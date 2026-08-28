@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -201,6 +202,89 @@ func TestPrepareJournalsCompaction(t *testing.T) {
 	}
 	if e.AgentID != agent.ID {
 		t.Errorf("AgentID = %q, want %q", e.AgentID, agent.ID)
+	}
+}
+
+// TestCompactionJournalRecordsFoldOrdinalAndSummaryBytes verifies the drift
+// telemetry on the compaction event: every fold carries its 1-based ordinal in
+// the session (FoldIndex) and the size of the summary it produced
+// (SummaryBytes). Both the budgeted "auto" path and manual /compact record them,
+// and the ordinal keeps counting across the two.
+func TestCompactionJournalRecordsFoldOrdinalAndSummaryBytes(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	agent, _ := d.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"})
+	sess, _ := d.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "T"})
+
+	m := NewManager()
+	m.SetLimits(1, 2) // budget 1 token forces a fold; keepRecent 2
+
+	history := []db.Message{
+		{Role: providers.RoleUser, Text: "u1"}, {Role: providers.RoleAssistant, Text: "a1"},
+		{Role: providers.RoleUser, Text: "u2"}, {Role: providers.RoleAssistant, Text: "a2"},
+		{Role: providers.RoleUser, Text: "u3"}, {Role: providers.RoleAssistant, Text: "a3"},
+	}
+	const firstSummary = "ROLLED UP"
+	if _, err := m.Prepare(ctx, d, stubProvider{summary: firstSummary}, sess, agent, history); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	// Second fold on the SAME session, through the manual /compact path. Re-read
+	// the session so it carries the summary state the first fold persisted.
+	sess2, err := d.GetSession(ctx, sess.ID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	history = append(history,
+		db.Message{Role: providers.RoleUser, Text: "u4"}, db.Message{Role: providers.RoleAssistant, Text: "a4"},
+		db.Message{Role: providers.RoleUser, Text: "u5"}, db.Message{Role: providers.RoleAssistant, Text: "a5"})
+	const secondSummary = "ROLLED UP AGAIN"
+	folded, _, err := m.ForceCompact(ctx, d, stubProvider{summary: secondSummary}, sess2, agent, history)
+	if err != nil {
+		t.Fatalf("force compact: %v", err)
+	}
+	if folded == 0 {
+		t.Fatalf("expected the manual path to fold")
+	}
+
+	evs, err := d.ReadDebugEvents(ctx, sess.ID, db.DebugCompaction, 0)
+	if err != nil {
+		t.Fatalf("read debug: %v", err)
+	}
+	if len(evs) != 2 {
+		t.Fatalf("compaction events = %d, want 2", len(evs))
+	}
+	want := []struct {
+		trigger      string
+		foldIndex    int
+		summaryBytes int
+	}{
+		{"auto", 1, len(firstSummary)},
+		{"manual", 2, len(secondSummary)},
+	}
+	for i, w := range want {
+		e := evs[i]
+		if e.Name != w.trigger {
+			t.Errorf("event %d trigger = %q, want %q", i, e.Name, w.trigger)
+		}
+		if e.FoldIndex != w.foldIndex {
+			t.Errorf("event %d FoldIndex = %d, want %d", i, e.FoldIndex, w.foldIndex)
+		}
+		if e.SummaryBytes != w.summaryBytes {
+			t.Errorf("event %d SummaryBytes = %d, want %d", i, e.SummaryBytes, w.summaryBytes)
+		}
+		if !strings.Contains(e.Detail, fmt.Sprintf("fold #%d", w.foldIndex)) {
+			t.Errorf("event %d Detail = %q, want it to mention fold #%d", i, e.Detail, w.foldIndex)
+		}
+	}
+
+	// The counter is persisted on the session, not derived per call.
+	final, _ := d.GetSession(ctx, sess.ID)
+	if final.CompactionCount != 2 {
+		t.Errorf("Session.CompactionCount = %d, want 2", final.CompactionCount)
 	}
 }
 

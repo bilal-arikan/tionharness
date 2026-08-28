@@ -474,12 +474,22 @@ func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agent
 	return d.createSessionLocked(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
 }
 
-// SetSessionSummary persists the rolling compaction summary for a session.
-func (d *DB) SetSessionSummary(ctx context.Context, sessionID, summary string, msgCount int) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
+// SetSessionSummary persists the rolling compaction summary for a session and
+// bumps the fold counter, returning the ordinal of THIS fold (1 for the first).
+// The ordinal is what the compaction debug event records as fold_index; a
+// non-nil error means it was not persisted and the caller must not report one.
+func (d *DB) SetSessionSummary(ctx context.Context, sessionID, summary string, msgCount int) (int, error) {
+	foldIndex := 0
+	err := d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.Summary = summary
 		s.SummaryMsgCount = msgCount
+		s.CompactionCount++
+		foldIndex = s.CompactionCount
 	})
+	if err != nil {
+		return 0, err
+	}
+	return foldIndex, nil
 }
 
 // SetSessionTitle persists a (re)generated title for a session.
@@ -1084,6 +1094,9 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 	if s.SummaryMsgCount > idx {
 		s.Summary = ""
 		s.SummaryMsgCount = 0
+		// The fold chain that produced that summary is gone with it; the next fold
+		// starts a fresh one, so its ordinal must start over too.
+		s.CompactionCount = 0
 	}
 	d.sessions[s.ID] = s
 	return removed, d.writeSessionFileLocked(s)

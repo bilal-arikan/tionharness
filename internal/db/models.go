@@ -394,6 +394,14 @@ type Session struct {
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`
+	// CompactionCount is how many rolling-summary folds this session has taken —
+	// bumped by every SetSessionSummary write (budgeted "auto" fold and manual
+	// /compact alike) and reset together with the summary when a rewind truncates
+	// past the summarized boundary. It is the fold ORDINAL that rides each
+	// compaction debug event, so cumulative semantic drift (fold #5's summary is
+	// not fold #1's) is observable instead of inferred. 0 on sessions written
+	// before this field existed: their first fold after the upgrade reads as #1.
+	CompactionCount int `json:"compactionCount,omitempty"`
 
 	// Context-reset / handoff lineage (see internal/agent/handoff.go). When a
 	// session nears its context limit it is not just compacted in place: a handoff

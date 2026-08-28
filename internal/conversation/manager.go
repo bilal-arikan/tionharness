@@ -271,7 +271,8 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 				return Prepared{}, err
 			}
 			summary = newSummary
-			if err := database.SetSessionSummary(ctx, session.ID, summary, newCount); err != nil {
+			foldIndex, err := database.SetSessionSummary(ctx, session.ID, summary, newCount)
+			if err != nil {
 				return Prepared{}, err
 			}
 			pending = keepTail
@@ -284,7 +285,8 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			// Journal the fold to debug.jsonl (true footprint = messages + overhead,
 			// the same basis the fold gate above uses).
 			recordCompactionDebug(database, session.ID, agent.ID, "auto",
-				len(fold), before+overhead, afterTokens, maxTokens, len(renderDBMessages(fold)))
+				len(fold), before+overhead, afterTokens, maxTokens, len(renderDBMessages(fold)),
+				foldIndex, len(summary))
 		}
 	}
 
@@ -331,7 +333,8 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	if err != nil {
 		return 0, "", err
 	}
-	if err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount); err != nil {
+	foldIndex, err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount)
+	if err != nil {
 		return 0, "", err
 	}
 	m.log(slog.LevelInfo, "context compacted (manual /compact)",
@@ -339,7 +342,8 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	// Journal the manual fold too; budget 0 → omitted from Detail (manual is
 	// budget-independent).
 	recordCompactionDebug(database, session.ID, agent.ID, "manual",
-		len(fold), beforeTokens, EstimateTokens(newSummary, keepTail), 0, len(renderDBMessages(fold)))
+		len(fold), beforeTokens, EstimateTokens(newSummary, keepTail), 0, len(renderDBMessages(fold)),
+		foldIndex, len(newSummary))
 	return len(fold), newSummary, nil
 }
 
@@ -444,7 +448,12 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 // Token figures ride Detail (not In/Out) because the debug summary sums In/Out for
 // llm_call events only — keeping them off the compaction event leaves the token
 // series clean while SavedBytes feeds the summary's existing compaction rollup.
-func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes int) {
+// foldIndex is the 1-based ordinal of this fold in the session (from
+// SetSessionSummary) and summaryBytes the size of the summary it produced —
+// together they make cumulative summary drift readable across folds. A
+// foldIndex <= 0 means the ordinal could not be established; it is then left off
+// the event and said so in Detail rather than silently journalled as fold #0.
+func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes, foldIndex, summaryBytes int) {
 	if database == nil || sessionID == "" {
 		return
 	}
@@ -452,12 +461,20 @@ func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, 
 	if budget > 0 {
 		detail += fmt.Sprintf(" · budget %d", budget)
 	}
+	if foldIndex > 0 {
+		detail += fmt.Sprintf(" · fold #%d", foldIndex)
+	} else {
+		detail += " · fold # unknown"
+	}
+	detail += fmt.Sprintf(" · summary %dB", summaryBytes)
 	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
-		Type:       db.DebugCompaction,
-		AgentID:    agentID,
-		Name:       trigger,
-		SavedBytes: savedBytes,
-		Detail:     detail,
+		Type:         db.DebugCompaction,
+		AgentID:      agentID,
+		Name:         trigger,
+		SavedBytes:   savedBytes,
+		FoldIndex:    foldIndex,
+		SummaryBytes: summaryBytes,
+		Detail:       detail,
 	}, 0)
 }
 

@@ -103,14 +103,24 @@ type DebugEvent struct {
 	// CLI's own internal tool-loop turn count (result event num_turns), since the
 	// CLI bills in/out/cache CUMULATIVELY across those steps — dividing by Calls
 	// recovers the per-call (single-pass) context. Only meaningful for llm_call.
-	Calls      int    `json:"calls,omitempty"`
-	OutBytes   int    `json:"outBytes,omitempty"`   // tool result size
-	SavedBytes int    `json:"savedBytes,omitempty"` // compaction bytes trimmed
-	Stop       string `json:"stop,omitempty"`       // turn stop reason
-	Err        bool   `json:"err,omitempty"`        // tool/turn failed
-	Error      string `json:"error,omitempty"`      // truncated single-line tool error text
-	Args       string `json:"args,omitempty"`       // truncated single-line tool argument summary
-	Detail     string `json:"detail,omitempty"`     // free-form (error msg, reason, decision)
+	Calls      int `json:"calls,omitempty"`
+	OutBytes   int `json:"outBytes,omitempty"`   // tool result size
+	SavedBytes int `json:"savedBytes,omitempty"` // compaction bytes trimmed
+	// FoldIndex is the 1-based ordinal of a compaction event's fold within its
+	// session (Session.CompactionCount after the fold). Semantic drift is
+	// cumulative — the summary produced by fold #5 is not the quality of fold
+	// #1's — so the ordinal is what makes that curve readable next to the token
+	// figures. Only meaningful for compaction; 0 means "not recorded".
+	FoldIndex int `json:"foldIndex"`
+	// SummaryBytes is the byte length of the rolling summary AFTER the fold. Paired
+	// with FoldIndex it shows whether the summary is growing, holding, or eroding
+	// across folds. Only meaningful for compaction.
+	SummaryBytes int    `json:"summaryBytes"`
+	Stop         string `json:"stop,omitempty"`   // turn stop reason
+	Err          bool   `json:"err,omitempty"`    // tool/turn failed
+	Error        string `json:"error,omitempty"`  // truncated single-line tool error text
+	Args         string `json:"args,omitempty"`   // truncated single-line tool argument summary
+	Detail       string `json:"detail,omitempty"` // free-form (error msg, reason, decision)
 	// WasteUSD is the avoidable cooling overpay for a cache_break attributed to
 	// TTL expiry / server eviction (a warm prefix a timely turn would have kept):
 	// the re-written prefix billed at the write tier minus the read tier it would
@@ -567,7 +577,7 @@ func computeDebugAnomalies(sum DebugSummary) []DebugAnomaly {
 		out = append(out, DebugAnomaly{
 			Severity: "warn",
 			Code:     "frequent_compaction",
-			Message:  "Bağlam " + itoa(sum.Compactions) + " kez sıkıştırıldı — önemli bilgileri core memory'ye yaz veya handoff yap.",
+			Message:  "Bağlam " + itoa(sum.Compactions) + " kez sıkıştırıldı — önemli bilgileri scratchpad'e/artifact'a yaz veya handoff yap.",
 		})
 	}
 

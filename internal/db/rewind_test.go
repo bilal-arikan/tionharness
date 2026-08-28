@@ -27,8 +27,12 @@ func TestDeleteMessagesFrom(t *testing.T) {
 
 	// Pretend the first 4 messages were folded into a rolling summary; rewinding
 	// before that boundary must clear the now-stale summary.
-	if err := d.SetSessionSummary(ctx, sess.ID, "old summary", 4); err != nil {
+	foldIndex, err := d.SetSessionSummary(ctx, sess.ID, "old summary", 4)
+	if err != nil {
 		t.Fatalf("set summary: %v", err)
+	}
+	if foldIndex != 1 {
+		t.Fatalf("first fold ordinal = %d, want 1", foldIndex)
 	}
 
 	// Rewind to the 3rd message (index 2): removes ids[2..4] → 3 removed, 2 left.
@@ -46,6 +50,9 @@ func TestDeleteMessagesFrom(t *testing.T) {
 	s2, _ := d.GetSession(ctx, sess.ID)
 	if s2.Summary != "" || s2.SummaryMsgCount != 0 {
 		t.Fatalf("stale summary not reset: %q count=%d", s2.Summary, s2.SummaryMsgCount)
+	}
+	if s2.CompactionCount != 0 {
+		t.Fatalf("fold counter not reset with the summary: %d", s2.CompactionCount)
 	}
 	if s2.MessageCount != 2 {
 		t.Fatalf("expected MessageCount 2, got %d", s2.MessageCount)

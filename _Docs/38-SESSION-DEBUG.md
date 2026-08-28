@@ -79,6 +79,15 @@ olarak sunar; Debug kartı ve mesaj panelinde "Düşünme %N · tok" olarak gör
 Ölçüm: thinking açık turlarda çıktı token'ının ~%40'ı (Sonnet 5 ~%59) gizli
 akıl yürütme.
 
+Ek alanlar (2026-08-28): `FoldIndex` ve `SummaryBytes` — yalnız `compaction`
+olaylarında anlamlıdır ve **`omitempty` taşımaz**, yani sıfır değer de JSON'a
+yazılır (sıfır burada gerçek bir sinyaldir, eksik veri değil).
+
+| Alan | Anlam |
+|------|-------|
+| `foldIndex` | Bu oturumdaki fold'un **1-tabanlı sırası** (fold sonrası `Session.CompactionCount`). Anlamsal aşınma birikimlidir — 5. fold'un özeti 1. fold'un kalitesinde değildir — sıra bilgisi token rakamlarının yanında bu eğriyi okunur kılar. Upgrade öncesi başlamış oturumlarda sayaç geriye dönük doldurulmadığı için `0`'dan başlayabilir; `0` = "ordinal tespit edilemedi". |
+| `summaryBytes` | Fold **sonrasındaki** rolling-summary'nin bayt uzunluğu. `foldIndex` ile birlikte özetin büyüdüğünü, sabit kaldığını mı yoksa eridiğini mi gösterir: fold başına küçülen `summaryBytes` = **"özet eriyor"** sinyali (bağlam kaybı). `0` = boş özet yazıldı — kendi başına bir anomali. |
+
 ## Emit noktaları (tek huni: `Runtime.emitDebug`)
 
 `internal/agent/debugjournal.go` tek yardımcı (`emitDebug`) tüm noktaları besler;
