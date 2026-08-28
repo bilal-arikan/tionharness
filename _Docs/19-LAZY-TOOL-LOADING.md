@@ -321,7 +321,8 @@
   hiçbir şema yüklemez**: aktif sete (`ActiveTools`) tek bir araç bile eklenmez,
   `ActiveDefs`/`shipDefs` değişmez; tool sonucu yalnız o demetin üyelerini
   `ad — özet` satırlarıyla listeler. Şema isteyen model, ardından **isimle** ikinci
-  bir `activate_tools` çağırır. Liste `bundleListLimit = 40` üyede kesilir ve kaç
+  bir `activate_tools` çağırır. Liste `tools.BundleListLimit = 40` üyede kesilir
+  (render'ı `tools.RenderBundleList` ile gateway yolu paylaşır) ve kaç
   üyenin gizlendiği + `tool_search` yönlendirmesi yazılır (300 araçlı bir MCP
   sunucusu tek çağrıda 20k token'lık sonuç üretmesin diye). Geçersiz/boş anahtar
   `unknown bundle: …; known bundles: …` olarak raporlanır — bulanık ad eşleştirme

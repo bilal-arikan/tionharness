@@ -98,10 +98,10 @@ func TestActivateUnknownBundleKey(t *testing.T) {
 	}
 }
 
-// TestActivateBundleListLimit: a huge bundle is truncated at bundleListLimit and
+// TestActivateBundleListLimit: a huge bundle is truncated at BundleListLimit and
 // says how many members it hid.
 func TestActivateBundleListLimit(t *testing.T) {
-	const total = bundleListLimit + 7
+	const total = BundleListLimit + 7
 	var catalog []providers.ToolDef
 	var members []string
 	for i := 0; i < total; i++ {
@@ -119,8 +119,8 @@ func TestActivateBundleListLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Count(out, "\n- "); got != bundleListLimit {
-		t.Fatalf("listed %d members, want %d", got, bundleListLimit)
+	if got := strings.Count(out, "\n- "); got != BundleListLimit {
+		t.Fatalf("listed %d members, want %d", got, BundleListLimit)
 	}
 	if !strings.Contains(out, "…and 7 more not shown") {
 		t.Fatalf("truncation notice missing:\n%s", out)

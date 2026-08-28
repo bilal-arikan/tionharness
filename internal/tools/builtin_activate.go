@@ -37,11 +37,6 @@ type ActivateToolsTool struct {
 	bundles map[string][]string // bundle key -> member names (see bundles.go); nil disables bundle keys
 }
 
-// bundleListLimit caps how many members one bundle listing prints. Without it a
-// single "mcp:<big-server>" call would render hundreds of summary lines into the
-// result — the exact token blowup bundle activation exists to avoid.
-const bundleListLimit = 40
-
 // NewActivateToolsTool builds the tool over the active set, the lazy catalog and
 // the set of eager (always-on) tool names. The eager set lets the tool answer a
 // request to activate an already-shipped tool with a clear "already available"
@@ -118,25 +113,25 @@ func (t ActivateToolsTool) knownBundleKeys() []string {
 // openBundles renders the member listing for the given bundle keys. It NEVER
 // activates a member: the whole point of a bundle is that it costs summaries, not
 // schemas, so ActiveTools (and therefore the shipped schema set) is untouched.
+// Rendering (header, row shape, truncation notice) is shared with the claude-cli
+// gateway path via RenderBundleList, so a change to the listing format lands on
+// both at once instead of drifting apart.
 func (t ActivateToolsTool) openBundles(keys []string) string {
-	var b strings.Builder
+	listings := make([]BundleListing, 0, len(keys))
 	for _, key := range keys {
 		members := t.bundles[key]
-		fmt.Fprintf(&b, "Opened %s (%d tools) — summaries only, no schema loaded. Load one with activate_tools(\"<name>\").\n", key, len(members))
-		shown := members
-		hidden := 0
-		if len(shown) > bundleListLimit {
-			hidden = len(shown) - bundleListLimit
-			shown = shown[:bundleListLimit]
+		rows := make([]BundleListRow, 0, len(members))
+		for _, n := range members {
+			rows = append(rows, BundleListRow{Name: n, Desc: t.byName[n]})
 		}
-		for _, n := range shown {
-			fmt.Fprintf(&b, "- %s — %s\n", n, t.byName[n])
-		}
-		if hidden > 0 {
-			fmt.Fprintf(&b, "…and %d more not shown; narrow with tool_search(\"<keyword>\").\n", hidden)
-		}
+		listings = append(listings, BundleListing{Key: key, Members: rows})
 	}
-	return b.String()
+	return RenderBundleList(listings, BundleListOpts{
+		HeaderFormat:   nativeBundleHeaderFormat,
+		OverflowFormat: nativeBundleOverflowFormat,
+		Max:            BundleListLimit,
+		NameOf:         func(n string) string { return n },
+	})
 }
 
 // resolveLazyName maps a requested tool name to a real catalog name, tolerating

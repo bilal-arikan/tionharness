@@ -918,26 +918,25 @@ func (b *interactionBackend) listBundles(run *chatRun, keys []string) string {
 			fmt.Fprintf(&out, "unknown bundle: %s; known bundles: %s\n", key, strings.Join(known, ", "))
 			continue
 		}
-		fmt.Fprintf(&out, "%s (%d tools) — summaries only, nothing was activated. Load one with activate_tools(\"<name>\").\n", key, len(members))
-		shown := members
-		hidden := 0
-		if len(shown) > gatewayBundleListLimit {
-			hidden = len(shown) - gatewayBundleListLimit
-			shown = shown[:gatewayBundleListLimit]
+		rows := make([]tools.BundleListRow, 0, len(members))
+		for _, n := range members {
+			rows = append(rows, tools.BundleListRow{Name: n, Desc: defs[n]})
 		}
-		for _, n := range shown {
-			fmt.Fprintf(&out, "- %s — %s\n", extendedNSPrefix+n, defs[n])
-		}
-		if hidden > 0 {
-			fmt.Fprintf(&out, "…and %d more not shown; narrow with tool_search.\n", hidden)
-		}
+		// Rendering is shared with the native activate_tools path (see
+		// tools.RenderBundleList); only the wordings and the printed name form
+		// differ, and they are passed in rather than duplicated here.
+		out.WriteString(tools.RenderBundleList(
+			[]tools.BundleListing{{Key: key, Members: rows}},
+			tools.BundleListOpts{
+				HeaderFormat:   "%s (%d tools) — summaries only, nothing was activated. Load one with activate_tools(\"<name>\").\n",
+				OverflowFormat: "…and %d more not shown; narrow with tool_search.\n",
+				Max:            tools.BundleListLimit,
+				NameOf:         func(n string) string { return extendedNSPrefix + n },
+			},
+		))
 	}
 	return strings.TrimSpace(out.String())
 }
-
-// gatewayBundleListLimit caps one bundle listing on the CLI path, mirroring
-// tools.bundleListLimit on the native path.
-const gatewayBundleListLimit = 40
 
 // gatewayToolSearchDescLimit caps a tool_search row's description on the gateway
 // path. Bridged CLI descriptions are far longer than the native catalog's

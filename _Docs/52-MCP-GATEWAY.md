@@ -702,6 +702,21 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
   Refactor öncesi yakalanmış golden'lar iki yolu da bayt bayt sabitler
   (`internal/tools/testdata/toolsearch_native_*.txt`,
   `internal/api/testdata/toolsearch_gateway_*.txt`).
+- ✅ **Demet (bundle) listeleme render'ı tek kaynak (2026-08-28):** aynı desen bu
+  yüzeye de uygulandı — `ActivateToolsTool.openBundles` ve
+  `interactionBackend.listBundles` içindeki kopya render `tools.RenderBundleList`
+  yardımcısına indi (`internal/tools/bundlelistrender.go`), `bundleListLimit` +
+  `gatewayBundleListLimit` tek `tools.BundleListLimit` sabitine düştü. Gerçek yol
+  farkları seçenek olarak taşınır: başlık metni (native "Opened … no schema
+  loaded" — durum tutar; gateway "… nothing was activated" — tutmaz), taşma notu
+  metni ve **basılan ad biçimi** (native bare ad, gateway `extendedNSPrefix`'li
+  çağrılabilir ad). `NameOf` nil ise panic — CLI'a çağrılamaz bir ad basmak
+  yardımcının önlediği hatanın ta kendisi. Bilinmeyen anahtar raporu paylaşılmadı:
+  iki yol farklı yerde ve farklı sözcüklerle raporlar. Durum yönetimi
+  (`ActiveTools.OpenBundle`/`CloseBundle`) kapsam dışı bırakıldı; yardımcı saf.
+  Karakterizasyon golden'ları refactor öncesi yakalandı
+  (`internal/tools/bundlelistrender_test.go`,
+  `internal/api/gateway_bundlelist_test.go`).
 
 ### ✅ VPS göç aracı (2026-07-06)
 
@@ -939,8 +954,8 @@ olarak kaçındığı token patlaması. Demet açmak bu yüzden:
 
 ### Limit 40
 
-Tek bir demet listelemesi `gatewayBundleListLimit = 40` üyede kesilir (native
-yoldaki `tools.bundleListLimit` ile aynı sayı). Kesilirse kaç üyenin gizlendiği ve
+Tek bir demet listelemesi `tools.BundleListLimit = 40` üyede kesilir — iki yol da
+**aynı sabiti** kullanır, ayrı kopya yoktur. Kesilirse kaç üyenin gizlendiği ve
 `tool_search` ile daraltma yönlendirmesi yazılır. Amaç: 300 araçlı bir MCP
 sunucusunun tek çağrıda on binlerce token'lık sonuç döndürmesini engellemek.
 
