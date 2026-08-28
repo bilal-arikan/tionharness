@@ -70,6 +70,10 @@ type Server struct {
 	// interactionSrv is the same server as a concrete type, so the activate path can
 	// push tools/list_changed to a live CLI session's SSE stream (gateway, Doc 52).
 	interactionSrv *interaction.Server
+	// interBackend is the Interaction MCP backend, kept so paths outside the MCP
+	// handler can reach the per-session activation state — currently the dead-tool
+	// repair, which activates a tool the CLI rejected (see dead_tool_activate.go).
+	interBackend *interactionBackend
 	// gatewaySrv is the EXTERNAL MCP gateway (Doc 52 Faz 3), exposing the default
 	// workspace's SHARED MCP pool to outside clients at /mcp/gateway. nil unless opted in
 	// at boot (TIONHARNESS_GATEWAY_EXTERNAL). It borrows the workspace pool (#11), so there
@@ -122,6 +126,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 	s.interactionSrv = interaction.NewServer(interBackend, logger)
 	// Wire the pusher back so activate_tools can push tools/list_changed (gateway, Doc 52).
 	interBackend.setServer(s.interactionSrv)
+	s.interBackend = interBackend
 	s.interactionMCP = s.interactionSrv
 	// External MCP gateway (Doc 52 Faz 3): opt-in at boot. Exposes the default
 	// workspace's enabled MCP servers to OUTSIDE clients at /mcp/gateway, gateway-style
@@ -198,6 +203,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
 	// turns the same use_skill/shell/self-manage bridge chat turns get.
 	manager.SetAutonomousInteraction(s.autonomousInteraction)
+	// Dead-tool self-repair: let the agent runtime activate an on-demand tool the
+	// CLI rejected with "No such tool available" (WS20/SES79, dead_tool_activate.go).
+	manager.SetDeadToolActivator(s.activateDeadTool)
 	// Let every runtime see the INTERACTIVE turns too: the chat-run registry lives
 	// here, but Runtime.AgentBusy is what BOTH agent-delete paths consult, so
 	// without this the self-management delete_agent tool would only ever see

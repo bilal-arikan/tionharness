@@ -191,6 +191,12 @@ type Runtime struct {
 	// Set by the workspace manager once the api server exists; nil before then.
 	autoInteract AutonomousInteraction
 
+	// deadToolActivate turns on an on-demand Interaction MCP tool the model called
+	// before activating it, so the "No such tool available" dead end repairs itself
+	// (see deadtool.go). Set by the api server once it exists; nil before then
+	// (the rejection then reaches the model unchanged, as before).
+	deadToolActivate DeadToolActivator
+
 	// extActive reports the api server's in-flight INTERACTIVE chat sessions, which
 	// this runtime does not track itself. Read by AgentBusy. Set by the workspace
 	// manager once the api server exists; nil before then.
@@ -660,6 +666,11 @@ type AutonomousInteraction func(ctx context.Context, agent db.Agent, sessionID s
 // SetAutonomousInteraction wires the headless Interaction MCP setup. The
 // workspace manager calls this for every runtime (existing + later-opened).
 func (r *Runtime) SetAutonomousInteraction(fn AutonomousInteraction) { r.autoInteract = fn }
+
+// SetDeadToolActivator wires the on-demand tool activator used by the dead-tool
+// repair. The workspace manager calls this for every runtime (existing + later-
+// opened), like the other api-owned bridges.
+func (r *Runtime) SetDeadToolActivator(fn DeadToolActivator) { r.deadToolActivate = fn }
 
 // WakeTurnFunc runs a full, history-aware chat turn for a self-wake: given the
 // originating session (whose history already includes the wake prompt as the

@@ -97,6 +97,13 @@ type Manager struct {
 	// runtimes. nil until wired.
 	autoInteractFactory func(*agent.Runtime) agent.AutonomousInteraction
 
+	// deadToolActivator activates an on-demand Interaction MCP tool the model
+	// called before turning it on, so the CLI's "No such tool available" dead end
+	// self-repairs. Token-addressed and therefore workspace-independent, so a single
+	// value is shared by every runtime (unlike the per-runtime factories above).
+	// Wired in after the api server exists. nil until wired.
+	deadToolActivator agent.DeadToolActivator
+
 	// extActiveProbe reports a workspace's in-flight INTERACTIVE chat sessions.
 	// The api server owns that registry; the runtime needs it to answer "is this
 	// agent busy" (AgentBusy) for the delete guard. Wired in after the api server
@@ -122,6 +129,19 @@ func (m *Manager) SetAutonomousInteraction(factory func(*agent.Runtime) agent.Au
 	m.autoInteractFactory = factory
 	for _, ws := range m.workspaces {
 		ws.Runtime.SetAutonomousInteraction(factory(ws.Runtime))
+	}
+}
+
+// SetDeadToolActivator wires the on-demand tool activator behind the dead-tool
+// repair into every existing workspace runtime and remembers it for workspaces
+// opened later. The api server calls this once at startup (it owns the run
+// registry and the per-session activation state).
+func (m *Manager) SetDeadToolActivator(fn agent.DeadToolActivator) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deadToolActivator = fn
+	for _, ws := range m.workspaces {
+		ws.Runtime.SetDeadToolActivator(fn)
 	}
 }
 
@@ -351,6 +371,9 @@ func (m *Manager) open(meta Meta) error {
 	}
 	if m.autoInteractFactory != nil {
 		rt.SetAutonomousInteraction(m.autoInteractFactory(rt))
+	}
+	if m.deadToolActivator != nil {
+		rt.SetDeadToolActivator(m.deadToolActivator)
 	}
 	if m.extActiveProbe != nil {
 		probe, id := m.extActiveProbe, meta.ID

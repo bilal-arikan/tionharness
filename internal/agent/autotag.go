@@ -312,8 +312,10 @@ var permissionDenyMarkers = []string{
 	// (`mcp__tionharness_interaction__PowerShell`): "No such tool available: X. X
 	// exists but is not enabled in this context." The model immediately retries with
 	// the correct name — a self-recovered mis-address, not a repairable failure, so
-	// it must not get the "tool-error" tag / spawn an auto-repair.
-	"no such tool available",
+	// it must not get the "tool-error" tag / spawn an auto-repair. The marker itself
+	// is shared with deadtool.go, which parses the tool name out of the SAME string
+	// to auto-activate an on-demand TionHarness tool (WS20/SES79).
+	deadToolMarker,
 	"not enabled in this context",
 }
 

@@ -227,11 +227,6 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		ctx = tools.WithTodoSink(ctx, r.NewTodoSink(sid, agent.ID))
 	}
 
-	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
-	if onStep != nil {
-		req.OnEvent = func(ts providers.TraceStep) { onStep(r.traceStepToTurnStep(ts)) }
-	}
-
 	// The claude CLI runs its own tool loop. Route it through the keyless MCP
 	// delegation path when external MCP is enabled OR an Interaction MCP endpoint
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
@@ -283,6 +278,22 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		inter = tools.InteractionFrom(ctx)
 	}
 	cliMCP := isCLI && (agent.MCPEnabled || inter.URL != "")
+
+	// Provider-driven paths (claude CLI) surface their own trace via OnEvent. This
+	// is wired AFTER the interaction endpoint is resolved because the dead-tool
+	// repair below needs that turn's Bearer token to activate against; the provider
+	// call itself happens further down, so the ordering is free.
+	//
+	// deadTools is nil on every path that cannot hit the failure (native loop, no
+	// activator wired), and repair leaves every unrelated step byte-identical.
+	if onStep != nil {
+		deadTools := r.deadToolRepairFor(agent, inter)
+		req.OnEvent = func(ts providers.TraceStep) {
+			st := r.traceStepToTurnStep(ts)
+			deadTools.repair(ctx, &st)
+			onStep(st)
+		}
+	}
 
 	if !agent.MCPEnabled && !cliMCP {
 		// Extended reasoning is applied only on the plain (non-tool) path: the

@@ -309,6 +309,22 @@ Testler: `internal/db/store_lessons_dedupe_test.go` — dört kümenin gerçek
 imzalarıyla yazma-anı birleşme, alakasız/araç-farklı/reflector imzalarının
 birleşmemesi, backfill sayısı + `Count` toplamı + idempotentlik.
 
+## Ölü araç onarımı — aktive edilmemiş on-demand araç (2026-08-28)
+
+claude-cli yolunda extended tier BOŞ başlar ve yalnız model `activate_tools`
+çağırdıkça büyür. Model aktive etmeden doğrudan bir deferred aracı çağırırsa
+(WS20/SES79: `mcp__tionharness_extended__list_tasks`) CLI çağrıyı kendi kayıt
+defterinden reddeder — istek gateway'e hiç ulaşmaz, dolayısıyla sunucu tarafında
+aracı açacak bir sinyal de oluşmaz; model üç tur aynı `No such tool available`
+hatasına girip çıktı. Onarım, hatayı CLI'nın stream-json izinde gördüğü anda
+aracı sunucu tarafında aktive eder (`tools/list_changed` push dahil) ve adım
+çıktısına "aynı çağrıyı bu tam adla tekrar et" talimatını ekler. Ad on-demand
+katalogda değilse hiçbir şey yapılmaz, orijinal hata aynen geçer; aynı ad için
+tur başına en fazla bir onarım yapılır ve olay `debug.jsonl`'e
+`dead_tool_activate` adıyla düşer. Kod: `internal/agent/deadtool.go` (kanca:
+`toolloop.go` → `req.OnEvent`), aktivasyon köprüsü
+`internal/api/dead_tool_activate.go`, testler `internal/agent/deadtool_test.go`.
+
 ## Kapsam dışı / sıradaki adımlar
 - ~~Guardrail eşiklerinin settings'e açılması~~ ✅ (2026-07-07, 6 eşik ayarı).
 - ~~Lessons için UI görünürlüğü~~ ✅ (2026-07-07, API + LessonsList).
