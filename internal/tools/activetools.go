@@ -208,20 +208,37 @@ func (a *ActiveTools) Has(name string) bool {
 
 // Prune drops tools that have been idle (never called) for more than maxIdle
 // iterations, keeping the shipped schema set lean across a long turn. Returns
-// the pruned names. A non-positive maxIdle disables pruning.
+// the pruned names, sorted. A non-positive maxIdle disables pruning.
+//
+// Pruning is BUNDLE-AWARE: idleness is judged per BUNDLE (see BundleOf), not per
+// tool. Using one member refreshes the whole bundle, so a tool is dropped only
+// once EVERY member of its bundle has gone quiet for longer than maxIdle. A
+// multi-step task tends to walk siblings in turn (open a browser page, snapshot
+// it, click, read the console); scoring each name alone would evict the ones not
+// touched in the current stretch and force an immediate re-activation round trip
+// for a tool the agent is demonstrably still working with.
 func (a *ActiveTools) Prune(maxIdle int) (pruned []string) {
 	if a == nil || maxIdle <= 0 {
 		return nil
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// Freshest use per bundle: the sibling that keeps the group alive.
+	freshest := make(map[string]int, len(a.set))
 	for n := range a.set {
-		if a.iter-a.usedAt[n] > maxIdle {
+		key := BundleOf(n)
+		if used, ok := freshest[key]; !ok || a.usedAt[n] > used {
+			freshest[key] = a.usedAt[n]
+		}
+	}
+	for n := range a.set {
+		if a.iter-freshest[BundleOf(n)] > maxIdle {
 			delete(a.set, n)
 			delete(a.addedAt, n)
 			delete(a.usedAt, n)
 			pruned = append(pruned, n)
 		}
 	}
+	sort.Strings(pruned)
 	return pruned
 }

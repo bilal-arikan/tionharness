@@ -216,6 +216,37 @@ func TestActiveToolsPrune(t *testing.T) {
 	}
 }
 
+// Prune scores idleness per BUNDLE: a recently used member keeps its siblings
+// active, while an unrelated bundle that has gone quiet is still dropped.
+func TestActiveToolsPruneKeepsBundleSiblings(t *testing.T) {
+	a := NewActiveTools()
+	a.SetIter(0)
+	// Two members of the same MCP bundle ("mcp:playwright"), plus one from an
+	// unrelated bundle. Names use the INTERNAL namespaced form <server>__<tool>,
+	// which is what BundleOf splits on.
+	a.Activate("playwright__browser_click", "playwright__browser_snapshot", "other__thing")
+	a.SetIter(6)
+	a.MarkUsed("playwright__browser_click") // only ONE sibling is used
+	a.SetIter(7)
+
+	pruned := a.Prune(3)
+
+	// The untouched sibling survives on its bundle-mate's recency.
+	if !a.Has("playwright__browser_snapshot") {
+		t.Errorf("sibling of a used tool should survive, pruned=%v", pruned)
+	}
+	if !a.Has("playwright__browser_click") {
+		t.Errorf("used tool should survive, pruned=%v", pruned)
+	}
+	// The unrelated bundle has no fresh member and must still be pruned.
+	if a.Has("other__thing") {
+		t.Errorf("idle unrelated bundle should be pruned, pruned=%v", pruned)
+	}
+	if len(pruned) != 1 || pruned[0] != "other__thing" {
+		t.Errorf("expected exactly [other__thing] pruned, got %v", pruned)
+	}
+}
+
 func TestActivateToolsTool(t *testing.T) {
 	active := NewActiveTools()
 	cat := []providers.ToolDef{{Name: "lazy_a", Description: "A"}, {Name: "lazy_b", Description: "B"}}
