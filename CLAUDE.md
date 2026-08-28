@@ -5,13 +5,11 @@ türetilmiş kısa kurallar içerir. Terminal: zorunlu Git Bash.
 
 ## Playwright MCP
 
-`browser_take_screenshot` / PDF çıktıları **yalnızca MCP'nin izinli kökü**
-altına yazılabilir. TionHarness bu kökü otomatik olarak **aktif oturumun
-scratchpad'ine** (`<store>/sessions/<SID>/scratchpad`) ayarlar; oturum
-scratchpad'ine **doğrudan mutlak yol vererek yazmaya çalışma** — dosyayı izinli
-köke (varsayılan olarak orası) kaydet, gerekiyorsa `Read` ile geri oku. Kök
-her istekte aktif oturumdan yeniden çözülür, dolayısıyla bayat oturum yolu
-kullanma.
+`browser_take_screenshot` / PDF çıktıları yalnızca MCP'nin izinli kökü altına
+yazılabilir. Runtime bu kökü her istekte aktif oturumun scratchpad'ine ayarlar
+(`internal/agent/mcp_playwright.go`), yani **dosya adı ver, mutlak yol verme** —
+çıktı doğru yere düşer, gerekirse `Read` ile geri oku.
+
 ## Edit aracı — eşleşme
 
 - **Edit'ten önce hedef bölgeyi `Read` ile oku.** `old_string`'i çıktının birebir
@@ -28,7 +26,7 @@ kullanma.
 `mcp__codebase-memory-mcp__*` sorgu araçları (`search_code`, `search_graph`,
 `query_graph`, `trace_path`, `get_code_snippet`, `get_architecture`,
 `index_status`) **`project`** argümanı ister — bu, `repo_path` değil, indeksleme
-çıktısındaki yol-tabanlı kimliktir (format: `C-Users-user-Desktop-<repo>`).
+çıktısındaki yol-tabanlı kimliktir (format: `C-Users-user-Desktop-<repo-yolu>`).
 
 - **İlk çağrıdan ÖNCE bir kez `list_projects` çalıştır.** `project` argümanını
   dönen listeden **birebir kopyala** — kimliği elle uydurma.
@@ -133,15 +131,6 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
   başlayabilecek desenlerde `--` ayırıcısını koru; boş değişken veya geniş,
   doğrulanmamış glob ile arama başlatma.
 
-- **`output_mode` yalnızca şu üç değeri kabul eder:** `content` |
-  `files_with_matches` | `count`. Başka bir değer (ör. `text`, `lines`) geçersiz
-  ve reddedilir.
-
-- **Sabit dosya yolu vermeden önce Glob ile doğrula.** Grep'e var olmayan bir
-  `path` verirsen sonuç boş/yanıltıcı döner ve hata da vermez. Önce
-  `Glob` ile (ör. `internal/db/store_*.go`) dosyanın gerçekten var olduğunu
-  teyit et, sonra o yolu Grep'e geç.
-
 ## Dosya okuma aracı tercihi
 
 - Kod arama ve gezinme için sıra: önce `codebase-memory-mcp` araçları
@@ -149,10 +138,12 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
   `query_graph`, `get_architecture`), sonra `Glob`/`Grep`. Ham shell grep
   (`rg`, `findstr`, `Select-String`) **son çare** — yalnız indeks gerçekten
   cevap veremediğinde.
-- Büyük çıktı üreten shell komutlarını `rtk` ile sarmala: `rtk git status`,
-  `rtk git log`, `rtk git diff`, `rtk test`, `rtk go build`, `rtk npm <script>`,
-  `rtk lint`. Token guardrail uyarılarını asıl bu önler.
-- `ls`/`tree` gibi native Windows'ta bulunmayan araçlarda `rtk` kullanma.
+- **Token optimizasyonunu elle çağırma.** `rtk` (komut katmanı) ve `sqz` (çıktı
+  katmanı) hook olarak kuruludur; shell komutları çalıştırılmadan önce runtime
+  tarafından otomatik yeniden yazılır ve çıktı otomatik sıkıştırılır
+  (`internal/agent/capabilities_tokenopt.go`). Komutun başına elle `rtk` ekleme —
+  ihtiyacın olan komutu düz yaz. Byte-exact çıktı gerekiyorsa shell aracına
+  `no_compress: true` geç.
 
 ## Kod formatı (otomatik)
 
@@ -172,23 +163,16 @@ formatlar (frontend → prettier, `*.go` → gofmt) ve yeniden stage'ler. Klon b
 bir kez: `git config core.hooksPath .githooks`. Tek seferlik atlamak için
 `git commit --no-verify`.
 
-`format:check` şu an (2026-08-18 itibarıyla) **temiz** — depo genelinde uyarı yok.
-Pre-commit hook stage'lenmiş dosyayı otomatik dönüştürüyor, bu yüzden tekil
-düzenlemeler için elle `npm run format` koşmaya gerek yok. Yine de büyük bir
-elle-düzenlenmiş dosya grubu eklenirse (ör. dışarıdan import edilen kod) kontrol
-etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
-
 ## Boş patch / gereksiz format koşusu
 
 - `git apply` veya `apply_patch` çağırmadan önce yamanın **gerçekten değişiklik
   içerdiğini** doğrula: `git diff --exit-code` (0 = değişiklik yok). Boş yama
   `git apply` tarafından reddedilir; bilinçli olarak boş yama uygulanacaksa
   `--allow-empty` ver.
-- Prettier'ı yazma modunda (`npm run format`) koşmadan önce
-  `cd frontend && npm run format:check` ile ölç. Zaten temizse **koşma** —
-  gereksiz koşu sahte diff ve boşa tur üretir.
 - Pre-commit hook stage'lenmiş dosyaları zaten formatlar; tekil düzenlemede elle
-  format koşusu genelde gereksizdir.
+  format koşusu gereksizdir. Büyük bir elle-düzenlenmiş dosya grubu (ör. dışarıdan
+  import edilen kod) eklendiyse önce `cd frontend && npm run format:check` ile ölç;
+  temizse `npm run format` **koşma** — gereksiz koşu sahte diff üretir.
 
 ## Kısmi commit (`git add -p`) ve pre-commit
 
@@ -239,8 +223,9 @@ hiçbir şeye gömülmez. Kendi `package.json`/`node_modules`'ü vardır — kom
 - **İki dosya uygulamadan elle senkronlanır**, uygulamada tema değişirse ikisi de
   güncellenmelidir: `website/src/styles/theme.css` ← `frontend/src/index.css`,
   `website/src/content/themes.ts` ← `frontend/src/shared/lib/themePresets.ts`.
-- Site metni yazarken **kök `README.md`'yi kaynak alma** — bayat. Kaynak:
-  `_Docs\00-GENEL-BAKIS.md` + `_Docs\05-ILERLEME.md`.
+- Site metni için kök `README.md` kullanılabilir (artık `_Docs` ile hizalı), ama
+  ayrıntı ve güncel durum kaynağı `_Docs\00-GENEL-BAKIS.md` +
+  `_Docs\05-ILERLEME.md`'dir; üçü çelişirse `_Docs` kazanır.
 
 Detay: `_Docs\72-TANITIM-SITESI.md`.
 
@@ -296,6 +281,24 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `store_usage.go` | Ajan/gün bazlı LLM kullanım (usage) rollup'ı ve çağrı taksonomisi |
 | `store_session_usage.go` | Oturum ömrü boyunca LLM kullanım rollup'ı (`SessionUsage`) |
 | `store_lessons.go` | Workspace düzeyi hata→ders (lessons) JSONL store'u (`lessons.jsonl`) |
+| `store_lessons_dedupe.go` | Lesson tekilleştirme — birebir `Signature` eşleşmesinin ötesinde |
+| `store_activity.go` | Mesaj ekleme aktivite sinyali (`ActivitySignal`) ve gözlemci hook'u |
+| `store_agent_system.go` | Yerleşik (system) ajan tanımları; silme yerine devre dışı bırakma (`ErrSystemAgentDelete`) |
+| `store_session_ask.go` | Durable Ask — oturuma sorulan ve yanıt bekleyen sorular |
+| `store_model_resolution.go` | İstenen model id → sağlayıcının gerçekte servis ettiği model eşlemesi |
+| `filestore.go` | Varlıktan bağımsız generic CRUD/persist yapı taşları; `store_*.go` bunlara delege eder |
+| `board_columns.go` | Kanban kolon anahtarı doğrulama (`IsValidBoardKey`) ve yerleşik kolon sabitleri |
+| `automation_limits.go` | Otomasyon iterasyon limitleri (`MaxIterations`) ve doğrulaması |
+| `artifact_content.go` | Metin türü artifact gövdelerinin JSON içinde değil `<workspace>/artifacts/` altında dosya olarak tutulması |
+| `artifact_migrate.go` | Sohbet eklerinin (attachment) artifact türüne göçü |
+| `inbox.go` | Oturum başına kuyruklanmış mesaj sidecar'ı (`inbox.json`), atomik yazım |
+| `inflight.go` | Akış hâlindeki yanıtın disk anlık görüntüsü (`inflight.json`) — çökme kurtarma |
+| `promptepoch.go` | Oturum başına dondurulmuş prompt-prefix anlık görüntüsü (opak JSON) |
+| `render_cleanup.go` | `render_template` çıktı dosyalarının TTL'i ve açılıştaki temizlik taraması |
+| `debug_journal.go` | `debug.jsonl` — kullanıcıya görünmeyen tanılama olayları, özet ve anomali tespiti |
+
+Tablo elle tutulur ve **tam olmayabilir**; kesin liste için
+`ls internal/db/*.go | grep -v _test.go`.
 
 **Mesaj okurken `ListMessages` varsayılanın DEĞİL.** O, oturumun tüm mesaj
 slice'ını her çağrıda kopyalar (uzun bir oturumda megabaytlarca `Steps` JSON'u).
