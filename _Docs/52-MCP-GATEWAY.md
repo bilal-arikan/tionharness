@@ -940,16 +940,30 @@ sunucusunun tek çağrıda on binlerce token'lık sonuç döndürmesini engellem
 | Girdi | Etki |
 |---|---|
 | Araç adı (`list_agents` veya `mcp__tionharness_extended__list_agents`) | **Şema yüklenir** — araç aktif sete girer, list_changed push edilir, aynı turda çağrılabilir. |
-| Bundle anahtarı (`group:diagnostics`, `mcp:playwright`) | **Şema yüklenmez** — yalnız `- ad — özet` satırları döner. Hiçbir şey aktive edilmez. |
+| Bundle anahtarı (`group:diagnostics`) | **Şema yüklenmez** — yalnız `- ad — özet` satırları döner. Hiçbir şey aktive edilmez. |
 
 Yani akış iki adımlıdır: **demeti aç (isimleri gör) → istediğin adı/adları
 `activate_tools`'a ver (şema gelir)**. Üyeler listede doğrudan
 **namespace'li çağrılabilir adla** (`mcp__tionharness_extended__<ad>`) yazılır,
 çünkü CLI bir aracı yalnız bu adla çağırabilir. Geçersiz anahtar
 `unknown bundle: …; known bundles: …` olarak raporlanır — bulanık ad eşleştirmeye
-düşmez. `deactivate_tools` da bir bundle anahtarını kabul eder ve açık demeti kapatır.
-`tool_search` sonuç satırları üyenin demet anahtarını `[group:…]` / `[mcp:…]`
+düşmez. `tool_search` sonuç satırları üyenin demet anahtarını `[group:…]`
 etiketiyle gösterir.
+
+> **Gateway'de yalnız `group:` demetleri vardır.** `mcp:<sunucu>` anahtarı bu yola
+> özgü DEĞİL, native yola özgüdür: gateway'in demet evreni `bundleIndex(run)` →
+> `candidateDefs`'tir ve bu küme yalnız built-in araçlardan oluşur — köprü MCP
+> araçlarını dışarıda bırakır (`internal/tools/bridge_filter.go`,
+> `BridgeableDefsFiltered`), çünkü harici MCP sunucularını claude-cli kendisi
+> mount eder. `mcp:*` demetleri yalnız native yolda üretilir
+> (`internal/tools/bundles.go`, `Registry.BundleIndex`).
+
+> **Gateway'de demet durumu tutulmaz.** Demet "açmak" yalnız bir listeleme
+> render'ıdır; `listBundles` hiçbir durum yazmaz, dolayısıyla kapatılacak bir şey de
+> yoktur. `deactivate_tools` bir demet anahtarını **no-op olarak yutar** (anahtar
+> `bundleKeys`'e ayrılır ve deactivate dalında kullanılmaz). `OpenBundle` /
+> `CloseBundle` yalnız native yolda anlamlıdır
+> (`internal/tools/builtin_activate.go`).
 
 > **Katalog farkı:** native (claude-cli olmayan) yolda lazy katalog bloğunun sonuna
 > `Bundles: group:… (n), mcp:… (n)` satırı basılır; **CLI formunda bilerek

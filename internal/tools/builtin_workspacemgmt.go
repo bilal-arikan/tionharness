@@ -11,7 +11,7 @@ import (
 )
 
 // Workspace self-management tools let an agent list, create, rename and delete
-// the WORKSPACES of the application â€” the fully-isolated stores (each its own
+// the WORKSPACES of the application — the fully-isolated stores (each its own
 // agents/sessions/flows/secrets) that the switcher hops between. Unlike the
 // other self-management tools (which act inside the current workspace's DB),
 // these reach across workspace boundaries, so they go through a bridge wired in
@@ -293,7 +293,7 @@ func NewDeleteWorkspaceTool(b WorkspaceBridge, actorID, currentWsID string) Dele
 func (DeleteWorkspaceTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_workspace",
-		Description: "Delete a workspace that was created by an agent (not by the user) and ALL of its data â€” agents, sessions, flows, secrets and files. This is irreversible. You cannot delete the workspace you are currently running in, nor the last remaining workspace. Pass the workspace id (see list_workspaces).",
+		Description: "Delete a workspace that was created by an agent (not by the user) and ALL of its data — agents, sessions, flows, secrets and files. This is irreversible. You cannot delete the workspace you are currently running in, nor the last remaining workspace. Pass the workspace id (see list_workspaces).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The workspace id to delete (see list_workspaces)"}},

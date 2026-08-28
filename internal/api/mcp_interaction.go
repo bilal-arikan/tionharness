@@ -527,8 +527,8 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	specs = append(specs,
 		interaction.ToolSpec{
 			Name:        "activate_tools",
-			Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`. An entry may also be a BUNDLE key (\"group:<category>\" or \"mcp:<server>\"): that activates nothing — it only lists that bundle's members with one-line summaries, so you can then activate the one you need by name.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate, and/or bundle keys (group:<category>, mcp:<server>) to list"}},"required":["tools"]}`),
+			Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`. An entry may also be a BUNDLE key (\"group:<category>\"): that activates nothing — it only lists that bundle's members with one-line summaries, so you can then activate the one you need by name. Only group bundles exist here; tools from external MCP servers are mounted separately and have no bundle key on this path.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate, and/or bundle keys (group:<category>) to list"}},"required":["tools"]}`),
 		},
 		interaction.ToolSpec{
 			Name:        "deactivate_tools",
@@ -542,7 +542,7 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		},
 		interaction.ToolSpec{
 			Name:        "tool_search",
-			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed. To browse a whole family instead of searching, pass a bundle key (\"group:<category>\", \"mcp:<server>\") to activate_tools — it lists members without loading schemas.",
+			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed. To browse a whole family instead of searching, pass a bundle key (\"group:<category>\") to activate_tools — it lists members without loading schemas.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Keywords to match against tool names + descriptions"}},"required":["query"]}`),
 		},
 	)
@@ -1068,13 +1068,32 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 		}
 		return ranked[i].nameHits > ranked[j].nameHits
 	})
+	// Each line carries the match's BUNDLE key, mirroring the native renderer
+	// (internal/tools/builtin_activate.go): the bundle vocabulary stays learnable from
+	// a search result, so the model can open a whole group with activate_tools("group:…")
+	// instead of guessing names. The key is derived from THIS path's bundle universe
+	// (bundleIndex over candidateDefs) — built-ins only, since the bridge excludes MCP
+	// tools (internal/tools/bridge_filter.go) — so MCP tools are never tagged here.
+	bundleOfName := map[string]string{}
+	for key, members := range b.bundleIndex(run) {
+		if strings.HasPrefix(key, tools.MCPBundlePrefix) {
+			continue
+		}
+		for _, m := range members {
+			bundleOfName[m] = key
+		}
+	}
 	var matches []string
 	for _, r := range ranked {
 		desc := cands[r.name]
 		if len(desc) > 100 {
 			desc = desc[:100] + "…"
 		}
-		matches = append(matches, "- "+r.name+" — "+desc)
+		line := "- " + r.name + " — " + desc
+		if key := bundleOfName[r.name]; key != "" {
+			line += "  [" + key + "]"
+		}
+		matches = append(matches, line)
 	}
 	if len(matches) == 0 {
 		return interaction.CallResult{Text: fmt.Sprintf("No on-demand tools match %q.", in.Query)}
@@ -1082,7 +1101,22 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 	const max = 30
 	more := ""
 	if len(matches) > max {
+		// Name the bundles the dropped matches live in, so narrowing has a direction.
+		var dropped []string
+		seen := map[string]bool{}
+		for _, r := range ranked[max:] {
+			key := bundleOfName[r.name]
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			dropped = append(dropped, key)
+		}
+		sort.Strings(dropped)
 		more = fmt.Sprintf("\n…and %d more; refine the query.", len(matches)-max)
+		if len(dropped) > 0 {
+			more += " The rest live in: " + strings.Join(dropped, ", ") + "."
+		}
 		matches = matches[:max]
 	}
 	return interaction.CallResult{Text: "Matching tools (load with activate_tools):\n" + strings.Join(matches, "\n") + more}

@@ -151,6 +151,40 @@ func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
 	}
 }
 
+// TestGatewayToolSearchTagsBundle locks the gateway renderer's parity with the native
+// one (internal/tools/builtin_activate.go): every tool_search row ends with the match's
+// bundle key, so the bundle vocabulary is learnable from a search result. The gateway's
+// bundle universe is candidateDefs — built-ins only — so a namespaced MCP-style name
+// carries NO tag (those servers are mounted by the CLI, never bridged here).
+func TestGatewayToolSearchTagsBundle(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+
+	run.setBridge(
+		[]providers.ToolDef{
+			{Name: "secret_ops", Description: "perform a secret hidden maintenance operation"},
+			{Name: "mcp__playwright__secret_click", Description: "click a secret element"},
+		},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil },
+	)
+	run.setTierVis(func(string) string { return tools.VisibilityNameOnly })
+
+	res := b.callToolSearch(run, json.RawMessage(`{"query":"secret"}`))
+	want := "- secret_ops — perform a secret hidden maintenance operation  [" + tools.BundleOf("secret_ops") + "]"
+	if !strings.Contains(res.Text, want) {
+		t.Fatalf("tool_search row must carry its bundle tag %q, got:\n%s", want, res.Text)
+	}
+	for _, line := range strings.Split(res.Text, "\n") {
+		if strings.Contains(line, "secret_click") && strings.Contains(line, "[mcp:") {
+			t.Fatalf("MCP-namespaced tools must not be tagged on the gateway path, got %q", line)
+		}
+	}
+}
+
 // TestFullTierBypassesGatewayGate locks the codex-cli variant of the gateway
 // request (tier suffixed "-full", see fullTierQueryParam in package interaction /
 // interactionServers in internal/agent/codexmcp.go): since codex-cli never
