@@ -44,27 +44,19 @@ func (GetViewTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "get_view",
 		// Description is deliberately terse: get_view is EAGER (its schema rides every
-		// turn's cached prefix), so per-kind prose is compressed to one line each. The
-		// projection itself is self-describing — the agent learns the detail by calling
-		// it, not by carrying a manual in every turn.
-		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole. " +
-			"Numbers are computed, never model-written; the view reports what it hid and hands back " +
-			"drill-down refs, so nothing is silently dropped.\n\n" +
-			"  workspace — \"what is going on?\": counts and the signals worth acting on " +
-			"(stuck sessions, pending questions, failed runs, broken schedules, stale cards). id='workspace'.\n" +
-			"  board    — the kanban: column histogram + stuck/failed/blocked/overdue cards. id='board'; " +
-			"sub=<cardId> drills into one card.\n" +
-			"  session  — a conversation WITHOUT its transcript: checklist progress, last failure, " +
-			"stuck turns, pending question, handoff lineage, coordinator role.\n" +
-			"  flowrun  — a flow execution: which nodes ran, timings, where it is parked, what failed. " +
-			"sub=<nodeId> drills into one node.\n" +
-			"  schedule — one cron schedule: armed/disabled, last fire + error, next run, what it delivers.\n" +
-			"  agent | budget | tools | logs | artifact | automation | skill | insight | category — the " +
-			"remaining Workspace Explorer nodes, the ones `expand` hands you refs for (use the id expand " +
-			"returned; 'budget'/'tools'/'logs' and category ids like 'sessions' are singletons).\n\n" +
-			"level: 'tiny' | 'card' (default) | 'full'.\n" +
-			"Prefer this over list_tasks / get_flow_run + parsing raw state: a fraction of the tokens, and " +
-			"it surfaces the warning signals directly.",
+		// turn's cached prefix), so it carries only what the schema cannot express —
+		// singleton ids, what sub means, and when to reach for this over the raw
+		// listing tools. The per-kind catalogue that used to live here was pure
+		// duplication of the kind enum: the projection is self-describing, so the
+		// agent learns the detail by calling it, not by carrying a manual every turn.
+		Description: "Get a COMPACT, deterministic summary of an entity instead of reading it whole: the " +
+			"state worth acting on (failures, stuck turns, pending questions, what it is parked on), " +
+			"never the raw transcript. Numbers are computed, never model-written, and whatever the view " +
+			"hid it counts and hands back as a drill-down ref.\n\n" +
+			"ids: 'workspace', 'board', 'budget', 'tools', 'logs' and category ids ('sessions', 'agents', …) " +
+			"are singletons — pass the kind as the id. Everything else takes the entity's own id, as `expand` " +
+			"returns it. sub= drills one level in (a card id on board, a node id on flowrun).\n" +
+			"Prefer this over list_tasks / get_flow_run + parsing raw state: a fraction of the tokens.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

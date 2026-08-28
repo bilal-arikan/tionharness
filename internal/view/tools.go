@@ -82,6 +82,13 @@ func ProjectTools(in ToolsInput, level Level) (View, error) {
 	if disabledTools > 0 {
 		l.add("kapalı araçlar: %s", strings.Join(clipList(in.ToolConfig.DisabledTools, toolsServerRows), ", "))
 	}
+	// The workspace-level visibility tiers are the OTHER half of the tool surface:
+	// a tool set to "hidden" here is still enabled but never advertised, which is
+	// exactly the state that reads as "the agent ignores this tool". Sorted, so two
+	// renders of the same config produce the same bytes (map order is not stable).
+	if tiers := toolVisibilityLine(in.ToolConfig.ToolVisibility); tiers != "" {
+		l.add("görünürlük: %s", tiers)
+	}
 	if l.empty() {
 		l.add("(yapılandırılmış MCP sunucusu yok)")
 	}
@@ -89,6 +96,23 @@ func ProjectTools(in ToolsInput, level Level) (View, error) {
 	v.Body = l.String()
 	v.finalize()
 	return v, nil
+}
+
+// toolVisibilityLine renders the workspace tool-visibility overrides as
+// "name=tier" pairs, capped like every other list in this package so a workspace
+// that re-tiered fifty tools cannot dominate the view. Returns "" when nothing is
+// overridden — an empty map means every tool sits at its code default, which is
+// not a fact worth a line.
+func toolVisibilityLine(tiers map[string]string) string {
+	if len(tiers) == 0 {
+		return ""
+	}
+	pairs := make([]string, 0, len(tiers))
+	for name, tier := range tiers {
+		pairs = append(pairs, name+"="+tier)
+	}
+	sort.Strings(pairs)
+	return strings.Join(clipList(pairs, toolsServerRows), ", ")
 }
 
 // mcpName falls back to the id when a server has no name.
@@ -105,5 +129,8 @@ func mcpEndpoint(m db.MCPServer) string {
 	if m.Transport == db.MCPTransportHTTP || m.Transport == db.MCPTransportSSE {
 		return clip(orDash(m.URL), 50)
 	}
-	return clip(orDash(m.Command), 50)
+	// A stdio command is often an absolute interpreter/script path, whose
+	// identifying half is the tail — clipPath keeps it (and leaves a bare
+	// command name like "npx" alone).
+	return clipPath(orDash(m.Command), 50)
 }

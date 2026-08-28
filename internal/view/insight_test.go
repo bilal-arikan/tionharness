@@ -56,3 +56,28 @@ func TestProjectInsightRejectsEmptyID(t *testing.T) {
 		t.Error("a finding with no id must be an error, not a blank card")
 	}
 }
+
+// TestInsightEvidenceListIsCapped pins the elision honesty on the one field that
+// grows with every recurrence: the list names at most insightEvidenceShown ids and
+// reports the remainder rather than implying it named them all.
+func TestInsightEvidenceListIsCapped(t *testing.T) {
+	now := time.Now()
+	ids := []string{"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"}
+	v, err := ProjectInsight(InsightInput{
+		Finding: InsightFinding{
+			ID: "FND9", Title: "tekrarlayan", Severity: "low", Status: "new",
+			Occurrences: len(ids), EvidenceSessionIDs: ids, LastSeen: now.Unix(),
+		},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	if !strings.Contains(txt, "+3") {
+		t.Errorf("dropped evidence ids must be counted:\n%s", txt)
+	}
+	if strings.Contains(txt, "S9") {
+		t.Errorf("evidence list was not capped:\n%s", txt)
+	}
+}

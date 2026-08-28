@@ -32,10 +32,15 @@ func TestBudgetHeaderCarriesRollupTotals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
-	for _, want := range []string{"BUDGET", "$3.14 bugün", "2 model", "gün 2026-08-06"} {
+	for _, want := range []string{"BUDGET", "$3.14", "2 model", "gün 2026-08-06"} {
 		if !strings.Contains(v.Header, want) {
 			t.Errorf("header missing %q: %q", want, v.Header)
 		}
+	}
+	// The covered period is named once. It used to appear as both a "bugün" beside
+	// the cost and a "gün <date>" at the end, which read as two periods.
+	if strings.Contains(v.Header, "bugün") {
+		t.Errorf("day must be named once, not twice: %q", v.Header)
 	}
 }
 

@@ -103,6 +103,41 @@ func TestSessionSurfacesTrouble(t *testing.T) {
 	}
 }
 
+// TestSessionKindInHeader pins the kind in the header, including the "chat"
+// default: whether a session accepts a new user turn depends on it, so leaving it
+// implicit made a machine-written transcript read like an ordinary conversation.
+func TestSessionKindInHeader(t *testing.T) {
+	now := time.Now()
+
+	v, err := ProjectSession(sessionFixture(now), LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Header, "tür:chat") {
+		t.Errorf("chat kind missing from header: %q", v.Header)
+	}
+
+	in := sessionFixture(now)
+	in.Session.Kind = "flow"
+	v, err = ProjectSession(in, LevelTiny)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Header, "tür:flow") {
+		t.Errorf("kind missing from header: %q", v.Header)
+	}
+
+	// An empty Kind is the persisted spelling of a plain chat session.
+	in.Session.Kind = ""
+	v, err = ProjectSession(in, LevelTiny)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Header, "tür:chat") {
+		t.Errorf("empty kind must render as chat: %q", v.Header)
+	}
+}
+
 func TestSessionCoordinatorLineageInHeader(t *testing.T) {
 	in := sessionFixture(time.Now())
 	in.Session.CoordinatorMode = true
@@ -133,5 +168,45 @@ func TestSessionTinyIsHeaderOnly(t *testing.T) {
 func TestSessionRejectsEmptyInput(t *testing.T) {
 	if _, err := ProjectSession(SessionInput{}, LevelCard); err == nil {
 		t.Fatal("expected an error for an empty session, got a view")
+	}
+}
+
+// TestSessionCardCarriesWorkingDirAndRunState pins the two facts that change what
+// a reader may conclude about a session: which directory its tools resolve
+// against, and how its last background turn ended. A session that died with
+// StuckTurns still zero used to read as healthy.
+func TestSessionCardCarriesWorkingDirAndRunState(t *testing.T) {
+	now := time.Now()
+	in := sessionFixture(now)
+	in.Session.WorkingDir = `C:\Users\user\Desktop\Projects\TionHarness`
+	in.Session.RunState = "failed"
+	in.Session.RunStateAt = now.Add(-2 * time.Hour).Unix()
+
+	v, err := ProjectSession(in, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	// clipPath normalises separators, so the bash-mounted and Windows spellings of
+	// the same directory render identically.
+	if !strings.Contains(txt, "cwd: ") || !strings.Contains(txt, "TionHarness") {
+		t.Errorf("working dir missing:\n%s", txt)
+	}
+	if strings.Contains(txt, `\`) {
+		t.Errorf("path separators must be normalised:\n%s", txt)
+	}
+	if !strings.Contains(txt, "son arka plan turu: failed") || !strings.Contains(txt, "2sa önce") {
+		t.Errorf("run state missing:\n%s", txt)
+	}
+
+	// A clean run and an unset working dir are the expected cases and cost nothing.
+	quiet := sessionFixture(now)
+	quiet.Session.RunState = "completed"
+	q, err := ProjectSession(quiet, LevelCard)
+	if err != nil {
+		t.Fatalf("project quiet: %v", err)
+	}
+	if strings.Contains(q.Text(), "cwd:") || strings.Contains(q.Text(), "arka plan turu") {
+		t.Errorf("default state must not render a line:\n%s", q.Text())
 	}
 }

@@ -136,14 +136,34 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 		l.add("özet: %s", clip(body, 160))
 	}
 	l.addIf(card.Progress > 0, "ilerleme: %%%d", card.Progress)
+	// A flow-backed card is not run by prompting its owner — running it executes
+	// this flow. That changes what the reader does with the card, so it belongs on
+	// the drill-down even though the board roll-up has no room for it.
+	l.addIf(card.FlowID != "", "akış: flow:%s", card.FlowID)
 	l.addIf(card.DueDate != "", "termin: %s%s", card.DueDate, overdueMark(card, now))
-	if deps := parseDependencies(card.Dependencies); len(deps) > 0 {
+	if deps, ok := decodeDependencies(card.Dependencies); !ok {
+		// An unreadable dependency list is the opposite fact from "no dependencies":
+		// the card may well be blocked. Say the list could not be read.
+		l.add("bağımlılık: (liste okunamadı)")
+	} else if len(deps) > 0 {
 		l.add("bağımlılık: %s%s", strings.Join(clipList(deps, boardSignalCards), ", "),
 			blockedMark(card, in.Tasks))
 	}
 	l.addIf(len(card.Tags) > 0, "etiket: %s", strings.Join(card.Tags, ", "))
 	if card.LastRunStatus != "" {
 		l.add("son koşu: %s (%s önce)", card.LastRunStatus, age(tsSec(card.LastRunAt), now))
+	}
+	// A provisioned worktree is where this card's work actually lives; a conflict
+	// state is what stops it landing. "none" is the absence of a worktree and
+	// renders nothing.
+	if st := card.WorktreeState; st != "" && st != "none" {
+		line := "worktree: " + st
+		if card.WorktreeBranch != "" {
+			line += " · " + card.WorktreeBranch
+		}
+		l.add("%s", line)
+		l.addIf(card.WorktreeLastError != "", "✗ worktree hatası: %s",
+			clip(compactPaths(card.WorktreeLastError), 120))
 	}
 	if card.BoardState == db.BoardFailed {
 		l.add("✗ kart başarısız sütunda")
@@ -376,15 +396,24 @@ func blockedCards(tasks []db.Task) []db.Task {
 // malformed value yields no dependencies rather than an error: this is a signal
 // line, and a card with unreadable deps must not break the whole board view.
 func parseDependencies(raw string) []string {
+	ids, _ := decodeDependencies(raw)
+	return ids
+}
+
+// decodeDependencies is parseDependencies with the parse outcome kept: ok is
+// false only when the value is present but will not decode. The single-card
+// drill-down uses it to report an unreadable list instead of rendering the card
+// as dependency-free — the roll-up signals stay on parseDependencies, where one
+// broken card must not take the whole board down.
+func decodeDependencies(raw string) (ids []string, ok bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {
-		return nil
+		return nil, true
 	}
-	var ids []string
 	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		return nil
+		return nil, false
 	}
-	return ids
+	return ids, true
 }
 
 // overdueCards are unfinished cards whose due date has passed.

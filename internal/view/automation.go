@@ -62,6 +62,11 @@ func ProjectAutomation(in AutomationInput, level Level) (View, error) {
 		if a.MaxIterations > 0 {
 			l.add("guardrail: max %d ateşleme · %d sn soğuma", a.MaxIterations, a.CooldownSec)
 		}
+		// An end date is the third guardrail and the only one that can silence a
+		// rule while its counters still look healthy.
+		if a.ExpiresAt > 0 {
+			l.add("bitiş: %s sonra", dur(time.Until(tsSec(a.ExpiresAt))))
+		}
 		if a.PromptTemplate != "" {
 			l.add("prompt: %s", clip(a.PromptTemplate, 100))
 		}
@@ -106,10 +111,25 @@ func automationTrigger(a db.Automation) string {
 	}
 }
 
-// automationTarget renders who runs on fire: an agent (the spawned session's
-// owner) or a flow. The empty target id is shown as "?" rather than as a blank —
-// a rule with no target is a misconfiguration the reader should see.
+// automationTarget renders what happens on fire: a bookkeeping board action, or
+// the agent/flow that runs. The empty target id is shown as "?" rather than as a
+// blank — a rule with no target is a misconfiguration the reader should see.
+//
+// The board ACTIONS are checked first because they carry no agent at all by
+// design: an archive/move rule legitimately has an empty TargetAgentID, and
+// rendering it as "?" accused every one of them of being misconfigured.
 func automationTarget(a db.Automation) string {
+	if a.TriggerKind == db.TriggerBoard {
+		switch a.BoardAction {
+		case db.BoardActionArchive:
+			return "kartı arşivle (LLM çağrısı yok)"
+		case db.BoardActionMove:
+			if a.BoardMoveToState != "" {
+				return "kartı taşı → " + a.BoardMoveToState
+			}
+			return "kartı taşı (hedef sütun tanımsız)"
+		}
+	}
 	if a.FlowID != "" {
 		return "flow:" + a.FlowID
 	}

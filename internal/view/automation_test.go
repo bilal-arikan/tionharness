@@ -65,3 +65,45 @@ func TestProjectAutomationRejectsEmptyID(t *testing.T) {
 		t.Error("an automation with no id must be an error, not a blank card")
 	}
 }
+
+// TestProjectAutomationBoardActionTarget pins the non-spawn board actions: an
+// archive/move rule legitimately carries no target agent, and rendering it as "?"
+// accused every one of them of being misconfigured.
+func TestProjectAutomationBoardActionTarget(t *testing.T) {
+	now := time.Now()
+	archive, err := ProjectAutomation(AutomationInput{
+		Automation: db.Automation{
+			ID: "AUT3", Name: "done→arşiv", TriggerKind: db.TriggerBoard,
+			BoardToState: db.BoardDone, BoardAction: db.BoardActionArchive,
+			Enabled: true,
+		},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project archive: %v", err)
+	}
+	if !strings.Contains(archive.Text(), "hedef: kartı arşivle") {
+		t.Errorf("archive action must name itself:\n%s", archive.Text())
+	}
+	if strings.Contains(archive.Text(), "hedef: ?") {
+		t.Errorf("an agent-less board action must not read as misconfigured:\n%s", archive.Text())
+	}
+
+	move, err := ProjectAutomation(AutomationInput{
+		Automation: db.Automation{
+			ID: "AUT4", TriggerKind: db.TriggerBoard, BoardAction: db.BoardActionMove,
+			BoardMoveToState: db.BoardReview, Enabled: true,
+			ExpiresAt: now.Add(48 * time.Hour).Unix(),
+		},
+		Now: now,
+	}, LevelFull)
+	if err != nil {
+		t.Fatalf("project move: %v", err)
+	}
+	if !strings.Contains(move.Text(), "hedef: kartı taşı → review") {
+		t.Errorf("move action must name its destination column:\n%s", move.Text())
+	}
+	if !strings.Contains(move.Text(), "bitiş:") {
+		t.Errorf("an end date is a guardrail and belongs on the full tier:\n%s", move.Text())
+	}
+}

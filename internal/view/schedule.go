@@ -43,12 +43,19 @@ func ProjectSchedule(in ScheduleInput, level Level) (View, error) {
 	if !sc.Enabled {
 		state = "disabled"
 	}
+	// A one-shot wake carries NO cron expression, so the old unconditional
+	// `cron ""` asserted a broken schedule for every wake the schedule_wake tool
+	// created. The rhythm is named for what it actually is.
+	rhythm := fmt.Sprintf("cron %q", sc.CronExpr)
+	if sc.OneShot {
+		rhythm = "tek seferlik"
+	}
 	if sc.Name != "" {
-		v.Header = fmt.Sprintf("SCHEDULE %s %q · %s · cron %q · asOf %s",
-			sc.ID, clip(sc.Name, 60), state, sc.CronExpr, hhmmss(now))
+		v.Header = fmt.Sprintf("SCHEDULE %s %q · %s · %s · asOf %s",
+			sc.ID, clip(sc.Name, 60), state, rhythm, hhmmss(now))
 	} else {
-		v.Header = fmt.Sprintf("SCHEDULE %s · %s · cron %q · asOf %s",
-			sc.ID, state, sc.CronExpr, hhmmss(now))
+		v.Header = fmt.Sprintf("SCHEDULE %s · %s · %s · asOf %s",
+			sc.ID, state, rhythm, hhmmss(now))
 	}
 
 	if level == LevelTiny {
@@ -64,19 +71,35 @@ func ProjectSchedule(in ScheduleInput, level Level) (View, error) {
 		l.add("son çalışma: %s önce · %s", age(tsSec(sc.LastRunAt), now),
 			firstNonBlank(sc.LastDeliveryStatus, "ok"))
 	}
-	if sc.Enabled && sc.NextRunAt > 0 {
+	// A one-shot fires at FireAt, not on the cron cursor NextRunAt.
+	if sc.Enabled && sc.OneShot && sc.FireAt > 0 {
+		l.add("ateşleme: %s sonra", dur(time.Until(time.Unix(sc.FireAt, 0))))
+	} else if sc.Enabled && sc.NextRunAt > 0 {
 		l.add("sıradaki: %s sonra", dur(time.Until(time.Unix(sc.NextRunAt, 0))))
 	}
-	if sc.FlowID != "" {
+	// A one-shot wake re-delivers into the ORIGINATING session — which session that
+	// is, is the whole point of the wake — so it is named ahead of the agent.
+	switch {
+	case sc.FlowID != "":
 		l.add("hedef: flow:%s", sc.FlowID)
-	} else if sc.AgentID != "" {
+	case sc.OneShot && sc.SessionID != "":
+		l.add("hedef: session:%s", sc.SessionID)
+	case sc.AgentID != "":
 		l.add("hedef: agent:%s", sc.AgentID)
 	}
+	l.addIf(sc.Reason != "", "neden: %s", clip(sc.Reason, 120))
 	l.addIf(sc.Prompt != "", "prompt: %s", clip(sc.Prompt, 140))
 	if sc.ExpiresAt > 0 {
 		l.add("bitiş: %s sonra", dur(time.Until(time.Unix(sc.ExpiresAt, 0))))
 	}
 	l.addIf(len(sc.Tags) > 0, "etiket: %v", sc.Tags)
+	// Whether every fire adds a turn to the agent's shared schedule thread or opens
+	// a fresh session decides what the delivered prompt may assume about its
+	// context. It is long-tail detail and only meaningful for an agent-backed
+	// recurring schedule (a flow always records into its own per-run transcript).
+	if level == LevelFull && !sc.OneShot && sc.FlowID == "" && sc.AgentID != "" {
+		l.add("oturum modu: %s", sc.EffectiveSessionMode())
+	}
 
 	v.Body = l.String()
 	v.finalize()

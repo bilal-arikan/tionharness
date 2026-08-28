@@ -90,3 +90,32 @@ func TestToolsTinyIsHeaderOnly(t *testing.T) {
 		t.Errorf("tiny level must not emit a body: %q", v.Body)
 	}
 }
+
+// TestToolsRendersVisibilityOverrides pins the other half of the tool surface: a
+// tool held at a non-default visibility tier is enabled but never advertised,
+// which is the state that reads as "the agent ignores this tool". The pairs are
+// sorted so two renders of the same config produce the same bytes.
+func TestToolsRendersVisibilityOverrides(t *testing.T) {
+	v, err := ProjectTools(ToolsInput{
+		ToolConfig: db.WorkspaceToolConfig{ToolVisibility: map[string]string{
+			"write_file": "hidden",
+			"get_view":   "summary",
+		}},
+		Now: time.Now(),
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Text(), "görünürlük: get_view=summary, write_file=hidden") {
+		t.Errorf("visibility overrides missing or unsorted:\n%s", v.Text())
+	}
+
+	// Nothing overridden is not a fact worth a line.
+	empty, err := ProjectTools(ToolsInput{Now: time.Now()}, LevelCard)
+	if err != nil {
+		t.Fatalf("project empty: %v", err)
+	}
+	if strings.Contains(empty.Text(), "görünürlük") {
+		t.Errorf("an empty override map must render nothing:\n%s", empty.Text())
+	}
+}

@@ -69,8 +69,22 @@ func ProjectArtifact(in ArtifactInput, level Level) (View, error) {
 	if a.Language != "" {
 		meta = append(meta, "dil: "+a.Language)
 	}
-	if a.ContentFile != "" {
-		meta = append(meta, "dosya: "+a.ContentFile)
+	// Where the bytes live. A media/file artifact keeps them at SourcePath and its
+	// Content is only a caption, so naming ContentFile alone left every image and
+	// upload with no location at all.
+	switch {
+	case a.SourcePath != "":
+		meta = append(meta, "dosya: "+clipPath(a.SourcePath, 60))
+	case a.ContentFile != "":
+		meta = append(meta, "dosya: "+clipPath(a.ContentFile, 60))
+	}
+	// Size is the "is this worth opening" signal a metadata card exists to answer.
+	// Measured in runes, and only for the text kinds whose Content IS the body —
+	// on a media artifact the same number would be the caption's length and read
+	// as the file's size, which is a different fact. Artifacts are not versioned
+	// (an update overwrites in place), so there is no revision to report.
+	if a.SourcePath == "" && a.Content != "" {
+		meta = append(meta, fmt.Sprintf("boyut: %s karakter", compactCount(int64(len([]rune(a.Content))))))
 	}
 	if a.Archived {
 		meta = append(meta, "arşivli")

@@ -43,11 +43,14 @@ func ProjectBudget(in BudgetInput, level Level) (View, error) {
 		Source: fmt.Sprintf("%s/%d", in.Day, len(roll.Rows)),
 	}
 
+	// The covered day is named ONCE. The header used to carry both a "bugün" next
+	// to the cost and a "gün <date>" at the end, which read as two different
+	// periods being reported side by side.
 	day := in.Day
 	if day == "" {
 		day = "bugün"
 	}
-	v.Header = fmt.Sprintf("BUDGET · %s bugün · %d model · %s tok · gün %s · asOf %s",
+	v.Header = fmt.Sprintf("BUDGET · %s · %d model · %s tok · gün %s · asOf %s",
 		usd(roll.CostUSD, estimated), len(roll.Rows), compactCount(tokens), day, hhmmss(now))
 
 	if level == LevelTiny {

@@ -81,3 +81,49 @@ func TestProjectLogsTinyIsHeaderOnly(t *testing.T) {
 		t.Errorf("tiny level must not emit a body: %q", v.Body)
 	}
 }
+
+// TestLogsHeaderCountsFailuresInWindow pins the one question a log tail is opened
+// to answer. The count covers the RENDERED window only — counting elided rows too
+// would promise a scan the body cannot back up.
+func TestLogsHeaderCountsFailuresInWindow(t *testing.T) {
+	now := time.Now()
+	v, err := ProjectLogs(LogsInput{Entries: logFixture(now), Now: now}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Header, "son 4 kayıtta 2 hata / 1 uyarı") {
+		t.Errorf("failure tally missing or wrong: %q", v.Header)
+	}
+
+	// A clean stream says nothing extra.
+	clean, err := ProjectLogs(LogsInput{
+		Entries: []logbuf.Entry{{Seq: 1, Time: now.UnixMilli(), Level: "INFO", Message: "ok"}},
+		Now:     now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project clean: %v", err)
+	}
+	if strings.Contains(clean.Header, "hata") {
+		t.Errorf("a clean tail must not claim failures: %q", clean.Header)
+	}
+}
+
+// TestLogsShortensEmbeddedPaths locks compactPaths on the message: a log line is
+// prose that routinely quotes the file it failed to open, and clip cuts exactly
+// that tail off.
+func TestLogsShortensEmbeddedPaths(t *testing.T) {
+	now := time.Now()
+	v, err := ProjectLogs(LogsInput{
+		Entries: []logbuf.Entry{{
+			Seq: 1, Time: now.UnixMilli(), Level: "ERROR",
+			Message: "açılamadı: C:/Users/user/Desktop/Projects/TionHarness/internal/view/logs.go",
+		}},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Text(), "logs.go") {
+		t.Errorf("the identifying tail of the path was cut:\n%s", v.Text())
+	}
+}

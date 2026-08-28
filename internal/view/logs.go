@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
@@ -24,6 +25,21 @@ const (
 	logsRows     = 30
 	logsRowsFull = 120
 )
+
+// countLogLevels tallies the error and warning records in one slice. Level
+// spellings vary by writer ("ERROR", "error", "warn", "WARNING"), so the match is
+// case-insensitive and prefix-based.
+func countLogLevels(entries []logbuf.Entry) (errs, warns int) {
+	for _, e := range entries {
+		switch lv := strings.ToLower(e.Level); {
+		case strings.HasPrefix(lv, "err"), strings.HasPrefix(lv, "fatal"):
+			errs++
+		case strings.HasPrefix(lv, "warn"):
+			warns++
+		}
+	}
+	return errs, warns
+}
 
 // ProjectLogs renders the recent process log tail, oldest → newest (the stream
 // reads top-down like a terminal that ended).
@@ -57,7 +73,15 @@ func ProjectLogs(in LogsInput, level Level) (View, error) {
 		ElidedUnit: elidedUnit,
 	}
 
-	v.Header = fmt.Sprintf("LOGS · %d kayıt · asOf %s", len(entries), hhmmss(now))
+	// The failure count over the RENDERED window, not the whole buffer: it is the
+	// one question a log tail is opened to answer, and counting the elided rows
+	// too would promise a scan the body cannot back up.
+	errs, warns := countLogLevels(kept)
+	head := fmt.Sprintf("LOGS · %d kayıt", len(entries))
+	if errs > 0 || warns > 0 {
+		head += fmt.Sprintf(" · son %d kayıtta %d hata / %d uyarı", len(kept), errs, warns)
+	}
+	v.Header = head + " · asOf " + hhmmss(now)
 
 	if level == LevelTiny {
 		v.finalize()
@@ -66,7 +90,10 @@ func ProjectLogs(in LogsInput, level Level) (View, error) {
 
 	var l lines
 	for _, e := range kept {
-		msg := clip(e.Message, 90)
+		// A log message is prose that routinely quotes a file it failed to open, and
+		// clip cuts exactly that tail off — compactPaths shortens the path in place
+		// so both the sentence and the file survive.
+		msg := clip(compactPaths(e.Message), 90)
 		src := e.Component
 		if src == "" && e.Session != "" {
 			src = "session:" + e.Session

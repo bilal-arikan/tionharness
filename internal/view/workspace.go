@@ -275,10 +275,10 @@ func workspaceDetail(in WorkspaceInput, st wsStats, now time.Time) string {
 		l.add("stuck   session:%-10s %-40s %s önce", s.ID, clip(s.Title, 40), age(tsSec(s.UpdatedAt), now))
 	}
 	for _, r := range st.FailedRuns {
-		l.add("failed  run:%-14s %s", r.ID, clip(r.Error, 90))
+		l.add("failed  run:%-14s %s", r.ID, clip(compactPaths(r.Error), 90))
 	}
 	for _, sc := range st.BrokenSchedules {
-		l.add("sched   %-14s %s", sc.ID, clip(sc.LastDeliveryError, 90))
+		l.add("sched   %-14s %s", sc.ID, clip(compactPaths(sc.LastDeliveryError), 90))
 	}
 	return l.String()
 }

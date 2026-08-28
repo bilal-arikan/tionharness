@@ -124,3 +124,45 @@ func TestBoardCustomColumnsSortAfterBuiltins(t *testing.T) {
 		t.Errorf("custom columns must follow built-ins, alphabetically:\n%s", v.Text())
 	}
 }
+
+// TestBoardCardDrilldownExtras pins the three card facts a reader acts on that the
+// board roll-up has no room for: the flow a flow-backed card runs, its worktree
+// state, and an unreadable dependency list reported as such (NOT as "no deps",
+// which is the opposite fact).
+func TestBoardCardDrilldownExtras(t *testing.T) {
+	now := time.Now()
+	in := boardFixture(now)
+	in.Tasks = append(in.Tasks, db.Task{
+		ID: "T9", Title: "flow kart", BoardState: db.BoardInProgress, UpdatedAt: now.Unix(),
+		FlowID: "FL2", WorktreeState: "conflict", WorktreeBranch: "task/T9",
+		WorktreeLastError: "merge conflict in internal/view/board.go",
+		Dependencies:      `{bozuk`,
+	})
+	in.Sub = "T9"
+
+	v, err := ProjectBoard(in, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	for _, want := range []string{
+		"akış: flow:FL2",
+		"worktree: conflict · task/T9",
+		"worktree hatası: merge conflict",
+		"bağımlılık: (liste okunamadı)",
+	} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("missing %q in:\n%s", want, txt)
+		}
+	}
+
+	// A card with none of these stays silent — the lines are earned, not padded.
+	in.Sub = "T3"
+	plain, err := ProjectBoard(in, LevelCard)
+	if err != nil {
+		t.Fatalf("project plain: %v", err)
+	}
+	if strings.Contains(plain.Text(), "worktree") || strings.Contains(plain.Text(), "akış:") {
+		t.Errorf("plain card must not render empty extras:\n%s", plain.Text())
+	}
+}

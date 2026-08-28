@@ -182,7 +182,7 @@ func workerLine(w Worker, now time.Time) string {
 
 	line := fmt.Sprintf("- %s [%s]%s (%s)", w.AgentName, status, badge, w.SessionID)
 	if w.Summary != "" {
-		line += " — " + clip(w.Summary, 200)
+		line += " — " + clip(compactPaths(w.Summary), 200)
 	}
 	return line
 }

@@ -137,8 +137,10 @@ func projectFlowNode(in FlowRunInput, v View, level Level, now time.Time) (View,
 		if level == LevelFull {
 			outMax, inMax = 4000, 2000
 		}
-		l.addIf(entry.Input != "", "girdi: %s", clip(entry.Input, inMax))
-		l.add("çıktı: %s", clip(entry.Output, outMax))
+		// Step input/output routinely carry filesystem paths, whose informative
+		// half is the tail — clipPath keeps it and degrades to clip for prose.
+		l.addIf(entry.Input != "", "girdi: %s", clipPath(entry.Input, inMax))
+		l.add("çıktı: %s", clipPath(entry.Output, outMax))
 		l.addIf(entry.StartMs > 0 && entry.EndMs > entry.StartMs, "süre: %s", durMs(entry.EndMs-entry.StartMs))
 		l.addIf(entry.ThreadLen > 0, "önceki bağlam: %d mesaj", entry.ThreadLen)
 	}
@@ -353,7 +355,7 @@ func flowSignals(in FlowRunInput, now time.Time) []string {
 	var out []string
 
 	if e := strings.TrimSpace(in.Run.Error); e != "" {
-		out = append(out, "⚠ hata: "+clip(e, 180))
+		out = append(out, "⚠ hata: "+clip(compactPaths(e), 180))
 	}
 	if in.State.WaitingAt != "" {
 		out = append(out, fmt.Sprintf("⏸ await-input node:%s — %s bekliyor",
@@ -397,7 +399,9 @@ func flowDetail(in FlowRunInput, now time.Time) (string, int) {
 	}
 	var l lines
 	for _, t := range trace {
-		l.add("%s %-10s %-24s %s", hhmmss(tsSec(t.At)), t.Type, clip(t.Title, 24), clip(t.Output, 110))
+		// The node output is free prose that routinely quotes a path; the title is an
+		// author-written label and stays on plain clip.
+		l.add("%s %-10s %-24s %s", hhmmss(tsSec(t.At)), t.Type, clip(t.Title, 24), clip(compactPaths(t.Output), 110))
 	}
 	if l.empty() {
 		return "", dropped

@@ -6,10 +6,9 @@ import (
 	"time"
 )
 
-// insightStatusNew is the view-local spelling of a finding that has not been
-// reviewed yet (mirrors insight.StatusNew without importing insight — see
-// Sources.FindingsSource).
-const insightStatusNew = "new"
+// insightEvidenceShown is how many evidence session ids one finding spells out
+// before the rest collapse into a "+N" tail.
+const insightEvidenceShown = 6
 
 // InsightInput is one insight finding (a retrospective scan result). The
 // finding is the view-local shape (InsightFinding) — the api layer adapts
@@ -73,8 +72,11 @@ func ProjectInsight(in InsightInput, level Level) (View, error) {
 	}
 	l.add("%s", strings.Join(meta, " · "))
 
+	// A recurring finding accumulates one evidence id per occurrence, so this list
+	// grows without bound. Capped through clipList, which appends the "+N"
+	// remainder rather than implying it named every session.
 	if len(f.EvidenceSessionIDs) > 0 {
-		l.add("kanıt: %s", strings.Join(f.EvidenceSessionIDs, ", "))
+		l.add("kanıt: %s", strings.Join(clipList(f.EvidenceSessionIDs, insightEvidenceShown), ", "))
 	}
 	if f.RootCause != "" {
 		l.add("kök neden: %s", clip(f.RootCause, 100))

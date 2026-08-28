@@ -54,14 +54,31 @@ func ProjectSkill(in SkillInput, level Level) (View, error) {
 		access = "shared"
 	}
 	var meta []string
+	// The tier decides whether editing this skill is even possible here: a global
+	// skill lives in the shared data dir and is read-only to workspace tooling,
+	// while a workspace one is the workspace's own file.
+	if sk.Source != "" {
+		meta = append(meta, "kaynak: "+string(sk.Source))
+	}
 	meta = append(meta, "erişim: "+access)
+	// How the skill is ADVERTISED in the per-turn catalog. A hidden or name-only
+	// skill still resolves through use_skill but will not reach an agent that never
+	// learns it exists — the difference between "not offered" and "not there".
+	if sk.Visibility != "" {
+		meta = append(meta, "görünürlük: "+sk.Visibility)
+	}
 	if sk.Group != "" {
 		meta = append(meta, "grup: "+sk.Group)
 	}
-	if sk.Icon != "" {
-		meta = append(meta, "ikon: "+sk.Icon)
-	}
+	// The icon is a UI glyph: nothing a reader of this projection can act on, and
+	// it cost a segment on every skill card.
 	l.add("%s", strings.Join(meta, " · "))
+
+	// When-to-use is the trigger condition — the long half of the catalog entry,
+	// and the part a reader only needs once they are deciding to load the skill.
+	if level == LevelFull && sk.WhenToUse != "" {
+		l.add("ne zaman: %s", clip(sk.WhenToUse, 200))
+	}
 
 	v.Body = l.String()
 	v.finalize()

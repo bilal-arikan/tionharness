@@ -2,6 +2,8 @@ package view
 
 import (
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -128,6 +130,164 @@ func clip(s string, max int) string {
 		return "…"
 	}
 	return string(r[:max-1]) + "…"
+}
+
+// homeDir resolves the current user's home directory. It is a var so tests can
+// pin a home regardless of the host OS (os.UserHomeDir reads USERPROFILE on
+// Windows and HOME elsewhere, which would make the expectations platform-bound).
+var homeDir = os.UserHomeDir
+
+// shortPath makes a filesystem path readable inside a one-line projection
+// WITHOUT throwing information away: separators normalise to "/" (so a Windows
+// path and its bash-mounted twin read the same) and the user's home prefix
+// collapses to "~", which is where most of the uninformative length lives.
+//
+// A string with no separator is not a path and is returned untouched — rewriting
+// a title or a tool name here would misrepresent what the value is.
+func shortPath(s string) string {
+	p := strings.ReplaceAll(s, `\`, "/")
+	if !strings.Contains(p, "/") {
+		return s
+	}
+	home, err := homeDir()
+	if err != nil || home == "" {
+		return p
+	}
+	h := strings.TrimRight(strings.ReplaceAll(home, `\`, "/"), "/")
+	if h == "" || len(p) < len(h) || !strings.EqualFold(p[:len(h)], h) {
+		return p
+	}
+	// Only a whole-segment prefix match counts: "/home/bil" must not swallow the
+	// first segment of "/home/bilal-backup".
+	rest := p[len(h):]
+	if rest != "" && !strings.HasPrefix(rest, "/") {
+		return p
+	}
+	return "~" + rest
+}
+
+// clipPath is clip for values that MAY be filesystem paths. It shortens with
+// shortPath first, then — if the result is still longer than max runes — keeps
+// the TAIL and marks the cut at the FRONT with "…/".
+//
+// clip cuts from the right, which is exactly backwards for a path:
+// "C:/Users/user/Desktop/Projects/TionHar…" identifies nothing, while
+// "…/features/view/ViewPanel.tsx" identifies the file. The cut lands on a
+// separator boundary so a rendered segment is always a real segment; a single
+// segment longer than max is the one case that must be cut mid-word.
+//
+// A value with no separator is not a path, so it falls back to clip and keeps
+// the front-preserving behaviour prose needs. Whitespace collapses like clip —
+// a projection line must stay ONE line.
+func clipPath(s string, max int) string {
+	s = strings.TrimSpace(collapseSpace(s))
+	if !strings.ContainsAny(s, `/\`) {
+		return clip(s, max)
+	}
+	s = shortPath(s)
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	const marker = "…/"
+	budget := max - len([]rune(marker))
+	if budget <= 0 {
+		return clip(s, max)
+	}
+	tail := string(r[len(r)-budget:])
+	// Prefer whole segments: drop the partial leading segment when one remains.
+	if i := strings.Index(tail, "/"); i >= 0 && i+1 < len(tail) {
+		tail = tail[i+1:]
+	}
+	return marker + tail
+}
+
+// pathStopChars are the characters an absolute path may NOT contain in prose.
+// They are the delimiters a path is normally wrapped in — whitespace, quotes,
+// backticks — plus the punctuation a sentence puts right after one. Stopping
+// there is what keeps a trailing "," or ")" out of the rewritten path.
+const pathStopChars = "\\s\"'" + "`" + ",;)>"
+
+// absPathRe matches an absolute filesystem path anywhere inside a string:
+// a Windows drive path ("C:\..." / "C:/...") or a POSIX path of at least TWO
+// segments ("/usr/bin"). One segment is not enough — a lone "/x" is far more
+// often a separator in prose than a path. Compiled once: this runs on every
+// rendered line.
+var absPathRe = regexp.MustCompile(
+	`[A-Za-z]:[\\/][^` + pathStopChars + `]*` +
+		`|/[^` + pathStopChars + `/]+(?:/[^` + pathStopChars + `]*)+`)
+
+// inlinePathBudget is how many runes one path may occupy inside a prose line.
+// The lines this runs on are clipped at 70–200 runes, so a path longer than
+// ~44 would eat most of the sentence it sits in and the clip would then cut the
+// prose instead. Three tail segments ("…/internal/view/session.go") stay under
+// it in practice while still identifying the file.
+const inlinePathBudget = 44
+
+// compactPaths rewrites every absolute path occurring INSIDE s, leaving the
+// surrounding prose byte-identical.
+//
+// clipPath only helps when the whole value IS a path. Most session lines are
+// prose that merely CONTAINS one — a chat message, an error string, a "şu an:"
+// activity line — and there clip() cuts the sentence, so the embedded path is
+// exactly what loses its informative tail. Shortening the path in place keeps
+// both the sentence and the file it names.
+//
+// A string with no path match is returned unchanged, not rebuilt.
+func compactPaths(s string) string {
+	locs := absPathRe.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	last := 0
+	for _, loc := range locs {
+		start, end := loc[0], loc[1]
+		// A path-looking run glued to the previous character is part of a bigger
+		// token — the "/host/path" of a URL after "://", or the tail of a path the
+		// previous match already consumed. Rewriting it would corrupt that token.
+		if start > 0 && !isPathBoundary(s[start-1]) {
+			continue
+		}
+		b.WriteString(s[last:start])
+		b.WriteString(compactOnePath(s[start:end]))
+		last = end
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// isPathBoundary reports whether c may directly precede a path. Anything that
+// could be part of a longer token (letters, digits, ":" of a URL scheme, a
+// separator) disqualifies the match.
+func isPathBoundary(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return false
+	case c == ':', c == '/', c == '\\', c == '.', c == '_', c == '-', c == '~':
+		return false
+	default:
+		return true
+	}
+}
+
+// compactOnePath shortens a single matched path: shortPath first (home → "~",
+// separators normalised), then — only if it is still over budget — the last
+// three segments behind a "…/" marker.
+func compactOnePath(p string) string {
+	p = shortPath(p)
+	if len([]rune(p)) <= inlinePathBudget {
+		return p
+	}
+	segs := strings.Split(p, "/")
+	if len(segs) <= 3 {
+		// Nothing to fold: the length lives in the segments themselves, and cutting
+		// mid-segment here would produce the half-eaten path this helper exists to
+		// prevent.
+		return p
+	}
+	return "…/" + strings.Join(segs[len(segs)-3:], "/")
 }
 
 // collapseSpace turns every run of whitespace (including newlines) into a single

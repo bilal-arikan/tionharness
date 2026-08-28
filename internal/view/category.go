@@ -35,10 +35,10 @@ const categoryTopN = 50
 // path it guards would never run in production or in a test.
 const categoryFullMaxBytes = 2400
 
-// CategoryInput is a resolved category: its id plus the FULL (uncapped, already
-// member list. The projection counts the members and caps the
-// handles — the count is honest because it sees every member, the handle list is
-// bounded because the map cannot render every one.
+// CategoryInput is a resolved category: its id plus the FULL, uncapped member
+// list. The projection counts the members and caps the handles — the count is
+// honest because it sees every member, the handle list is bounded because the map
+// cannot render every one.
 type CategoryInput struct {
 	ID      string
 	Members []Handle

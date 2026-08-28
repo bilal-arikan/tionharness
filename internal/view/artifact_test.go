@@ -52,3 +52,41 @@ func TestProjectArtifactTinyIsHeaderOnly(t *testing.T) {
 		t.Errorf("tiny level must not emit a body: %q", v.Body)
 	}
 }
+
+// TestProjectArtifactRendersSizeAndSourcePath locks the two "is it worth opening"
+// facts: a text artifact reports its body size, and a media artifact reports the
+// file its bytes live in (its Content is only a caption, so no size is claimed).
+func TestProjectArtifactRendersSizeAndSourcePath(t *testing.T) {
+	now := time.Now()
+	text, err := ProjectArtifact(ArtifactInput{
+		Artifact: db.Artifact{
+			ID: "ART2", Title: "rapor", Kind: db.ArtifactMarkdown,
+			Content: strings.Repeat("a", 4200), UpdatedAt: now.Unix(),
+		},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project text: %v", err)
+	}
+	if !strings.Contains(text.Text(), "boyut: 4k karakter") {
+		t.Errorf("text artifact must report its size:\n%s", text.Text())
+	}
+
+	media, err := ProjectArtifact(ArtifactInput{
+		Artifact: db.Artifact{
+			ID: "ART3", Title: "ekran", Kind: db.ArtifactImage,
+			SourcePath: "uploads/ART3.png", Content: "başlık", UpdatedAt: now.Unix(),
+		},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project media: %v", err)
+	}
+	txt := media.Text()
+	if !strings.Contains(txt, "dosya: uploads/ART3.png") {
+		t.Errorf("media artifact must name where its bytes live:\n%s", txt)
+	}
+	if strings.Contains(txt, "boyut:") {
+		t.Errorf("a caption length must not be rendered as the file size:\n%s", txt)
+	}
+}

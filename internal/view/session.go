@@ -61,7 +61,7 @@ func ProjectSession(in SessionInput, level Level) (View, error) {
 
 	var l lines
 	if s := strings.TrimSpace(in.Session.Summary); s != "" {
-		l.add("özet: %s", clip(s, summaryWidth(level)))
+		l.add("özet: %s", clip(compactPaths(s), summaryWidth(level)))
 	}
 	if todo := sessionTodoLine(in.Messages); todo != "" {
 		l.add("%s", todo)
@@ -102,13 +102,14 @@ func sessionHeader(in SessionInput, now time.Time) string {
 		title = "(başlıksız)"
 	}
 
-	head := fmt.Sprintf("SES:%s %q · %d msg · %s · agent:%s",
-		s.ID, clip(title, 60), s.MessageCount,
+	// The kind is always rendered, including the "chat" default: it decides how a
+	// reader may act on the session (only a writable kind accepts a new user turn
+	// — db.IsWritableSessionKind), so leaving it implicit made a machine-written
+	// transcript look like an ordinary conversation.
+	head := fmt.Sprintf("SES:%s %q · tür:%s · %d msg · %s · agent:%s",
+		s.ID, clip(title, 60), sessionKindLabel(s.Kind), s.MessageCount,
 		age(tsSec(s.CreatedAt), now)+" önce açıldı", orDash(s.AgentID))
 
-	if s.Kind != "" && s.Kind != "chat" {
-		head += " · " + s.Kind
-	}
 	// Coordination lineage changes how a reader should interpret everything else
 	// (a worker's "stuck" is its coordinator's problem too), so it belongs in the
 	// header rather than buried among the signals.
@@ -123,20 +124,48 @@ func sessionHeader(in SessionInput, now time.Time) string {
 	return head
 }
 
+// sessionKindLabel names the session kind. An empty Kind is the persisted
+// spelling of a plain chat session (db.writableSessionKindList carries both), so
+// it renders as "chat" rather than as a missing value.
+func sessionKindLabel(kind string) string {
+	if strings.TrimSpace(kind) == "" {
+		return "chat"
+	}
+	return kind
+}
+
 // sessionSignals is the L1 layer for a session.
 func sessionSignals(in SessionInput, now time.Time) []string {
 	var out []string
 	s := in.Session
 
+	// The working directory decides what every filesystem/shell tool call in this
+	// session resolves against, so two sessions of the same agent can be operating
+	// on different repositories. Empty means "workspace default", which this
+	// projection cannot resolve — so it renders nothing rather than guessing.
+	if wd := strings.TrimSpace(s.WorkingDir); wd != "" {
+		out = append(out, "cwd: "+clipPath(wd, 60))
+	}
 	if s.StuckTurns > 0 {
 		out = append(out, fmt.Sprintf("⚠ StuckTurns %d — ardışık başarısız tur", s.StuckTurns))
+	}
+	// How the last BACKGROUND turn ended. A single failed/killed/timeout turn does
+	// not raise StuckTurns past zero on the next clean turn, so without this line a
+	// session that just died reads as healthy. A completed run is the expected
+	// case and stays unrendered.
+	if rs := strings.TrimSpace(s.RunState); rs != "" && rs != "completed" {
+		line := "⚑ son arka plan turu: " + rs
+		if s.RunStateAt > 0 {
+			line += fmt.Sprintf(" (%s önce)", age(tsSec(s.RunStateAt), now))
+		}
+		out = append(out, line)
 	}
 	if in.WaitingAsk != nil {
 		out = append(out, fmt.Sprintf("⏸ cevap bekleyen soru (%s, %s'dir bekliyor) — ask:%s",
 			orDash(in.WaitingAsk.Kind), age(tsSec(in.WaitingAsk.CreatedAt), now), in.WaitingAsk.ID))
 	}
 	if err := lastErrorStep(in.Messages); err != "" {
-		out = append(out, "✗ son hata: "+clip(err, 180))
+		out = append(out, "✗ son hata: "+clip(compactPaths(err), 180))
 	}
 	if tags := signalTags(s.Tags); len(tags) > 0 {
 		out = append(out, "🏷 "+strings.Join(tags, ", "))
@@ -180,7 +209,7 @@ func sessionTodoLine(msgs []db.Message) string {
 	}
 	line := fmt.Sprintf("todo: %d/%d tamam", r.Done, len(r.Items))
 	if r.Active != "" {
-		line += " · şu an: " + clip(r.Active, 70)
+		line += " · şu an: " + clip(compactPaths(r.Active), 70)
 	}
 	return line
 }
@@ -218,7 +247,7 @@ func sessionRecent(msgs []db.Message, now time.Time) string {
 		if text == "" {
 			text = fmt.Sprintf("(%d adım)", len(DecodeSteps(m.Steps)))
 		}
-		l.add("%-9s %s", m.Role, clip(text, 160))
+		l.add("%-9s %s", m.Role, clip(compactPaths(text), 160))
 	}
 	return l.String()
 }

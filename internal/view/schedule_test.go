@@ -77,3 +77,53 @@ func TestScheduleProjectionSurfacesLastError(t *testing.T) {
 // TestScheduleProjectionSurfacesLastError pins the schedule drill-down: the last
 // fire's error is the headline, the enabled/disabled state is explicit, and a
 // disabled schedule still shows its error here (unlike the workspace roll-up).
+
+// TestProjectScheduleOneShotWake pins the one-shot (schedule_wake) shape: a wake
+// carries no cron expression, so the header used to assert a broken `cron ""`.
+// It fires at FireAt and delivers back into the originating session.
+func TestProjectScheduleOneShotWake(t *testing.T) {
+	now := time.Now()
+	v, err := ProjectSchedule(ScheduleInput{
+		Schedule: db.Schedule{
+			ID: "SCH9", Enabled: true, OneShot: true,
+			FireAt: now.Add(30 * time.Minute).Unix(), SessionID: "SES4",
+			Reason: "derleme bitince kontrol", Prompt: "durumu özetle",
+		},
+		Now: now,
+	}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if !strings.Contains(v.Header, "tek seferlik") || strings.Contains(v.Header, `cron ""`) {
+		t.Errorf("a one-shot must not claim an empty cron: %q", v.Header)
+	}
+	txt := v.Text()
+	for _, want := range []string{"ateşleme:", "hedef: session:SES4", "neden: derleme bitince kontrol"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("missing %q in:\n%s", want, txt)
+		}
+	}
+}
+
+// TestProjectScheduleSessionModeIsFullOnly locks the level discipline for the
+// per-fire session mode: long-tail detail, drill-down only.
+func TestProjectScheduleSessionModeIsFullOnly(t *testing.T) {
+	in := ScheduleInput{
+		Schedule: db.Schedule{ID: "SCH8", Enabled: true, CronExpr: "0 9 * * *", AgentID: "AG1"},
+		Now:      time.Now(),
+	}
+	card, err := ProjectSchedule(in, LevelCard)
+	if err != nil {
+		t.Fatalf("card: %v", err)
+	}
+	if strings.Contains(card.Text(), "oturum modu") {
+		t.Errorf("session mode must not reach the card tier:\n%s", card.Text())
+	}
+	full, err := ProjectSchedule(in, LevelFull)
+	if err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if !strings.Contains(full.Text(), "oturum modu: reuse") {
+		t.Errorf("full tier must resolve the session mode default:\n%s", full.Text())
+	}
+}
