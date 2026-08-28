@@ -68,6 +68,16 @@ uygular:
 4. Fazlar: Araştırma (paralel işçiler) → Sentez (koordinatör) → Uygulama →
    Doğrulama.
 
+> **`schedule_wake` ile işçi yoklaması yasak.** Sonuç zaten (2)'deki
+> `<task-notification>` ile kendiliğinden yeni bir tur açar; yoklama için kurulan
+> her uyandırma, cevabı hep "hâlâ çalışıyor" olan fazladan bir LLM çağrısıdır ve
+> koordinatörün tüm bağlamını yeniden gönderir. Tüm hatları işçilere bağlıysa
+> koordinatör turu bitirip beklemelidir. Gözlemlenen israf: SES1992'de tek bir
+> işçi beklenirken 8 tur boyunca `schedule_wake` yoklaması. Kural, yerleşik
+> koordinatör prompt'unda (`internal/prompts/defaults/coordinator.md`, "How
+> worker results arrive") ve `schedule_wake` araç açıklamasında
+> (`internal/tools/builtin_wake.go`) yazılıdır.
+
 TionHarness bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
 geri bildirim → koordinatör devam eder" halkası eksik.
 
@@ -1417,3 +1427,27 @@ materyalize **edilmiyor**; her biri kararlı bir sistem ajanına (`SystemKey`:
 `TestSubagentSystemAgentDefaultsCarryProfileAllowlist`,
 `TestEnsureSystemAgentsAdoptsLegacyWorkerAgent`,
 `TestEnsureSystemAgentsDisablesRedundantLegacyWorker`.
+
+## 15. Worker'a giden mesajda alıcı politikası + byte sınırı (TSK340, 2026-08-28)
+
+`send_to_worker` artık teslimden önce **alıcı tarafı kapısından** geçer
+(`gateInbound`, `internal/agent/inbound.go`). Tam tasarım
+[[28-PEER-MESAJLASMA-PLANI]] §9'da; koordinatör tarafına yansıyan kısmı:
+
+- **Politika:** worker oturumunun `Session.InboundPolicy`'si (yoksa worker ajanının
+  `Agent.InboundPolicy`'si, o da yoksa `accept`). `hold` ise takip mesajı **kuyruk
+  slotu bile almaz**: park edilir ve `SendResult.Held` + makbuz kimliğiyle döner —
+  araç, koordinatöre tur başlamadığını ve bildirim gelmeyeceğini açıkça söyler.
+- **Makbuz:** her `send_to_worker` bir `db.AgentMessage` bırakır. Kuyruk dolu ya da
+  slot yoksa makbuz `dropped`'a düşürülür (`dropDelivery`), yani "gönderdim ama
+  kayboldu" durumu artık kalıcı kayıtta görünür.
+- **Byte sınırı:** `agentMessageMaxKB` (varsayılan 64 KB). Aşan `send_to_worker`
+  çağrısı `message_too_large` ile **reddedilir**.
+- **Worker → koordinatör bildirimi tersidir:** `NotifyCoordinator` bildirimi
+  reddetmez, `capNotification` ile **kırpar** ve kırpmayı `message_too_large`
+  işaretiyle belirtir. Gerekçe: turu bitmiş worker'a hata döndürecek kimse yoktur;
+  bildirimi düşürmek koordinatörü sonsuza dek bekletirdi.
+
+**Testler:** `TestSendToWorkerEnforcesSizeAndPolicy`,
+`TestReleaseHeldMessageDeliversOnce`, `TestRefuseHeldMessage`,
+`TestCapNotification` (`internal/agent/inbound_test.go`).
