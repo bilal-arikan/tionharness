@@ -31,10 +31,16 @@ func toLazyEntries(catalog []providers.ToolDef) []lazyEntry {
 // names the tools it wants, they enter the active set, and their real schemas
 // are shipped on the next iteration so it can call them.
 type ActivateToolsTool struct {
-	active *ActiveTools
-	byName map[string]string // lazy tool name -> description
-	eager  map[string]bool   // always-on tool names (already callable, no activation needed)
+	active  *ActiveTools
+	byName  map[string]string   // lazy tool name -> description
+	eager   map[string]bool     // always-on tool names (already callable, no activation needed)
+	bundles map[string][]string // bundle key -> member names (see bundles.go); nil disables bundle keys
 }
+
+// bundleListLimit caps how many members one bundle listing prints. Without it a
+// single "mcp:<big-server>" call would render hundreds of summary lines into the
+// result — the exact token blowup bundle activation exists to avoid.
+const bundleListLimit = 40
 
 // NewActivateToolsTool builds the tool over the active set, the lazy catalog and
 // the set of eager (always-on) tool names. The eager set lets the tool answer a
@@ -42,11 +48,39 @@ type ActivateToolsTool struct {
 // note instead of the misleading "unknown name" (eager tools are never in the
 // lazy catalog). A nil eager set is fine — such names simply fall back to unknown.
 func NewActivateToolsTool(active *ActiveTools, catalog []providers.ToolDef, eager map[string]bool) ActivateToolsTool {
+	return NewActivateToolsToolBundled(active, catalog, eager, nil)
+}
+
+// NewActivateToolsToolBundled is NewActivateToolsTool plus the BUNDLE index
+// (bundle key -> member names, from Registry.BundleIndex): with it the tool also
+// accepts a bundle key ("group:automation", "mcp:playwright") and answers with the
+// members' summaries. A nil index simply means no key is recognized as a bundle.
+func NewActivateToolsToolBundled(active *ActiveTools, catalog []providers.ToolDef, eager map[string]bool, bundles map[string][]string) ActivateToolsTool {
 	byName := make(map[string]string, len(catalog))
 	for _, e := range toLazyEntries(catalog) {
 		byName[e.name] = e.desc
 	}
-	return ActivateToolsTool{active: active, byName: byName, eager: eager}
+	// Keep only members that exist in the LAZY catalog: a bundle listing is built
+	// from the summaries snapshotted here, and an always-on (eager) tool has no row
+	// — listing it would print a name with an empty summary and invite a pointless
+	// activation. A bundle left with no listable member is dropped entirely so it
+	// reports as unknown rather than opening empty.
+	var idx map[string][]string
+	if len(bundles) > 0 {
+		idx = make(map[string][]string, len(bundles))
+		for key, members := range bundles {
+			kept := make([]string, 0, len(members))
+			for _, n := range members {
+				if _, ok := byName[n]; ok {
+					kept = append(kept, n)
+				}
+			}
+			if len(kept) > 0 {
+				idx[key] = kept
+			}
+		}
+	}
+	return ActivateToolsTool{active: active, byName: byName, eager: eager, bundles: idx}
 }
 
 func (ActivateToolsTool) Def() providers.ToolDef {
@@ -57,16 +91,52 @@ func (ActivateToolsTool) Def() providers.ToolDef {
 			"name(s). Activate everything you expect to need for the task in one call. IMPORTANT: the " +
 			"activated tools only become callable on your NEXT step — do NOT call them in the SAME " +
 			"response/batch as this activate_tools call, or the runtime will reject them as \"No such " +
-			"tool available\". Activate now, use them next turn.",
+			"tool available\". Activate now, use them next turn. An entry may also be a BUNDLE key " +
+			"(\"group:<category>\" or \"mcp:<server>\"): that loads no schema at all — it only returns " +
+			"the bundle members' name — summary lines, so you can then activate the one you need by name.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "names": { "type": "array", "items": { "type": "string" }, "description": "Exact tool names to activate." }
+    "names": { "type": "array", "items": { "type": "string" }, "description": "Exact tool names to activate, and/or bundle keys (group:<category>, mcp:<server>) to list." }
   },
   "required": ["names"],
   "additionalProperties": false
 }`),
 	}
+}
+
+// knownBundleKeys returns the sorted bundle keys this tool can open.
+func (t ActivateToolsTool) knownBundleKeys() []string {
+	out := make([]string, 0, len(t.bundles))
+	for k := range t.bundles {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// openBundles renders the member listing for the given bundle keys. It NEVER
+// activates a member: the whole point of a bundle is that it costs summaries, not
+// schemas, so ActiveTools (and therefore the shipped schema set) is untouched.
+func (t ActivateToolsTool) openBundles(keys []string) string {
+	var b strings.Builder
+	for _, key := range keys {
+		members := t.bundles[key]
+		fmt.Fprintf(&b, "Opened %s (%d tools) — summaries only, no schema loaded. Load one with activate_tools(\"<name>\").\n", key, len(members))
+		shown := members
+		hidden := 0
+		if len(shown) > bundleListLimit {
+			hidden = len(shown) - bundleListLimit
+			shown = shown[:bundleListLimit]
+		}
+		for _, n := range shown {
+			fmt.Fprintf(&b, "- %s — %s\n", n, t.byName[n])
+		}
+		if hidden > 0 {
+			fmt.Fprintf(&b, "…and %d more not shown; narrow with tool_search(\"<keyword>\").\n", hidden)
+		}
+	}
+	return b.String()
 }
 
 // resolveLazyName maps a requested tool name to a real catalog name, tolerating
@@ -134,10 +204,21 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("activate_tools", err)
 	}
-	var known, alwaysOn, unknown []string
+	var known, alwaysOn, unknown, bundleKeys, unknownBundles []string
 	for _, n := range in.Names {
 		n = strings.TrimSpace(n)
 		if n == "" {
+			continue
+		}
+		// Bundle keys are decided BEFORE any name resolution: a mistyped
+		// "group:automaton" must report the known bundles, not fall into the fuzzy
+		// name path (a key contains ":", which no tool name may contain).
+		if _, _, isKey := SplitBundleKey(n); isKey {
+			if ValidBundleKey(n) && len(t.bundles[n]) > 0 {
+				bundleKeys = append(bundleKeys, n)
+			} else {
+				unknownBundles = append(unknownBundles, n)
+			}
 			continue
 		}
 		if r := t.resolveLazyName(n); r != "" {
@@ -148,7 +229,21 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 			unknown = append(unknown, n)
 		}
 	}
-	if len(known) == 0 {
+	// unknownBundle renders the shared "bad bundle key" note.
+	unknownBundleNote := func(b *strings.Builder) {
+		if len(unknownBundles) == 0 {
+			return
+		}
+		fmt.Fprintf(b, "Unknown bundle(s): %s.", strings.Join(unknownBundles, ", "))
+		if keys := t.knownBundleKeys(); len(keys) > 0 {
+			fmt.Fprintf(b, " Known bundles: %s.", strings.Join(keys, ", "))
+		} else {
+			b.WriteString(" No bundles are available here.")
+		}
+		b.WriteString("\n")
+	}
+
+	if len(known) == 0 && len(bundleKeys) == 0 {
 		var b strings.Builder
 		if len(alwaysOn) > 0 {
 			fmt.Fprintf(&b, "Nothing to activate: %s already available (always-on) — just call it directly.\n", strings.Join(alwaysOn, ", "))
@@ -156,12 +251,16 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		if len(unknown) > 0 {
 			fmt.Fprintf(&b, "Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or tool_search).\n", strings.Join(unknown, ", "))
 		}
+		unknownBundleNote(&b)
 		if b.Len() == 0 {
 			return "No tool names given.", nil
 		}
 		return strings.TrimSpace(b.String()), nil
 	}
 	added, already := t.active.Activate(known...)
+	// The listing is always rendered for every requested key (a re-open is answered
+	// idempotently); the open-set only feeds the "already opened" note.
+	_, alreadyOpen := t.active.OpenBundle(bundleKeys...)
 
 	var b strings.Builder
 	if len(added) > 0 {
@@ -169,6 +268,12 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		for _, n := range added {
 			fmt.Fprintf(&b, "- %s — %s\n", n, t.byName[n])
 		}
+	}
+	if len(bundleKeys) > 0 {
+		b.WriteString(t.openBundles(bundleKeys))
+	}
+	if len(alreadyOpen) > 0 {
+		fmt.Fprintf(&b, "(already opened earlier this turn: %s)\n", strings.Join(alreadyOpen, ", "))
 	}
 	if len(already) > 0 {
 		fmt.Fprintf(&b, "Already active: %s\n", strings.Join(already, ", "))
@@ -179,6 +284,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if len(unknown) > 0 {
 		fmt.Fprintf(&b, "Unknown (skipped): %s\n", strings.Join(unknown, ", "))
 	}
+	unknownBundleNote(&b)
 	return strings.TrimSpace(b.String()), nil
 }
 
@@ -199,7 +305,8 @@ func (DeactivateToolsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "deactivate_tools",
 		Description: "Remove previously activated on-demand tools you no longer need, so their schemas " +
-			"stop being sent. Optional housekeeping; pass the exact tool name(s).",
+			"stop being sent. Optional housekeeping; pass the exact tool name(s). A bundle key " +
+			"(\"group:<category>\", \"mcp:<server>\") closes a bundle you opened.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -218,11 +325,31 @@ func (t DeactivateToolsTool) Call(ctx context.Context, input json.RawMessage) (s
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("deactivate_tools", err)
 	}
-	removed := t.active.Deactivate(in.Names...)
-	if len(removed) == 0 {
-		return "No active tools matched; nothing deactivated.", nil
+	var names, keys []string
+	for _, n := range in.Names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if _, _, isKey := SplitBundleKey(n); isKey {
+			keys = append(keys, n)
+			continue
+		}
+		names = append(names, n)
 	}
-	return "Deactivated: " + strings.Join(removed, ", "), nil
+	removed := t.active.Deactivate(names...)
+	closed := t.active.CloseBundle(keys...)
+	if len(removed) == 0 && len(closed) == 0 {
+		return "No active tools or open bundles matched; nothing deactivated.", nil
+	}
+	var b strings.Builder
+	if len(removed) > 0 {
+		fmt.Fprintf(&b, "Deactivated: %s\n", strings.Join(removed, ", "))
+	}
+	if len(closed) > 0 {
+		fmt.Fprintf(&b, "Closed bundle(s): %s\n", strings.Join(closed, ", "))
+	}
+	return strings.TrimSpace(b.String()), nil
 }
 
 // ---- tool_search ----------------------------------------------------------
@@ -315,14 +442,27 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 		}
 		return ranked[i].e.name < ranked[j].e.name
 	})
+	// Each line carries the match's BUNDLE key, so the bundle vocabulary is
+	// learnable from a search result: the model can then open a whole group with
+	// activate_tools("group:…") instead of guessing names one at a time.
 	matches := make([]string, 0, len(ranked))
 	for _, r := range ranked {
-		matches = append(matches, fmt.Sprintf("- %s — %s", r.e.name, r.e.desc))
+		matches = append(matches, fmt.Sprintf("- %s — %s  [%s]", r.e.name, r.e.desc, BundleOf(r.e.name)))
 	}
 	const max = 30
 	more := ""
 	if len(matches) > max {
-		more = fmt.Sprintf("\n…and %d more; refine the query.", len(matches)-max)
+		// Name the bundles the dropped matches live in, so narrowing has a direction.
+		var dropped []string
+		seen := map[string]bool{}
+		for _, r := range ranked[max:] {
+			if k := BundleOf(r.e.name); !seen[k] {
+				seen[k] = true
+				dropped = append(dropped, k)
+			}
+		}
+		sort.Strings(dropped)
+		more = fmt.Sprintf("\n…and %d more; refine the query. The rest live in: %s.", len(matches)-max, strings.Join(dropped, ", "))
 		matches = matches[:max]
 	}
 	return "Matching tools (activate with activate_tools):\n" + strings.Join(matches, "\n") + more, nil

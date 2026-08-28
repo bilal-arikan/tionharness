@@ -315,6 +315,26 @@
   **boş** dönüyordu (yanlışlıkla "araç yok" sanılıyordu). Artık **en az bir terimi**
   içeren araçlar, eşleşen terim sayısına (ad eşleşmesi bonuslu) göre sıralanarak döner;
   çoklu-ad sorgusu ilgili tüm araçları yüzeye çıkarır. Test: `TestToolSearchMultiNameOR`.
+  **Bundle (demet) anahtarı (2026-08-28, ADIM B):** `activate_tools`'a bir araç adı
+  yerine **bundle anahtarı** da verilebilir: `group:<kategori>` (built-in kategorisi,
+  `categories.go`) veya `mcp:<sunucu>` (`bundles.go`). Sözleşme — **bundle açmak
+  hiçbir şema yüklemez**: aktif sete (`ActiveTools`) tek bir araç bile eklenmez,
+  `ActiveDefs`/`shipDefs` değişmez; tool sonucu yalnız o demetin üyelerini
+  `ad — özet` satırlarıyla listeler. Şema isteyen model, ardından **isimle** ikinci
+  bir `activate_tools` çağırır. Liste `bundleListLimit = 40` üyede kesilir ve kaç
+  üyenin gizlendiği + `tool_search` yönlendirmesi yazılır (300 araçlı bir MCP
+  sunucusu tek çağrıda 20k token'lık sonuç üretmesin diye). Geçersiz/boş anahtar
+  `unknown bundle: …; known bundles: …` olarak raporlanır — bulanık ad eşleştirme
+  yoluna **düşmez**. Açılan demetler `ActiveTools.OpenBundle`/`CloseBundle` ile
+  kaydedilir (yalnız "zaten açıldı" notu için; şema tutmadıkları için `Prune`
+  onlara dokunmaz), `deactivate_tools` da bir bundle anahtarını kapatır.
+  `tool_search` her eşleşme satırına üyenin demet anahtarını (`[group:diagnostics]`)
+  ekler ve 30'da kesildiğinde kalanların hangi demetlerde olduğunu yazar; native
+  katalog bloğu ise sonuna tek bir `Bundles: group:… (n), mcp:… (n)` satırı koyar
+  (demet yoksa satır hiç yazılmaz → blok bayt-aynı kalır; CLI formunda yazılmaz,
+  çünkü orada üyelik gateway'in kendi aday kümesinden çözülür). Testler:
+  `builtin_activate_bundle_test.go`, `TestLazyCatalogBundleLine`,
+  `gateway_bundle_test.go`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
@@ -688,6 +708,21 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
   meta-tool'unu çağırınca backend aracı kaydeder + `tools/list_changed` push eder → CLI
   re-list eder → **aynı turda** çağrılabilir (Doc 52 spike Q1/Q2 + canlı validation).
   `deactivate_tools` bağlamı boşaltır, `active_tools` aktif olanları listeler.
+- **Bundle anahtarı gateway'de (2026-08-28, ADIM B7):** `callActivate` girdiyi ad ve
+  bundle anahtarı olarak ayırır (`tools.SplitBundleKey`; anahtarlar `bareToolName`
+  normalizasyonuna sokulmaz). Bundle dalı `activateExtended` **ve**
+  `PushToolsChangedAndWait` **çağırmaz** — üyeleri kaydetmek onların tam şemasını
+  `tionharness_extended` üzerinde ilan etmek demektir, yani tasarımın kaçındığı token
+  patlaması. Üyeler `bundleIndex(run)` ile `candidateDefs` üzerinden gruplanır
+  (`toolAllowedFor` zaten uygulanmıştır → workspace'te kapalı bir araç listeye
+  sızamaz) ve **namespace'li çağrılabilir adla** (`mcp__tionharness_extended__<ad>`)
+  yazılır; limit `gatewayBundleListLimit = 40`. codex-cli (`-full` varyantı) için
+  savunma dalı: her non-core araç zaten ilan edildiğinden
+  `"all on-demand tools are already advertised on this provider"` döner.
+  `cliTier`/`splitInteractionTiers` **değişmedi** (bundle anahtarı hiçbir zaman araç
+  adı olmadığı için sınıflandırmaya ulaşmaz). Test:
+  `TestGatewayBundleActivateListsWithoutAdvertising` — bundle açıldıktan sonra
+  `b.Tools(token,"extended")` uzunluğu **değişmez**.
 - `renderLazyToolCatalog` CLI formunda nudge'ı daima "yüklemek için `activate_tools` çağır"
   (ToolSearch değil; harici MCP araçları hâlâ ToolSearch ile) olarak render eder.
 - **CLI'da 2-durum projeksiyonu:** summary/name-only zaten `cliTier`'da tek `extended`

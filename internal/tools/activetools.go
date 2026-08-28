@@ -1,6 +1,9 @@
 package tools
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // ActiveTools is the per-turn set of lazy tools the model has activated via the
 // activate_tools tool. It is consulted each loop iteration to decide which lazy
@@ -15,11 +18,85 @@ type ActiveTools struct {
 	usedAt        map[string]int  // last iteration the tool was actually called
 	autoActivated map[string]bool // tools already recovered by automatic activation
 	iter          int             // current loop iteration (set by the loop)
+
+	// groups is the set of BUNDLE keys the model has opened this turn (see
+	// bundles.go). Opening a bundle only lists its members' summaries — it never
+	// puts a member into `set`, so no schema is shipped for it and Prune has
+	// nothing to reclaim. Tracked purely so a repeated open can be reported as
+	// "already opened" instead of re-printing the whole listing.
+	groups map[string]bool
 }
 
 // NewActiveTools returns an empty active set.
 func NewActiveTools() *ActiveTools {
-	return &ActiveTools{set: map[string]bool{}, addedAt: map[string]int{}, usedAt: map[string]int{}, autoActivated: map[string]bool{}}
+	return &ActiveTools{set: map[string]bool{}, addedAt: map[string]int{}, usedAt: map[string]int{}, autoActivated: map[string]bool{}, groups: map[string]bool{}}
+}
+
+// OpenBundle records bundle keys as opened, returning the keys that were newly
+// opened and the ones already open. It deliberately does NOT touch the active
+// tool set: a bundle carries summaries only.
+func (a *ActiveTools) OpenBundle(keys ...string) (opened, already []string) {
+	if a == nil {
+		return nil, nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.groups == nil {
+		a.groups = map[string]bool{}
+	}
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		if a.groups[k] {
+			already = append(already, k)
+			continue
+		}
+		a.groups[k] = true
+		opened = append(opened, k)
+	}
+	return opened, already
+}
+
+// CloseBundle forgets bundle keys, returning those that were actually open.
+func (a *ActiveTools) CloseBundle(keys ...string) (closed []string) {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, k := range keys {
+		if a.groups[k] {
+			delete(a.groups, k)
+			closed = append(closed, k)
+		}
+	}
+	return closed
+}
+
+// HasBundle reports whether a bundle key is currently open.
+func (a *ActiveTools) HasBundle(key string) bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.groups[key]
+}
+
+// OpenBundles returns a sorted snapshot of the open bundle keys.
+func (a *ActiveTools) OpenBundles() []string {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]string, 0, len(a.groups))
+	for k := range a.groups {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // AutoActivate activates name and reports whether this is its first automatic

@@ -680,8 +680,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// answer a stray "activate an already-shipped tool" request with a clear
 		// "already available" note instead of a misleading "unknown name".
 		eagerNames := reg.EagerNames(nil)
+		// Bundle index for activate_tools' group form. nil filter matches the
+		// LazyCatalog(nil) snapshot above — deliberately NOT the agent filter, so the
+		// two views stay consistent; the tool itself drops any member missing from the
+		// lazy catalog.
+		bundles := reg.BundleIndex(nil)
 		reg.Add(
-			tools.NewActivateToolsTool(active, lazyCat, eagerNames),
+			tools.NewActivateToolsToolBundled(active, lazyCat, eagerNames, bundles),
 			deact,
 			tools.NewToolSearchTool(lazyCat),
 		)
@@ -826,7 +831,34 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	// the empty provider is the keyless claude-cli default.
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), r.agentProviderKind(agent), reg.ServerDescriptions())
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), r.agentProviderKind(agent), reg.ServerDescriptions(), lazyBundleCounts(reg))
+}
+
+// lazyBundleCounts returns bundle key -> member count over the LAZY catalog only,
+// i.e. exactly the bundles activate_tools can open (buildRegistry hands the tool
+// the same nil-filtered index, and the tool drops members that are not lazy).
+// Eager tools are excluded so the advertised count matches the listing length.
+func lazyBundleCounts(reg *tools.Registry) map[string]int {
+	lazy := map[string]bool{}
+	for _, d := range reg.LazyCatalog(nil) {
+		lazy[d.Name] = true
+	}
+	if len(lazy) == 0 {
+		return nil
+	}
+	out := map[string]int{}
+	for key, members := range reg.BundleIndex(nil) {
+		n := 0
+		for _, m := range members {
+			if lazy[m] {
+				n++
+			}
+		}
+		if n > 0 {
+			out[key] = n
+		}
+	}
+	return out
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -917,7 +949,13 @@ func catalogDisplayName(name, provider string) (string, bool) {
 // tool_search). Built-ins that dialect does not bridge (claude-cli's own WebFetch/
 // WebSearch) are dropped. This mirrors how the skills block
 // (CatalogBlockForAgentTool) already adapts to the CLI.
-func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider string, serverDesc map[string]string) string {
+// bundles (key -> member count) adds ONE discovery line naming the openable
+// bundles; empty/nil emits nothing, so a workspace without bundles renders the
+// byte-identical block it did before. The line is native-only: the CLI path's
+// activate_tools is the gateway one, whose bundle membership is derived from the
+// run's candidate set rather than this registry, so advertising these exact
+// counts there would be misleading.
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider string, serverDesc map[string]string, bundles map[string]int) string {
 	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
@@ -1005,6 +1043,20 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 				fmt.Fprintf(&b, "- `%s` — %d tools\n", label, counts[srv])
 			}
 		}
+	}
+
+	if !cli && len(bundles) > 0 {
+		keys := make([]string, 0, len(bundles))
+		for k := range bundles {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s (%d)", k, bundles[k]))
+		}
+		fmt.Fprintf(&b, "\nBundles: %s — open one with `activate_tools(\"<bundle key>\")` to see its members' "+
+			"summaries without loading any schema.\n", strings.Join(parts, ", "))
 	}
 
 	// Self-management suite: kept out of the per-turn enumeration to save context.

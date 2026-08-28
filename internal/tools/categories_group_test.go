@@ -37,6 +37,26 @@ func TestMatchesGroup(t *testing.T) {
 	}
 }
 
+// TestGroupAndBundleSemanticsDiverge pins the one place the two abstractions must
+// NOT agree: an MCP tool belongs to its server BUNDLE but to no category GROUP, so
+// generalizing MatchesGroup into MatchesBundle must not have widened the group
+// form (which the visibility-override path still uses).
+func TestGroupAndBundleSemanticsDiverge(t *testing.T) {
+	if !MatchesBundle("srv__tool", "mcp:srv") {
+		t.Fatal("an MCP tool must match its server bundle")
+	}
+	if MatchesGroup("srv__tool", "mcp:srv") {
+		t.Fatal("MatchesGroup must reject an mcp: key outright")
+	}
+	if MatchesGroup("srv__tool", "group:other") {
+		t.Fatal("an MCP tool must never fall into a category group")
+	}
+	// A built-in behaves identically through both entry points.
+	if MatchesGroup("Bash", "group:files") != MatchesBundle("Bash", "group:files") {
+		t.Fatal("group semantics must be unchanged for built-ins")
+	}
+}
+
 func TestCategoriesStableAndComplete(t *testing.T) {
 	got := Categories()
 	if len(got) == 0 || got[0] != CategoryFiles || got[len(got)-1] != CategoryOther {

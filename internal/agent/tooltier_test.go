@@ -69,6 +69,30 @@ func TestWebSearchVisibleInWorkspaceCatalog(t *testing.T) {
 	}
 }
 
+// TestLazyCatalogBundleLine verifies the one-line bundle hint: emitted on the
+// native path when bundles exist, silent otherwise (so a workspace without
+// bundles renders the byte-identical block it did before), and never on the CLI
+// path, whose gateway resolves bundle membership from its own candidate set.
+func TestLazyCatalogBundleLine(t *testing.T) {
+	lazy := []providers.ToolDef{{Name: "create_agent", Description: "self-mgmt"}}
+	counts := map[string]int{"group:agents": 3, "mcp:srv": 21}
+
+	out := renderLazyToolCatalog(lazy, 0, "anthropic", nil, counts)
+	if !strings.Contains(out, "Bundles: group:agents (3), mcp:srv (21)") {
+		t.Fatalf("bundle line missing or unsorted:\n%s", out)
+	}
+	if !strings.Contains(out, "activate_tools(\"<bundle key>\")") {
+		t.Fatalf("bundle line must say how to open one:\n%s", out)
+	}
+
+	if got := renderLazyToolCatalog(lazy, 0, "anthropic", nil, nil); strings.Contains(got, "Bundles:") {
+		t.Fatalf("no bundles → no line:\n%s", got)
+	}
+	if got := renderLazyToolCatalog(lazy, 0, "claude-cli", nil, counts); strings.Contains(got, "Bundles:") {
+		t.Fatalf("CLI form must not advertise native bundle counts:\n%s", got)
+	}
+}
+
 // TestLazyCatalogSummarisesManyMCPTools verifies the load-on-demand catalog block
 // lists built-in lazy tools in full but, past lazyCatalogMCPListLimit MCP tools,
 // summarises them per server (count + tool_search pointer) instead of enumerating.
@@ -79,7 +103,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 		{Name: "srvA__alpha", Description: "mcp tool alpha"},
 		{Name: "srvA__beta", Description: "mcp tool beta"},
 	}
-	out := renderLazyToolCatalog(small, 0, "anthropic", nil)
+	out := renderLazyToolCatalog(small, 0, "anthropic", nil, nil)
 	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
 		t.Fatalf("small catalog should list every tool, got:\n%s", out)
 	}
@@ -94,7 +118,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 	}
 	// A curated server description must ride the per-server summary line so the
 	// model keeps a semantic hint even when individual tools are dropped.
-	out = renderLazyToolCatalog(big, 0, "anthropic", map[string]string{"bigsrv": "graph code search; prefer over grep"})
+	out = renderLazyToolCatalog(big, 0, "anthropic", map[string]string{"bigsrv": "graph code search; prefer over grep"}, nil)
 	if !strings.Contains(out, "create_agent") {
 		t.Error("built-in lazy tool must still be listed in full")
 	}
@@ -117,7 +141,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 // the tionharness-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
-	out := renderLazyToolCatalog(visible, 12, "anthropic", nil)
+	out := renderLazyToolCatalog(visible, 12, "anthropic", nil, nil)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
@@ -128,12 +152,12 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 		t.Errorf("pointer must state the hidden count, got:\n%s", out)
 	}
 	// With no hidden tools, no pointer line.
-	out = renderLazyToolCatalog(visible, 0, "anthropic", nil)
+	out = renderLazyToolCatalog(visible, 0, "anthropic", nil, nil)
 	if strings.Contains(out, "tionharness-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
-	if renderLazyToolCatalog(nil, 0, "anthropic", nil) != "" {
+	if renderLazyToolCatalog(nil, 0, "anthropic", nil, nil) != "" {
 		t.Error("empty catalog with no hidden tools must render nothing")
 	}
 }
@@ -149,7 +173,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}
-	out := renderLazyToolCatalog(lazy, 3, "claude-cli", nil)
+	out := renderLazyToolCatalog(lazy, 3, "claude-cli", nil, nil)
 
 	if !strings.Contains(out, "mcp__tionharness_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
@@ -178,7 +202,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 
 	// Native form keeps bare names + activate_tools (regression guard).
-	nat := renderLazyToolCatalog(lazy, 0, "anthropic", nil)
+	nat := renderLazyToolCatalog(lazy, 0, "anthropic", nil, nil)
 	if !strings.Contains(nat, "- `update_session`") || !strings.Contains(nat, "- `WebFetch`") {
 		t.Errorf("native form keeps bare names incl. WebFetch:\n%s", nat)
 	}
@@ -198,7 +222,7 @@ func TestLazyCatalogSummaryFormSpellsToolSearchSyntax(t *testing.T) {
 		lazy = append(lazy, providers.ToolDef{Name: fmt.Sprintf("srvA__tool%d", i), Description: "mcp"})
 	}
 
-	out := renderLazyToolCatalog(lazy, 7, "claude-cli", nil)
+	out := renderLazyToolCatalog(lazy, 7, "claude-cli", nil, nil)
 	if strings.Contains(out, "srvA__tool0") {
 		t.Fatalf("fixture must exceed the list limit and summarise instead:\n%s", out)
 	}
@@ -206,7 +230,7 @@ func TestLazyCatalogSummaryFormSpellsToolSearchSyntax(t *testing.T) {
 		t.Errorf("CLI summary + self-management pointer must both spell the ToolSearch select: syntax:\n%s", out)
 	}
 
-	nat := renderLazyToolCatalog(lazy, 7, "anthropic", nil)
+	nat := renderLazyToolCatalog(lazy, 7, "anthropic", nil, nil)
 	if strings.Contains(nat, "select:") {
 		t.Errorf("native form uses tool_search, not ToolSearch select:\n%s", nat)
 	}

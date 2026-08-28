@@ -527,8 +527,8 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	specs = append(specs,
 		interaction.ToolSpec{
 			Name:        "activate_tools",
-			Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate"}},"required":["tools"]}`),
+			Description: "Load one or more on-demand tools (from the 'Available Tools' catalog) into this session so you can call them. After activating, the tool becomes callable immediately. Pass tool names in `tools`. An entry may also be a BUNDLE key (\"group:<category>\" or \"mcp:<server>\"): that activates nothing — it only lists that bundle's members with one-line summaries, so you can then activate the one you need by name.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"description":"On-demand tool names to activate, and/or bundle keys (group:<category>, mcp:<server>) to list"}},"required":["tools"]}`),
 		},
 		interaction.ToolSpec{
 			Name:        "deactivate_tools",
@@ -542,7 +542,7 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		},
 		interaction.ToolSpec{
 			Name:        "tool_search",
-			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed.",
+			Description: "Search ALL on-demand tools by keyword — including ones not shown in the 'Available Tools' catalog (hidden tier). Returns matching names to load with activate_tools. Use when you need a capability you don't see listed. To browse a whole family instead of searching, pass a bundle key (\"group:<category>\", \"mcp:<server>\") to activate_tools — it lists members without loading schemas.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Keywords to match against tool names + descriptions"}},"required":["query"]}`),
 		},
 	)
@@ -832,16 +832,121 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 	}
 	// Accept either the bare name ("notify") or the namespaced form the catalog shows
 	// ("mcp__tionharness_extended__notify") — the model may echo either. Normalise to bare.
-	for i, n := range in.Tools {
-		in.Tools[i] = bareToolName(n)
+	// Bundle keys ("group:automation", "mcp:playwright") are skipped: they are not
+	// tool names and must reach the bundle branch verbatim.
+	var names, bundleKeys []string
+	for _, n := range in.Tools {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if _, _, isKey := tools.SplitBundleKey(n); isKey {
+			bundleKeys = append(bundleKeys, n)
+			continue
+		}
+		names = append(names, bareToolName(n))
 	}
+	in.Tools = names
 
 	if activate {
+		if len(bundleKeys) > 0 {
+			// A "-full" provider (codex-cli) is already shown every non-core tool, so a
+			// bundle listing buys it nothing — and gatewayMetaTools strips activate_tools
+			// from its list entirely, so this is defensive only.
+			if run != nil && fullTierProvider(run.providerOf()) {
+				return interaction.CallResult{Text: "all on-demand tools are already advertised on this provider; call the tool directly"}, nil
+			}
+			listing := b.listBundles(run, bundleKeys)
+			if len(in.Tools) == 0 {
+				return interaction.CallResult{Text: listing}, nil
+			}
+			// Names alongside bundles: activate the names normally (below) and append the
+			// listing to that result.
+			res, err := b.callActivateNames(token, run, in.Tools)
+			if err != nil {
+				return res, err
+			}
+			res.Text = strings.TrimSpace(res.Text + "\n\n" + listing)
+			return res, nil
+		}
+		return b.callActivateNames(token, run, in.Tools)
+	}
+
+	removed := b.deactivateExtended(token, in.Tools)
+	if len(removed) > 0 && b.srv != nil {
+		b.srv.PushToolsChanged(token)
+	}
+	if len(removed) == 0 {
+		return interaction.CallResult{Text: "no tools deactivated (none were active)", IsError: false}, nil
+	}
+	return interaction.CallResult{Text: "deactivated: " + strings.Join(removed, ", ")}, nil
+}
+
+// bundleIndex groups the run's activatable (non-core) tools by BUNDLE key. It is
+// built from candidateDefs, which already applies the run's tool filter, so a
+// workspace-disabled tool can never leak into a bundle listing.
+func (b *interactionBackend) bundleIndex(run *chatRun) map[string][]string {
+	out := map[string][]string{}
+	for name := range b.candidateDefs(run) {
+		key := tools.BundleOf(name)
+		out[key] = append(out[key], name)
+	}
+	for _, members := range out {
+		sort.Strings(members)
+	}
+	return out
+}
+
+// listBundles renders the member listing for bundle keys WITHOUT registering any
+// member on the extended server: no activateExtended, no PushToolsChangedAndWait.
+// Registering them would advertise their full schemas — precisely the token blowup
+// bundle listing exists to avoid. Members are printed under their namespaced
+// callable form, since that is the only name the CLI can call after a per-tool
+// activate.
+func (b *interactionBackend) listBundles(run *chatRun, keys []string) string {
+	idx := b.bundleIndex(run)
+	defs := b.candidateDefs(run)
+	var out strings.Builder
+	for _, key := range keys {
+		members := idx[key]
+		if !tools.ValidBundleKey(key) || len(members) == 0 {
+			known := make([]string, 0, len(idx))
+			for k := range idx {
+				known = append(known, k)
+			}
+			sort.Strings(known)
+			fmt.Fprintf(&out, "unknown bundle: %s; known bundles: %s\n", key, strings.Join(known, ", "))
+			continue
+		}
+		fmt.Fprintf(&out, "%s (%d tools) — summaries only, nothing was activated. Load one with activate_tools(\"<name>\").\n", key, len(members))
+		shown := members
+		hidden := 0
+		if len(shown) > gatewayBundleListLimit {
+			hidden = len(shown) - gatewayBundleListLimit
+			shown = shown[:gatewayBundleListLimit]
+		}
+		for _, n := range shown {
+			fmt.Fprintf(&out, "- %s — %s\n", extendedNSPrefix+n, defs[n])
+		}
+		if hidden > 0 {
+			fmt.Fprintf(&out, "…and %d more not shown; narrow with tool_search.\n", hidden)
+		}
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// gatewayBundleListLimit caps one bundle listing on the CLI path, mirroring
+// tools.bundleListLimit on the native path.
+const gatewayBundleListLimit = 40
+
+// callActivateNames is the original name-based activation path.
+func (b *interactionBackend) callActivateNames(token string, run *chatRun, requested []string) (interaction.CallResult, error) {
+	{
 		// Split requested names into valid extended candidates vs unknown, so the model
 		// gets clear feedback instead of a silent partial success.
 		candidates := b.extendedCandidates(run)
 		var valid, unknown []string
-		for _, n := range in.Tools {
+		for _, n := range requested {
 			if candidates[n] {
 				valid = append(valid, n)
 			} else {
@@ -885,15 +990,6 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 		}
 		return interaction.CallResult{Text: msg, IsError: len(added) == 0 && len(unknown) > 0}, nil
 	}
-
-	removed := b.deactivateExtended(token, in.Tools)
-	if len(removed) > 0 && b.srv != nil {
-		b.srv.PushToolsChanged(token)
-	}
-	if len(removed) == 0 {
-		return interaction.CallResult{Text: "no tools deactivated (none were active)", IsError: false}, nil
-	}
-	return interaction.CallResult{Text: "deactivated: " + strings.Join(removed, ", ")}, nil
 }
 
 // callActiveTools implements the active_tools meta-tool: it lists the extended tools
