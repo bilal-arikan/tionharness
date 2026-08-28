@@ -281,7 +281,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
-	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleMin) * time.Minute)
+	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)

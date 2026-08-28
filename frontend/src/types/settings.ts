@@ -121,7 +121,7 @@ export interface AppSettings {
   spawnIdleTimeoutMin: number
   chatTurnTimeoutMin: number
   chatTurnIdleTimeoutMin: number
-  codexStdoutIdleMin: number
+  codexStdoutIdleSec: number
   idleResumeMax: number
   scheduleTimeoutMin: number
   turnWatchdogMin: number

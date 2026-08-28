@@ -361,10 +361,10 @@ const codexStartupTimeout = 90 * time.Second
 // started. A surviving grandchild can hold the stdout pipe open after codex
 // itself exits, so silence alone never ends the read loop — this timer does.
 // It is the compiled-in fallback only: the effective window comes from the
-// codexStdoutIdleMin setting via SetCodexIdleOutputTimeout, and must stay below
-// the caller's turn idle watchdog so THIS diagnosis (with the stdout tail) wins
-// the race against the generic turn cancel.
-const codexIdleOutputTimeout = 8 * time.Minute
+// codexStdoutIdleSec setting via SetCodexIdleOutputTimeout, and must stay below
+// the caller's turn idle watchdog (default 3 minutes) so THIS diagnosis (with
+// the stdout tail) wins the race against the generic turn cancel.
+const codexIdleOutputTimeout = 90 * time.Second
 
 var (
 	codexIdleMu sync.RWMutex

@@ -1039,7 +1039,8 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
 
 - `codexStartupTimeout` (90 saniye) yalnız **ilk stdout satırına kadar** işler;
   hiç çıktı üretmeyen MCP başlangıç takılmasını retryable hata olarak keser.
-- `codexIdleOutputTimeout` (15 dakika), ilk çıktıdan sonra ardışık iki stdout
+- `codexIdleOutputTimeout` (varsayılan 90 saniye; `codexStdoutIdleSec` ayarı ile
+  yapılandırılır, 0 = kapalı), ilk çıktıdan sonra ardışık iki stdout
   satırı arasındaki sessizliği ölçer. Her satır timer'ı sıfırlar; timer yaşam
   döngüsü `defer idle.Stop()` ile kapatılır.
 - Idle süresi dolunca `proc.KillTree` tüm proses ağacını öldürür. Hata

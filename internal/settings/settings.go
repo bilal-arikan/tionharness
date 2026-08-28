@@ -329,13 +329,15 @@ type Settings struct {
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled)
-	// CodexStdoutIdleMin is the codex-cli stdout-silence watchdog: a codex
-	// subprocess that has started streaming and then emits NOTHING for this long is
-	// killed (whole process tree) and reported as a wedge instead of an empty
-	// answer. It must stay BELOW the chat/turn idle watchdogs so the specific,
-	// actionable codex diagnosis wins the race against the generic turn cancel
+	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
+	// codex subprocess that has started streaming and then emits NOTHING for this
+	// long is killed (whole process tree) and reported as a wedge instead of an
+	// empty answer. It must stay BELOW the chat/turn idle watchdogs (whose default
+	// is 3 minutes) so the specific, actionable codex diagnosis wins the race
+	// against the generic turn cancel. Seconds, not minutes: minute granularity is
+	// too coarse to fit under a 3-minute ceiling with any margin
 	// (0 = disabled, no stdout-silence watchdog).
-	CodexStdoutIdleMin int `json:"codexStdoutIdleMin"`
+	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      int `json:"idleResumeMax"`      // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
 	// TurnWatchdogMin bounds a single QUEUED turn (chat, coordinator, worker, wake…)
@@ -526,12 +528,12 @@ func Default() Settings {
 		SpawnIdleTimeoutMin:    5,
 		ChatTurnTimeoutMin:     120,
 		ChatTurnIdleTimeoutMin: 20,
-		// 8 minutes: comfortably longer than any legitimately quiet stretch inside a
-		// codex turn (a single long build/test step still emits nothing for minutes),
-		// yet well under the 20-minute chat/turn idle watchdogs — so a wedged codex
-		// subprocess is diagnosed and killed HERE, with its stdout tail, instead of
-		// being swallowed by the generic turn cancel that would fire later.
-		CodexStdoutIdleMin:  8,
+		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
+		// that prints nothing while it works), yet comfortably under the 3-minute
+		// chat/turn idle watchdogs — so a wedged codex subprocess is diagnosed and
+		// killed HERE, with its stdout tail, instead of being swallowed by the
+		// generic turn cancel that would otherwise always fire first.
+		CodexStdoutIdleSec:  90,
 		IdleResumeMax:       1,
 		ScheduleTimeoutMin:  60,
 		TurnWatchdogMin:     120,
@@ -671,7 +673,7 @@ type DTO struct {
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"`
-	CodexStdoutIdleMin     int `json:"codexStdoutIdleMin"`
+	CodexStdoutIdleSec     int `json:"codexStdoutIdleSec"`
 	IdleResumeMax          int `json:"idleResumeMax"`
 	ScheduleTimeoutMin     int `json:"scheduleTimeoutMin"`
 	TurnWatchdogMin        int `json:"turnWatchdogMin"`
@@ -790,7 +792,7 @@ func (s Settings) ToDTO() DTO {
 		SpawnIdleTimeoutMin:    s.SpawnIdleTimeoutMin,
 		ChatTurnTimeoutMin:     s.ChatTurnTimeoutMin,
 		ChatTurnIdleTimeoutMin: s.ChatTurnIdleTimeoutMin,
-		CodexStdoutIdleMin:     s.CodexStdoutIdleMin,
+		CodexStdoutIdleSec:     s.CodexStdoutIdleSec,
 		IdleResumeMax:          s.IdleResumeMax,
 		ScheduleTimeoutMin:     s.ScheduleTimeoutMin,
 		TurnWatchdogMin:        s.TurnWatchdogMin,
@@ -911,7 +913,7 @@ type Patch struct {
 	SpawnIdleTimeoutMin    *int `json:"spawnIdleTimeoutMin"`
 	ChatTurnTimeoutMin     *int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin *int `json:"chatTurnIdleTimeoutMin"`
-	CodexStdoutIdleMin     *int `json:"codexStdoutIdleMin"`
+	CodexStdoutIdleSec     *int `json:"codexStdoutIdleSec"`
 	IdleResumeMax          *int `json:"idleResumeMax"`
 	ScheduleTimeoutMin     *int `json:"scheduleTimeoutMin"`
 	TurnWatchdogMin        *int `json:"turnWatchdogMin"`

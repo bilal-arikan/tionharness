@@ -138,12 +138,14 @@ tutabilir; bu durumda `cmd.Wait` hiç dönmez ve tur "boş cevap" gibi görünü
 - **Ayrı hata metinleri**: startup hang → "likely MCP startup hang (**retryable**)";
   idle hang → "killed after the idle output timeout (**non-retryable**)" + stdout
   kuyruğu. Hiçbiri normal boş cevap olarak raporlanmaz.
-- **Ayarlanabilir pencere**: `codexStdoutIdleMin` ayarı (varsayılan **8 dk**,
+- **Ayarlanabilir pencere**: `codexStdoutIdleSec` ayarı (varsayılan **90 sn**,
   0 = kapalı, Ayarlar ▸ Araçlar ▸ "Codex stdout sessizlik penceresi").
-  `applySettings` → `providers.SetCodexIdleOutputTimeout`. 8 dk seçildi: codex bir
-  turda meşru olarak dakikalarca sessiz kalabilir (uzun build/test adımı), ama
-  20 dakikalık sohbet/tur boşta gözcüsünün ALTINDA kalmalı — aksi halde jenerik
-  tur iptali önce ateşler ve stdout kuyruklu spesifik teşhis hiç üretilmez.
+  `applySettings` → `providers.SetCodexIdleOutputTimeout`. Birim saniyedir çünkü
+  pencere, sohbet/tur boşta gözcüsünün (varsayılan **3 dk**, TSK440) ALTINDA
+  kalmalı — aksi halde jenerik tur iptali her zaman önce ateşler ve stdout
+  kuyruklu spesifik teşhis hiç üretilmez; dakika granülaritesi bu tavanın altına
+  makul bir payla sığmaz. 90 sn, çıktı üretmeden çalışan normal bir araç
+  çağrısının sessiz aralığından uzun, 3 dk'lık tavandan belirgin şekilde kısadır.
   Pencere tur başlangıcında bir kez okunur; ayar değişimi uçuştaki turu kaydırmaz.
 - **debug.jsonl kaydı**: gözcü öldürdüğünde sağlayıcı `Request.OnWatchdog`
   (`internal/providers/watchdog.go`, `WatchdogKill`) ile bildirir; `internal/agent`

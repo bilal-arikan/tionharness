@@ -208,15 +208,15 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           />
         </Field>
         <Field
-          label="Codex stdout sessizlik penceresi (dk)"
-          hint="Akışa başlamış bir codex-cli alt süreci bu kadar süre hiç çıktı üretmezse süreç ağacı öldürülür ve tur 'takıldı' olarak raporlanır (stdout kuyruğu debug.jsonl'e yazılır). Sohbet boşta süresinden küçük tutun (varsayılan 8; 0 = kapalı)."
+          label="Codex stdout sessizlik penceresi (sn)"
+          hint="Akışa başlamış bir codex-cli alt süreci bu kadar saniye hiç çıktı üretmezse süreç ağacı öldürülür ve tur 'takıldı' olarak raporlanır (stdout kuyruğu debug.jsonl'e yazılır). Sohbet boşta süresinden küçük tutun (varsayılan 90; 0 = kapalı)."
         >
           <input
             type="number"
             min={0}
-            max={1440}
-            value={draft.codexStdoutIdleMin}
-            onChange={(e) => set('codexStdoutIdleMin', Number(e.target.value))}
+            max={86400}
+            value={draft.codexStdoutIdleSec}
+            onChange={(e) => set('codexStdoutIdleSec', Number(e.target.value))}
             className={inputCls}
           />
         </Field>
