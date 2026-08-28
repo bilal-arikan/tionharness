@@ -331,6 +331,8 @@
   `tool_search` her eşleşme satırına üyenin demet anahtarını (`[group:diagnostics]`)
   ekler ve 30'da kesildiğinde kalanların hangi demetlerde olduğunu yazar; native
   katalog bloğu ise sonuna tek bir `Bundles: group:… (n), mcp:… (n)` satırı koyar
+  — buradaki **n kategorinin büyüklüğü değil, o demetteki LAZY araç sayısıdır**
+  (`lazyBundleCounts`; eager araçlar sayıma girmez, zaten katalogda listelidir)
   (demet yoksa satır hiç yazılmaz → blok bayt-aynı kalır; CLI formunda yazılmaz,
   çünkü orada üyelik gateway'in kendi aday kümesinden çözülür). Testler:
   `builtin_activate_bundle_test.go`, `TestLazyCatalogBundleLine`,

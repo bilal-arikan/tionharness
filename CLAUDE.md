@@ -62,6 +62,13 @@ ile başarısız olur — araç yok değildir, şeması henüz yüklenmemiştir.
   kullanma.
 - Bir turda ihtiyaç duyacağın **tüm araçları tek çağrıda** yükle
   (`select:a,b,c`) — araç başına ayrı tur tüketme.
+- `activate_tools` araç adının yanında **bundle anahtarı** da kabul eder:
+  `group:<kategori>` (built-in kategorisi) ve `mcp:<sunucu>`. Ama **demet açmak
+  şema YÜKLEMEZ** — yalnız o demetin üyelerini `ad — özet` satırlarıyla listeler
+  (en fazla 40 üye), hiçbir araç aktif sete girmez.
+- Yani akış iki adımdır: demeti aç (isimleri gör) → istediğin **adı/adları** ikinci
+  bir `activate_tools` çağrısına ver (şema ancak o zaman gelir). Detay:
+  `_Docs\19-LAZY-TOOL-LOADING.md`, `_Docs\52-MCP-GATEWAY.md` §13.
 
 ## Ajan delegasyonu
 

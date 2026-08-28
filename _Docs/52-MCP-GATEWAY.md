@@ -890,3 +890,69 @@ ve Playwright dahil diğer MCP sunucuları kapalı kalır. Profil worker'ları a
 `subagent-validator` sistem ajanına çözülür ve allowlist her spawn'da koddan
 yeniden uygulanır (bkz. `_Docs/74-SISTEM-AJANLARI.md`); `ToolOverrides` gibi
 diğer ajan özelleştirmeleri ezilmez.
+
+---
+
+## 13. Bundle (demet) listeleme — CLI/gateway yolu (2026-08-28)
+
+`activate_tools` artık araç adının yanında **bundle anahtarı** da kabul eder:
+`group:<kategori>` (built-in fonksiyonel kategorileri, `internal/tools/categories.go`)
+ve `mcp:<sunucu>` (`internal/tools/bundles.go`). Gateway (claude-cli) tarafındaki
+uygulama `internal/api/mcp_interaction.go` içindedir.
+
+### Akış — hangi fonksiyon
+
+1. `callActivate` girdiyi ikiye ayırır: `tools.SplitBundleKey` bir anahtarı tanırsa
+   `bundleKeys`'e gider (`bareToolName` normalizasyonuna **sokulmaz**), aksi halde
+   araç adı olarak `names`'e gider.
+2. Anahtar varsa `listBundles(run, keys)` çalışır; üyeler `bundleIndex(run)` ile
+   `candidateDefs(run)` üzerinden gruplanır — bu küme ajanın tool filtresini zaten
+   geçmiştir, dolayısıyla workspace'te kapalı bir araç listeye sızamaz.
+3. Aynı çağrıda hem ad hem anahtar geldiyse adlar normal yolla
+   (`callActivateNames`) aktive edilir, listeleme sonucun sonuna eklenir.
+4. codex-cli (`-full` sağlayıcı) dalında her non-core araç zaten ilan edildiğinden
+   listeleme anlamsızdır: `"all on-demand tools are already advertised on this
+   provider"` döner (savunma amaçlı; `gatewayMetaTools` orada `activate_tools`'u
+   zaten ilan etmez).
+
+### Neden push yok
+
+`listBundles` bilinçli olarak **`activateExtended` ÇAĞIRMAZ** ve
+**`PushToolsChangedAndWait` ÇAĞIRMAZ**. Üyeleri aktive etmek onların tam şemasını
+`tionharness_extended` üzerinde ilan etmek demektir — yani lazy loading'in tam
+olarak kaçındığı token patlaması. Demet açmak bu yüzden:
+
+- `Tools(token,"extended")` uzunluğunu **değiştirmez** (regresyon testi:
+  `TestGatewayBundleActivateListsWithoutAdvertising`),
+- CLI'da `tools/list_changed` bildirimi üretmez (re-list turu harcanmaz),
+- `cliTier`/`splitInteractionTiers` sınıflandırmasına hiç uğramaz — bundle anahtarı
+  hiçbir zaman bir araç adı değildir.
+
+### Limit 40
+
+Tek bir demet listelemesi `gatewayBundleListLimit = 40` üyede kesilir (native
+yoldaki `tools.bundleListLimit` ile aynı sayı). Kesilirse kaç üyenin gizlendiği ve
+`tool_search` ile daraltma yönlendirmesi yazılır. Amaç: 300 araçlı bir MCP
+sunucusunun tek çağrıda on binlerce token'lık sonuç döndürmesini engellemek.
+
+### Ad ile anahtar ayrımı (sözleşme)
+
+| Girdi | Etki |
+|---|---|
+| Araç adı (`list_agents` veya `mcp__tionharness_extended__list_agents`) | **Şema yüklenir** — araç aktif sete girer, list_changed push edilir, aynı turda çağrılabilir. |
+| Bundle anahtarı (`group:diagnostics`, `mcp:playwright`) | **Şema yüklenmez** — yalnız `- ad — özet` satırları döner. Hiçbir şey aktive edilmez. |
+
+Yani akış iki adımlıdır: **demeti aç (isimleri gör) → istediğin adı/adları
+`activate_tools`'a ver (şema gelir)**. Üyeler listede doğrudan
+**namespace'li çağrılabilir adla** (`mcp__tionharness_extended__<ad>`) yazılır,
+çünkü CLI bir aracı yalnız bu adla çağırabilir. Geçersiz anahtar
+`unknown bundle: …; known bundles: …` olarak raporlanır — bulanık ad eşleştirmeye
+düşmez. `deactivate_tools` da bir bundle anahtarını kabul eder ve açık demeti kapatır.
+`tool_search` sonuç satırları üyenin demet anahtarını `[group:…]` / `[mcp:…]`
+etiketiyle gösterir.
+
+> **Katalog farkı:** native (claude-cli olmayan) yolda lazy katalog bloğunun sonuna
+> `Bundles: group:… (n), mcp:… (n)` satırı basılır; **CLI formunda bilerek
+> basılmaz**. Sebep: native sayım `Registry.BundleIndex`'ten, gateway üyeliği ise
+> run'a özel `candidateDefs`'ten çözülür — iki farklı kaynak, sayılar örtüşmezdi.
+> Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
