@@ -108,7 +108,10 @@
   kadarki kısmi yanıt + iz kalıcılaştırılır, `ClearInflight` çağrılır ve tur normal
   dönerek seri kuyruk işçisinin **sıradaki gelen-kutusu mesajını** teslim etmesinin
   önü açılır (önceki davranış: oturum sonsuza kadar asılı, kuyruk hiç ilerlemez —
-  WS19/SES578).
+  WS19/SES578). Bu kuyruk teslimi artık uçtan uca bir regresyon testiyle korunuyor:
+  `TestInboxQueueDrainsAfterStalledTurnIsReclaimed`
+  (`internal/api/inbox_stalled_turn_test.go`) hiç parça üretmeyen bir Streamer ile
+  iki mesaj kuyruklar ve İKİNCİ mesajın sağlayıcıya ulaştığını doğrular (TSK442).
 - **Kesinti kurtarma**: `classifyTurnOutcome` iptal nedenini (`ErrTurnIdleTimeout`/
   `ErrTurnHardTimeout`) + loop terminal işaretlerini okuyup "iş BİTMİŞ DEĞİL" notu
   üretir. `reconcileTurnOutcome` bu notu kurtarılan kısmi metnin başına ekler, iz'e
