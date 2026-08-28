@@ -12,7 +12,8 @@ the external agent project "her şeyi prompta göm" (~28K karakter statik + dina
 **lean prefix → skill'e devret** (`default-instructions.md` ~166 satır). Bu yüzden parite
 = körü körüne kopyalama değil; **gerçek boşluk + TionHarness'te destekli + prefix'i
 şişirmeyen** olanı almak. `internal/workspace/defaults_test.go` guard'ı desteklenmeyen
-the external agent project-ism'lerin (datatable/html-preview/call_llm/render_template/_displayName) geri
+the external agent project-ism'lerin (datatable/spreadsheet/call_llm/`~/.external-agent/docs`/_displayName/
+pdf-preview/markdown-preview/"the external agent project" adı — tam liste `defaults_test.go:19-28`) geri
 sızmasını aktif engeller.
 
 ## Statik prompt — alınan / alınmayan
@@ -24,7 +25,8 @@ sızmasını aktif engeller.
 | "Confirm destructive" → geri-döndürülemez + dışa-dönük | **GENİŞLETİLDİ** | send/publish/push kapsandı |
 | Environment marker (`<environment>` OS/arch/shell) | **EKLENDİ** (dinamik tarafta) | `agent.EnvironmentContextBlock()` |
 | Shell-tool gate advertisement | **EKLENDİ** (dinamik tarafta) | `Runtime.ShellToolsContextBlock()` — **tek kaynak, hiç boş dönmez**: gate açık + backing shell varsa Bash/PowerShell'i adıyla duyurur; **kapalıysa "shell DISABLED" + ölü-araç kuralını** enjekte eder (bir araç "not enabled in this context" derse ölü kabul et, aynı çağrıyı tekrarlama, fs araçlarına geç ya da raporla — ayrıca terminal varsayan rehberlik `rtk`/`go test`/`npm` shell'siz oturumda geçersiz). Bu, ajanın bare `PowerShell` çağırıp tur zaman aşımına düşmesini keser (FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8). Statik talimatlar shell'i "her zaman var" diye VAAT ETMEZ (yalnız fs araçları always-on). `tools.ShellToolNames()` kayıt koşullarıyla aynı resolver'ı paylaşır → prompt ↔ katalog drift yok. **Ajan filtresi (2026-08-17):** workspace gate'i tek başına yetmiyordu — allowlist'inde `Bash`/`PowerShell` olmayan bir ajana "ENABLED" deniyor, ajan Bash'i çağırıp her seferinde `No such tool available` alıyordu (makine genelinde 100 başarısız çağrı; Bash hata oranı %4.05'e karşı köprülü MCP shell'de %0.21). Blok artık host'un desteklediği shell adlarını **ajanın kendi tool filtresinden** geçirir (`availableShellToolNames` → `ToolAllowedFunc`, `ToolCatalog`'un kullandığı **aynı** kapı): ikisinden hiçbiri kalmıyorsa DISABLED varyantı, yalnız biri kalıyorsa **sadece o** duyurulur. Bu yüzden `ShellToolsContextBlock(ctx, agent, confined)` imzası ajan taşır. Testler: `shellcontext_test.go` (allowlist'siz / kısmi allowlist / denylist) |
-| Structured Data (datatable/spreadsheet) · HTML/PDF/Markdown Preview · call_llm · render_template · Source Templates · Tool Metadata (`_displayName/_intent`) | **DIŞLANDI** | Frontend/araç desteği yok → prompta yazmak halüsinasyon; guard yasaklıyor |
+| Structured Data (datatable/spreadsheet) · PDF/Markdown Preview · call_llm · Tool Metadata (`_displayName/_intent`) | **DIŞLANDI** | Frontend/araç desteği yok → prompta yazmak halüsinasyon; guard yasaklıyor |
+| Source Templates / `render_template` · `html-preview` | **UYGULANDI** (2026-07-06) | TionHarness-native karşılık: `internal/tools/builtin_render_template.go` + inline HTML önizleme (`frontend/src/shared/components/markdown/HtmlPreview.tsx`). Guard bu ikisini artık yasaklamaz. Detay: [63-SOURCE-TEMPLATES-RENDER.md](63-SOURCE-TEMPLATES-RENDER.md) |
 | Configuration Documentation tablosu (`~/.external-agent/docs/*`) | **DIŞLANDI** | TionHarness docs yerine skill'e devreder |
 | External Sources (config.json/guide.md) | **FARKLI** | TionHarness MCP-server modeli kullanır |
 

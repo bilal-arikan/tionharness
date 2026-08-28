@@ -117,7 +117,7 @@ dosyası ve editlenebilir prompt'ları düzenleme.** İyi haber: büyük kısmı
 | Dosya oku/yaz/edit | `Read`/`Write`/`Edit` araçları + fs kilitsiz | `sandbox.go` |
 | Artifact listeleme/içerik | `workspace/artifacts/<sessionId>/` + artifact API | Artifact sistemi |
 | Binary/medya artifact | `kind=image/video/audio/file` + `sourcePath` (base64 gömmeden) | Artifact sistemi |
-| Editlenebilir prompt'lar | agent soul, skill body, flow prompt, workspace instructions, compact.md, core memory, oturum hedefi (9 call-site, `PromptEditor`) | `common/PromptEditor.tsx` |
+| Editlenebilir prompt'lar | agent soul (`AgentSettingsForm`, `AgentsView`), flow node prompt'u (`NodeInspector`), profil/workspace dosyaları (`ProfilePanel`, `WorkspaceFilesPanel`), skill body (`SkillEditor`) — 6 tüketici, `PromptEditor` | `shared/components/PromptEditor.tsx` |
 
 ### 4.2 Eklenecek (küçük)
 

@@ -255,9 +255,9 @@ ajanın denylist'inde olan bir skill aracı hâlâ engellidir. Katman sırası v
 
 - `agent/trace.go`: `StepSubagent StepKind = "subagent"` + `TurnStep.SubSteps
   []TurnStep` (alt-ajan iz ağacı iç içe). E3 "kalan" maddesi bununla kapanır.
-- `frontend/src/components/chat/SubagentStep.tsx` (yeni): katlanabilir iç içe ajan
-  kartı (başlık = profil/ad + görev özeti; açılınca alt-adımlar). `lib/stepKinds.ts`
-  + `lib/tools.ts` kaydı.
+- `frontend/src/features/chat/SubagentStep.tsx` (yeni): katlanabilir iç içe ajan
+  kartı (başlık = profil/ad + görev özeti; açılınca alt-adımlar).
+  `shared/stepKinds.ts` + `features/chat/tools.ts` kaydı.
 
 ### Canlı kart (2026-08-21)
 
@@ -307,8 +307,8 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 | `internal/agent/toolloop.go` | düzenle | çoklu `tool_use` paralel; subagent iz gömme |
 | `internal/agent/toolsetup.go` | düzenle | tek `run_subagent` kaydı; eski 3 kaydın çıkarılması |
 | `internal/agent/tunables.go` | düzenle | guard tunable'larını paylaş (`Subagent*` veya mevcut delegation/spawn alanları) |
-| `frontend/src/components/chat/SubagentStep.tsx` | **yeni** | iç içe katlanabilir kart |
-| `frontend/src/lib/{stepKinds,tools}.ts`, `types/*.ts` | düzenle | `subagent` kind + `run_subagent` |
+| `frontend/src/features/chat/SubagentStep.tsx` | **yeni** | iç içe katlanabilir kart |
+| `frontend/src/shared/stepKinds.ts`, `frontend/src/features/chat/tools.ts`, `types/*.ts` | düzenle | `subagent` kind + `run_subagent` |
 
 > **Dokümantasyon temizliği ✅ (tamamlandı):** `00-GENEL-BAKIS`, `05-ILERLEME`,
 > `24-SELF-MANAGEMENT` ve proje SKILL'inde artık "heartbeat/`Wake`/`send_agent_message`"

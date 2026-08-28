@@ -88,21 +88,30 @@ graph LR
 ## Mimari: tee'li slog handler + ring buffer
 
 `internal/logbuf` paketi bir `slog.Handler` sarmalayıcısı sağlar (`Buffer.Handler`):
-gelen her kaydı **hem** kalıcı `inner` handler'a (stdout `TextHandler`) **hem de**
-sabit kapasiteli bir ring buffer'a yazar (tee deseni).
+gelen her kaydı **hem** kalıcı `inner` handler'a (stdout + log dosyası
+`TextHandler`) **hem de** sabit kapasiteli bir ring buffer'a yazar (tee deseni).
 
-`main.go` kurulumu:
+Kurulum `main.go`'da değil, ortak `app.SetupLogging()` içindedir
+(`internal/app/app.go:59-69`) — her giriş noktası (server ve desktop binary'si)
+onu çağırır:
 
 ```go
 logs := logbuf.New(2000) // ring buffer kapasitesi
-logger := slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+var w io.Writer = os.Stdout
+if f, err := openLogFile(); err == nil { // config.LogFilePath()
+    w = io.MultiWriter(os.Stdout, f)
+}
+logger := slog.New(logs.Handler(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})))
+slog.SetDefault(logger)
 ```
 
 - **Seviye eşiği:** `slog.LevelInfo` → `Debug` kayıtlar varsayılan olarak yazılmaz.
 - **Ring buffer:** `internal/logbuf/logbuf.go`. `max` (2000) aşılınca en eski
   kayıtlar düşürülür (FIFO). Her kayıt artan bir `Seq` alır (UI'da React key).
 - **Bellek-içi:** sunucu yeniden başlayınca buffer **sıfırlanır**. Kalıcı geçmiş
-  için stdout'a bakılır (henüz dosyaya rotating log yok — bkz. *Gelecek*).
+  stdout'ta ve disk log dosyasındadır (`config.LogFilePath()`, data dizini altında
+  `logs/`; `internal/app/app.go` `io.MultiWriter` ile append modda yazar, yol
+  `GET /api/logs/path` ile açığa çıkar). **Rotation henüz yok** — bkz. *Gelecek*.
 
 ### `logbuf.Entry` şekli
 
@@ -162,9 +171,7 @@ de access-log'a yansısın diye withRequestLog'un içinde).
 | `task run finished` | `agent/executor.go` | task, trigger, status |
 | `schedule created` / `toggled` | `api/schedules.go` | id, agent, cron, enabled |
 | `mcp server toggled` / `tested` | `api/mcp.go` | server, tools (test başarısız → WARN) |
-| `memory added` | `api/memory.go` | agent, kind, id |
 | `flow run started` / `finished` | `agent/flow.go` | flow, run, status, steps |
-| `agent reflected` | `agent/reflector.go` | agent, journals |
 
 > Konvansiyon: log mesajları + alan değerleri **İngilizce** (kod kuralı). Hata
 > yolları `s.logger.Warn/Error` ile zaten loglanır; başarı yolları yukarıdaki
@@ -273,8 +280,11 @@ Sınırlar ve güvenlik:
 2. ~~**Frontend hata köprüsü**~~ ✅ **Yapıldı (2026-06-18)** — `POST /api/logs` +
    `ErrorBoundary` + global handler'lar (bkz. yukarıdaki "Takip edilmeyen
    hataları yakalama" bölümü).
-3. **Kalıcı rotating log dosyası:** restart sonrası geçmiş korunur (UI'dan
-   disk dosyası geçmişini okuma modu ile birlikte).
+3. **Kalıcı log dosyası — yarı tamam:** dosyaya yazma ✅ yapıldı
+   (`internal/config/config.go` `LogFilePath()` + `internal/app/app.go`
+   `io.MultiWriter`, `GET /api/logs/path` ile yol açığa çıkar), restart sonrası
+   geçmiş diskte korunur. **Kalan:** rotation/boyut sınırı ve UI'dan disk
+   dosyası geçmişini okuma modu.
 4. **Bearer auth + ağ bind:** gerçek uzak-ajan erişimi için token'lı koruma.
 5. **Log satırı → oturum linki:** `session` alanından ilgili oturuma/
    SessionDebugModal'a atlama.
@@ -286,10 +296,12 @@ Sınırlar ve güvenlik:
 - `internal/api/events.go` — `log` SSE olayı (canlı tail)
 - `internal/api/middleware_log.go` — HTTP access-log middleware
 - `internal/api/middleware_recover.go` — HTTP panic-recovery middleware (son savunma hattı)
-- `frontend/src/lib/reportError.ts` — istemci hata raporlayıcı + global handler kurulumu
-- `frontend/src/components/ErrorBoundary.tsx` — React render çökmesi yakalayıcı
-- `internal/api/{chat,chat_stream,agents,sessions,tasks,schedules,mcp,memory}.go` — iş logları
-- `internal/agent/{worker,executor,flow,reflector}.go` — otonom/runtime logları
+- `internal/api/logs_path.go` — `GET /api/logs/path` (disk log dosyasının yolu)
+- `frontend/src/shared/lib/reportError.ts` — istemci hata raporlayıcı + global handler kurulumu
+- `frontend/src/shared/components/ErrorBoundary.tsx` — React render çökmesi yakalayıcı
+- `internal/api/{chat,chat_stream,agents,sessions,tasks,schedules,mcp}.go` — iş logları
+- `internal/agent/{executor,flow}.go` — otonom/runtime logları
 - `frontend/src/features/logs/LogsPanel.tsx` — Loglar ekranı (filtreler + gruplama + SSE tail)
 - `frontend/src/features/logs/logGroup.ts` — ardışık aynı kayıtları katlama (`groupConsecutive`)
-- `cmd/tionharness/main.go` — logger kurulumu
+- `internal/app/app.go` — `SetupLogging()` (ring buffer + stdout/dosya tee) ve `openLogFile()`; her entry point bunu çağırır
+- `internal/config/config.go` — `LogFilePath()` (data dizini altındaki log dosyası)

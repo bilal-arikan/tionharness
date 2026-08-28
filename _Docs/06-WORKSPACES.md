@@ -20,7 +20,15 @@ Workspace oluşturma ekranında varsayılan seçilen `workspace-blank` şablonu 
 hazır bir **CEO + PM** kontrol döngüsüyle açılır. CEO salt-okuma, mesajlaşma ve
 delegasyon araçlarıyla board'u gözler; etkin 20 dakikalık cron schedule kalıcı
 `kind="schedule"` oturumunu uyandırır. CEO iş yapmaz, duran/başarısız/ilerlemeyen
-işte PM'i harekete geçirir. PM tam araç erişimli yürütücüdür; kartları yönetir,
+işte PM'i harekete geçirir. CEO bunu **her zaman `spawn_session{agent:"PM"}`** ile
+yapar — PM kendi bağımsız oturumunda çalışır, CEO'nun worker'ı olarak değil. Bu
+yüzden CEO'nun koordinatör modu kapalıdır ve `spawn_worker` / `send_to_worker` /
+`run_subagent` araçları engellidir; PM'in sonucu CEO oturumuna dönmez, PM'in kendi
+oturumuna düşer. CEO ayrıca açık kartları **bağımsız kümelere** ayırır ve her küme
+için ayrı bir PM oturumu açar (aynı turda paralel `spawn_session` çağrıları); birbirine
+bağımlı kartlar aynı kümede kalır, aynı kart iki oturuma verilmez. Tur başına spawn
+üst sınırı `SpawnMaxPerTurn` ayarıdır (varsayılan 4); artan kümeler bir sonraki
+heartbeat'e bırakılır. PM tam araç erişimli yürütücüdür; kartları yönetir,
 uzman işi ve insight/prompt/skill/otomasyon/akış optimizasyonunu delege eder.
 
 Şablon ayrıca kart `failed` veya `review` durumuna taşındığında PM'in aynı kalıcı
@@ -41,7 +49,7 @@ rengini (accent) saklar; **workspace değiştirince arayüz teması da değişir
   (`internal/workspace/settings.go` → `WSSettings`). Boş alan = **uygulama-geneli
   görünümü miras alır** (`settings.json`'daki `theme`/`accent`/`themePreset`
   varsayılan rolünü sürdürür).
-- **Çözümleme:** `frontend/src/lib/theme.ts::resolveAppearance(ws, global)` her
+- **Çözümleme:** `frontend/src/shared/lib/theme.ts::resolveAppearance(ws, global)` her
   alanı tek tek birleştirir (boş → global). `applyAppearance` belgeye uygular.
 - **Uygulama akışı:** `App.tsx` global görünümü ve aktif workspace override'ını
   iki ref'te tutar; workspace değişiminde `GET /api/workspace-settings` ile
@@ -61,7 +69,7 @@ rengini (accent) saklar; **workspace değiştirince arayüz teması da değişir
 Workspace'i taşınabilir bir **şablon paketine** dönüştürme (eski "Şablon olarak yayınla")
 artık `WorkspaceView`'in kendi **Dışa Aktar** sekmesindedir (Genel ▸ Görünüm ▸ Proje ▸
 Promptlar & Dosyalar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
-detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
+detaylandırıldı. Panel: `frontend/src/features/workspace/WorkspaceExportPanel.tsx`.
 
 - **Öğe-bazlı seçim (2026-07-01):** Ajanlar, Akışlar, Workspace skill'leri, Zamanlamalar
   ve **Otomasyonlar** (2026-08-11) **tek tek** seçilir (beş ayrı checkbox listesi —

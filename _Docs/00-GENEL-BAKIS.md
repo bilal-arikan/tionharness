@@ -37,7 +37,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - **Swarm (Sürü):** Delegasyon ile işbirliği yapan ajan toplulukları.
 - **Session (Oturum):** Mesaj geçmişini ve bağlamı koruyan konuşma dizisi.
 - **Task (Görev):** Yürütme politikaları, retry mantığı ve bağımlılıkları olan pano-tabanlı iş kuyruğu.
-- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (9 kind: `anthropic`, `claude-cli`, `codex-cli`, `minimax`, `minimax-anthropic`, `openrouter`, `zai`, `deepseek`, `deepseek-anthropic`).
+- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (11 kind: `anthropic`, `claude-cli`, `codex-cli`, `minimax`, `minimax-anthropic`, `openrouter`, `zai`, `deepseek`, `deepseek-anthropic`, `anthropic-compat`, `openai-compat`).
 
 ## Doküman Dizini
 

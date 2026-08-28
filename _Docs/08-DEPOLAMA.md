@@ -250,13 +250,8 @@ saklanır.
 
 - **Zaman damgaları:** unix epoch **saniye** (`int64`), değişmedi.
 - **Birincil anahtarlar:** UUID (`google/uuid`), değişmedi.
-- **Gömülü JSON alanları:** `dream_config`, `tool_calls`,
-  `graph`, `state`, `env_config` vb. yine TEXT-içinde-JSON string olarak tutulur
-  (model değişmedi).
-- **Memory embedding:** `KnowledgeSource.Embedding []byte` bellek modelinde
-  `json:"-"`; diske `knowledgeDisk` sarmalayıcısıyla base64 olarak yazılır, böylece
-  cosine vektör cache'i restart'ta korunur (yoksa `memory.Recall` içerikten yeniden
-  hesaplar — geriye dönük güvenli).
+- **Gömülü JSON alanları:** `tool_calls`, `graph`, `state`, `env_config` vb. yine
+  TEXT-içinde-JSON string olarak tutulur (model değişmedi).
 - **Usage:** gün-bazlı dosya (`{agentID}__{gün}.json`), read-modify-write upsert.
 - **Cascade silme:**
   - `DeleteTask` → task'ın run'ları; `DeleteFlow` → flow'un `flow_runs`'ı.

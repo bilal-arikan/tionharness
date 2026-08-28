@@ -11,7 +11,9 @@
 > sunuculardan paket çekebilir (`harnessregistry/v1` index). Kaynak ekle/çıkar/yenile,
 > uzak paketleri listele+kur (lazy indirme, opsiyonel sha256), ve **sürüm bazlı
 > "Güncelle"** algısı (install ledger). Detay §7.
-> Yayınlama (publish) şimdilik yalnız skill için; diğer türlerin publish + import/export UI sonraki dilim.
+> Yayınlama (publish) şimdilik **skill** ve **workspace şablonu** için
+> (`internal/api/market_publish.go`: `market.KindSkill` + `market.KindWorkspace`);
+> diğer türlerin publish + import/export UI sonraki dilim.
 > **Hedef:** Skiller, Agentlar, Sağlayıcılar, Flow taslakları, **Workspace şablonları,
 > MCP araç sunucuları ve hook'lar** uygulama içinden paketlenip (publish),
 > gözatılıp (browse) ve kurulabilsin (install).

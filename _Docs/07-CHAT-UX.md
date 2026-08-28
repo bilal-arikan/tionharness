@@ -28,6 +28,21 @@ sohbet ekranı gibi.
     `Response.Trace`'e doldurur. `agent/trace.go:traceToSteps` bunu `[]TurnStep`'e çevirir.
     Böylece **API anahtarı olmadan** da tool kartları + ara adımlar görünür.
 
+#### Adım Türleri — işaretler
+
+Adım türlerinin tek kaynağı `frontend/src/shared/stepKinds.ts`'tir (Ayarlar →
+**Adım Türleri** ekranını besler). `context_change` adımının diff işaretleri:
+
+| İşaret | Anlamı |
+|--------|--------|
+| `+` | Snapshot'ta olmayan, canlı bağlamda olan blok (ya da yeni araç) |
+| `-` | Snapshot'ta olup canlı bağlamdan düşen blok (ya da kalkan araç) |
+| `~` | İki tarafta da olan ama **düzenlenmiş** blok; gövdesi unified diff'tir (` ` değişmeyen, `-` silinen, `+` eklenen satır, atlanan aralıklar `…`) |
+
+Başlıktaki `+N -M` sayaçları da satır düzeyindedir: `+`/`-` blok tek birim sayar,
+`~` blok kendi diff'indeki gerçek eklenen/silinen **satır** sayısını ekler — yani
+sadece satır silen bir düzenleme `+1` göstermez (`_Docs\57-PROMPT-EPOCH.md`).
+
 ### Kalıcılık
 
 #### Canlı adım kartı sözleşmesi (2026-08-21)
@@ -334,8 +349,17 @@ kırpıldı:
   4. **Yeni dosya özel durumu:** `Write`'ın sentezlenen "farkı" dosyanın tüm
      içeriğidir (binlerce `+` satırı, bilgi değeri düşük) → varsayılan kapalı,
      `Yeni dosya · N satır` rozetinin arkasında. Düzenlemeler açık başlar.
-- `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
-  (`lib/paths.ts` tespit eder).
+- `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere, **URL'leri
+  de gerçek `<a target="_blank">` linkine** çevirir (`lib/paths.ts` tespit eder).
+  `splitPaths` artık `{ text, kind: 'text' | 'path' | 'url' }` segmentleri döner;
+  URL deseni yol deseninden **önce** denenir — aksi hâlde `https://host/x` içindeki
+  `//host/x` kuyruğu "yol" sanılıp şeması kesiliyor ve WebSearch/WebFetch adımının
+  yanındaki link tıklanamaz sahte bir dosya çipine dönüşüyordu (TSK423). Cümle
+  sonu noktalama (`.,;:!?`) ve dengesiz kapanış parantezi linkin dışında bırakılır;
+  şemasız `www.host` linkleri `urlHref` ile `https://` alır.
+- `lib/paths.ts` → `isExternalUrl` tek kaynaktır; `Markdown.tsx` ve `Gallery.tsx`
+  kendi kopya `isExternal` yardımcılarını kullanmaz. `mediaUrl` uzak (http/https)
+  bir görsel adresini artık `/api/files?path=…` ile sarmalamaz, olduğu gibi geçirir.
 - `WorkerWaitBanner.tsx` (2026-07-27) — koordinatör oturumunda **çalışan worker**
   varken composer'ın üstünde bekleme banner'ı (`WakeWaitBanner` deseni): "N worker
   çalışıyor — sonuçları bekleniyor · M/T bitti" + her worker için oturumunu açan çip.
@@ -438,12 +462,15 @@ kırpıldı:
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
   - **Araç müfettişi (`ToolAccessPanel.tsx` + `ToolAccessList.tsx` +
     `toolAccessGroups.ts`):** toolbar'daki 🔧 butonu seçili ajanın **şu an**
-    kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: *Aktif*
+    kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: *Bağlamda*
     (şeması her tur gönderilen eager set), *Talep üzerine* (katalogda isim/özet
     duran, `tool_search`/`activate_tools` ile açılabilen lazy set) ve *MCP*
     (tanımlı sunucular: etkin mi, transport/kapsam, canlı bağlantı sayısı, o
-    sunucudan gelen aktif/hazır araç adedi). Built-in'ler fonksiyonel kategoriye,
-    MCP araçları sunucuya göre gruplanır; her satırda görünürlük tier rozeti.
+    sunucudan gelen aktif/hazır araç adedi). İki araç sekmesi de tek düz,
+    alfabetik listedir — built-in ve MCP araçları ayrı gruplara bölünmez, kaynak
+    satırdaki rozette durur; her satırda ayrıca görünürlük tier rozeti vardır.
+    Sekme başlıklarında sayı rozeti; boş sekme kendi boş-durum metnini, sonuçsuz
+    arama ayrı bir metni gösterir.
     Kaynak `GET /api/agents/{id}/tool-access` (ajan-kapsamlı, hiçbir şeyi
     değiştirmez); ayar değişikliği yine Araçlar ekranından yapılır. Panel akış
     sürerken de açılabilir, ajan seçimi değişince `key={agentId}` ile remount olur.
@@ -594,9 +621,11 @@ kırpıldı:
     görünmezdi). Seçim `#sorgu` token'ını siler ve artifact'ı içerik eki olarak ekler
     (içerik satır-içine alınır, `ARTIFACT_INLINE_CAP`).
   - **`/`** (girdinin başında, tek kelime) → **komut paleti**; seçim `SlashCommand.run()`,
-    girdi temizlenir. Komutlar `App.tsx`'te `chatCommands` (useMemo): `/reflect` (yansıma),
-    `/memory` · `/board` · `/flows` (talep-üzerine özet, `POST /api/sessions/{id}/summary`),
-    `/tools` (deterministik araç listesi). Özet komutları çalışınca **komutun kendisi de**
+    girdi temizlenir. Komutlar `features/chat/chatStreamCommands.ts`'teki
+    `buildChatCommands()`'ten gelir: `/compact` (sohbeti şimdi özete sıkıştır),
+    `/refresh-context` (donmuş bağlam snapshot'ını yenile), `/handoff` (context
+    reset), `/rewind` (checkpoint'e geri sar), `/tools` · `/board` · `/flows`
+    (talep-üzerine özet, `POST /api/sessions/{id}/summary`). Özet komutları çalışınca **komutun kendisi de**
     sohbete bir kullanıcı balonu (`/kind`, komut stilinde) olarak yazılır, ardından sonuç
     asistan mesajı gelir (ikisi de kalıcı; `{userMessage, replyMessage}`). Bir komutu
     **çalıştırmadan düz metin** göndermek için tırnak içine al: `"/komut"` (bkz. `chat/UserBubble.tsx`).

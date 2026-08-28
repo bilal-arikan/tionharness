@@ -179,8 +179,8 @@ davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uy
   `internal/agent/workdir_ctx.go` (`SessionWorkdir`), `internal/db/db.go` (`Root()`),
   `internal/api/{todos.go,chat_turn.go,chat_stream.go,chat_control.go,mcp_interaction.go,autonomous_interaction.go,server.go}`,
   `internal/settings/{settings.go,store.go}`, `frontend/src/types/{settings.ts,session.ts}`,
-  `frontend/src/api/sessions.ts`, `frontend/src/components/settings/appPanels.tsx`,
-  `frontend/src/components/sessions/SessionDetailPanel.tsx`.
+  `frontend/src/api/sessions.ts`, `frontend/src/features/settings/appPanels.tsx`,
+  `frontend/src/features/sessions/SessionDetailPanel.tsx`.
 
 ## Geri-Uyumluluk & Felsefe
 

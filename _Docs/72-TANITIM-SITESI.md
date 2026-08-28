@@ -17,8 +17,8 @@ sunar.
 | Stack | Astro 5 + Tailwind v4 | Varsayılan sıfır JS, statik çıktı, ileride `/docs` eklenebilir |
 | Konum | `website/` (repo içinde) | Özellik değişince site metni **aynı commit'te** güncellenir |
 | Dil | EN | Hedef kitle açık kaynak geliştiricisi; TR faz 2 |
-| Kapsam | Tek sayfa + `/releases` + `/404` | Doküman sitesi ayrı bir iş |
-| Deploy | Yok (henüz) | `dist/` hazır; hosting kararı repo kararına bağlı |
+| Kapsam | Tek sayfa + `/releases` + `/404` + `/docs` | Doküman sayfaları içerik koleksiyonundan üretilir (`website/src/pages/docs/[...slug].astro`) |
+| Deploy | **GitHub Pages** (`.github/workflows/pages.yml`) | `main`'e `website/**` push'unda otomatik build+deploy; özel alan adı `tionharness.com`, `latest.json` site köküne kopyalanır |
 | Alan adı | `tionharness.com` | Bir alan adı sağlayıcısında kayıtlı; DNS henüz bir yere yönlendirilmedi |
 | Release verisi | **Build anında** çözülür, tarayıcıda tazelenir | Sürüm ve indirme linki JS'siz görünür; build hiçbir zaman canlı bir host'a bağımlı değil (aşağıya bak) |
 
@@ -26,9 +26,10 @@ Go tarafını etkilemez: `website/` modül dışıdır, `go:embed` ağacına gir
 
 ## Placeholder politikası — sitenin omurgası
 
-Projede henüz **olmayan** her şey (release binary'leri, docs sitesi, tanıtım videosu,
-DNS) tek dosyada toplanır: `website/src/site.config.ts`. Public repo, lisans ve issue
-takibi artık var, dolayısıyla o alanlar dolduruldu.
+Projede henüz **olmayan** her şey (release binary'leri, etiketli sürüm, tanıtım videosu,
+DNS) tek dosyada toplanır: `website/src/site.config.ts`. Public repo, lisans, issue
+takibi ve docs sitesi artık var, dolayısıyla o alanlar dolduruldu — `docsUrl` artık
+`null` değil, `/docs/getting-started/introduction`'a bakar.
 
 Kural: **`null` = henüz yok.** Bileşenler bu durumu ölü linke çevirmez.
 
@@ -209,12 +210,14 @@ Arama kutusu, tema seçici ve TR çevirisi kapsam dışı bırakıldı.
 
 ## İçerik kaynağı kuralı
 
-Site metni yazılırken/güncellenirken **kök `README.md` kaynak alınmaz.** Bayat: kaldırılmış
-Hafıza alt sistemini anlatıyor (2026-07-05'te silindi), provider listesi 3 diyor (gerçekte
-7 kind), tema sayısını 8 sanıyor (gerçekte 6 renk × 2 mod). Doğru kaynak sırasıyla:
-`00-GENEL-BAKIS.md`, `05-ILERLEME.md`, `tionharness-project` skill'i.
+Site metni yazılırken/güncellenirken doğru kaynak sırasıyla `00-GENEL-BAKIS.md`,
+`05-ILERLEME.md` ve `tionharness-project` skill'idir — hepsi koda karşı doğrulanır.
 
-> **Açık iş:** kök `README.md`'nin de aynı gerekçeyle tazelenmesi gerekiyor.
+Kök `README.md` 2026-08-28'de bu kaynaklardan yeniden yazıldı (silinmiş Hafıza alt
+sistemi, "3 sağlayıcı" ve "8 tema" iddiaları kaldırıldı; sağlayıcı sayısı
+`internal/providers/kind_*.go`'dan, tema sayısı `themePresets.ts`'ten teyit edildi).
+Yine de birincil kaynak README değil, yukarıdaki üç kaynaktır: README elle bakımlıdır
+ve tekrar bayatlayabilir.
 
 ## Sıradaki adımlar
 

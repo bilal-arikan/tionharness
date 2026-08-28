@@ -3,7 +3,7 @@
 > Session ⇄ flow birleşiminin (Model C: ortak Run substratı, Model D: çapraz-driver
 > kompozisyon) **yürütülebilir çekirdeği**: flow'un durable olarak **girdi bekleyebilmesi**.
 > Bir flow `[agent] → [await-input] → [agent]` artık **scripted bir konuşmadır** =
-> "her session bir flow"un ilk somut adımı. Tam tasarım: `plans/unified-run-CD-design.md`.
+> "her session bir flow"un ilk somut adımı.
 
 ## Neden keystone
 

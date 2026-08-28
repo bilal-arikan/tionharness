@@ -32,12 +32,12 @@ aynı iş için beklenenin bir kaç katı.
 
 | # | Ne | Nerede | Beklenen kazanç | Efor |
 |---|-----|--------|-----------------|------|
-| 1 | `claudePersistentSession=true` yap (tek uzun ömürlü claude süreci) **veya** Coder ajanını (AGT1) native `anthropic` provider'a geçir | `~\.tionharness\settings.json`; `internal/providers/claudecli.go:392-400` | Oturumun ~%36'sı ($0.93); tur-2 sınıfı miss'ler biter | Küçük |
+| 1 | ✅ **YAPILDI** — `claudePersistentSession` artık varsayılan **açık** (`internal/settings/settings.go` `Default()`): oturum+ajan başına tek sıcak claude süreci stdin üzerinden beslenir, `--resume`'u geçersiz kılar | `internal/settings/settings.go:501`; `internal/providers/claudecli.go` | Oturumun ~%36'sı ($0.93); tur-2 sınıfı miss'ler biter | Küçük |
 | 2 | Kodlama ajanları için playwright + tarayıcı MCP sunucu satırlarını kapat; `writeCLIMCPConfig`'i per-tool visibility/DisabledTools'a saygılı hale getir | `internal/agent/climcp.go:76-135`; `internal/agent/toolsetup.go:573-599` | ~45-55 şema = 10-15k token/çağrı; 3 turluk oturum ~$0.60-0.75'e iner | Orta |
-| 3 | `ExtendedPromptCache`'i varsayılan **açık** yap; timestamp'i sistem promptundan çıkarıp rolling breakpoint sonrası kullanıcı-mesajı kuyruğuna taşı | `internal/settings/settings.go:106,293-425`; `internal/providers/anthropic.go:499-517`; `internal/api/chat_turn.go:85,182-185` | Taze kurulumda sıcak çağrılar 1× tam fiyattan 0.1× cache-read'e (prefix'te ~%85-90) | Küçük |
+| 3 | ✅ **YAPILDI** — `ExtendedPromptCache` varsayılan **açık** (`internal/settings/settings.go:449`); timestamp artık cache'li statik prefix'te değil, breakpoint sonrası `SystemDynamic` suffix'inde üretiliyor (`internal/api/chat_turn.go:56,158` `dateTimeContextBlock`) | `internal/settings/settings.go:106,293-425`; `internal/providers/anthropic.go:499-517`; `internal/api/chat_turn.go:85,182-185` | Taze kurulumda sıcak çağrılar 1× tam fiyattan 0.1× cache-read'e (prefix'te ~%85-90) | Küçük |
 | 4 | Lazy-tool aktivasyonunu **oturum bazında** kalıcı yap (append-only), tur-ortası Prune'u kaldır; uzun vadede API-native Tool Search (`tool_search_tool_regex_20251119` + `defer_loading:true`) | `internal/agent/toolloop.go:279,292,347-348,592`; `internal/tools/registry.go:289-313` | Araç aktivasyonu sonrası her turda ~65k token 2× fiyatlı yeniden yazımı önler | Orta |
 | 5 | TTL'i yapılandırılabilir yap, varsayılan **5m** (beta header'sız `ephemeral`); 1h yalnızca uzun düşünme aralıklı otonom oturumlara opt-in | `internal/providers/anthropic.go:17,44,567-577,604-620` | Yazım primi 2×→1.25× (soğuk yazımda ~%37) | Küçük |
-| 6 | Yan işleri Haiku'ya yönlendir: başlık üretimi, özet/compaction (`miniModel` ayarı) | `internal/providers/summary.go:34-43`; `internal/api` başlık çağrıları | Yan çağrılarda ~%80-95 | Küçük |
+| 6 | Yan işleri ucuz modele yönlendir. **Çözüm global `miniModel` ayarı değil, sistem ajanları oldu** (2026-08-26): başlık, özet, compaction, ders çıkarma ve içgörü işlerinin her biri kendi modeli/promptu olan ayrı bir sistem ajanıdır; ucuzlatma, ilgili sistem ajanının modelini değiştirmekle yapılır. Detay: [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md) | `internal/agent/systemagents.go`; `internal/agent/titler.go`, `summarizer.go` | Yan çağrılarda ~%80-95 | Küçük |
 | 7 | Büyük araç sonuçlarını sınırla: ~12k token üstünü dosyaya yaz, Haiku özetini + dosya yolunu geçmişe koy | `internal/agent/toolloop.go:416-420,586-589` | Tarayıcı/MCP ağırlıklı oturumlarda on binlerce token'ın her turda yeniden faturalanması biter | Orta |
 | 8 | Cache-kırılma dedektörünü düzelt: messages-prefix hash'i, tool-listesi deltası logu, "hiç ısınmayan oturum" bayrağı | `internal/providers/anthropic.go` (usage/probe mantığı) | Doğrudan kazanç yok; gelecekteki sessiz $1+/tur regresyonları görünür kılar | Küçük |
 
@@ -49,13 +49,3 @@ Ayrıca: dahili fiyat tablosundaki opus-4-8 satırını sağlayıcının güncel
 - **Volatile/stable ayrımı**: tarih-saat (dakika hassasiyeti), oturum durumu vb. kullanıcı mesajına eklenir; sistem promptu ilk `chat()` çağrısında **pinlenir**, oturum boyunca bayt-sabit (`prompt-builder.ts:85-133`, `claude-agent.ts:817-839`).
 - **Yalnızca bağlı-aktif kaynakların araçları** eklenir; pasif kaynak tek satır metin + hata güdümlü lazy aktivasyon (`claude-agent.ts:432-466, 1503-1506`).
 - **Haiku yönlendirmesi** (başlık/özet/doğrulama) ve **12k+ araç sonuçlarını diske yazma**.
-
-## Doğrulama
-
-Her adım sonrası aynı 3-turluk testi tekrar çalıştır (`http://127.0.0.1:8090/api/chat`, AGT1/WS1) ve yeni `sw_turn*.json` + `sw_usage.json` ile karşılaştır. Hedefler:
-
-- Tur-2 `cacheReadTokens` ≥ tur-1 `cacheWriteTokens`'ın ~%95'i (önce: 0 / 51.920)
-- Tur-2 ve tur-3 `cacheWriteTokens` < 2.000 (önce: 65.686 / 3.794)
-- Toplam `cacheWriteTokens` < 60k (önce: 121.400)
-- `costUSD` ≤ ~$1.00 (önce: $2.5915); adım 2 sonrası araç token'ı < 15k, araç sayısı < 90
-- `debug.jsonl`'de ilk çağrı sonrası her çağrıda `cache_read > 0`; hâlâ tur-2 yazımı > 5k ise iki ardışık istek gövdesini diff'le

@@ -26,11 +26,11 @@
 | Built-in araçlar (file/bash/grep/glob/web) | Kutudan | `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash`/`WebFetch` (claude-cli ile aynı isimler) | Kapandı (P2) |
 | Agentic tool döngüsü | Olgun | `agent/toolloop.go` (`maxToolIters` varsayılan 24, `TIONHARNESS_MAX_TOOL_ITERS` ile override) + tur kurtarma (`recovery.go`: max-token resume + reaktif compaction, A1) | Yok |
 | Context yönetimi / compaction | Otomatik | `internal/conversation` (token-bütçeli) | Yok |
-| Prompt caching | İnce ayarlı | Yok (native HTTP) | Küçük |
+| Prompt caching | İnce ayarlı | **Var** — `internal/providers/anthropic.go` istek gövdesine `cache_control` breakpoint'i ekler | Kapandı |
 | Permission / onay modları | Var (mod + hook) | **Var** — `internal/agent/permission.go` + `tools/permission.go` (auto/ask/read-only modları, arg-bazlı grant desenleri, claude-cli `--permission-prompt-tool`) | ✅ (Faz P3) |
 | Hooks (PreToolUse / PostToolUse) | Var | **Var** (Faz P4, native yol; `internal/agent/hooks.go`) | ✅ |
 | Subagents | Var | **Var** — `internal/agent/subagent.go` + `internal/tools/subagent.go` (`run_subagent`: izole alt-ajan, objective/output_format/boundaries) + `internal/orchestration` graf motoru | ✅ |
-| MCP | Var | `internal/mcp` (stdio JSON-RPC) | Yok |
+| MCP | Var | `internal/mcp` (JSON-RPC; stdio + Streamable HTTP taşıması, `manager.go` `DialStdio`/`DialHTTP`) | Yok |
 | Anthropic ile güncel kalma | Bakım Anthropic'te | Bakım bizde | Yapısal |
 
 **Net artı:** Eksik yetenekleri sıfırdan yazıp bakımını üstlenmek yerine olgun bir

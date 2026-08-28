@@ -82,7 +82,7 @@ graph LR
 ## Faz 6 — Memory ✅ → **KALDIRILDI (2026-07-05)**
 > ⚠️ Memory alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI/veri)
 > projeden **tamamen çıkarıldı**. Aşağısı tarihsel kayıttır; bu özellikler artık yoktur.
-- [x] `internal/memory`: doküman + journal + reflection
+- [x] ~~`internal/memory`: doküman + journal + reflection~~ — paket depodan **silindi**
 - [x] Recall: **embedding yerine saf Go lexical cosine** (anahtarsız/çevrimdışı; embedding ileride takılabilir)
 - [x] Dream cycle (`Reflect`) — journal'ı provider'a özetletip reflection üret
 - **Çıktı:** Hatırlayan, yansıtan ajanlar; sohbet+göreve otomatik enjeksiyon. ✅

@@ -1,4 +1,4 @@
-# 39 — Plan Modu (ExitPlanMode köprüsü)
+# 40 — Plan Modu (ExitPlanMode köprüsü)
 
 > Durum: **Tamamlandı (2026-06-28).** claude-cli'nin yerleşik plan modunu TionHarness'in
 > izin/onay katmanına bağlar. Ayrıca eski ölü `planningMode` alanı tamamen kaldırıldı.

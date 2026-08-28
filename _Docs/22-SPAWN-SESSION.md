@@ -73,7 +73,9 @@ Akış:
    işler başlatılmaz; düşürülür ve koordinatör işi ise başarısızlık bildirimi yazılır.
 4. **Bağımsız oturum:** `db.CreateSession{Kind:"spawned", SourceID:uuid, …}` —
    her spawn taze bir `sourceID` ile **ayrı** bir session (GetOrCreate **değil**;
-   dedup istemiyoruz). Başlık `✨ <kısa prompt>`.
+   dedup istemiyoruz). Başlık `✨ <kısa prompt>`
+   — koordinatör fan-out'uyla açılan worker oturumları (`Role == worker`) aynı
+   yerde `🤖 <kısa prompt>` alır, böylece oturum listesinde düz spawn'dan ayrılır.
 5. `AddMessage(user, prompt)` — thread gerçek bir konuşma gibi okunsun.
 6. **Fire-and-forget:** `go r.runSpawn(agent, sessionID, prompt)` ve hemen
    `SpawnResult` döner. Çağıranın `ctx`'i goroutine'i **iptal etmez**

@@ -25,8 +25,8 @@
   şablon/veri dönüştürme, oturumlar-arası mesajlaşma) üzerine kurulu; çekirdek dosya/şüt araçlarını
   (Read/Write/Bash...) Claude/Codex SDK'sından **natif** alır, bu yüzden `session-tools-core` içinde
   yer almazlar.
-- **TionHarness**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u, kalıcı
-  bellek (core + long-term), secret vault, artifact ve skill yönetimi gibi **platform yönetim
+- **TionHarness**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u,
+  secret vault, artifact ve skill yönetimi gibi **platform yönetim
   araçlarını** kendi builtin'leri olarak taşır. Dosya/şal araçları da builtin'dir.
 
 ---

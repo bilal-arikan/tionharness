@@ -68,19 +68,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:transform_data|script exited 0 but did not write the output file -->
 
-## Edit/apply_patch never match on a file that a script can patch — likely line-ending/normalization mismatch between Read output and on-disk bytes
-
-- **Severity:** high
-- **Occurrences:** 1
-- **Evidence sessions:** SES2
-- **File:** `internal/tools/builtin_edit.go` ⚠️ (not found in repo — pointer unverified)
-
-**Root cause:** Edit failed 4x and apply_patch failed with "hunk 1 does not match the file" on the same Windows/Unity C# file (WeeklyEventEditorModel.cs), while a transform_data script doing a raw string replace on the same file succeeded ("replaced 152 chars with 4159 chars"). That asymmetry points at the app, not the caller: the Read tool almost certainly normalizes CRLF→LF (and/or strips a BOM) when rendering content, but Edit/apply_patch match old_string against the raw on-disk bytes. Any old_string copied verbatim from Read can then never match a CRLF file, so no amount of "read the file again" advice fixes it.
-
-**Proposed fix:** Make Edit/apply_patch match with the same normalization Read applies: detect the file's dominant line ending and BOM on load, normalize both haystack and needle for matching, then re-apply the original ending style when writing back. Add a regression test on a CRLF + BOM fixture.
-
-<!-- insight-sig:Edit|old_string not found in file (CRLF/BOM-normalized read vs raw-byte match) -->
-
 ## activate_tools rejects MCP-namespaced tool names that are not mirrored into the on-demand catalog
 
 - **Severity:** high
@@ -132,19 +119,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 **Proposed fix:** Make the enabled tool set authoritative: either register/enable Bash for session kinds that need shell access, or strip Bash from the model's advertised toolset for contexts where it is intentionally disabled so it is never offered. On a 'tool not enabled' rejection, surface a guardrail that redirects the model to the equivalent available tool instead of letting it retry the same disabled tool.
 
 <!-- insight-sig:Bash|no-such-tool-available-not-enabled-in-context -->
-
-## activate_tools rejects tool names the agent was told exist (catalog/prompt drift)
-
-- **Severity:** med
-- **Occurrences:** 2
-- **Evidence sessions:** SES33, SES32
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** The on-demand tool catalog exposed to activate_tools does not contain every tool name the model is led to believe is activatable. The agent requested `create_skill` and `skill_validate`; both were reported as "unknown (not in the on-demand catalog)", so the call was a complete no-op. This is a registry/prompt mismatch inside TionHarness: either those tools are registered under different names (or only in a different scope/session kind) while the prompt or an earlier hint still advertises them, or they were removed from the deferred catalog without updating the catalog description the model sees. The failure is silent-ish — activate_tools returns success-shaped text ("no new tools activated") rather than an error, so the loop can proceed without the capability it just asked for.
-
-**Proposed fix:** Make the on-demand catalog the single source of truth: generate the activatable-tool list handed to the model directly from the registry's deferred set (so an unregistered name can never be advertised), and have activate_tools return a hard error — not a benign "no new tools activated" line — when *every* requested name is unknown, including a nearest-match suggestion list from the catalog. Additionally, alias or register skill-authoring tools (create_skill / skill_validate) if they are intended to be activatable in this session kind.
-
-<!-- insight-sig:activate_tools:unknown_tool_not_in_on_demand_catalog -->
 
 ## Agent calls `Bash` but the tool is not enabled in its context — tool advertisement/registry drift
 
@@ -223,58 +197,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 **Proposed fix:** Resolve the source path against a set of known roots (session workspace, MCP server cwds, configured output dirs) before failing, and on a miss return an actionable error listing the roots searched plus any near-match filenames found under them. Longer term, have MCP tool results that produce files register their absolute output paths in session state so create_artifact can look them up by name instead of relying on the model to reconstruct a path.
 
 <!-- insight-sig:create_artifact:save-artifact-source-file-not-found -->
-
-## activate_tools no-ops when the model asks for tools that exist in the product but are absent from the on-demand catalog
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES30
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** The on-demand tool catalog consulted by activate_tools is a separate registry from the tools the agent is told about elsewhere (skill-related tools like create_skill / skill_validate are referenced in prompt/skill guidance but never registered as activatable entries). When the model requests them, activate_tools finds no catalog match, activates nothing, and returns a soft informational message rather than an actionable error — so the agent believes activation was attempted and proceeds without the capability, or loops re-requesting the same names.
-
-**Proposed fix:** Make the on-demand catalog the single source of truth: register every non-always-on tool (including the skill tools) in the catalog at startup, and add a startup assertion/test that every tool name mentioned in system-prompt/skill guidance resolves in the catalog. Separately, have activate_tools distinguish the three outcomes explicitly — 'already active', 'activated', 'unknown name' — and return an error (with the list of valid catalog names) when every requested name is unknown, instead of a success-shaped no-op.
-
-<!-- insight-sig:activate_tools:unknown-tools-not-in-on-demand-catalog -->
-
-## `activate_tools` accepts unknown tool names and no-ops silently instead of failing with a valid-name list
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES34
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** `activate_tools` was called with `create_skill` and `skill_validate`, neither of which exists in the on-demand catalog. The tool returns `no new tools activated (already active or none valid)` — it merges the "already active" and "name does not exist" cases into one message and does not enumerate what the agent could have activated. The model has no grounded catalog to draw from, so it invents plausible tool names; the app then gives it no signal to correct with, which invites repeat attempts in the same session.
-
-**Proposed fix:** Split the response paths in the `activate_tools` builtin: on an unknown name, return an explicit error listing the valid on-demand catalog names (optionally with the nearest match by edit distance), and distinguish it from the benign "already active" case. Ideally also inject the catalog names into the tool's JSON schema as an enum so the model cannot emit an out-of-catalog name in the first place.
-
-<!-- insight-sig:tool:activate_tools|error:unknown_tools_not_in_on_demand_catalog -->
-
-## `activate_tools` accepts names that are not in the on-demand catalog and silently no-ops
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES31
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** The model is told (or guesses) that skill-related tools such as `create_skill` and `skill_validate` are activatable, but they are not registered in the on-demand catalog. `activate_tools` validates the names only after the call, returning "no new tools activated ... unknown" — so the agent gets neither the tool nor an actionable alternative, and the catalog/prompt drift is invisible until runtime.
-
-**Proposed fix:** Have `activate_tools` return the valid catalog (or nearest-name suggestions) in its error payload, and generate the activatable-tool list injected into the prompt from the catalog itself so unknown names can never be suggested to the model.
-
-<!-- insight-sig:tool:activate_tools|error:unknown_tool_not_in_on_demand_catalog -->
-
-## activate_tools silently no-ops when the model requests catalog names that don't exist (create_skill, skill_validate)
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES29
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** The on-demand tool catalog exposed to the model advertises skill-related capabilities (or the system prompt / skills documentation names them) under identifiers that are not registered in the activation catalog. activate_tools resolves the requested names, finds no match, and returns a soft 'no new tools activated … unknown' message instead of a hard error or a correction, so the model has no actionable signal and re-issues the identical call — the same pair of unknown names appears twice in one session. The catalog and the names the model is told about are not derived from a single source of truth.
-
-**Proposed fix:** Derive the on-demand catalog and the names surfaced to the model from the same registry map so an advertised capability cannot be unregistered. In activate_tools, when every requested name is unknown, return an error result (not a success message) that lists the closest valid catalog names, so the model corrects instead of repeating the call. Add a startup assertion that every tool name referenced in prompt/skill documentation resolves in the registry.
-
-<!-- insight-sig:activate_tools|no_new_tools_activated|unknown_not_in_on_demand_catalog -->
 
 ## Model calls Bash, which exists in the provider but is not enabled in the TionHarness tool context
 
@@ -380,19 +302,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:tool=Bash | error=no_such_tool_available:tool_not_enabled_in_context -->
 
-## transform_data accepts a call with no output_file and only fails at execution time ("output_file is required")
-
-- **Severity:** low
-- **Occurrences:** 1
-- **Evidence sessions:** SES2
-- **File:** `internal/tools/registry.go`
-
-**Root cause:** output_file is enforced imperatively inside the tool handler rather than being declared as a required property in the tool's JSON schema. The model therefore has no schema-level signal that the argument is mandatory, and the omission surfaces as a runtime tool error that counts against the loop guardrail.
-
-**Proposed fix:** Mark output_file as required in the transform_data schema (and validate args against the schema before dispatch) so the omission is caught at validation time with a schema-derived message instead of a runtime failure.
-
-<!-- insight-sig:transform_data|output_file is required -->
-
 ## Edit tool hard-fails on stale read instead of auto-refreshing the file snapshot
 
 - **Severity:** low
@@ -432,19 +341,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:ask_user:operation_timed_out -->
 
-## insight_* araçları on-demand katalogda kayıtlı olmadığı için activate_tools ile etkinleştirilemiyor
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES180
-- **File:** `internal/agent/toolsetup.go`
-
-**Root cause:** Ajan, insight akışını sürdürmek için insight_scan, insight_list_findings ve insight_apply_finding araçlarını activate_tools ile etkinleştirmeye çalışıyor; ancak bu araçlar on-demand (talep üzerine etkinleştirilebilir) araç kataloğuna hiç eklenmemiş. Katalogda tanımlı olmadıkları için activate_tools 'unknown (not in the on-demand catalog)' diyerek hiçbir yeni araç etkinleştirmiyor ve insight adımı sessizce ilerleyemiyor. Bu, kullanıcı/geçici bir hata değil, araç kayıt tablosundaki bir eksiklik — uygulama seviyesinde bir kayıt/şema hatası.
-
-**Proposed fix:** insight_scan, insight_list_findings ve insight_apply_finding araçlarını on-demand araç kataloğuna kaydet (activate_tools tarafından çözümlenebilir hale getir). Alternatif olarak bu araçları insight bağlamında baştan aktif (always-on) kabul et; her iki durumda da katalog ile araç tanımları arasındaki isim eşlemesini doğrulayan bir başlangıç kontrolü ekle ki katalogda olmayan bir araç etkinleştirme isteği erken ve açık şekilde raporlansın.
-
-<!-- insight-sig:activate_tools|unknown tool not in on-demand catalog|insight_scan,insight_list_findings,insight_apply_finding -->
-
 ## Flow çalıştırması, var olmayan agent node referansı yüzünden ancak run sırasında düşüyor
 
 - **Severity:** med
@@ -470,19 +366,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 **Proposed fix:** Shell yürütücüsünde işletim sistemini algılayıp Windows için varsayılan olarak PowerShell kullanın; komut, PATH ve boşluk içeren executable yollarını seçilen shell'e uygun biçimde oluşturup alıntılayın. Bash yalnızca açıkça seçildiğinde veya doğrulanmış bir WSL ortamında kullanılmalı.
 
 <!-- insight-sig:shell:/bin/bash on Windows causes command not found for host executable -->
-
-## Windows derlemesi tanımsız syscall sabiti nedeniyle başarısız oluyor
-
-- **Severity:** high
-- **Occurrences:** 1
-- **Evidence sessions:** SES1108
-- **File:** `internal/providers/process_alive_windows.go`
-
-**Root cause:** `internal/providers/process_alive_windows.go`, Go'nun `syscall` paketinde bulunmayan `syscall.ERROR_INVALID_PARAMETER` tanımlayıcısına başvuruyor; bu nedenle TionHarness Windows hedefinde derlenemiyor.
-
-**Proposed fix:** Windows hata kodunu desteklenen `golang.org/x/sys/windows` sabitiyle kullanın veya yerel bir `syscall.Errno(87)` sabiti tanımlayın; ardından Windows hedefli derleme testi ekleyin.
-
-<!-- insight-sig:shell: go-build undefined: syscall.ERROR_INVALID_PARAMETER -->
 
 ## Windows oturumundaki shell komutları yanlışlıkla Bash ile çalıştırılıyor
 

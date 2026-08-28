@@ -9825,3 +9825,48 @@ sağlayıcıların anahtarları dahil.
 - **Kapsam dışı — ayrı kart:** `internal/exttools/update.go:42` ve
   `version.go:53` hâlâ `proc.HardenedEnv(nil)` kullanıyor (update-check alt
   prosesi); bu turda dokunulmadı.
+
+## Tek seferlik schedule/otomasyon ateşlemeleri "Spawn" yerine "Otomasyon" cipine düşüyordu (2026-08-28) ✅
+
+Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
+`internal/agent/scheduler.go`) ve bir otomasyonun tek seferlik ateşi
+(`sessionMode != "continue"`, `dispatchFire`'ın spawn dalı,
+`internal/agent/automation.go`) her ateşlemede `SpawnSession`'ı **Kind ayarlamadan**
+çağırıyordu → varsayılan `Kind = "spawned"` ile oturum kenar çubuğunda genel
+"Spawn" cipine düşüyordu, "Otomasyon" cipine değil (`kindChipKey`,
+`frontend/src/features/sessions/sessionKindMeta.ts`).
+
+- **Naif düzeltme (`Kind: "schedule"`) yanlış çıktı:** `getOrCreateKindSession`
+  (`internal/db/store.go`) yalnız `(agentID, Kind)` ile eşleşiyor, `SourceID`'ye
+  bakmıyor — bu tek seferlik spawn oturumunu ajanın **paylaşılan** cron
+  thread'iyle çakıştırıp sonraki `reuse`-modu ateşlemelerinin mesajlarını bu
+  spawn oturumuna yazdırdı (`TestDeliverPrompt_SpawnModeOpensFreshSession`
+  bunu yakaladı).
+- **Gerçek düzeltme — iki yeni ayrık kind:**
+  - `Kind = "schedule-run"` — schedule spawn-modu ateşi
+    (`internal/agent/scheduler.go` `deliverSpawnedPrompt`).
+  - `Kind = "automation-run"` (`internal/agent.SessionKindAutomationRun`,
+    `internal/agent/automation_deliver.go`) — otomasyon tek seferlik ateşi
+    (`internal/agent/automation.go` `dispatchFire`, yalnız `spawn.Kind == ""`
+    iken doldurulur).
+  - Her ikisi de backend `writableSessionKindList`
+    (`internal/db/models.go`) ve frontend `isWritableSessionKind`
+    (`frontend/src/shared/lib/sessionKind.ts`) listesine eklendi — `"spawned"`
+    gibi insan devam ettirebilsin diye yazılabilir.
+  - `sessionKindMeta.ts`'te `KIND_META` + `kindChipKey`: ikisi de `"Otomasyon"`
+    etiketiyle `automation` cipine gruplanıyor (ikon: `automation-run` → Zap,
+    `schedule-run` → Clock, kaynağını ayırt etmek için).
+- **`automation-run`'ın `"automation"`'ı DEĞİL, yeni bir kind olması bilinçli:**
+  `OnUsageRecorded`'daki self-amplification guard (`crossingIsMaint`,
+  `internal/agent/automation.go`) `s.Kind == SessionKindAutomation` kontrolüyle
+  yalnız kalıcı bakım oturumunun kendi harcamasını session-scope token eşiğinden
+  muaf tutuyor; tek seferlik bir spawn'ı da `"automation"` etiketlemek bu
+  muafiyeti yanlışlıkla ona da uygulayıp meşru bir token geçişini yutardı.
+- **Değişen dosyalar:** `internal/agent/scheduler.go`,
+  `internal/agent/automation.go`, `internal/agent/automation_deliver.go`,
+  `internal/db/models.go`, `frontend/src/shared/lib/sessionKind.ts`,
+  `frontend/src/features/sessions/sessionKindMeta.ts`,
+  `internal/agent/scheduler_sessionmode_test.go` (beklenen kind
+  `"spawned"` → `"schedule-run"`), `_Docs/20-SCHEDULE-WAKE.md`.
+- **Testler:** `go test ./...` (tam takım) + `frontend`: `tsc -b --noEmit`,
+  `vitest run` (323/323) — hepsi yeşil.
