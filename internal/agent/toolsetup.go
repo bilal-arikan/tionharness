@@ -661,10 +661,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		applyVisibilityOverrides(reg, agentOv, names)
 	}
 
-	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management
-	// + MCP) is known. They are eager (always shipped) so the model can always
+	// Wire the lazy-loading meta-tools once the lazy catalog (self-management +
+	// MCP) is known. They are eager (always shipped) so the model can always
 	// discover and activate on-demand tools. Skipped when nothing is lazy.
-	if lazyCat := reg.LazyCatalog(nil); len(lazyCat) > 0 {
+	//
+	// Every view handed to those meta-tools is built with THIS agent's tool filter
+	// so a tool the agent may not use is neither listed nor activatable: the
+	// catalog block already renders filtered, and an unfiltered known set let
+	// activate_tools / tool_search resurrect a blocked tool by name.
+	filter := r.toolFilter(ctx, agent)
+	if lazyCat := reg.LazyCatalog(filter); len(lazyCat) > 0 {
 		active := activeToolsFromCtx(ctx) // nil for catalog/preview calls (no-op meta-tools)
 		deact := tools.NewDeactivateToolsTool(active)
 		// deactivate_tools is itself name-only on the native path (marked above), so it
@@ -672,19 +678,18 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// activate/search meta-tools' known set — making it impossible to activate. Add
 		// its entry to the catalog those meta-tools see so it activates like any other
 		// load-on-demand tool.
-		if reg.IsLazy(deact.Def().Name) {
-			d := deact.Def()
+		if d := deact.Def(); reg.IsLazy(d.Name) && (filter == nil || filter(d.Name)) {
 			lazyCat = append(lazyCat, providers.ToolDef{Name: d.Name, Description: d.Description})
 		}
 		// eagerNames: the always-on built-ins (e.g. todo_write) so activate_tools can
 		// answer a stray "activate an already-shipped tool" request with a clear
 		// "already available" note instead of a misleading "unknown name".
-		eagerNames := reg.EagerNames(nil)
-		// Bundle index for activate_tools' group form, built with THIS agent's tool
-		// filter so a blocked built-in never surfaces as a name+summary line when the
-		// agent opens its category. The tool additionally drops any member missing
-		// from the lazy catalog, so an eager tool still cannot be "activated".
-		bundles := reg.BundleIndex(r.toolFilter(ctx, agent))
+		eagerNames := reg.EagerNames(filter)
+		// Bundle index for activate_tools' group form: a blocked built-in never
+		// surfaces as a name+summary line when the agent opens its category. The tool
+		// additionally drops any member missing from the lazy catalog, so an eager
+		// tool still cannot be "activated".
+		bundles := reg.BundleIndex(filter)
 		reg.Add(
 			tools.NewActivateToolsToolBundled(active, lazyCat, eagerNames, bundles),
 			deact,

@@ -344,6 +344,18 @@
   yüklenmediğinden token/güvenlik etkisi yoktu). Testler:
   `builtin_activate_bundle_test.go`, `TestLazyCatalogBundleLine`,
   `TestBundleIndexHonoursAgentToolFilter`, `gateway_bundle_test.go`.
+- **Meta-araçların bildiği küme de ajan filtresinden geçer (2026-08-28):**
+  `buildRegistry` artık `filter := r.toolFilter(ctx, agent)` değerini bir kez
+  hesaplayıp `LazyCatalog`, `EagerNames` ve `BundleIndex` çağrılarının üçüne de
+  verir. Önceden ilk ikisi `nil` filtreyle kuruluyordu; sistem promptundaki
+  katalog bloğu filtreli render edildiği hâlde `activate_tools`/`tool_search`
+  engellenmiş bir aracı adıyla hâlâ tanıyordu — `activate_tools("get_flow")`
+  aracı aktif kümeye yazıyor, engellenmiş bir **eager** araç ise
+  "already available (always-on) — just call it directly" diye bildiriliyordu.
+  Artık ikisi de "Unknown names" döner. `deactivate_tools`'un katalog satırı da
+  aynı filtreye tabidir. Testler: `agent/toolcatalog_filter_test.go`
+  (`TestLazyCatalogHonoursAgentToolFilter`,
+  `TestEagerNamesHonourAgentToolFilter`).
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
