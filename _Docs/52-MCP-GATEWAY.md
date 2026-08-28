@@ -1019,3 +1019,37 @@ etiketiyle gösterir.
 > basılmaz**. Sebep: native sayım `Registry.BundleIndex`'ten, gateway üyeliği ise
 > run'a özel `candidateDefs`'ten çözülür — iki farklı kaynak, sayılar örtüşmezdi.
 > Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
+
+## 14. Aktivasyon kalıcılığı — `activated-tools.json` (2026-08-28)
+
+Aktive edilmiş extended araç kümesi artık **oturuma ait kalıcı bir sidecar'da**
+tutulur; RAM'deki `interactionBackend.activated` haritası yalnız bir **önbellek**tir.
+
+- **Dosya:** `<workspace>/store/sessions/<SESID>/activated-tools.json`,
+  gövde `{"tools":["notify","focus_view"]}` (sıralı + tekilleştirilmiş).
+  Sahibi: `internal/db/activatedtools.go` (`WriteActivatedTools` /
+  `ReadActivatedTools` / `ClearActivatedTools`), `inbox.json` ve
+  `prompt_epoch.json` ile aynı atomik tmp→rename deseni.
+- **Neden:** küme daha önce yalnız RAM'de ve **Bearer token** anahtarıyla
+  duruyordu. Uygulama yeniden başlarsa ya da claude-cli alt süreci yeni bir
+  token'la yeniden bağlanırsa küme sıfırlanıyor, daha önce aktive edilen araçlar
+  CLI'ın listesinden düşüyor ve çağrı
+  `No such tool available: mcp__tionharness_extended__<ad>` ile hata veriyordu
+  (SES79). Kalıcı kopya **oturum** anahtarlı olduğu için token değişse de küme korunur.
+- **Ne zaman yüklenir:** token için küme ilk kez istendiğinde (lazy hydrate,
+  `hydrateActivated`). Disk okuma **mutex dışında** yapılır, birleştirme kilit
+  altındadır; her token için tek okuma (`hydrated` haritası).
+- **Ne zaman yazılır:** `activate_tools` / `deactivate_tools` gerçekten bir şey
+  değiştirdiğinde (`persistActivated`, yine kilit dışında).
+- **Ne zaman sıfırlanır:** son araç da deaktive edildiğinde sidecar **silinir**
+  (boş yazım = temizlik); oturum silinince oturum dizini ile birlikte gider.
+  Bunun dışında ne yeniden başlatma ne de token değişimi kümeyi sıfırlar.
+- **Bozuk sidecar yutulmaz:** `ReadActivatedTools` geçersiz JSON'da hata döner;
+  api katmanı bunu `logger.Error` ile raporlar ve token'ı hydrate edilmiş sayar
+  (her araç çağrısında tekrar disk okumamak için).
+- **codex-cli (`-full`) yolu etkilenmez:** orada extended tier zaten koşulsuz
+  yayınlanır, aktivasyon kapısı hiç çalışmaz.
+
+Testler: `internal/db/activatedtools_test.go` (round-trip, yok-dosya, üzerine
+yazma, bozuk JSON) ve `internal/api/gateway_activation_persist_test.go`
+(aynı oturum + YENİ token → araç hâlâ aktif — asıl regresyon).

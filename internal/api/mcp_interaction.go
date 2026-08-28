@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -38,11 +39,114 @@ type interactionBackend struct {
 	// (setServer); nil-safe — without it activation still mutates state, the client just
 	// converges on its next tools/list instead of via an immediate push.
 	srv *interaction.Server
-	// mu guards activated. activated maps a session token to the set of extended tool
-	// names the model has turned on this session — the gateway dynamic surface: the
-	// claude-cli extended tier starts EMPTY and grows only as the model activates tools.
+	// mu guards activated and hydrated. activated maps a session token to the set of
+	// extended tool names the model has turned on this session — the gateway dynamic
+	// surface: the claude-cli extended tier starts EMPTY and grows only as the model
+	// activates tools. It is a CACHE over the per-session sidecar
+	// (db.ReadActivatedTools / WriteActivatedTools): the durable copy is keyed by
+	// SESSION, so a restart or a claude-cli subprocess reconnecting under a fresh
+	// Bearer token still sees everything it activated (SES79 — the activated tools
+	// vanished mid-session and every call answered "No such tool available").
+	// hydrated records which tokens have already loaded that sidecar, so the disk read
+	// happens once per token.
 	mu        sync.Mutex
 	activated map[string]map[string]bool
+	hydrated  map[string]bool
+	// activationStoreFor resolves the durable store + session id backing a run's
+	// activation set. nil → the owning server's workspace manager is used; tests
+	// override it to point at a temp store without standing up a workspace.
+	activationStoreFor func(run *chatRun) (*db.DB, string)
+}
+
+// activationStore returns the store and session id whose sidecar holds this
+// token's activated set, or (nil, "") when there is nothing durable to write to
+// (no live run, no owning server — e.g. unit tests).
+func (b *interactionBackend) activationStore(token string) (*db.DB, string) {
+	run := b.runs.byToken(token)
+	if run == nil {
+		return nil, ""
+	}
+	if b.activationStoreFor != nil {
+		return b.activationStoreFor(run)
+	}
+	if b.apiSrv == nil || b.apiSrv.workspaces == nil {
+		return nil, ""
+	}
+	ws, err := b.apiSrv.workspaces.Get(run.workspaceID)
+	if err != nil || ws == nil {
+		return nil, ""
+	}
+	return ws.DB, run.sessionID
+}
+
+// hydrateActivated loads the session's persisted activation set into the cache
+// the first time a token is seen. The disk read runs OUTSIDE b.mu; the merge
+// re-takes it. A read failure (corrupt sidecar) is logged — never swallowed —
+// and the token is marked hydrated so the failure is reported once instead of on
+// every tool call.
+func (b *interactionBackend) hydrateActivated(token string) {
+	b.mu.Lock()
+	done := b.hydrated[token]
+	b.mu.Unlock()
+	if done {
+		return
+	}
+
+	var names []string
+	if store, sessionID := b.activationStore(token); store != nil {
+		got, ok, err := store.ReadActivatedTools(sessionID)
+		switch {
+		case err != nil:
+			if b.apiSrv != nil && b.apiSrv.logger != nil {
+				b.apiSrv.logger.Error("read activated tools sidecar", "session", sessionID, "err", err)
+			}
+		case ok:
+			names = got
+		}
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.hydrated == nil {
+		b.hydrated = map[string]bool{}
+	}
+	if b.hydrated[token] {
+		return // lost a race with a concurrent hydrate; that one's merge stands
+	}
+	if len(names) > 0 {
+		if b.activated == nil {
+			b.activated = map[string]map[string]bool{}
+		}
+		set := b.activated[token]
+		if set == nil {
+			set = map[string]bool{}
+			b.activated[token] = set
+		}
+		for _, n := range names {
+			set[n] = true
+		}
+	}
+	b.hydrated[token] = true
+}
+
+// persistActivated writes the token's current set to the session sidecar. The
+// snapshot is taken under b.mu, the write happens outside it.
+func (b *interactionBackend) persistActivated(token string) {
+	b.mu.Lock()
+	set := b.activated[token]
+	names := make([]string, 0, len(set))
+	for n := range set {
+		names = append(names, n)
+	}
+	b.mu.Unlock()
+
+	store, sessionID := b.activationStore(token)
+	if store == nil {
+		return
+	}
+	if err := store.WriteActivatedTools(sessionID, names); err != nil && b.apiSrv != nil && b.apiSrv.logger != nil {
+		b.apiSrv.logger.Error("persist activated tools sidecar", "session", sessionID, "err", err)
+	}
 }
 
 // setServer wires the streaming server so the backend can push tools/list_changed.
@@ -50,6 +154,7 @@ func (b *interactionBackend) setServer(s *interaction.Server) { b.srv = s }
 
 // isActivated reports whether name is in the session's activated extended set.
 func (b *interactionBackend) isActivated(token, name string) bool {
+	b.hydrateActivated(token)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	set := b.activated[token]
@@ -59,6 +164,16 @@ func (b *interactionBackend) isActivated(token, name string) bool {
 // activateExtended turns names on for a session and returns the names newly added
 // (already-active names are skipped). Caller filters names to the real extended set.
 func (b *interactionBackend) activateExtended(token string, names []string) []string {
+	b.hydrateActivated(token)
+	added := b.activateExtendedLocked(token, names)
+	if len(added) > 0 {
+		b.persistActivated(token)
+	}
+	return added
+}
+
+// activateExtendedLocked is the cache mutation; the caller owns hydrate/persist.
+func (b *interactionBackend) activateExtendedLocked(token string, names []string) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.activated == nil {
@@ -81,6 +196,16 @@ func (b *interactionBackend) activateExtended(token string, names []string) []st
 
 // deactivateExtended turns names off for a session and returns the names removed.
 func (b *interactionBackend) deactivateExtended(token string, names []string) []string {
+	b.hydrateActivated(token)
+	removed := b.deactivateExtendedLocked(token, names)
+	if len(removed) > 0 {
+		b.persistActivated(token)
+	}
+	return removed
+}
+
+// deactivateExtendedLocked is the cache mutation; the caller owns hydrate/persist.
+func (b *interactionBackend) deactivateExtendedLocked(token string, names []string) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	set := b.activated[token]
@@ -99,6 +224,7 @@ func (b *interactionBackend) deactivateExtended(token string, names []string) []
 
 // activeExtended returns a sorted snapshot of the session's activated extended tools.
 func (b *interactionBackend) activeExtended(token string) []string {
+	b.hydrateActivated(token)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	set := b.activated[token]
