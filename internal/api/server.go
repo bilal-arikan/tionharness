@@ -684,6 +684,7 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	// Workspace overview: counters + chart series + the workspace projection,
 	// in one call (_Docs/66).
 	mux.HandleFunc("GET /api/dashboard", s.handleDashboard)
+	mux.HandleFunc("GET /api/dashboard/commit-activity", s.handleDashboardCommitActivity)
 }
 
 // registerExecutionRoutes registers the unified executions feed — every run

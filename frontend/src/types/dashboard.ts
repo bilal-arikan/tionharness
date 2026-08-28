@@ -12,6 +12,19 @@ export interface DaySeriesPoint {
   value: number
 }
 
+export interface CommitActivityDay {
+  day: string // YYYY-MM-DD in the server's local timezone
+  value: number
+}
+
+export interface CommitActivity {
+  weeks: number
+  commitsByDay: CommitActivityDay[]
+  // Older servers return an all-zero series for a non-repository. Newer servers
+  // can set this to false so the UI can explain that state separately.
+  isGitRepo?: boolean
+}
+
 export interface NamedCount {
   name: string
   count: number

@@ -11,6 +11,7 @@ import { CostRankBars, DayBars, StackedBar, RankBars } from './charts'
 import { fmtUsd } from './chartFormat'
 import { ViewButton } from '@/features/view/ViewButton'
 import { formatTime } from '@/shared/lib/intl'
+import { CommitHeatmap } from './CommitHeatmap'
 
 const RANGES = [7, 14, 30, 90]
 
@@ -130,6 +131,9 @@ export function DashboardPanel({
 
             {/* Item 4: the completion side — throughput, cycle time, success rate. */}
             <OutcomeSummary o={data.outcomes} />
+
+            {/* Git activity owns its request and state; the dashboard range does not filter it. */}
+            <CommitHeatmap />
 
             {/* The projection: the agent's own summary, shown raw. */}
             <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
