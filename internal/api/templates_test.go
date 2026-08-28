@@ -215,12 +215,14 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 		"create_schedule", "update_schedule", "delete_schedule",
 		"create_automation", "update_automation", "delete_automation",
 		"toggle_mcp_server",
+		// The PM is started as its own session, never as a worker of the CEO.
+		"spawn_worker", "send_to_worker", "run_subagent",
 	} {
 		if !blockedSet[forbidden] {
 			t.Errorf("CEO blockedTools is missing %q", forbidden)
 		}
 	}
-	for _, required := range []string{"get_view", "list_tasks", "list_agents", "list_sessions", "send_message", "run_subagent"} {
+	for _, required := range []string{"get_view", "list_tasks", "list_agents", "list_sessions", "send_message", "spawn_session"} {
 		if !allowedSet[required] {
 			t.Errorf("CEO allowedTools is missing %q", required)
 		}
@@ -238,6 +240,9 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 	for _, def := range runtime.WorkspaceToolCatalog(context.Background()) {
 		registered[def.Name] = true
 	}
+	// spawn_session is bound per session (it needs the spawn function), so it is
+	// absent from the workspace-level catalog even though agents can call it.
+	registered["spawn_session"] = true
 	for _, name := range allowed {
 		if !registered[name] {
 			t.Errorf("CEO allowedTools contains unregistered tool %q", name)
