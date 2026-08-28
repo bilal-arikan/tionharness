@@ -43,7 +43,7 @@ func NewScheduleWakeTool() ScheduleWakeTool { return ScheduleWakeTool{} }
 func (ScheduleWakeTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "schedule_wake",
-		Description: "Pause this turn and have yourself automatically re-invoked after a delay to continue the conversation. Use this when you must WAIT for something (a long background job, a timer) before you can finish — instead of ending the turn while 'waiting'. When the delay elapses, `prompt` is delivered to you as a new turn in THIS chat session. delaySeconds is clamped to 5..3600. After calling this, stop — produce no further work this turn.",
+		Description: "Pause this turn and have yourself automatically re-invoked after a delay to continue the conversation. Use this when you must WAIT for something (a long background job, a timer) before you can finish — instead of ending the turn while 'waiting'. When the delay elapses, `prompt` is delivered to you as a new turn in THIS chat session. delaySeconds is clamped to 5..3600. After calling this, stop — produce no further work this turn. Do NOT use it to poll a spawned worker or subagent: their results are delivered to you automatically as a new turn, so a wake only burns an extra LLM call to learn they are still running.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
