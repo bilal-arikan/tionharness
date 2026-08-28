@@ -283,6 +283,7 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		ProviderInstanceID: providerInstanceID,
 		Model:              ap.Model,
 		ThinkingLevel:      ap.ThinkingLevel,
+		NativeWebSearch:    ap.NativeWebSearch,
 		PermissionMode:     ap.PermissionMode,
 		Avatar:             ap.Avatar,
 		Color:              ap.Color,

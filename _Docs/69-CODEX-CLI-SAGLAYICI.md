@@ -764,8 +764,44 @@ Codex'te **Codex'in kendi OS sandbox'ı** tarafından zaten karşılanıyor.
 
 Yani gerçek etkisi: **`todo_write` / `ask_user` / `WebSearch` köprüleri
 korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
+
+**Web araçları codex'e köprüleniyor (2026-08-28).** claude-cli'nin aksine codex'in
+**native `WebFetch`'i hiç yok** ve kendi `web_search`'ü varsayılan **kapalı** — ikisi
+birden verilmeyince ajan web erişimsiz kalıp kaynak uyduruyordu. Bu yüzden
+`Runtime.BridgeTools` codex-cli için `WebFetch` + `WebSearch`'ü Interaction MCP
+köprüsüne açıkça ekliyor (`internal/agent/runtime.go`); claude-cli'de ikisi de
+**dışlanmaya devam ediyor** (`cliLazyBridgeExcluded` +
+`claudeOnlyBridgeExclusions`, `internal/agent/toolsetup.go`). İkisi de eager
+built-in olduğundan görünürlükleri `full` → CLI kademe eşlemesi onları **core**
+sunucusuna koyuyor (`/core?full=1`); çağrı, diğer köprülenen araçlarla aynı
+`bridgeCallFor` → `reg.Call` yolundan geçiyor. `WebSearch` workspace vault'una
+bağlıdır (`SEARXNG_URL` veya `TAVILY_API_KEY`); anahtar yoksa aracın kendi hatası
+döner, sessizce yutulmaz.
 `climcp.go`'daki `suppressIfBridged` mantığının Codex karşılığı çok daha küçük
 bir liste olacak.
+
+**Native `web_search` artık ajan düzeyinde toggle (2026-08-28).** Önceki halde
+`buildConfig` `DisableWebSearch` alanını hiç set etmiyordu; yani codex'in kendi
+araması **daima açıktı** (yukarıdaki "varsayılan kapalı" tespiti codex'in kendi
+varsayılanı için geçerliydi, TionHarness'in yazdığı config için değil). Zincir:
+
+`db.Agent.NativeWebSearch` (JSON `nativeWebSearch`) → `toolloop.go`
+`req.NativeWebSearch` → `codexcli.go buildConfig` → `codexConfig.DisableWebSearch`
+→ `config.toml`'da `[tools] web_search = false`.
+
+- **Kapalı (varsayılan):** `web_search = false` yazılır; arama yalnız köprülenen
+  `WebSearch`/`WebFetch` araçlarından geçer.
+- **Açık:** config'e bu konuda **hiçbir satır yazılmaz**. `web_search = true`'nun
+  desteklendiği kanıtlanmadı ve tur `--strict-config` ile koşuyor — bilinmeyen bir
+  değer tüm turu düşürürdü. Codex kendi varsayılanıyla devam eder.
+
+Taşıma kanalı bilinçli olarak `providers.Request`, `CLIMCPSpec` değil: spec ancak
+`len(spec.Servers) > 0` iken uygulanıyor (`toolloop.go`), dolayısıyla MCP'si kapalı
+bir ajanda ayar sessizce düşerdi.
+
+**Arama adımı:** `codexcli_events.go` `web_search` item'ının `query` yanında
+`action` alanını da adım çıktısına koyar (`"open: https://go.dev"`); yalnız query
+gösterildiğinde bir sayfa açma adımı, o URL için yapılmış arama gibi görünüyordu.
 
 ### ❌ Boşluk-3: Hook'lar (Pre/PostToolUse) codex turunda HİÇ uygulanmıyor — ve sqz de onunla birlikte devre dışı
 

@@ -114,6 +114,16 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		}
 	}
 
+	// Native web search is an AGENT-level toggle, so its suppression must not sit
+	// inside the interaction-endpoint branch below: an agent without an endpoint
+	// (no bridged tools at all) would silently keep the CLI's own WebSearch/
+	// WebFetch even with the toggle off. Off is the default — TionHarness bridges
+	// its own web tools — so this list is normally non-empty, which is why the
+	// caller applies the spec on the strength of `disallowed` alone.
+	if !ag.NativeWebSearch {
+		disallowed = append(disallowed, "WebSearch", "WebFetch")
+	}
+
 	if inter.URL != "" {
 		authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
 		// Two server entries point at the SAME in-process endpoint via distinct path
@@ -253,8 +263,10 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		}
 	}
 
+	// No servers to wire → no --mcp-config file. The disallow list still travels:
+	// it is agent-level (native web search) and applies to a plain CLI turn too.
 	if len(cfg.MCPServers) == 0 {
-		return "", nil, nil, func() {}, nil
+		return "", nil, disallowed, func() {}, nil
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

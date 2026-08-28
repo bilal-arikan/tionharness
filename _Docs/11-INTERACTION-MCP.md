@@ -248,6 +248,28 @@ reddeder. `climcp.go` bu iki aileyi (`todo_write`→TodoWrite/Task*, `use_skill`
 `logger.Warn` ile görünür kılınır (sessizce yutulmaz). `AskUserQuestion`/`ScheduleWakeup`
 tek-atım `-p` modunda geçerli native yedeğe sahip olmadığından koşulsuz kapatılır.
 
+**Native web arama toggle'ı (2026-08-28).** `db.Agent.NativeWebSearch`
+(JSON `nativeWebSearch`, ajan ayarları formunda "Sağlayıcının kendi web araması")
+CLI sağlayıcının **kendi** aramasını açar/kapatır. Varsayılan **kapalı**:
+`climcp.go` `disallowed` listesine `WebSearch` + `WebFetch` ekler (ve aynı liste
+`writeCLISettings` üzerinden `permissions.deny`'a da düşer), böylece tek yol
+TionHarness'in köprülenen `WebSearch`/`WebFetch` araçları olur — izleme ve kullanım
+sayacı yalnız orada çalışır. Açıkken hiçbir kısıt yazılmaz, native araç menüde
+kalır.
+
+Bu suppress **`inter.URL != ""` bloğunun dışındadır**: toggle ajan düzeyindedir,
+interaction endpoint'i olmayan bir turda da geçerli olmalıdır. Aynı nedenle
+`writeCLIMCPConfig` MCP sunucusu yokken bile `disallowed` listesini döndürür,
+`toolloop.go` spec'i `path != "" || len(disallowed) > 0` koşuluyla uygular ve
+`ClaudeCLI.mcpArgs` `--settings`/`--disallowedTools` bayraklarını `--mcp-config`
+olmadan da yazar (`--strict-mcp-config` yalnız config dosyasıyla birlikte gider).
+
+**Native arama adımı görünür.** `claudecli.go` stream-json parser'ı artık
+`server_tool_use` / `web_search_tool_result` / `web_fetch_tool_result` bloklarını
+`anthropic.go` ile aynı şekilde trace adımına çevirir; tanımadığı blok tipleri de
+tur başına bir kez `[claude-cli] unhandled content block skipped: <tip>` notu
+üretir — sessizce yutulmaz.
+
 Wiring köprüsü: API katmanı `{interactionURL, token}`'ı context ile runtime'a
 geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü deseni);
 `writeCLIMCPConfig` bunu okuyup entry üretir.

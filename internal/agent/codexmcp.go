@@ -189,9 +189,12 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // not ship most of those natives (no Task/Agent launcher, no Skill tool, no
 // native TodoWrite family beyond update_plan). Only the genuine overlaps are
 // named, so a reader can tell suppression from absence.
-// web_search is left out on purpose: it only shadows a bridge when TionHarness's
-// own WebSearch is enabled for the turn, which the config renderer decides via
-// its DisableWebSearch flag.
+// web_search is left out on purpose, but no longer because it is always off: it
+// is now an AGENT-level toggle (db.Agent.NativeWebSearch → Request.NativeWebSearch
+// → codexConfig.DisableWebSearch). With the toggle off the config renderer writes
+// `web_search = false`, so there is nothing left to suppress here; with it on the
+// user has explicitly asked for the native search to run next to the bridged
+// TionHarness WebSearch/WebFetch, so listing it here would revoke that choice.
 func codexNativeSuppressions() []string {
 	// update_plan shadows the bridged todo_write (the progress card sink);
 	// experimental_request_user_input shadows ask_user. Both are also switched

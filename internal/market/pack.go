@@ -151,6 +151,10 @@ type AgentPayload struct {
 	MCPEnabled     bool     `json:"mcpEnabled,omitempty"`
 	AllowedTools   string   `json:"allowedTools,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
+	// NativeWebSearch carries the provider-native web-search opt-in (see
+	// db.Agent.NativeWebSearch) so a published agent installs with the same
+	// search setup it was authored with.
+	NativeWebSearch bool `json:"nativeWebSearch,omitempty"`
 	// Coordinator defaults for the sessions this agent opens (see
 	// db.Agent.CoordinatorMode). Kept in sync with WorkspaceTemplateAgent so a
 	// coordinator survives being shared either as a standalone agent pack or as
@@ -227,6 +231,9 @@ type WorkspaceTemplateAgent struct {
 	BlockedTools   string   `json:"blockedTools,omitempty"`  // legacy per-agent denylist (JSON array); folded into ToolOverrides on load
 	ToolOverrides  string   `json:"toolOverrides,omitempty"` // per-agent tool override map (JSON object: name/pattern → tier)
 	Skills         []string `json:"skills,omitempty"`        // skill slugs to assign (resolved against the seeded skills)
+	// NativeWebSearch mirrors AgentPayload.NativeWebSearch — kept in sync so the
+	// setting survives either sharing route.
+	NativeWebSearch bool `json:"nativeWebSearch,omitempty"`
 	// CoordinatorMode seeds the agent as a coordinator BY DEFAULT, so every session
 	// it opens arrives with the coordination tools — this is what lets a template
 	// ship a team that orchestrates out of the box (a PM/CTO pair) instead of one

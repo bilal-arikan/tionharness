@@ -81,6 +81,7 @@ export function AgentSettingsForm({
   )
   const [model, setModel] = useState(agent.model ?? '')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
+  const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? false)
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
@@ -124,6 +125,7 @@ export function AgentSettingsForm({
       providerInstanceId !== (agent.providerInstanceId || agent.provider) ||
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel ?? '') ||
+      nativeWebSearch !== (agent.nativeWebSearch ?? false) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       coordinatorMode !== (agent.coordinatorMode ?? false) ||
       coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
@@ -138,6 +140,7 @@ export function AgentSettingsForm({
       providerInstanceId,
       model,
       thinkingLevel,
+      nativeWebSearch,
       permissionMode,
       coordinatorMode,
       coordinatorWorkflow,
@@ -176,6 +179,7 @@ export function AgentSettingsForm({
         provider: providerInstanceId,
         model: model.trim(),
         thinkingLevel,
+        nativeWebSearch,
         permissionMode,
         skills,
         coordinatorMode,
@@ -441,6 +445,29 @@ export function AgentSettingsForm({
           / Deny); onay verecek kimse yoksa (otonom koşu) reddedilir. claude-cli ajanlarında bu mod
           CLI izin bayrağına çevrilir (salt-okunur→<code>plan</code>, sor→<code>acceptEdits</code>,
           otomatik→<code>bypass</code>).
+        </p>
+
+        <Field label="Sağlayıcının kendi web araması">
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--color-text)]">
+            <input
+              type="checkbox"
+              data-testid="agent-native-web-search"
+              checked={nativeWebSearch}
+              onChange={(e) => setNativeWebSearch(e.target.checked)}
+              className="mt-0.5 accent-[var(--color-accent)]"
+            />
+            <span>
+              CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin
+            </span>
+          </label>
+        </Field>
+        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+          Kapalıyken (varsayılan) codex'in <code>web_search</code>'ü config'te kapatılır ve
+          claude-cli'nin <code>WebSearch</code>/<code>WebFetch</code> yerleşikleri
+          <code>--disallowedTools</code> + <code>permissions.deny</code> ile engellenir; arama
+          yalnız TionHarness'in köprülenen <code>WebSearch</code>/<code>WebFetch</code> araçlarından
+          geçer (izleme ve kullanım sayacı bunlarda çalışır). Açıkken sağlayıcı kendi aramasını
+          yapar; çağrı yine de aktivite izinde bir adım olarak görünür.
         </p>
 
         <Field label="Koordinatör">

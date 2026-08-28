@@ -177,6 +177,12 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// (ThinkingBudget==0 already means off there).
 	req.DisableThinking = thinkingBudgetForLevel(agent.ThinkingLevel) == 0
 
+	// Provider-native web search is opt-in per agent. Off (the default) tells the
+	// CLI providers to switch their own search off so the bridged WebSearch/
+	// WebFetch tools stay the single path; on leaves the native tool available and
+	// its call surfaces as a trace step.
+	req.NativeWebSearch = agent.NativeWebSearch
+
 	// Announce the configured task budget to autonomous turns (API-native
 	// output_config.task_budget): the model sees a running countdown for the
 	// whole loop and paces itself. Providers/models without support ignore it;
@@ -330,7 +336,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, agent, inter, agent.PermissionMode)
 			if err != nil {
 				r.logger.Warn("cli mcp config failed", "error", err)
-			} else if path != "" {
+			} else if path != "" || len(disallowed) > 0 {
+				// A turn with no MCP servers still has something to say when the
+				// disallow list is non-empty (agent-level native-tool suppression, e.g.
+				// web search off): the spec then carries only --disallowedTools +
+				// --settings, no --mcp-config.
 				defer cleanup()
 				// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
 				// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours

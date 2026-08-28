@@ -99,6 +99,10 @@ type createAgentReq struct {
 	PermissionMode string `json:"permissionMode"`
 	Avatar         string `json:"avatar"`
 	Color          string `json:"color"`
+	// NativeWebSearch opts into the CLI provider's own web search (see
+	// db.Agent.NativeWebSearch). Defaults OFF: the bridged WebSearch/WebFetch
+	// tools are the default path.
+	NativeWebSearch bool `json:"nativeWebSearch"`
 	// MCPEnabled gates tool access. Pointer so we can tell "omitted" (nil →
 	// default on) apart from an explicit false (opt-out). New agents get tools
 	// by default.
@@ -179,6 +183,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		ProviderInstanceID:  providerInstanceID,
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
+		NativeWebSearch:     req.NativeWebSearch,
 		PermissionMode:      req.PermissionMode,
 		MCPEnabled:          mcpEnabled,
 		CoordinatorMode:     req.CoordinatorMode,
@@ -337,19 +342,22 @@ func (s *Server) handleRestoreSystemAgent(w http.ResponseWriter, r *http.Request
 }
 
 type updateAgentReq struct {
-	Name           *string   `json:"name"`
-	Soul           *string   `json:"soul"`
-	Identity       *string   `json:"identity"`
-	Provider       *string   `json:"provider"`
-	Model          *string   `json:"model"`
-	ThinkingLevel  *string   `json:"thinkingLevel"`
-	PermissionMode *string   `json:"permissionMode"`
-	Avatar         *string   `json:"avatar"`
-	Color          *string   `json:"color"`
-	Skills         *[]string `json:"skills"`
-	Disabled       *bool     `json:"disabled"`
-	System         *bool     `json:"system"`
-	SystemKey      *string   `json:"systemKey"`
+	Name           *string `json:"name"`
+	Soul           *string `json:"soul"`
+	Identity       *string `json:"identity"`
+	Provider       *string `json:"provider"`
+	Model          *string `json:"model"`
+	ThinkingLevel  *string `json:"thinkingLevel"`
+	PermissionMode *string `json:"permissionMode"`
+	// NativeWebSearch toggles the provider's own web search. Pointer so omitting
+	// it leaves the stored value alone and an explicit false turns it off.
+	NativeWebSearch *bool     `json:"nativeWebSearch"`
+	Avatar          *string   `json:"avatar"`
+	Color           *string   `json:"color"`
+	Skills          *[]string `json:"skills"`
+	Disabled        *bool     `json:"disabled"`
+	System          *bool     `json:"system"`
+	SystemKey       *string   `json:"systemKey"`
 	// Coordinator defaults for NEW sessions of this agent. Pointers so omitting
 	// them leaves the current setting alone and an explicit false turns it off.
 	// Existing sessions keep whatever mode they are already in — the toggle is a
@@ -404,6 +412,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Identity:            req.Identity,
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
+		NativeWebSearch:     req.NativeWebSearch,
 		PermissionMode:      req.PermissionMode,
 		Avatar:              req.Avatar,
 		Color:               req.Color,

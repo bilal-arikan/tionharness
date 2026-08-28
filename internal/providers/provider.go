@@ -217,6 +217,15 @@ type Request struct {
 	// batching and the pre-regression cost profile (_Docs/05 2026-07-10). HTTP
 	// providers ignore it (ThinkingBudget==0 already means off there).
 	DisableThinking bool
+	// NativeWebSearch, when set, lets a CLI provider use its OWN web search
+	// (codex: `web_search` stays enabled in config.toml; claude-cli: the native
+	// WebSearch/WebFetch tools stay on the menu). False — the default — switches
+	// those natives off so the bridged TionHarness WebSearch/WebFetch tools are
+	// the only path. Set from the agent's NativeWebSearch toggle. It rides the
+	// Request rather than CLIMCPSpec on purpose: the spec is only applied when the
+	// turn wires MCP servers, so an MCP-less agent would silently lose the
+	// setting. HTTP providers ignore it (their web tools are request-level).
+	NativeWebSearch bool
 	// CLIEffortLevel is the resolved Claude Code effortLevel for a claude-cli turn
 	// (low/medium/high/xhigh/max). Levels up to xhigh flow through the --settings
 	// file; "max" is the exception — Claude Code's settings.json effortLevel enum

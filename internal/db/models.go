@@ -68,6 +68,15 @@ type Agent struct {
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.
 	ThinkingLevel string `json:"thinkingLevel"`
+	// NativeWebSearch opts the agent INTO its CLI provider's OWN web search
+	// (codex `web_search`; Claude Code's WebSearch/WebFetch built-ins). Default
+	// false = native search is switched off, because TionHarness bridges its own
+	// WebSearch/WebFetch tools to both CLIs: leaving the natives on gives the
+	// model two ways to do the same thing, and the native one bypasses the
+	// bridged tool's trace/usage accounting. Turning it on lets the provider
+	// search natively; the call still surfaces as a trace step. Ignored by
+	// non-CLI providers, which get their web tools from the request itself.
+	NativeWebSearch bool `json:"nativeWebSearch,omitempty"`
 	// PermissionMode gates how the agent's tool use is approved:
 	// "read-only" | "ask" | "auto". Empty defaults to "auto". For the claude-cli
 	// path this maps to the CLI's --permission-mode / --dangerously-skip-permissions

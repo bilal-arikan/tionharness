@@ -102,6 +102,45 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	}
 }
 
+func TestWriteCLIMCPConfigNativeWebSearchWithoutServers(t *testing.T) {
+	has := func(list []string, name string) bool {
+		for _, item := range list {
+			if item == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, tc := range []struct {
+		name            string
+		nativeWebSearch bool
+		wantDisallowed  bool
+	}{
+		{name: "disabled", wantDisallowed: true},
+		{name: "enabled", nativeWebSearch: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+			path, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(
+				context.Background(), false, db.Agent{NativeWebSearch: tc.nativeWebSearch}, tools.InteractionEndpoint{}, "ask",
+			)
+			if err != nil {
+				t.Fatalf("writeCLIMCPConfig: %v", err)
+			}
+			defer cleanup()
+			if path != "" {
+				t.Fatalf("path = %q, want empty without MCP servers", path)
+			}
+			for _, tool := range []string{"WebSearch", "WebFetch"} {
+				if got := has(disallowed, tool); got != tc.wantDisallowed {
+					t.Errorf("disallowed contains %q = %v, want %v; list=%v", tool, got, tc.wantDisallowed, disallowed)
+				}
+			}
+		})
+	}
+}
+
 // TestWriteCLIMCPConfigRequiredCoreInvariant locks the WS17 invariant: a native CLI
 // tool whose bridged replacement is prompt-/catalog-mandated (todo_write, use_skill)
 // is suppressed ONLY while that bridge is actually advertised for the turn. When the

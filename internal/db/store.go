@@ -241,9 +241,13 @@ type AgentProfilePatch struct {
 	ProviderInstanceID *string
 	Model              *string
 	ThinkingLevel      *string
-	PermissionMode     *string
-	Avatar             *string
-	Color              *string
+	// NativeWebSearch toggles the provider's own web search (see
+	// Agent.NativeWebSearch). Pointer so an explicit false (turn it off) is
+	// distinguishable from "not in this patch".
+	NativeWebSearch *bool
+	PermissionMode  *string
+	Avatar          *string
+	Color           *string
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
 	Skills   *[]string
@@ -284,6 +288,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.ThinkingLevel != nil {
 			a.ThinkingLevel = *p.ThinkingLevel
+		}
+		if p.NativeWebSearch != nil {
+			a.NativeWebSearch = *p.NativeWebSearch
 		}
 		if p.PermissionMode != nil {
 			a.PermissionMode = *p.PermissionMode

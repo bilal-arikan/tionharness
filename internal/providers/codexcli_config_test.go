@@ -155,6 +155,33 @@ func TestCodexConfigToolsSectionOmittedWhenNoToggle(t *testing.T) {
 	}
 }
 
+func TestCodexConfigNativeWebSearchRequest(t *testing.T) {
+	c := &CodexCLI{}
+	tests := []struct {
+		name            string
+		nativeWebSearch bool
+		wantDisabled    bool
+	}{
+		{name: "enabled omits strict config key", nativeWebSearch: true},
+		{name: "disabled renders false", nativeWebSearch: false, wantDisabled: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := renderCodexConfig(c.buildConfig(Request{NativeWebSearch: tc.nativeWebSearch}))
+			if tc.wantDisabled {
+				if !strings.Contains(got, "web_search = false\n") {
+					t.Fatalf("disabled native web search must render false, got %q", got)
+				}
+				return
+			}
+			if strings.Contains(got, "web_search") {
+				t.Fatalf("enabled native web search must omit the strict config key, got %q", got)
+			}
+		})
+	}
+}
+
 func TestCodexConfigURLWithoutTransportIsRemote(t *testing.T) {
 	got := renderCodexConfig(codexConfig{Servers: map[string]CLIMCPServer{
 		"remote": {URL: "https://example.test/mcp"},

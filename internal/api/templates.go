@@ -201,6 +201,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			ProviderInstanceID:  providerInstanceID,
 			Model:               am,
 			ThinkingLevel:       ta.ThinkingLevel,
+			NativeWebSearch:     ta.NativeWebSearch,
 			PermissionMode:      ta.PermissionMode,
 			MCPEnabled:          mcpEnabled,
 			AllowedTools:        ta.AllowedTools,

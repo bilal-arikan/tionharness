@@ -206,10 +206,14 @@ func (c *ClaudeCLI) permissionArgs(req Request) []string {
 // --allowedTools so neither variadic flag swallows the other. Empty when no MCP
 // config is set. Shared by Complete and the persistent-session launcher.
 func (c *ClaudeCLI) mcpArgs() []string {
-	if c.mcpConfigPath == "" {
-		return nil
+	var args []string
+	// --strict-mcp-config only means anything next to --mcp-config, so both are
+	// tied to a config file; the settings/tool flags stand on their own, because a
+	// turn with no MCP servers can still carry an agent-level suppression (native
+	// web search off).
+	if c.mcpConfigPath != "" {
+		args = append(args, "--mcp-config", c.mcpConfigPath, "--strict-mcp-config")
 	}
-	args := []string{"--mcp-config", c.mcpConfigPath, "--strict-mcp-config"}
 	if c.settingsPath != "" {
 		args = append(args, "--settings", c.settingsPath)
 	}
@@ -929,6 +933,7 @@ type cliStreamParser struct {
 	errText        string
 	notedMCP       bool                 // the unusable-MCP-server note was already emitted for this turn
 	notedParseDrop bool                 // malformed stream JSON was already reported for this turn
+	notedBlock     map[string]bool      // assistant content block types already reported as unknown
 	sawModelTurn   bool                 // any assistant/tool/result content seen (vs. only system/init noise)
 	rateLimited    bool                 // the turn was rejected by a subscription usage / rate limit
 	rateLimitMsg   string               // human-readable detail for the rate-limit failure
@@ -972,11 +977,12 @@ func primaryModelUsage(mu map[string]json.RawMessage) string {
 
 func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
 	return &cliStreamParser{
-		resp:      &Response{Model: model},
-		onEvent:   onEvent,
-		toolIdx:   map[string]int{},
-		emitted:   map[int]bool{},
-		toolStart: map[string]time.Time{},
+		resp:       &Response{Model: model},
+		onEvent:    onEvent,
+		toolIdx:    map[string]int{},
+		emitted:    map[int]bool{},
+		toolStart:  map[string]time.Time{},
+		notedBlock: map[string]bool{},
 	}
 }
 
@@ -1001,6 +1007,21 @@ func (p *cliStreamParser) note(text string) {
 	p.flushText()
 	p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: text})
 	p.emit(len(p.resp.Trace) - 1)
+}
+
+// noteUnknownBlock reports an assistant content block this parser does not model
+// (once per type per turn). Without it a new block type — server_tool_use was
+// the real case — vanishes from the trace with no trace of the omission.
+func (p *cliStreamParser) noteUnknownBlock(blockType string) {
+	t := strings.TrimSpace(blockType)
+	if t == "" {
+		t = "(missing type)"
+	}
+	if p.notedBlock[t] {
+		return
+	}
+	p.notedBlock[t] = true
+	p.note("[claude-cli] unhandled content block skipped: " + t)
 }
 
 // noteParseDrop reports the first malformed JSON event in a turn. The bounded
@@ -1252,6 +1273,27 @@ func (p *cliStreamParser) feed(line string) {
 					}
 				}
 				// Not emitted yet — wait for its tool_result to fill the output.
+			case "server_tool_use":
+				// Native server-side tool (WebSearch/WebFetch running inside the API,
+				// not through our loop): nothing to execute here, but the step must be
+				// visible — same handling as the anthropic provider.
+				p.flushText()
+				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: b.Name, Input: b.Input, Output: "(executed server-side)"})
+				p.emit(len(p.resp.Trace) - 1)
+			case "web_search_tool_result":
+				p.flushText()
+				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: webSearchName, Output: renderWebToolResult(b.Content, "result")})
+				p.emit(len(p.resp.Trace) - 1)
+			case "web_fetch_tool_result":
+				p.flushText()
+				p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "tool", Tool: webFetchName, Output: renderWebToolResult(b.Content, "document")})
+				p.emit(len(p.resp.Trace) - 1)
+			default:
+				// Never drop a block silently: an unrecognised type means the CLI
+				// emitted something this parser does not model yet, and swallowing it
+				// is exactly how native web search stayed invisible. Reported once per
+				// type per turn so a repeated block cannot flood the trace.
+				p.noteUnknownBlock(b.Type)
 			}
 		}
 	case "user":

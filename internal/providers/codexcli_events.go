@@ -309,7 +309,7 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 			IsError: it.Error != nil || it.Status == "failed" || (it.Result != nil && it.Result.IsError),
 		})
 	case "web_search":
-		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Output: it.Query})
+		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Output: webSearchStepOutput(it)})
 	case "todo_list":
 		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "todo_list", Output: summarizeTodoList(it.Items)})
 	case "collab_tool_call":
@@ -526,6 +526,23 @@ func hasUnifiedDiffFileHeader(diff string) bool {
 }
 
 // summarizeTodoList renders a todo_list item as checkbox lines.
+// webSearchStepOutput renders a native codex web_search item for the trace. The
+// item carries the query AND an action ("search", "open", …); showing only the
+// query made a page-open step look like a search for a URL, so both are surfaced
+// when the action is present ("search: golang generics").
+func webSearchStepOutput(it *codexItem) string {
+	query := strings.TrimSpace(it.Query)
+	action := strings.TrimSpace(it.Action)
+	switch {
+	case action == "":
+		return query
+	case query == "":
+		return action
+	default:
+		return action + ": " + query
+	}
+}
+
 func summarizeTodoList(items []codexTodoItem) string {
 	if len(items) == 0 {
 		return ""

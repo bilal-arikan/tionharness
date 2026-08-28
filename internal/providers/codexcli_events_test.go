@@ -371,11 +371,42 @@ func TestCodexParserWebSearchAndTodoList(t *testing.T) {
 	if len(resp.Trace) != 2 {
 		t.Fatalf("Trace = %+v, want two steps", resp.Trace)
 	}
-	if resp.Trace[0].Tool != "web_search" || resp.Trace[0].Output != "golang json flatten" {
+	if resp.Trace[0].Tool != "web_search" || resp.Trace[0].Output != "search: golang json flatten" {
 		t.Errorf("step 0 = %+v", resp.Trace[0])
 	}
 	if resp.Trace[1].Tool != "todo_list" || resp.Trace[1].Output != "[x] read contract\n[ ] write parser" {
 		t.Errorf("step 1 = %+v", resp.Trace[1])
+	}
+}
+
+// A web_search item carries an action next to the query ("search", "open", …).
+// Both halves belong in the step: an "open" of a URL is not a search for it.
+func TestCodexParserWebSearchActionVariants(t *testing.T) {
+	cases := []struct {
+		name string
+		item string
+		want string
+	}{
+		{"query only", `{"id":"i1","type":"web_search","query":"golang generics"}`, "golang generics"},
+		{"action only", `{"id":"i1","type":"web_search","action":"search"}`, "search"},
+		{"both", `{"id":"i1","type":"web_search","query":"https://go.dev","action":"open"}`, "open: https://go.dev"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newCodexParser("", nil)
+			feedAll(p, fxThreadStarted, fxTurnStarted,
+				`{"type":"item.completed","item":`+tc.item+`}`, fxAgentMessage, fxTurnCompleted)
+			resp, err := p.finish()
+			if err != nil {
+				t.Fatalf("finish: %v", err)
+			}
+			if len(resp.Trace) != 1 {
+				t.Fatalf("Trace = %+v, want one step", resp.Trace)
+			}
+			if resp.Trace[0].Output != tc.want {
+				t.Errorf("Output = %q, want %q", resp.Trace[0].Output, tc.want)
+			}
+		})
 	}
 }
 
