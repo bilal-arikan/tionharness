@@ -12,7 +12,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/api'
-import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
+import type { Agent, InsightLens, InsightFinding, InsightSettings } from '@/types'
+import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { FindingsTab } from './FindingsTab'
 import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
@@ -20,6 +21,7 @@ import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
 import { LessonsTab } from './LessonsTab'
 import { LessonsList } from '@/features/settings/LessonsList'
+import { persistAnalysisAgentSelection, withDefaultAnalysisAgent } from './insightAgentSelection'
 
 interface Props {
   onError: (msg: string) => void
@@ -59,6 +61,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   const [lenses, setLenses] = useState<InsightLens[]>([])
   const [findings, setFindings] = useState<InsightFinding[]>([])
   const [settings, setSettings] = useState<InsightSettings>({})
+  const [agents, setAgents] = useState<Agent[]>([])
   const [scanning, setScanning] = useState(false)
   const [scanNote, setScanNote] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -79,9 +82,11 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
 
   const load = useCallback(() => {
     loadLenses()
-    api
-      .getInsightSettings()
-      .then(setSettings)
+    Promise.all([api.getInsightSettings(), api.listAgents()])
+      .then(([loadedSettings, loadedAgents]) => {
+        setAgents(loadedAgents)
+        setSettings(withDefaultAnalysisAgent(loadedSettings, loadedAgents))
+      })
       .catch((e) => onError((e as Error).message))
     loadFindings()
     api
@@ -139,6 +144,15 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
     }
   }
 
+  const selectAnalysisAgent = (agentId: string) =>
+    persistAnalysisAgentSelection(
+      settings,
+      agentId,
+      setSettings,
+      api.updateInsightSettings,
+      onError,
+    )
+
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       {/* Left: scan actions on top + sub-page rail below (Settings-style). */}
@@ -167,6 +181,22 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
           >
             <Play size={15} /> {scanning ? 'Taranıyor…' : 'Tara'}
           </button>
+        </div>
+
+        <div className="min-w-0 px-3 pb-2 pt-1">
+          <label className="block min-w-0">
+            <span className="mb-1 block truncate text-xs text-[var(--color-text-dim)]">
+              Analiz ajanı
+            </span>
+            <div className="min-w-0 [&>div]:w-full [&_[data-testid=agent-picker-trigger]]:w-full [&_[data-testid=agent-picker-trigger]]:min-w-0">
+              <AgentPicker
+                agents={agents}
+                value={settings.autoScanAgentId ?? ''}
+                onChange={selectAnalysisAgent}
+                placeholder="Ajan seç"
+              />
+            </div>
+          </label>
         </div>
 
         {/* Sub-page rail. */}
