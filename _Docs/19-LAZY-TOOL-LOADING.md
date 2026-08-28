@@ -363,6 +363,17 @@
   hesaplar → aktive edilen aracın şeması bir sonraki adımda gelir.
 - **Faz 3 prune**: `ActiveTools.Prune` — `activeToolMaxIdle=3` iterasyon
   kullanılmayan aktif araç düşürülür (uzun turda şema yükünü düşük tutar).
+
+  **Prune bundle farkındadır (2026-08-28, ADIM D):** boşta kalma süresi araç
+  başına değil **bundle başına** ölçülür (`BundleOf`, bkz. `bundles.go`). Bir
+  üyenin kullanılması tüm demeti tazeler; bir araç ancak demetindeki **her** üye
+  `maxIdle`'dan uzun süre sessiz kaldığında düşer. Gerekçe: çok adımlı bir iş
+  demet kardeşlerini sırayla dolaşır (sayfayı aç → snapshot al → tıkla → konsolu
+  oku); her adı tek başına puanlamak, o anki kesitte dokunulmayanları atar ve
+  ajanın hâlâ üzerinde çalıştığı araç için gereksiz bir yeniden-aktivasyon turu
+  doğurur. İlgisiz, tamamen sessiz bir demet yine normal şekilde budanır.
+  Dönen liste deterministik olsun diye sıralanır. Test:
+  `TestActiveToolsPruneKeepsBundleSiblings` (`internal/tools/lazyload_test.go`).
 - Bağlam önizlemesi (`agent_context.go`): gönderilen araçlar = eager
   (`ShippedToolCatalog`); lazy'ler sistem bloğunda sayılır → dürüst token ayrımı.
 - Doğrulama: `/api/agents/{id}/context` — MCP araçları lazy blokta, eager listede
@@ -870,14 +881,18 @@ composer toolbar'ındaki 🔧 butonu `ToolAccessPanel`'i açar.
   `Runtime.ShippedToolCatalog` (eager) + `Runtime.LazyToolCatalog` (lazy) +
   `Runtime.ToolVisibilityFunc` (tier) + `ListMCPServers` + `MCPPool().Stats()`.
   Ajan-kapsamlı ve **read-only**; hiçbir yapılandırmayı değiştirmez.
-- Sekmeler: **Aktif** (her tur şeması gönderilenler), **Talep üzerine** (ajanın
+- Sekmeler: **Bağlamda** (her tur şeması gönderilenler), **Talep üzerine** (ajanın
   `tool_search`/`activate_tools` ile açabilecekleri), **MCP** (tanımlı sunucular;
   devre dışı olanlar da listelenir → "neyi açabilirim" görünür, canlı bağlantı
   sayısı ve scoped reaper penceresi rozetle).
+- İki araç sekmesi de **tek düz liste**dir: built-in ve MCP araçları ayrı
+  gruplara bölünmez, kaynak yalnız satırdaki rozette görünür. Her sekmenin
+  başlığında sayı rozeti, boşken sekmeye özel bir boş-durum metni vardır
+  (aramanın hiçbir şey bulamaması ayrı bir metinle söylenir).
 - Ajan yasakları (`blocked`) ve ajanda MCP kapalıysa uyarı panelin altında.
 - Frontend: `features/chat/composer/ToolAccessPanel.tsx` (kabuk + sekmeler),
-  `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi), `toolAccessGroups.ts`
-  (saf grup/filtre yardımcıları).
+  `ToolAccessList.tsx` (düz araç listesi + sunucu listesi), `toolAccessGroups.ts`
+  (saf sıralama/filtre yardımcıları).
 
 ### "Bağlamda mı?" verdikti (MCP sunucuları)
 
