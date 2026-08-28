@@ -1,4 +1,4 @@
-import { displayPath, splitPaths } from '@/shared/lib/paths'
+import { displayPath, splitPaths, urlHref } from '@/shared/lib/paths'
 
 interface Props {
   text: string
@@ -6,13 +6,27 @@ interface Props {
 }
 
 // PathText renders plain text with embedded file paths turned into clickable,
-// monospace chips — used for tool summaries and other non-markdown strings.
+// monospace chips and embedded URLs turned into real links — used for tool
+// summaries (WebSearch/WebFetch show their URL here) and other non-markdown
+// strings.
 export function PathText({ text, onOpenFile }: Props) {
   const segments = splitPaths(text)
   return (
     <>
       {segments.map((seg, i) =>
-        seg.isPath ? (
+        seg.kind === 'url' ? (
+          // stopPropagation: following the link must not also toggle the card.
+          <a
+            key={i}
+            href={urlHref(seg.text)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="break-all text-[var(--color-accent)] underline underline-offset-2 hover:opacity-80"
+          >
+            {seg.text}
+          </a>
+        ) : seg.kind === 'path' ? (
           // A span (not a <button>) so it stays valid HTML when PathText sits
           // inside a clickable card header (which is itself a <button>) —
           // nested buttons are invalid and trigger a hydration warning.

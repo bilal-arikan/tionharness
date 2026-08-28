@@ -3,7 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CodeBlock } from './CodeBlock'
 import { Lightbox } from '@/shared/components'
-import { isImagePath, isVideoPath, mediaUrl } from '@/shared/lib/paths'
+import { isExternalUrl, isImagePath, isVideoPath, mediaUrl } from '@/shared/lib/paths'
 
 interface Props {
   children: string
@@ -16,8 +16,6 @@ function flatten(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(flatten).join('')
   return ''
 }
-
-const isExternal = (href: string) => /^https?:\/\//i.test(href)
 
 // Markdown treats backslashes as escapes, which mangles Windows paths inside
 // link/image targets (![x](C:\a\b.png)). Normalise backslashes to forward
@@ -149,7 +147,7 @@ function MarkdownImpl({ children, onOpenFile }: Props) {
       a({ href, children }) {
         const url = href || ''
         // Local file path (not http, not anchor) → open-file callback.
-        if (url && !isExternal(url) && !url.startsWith('#') && !url.startsWith('mailto:')) {
+        if (url && !isExternalUrl(url) && !url.startsWith('#') && !url.startsWith('mailto:')) {
           return (
             <button
               type="button"
@@ -175,7 +173,7 @@ function MarkdownImpl({ children, onOpenFile }: Props) {
         const raw = typeof src === 'string' ? src : ''
         // Resolve local media paths through the backend file server.
         const resolved =
-          isExternal(raw) || raw.startsWith('data:')
+          isExternalUrl(raw) || raw.startsWith('data:')
             ? raw
             : isImagePath(raw) || isVideoPath(raw)
               ? mediaUrl(raw)

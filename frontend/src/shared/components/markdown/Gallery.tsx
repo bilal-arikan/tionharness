@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Lightbox, type LightboxImage } from '@/shared/components'
-import { isMediaPath, isVideoPath, mediaUrl } from '@/shared/lib/paths'
+import { isExternalUrl, isMediaPath, isVideoPath, mediaUrl } from '@/shared/lib/paths'
 
 interface Props {
   code: string
@@ -16,7 +16,7 @@ interface RawItem {
   label?: string
 }
 
-const isExternal = (s: string) => /^(https?:|data:|blob:)/i.test(s)
+const isInlineData = (s: string) => /^(data:|blob:)/i.test(s)
 
 // Resolve a path/URL to something the <img> can load: external/data/blob URLs
 // and already-built /api/files URLs pass through; a bare local image path is
@@ -24,7 +24,7 @@ const isExternal = (s: string) => /^(https?:|data:|blob:)/i.test(s)
 function resolveSrc(raw: string): string {
   const s = raw.trim()
   if (!s) return s
-  if (isExternal(s) || s.startsWith('/api/') || s.startsWith('/')) return s
+  if (isExternalUrl(s) || isInlineData(s) || s.startsWith('/api/') || s.startsWith('/')) return s
   return isMediaPath(s) ? mediaUrl(s) : s
 }
 
