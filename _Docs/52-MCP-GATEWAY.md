@@ -693,6 +693,15 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
   core `tool_search` meta-tool katalogda görünmeyen hidden dahil tüm aktive-edilebilir araçları
   arar; `Tools("extended")` aktive edilmiş non-core (extended+hidden) ilan eder. CLI'da native
   hidden-tier'ın tam muadili. Test: `TestGatewayHiddenActivatableAndToolSearch`.
+- ✅ **`tool_search` render'ı tek kaynak (2026-08-28):** iki elle-senkron kopya
+  (`internal/tools/builtin_activate.go` + `callToolSearch`) tek saf yardımcıya indi:
+  `tools.RenderToolSearch` (`internal/tools/toolsearchrender.go`). Gerçek yol farkları
+  kod kopyası değil **seçenek**: başlık metni, gateway'in 100 baytlık açıklama kırpması,
+  taşma notundaki boş demet listesinin basılıp basılmayacağı. `BundleOf` nil ise panic —
+  satırların sessizce etiketsiz render edilmesi bu yardımcının önlediği hatanın ta kendisi.
+  Refactor öncesi yakalanmış golden'lar iki yolu da bayt bayt sabitler
+  (`internal/tools/testdata/toolsearch_native_*.txt`,
+  `internal/api/testdata/toolsearch_gateway_*.txt`).
 
 ### ✅ VPS göç aracı (2026-07-06)
 
