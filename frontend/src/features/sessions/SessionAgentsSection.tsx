@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import type { SessionInfo } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
+import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { Section } from './SessionDetailBits'
 import { formatTokens } from './sessionDetailFormat'
 
@@ -27,7 +28,9 @@ export function SessionAgentsSection({ info, onSelectAgent }: Props) {
                   </span>
                 ) : undefined
               }
-              subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token`}
+              subtitle={`${a.turns} tur · ~${formatTokens(a.tokens)} token${
+                a.model ? ` · ${modelDisplayName(a.model)}` : ''
+              }`}
             />
           )
           // Without a handler, render the bare row (read-only). With one,

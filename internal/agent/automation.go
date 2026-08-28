@@ -230,6 +230,13 @@ func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, pr
 		sid, derr := e.rt.deliverAutomationTurn(ctx, a, prompt)
 		return sid, "session", derr
 	}
+	// A one-shot automation fire (session mode != continue) still opens a NEW
+	// session via SpawnSession, whose default Kind is "spawned" — landing under the
+	// sidebar's generic "Spawn" chip instead of "Otomasyon". Tag it explicitly so it
+	// groups with the persistent maintenance thread (see SessionKindAutomationRun).
+	if spawn.Kind == "" {
+		spawn.Kind = SessionKindAutomationRun
+	}
 	res, serr := e.rt.LaunchRun(ctx, RunSpec{
 		Trigger:    trigger,
 		Input:      prompt,

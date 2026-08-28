@@ -51,8 +51,8 @@ func TestDeliverPrompt_SpawnModeOpensFreshSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get spawned session: %v", err)
 	}
-	if session.Kind != "spawned" {
-		t.Errorf("spawned session kind = %q, want %q", session.Kind, "spawned")
+	if session.Kind != "schedule-run" {
+		t.Errorf("spawned session kind = %q, want %q", session.Kind, "schedule-run")
 	}
 	if session.AgentID != agent.ID {
 		t.Errorf("spawned session agent = %q, want %q", session.AgentID, agent.ID)

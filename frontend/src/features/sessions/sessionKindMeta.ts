@@ -24,6 +24,14 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   // One persistent maintenance thread per token automation (see internal/agent/
   // automation_deliver.go); every fire continues it instead of spawning fresh.
   automation: { label: 'Otomasyon', icon: Zap },
+  // A one-shot automation fire (session mode != continue) still opens its own
+  // fresh session per fire, same shape as 'spawned' — just tagged distinctly so
+  // it groups under "Otomasyon" here instead of "Spawn" (see kindChipKey below).
+  'automation-run': { label: 'Otomasyon', icon: Zap },
+  // A spawn-mode schedule fire's own fresh session (see internal/agent/
+  // scheduler.go deliverSpawnedPrompt) — the "schedule" counterpart of
+  // 'automation-run', same rationale.
+  'schedule-run': { label: 'Otomasyon', icon: Clock },
   spawned: { label: 'Spawn', icon: Sparkles },
   // A flow's coordinator node opens one of these per run (see internal/agent/
   // flow_coordinator.go); its workers hang off it like any coordinator's.
@@ -109,9 +117,17 @@ export function nextChipsOff(chipsOff: string[], key: string, mode: ChipClickMod
 // becoming unfilterable.
 export function kindChipKey(kind: string): string {
   if (kind === '' || kind === 'chat') return 'chat'
-  // The "Otomasyon" chip is an umbrella over event-triggered automations and
-  // time-triggered cron schedules (two distinct Session.Kind values).
-  if (kind === 'automation' || kind === 'schedule') return 'automation'
+  // The "Otomasyon" chip is an umbrella over event-triggered automations
+  // (persistent thread 'automation' and their one-shot 'automation-run' fires)
+  // and time-triggered cron schedules (persistent 'schedule' and their one-shot
+  // 'schedule-run' fires).
+  if (
+    kind === 'automation' ||
+    kind === 'automation-run' ||
+    kind === 'schedule' ||
+    kind === 'schedule-run'
+  )
+    return 'automation'
   return SESSION_CHIPS.some((c) => c.key === kind) ? kind : OTHER_CHIP
 }
 

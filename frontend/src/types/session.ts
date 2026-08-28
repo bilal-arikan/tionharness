@@ -269,6 +269,7 @@ export interface SessionAgentStat {
   name: string
   avatar?: string
   color?: string
+  model?: string
   turns: number
   tokens: number
   isOwner: boolean

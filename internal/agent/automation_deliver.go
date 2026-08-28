@@ -25,6 +25,17 @@ var ErrEmptyAutomationPrompt = errors.New("automation prompt is empty")
 // session-scoped rule cannot re-trigger itself on the spend of its own upkeep turn.
 const SessionKindAutomation = "automation"
 
+// SessionKindAutomationRun is the Kind of a ONE-SHOT session an automation spawns
+// when its session mode is NOT "continue" (fireToken/fireBoard/fireTag/fireCounter
+// dispatching through LaunchRun's spawn path instead of deliverAutomationTurn).
+// Distinct from SessionKindAutomation (the persistent maintenance thread) so the
+// self-amplification guard in OnUsageRecorded — which excludes ONLY the
+// maintenance session's own upkeep tokens from session-scoped crossings — does not
+// also swallow a fresh spawn's legitimate token crossing. Both kinds share the
+// sidebar's "Otomasyon" grouping (see frontend's kindChipKey) so a one-shot
+// automation fire is not miscategorized under "Spawn".
+const SessionKindAutomationRun = "automation-run"
+
 // deliverAutomationTurn delivers an automation's rendered prompt into its
 // persistent per-automation session as a fresh, history-aware turn — the
 // continuity that makes a token automation behave like a cron schedule: each fire

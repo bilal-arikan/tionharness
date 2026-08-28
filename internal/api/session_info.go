@@ -119,6 +119,7 @@ type sessionAgentStat struct {
 	Name     string `json:"name"`
 	Avatar   string `json:"avatar"`
 	Color    string `json:"color"`
+	Model    string `json:"model"`
 	Turns    int    `json:"turns"`
 	Tokens   int    `json:"tokens"`
 	IsOwner  bool   `json:"isOwner"`
@@ -531,6 +532,7 @@ func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, h
 			st.Name = ag.Name
 			st.Avatar = ag.Avatar
 			st.Color = ag.Color
+			st.Model = ag.Model
 		} else {
 			st.Name = "Silinmiş ajan"
 			st.Disabled = true

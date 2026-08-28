@@ -21,10 +21,22 @@
 // keeps its composer. A user turn and a scheduled turn share the session's single
 // turn slot on the backend, so they serialize rather than interleave.
 //
+// 'automation-run' and 'schedule-run' are a one-shot automation/schedule fire's
+// own fresh session — a linear transcript like 'spawned', just tagged distinctly
+// so the sidebar groups it under "Otomasyon" instead of "Spawn" (see
+// sessionKindMeta.ts's kindChipKey).
+//
 // This list MIRRORS the backend source of truth, writableSessionKindList /
 // IsWritableSessionKind in internal/db/models.go:252, which the API enforces in
 // rejectNonWritableSession (internal/api/session_readonly.go). Change both sides
 // together, or the composer and the API will disagree about the same session.
 export function isWritableSessionKind(kind: string): boolean {
-  return kind === '' || kind === 'chat' || kind === 'spawned' || kind === 'schedule'
+  return (
+    kind === '' ||
+    kind === 'chat' ||
+    kind === 'spawned' ||
+    kind === 'schedule' ||
+    kind === 'automation-run' ||
+    kind === 'schedule-run'
+  )
 }

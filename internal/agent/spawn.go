@@ -198,7 +198,13 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 
 	title := strings.TrimSpace(opts.Title)
 	if title == "" {
-		title = "✨ " + spawnTitle(prompt)
+		// Worker sessions (coordinator fan-out) carry their own marker so the
+		// session list tells them apart from plain spawn_session runs at a glance.
+		marker := "✨ "
+		if opts.Role == db.SessionRoleWorker {
+			marker = "🤖 "
+		}
+		title = marker + spawnTitle(prompt)
 	}
 
 	// Seed the cwd like a UI-created session: an explicit option wins (e.g. a
