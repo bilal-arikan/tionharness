@@ -146,6 +146,47 @@ tarafta → cache'i asla bozmaz).
   **panikletiyordu** (`slice bounds out of range [:400] with capacity 384`). Panik
   tur-setup'ında (epoch/debug olayından önce) olduğu için semptom "tur hiç
   başlamıyor, hata da yok"tu — kuyruk worker'ını da kilitliyordu (bkz. `_Docs\58`).
+- **Düzenlenen blok = tek `modified` alan (2026-08-28):** paragraf-LCS bir bloğun
+  düzenlenmesini "tüm blok silindi + tüm blok eklendi" diye raporluyordu; kullanıcı
+  iki neredeyse özdeş metin duvarı görüp değişen satırı bulamıyordu.
+  `internal/agent/contextdiff_lines.go` bu iki yarımı geri eşleştirir
+  (`pairParagraphs`: önce birebir etiket eşleşmesi, sonra ortak-satır benzerliği
+  `>= 0.5` greedy; her paragraf en fazla bir kez eşleşir) ve çifti tek bir
+  `ContextModified` alan olarak üretir. Alanın `Lines`'ı düz gövde değil **unified
+  diff**'tir: değişmeyen satır `" "`, silinen `-`, eklenen `+` önekli; değişikliğin
+  etrafında en fazla `lineDiffContext` (2) satır bağlam tutulur, atlanan bloklar tek
+  `"…"` satırına çöker. Satır kesme yine rune-güvenlidir. Suffix notunda modified
+  alanın işareti `~`.
+- **Sayaçlar satır düzeyinde (2026-08-28):** `Added`/`Removed` başlangıçta
+  paragraf-LCS'ten geliyordu, yani düzenlenen her blok — içinde hiç eklenen satır
+  olmasa bile — daima `+1 -1` sayıyordu; kullanıcı `+1` görüp diff'te olmayan yeşil
+  satırı arıyordu. Bugünkü kural: **eşleşmemiş** (saf added/removed) paragraf tek
+  birim sayar; **eşleşmiş** (`modified`) blok kendi unified diff'indeki gerçek `+`
+  satır sayısını `Added`'e, `-` satır sayısını `Removed`'a ekler. Sayım
+  `modifiedArea`'da **kırpma öncesi** tam op listesi üzerinden yapılır, böylece
+  `lineDiffContext` bağlam kırpması ve `maxAreaLines` tavanı sayacı bozmaz
+  (gövde kısalır, sayı doğru kalır). `Summary()` biçimi değişmedi:
+  `Static context changed: +N -M`.
+- **Eşleştirme maliyeti (2026-08-28):** ilk hâli patolojik olarak yavaştı (~n⁴):
+  benzerlik geçişi her aday çift için satır çoklu-kümesini yeniden hesaplıyor,
+  greedy seçim de her turda tüm aday listesini baştan tarıyordu — 400 değişen
+  paragraf 27.9 sn. Şimdi: pass 1 etiket→indeks haritasıyla lineer; satır
+  çoklu-kümeleri paragraf başına bir kez hesaplanır; adaylar bir kez
+  `(skor↓, i↑, j↑)` sırasına dizilip tek geçişte seçilir (sonuç eski greedy ile
+  birebir aynı). Blok sayısı `maxSimilarityPairBlocks` (200) tavanını aşarsa
+  benzerlik geçişi **tümüyle atlanır** ve o bloklar düz `added`/`removed` alan
+  olarak kalır — yüzlerce yeniden etiketlenmiş blok zaten toptan bir prefix
+  yeniden yazımıdır, blok başına satır diff'i sinyal taşımaz. Ölçüm: 200 blok
+  1.25 sn → 6.6 ms, 400 blok 27.6 sn → ~1 ms. Regresyon testleri:
+  `internal/agent/contextdiff_perf_test.go`. Dikkat: 400 bloklu test/benchmark
+  tavanın **üstünde** kaldığı için benzerlik geçişini hiç koşturmaz (yalnız
+  kısa-devrenin devrede olduğunu doğrular, ~1.74 ms); gerçek O(n⁴) guard'ı 200
+  bloklu olandır (~11.4 ms).
+- **Tavana marj (2026-08-28 ölçümü):** WS5 store'undaki 175 gerçek
+  `prompt_epoch.json` snapshot'ında paragraf sayısı en fazla **62** (35 KB), tipik
+  **52** (17.7 KB) — `maxSimilarityPairBlocks` (200) tavanına ~3.2x marj var.
+  Ayrıca tavan tüm paragraflara değil yalnız **değişen** paragraf sayısına
+  (`len(removed)` / `len(added)`) bakar, yani pratikte marj daha da geniştir.
 - **Hesaplama seam'i:** `EpochStaticSystem` zaten `build() != e.System`
   karşılaştırmasında canlı+donmuş metnin ikisini de elinde tutuyor → orada
   `e.systemChange` doldurulur; `EpochToolDefs` `e.toolsChange`'i doldurur;
@@ -160,8 +201,9 @@ tarafta → cache'i asla bozmaz).
   StaleLocked` arms/re-arms), `ConsumeContextChange` ile tüketilir; canlı SSE'ye
   yayılır + kalıcı `steps`'e prepend (reload'da kalır). Chat/non-stream yolları
   `consumeContextChangeLead` helper'ını paylaşır. Frontend `ContextChangeCard.tsx`:
-  katlanabilir renkli +/- diff (blok başlığı → gövde), Ayarlar → Adım Türleri'nde
-  belgeli. Not: değişiklik yine sadece bir sonraki refresh'te **tam** uygulanır.
+  katlanabilir renkli +/-/`~` diff (blok başlığı → gövde; `modified` alanlar nötr
+  tonlu kalem ikonuyla ve gövde satır satır önek rengine göre boyanarak render
+  edilir), Ayarlar → Adım Türleri'nde belgeli. Not: değişiklik yine sadece bir sonraki refresh'te **tam** uygulanır.
 
 ## Bilinçli Takaslar
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Plus, Minus } from 'lucide-react'
+import { ChevronRight, Plus, Minus, Pencil } from 'lucide-react'
 import type { TurnStep, ContextArea } from '@/types'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
 
@@ -61,14 +61,21 @@ export function ContextChangeCard({ step }: Props) {
   )
 }
 
-// AreaRow is one changed block: a colored +/- header (its self-label) that
-// expands to the changed paragraph body when it carries one.
+// AreaRow is one changed block: a colored +/-/pencil header (its self-label)
+// that expands to the block body when it carries one. An added/removed body is
+// plain text; a 'modified' body is a unified diff, rendered line by line so only
+// the actually changed lines stand out.
 function AreaRow({ area }: { area: ContextArea }) {
   const [open, setOpen] = useState(false)
   const hasBody = (area.lines?.length ?? 0) > 0
   const isAdd = area.kind === 'added'
-  const tone = isAdd ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
-  const Icon = isAdd ? Plus : Minus
+  const isMod = area.kind === 'modified'
+  const tone = isMod
+    ? 'text-[var(--color-text-dim)]'
+    : isAdd
+      ? 'text-[var(--color-success)]'
+      : 'text-[var(--color-danger)]'
+  const Icon = isMod ? Pencil : isAdd ? Plus : Minus
   return (
     <div className="my-0.5">
       <button
@@ -85,17 +92,35 @@ function AreaRow({ area }: { area: ContextArea }) {
           />
         )}
       </button>
-      {open && hasBody && (
-        <pre
-          className={`mt-0.5 overflow-x-auto rounded px-2 py-1 font-mono text-[10px] leading-snug ${
-            isAdd
-              ? 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)]'
-              : 'bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]'
-          }`}
-        >
-          {area.lines!.join('\n')}
-        </pre>
-      )}
+      {open &&
+        hasBody &&
+        (isMod ? (
+          <pre className="mt-0.5 overflow-x-auto rounded bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-2 py-1 font-mono text-[10px] leading-snug">
+            {area.lines!.map((l, i) => (
+              <div key={i} className={diffLineTone(l)}>
+                {l}
+              </div>
+            ))}
+          </pre>
+        ) : (
+          <pre
+            className={`mt-0.5 overflow-x-auto rounded px-2 py-1 font-mono text-[10px] leading-snug ${
+              isAdd
+                ? 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)]'
+                : 'bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]'
+            }`}
+          >
+            {area.lines!.join('\n')}
+          </pre>
+        ))}
     </div>
   )
+}
+
+// diffLineTone colors one unified-diff line by its prefix: '+' added, '-'
+// removed, everything else (context lines and the '…' elision marker) dim.
+function diffLineTone(line: string): string {
+  if (line.startsWith('+')) return 'text-[var(--color-success)]'
+  if (line.startsWith('-')) return 'text-[var(--color-danger)]'
+  return 'text-[var(--color-text-dim)]'
 }

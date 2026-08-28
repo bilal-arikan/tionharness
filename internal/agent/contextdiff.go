@@ -34,6 +34,9 @@ const (
 	ContextAdded ContextChangeKind = "added"
 	// ContextRemoved marks a paragraph/tool present in the snapshot but not live.
 	ContextRemoved ContextChangeKind = "removed"
+	// ContextModified marks a paragraph present in both, in two different forms:
+	// its Lines carry a unified line diff instead of a plain body.
+	ContextModified ContextChangeKind = "modified"
 )
 
 // ContextArea is one changed region of the frozen prefix (or tool set), self-
@@ -42,15 +45,21 @@ type ContextArea struct {
 	Label string            `json:"label"`
 	Kind  ContextChangeKind `json:"kind"`
 	// Lines is the changed paragraph's body (capped), so the UI can show the
-	// actual text on expand. Empty for a tool-name area.
+	// actual text on expand. Empty for a tool-name area. For a "modified" area
+	// it is a unified diff instead: each line is prefixed with " ", "-" or "+",
+	// and elided runs are a lone "…".
 	Lines []string `json:"lines,omitempty"`
 }
 
 // ContextChange is the drift between the frozen snapshot and live state.
 type ContextChange struct {
-	Areas   []ContextArea `json:"areas"`
-	Added   int           `json:"added"`
-	Removed int           `json:"removed"`
+	Areas []ContextArea `json:"areas"`
+	// Added/Removed are the headline counts. A wholly new or wholly deleted
+	// paragraph (or tool) counts as one; a MODIFIED paragraph contributes the
+	// real number of added/removed LINES in its diff, so a block that only lost
+	// lines reports no additions.
+	Added   int `json:"added"`
+	Removed int `json:"removed"`
 	// Truncated reports that some changed areas were dropped from Areas to keep
 	// the payload bounded (surfaced as "+N more" in the note/UI).
 	Truncated int `json:"truncated,omitempty"`
@@ -136,11 +145,33 @@ func diffSystemPrefix(frozen, live string) *ContextChange {
 	if len(added) == 0 && len(removed) == 0 {
 		return nil
 	}
-	c := &ContextChange{Added: len(added), Removed: len(removed)}
-	for _, p := range removed {
+	c := &ContextChange{}
+	// Pair each removal with the addition that is the same block in a new form;
+	// those become one "modified" area carrying a line diff, so the user sees the
+	// changed lines instead of two near-identical walls of text.
+	pairTo := pairParagraphs(removed, added)
+	pairedAdd := make([]bool, len(added))
+	for i, p := range removed {
+		if j := pairTo[i]; j >= 0 {
+			pairedAdd[j] = true
+			// Counters follow the actual edit: a paired block contributes its real
+			// added/removed LINE counts, not a blanket "+1 -1". A block that only lost
+			// lines must not advertise an addition the user then hunts for in the diff.
+			area, addLines, delLines := modifiedArea(p, added[j])
+			c.Added += addLines
+			c.Removed += delLines
+			c.appendArea(area)
+			continue
+		}
+		// An unpaired paragraph is a whole block gained or lost: counted as one.
+		c.Removed++
 		c.appendArea(paragraphArea(p, ContextRemoved))
 	}
-	for _, p := range added {
+	for j, p := range added {
+		if pairedAdd[j] {
+			continue
+		}
+		c.Added++
 		c.appendArea(paragraphArea(p, ContextAdded))
 	}
 	return c
@@ -182,14 +213,7 @@ func diffToolNames(frozen, live []string) *ContextChange {
 // empty line becomes the label, the whole (capped) body the detail.
 func paragraphArea(p string, kind ContextChangeKind) ContextArea {
 	lines := strings.Split(p, "\n")
-	label := ""
-	for _, l := range lines {
-		if t := strings.TrimSpace(l); t != "" {
-			label = t
-			break
-		}
-	}
-	label = truncateRunes(strings.TrimSpace(strings.TrimLeft(label, "#> \t")), contextLabelMaxRune)
+	label := paragraphLabel(p)
 	body := make([]string, 0, len(lines))
 	for _, l := range lines {
 		// Guard by RUNE count, not byte length: len(l) is bytes, but the slice below
@@ -288,8 +312,11 @@ func (c *ContextChange) SuffixNote() string {
 			break
 		}
 		sign := "+"
-		if a.Kind == ContextRemoved {
+		switch a.Kind {
+		case ContextRemoved:
 			sign = "-"
+		case ContextModified:
+			sign = "~"
 		}
 		b.WriteString("\n" + sign + " " + a.Label)
 		listed++

@@ -33,10 +33,13 @@ export interface TodoItem {
 }
 
 // One changed region of the frozen static context (prompt-epoch drift), self-
-// labelled by the first line of the changed paragraph. kind ∈ added | removed.
+// labelled by the first line of the changed paragraph.
+// kind ∈ added | removed | modified. For 'modified' the block exists in both
+// forms and `lines` is a unified diff: every entry is prefixed with ' ', '-' or
+// '+', and an elided run of unchanged lines is a lone '…'.
 export interface ContextArea {
   label: string
-  kind: 'added' | 'removed'
+  kind: 'added' | 'removed' | 'modified'
   lines?: string[]
 }
 

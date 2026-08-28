@@ -179,7 +179,7 @@ export const STEP_KINDS: StepKindInfo[] = [
     persisted: true,
     status: 'active',
     description:
-      'Oturumun dondurulmuş statik bağlamı (persona/talimat/skill/araç kataloğu) oturum ortasında değişti; prompt cache’i korumak için önbelleğe giren prefix hâlâ oturum-başı snapshot’ını taşır. Değişen bloklar +/- diff olarak gösterilir. Drift başına bir kez yayılır; değişiklik bir sonraki bağlam yenilemesinde (/refresh-context, compaction, boşta kalma) tam uygulanır.',
+      'Oturumun dondurulmuş statik bağlamı (persona/talimat/skill/araç kataloğu) oturum ortasında değişti; prompt cache’i korumak için önbelleğe giren prefix hâlâ oturum-başı snapshot’ını taşır. Değişen bloklar diff olarak gösterilir: eklenen blok `+`, silinen blok `-`, düzenlenen blok `~` (satır düzeyinde unified diff). Başlıktaki `+N -M` sayaçları da satır düzeyindedir; düzenlenen bir blok yalnız gerçekten eklenen/silinen satırları sayar. Drift başına bir kez yayılır; değişiklik bir sonraki bağlam yenilemesinde (/refresh-context, compaction, boşta kalma) tam uygulanır.',
   },
   {
     kind: 'cache_break',

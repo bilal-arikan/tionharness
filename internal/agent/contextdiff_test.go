@@ -23,12 +23,139 @@ func TestDiffSystemPrefixParagraphs(t *testing.T) {
 	}
 }
 
-// TestDiffSystemPrefixModifiedBlock: a changed paragraph reads as one removal
-// (old form) plus one addition (new form).
+// TestDiffSystemPrefixModifiedBlock: a changed paragraph surfaces as a single
+// "modified" area, counted by the lines its diff really changed.
 func TestDiffSystemPrefixModifiedBlock(t *testing.T) {
 	c := diffSystemPrefix("# A\nold body", "# A\nnew body")
 	if c == nil || c.Added != 1 || c.Removed != 1 {
-		t.Fatalf("modified block must be remove+add, got %+v", c)
+		t.Fatalf("one line swapped must be +1 -1, got %+v", c)
+	}
+	if len(c.Areas) != 1 || c.Areas[0].Kind != ContextModified {
+		t.Fatalf("modified block must collapse into one modified area, got %+v", c.Areas)
+	}
+}
+
+// TestDiffSystemPrefixModifiedCountsAreLineLevel: the +N/-M headline of a
+// modified block reports its real line changes, so a pure deletion never
+// advertises an addition the user then hunts for (and vice versa).
+func TestDiffSystemPrefixModifiedCountsAreLineLevel(t *testing.T) {
+	cases := []struct {
+		name             string
+		old, nw          string
+		wantAdd, wantDel int
+	}{
+		{"line deleted", "# A\nl1\nl2\nl3", "# A\nl1\nl3", 0, 1},
+		{"line added", "# A\nl1\nl3", "# A\nl1\nl2\nl3", 1, 0},
+		{"two added one removed", "# A\nl1\nl2", "# A\nl1\nnew1\nnew2", 2, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := diffSystemPrefix(tc.old, tc.nw)
+			if c == nil || len(c.Areas) != 1 || c.Areas[0].Kind != ContextModified {
+				t.Fatalf("want one modified area, got %+v", c)
+			}
+			if c.Added != tc.wantAdd || c.Removed != tc.wantDel {
+				t.Fatalf("counts = +%d -%d, want +%d -%d", c.Added, c.Removed, tc.wantAdd, tc.wantDel)
+			}
+		})
+	}
+}
+
+// TestDiffSystemPrefixWholeBlockCountsOne: an unpaired paragraph is still one
+// unit of change regardless of how many lines it holds.
+func TestDiffSystemPrefixWholeBlockCountsOne(t *testing.T) {
+	old := "# Keep\nsame\n\n# Gone\nalpha\nbeta\ngamma"
+	nw := "# Keep\nsame\n\n# Fresh\nnothing alike\nor here\nor here either"
+	c := diffSystemPrefix(old, nw)
+	if c == nil || c.Added != 1 || c.Removed != 1 {
+		t.Fatalf("one block gained and one lost must be +1 -1, got %+v", c)
+	}
+}
+
+// TestDiffSystemPrefixModifiedCountsIgnoreAreaCap: the counters are taken from
+// the untrimmed diff, so a block far larger than maxAreaLines still reports
+// every changed line even though its rendered body is capped.
+func TestDiffSystemPrefixModifiedCountsIgnoreAreaCap(t *testing.T) {
+	n := maxAreaLines * 3
+	var oldB, newB strings.Builder
+	oldB.WriteString("# Big")
+	newB.WriteString("# Big")
+	for i := 0; i < n; i++ {
+		oldB.WriteString("\nold " + itoa(i))
+		newB.WriteString("\nnew " + itoa(i))
+	}
+	c := diffSystemPrefix(oldB.String(), newB.String())
+	if c == nil || len(c.Areas) != 1 || c.Areas[0].Kind != ContextModified {
+		t.Fatalf("want one modified area, got %+v", c)
+	}
+	if len(c.Areas[0].Lines) > maxAreaLines+1 {
+		t.Fatalf("rendered body must stay capped, got %d lines", len(c.Areas[0].Lines))
+	}
+	if c.Added != n || c.Removed != n {
+		t.Fatalf("counts = +%d -%d, want +%d -%d (cap must not truncate them)", c.Added, c.Removed, n, n)
+	}
+}
+
+// TestDiffSystemPrefixModifiedLineDiff: a paragraph with one changed line yields
+// a unified diff showing that line only, with at most lineDiffContext lines of
+// surrounding context and an ellipsis for what was elided.
+func TestDiffSystemPrefixModifiedLineDiff(t *testing.T) {
+	body := func(l5 string) string {
+		return "# Rules\nl1\nl2\nl3\nl4\n" + l5 + "\nl6\nl7\nl8\nl9"
+	}
+	c := diffSystemPrefix(body("OLD"), body("NEW"))
+	if c == nil || len(c.Areas) != 1 {
+		t.Fatalf("want one area, got %+v", c)
+	}
+	a := c.Areas[0]
+	if a.Kind != ContextModified || a.Label != "Rules" {
+		t.Fatalf("want a modified area labelled Rules, got %+v", a)
+	}
+	want := []string{"…", " l3", " l4", "-OLD", "+NEW", " l6", " l7", "…"}
+	if len(a.Lines) != len(want) {
+		t.Fatalf("want %v, got %v", want, a.Lines)
+	}
+	for i, w := range want {
+		if a.Lines[i] != w {
+			t.Fatalf("line %d: want %q, got %q (all: %v)", i, w, a.Lines[i], a.Lines)
+		}
+	}
+}
+
+// TestDiffSystemPrefixUnpairedBlocks: a wholly new block and a wholly deleted
+// one stay added/removed — pairing must not invent a "modified" out of two
+// unrelated paragraphs.
+func TestDiffSystemPrefixUnpairedBlocks(t *testing.T) {
+	old := "# Keep\nsame\n\n# Gone\nalpha beta\ngamma delta"
+	nw := "# Keep\nsame\n\n# Fresh\nnothing alike here\nor here either"
+	c := diffSystemPrefix(old, nw)
+	if c == nil || len(c.Areas) != 2 {
+		t.Fatalf("want two unpaired areas, got %+v", c)
+	}
+	kinds := map[ContextChangeKind]string{}
+	for _, a := range c.Areas {
+		kinds[a.Kind] = a.Label
+	}
+	if kinds[ContextRemoved] != "Gone" || kinds[ContextAdded] != "Fresh" {
+		t.Fatalf("want -Gone / +Fresh, got %+v", c.Areas)
+	}
+}
+
+// TestModifiedAreaMultiByteNoPanic: a modified paragraph holding an over-cap
+// multi-byte line must truncate by RUNE, not byte (see contextdiff_rune_test).
+func TestModifiedAreaMultiByteNoPanic(t *testing.T) {
+	long := strings.Repeat("ş", maxAreaLineLen+50)
+	old := "# Türkçe\n" + long + "\nson"
+	nw := "# Türkçe\n" + long + "\nsonu değişti"
+	c := diffSystemPrefix(old, nw) // must not panic
+	if c == nil || len(c.Areas) != 1 || c.Areas[0].Kind != ContextModified {
+		t.Fatalf("want one modified area, got %+v", c)
+	}
+	for _, l := range c.Areas[0].Lines {
+		// +1 for the diff sign, +1 for the ellipsis added on truncation.
+		if n := len([]rune(l)); n > maxAreaLineLen+2 {
+			t.Fatalf("line not rune-capped: %d runes", n)
+		}
 	}
 }
 
