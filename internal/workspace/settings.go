@@ -259,6 +259,9 @@ func (w *Workspace) sanitizeDefaultAgent(logger *slog.Logger) {
 	w.settings.mu.Lock()
 	w.settings.cur.DefaultAgentId = ""
 	w.settings.mu.Unlock()
+	if w.Runtime != nil {
+		w.Runtime.SetDefaultAgentID("")
+	}
 	if logger != nil {
 		logger.Warn("cleared workspace default agent pointing at a system agent",
 			"workspace", w.ID, "agent", id)
@@ -309,6 +312,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetInstructions(s.Instructions)
 		w.Runtime.SetTerseMode(s.TerseMode)
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
+		w.Runtime.SetDefaultAgentID(s.DefaultAgentId)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
 		w.Runtime.SetShellCompression(s.ShellOutputCompression)
@@ -456,6 +460,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	instructions := ws.settings.cur.Instructions
 	terseMode := ws.settings.cur.TerseMode
 	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
+	defaultAgentID := ws.settings.cur.DefaultAgentId
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	shellCompression := ws.settings.cur.ShellOutputCompression
@@ -483,6 +488,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetInstructions(instructions)
 		ws.Runtime.SetTerseMode(terseMode)
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
+		ws.Runtime.SetDefaultAgentID(defaultAgentID)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
 		ws.Runtime.SetShellCompression(shellCompression)
