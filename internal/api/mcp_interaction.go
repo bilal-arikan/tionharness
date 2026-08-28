@@ -949,11 +949,17 @@ func (b *interactionBackend) callActivateNames(token string, run *chatRun, reque
 		// Split requested names into valid extended candidates vs unknown, so the model
 		// gets clear feedback instead of a silent partial success.
 		candidates := b.extendedCandidates(run)
-		var valid, unknown []string
+		var valid, unknown, external []string
 		for _, n := range requested {
-			if candidates[n] {
+			switch {
+			case candidates[n]:
 				valid = append(valid, n)
-			} else {
+			// An EXTERNAL mcp__<server>__… name is not "unknown" — it exists, just in the
+			// CLI's own catalog. Folding it into the generic unknown list told the model
+			// nothing about which loader to use next (SES79).
+			case tools.IsExternalMCPName(n):
+				external = append(external, n)
+			default:
 				unknown = append(unknown, n)
 			}
 		}
@@ -989,10 +995,13 @@ func (b *interactionBackend) callActivateNames(token string, run *chatRun, reque
 		if len(unknown) > 0 {
 			msg += "; unknown (not in the on-demand catalog): " + strings.Join(unknown, ", ")
 		}
+		if len(external) > 0 {
+			msg += "\n" + tools.ExternalMCPActivateNote(external)
+		}
 		if len(added) > 0 && !pushed {
 			msg += "\n(note: tools registered; they will appear on your next tool list)"
 		}
-		return interaction.CallResult{Text: msg, IsError: len(added) == 0 && len(unknown) > 0}, nil
+		return interaction.CallResult{Text: msg, IsError: len(added) == 0 && (len(unknown) > 0 || len(external) > 0)}, nil
 	}
 }
 
@@ -1029,6 +1038,13 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 	q := strings.ToLower(strings.TrimSpace(in.Query))
 	if q == "" {
 		return interaction.CallResult{Text: "empty query", IsError: true}
+	}
+	// A `select:` query, or one naming a tool in a TionHarness namespace, means the
+	// model reached for the CLI's loader syntax on OUR catalog. That never matches, so
+	// the redirect is prepended to whatever the search finds — including nothing.
+	var lead string
+	if tools.IsTionHarnessLoaderQuery(in.Query) {
+		lead = tools.TionHarnessLoaderNote(`activate_tools({"tools":[...]})`) + "\n\n"
 	}
 	terms := strings.Fields(q)
 	cands := b.candidateDefs(run)
@@ -1088,7 +1104,7 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 		}
 	}
 	if len(ranked) == 0 {
-		return interaction.CallResult{Text: fmt.Sprintf("No on-demand tools match %q.", in.Query)}
+		return interaction.CallResult{Text: lead + fmt.Sprintf("No on-demand tools match %q.", in.Query)}
 	}
 	// Row shape, bundle tag and overflow notice come from the SHARED renderer
 	// (internal/tools/toolsearchrender.go), the same one the native builtin uses, so
@@ -1099,7 +1115,7 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 	for _, r := range ranked {
 		rows = append(rows, tools.ToolSearchRow{Name: r.name, Desc: cands[r.name]})
 	}
-	return interaction.CallResult{Text: tools.RenderToolSearch(rows, tools.ToolSearchRenderOpts{
+	return interaction.CallResult{Text: lead + tools.RenderToolSearch(rows, tools.ToolSearchRenderOpts{
 		Header:                  "Matching tools (load with activate_tools):",
 		Max:                     tools.ToolSearchMaxRows,
 		DescLimit:               gatewayToolSearchDescLimit,

@@ -199,7 +199,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("activate_tools", err)
 	}
-	var known, alwaysOn, unknown, bundleKeys, unknownBundles []string
+	var known, alwaysOn, unknown, external, bundleKeys, unknownBundles []string
 	for _, n := range in.Names {
 		n = strings.TrimSpace(n)
 		if n == "" {
@@ -220,6 +220,11 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 			known = append(known, r)
 		} else if r := t.resolveEagerName(n); r != "" {
 			alwaysOn = append(alwaysOn, r)
+		} else if IsExternalMCPName(n) {
+			// Checked only AFTER name resolution, so the tolerant bare-name match keeps
+			// working: an external MCP name that resolves to nothing here is not unknown,
+			// it belongs to the CLI's own loader and needs a pointer at it, not a shrug.
+			external = append(external, n)
 		} else {
 			unknown = append(unknown, n)
 		}
@@ -245,6 +250,9 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		}
 		if len(unknown) > 0 {
 			fmt.Fprintf(&b, "Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or tool_search).\n", strings.Join(unknown, ", "))
+		}
+		if len(external) > 0 {
+			b.WriteString(ExternalMCPActivateNote(external) + "\n")
 		}
 		unknownBundleNote(&b)
 		if b.Len() == 0 {
@@ -278,6 +286,9 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	}
 	if len(unknown) > 0 {
 		fmt.Fprintf(&b, "Unknown (skipped): %s\n", strings.Join(unknown, ", "))
+	}
+	if len(external) > 0 {
+		b.WriteString(ExternalMCPActivateNote(external) + "\n")
 	}
 	unknownBundleNote(&b)
 	return strings.TrimSpace(b.String()), nil
@@ -396,6 +407,14 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	terms := strings.Fields(q)
 
+	// Same wrong-loader redirect as the gateway path: a `select:` query, or one naming
+	// a tool in a TionHarness namespace, scores zero here, and an empty answer is what
+	// kept the model retrying the same call (SES79). Prepended to any outcome.
+	var lead string
+	if IsTionHarnessLoaderQuery(in.Query) {
+		lead = TionHarnessLoaderNote(`activate_tools({"names":[...]})`) + "\n\n"
+	}
+
 	// Term-scoring (OR + rank), not strict AND: a tool matches when it contains
 	// AT LEAST ONE query term, ranked by how many distinct terms it hits. This is
 	// forgiving of the common "search these several tool names" query — passing a
@@ -426,7 +445,7 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 		}
 	}
 	if len(ranked) == 0 {
-		return fmt.Sprintf("No on-demand tools match %q.", in.Query), nil
+		return lead + fmt.Sprintf("No on-demand tools match %q.", in.Query), nil
 	}
 	sort.SliceStable(ranked, func(i, j int) bool {
 		if ranked[i].terms != ranked[j].terms {
@@ -444,7 +463,7 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 	for _, r := range ranked {
 		rows = append(rows, ToolSearchRow{Name: r.e.name, Desc: r.e.desc})
 	}
-	return RenderToolSearch(rows, ToolSearchRenderOpts{
+	return lead + RenderToolSearch(rows, ToolSearchRenderOpts{
 		Header:   "Matching tools (activate with activate_tools):",
 		Max:      ToolSearchMaxRows,
 		BundleOf: BundleOf,

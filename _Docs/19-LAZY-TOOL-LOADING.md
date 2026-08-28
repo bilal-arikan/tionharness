@@ -436,6 +436,16 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > yanıltıcıydı; Default-NameOnly değişikliği 10 built-in'i daha bu bloğa ekleyince fark
 > belirginleşti. Test: `TestLazyCatalogCLIFormNamespacesNames`.
 
+> **Yanlış yükleyiciye net yönlendirme (2026-08-28):** iki yükleyici ayrıdır — TionHarness
+> kendi deferred araçlarını `activate_tools` ile, harici MCP araçlarını CLI kendi
+> `ToolSearch select:<ad>` sorgusuyla yükler. Gerçek bir oturumda model
+> `select:mcp__tionharness_extended__list_tasks` çağırdı, **boş** sonuç aldı ve 3 tur aynı
+> döngüde kaldı. Artık: harici `mcp__<server>__…` adı `activate_tools`'a verilirse cevap
+> `ToolSearch` + hazır `select:` sorgusunu gösterir; `tool_search`/`ToolSearch`'e `select:`
+> önekli veya TionHarness namespace'li sorgu gelirse — eşleşme olmasa bile — başa
+> `activate_tools` notu eklenir. Her iki yol (native + gateway) aynı metni
+> `internal/tools/loader_guidance.go`'dan alır.
+
 > **Skill NameOnly (2026-06-26):** araçlardaki NameOnly katmanının skill muadili.
 > Frontmatter `name_only: true` ile işaretlenen skill "# Available Skills" bloğunda
 > **yalnız slug** olarak listelenir (`- \`slug\``) — açıklama+when bastırılır. Skill

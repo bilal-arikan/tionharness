@@ -526,6 +526,12 @@ turda çağırır (spike Q1/Q2 mekaniği). `go test ./...` **701 passed**, flag 
    modunda "yüklemek için `activate_tools` çağır (ToolSearch değil)" der. Harici MCP araçları
    hâlâ ToolSearch ile.
 6. **YENİ-D sıralama** — activate push'u sonuç dönmeden ÖNCE queue'lanır (SSE flush arası).
+7. **Yanlış-yükleyici yönlendirmesi (2026-08-28)** — iki yükleyici ayrı kalır, ama yanlış
+   olanı seçen model artık **sessiz boş sonuç** yerine yön alır. `activate_tools`'a harici
+   bir `mcp__<server>__…` adı verilirse cevap onu "unknown" kovasına atmaz; ayrı satırda
+   `ToolSearch` + hazır `select:<ad>` sorgusunu yazar. Gateway `tool_search`'e `select:`
+   önekli ya da TionHarness namespace'li bir sorgu gelirse sonucun başına — **eşleşme
+   olmasa bile** — `activate_tools` notu eklenir. Ortak metin: `internal/tools/loader_guidance.go`.
 
 **Testler:** `gateway_dynamic_test.go` (boş başlama, activate→görünür, deactivate,
 bilinmeyen ad, namespaced ad, flag-OFF tam yüzey), `tooltier_test.go`

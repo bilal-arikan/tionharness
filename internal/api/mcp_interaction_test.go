@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/sessionhub"
@@ -513,5 +514,53 @@ func TestBareToolNameStripsRepeatedNamespace(t *testing.T) {
 				t.Errorf("bareToolName(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// newGuidanceBackend builds a bound gateway backend + run for the wrong-loader tests.
+func newGuidanceBackend(t *testing.T) (*interactionBackend, string, *chatRun) {
+	t.Helper()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: agent.NewTunables()}
+	run := runs.register("r-guide", "s-guide", "ws-guide", func() {})
+	tok := runs.interactionToken("ws-guide", "s-guide", "a-guide")
+	runs.bindActive(tok, run)
+	return b, tok, run
+}
+
+// TestGatewayActivateRedirectsExternalMCPName: an EXTERNAL mcp__<server>__ name handed
+// to activate_tools must be pointed at the CLI's ToolSearch loader instead of vanishing
+// into the generic "unknown name" list, which left the model retrying the wrong loader
+// for three turns (WS20/SES79).
+func TestGatewayActivateRedirectsExternalMCPName(t *testing.T) {
+	b, tok, run := newGuidanceBackend(t)
+
+	res, err := b.callActivateNames(tok, run, []string{"mcp__codebase-memory-mcp__search_graph"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Text, "ToolSearch") {
+		t.Fatalf("external MCP name must be redirected to ToolSearch, got:\n%s", res.Text)
+	}
+	if !strings.Contains(res.Text, "select:mcp__codebase-memory-mcp__search_graph") {
+		t.Fatalf("redirect must spell out the select: query, got:\n%s", res.Text)
+	}
+	if !res.IsError {
+		t.Fatalf("nothing activated + an unusable name must stay an error, got:\n%s", res.Text)
+	}
+}
+
+// TestGatewayToolSearchRedirectsSelectQuery: the gateway tool_search must never answer a
+// `select:` query over OUR namespace with an empty/blank result — that silence is the
+// actual bug from SES79. It has to name activate_tools as the right loader.
+func TestGatewayToolSearchRedirectsSelectQuery(t *testing.T) {
+	b, _, run := newGuidanceBackend(t)
+
+	res := b.callToolSearch(run, json.RawMessage(`{"query":"select:mcp__tionharness_extended__list_tasks"}`))
+	if strings.TrimSpace(res.Text) == "" {
+		t.Fatal("tool_search must not return an empty result for a select: query")
+	}
+	if !strings.Contains(res.Text, "activate_tools") {
+		t.Fatalf("tool_search must redirect to activate_tools, got:\n%s", res.Text)
 	}
 }
