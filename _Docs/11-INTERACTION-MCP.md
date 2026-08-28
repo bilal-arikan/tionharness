@@ -991,3 +991,31 @@ Debug olayları: `mcp_prefill`, `mcp_args_block`, `mcp_repair_retry`,
 düzeltme, belirsizlikte tahmin etmeme, tek-seferlik düzeltme, indeks tetikleme,
 `resolveProjectID` tablosu) ve `internal/agent/mcpargs_test.go` (required
 tespiti, prefill sınırları, mesaj metni).
+
+## Otonom turda run alanı paritesi — steerable + grants (2026-08-28)
+
+`autonomous_interaction.go`, chat yolunun (`chat_stream.go`) run üzerine kurduğu
+üç alandan ikisini kurmuyordu; provider etiketi daha önce (c5bdbaf1) eklendi,
+kalan ikisi burada tamamlandı:
+
+- **`run.setSteerable(steerableForTurn(ag.Provider, ag.PermissionMode))`** —
+  otonom turda alan hep `false` kalıyordu. Provider artık etiketli olduğu için
+  `inbox.go`'daki steer dalı CLI sağlayıcılarında da çalışıyor ve
+  `!run.steerableFor()` yüzünden **ask/read-only** modda koşan otonom
+  `claude-cli` turuna gönderilen "Yönlendir" isteği "unsupported" dönüyordu —
+  oysa o modlarda permission-prompt sınırı var ve steer teslim edilebilir.
+  Otonom turda istek düzeyinde mod override'ı yok; etkin mod = ajanın kendi modu.
+  `codex-cli` için kural zaten `false` döner (doğru davranış).
+- **`run.setGrants(s.grants.forSession(rt.WorkspaceID(), sessionID))`** — otonom
+  turda `run.grantStore()` nil'di. Nil-safe olduğu için çökmüyordu ama **SK-3
+  sessizce ölüydü**: `grantSkillToolsCLI` (`mcp_interaction_tools.go`) `g == nil`
+  görüp boş dönüyor, yüklenen skill'in `allowed-tools` otomatik grant'i hiç
+  işlemiyordu. Ayrıca ask modunda "Always allow" kararı hatırlanmıyordu. Grant
+  seti ayrıca `tools.WithGrants` ile ctx'e de bağlanır — `toolloop` tur ctx'ini
+  bu fonksiyonun döndürdüğü ctx ile değiştirdiği için native kapı da aynı seti
+  görür. Yalnız `sessionID != ""` iken kurulur (grant seti oturum-kapsamlıdır).
+
+**Test:** `internal/api/autonomous_interaction_test.go` —
+`TestAutonomousInteractionRecordsSteerable` (provider × mod tablosu),
+`TestAutonomousInteractionBindsGrants` (run + ctx aynı oturum grant setini
+taşır), `TestAutonomousInteractionWithoutSessionSkipsGrants` (sessionID kapısı).

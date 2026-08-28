@@ -43,12 +43,27 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// extended tier without the activate_tools meta-tools, so leaving the provider
 		// empty here made every extended call answer "is not activated" with no fix.
 		run.setProvider(ag.Provider)
+		// Record steer deliverability for this turn, exactly like the chat path. An
+		// autonomous turn has no request-level override, so the effective mode is the
+		// agent's own. Without this the field stayed false and a steer aimed at an
+		// autonomous claude-cli turn in ask/read-only mode — where the permission-prompt
+		// boundary DOES exist and can carry it — was reported "unsupported".
+		run.setSteerable(steerableForTurn(ag.Provider, ag.PermissionMode))
 
 		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact
 		// / update_artifact work on autonomous CLI turns too (otherwise the bridge
 		// reports "artifacts are not available for this turn"). Mirrors the chat path's
 		// setArtifacts. Only when we know the session to stamp artifacts with.
 		if sessionID != "" {
+			// Permission grants (CLI path): bind the SAME session-scoped grant set the
+			// chat path uses, so an "Always allow" decision is remembered across turns and
+			// SK-3's allowed-tools auto-grant actually lands — grantSkillToolsCLI bails out
+			// on a nil store, which silently disabled it on every autonomous turn. Also
+			// attached to ctx (the tool loop reassigns the turn ctx to the one returned
+			// here) so the native gate sees the same grants.
+			grants := s.grants.forSession(rt.WorkspaceID(), sessionID)
+			run.setGrants(grants)
+			ctx = tools.WithGrants(ctx, grants)
 			run.setArtifacts(rt.NewArtifactSink(sessionID, ag.ID))
 			// notify (CLI path): bind a notify sink so an autonomous claude-cli agent
 			// can raise a desktop notification (e.g. "long job finished"). Publishes an
