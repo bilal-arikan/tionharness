@@ -48,6 +48,14 @@ const (
 	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
 )
 
+// DefaultAgentMessageMaxBytes bounds a single agent→agent / coordinator→worker
+// message body. An oversized message is refused with an explicit
+// message_too_large error rather than being silently truncated or dropped; the
+// one exception is the one-way worker notification path, which has no sender to
+// return an error to and is therefore capped with a visible marker instead.
+// Settings-driven (AgentMessageMaxKB) via applySettings; 0 selects this default.
+const DefaultAgentMessageMaxBytes = 64 * 1024
+
 // DefaultSpawnTimeoutMinutes bounds a single background spawn work turn (plus the
 // auto-continue continuations that share its context). Settings-driven
 // (SpawnTimeoutMinutes) via applySettings; 0 selects this default.
@@ -153,6 +161,7 @@ type Tunables struct {
 	delegMaxDepth    int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls    int  // 0 → DefaultMaxDelegationCalls
 
+	agentMsgMaxBytes    int // 0 → DefaultAgentMessageMaxBytes (per-message body cap)
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
 	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
@@ -493,6 +502,24 @@ func (t *Tunables) SetSpawnLimits(maxConcurrent, queueMax, maxPerTurn int) {
 	t.spawnQueueMax = queueMax
 	t.spawnMaxPerTurn = maxPerTurn
 	t.mu.Unlock()
+}
+
+// SetAgentMessageMaxBytes sets the per-message body cap for agent messaging.
+// A value of 0 selects the built-in default.
+func (t *Tunables) SetAgentMessageMaxBytes(n int) {
+	t.mu.Lock()
+	t.agentMsgMaxBytes = n
+	t.mu.Unlock()
+}
+
+// AgentMessageMaxBytes returns the per-message body cap (default when unset).
+func (t *Tunables) AgentMessageMaxBytes() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.agentMsgMaxBytes <= 0 {
+		return DefaultAgentMessageMaxBytes
+	}
+	return t.agentMsgMaxBytes
 }
 
 // SpawnQueueMax returns the cap on queued spawned sessions (default when unset).

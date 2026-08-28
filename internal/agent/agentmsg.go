@@ -60,10 +60,14 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	if target.ID == fromAgentID {
 		return "", fmt.Errorf("cannot send a message to yourself")
 	}
-	if err := r.deliverOne(ctx, fromAgentID, fromName, target, summary, message); err != nil {
+	receipt, err := r.deliverOne(ctx, fromAgentID, fromName, target, summary, message)
+	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Message delivered to %q (inbox). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name), nil
+	if receipt.Status == db.DeliveryHeld {
+		return heldNotice(receipt), nil
+	}
+	return fmt.Sprintf("Message delivered to %q (inbox, receipt %s). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name, receipt.ID), nil
 }
 
 // broadcastAgentMessage delivers a message to every other agent's inbox. Each
@@ -74,36 +78,78 @@ func (r *Runtime) broadcastAgentMessage(ctx context.Context, fromAgentID, fromNa
 	if err != nil {
 		return "", err
 	}
-	delivered, skipped := 0, 0
+	delivered, skipped, held := 0, 0, 0
 	for _, a := range agents {
 		if a.ID == fromAgentID {
 			continue
 		}
-		if err := r.deliverOne(ctx, fromAgentID, fromName, a, summary, message); err != nil {
+		receipt, err := r.deliverOne(ctx, fromAgentID, fromName, a, summary, message)
+		if err != nil {
 			skipped++
 			r.logger.Warn("broadcast: delivery skipped", "to", a.ID, "error", err)
+			continue
+		}
+		if receipt.Status == db.DeliveryHeld {
+			held++
 			continue
 		}
 		delivered++
 	}
 	if delivered == 0 {
+		if held > 0 {
+			return fmt.Sprintf("Broadcast delivered to no one right now: %d recipient(s) hold incoming messages for approval, %d refused/failed.", held, skipped), nil
+		}
 		if skipped > 0 {
 			return "", fmt.Errorf("broadcast reached no one (%d recipient(s) over the delivery limit); try again shortly", skipped)
 		}
 		return "", fmt.Errorf("no other agents in this workspace to broadcast to")
 	}
 	out := fmt.Sprintf("Broadcast delivered to %d agent(s); each processes it in its own inbox in the background.", delivered)
+	if held > 0 {
+		out += fmt.Sprintf(" %d held for approval (not delivered yet).", held)
+	}
 	if skipped > 0 {
-		out += fmt.Sprintf(" %d skipped (delivery limit).", skipped)
+		out += fmt.Sprintf(" %d skipped (refused or over the delivery limit).", skipped)
 	}
 	return out, nil
 }
 
-// deliverOne appends the sender-tagged message to one recipient's inbox and fires
-// its background turn (fire-and-forget). Takes a concurrency slot, released when
-// the inbox turn finishes. fromAgentID is the sender (the message author in the
-// participant model); fromName is its display name for the visible tag.
-func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, target db.Agent, summary, message string) error {
+// deliverOne runs the recipient-side gate (size limit + inbound policy, see
+// inbound.go) for one recipient and, when the policy accepts, performs the
+// delivery. It returns the durable receipt so the caller can tell the sender
+// exactly what happened — accepted, held, or (via the error) refused/dropped.
+// fromAgentID is the sender (the message author in the participant model);
+// fromName is its display name for the visible tag.
+func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, target db.Agent, summary, message string) (db.AgentMessage, error) {
+	// ToSessionID is deliberately empty here: the inbox session is created on
+	// demand by deliverToInbox, so a peer DM is gated on the recipient AGENT's
+	// policy. A per-session override applies to sessions that already exist
+	// (worker sessions — see SendToWorker).
+	receipt, err := r.gateInbound(ctx, db.AgentMessage{
+		FromAgentID: fromAgentID,
+		FromName:    fromName,
+		ToAgentID:   target.ID,
+		Channel:     db.ChannelInbox,
+		Summary:     summary,
+		Body:        message,
+	})
+	if err != nil {
+		return db.AgentMessage{}, err
+	}
+	if receipt.Status == db.DeliveryHeld {
+		return receipt, nil
+	}
+	if err := r.deliverToInbox(ctx, fromAgentID, fromName, target, summary, message); err != nil {
+		return db.AgentMessage{}, r.dropDelivery(ctx, receipt.ID, err)
+	}
+	return receipt, nil
+}
+
+// deliverToInbox appends the sender-tagged message to one recipient's inbox and
+// fires its background turn (fire-and-forget). Takes a concurrency slot, released
+// when the inbox turn finishes. Called only after the gate accepted the delivery
+// (directly, or later when a held message is released).
+func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName string, target db.Agent, summary, message string) error {
 	if !r.acquireSpawnSlot() {
 		return fmt.Errorf("message delivery limit reached (%d concurrent background turns); try again once some finish", r.tun.SpawnMaxConcurrent())
 	}

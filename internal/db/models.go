@@ -86,6 +86,14 @@ type Agent struct {
 	// flags (headless mode refuses edits without an explicit mode).
 	PermissionMode string `json:"permissionMode"`
 
+	// InboundPolicy decides what happens to messages ADDRESSED AT this agent
+	// (send_message into its inbox, send_to_worker into one of its worker
+	// sessions): "accept" | "hold" | "refuse". Empty = unset = accept, which is
+	// exactly the behaviour before this field existed, so old agent rows keep
+	// working unchanged. A session may override it (Session.InboundPolicy).
+	// See internal/db/models_agentmsg.go.
+	InboundPolicy string `json:"inboundPolicy,omitempty"`
+
 	// Visual identity for the roster avatar. Avatar holds an optional emoji/glyph
 	// rendered inside the circle; Color is an optional hex accent (e.g. "#7c3aed").
 	// Both may be empty — the frontend then derives a deterministic look from ID.
@@ -266,10 +274,20 @@ func MachineTranscriptKinds() []string {
 // turn and a scheduled turn both claim the session's single turn slot (turnqueue),
 // which serializes them instead of letting them interleave.
 //
+// "automation-run" and "schedule-run" are writable for the same reason: a
+// one-shot automation fire (see internal/agent.SessionKindAutomationRun) or a
+// spawn-mode schedule fire's own fresh session is a linear transcript like
+// "spawned", just tagged distinctly so the sidebar groups it under "Otomasyon"
+// instead of "Spawn". Neither reuses the plain "automation"/"schedule" kind: those
+// are looked up by (agentID, Kind) alone (SourceID ignored, see
+// getOrCreateKindSession/GetOrCreateSourceSession), so a one-shot fire tagged with
+// the shared kind would collide with — and silently absorb turns meant for — the
+// agent's one persistent maintenance/cron thread.
+//
 // This list is the single source of truth for the whole product; the frontend's
 // isWritableSessionKind (frontend/src/shared/lib/sessionKind.ts) mirrors it and the
 // two must be changed together.
-var writableSessionKindList = []string{"", "chat", "spawned", "schedule"}
+var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "automation-run", "schedule-run"}
 
 // IsWritableSessionKind reports whether a new user turn may be started in a
 // session of this kind (see writableSessionKindList).
@@ -359,6 +377,12 @@ type Session struct {
 
 	// Pinned keeps the session at the top of the sidebar list regardless of recency.
 	Pinned bool `json:"pinned,omitempty"`
+
+	// InboundPolicy overrides the recipient agent's inbound policy for messages
+	// delivered INTO this session ("accept" | "hold" | "refuse"). Empty = inherit
+	// the agent's, which itself defaults to accept. Lets one worker session be
+	// put on hold without changing the agent for every other session.
+	InboundPolicy string `json:"inboundPolicy,omitempty"`
 
 	// Tags are free-form labels on the session, editable by both the user (UI) and
 	// agents (set_session_tags). They organize sessions and, crucially, drive

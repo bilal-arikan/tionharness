@@ -36,21 +36,24 @@ func newID() string { return uuid.NewString() }
 type DB struct {
 	root string // store root directory
 
-	mu           sync.RWMutex
-	agents       map[string]Agent
-	sessions     map[string]Session
-	messages     map[string][]Message // keyed by session id, chronological
-	tasks        map[string]Task
-	schedules    map[string]Schedule
-	mcp          map[string]MCPServer
-	flows        map[string]Flow
-	flowRuns     map[string]FlowRun
-	sessionAsks  map[string]SessionAsk // durable ask suspend/resume (MVP)
-	automations  map[string]Automation
-	artifacts    map[string]Artifact
-	hooks        map[string]Hook
-	usage        map[string]Usage        // keyed by agentID + "|" + day
-	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
+	mu          sync.RWMutex
+	agents      map[string]Agent
+	sessions    map[string]Session
+	messages    map[string][]Message // keyed by session id, chronological
+	tasks       map[string]Task
+	schedules   map[string]Schedule
+	mcp         map[string]MCPServer
+	flows       map[string]Flow
+	flowRuns    map[string]FlowRun
+	sessionAsks map[string]SessionAsk // durable ask suspend/resume (MVP)
+	// agentMessages holds the delivery receipts for agent→agent / coordinator→
+	// worker messages, including the parked bodies of held ones.
+	agentMessages map[string]AgentMessage
+	automations   map[string]Automation
+	artifacts     map[string]Artifact
+	hooks         map[string]Hook
+	usage         map[string]Usage        // keyed by agentID + "|" + day
+	sessionUsage  map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
@@ -139,6 +142,7 @@ func Open(path string) (*DB, error) {
 		flows:            map[string]Flow{},
 		flowRuns:         map[string]FlowRun{},
 		sessionAsks:      map[string]SessionAsk{},
+		agentMessages:    map[string]AgentMessage{},
 		automations:      map[string]Automation{},
 		artifacts:        map[string]Artifact{},
 		hooks:            map[string]Hook{},
@@ -204,6 +208,7 @@ const (
 	dirFlows        = "flows"
 	dirFlowRuns     = "flow-runs"
 	dirSessionAsks  = "session-asks"
+	dirAgentMsgs    = "agent-messages"
 	dirAutomations  = "automations"
 	dirArtifacts    = "artifacts"
 	dirRender       = "render" // per-session render_template output (transient, swept)
@@ -227,6 +232,7 @@ const (
 	idFlow       = "FLW"
 	idFlowRun    = "RUN"
 	idSessionAsk = "SAK"
+	idAgentMsg   = "AMS"
 	idArtifact   = "ART"
 	idKnowledge  = "MEM"
 	idMCP        = "MCP"
@@ -445,6 +451,14 @@ func (d *DB) load() error {
 	}
 	for _, a := range sessionAsks {
 		d.sessionAsks[a.ID] = a
+	}
+
+	agentMessages, err := loadJSONDir[AgentMessage](d.dir(dirAgentMsgs))
+	if err != nil {
+		return err
+	}
+	for _, m := range agentMessages {
+		d.agentMessages[m.ID] = m
 	}
 
 	automations, err := loadJSONDir[Automation](d.dir(dirAutomations))

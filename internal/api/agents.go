@@ -349,6 +349,9 @@ type updateAgentReq struct {
 	Model          *string `json:"model"`
 	ThinkingLevel  *string `json:"thinkingLevel"`
 	PermissionMode *string `json:"permissionMode"`
+	// InboundPolicy is the recipient-side messaging policy: "accept" (default) |
+	// "hold" | "refuse". "" resets to the default. See internal/agent/inbound.go.
+	InboundPolicy *string `json:"inboundPolicy"`
 	// NativeWebSearch toggles the provider's own web search. Pointer so omitting
 	// it leaves the stored value alone and an explicit false turns it off.
 	NativeWebSearch *bool     `json:"nativeWebSearch"`
@@ -414,6 +417,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		ThinkingLevel:       req.ThinkingLevel,
 		NativeWebSearch:     req.NativeWebSearch,
 		PermissionMode:      req.PermissionMode,
+		InboundPolicy:       req.InboundPolicy,
 		Avatar:              req.Avatar,
 		Color:               req.Color,
 		Skills:              req.Skills,

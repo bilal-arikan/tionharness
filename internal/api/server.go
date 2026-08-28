@@ -286,6 +286,7 @@ func (s *Server) applySettings() {
 	s.tun.SetTurnIdleWatchdogMinutes(cur.TurnIdleWatchdogMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
+	s.tun.SetAgentMessageMaxBytes(cur.AgentMessageMaxKB * 1024)
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns,
 		cur.CoordinatorMaxDepth, cur.CoordinatorMaxSubtreeSessions)
 	s.tun.SetCoordinatorSettleGrace(cur.CoordinatorSettleGraceSec)
@@ -716,6 +717,12 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/artifacts/{id}/archive", s.handleSetArtifactArchived)
 	// Locate the artifact on disk (copy-path action).
 	mux.HandleFunc("GET /api/artifacts/{id}/path", s.handleArtifactPath)
+
+	// Inbound-message hold queue (agent_messages.go): list what a "hold" policy
+	// has parked, then release (deliver now) or refuse it.
+	mux.HandleFunc("GET /api/agent-messages/held", s.handleListHeldAgentMessages)
+	mux.HandleFunc("POST /api/agent-messages/{id}/release", s.handleReleaseAgentMessage)
+	mux.HandleFunc("POST /api/agent-messages/{id}/refuse", s.handleRefuseAgentMessage)
 }
 
 // registerSkillRoutes registers the file-based skill catalog (reusable agent

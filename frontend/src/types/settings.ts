@@ -130,6 +130,9 @@ export interface AppSettings {
   shellDefaultTimeoutSec: number
   shellMaxTimeoutSec: number
   maxToolOutputKB: number
+  // Per-message byte cap (in KB) for send_message / send_to_worker; over it the
+  // call fails with an explicit message_too_large error.
+  agentMessageMaxKB: number
 
   // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap,
   // plus the TREE guards. The per-coordinator worker cap is enforced per node, so

@@ -260,8 +260,13 @@ func treeBudgetLine(used, total int) string {
 // see the worker is genuinely busy rather than wedged — and therefore keep
 // waiting instead of issuing a destructive stop_worker.
 type SendResult struct {
-	Delivered         bool
-	Queued            bool
+	Delivered bool
+	Queued    bool
+	// Held reports that the worker's inbound policy parked the message for
+	// approval: it is durably stored under ReceiptID but was NOT delivered and no
+	// turn was started. Distinct from Queued, which is delivered-on-turn-end.
+	Held              bool
+	ReceiptID         string
 	RunningForSeconds int64
 }
 
@@ -314,6 +319,11 @@ func (SendToWorkerTool) Call(ctx context.Context, input json.RawMessage) (string
 	res, err := f.Send(ctx, in.Worker, in.Message)
 	if err != nil {
 		return "", err
+	}
+	if res.Held {
+		return fmt.Sprintf("Worker %s HOLDS incoming messages for approval, so your follow-up was stored (receipt %s) and NOT delivered: "+
+			"no turn was started and no <task-notification> will follow until it is released. Do not resend the same message; "+
+			"plan for the worker to stay idle until a human approves it.", in.Worker, res.ReceiptID), nil
 	}
 	if res.Queued {
 		busy := ""

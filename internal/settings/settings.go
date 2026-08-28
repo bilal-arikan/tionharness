@@ -346,6 +346,11 @@ type Settings struct {
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 30); per-call timeout_sec still overrides
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`     // hard-max Bash/PowerShell timeout in seconds (0 = default 120)
 	MaxToolOutputKB        int `json:"maxToolOutputKB"`        // backstop cap on a tool's output in KB before truncation (0 = default 100)
+	// AgentMessageMaxKB caps a single agent→agent (send_message) or coordinator→
+	// worker (send_to_worker) message body. Over the cap the call fails with an
+	// explicit message_too_large error; the one-way worker notification path is
+	// capped with a visible marker instead (0 = default 64). _Docs/47.
+	AgentMessageMaxKB int `json:"agentMessageMaxKB"`
 
 	// Coordinator/worker guards (M2, _Docs/47).
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
@@ -522,6 +527,7 @@ func Default() Settings {
 		ShellDefaultTimeoutSec: 30,
 		ShellMaxTimeoutSec:     120,
 		MaxToolOutputKB:        100,
+		AgentMessageMaxKB:      64,
 
 		CoordinatorMaxWorkers:         8,
 		CoordinatorMaxTurns:           -1, // unlimited (not user-configurable; see normalize)
@@ -660,6 +666,7 @@ type DTO struct {
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        int `json:"maxToolOutputKB"`
+	AgentMessageMaxKB      int `json:"agentMessageMaxKB"`
 
 	CoordinatorMaxWorkers         int  `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns           int  `json:"coordinatorMaxTurns"`
@@ -777,6 +784,7 @@ func (s Settings) ToDTO() DTO {
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
 		MaxToolOutputKB:        s.MaxToolOutputKB,
+		AgentMessageMaxKB:      s.AgentMessageMaxKB,
 
 		CoordinatorMaxWorkers:         s.CoordinatorMaxWorkers,
 		CoordinatorMaxTurns:           s.CoordinatorMaxTurns,
@@ -896,6 +904,7 @@ type Patch struct {
 	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        *int `json:"maxToolOutputKB"`
+	AgentMessageMaxKB      *int `json:"agentMessageMaxKB"`
 
 	CoordinatorMaxWorkers         *int  `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns           *int  `json:"coordinatorMaxTurns"`

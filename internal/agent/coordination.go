@@ -744,6 +744,24 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 		return tools.SendResult{}, err
 	}
 
+	// Recipient-side gate (size limit + inbound policy, inbound.go). Runs BEFORE
+	// the queue/dispatch decision so a refused or held follow-up neither takes a
+	// queue slot nor starts a turn, and the coordinator gets a durable receipt
+	// either way instead of a bare error string.
+	receipt, err := r.gateInbound(ctx, db.AgentMessage{
+		FromName:    coordSessionID,
+		ToAgentID:   agent.ID,
+		ToSessionID: workerSessionID,
+		Channel:     db.ChannelWorker,
+		Body:        message,
+	})
+	if err != nil {
+		return tools.SendResult{}, err
+	}
+	if receipt.Status == db.DeliveryHeld {
+		return tools.SendResult{Held: true, ReceiptID: receipt.ID}, nil
+	}
+
 	// Backpressure instead of rejection: a worker mid-turn no longer loses the
 	// message. The busy-check and the enqueue are done under workerQueueMu in one
 	// critical section so they stay atomic against drainWorkerQueue, which pops
@@ -755,21 +773,51 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 		queue := r.workerQueue[workerSessionID]
 		if len(queue) >= maxWorkerQueueDepth {
 			r.workerQueueMu.Unlock()
-			return tools.SendResult{}, fmt.Errorf("worker %s already has %d queued messages (max %d); wait for them to be delivered before sending another",
-				workerSessionID, len(queue), maxWorkerQueueDepth)
+			return tools.SendResult{}, r.dropDelivery(ctx, receipt.ID, fmt.Errorf("worker %s already has %d queued messages (max %d); wait for them to be delivered before sending another",
+				workerSessionID, len(queue), maxWorkerQueueDepth))
 		}
 		r.workerQueue[workerSessionID] = append(queue, message)
 		r.workerQueueMu.Unlock()
-		return tools.SendResult{Queued: true, RunningForSeconds: r.workerRunningForSeconds(workerSessionID)}, nil
+		return tools.SendResult{Queued: true, ReceiptID: receipt.ID, RunningForSeconds: r.workerRunningForSeconds(workerSessionID)}, nil
 	}
 	r.workerQueueMu.Unlock()
 
 	// Worker is idle: deliver immediately (same depth-aware slot reservation as a
 	// fresh spawn — continuing a deep worker drains the pool just as a spawn does).
 	if err := r.dispatchWorkerTurn(ctx, agent, workerSessionID, message, coordSessionID, ws.CoordinatorDepth); err != nil {
-		return tools.SendResult{}, err
+		return tools.SendResult{}, r.dropDelivery(ctx, receipt.ID, err)
 	}
-	return tools.SendResult{Delivered: true}, nil
+	return tools.SendResult{Delivered: true, ReceiptID: receipt.ID}, nil
+}
+
+// deliverToWorker re-dispatches a previously HELD worker follow-up once it has
+// been approved (see inbound.go). It re-reads the worker session for its current
+// coordinator/depth rather than trusting stale values captured at hold time.
+func (r *Runtime) deliverToWorker(ctx context.Context, workerSessionID, message string) error {
+	ws, err := r.db.GetSession(ctx, workerSessionID)
+	if err != nil {
+		return fmt.Errorf("worker session %s not found: %w", workerSessionID, err)
+	}
+	agent, err := r.db.GetAgent(ctx, ws.AgentID)
+	if err != nil {
+		return fmt.Errorf("worker agent gone: %w", err)
+	}
+	if err := r.applyProfileAllowlist(&agent); err != nil {
+		return err
+	}
+	r.workerQueueMu.Lock()
+	if r.isSessionActive(workerSessionID) {
+		queue := r.workerQueue[workerSessionID]
+		if len(queue) >= maxWorkerQueueDepth {
+			r.workerQueueMu.Unlock()
+			return fmt.Errorf("worker %s queue is full (max %d)", workerSessionID, maxWorkerQueueDepth)
+		}
+		r.workerQueue[workerSessionID] = append(queue, message)
+		r.workerQueueMu.Unlock()
+		return nil
+	}
+	r.workerQueueMu.Unlock()
+	return r.dispatchWorkerTurn(ctx, agent, workerSessionID, message, ws.CoordinatorSessionID, ws.CoordinatorDepth)
 }
 
 // dispatchWorkerTurn reserves a background slot, records the follow-up as an
@@ -1268,6 +1316,16 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 	coordSessionID = strings.TrimSpace(coordSessionID)
 	if coordSessionID == "" || strings.TrimSpace(note) == "" {
 		return
+	}
+	// Same byte limit as send_message / send_to_worker, applied differently: this
+	// path is ONE-WAY (the worker turn that produced the note is already over), so
+	// there is nobody to hand a message_too_large error back to. Refusing here
+	// would leave the coordinator waiting forever for a worker that has finished,
+	// so an oversized note is cut and the cut is stated explicitly instead.
+	if capped, cut := capNotification(note, r.tun.AgentMessageMaxBytes()); cut {
+		r.logger.Warn("coordination: task-notification capped",
+			"coordinator", coordSessionID, "bytes", len(note), "max", r.tun.AgentMessageMaxBytes())
+		note = capped
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "worker-note", note); err != nil {

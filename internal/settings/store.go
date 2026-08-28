@@ -230,6 +230,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
 	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
 	applyInt(&next.MaxToolOutputKB, p.MaxToolOutputKB)
+	applyInt(&next.AgentMessageMaxKB, p.AgentMessageMaxKB)
 	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
 	applyInt(&next.CoordinatorMaxDepth, p.CoordinatorMaxDepth)
