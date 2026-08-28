@@ -717,6 +717,25 @@ Tam zincir **claude → gateway → pool → backend MCP** doğrulandı (num_tur
   Karakterizasyon golden'ları refactor öncesi yakalandı
   (`internal/tools/bundlelistrender_test.go`,
   `internal/api/gateway_bundlelist_test.go`).
+- ✅ **Aktivasyon SONUÇ metni — birleştirilmedi, kilitlendi (2026-08-28):** aynı
+  disiplin üçüncü yüzeye uygulandı ama sonuç ters çıktı: `activate_tools` /
+  `deactivate_tools` / `active_tools` sonuç metinlerinde native ile gateway
+  arasında **kopya yok**. İki yol tek bir bayt bile paylaşmıyor ve bölüm dilbilgisi
+  de örtüşmüyor — native adları açıklamalarıyla satır satır basar
+  (`Activated %d tool(s)…` + `- ad — açıklama`), gateway adları tek satırda
+  namespace'li ve virgülle basar (`activated: mcp__tionharness_extended__…` +
+  `Call each by this exact (namespaced) name.`); native'in `Already active: %s`
+  bölümü adları sayar, gateway'in `no new tools activated (already active or none
+  valid)` karşılığı saymaz; native'de her bölüm `\n` ile biter ve sonuç
+  `TrimSpace`'lenir, gateway'de tutkal bölüm başına değişir (`\n`, `; `) ve trim
+  yoktur. Native'de always-on ve açık-demet notları vardır, gateway'de karşılığı
+  yoktur; gateway'de push notu ve `IsError` bayrağı vardır, native'de yoktur. Geriye
+  ortak olarak yalnız `strings.Join` kalıyor — onu bir yardımcıya sarmak her yolun
+  metnini üretildiği yerden koparıp ikinci bir dosyaya dağıtacağı için drift riskini
+  **artırır**. Bunun yerine iki sözleşme bağımsız birer karakterizasyon testiyle
+  bayt bayt sabitlendi: `internal/tools/builtin_activate_result_test.go`,
+  `internal/api/gateway_activate_result_test.go`. Böylece `tool_search` ve demet
+  listeleme birleştirmeleriyle açılan "yarım-port render kopyası" sınıfı **kapandı**.
 
 ### ✅ VPS göç aracı (2026-07-06)
 
