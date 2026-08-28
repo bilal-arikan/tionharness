@@ -3,22 +3,12 @@
 import type { ToolAccessEntry } from '@/types'
 import { compareText } from '@/shared/lib/intl'
 
-// A tool's context state: whether its schema rides in the prompt right now
-// ('in-context', always true for the eager tab) or only sits in the
-// load-on-demand catalog until activated ('optional', the lazy tab's
-// catalogued entries — 'hidden' tier tools also land here since they remain
-// callable via tool_search/activate_tools, just uncatalogued).
-export type ToolContextState = 'in-context' | 'optional'
-
-export interface ToolContextGroup {
-  key: ToolContextState
-  label: string
-  tools: ToolAccessEntry[]
-}
-
-const CONTEXT_GROUP_LABELS: Record<ToolContextState, string> = {
-  'in-context': 'Bağlamda',
-  optional: 'İsteğe bağlı',
+// sortTools orders a tool list the way the inspector shows it: alphabetically by
+// un-namespaced label, regardless of source. Built-in and MCP tools mix freely —
+// the tab already answers "is it in context", so source is a per-row badge, not a
+// grouping key. Returns a new array; the input is left untouched.
+export function sortTools(tools: ToolAccessEntry[]): ToolAccessEntry[] {
+  return [...tools].sort((a, b) => compareText(a.label, b.label))
 }
 
 // filterTools narrows a list by a free-text query matched against the tool name,
@@ -45,26 +35,4 @@ export function toolsForServer(
       .filter((t) => t.source === 'mcp' && t.server === serverName)
       .sort((a, b) => compareText(a.label, b.label))
   return [...pick(tools.eager), ...pick(tools.lazy)]
-}
-
-// groupToolsByContext buckets tools by whether they occupy prompt context right
-// now, NOT by where they come from — a built-in and an MCP tool with the same
-// state land in the same group. 'in-context' always sorts first; empty buckets
-// are dropped so an all-eager or all-optional list renders a single group.
-export function groupToolsByContext(tools: ToolAccessEntry[]): ToolContextGroup[] {
-  const buckets: Record<ToolContextState, ToolAccessEntry[]> = {
-    'in-context': [],
-    optional: [],
-  }
-  for (const t of tools) {
-    buckets[t.inContext ? 'in-context' : 'optional'].push(t)
-  }
-  const order: ToolContextState[] = ['in-context', 'optional']
-  return order
-    .filter((key) => buckets[key].length > 0)
-    .map((key) => ({
-      key,
-      label: CONTEXT_GROUP_LABELS[key],
-      tools: [...buckets[key]].sort((a, b) => compareText(a.label, b.label)),
-    }))
 }

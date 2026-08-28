@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { api } from '@/api'
 import type { AgentToolAccess } from '@/types'
-import { filterTools } from './toolAccessGroups'
-import { ServerList, ToolGroupList } from './ToolAccessList'
+import { ServerList, ToolList } from './ToolAccessList'
 
 interface Props {
   // The composer's selected agent — tool access is per-agent (workspace catalog
@@ -17,8 +16,9 @@ type Tab = 'eager' | 'lazy' | 'servers'
 // ToolAccessPanel is a READ-ONLY inspector: which tools the selected agent can
 // use right now, and what the MCP gateway has open vs what it could open.
 //
-// The split it shows is the one that actually costs tokens:
-//   - "Aktif" (eager): full schemas are shipped with every turn.
+// The split it shows is the one that actually costs tokens. Each tool tab is ONE
+// flat list — built-in and MCP tools mix, told apart by their row badges:
+//   - "Bağlamda" (eager): full schemas are shipped with every turn.
 //   - "Talep üzerine" (lazy): only name/description sit in the load-on-demand
 //     catalog; the agent pulls the schema in mid-turn via tool_search /
 //     activate_tools. These are the tools it CAN activate but has not.
@@ -72,7 +72,7 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
   const hiddenCount = data?.lazy.filter((t) => !t.inContext).length ?? 0
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'eager', label: 'Aktif', count: data?.eager.length },
+    { id: 'eager', label: 'Bağlamda', count: data?.eager.length },
     { id: 'lazy', label: 'Talep üzerine', count: data?.lazy.length },
     { id: 'servers', label: 'MCP', count: data?.servers.length },
   ]
@@ -151,8 +151,20 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
           </p>
 
           <div className="max-h-[22rem] overflow-y-auto pr-1">
-            {tab === 'eager' && <ToolGroupList tools={filterTools(data.eager, query)} />}
-            {tab === 'lazy' && <ToolGroupList tools={filterTools(data.lazy, query)} />}
+            {tab === 'eager' && (
+              <ToolList
+                tools={data.eager}
+                query={query}
+                empty="Bu ajana her tur şeması gönderilen araç yok."
+              />
+            )}
+            {tab === 'lazy' && (
+              <ToolList
+                tools={data.lazy}
+                query={query}
+                empty="Talep üzerine yüklenebilecek araç yok — tüm araçlar zaten bağlamda."
+              />
+            )}
             {tab === 'servers' && (
               <ServerList
                 servers={data.servers}

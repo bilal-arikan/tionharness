@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ToolAccessEntry, ToolAccessServer, ToolAccessServerStatus } from '@/types'
 import { visibilityMeta } from '@/features/tools/toolMeta'
-import { filterTools, groupToolsByContext, toolsForServer } from './toolAccessGroups'
+import { filterTools, sortTools, toolsForServer } from './toolAccessGroups'
 
 // TierBadge shows the tool's effective visibility tier (Tam / Özet / İsim / Gizli)
 // — i.e. how much of its schema reaches the model, which is the real cost driver.
@@ -67,10 +67,9 @@ function hiddenHint(count: number): string {
 }
 
 // SourceBadge names where a tool comes from — a built-in category or an MCP
-// server — as a small secondary tag on the row. It is NOT a grouping key
-// anymore (see groupToolsByContext): a built-in and an MCP tool with the same
-// context state sit in the same group, this badge is the only place source
-// still shows.
+// server — as a small secondary tag on the row. It is NOT a grouping key: each
+// tab is one flat list where built-in and MCP tools mix, so this badge is the
+// only place source still shows.
 function SourceBadge({ t }: { t: ToolAccessEntry }) {
   const label = t.source === 'mcp' ? t.server || 'MCP' : (t.category ?? 'builtin')
   return (
@@ -80,61 +79,46 @@ function SourceBadge({ t }: { t: ToolAccessEntry }) {
   )
 }
 
-// ToolGroupList groups tools by CONTEXT STATE (in prompt now vs. on-demand
-// catalog only) rather than by source, so built-in and MCP tools mix freely
-// within a group. Each group is foldable — the same fold affordance the MCP
-// server rows use — regardless of which sources it contains.
-export function ToolGroupList({ tools }: { tools: ToolAccessEntry[] }) {
-  const groups = groupToolsByContext(tools)
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
-  if (groups.length === 0) {
-    return <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">Eşleşen araç yok.</div>
+// ToolList renders ONE tab's tools as a single flat, alphabetical list. The tab
+// itself is the context split (in context vs. on demand), so there is no second
+// level of grouping here and no source split either — built-in and MCP rows sit
+// side by side, told apart by their badges.
+//
+// `empty` is the message for a genuinely empty tab; a query that matches nothing
+// says so instead, because the two mean very different things.
+export function ToolList({
+  tools,
+  query,
+  empty,
+}: {
+  tools: ToolAccessEntry[]
+  query: string
+  empty: string
+}) {
+  const shown = sortTools(filterTools(tools, query))
+  if (shown.length === 0) {
+    return (
+      <div className="px-1 py-3 text-xs text-[var(--color-text-dim)]">
+        {tools.length === 0 ? empty : 'Aramayla eşleşen araç yok.'}
+      </div>
+    )
   }
-  const toggle = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
   return (
-    <div className="flex flex-col gap-3">
-      {groups.map((g) => {
-        const open = !collapsed.has(g.key)
-        return (
-          <div key={g.key}>
-            <button
-              type="button"
-              onClick={() => toggle(g.key)}
-              aria-expanded={open}
-              data-testid="tool-context-group-toggle"
-              data-group={g.key}
-              className="mb-1 flex w-full items-center gap-1.5 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]"
-            >
-              {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <span>{g.label}</span>
-              <span className="opacity-60">({g.tools.length})</span>
-            </button>
-            {open && (
-              <div className="flex flex-col">
-                {g.tools.map((t) => (
-                  <div
-                    key={t.name}
-                    className="flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-[var(--color-surface-2)]"
-                  >
-                    <code className="shrink-0 text-xs text-[var(--color-text)]">{t.label}</code>
-                    <TierBadge visibility={t.visibility} />
-                    <SourceBadge t={t} />
-                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-dim)]">
-                      {t.description}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+    <div className="flex flex-col">
+      {shown.map((t) => (
+        <div
+          key={t.name}
+          data-testid="tool-access-row"
+          className="flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-[var(--color-surface-2)]"
+        >
+          <code className="shrink-0 text-xs text-[var(--color-text)]">{t.label}</code>
+          <TierBadge visibility={t.visibility} />
+          <SourceBadge t={t} />
+          <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-dim)]">
+            {t.description}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
