@@ -21,6 +21,9 @@ export interface TaskCardMeta {
   depIds: string[]
   unmetDeps: string[]
   unmetColColor: string | null
+  /** Preview of the last image attached to the card: the serving URL plus the
+   *  artifact title for alt text. null when the card has no image attachment. */
+  image: { url: string; title: string } | null
 }
 
 interface Props {
@@ -29,6 +32,9 @@ interface Props {
   selected: boolean
   /** An OS file drag is hovering THIS card (ring highlight). */
   fileDropActive: boolean
+  /** This card changed since the board was last opened — glows until the
+   *  board view is left (the flag resets on unmount, not on a timer). */
+  recentlyChanged: boolean
   /** Today in ISO, for the due-date chip. Passed in so every card agrees. */
   today: string
   /** This card's position among the board's current columns, for the keyboard
@@ -62,6 +68,7 @@ function TaskCardImpl({
   meta,
   selected,
   fileDropActive,
+  recentlyChanged,
   today,
   columnIndex,
   columnCount,
@@ -75,7 +82,7 @@ function TaskCardImpl({
   onMoveColumn,
   onUnarchive,
 }: Props) {
-  const { owner, flow, depIds, unmetDeps, unmetColColor } = meta
+  const { owner, flow, depIds, unmetDeps, unmetColColor, image } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
   const pending = t.id.startsWith('temp-')
 
@@ -139,6 +146,10 @@ function TaskCardImpl({
       className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
       } ${
+        recentlyChanged && !pending
+          ? 'shadow-[0_0_0_1px_var(--color-accent),0_0_14px_2px_var(--color-accent)]'
+          : ''
+      } ${
         pending
           ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
           : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
@@ -160,6 +171,23 @@ function TaskCardImpl({
         >
           <ArchiveRestore size={11} /> Geri al
         </button>
+      )}
+      {/* Attachment preview: the last image attached to the card, above the
+          title. The box is a fixed 4:3 so the preview never grows taller than
+          three quarters of the card width whatever the image's own ratio is;
+          object-cover squeezes an off-ratio image into that box instead of
+          letting it letterbox or push the rest of the card down. Cards without
+          an image attachment render exactly as before — no placeholder. */}
+      {image && (
+        <div className="mb-2 aspect-[4/3] w-full overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
+          <img
+            src={image.url}
+            alt={image.title}
+            draggable={false}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        </div>
       )}
       <div className="font-medium">{t.title}</div>
       {pending ? (

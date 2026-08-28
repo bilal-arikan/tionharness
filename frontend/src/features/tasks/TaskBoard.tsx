@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import type { Agent, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
+import type { Agent, Artifact, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
+import { fileURL } from '@/shared/lib/attachments'
+import { pickCardImage } from './cardImage'
 import { ViewButton } from '@/features/view/ViewButton'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
@@ -46,6 +48,10 @@ function columnColor(color: string): string {
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
 
+// Persists across reloads/reopens (not just remounts) so a card someone else
+// moved while this tab was closed still glows the next time the board opens.
+const BOARD_LAST_SEEN_KEY = 'tionharness:board-last-seen-at'
+
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
@@ -77,6 +83,23 @@ export function TaskBoard({ agents, onError }: Props) {
   // the active board. The backend excludes archived from the default list, so the
   // archived view asks for the full list (?archived=1) and keeps just the archived.
   const [showArchived, setShowArchived] = useState(false)
+  // Cards that changed since the board was last opened — glow until this
+  // TaskBoard instance unmounts (view switch), never on a timer. Computed once,
+  // from the first task load after mount, against BOARD_LAST_SEEN_KEY.
+  const [recentlyChangedIds, setRecentlyChangedIds] = useState<Set<string>>(new Set())
+  const glowComputedRef = useRef(false)
+
+  // Image artifacts only — the board needs them just to render card previews, so
+  // it asks the server for that kind instead of pulling the whole artifact list.
+  const [images, setImages] = useState<Artifact[]>([])
+
+  const loadImages = () =>
+    api
+      .listArtifacts({ kind: 'image' })
+      .then((r) => setImages(r.items))
+      .catch(() => {
+        // non-fatal: cards simply render without their image preview
+      })
 
   const reload = () =>
     api
@@ -103,6 +126,7 @@ export function TaskBoard({ agents, onError }: Props) {
   useEffect(() => {
     reload()
     loadColumns()
+    loadImages()
     api
       .listFlows()
       .then(setFlows)
@@ -119,8 +143,22 @@ export function TaskBoard({ agents, onError }: Props) {
   useEffect(() => {
     reload()
     loadColumns()
+    // A card's artifact refs can change in another window too, and a ref to an
+    // image we have not fetched yet would leave that card without its preview.
+    loadImages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardTick])
+
+  // Snapshot which cards changed since the board's last visit, exactly once
+  // per mount (glowComputedRef guards against boardTick's later reloads
+  // re-running this and picking up in-session moves as "changed since open").
+  useEffect(() => {
+    if (loading || glowComputedRef.current) return
+    glowComputedRef.current = true
+    const lastSeen = Number(localStorage.getItem(BOARD_LAST_SEEN_KEY) ?? '0')
+    setRecentlyChangedIds(new Set(tasks.filter((t) => t.updatedAt > lastSeen).map((t) => t.id)))
+    localStorage.setItem(BOARD_LAST_SEEN_KEY, String(nowSec()))
+  }, [loading, tasks])
 
   // Reload when switching between the active board and the archived view.
   useEffect(() => {
@@ -171,6 +209,7 @@ export function TaskBoard({ agents, onError }: Props) {
   const attachFilesToTask = async (task: Task, files: File[]) => {
     if (files.length === 0 || task.id.startsWith('temp-')) return
     const newIds: string[] = []
+    const newImages: Artifact[] = []
     for (const file of files) {
       try {
         const att = await api.uploadFile(task.id, file)
@@ -182,11 +221,15 @@ export function TaskBoard({ agents, onError }: Props) {
           origin: 'manual',
         })
         newIds.push(a.id)
+        // Keep the preview index in step with the optimistic task update, so a
+        // dropped image shows on the card without waiting for the next reload.
+        if (a.kind === 'image') newImages.push(a)
       } catch (e) {
         onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
       }
     }
     if (newIds.length === 0) return
+    if (newImages.length > 0) setImages((prev) => [...prev, ...newImages])
     const artifactIds = [...(task.artifactIds ?? []), ...newIds]
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, artifactIds } : t)))
     try {
@@ -277,6 +320,7 @@ export function TaskBoard({ agents, onError }: Props) {
     // Dependency chips colour by the STATUS column of the blocker, whatever the
     // current grouping axis is — so this reads `columns`, not derivedColumns.
     const colorByState = new Map(columns.map((c) => [c.key, c.color ?? null]))
+    const imageById = new Map(images.map((a) => [a.id, a]))
 
     const m = new Map<string, TaskCardMeta>()
     for (const t of tasks) {
@@ -286,16 +330,21 @@ export function TaskBoard({ agents, onError }: Props) {
         return dep && dep.boardState !== 'done'
       })
       const firstUnmet = unmetDeps.length > 0 ? taskById.get(unmetDeps[0]) : undefined
+      // The preview image and its serving URL: a media artifact's bytes live on
+      // disk, so an image with no sourcePath has nothing to render.
+      const img = pickCardImage(t.artifactIds, imageById)
+      const imgURL = img ? fileURL(img.sourcePath) : null
       m.set(t.id, {
         owner: agentById.get(t.ownerAgentId),
         flow: t.flowId ? flowById.get(t.flowId) : undefined,
         depIds,
         unmetDeps,
         unmetColColor: firstUnmet ? (colorByState.get(firstUnmet.boardState) ?? null) : null,
+        image: img && imgURL ? { url: imgURL, title: img.title } : null,
       })
     }
     return m
-  }, [tasks, agents, flows, columns])
+  }, [tasks, agents, flows, columns, images])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
@@ -648,6 +697,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         meta={meta}
                         selected={sel.isSelected(t.id)}
                         fileDropActive={fileDropId === t.id}
+                        recentlyChanged={recentlyChangedIds.has(t.id)}
                         today={today}
                         columnIndex={colIdx}
                         columnCount={derivedColumns.length}

@@ -125,6 +125,33 @@ bu durumda seçim sessizce "Tümü"ye düşer — türetilmiş, effect'siz.
 3. **Filtreden düşen kart** — sürükleme sonrası kart filtreye uymuyorsa anında
    kaybolur. Doğru ama sessiz; ipucu satırı + **Geri al** eklendi.
 
+## Kart görsel önizlemesi (TSK437)
+
+Bir karta eklenen (`artifactIds`) **görsel** artifact varsa, kartın en üstünde —
+başlığın da üstünde — önizlemesi çizilir. Ek yoksa kart eskisi gibi kalır; boş
+kutu veya placeholder yok.
+
+- **Hangi görsel:** her zaman karta **en son eklenen** görsel. Seçim
+  `frontend/src/features/tasks/cardImage.ts` içindeki saf `pickCardImage`
+  fonksiyonunda; `artifactIds` dizisi **sondan başa** taranır ve ilk `image`
+  türü artifact seçilir. Sıra ölçütü bilinçli olarak artifact `createdAt`
+  **değil**: hem dosya bırakma hem "mevcut artifact'ı bağla" akışı yeni id'yi
+  dizinin **sonuna** ekler, dolayısıyla dizinin kuyruğu "bu karta en son eklenen"
+  demektir; `createdAt` ise çok önce yüklenip bugün bağlanan bir görseli öne
+  çıkarırdı. Çözülemeyen id'ler (başka yerde silinmiş artifact) atlanır.
+- **4:3 sınırı:** kutu sabit `aspect-[4/3]` + `overflow-hidden`, görsel
+  `object-cover`. Böylece önizleme yüksekliği her zaman kart genişliğinin tam
+  3/4'ü olur, asla aşmaz; farklı orandaki görsel kutunun içine sıkışır, letterbox
+  bandı bırakmaz ve kart yerleşimini bozmaz.
+- **Veri yolu:** `TaskBoard` yalnızca `kind=image` artifact'larını çeker
+  (`api.listArtifacts({ kind: 'image' })`), `cardMeta` içinde id ile indeksler,
+  `pickCardImage` ile kart başına seçer ve `fileURL(sourcePath)` ile servis
+  URL'ine çevirir. `sourcePath` yoksa (medya baytları diskte değilse) önizleme
+  çizilmez. Liste açılışta, `board` SSE tick'inde ve karta dosya bırakıldığında
+  (iyimser ekleme) tazelenir.
+
+Test: `frontend/src/features/tasks/cardImage.test.ts`.
+
 ## Dosyalar
 
 | Dosya | Rol |
@@ -139,6 +166,7 @@ bu durumda seçim sessizce "Tümü"ye düşer — türetilmiş, effect'siz.
 | `.../views/BoardFilterBar.tsx` | çubuk |
 | `.../views/FacetDropdown.tsx` | tek facet menüsü |
 | `.../views/SavedViewMenu.tsx` | görünüm seçici |
+| `.../cardImage.ts` | kartın önizleyeceği görsel artifact'ın seçimi (saf) |
 
 Testler: `filterTasks.test.ts`, `deriveColumns.test.ts` (saf fonksiyonlar),
 `models_board_view_test.go` (doğrulama).
