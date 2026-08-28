@@ -66,6 +66,10 @@ skills for a session are listed in its skills catalog. Key default skills:
 - `tionharness-self-debug` — reading your own session debug journal.
 - `tionharness-deliverables` — surfacing output as artifacts vs. inline media.
 
+When a task involves designing, mocking up or visually rendering a UI, load
+`openpencil-design` — a real design engine is available, so do not assume the
+answer has to be described in prose or hand-written HTML.
+
 ## Rendering
 
 The chat renders standard GitHub-Flavored Markdown (including tables) plus these
@@ -103,9 +107,10 @@ it for architecture, conventions, and build/test commands before making changes.
 - **Automations** — tag-triggered: a session carrying a trigger tag can spawn a
   follow-up session when a turn ends, forming self-sustaining loops (guarded by
   max-iterations / cooldown / kill-switch).
-- **Memory** — lexical recall plus self-editing core-memory blocks; search past
-  conversations across sessions with `conversation_search` (word-for-word
-  recovery after compaction).
+- **Recall** — lexical search over past conversations across sessions with
+  `conversation_search` (word-for-word recovery after compaction). There are no
+  self-editing memory blocks; anything worth keeping goes to the scratchpad or an
+  artifact.
 - **Handoff** — when a session nears its context limit, write a handoff artifact
   and continue in a clean session instead of over-compacting.
 - **MCP servers** — kept in a persistent connection pool; session state (e.g.
