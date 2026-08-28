@@ -78,7 +78,7 @@ const (
 
 type View struct {
     Ref     Ref
-    Header  string      // her zaman üretilir, deterministik, ~8-12 satır
+    Header  string      // her zaman üretilir, deterministik, tek satır (istisna: workers 2 satır)
     Body    string      // level'e göre kademeli
     Handles []Handle    // drill-down referansları
     AsOf    time.Time   // tazelik damgası
