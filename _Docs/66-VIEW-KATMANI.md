@@ -163,19 +163,108 @@ todo 4 | in_progress 2 | done 1 | failed 1
 Kart listesi **değil**, sinyal. Yaşlılık yalnız **çalışan sütunlarda**
 (`in_progress`/`review`) uyarıdır — hareketsiz bir backlog kartı normaldir.
 
+`sub` verilince tek-kart drill-down'ı (`projectCard`):
+
+```
+CARD T9 "arama indeksini yeniden kur" · in_progress · p:high · agent:AG1 · 2sa önce · asOf 01:07:50
+özet: Eski indeks bozuldu; sıfırdan kurulacak.
+ilerleme: %40
+akış: flow:FL2
+termin: 2026-08-30
+bağımlılık: T2, T5 ⛔bloke
+etiket: infra
+worktree: conflict · task/T9
+✗ worktree hatası: merge conflict in internal/view/board.go
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| `akış:` | `db.Task.FlowID` — kart *prompt* ile değil, bu akışla koşar; okuyucunun kartla ne yapacağını değiştirir | Card+ |
+| `bağımlılık:` | `db.Task.Dependencies` (JSON dizi) + `blockedMark`; ilk 6 id, kalanı `+N` | Card+ |
+| `worktree:` | `db.Task.WorktreeState` + `WorktreeBranch` — `""`/`none` yazılmaz | Card+ |
+| `✗ worktree hatası:` | `db.Task.WorktreeLastError` | Card+ |
+
+**Ayrıştırılamayan bağımlılık listesi yutulmaz.** Bozuk JSON'da tek-kart
+projeksiyonu `bağımlılık: (liste okunamadı)` yazar — "bağımlılık yok" **tam ters
+olgudur** ve kart pekâlâ bloke olabilir. Pano roll-up'ının sinyalleri
+(`parseDependencies`) bozuk değeri yok sayar: orada tek bozuk kart tüm panoyu
+düşürmemelidir.
+
 ### Session (gerçek çıktı — 60 token)
 
 ```
-SES:SES9a1 "auth refactor" · 214 msg · 3g önce açıldı · agent:builder
+SES:SES9a1 "auth refactor" · tür:chat · 214 msg · 3g önce açıldı · agent:builder
 özet: JWT'den session cookie'ye geçiş yapılıyor.
 todo: 2/4 tamam · şu an: testleri güncelle
+cwd: ~/Desktop/Projects/TionHarness
+⚑ son arka plan turu: failed (2sa önce)
 ⤺ ilk 120 mesaj özete katlandı (compaction)
 son hareket: 4dk önce
 …174 eski mesaj gizlendi  ↳ son turlar + tam özet
 ```
 
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| `tür:` | `db.Session.Kind` (`""` → `chat`, `sessionKindLabel`) | Tiny+ |
+| `cwd:` | `db.Session.WorkingDir`, `clipPath(…, 60)` — bu oturumun dosya/shell araçlarının çözümlendiği dizin. Boş = workspace varsayılanı; bu projeksiyon onu çözemez, o yüzden **satır yazılmaz** | Card+ |
+| `⚑ son arka plan turu:` | `db.Session.RunState` + `RunStateAt` — `""` ve `completed` yazılmaz | Card+ |
+
+`RunState`, `State` (aktif/arşiv) ile **aynı şey değildir**: son arka plan turunun
+nasıl bittiğidir (`failed`/`killed`/`timeout`/`incomplete`). Tek bir başarısız tur
+`StuckTurns`'ü eşiğe taşımadığı için, bu satır olmadan az önce ölmüş bir oturum
+sağlıklı görünüyordu.
+
+`tür:` alanı **her zaman** yazılır — boş `Kind` de dahil, o da `chat` olarak
+render edilir (`sessionKindLabel`). Oturumun türü, o oturuma yeni bir kullanıcı
+turu başlatılıp başlatılamayacağını belirler (`db.IsWritableSessionKind`), yani
+okuyucunun ne yapabileceğini değiştiren bir olgudur. Önceden yalnız `chat`
+dışındaki türler yazılıyordu; bu, makine-yazımı bir transkriptin sıradan bir
+sohbet gibi görünmesine yol açıyordu.
+
 Transkript **okunmadan** üretilir: header + usage bellek-içi, geri kalanı yalnız
 son 40 mesajlık kuyruktan. Okunmayan mesaj sayısı `Elided`'e yazılır.
+
+### Agent (gerçek çıktı)
+
+Ajanın **ne olduğu** (bağlanma + davranış + kısıt) ile oturumlarının **ne yaptığı**
+ayrı bloklardır: önce L1 sinyalleri, sonra kimlik/konfigürasyon satırları.
+
+```
+AGENT:AG1 "builder" · anthropic/claude · 4 oturum (3 aktif) · son etkinlik 2sa önce
+⚠ 1 oturum takılmış (StuckTurns>0): takılan
+⇵ 1 koordinatör oturumu
+düşünme: high
+izin: read-only
+devre dışı · koordinatör · varsayılan
+yasaklı araçlar (6): shell, write_file, edit_file, delete_file, git_push … +1
+ruh: Sen titiz bir derleyici mühendisisin…          (yalnız LevelFull)
+kimlik: Her değişikliği testle doğrula…             (yalnız LevelFull)
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| başlıktaki `sağlayıcı/model` | `db.Agent.Provider` + `db.Agent.Model` (`modelLabel`) — **yalnız başlıkta**, konfigürasyon bloğunda tekrarlanmaz | Tiny+ |
+| `düşünme:` | `db.Agent.ThinkingLevel` (`""`/`off` → satır yazılmaz) | Card+ |
+| `izin:` | `db.Agent.PermissionMode` — `""`/`auto` **yazılmaz** (varsayılanı tekrar eden satır her kartta gürültüdür) | Card+ |
+| `devre dışı` | `db.Agent.Disabled` — ajan hiç çalışmaz; kartın geri kalanını yeniden çerçeveler | Card+ |
+| `koordinatör` | `db.Agent.CoordinatorMode` (ajan varsayılanı; oturumun canlı bayrağı değil) | Card+ |
+| `varsayılan` | `AgentInput.IsDefault` — workspace ayarı `DefaultAgentId` | Card+ |
+| `yasaklı araçlar (N):` | `db.Agent.BlockedTools` (JSON dizi), ilk 5 ad + `… +N` | Card+ |
+| `ruh:` | `db.Agent.Soul`, `clip(…, 120)` | Full |
+| `kimlik:` | `db.Agent.Identity`, `clip(…, 120)` | Full |
+
+Kurallar:
+
+- **Boş alan satır üretmez.** `model: -` yazmak "bu ajanın modeli yok" iddiasıdır;
+  bilinmiyor olmakla aynı şey değildir.
+- **Sayı önce, kesme dürüst.** Yasaklı araç satırı toplam sayıyı her zaman yazar;
+  yalnız adlar kısalır.
+- **Ayrıştırılamayan denylist yutulmaz** — `yasaklı araçlar: (liste okunamadı)`
+  yazılır, "kısıt yok" değil (tam tersi olgu).
+- `varsayılan` bilgisi `db.Agent`'ta **yoktur**; workspace ayarlarından gelir ve
+  `Projector.WithDefaultAgent(id)` ile bağlanır (`tools.ViewSources.DefaultAgentID`
+  → API `ws.Settings().DefaultAgentId`, ajan tarafı `Runtime.DefaultAgentID()`).
+  Bağlanmamışsa satır **yazılmaz**, uydurulmaz.
 
 ### Workspace (gerçek çıktı)
 
@@ -213,6 +302,129 @@ hâlâ okur ama yalnız `Source` parmak izi için, fiyatlamaz (billing →
 db+providers, döngü yok). Her
 okumanın önüne para rakamı koymak istenmiyordu — rakam isteyen `get_view
 {kind:"budget"}` çağırır.
+
+### Harita yaprakları (schedule · artifact · automation · skill · insight)
+
+Explorer haritasının küçük varlıkları. Hepsi L0/L1'dir (transkript yok, L2 yok) ve
+hepsi aynı kurala uyar: **boş alan satır üretmez**, ayrıştırılamayan alan
+"(okunamadı)" der.
+
+**Schedule** — cron mu, tek seferlik uyanma mı:
+
+```
+SCHEDULE SCH9 "sabah özeti" · enabled · cron "0 9 * * *" · asOf 09:00:03
+son çalışma: 1g önce · ok
+sıradaki: 23h58m sonra
+hedef: agent:AG1
+prompt: Dünün panosunu özetle.
+oturum modu: reuse                                   (yalnız LevelFull)
+```
+
+```
+SCHEDULE SCH12 · enabled · tek seferlik · asOf 13:20:06
+ateşleme: 30m00s sonra
+hedef: session:SES4
+neden: derleme bitince kontrol
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| başlıktaki `tek seferlik` | `db.Schedule.OneShot` — bir wake'in cron ifadesi **yoktur**; eskiden başlık her wake için `cron ""` yazıp bozuk bir zamanlama iddia ediyordu | Tiny+ |
+| `ateşleme:` | `db.Schedule.FireAt` (yalnız one-shot; cron imleci `NextRunAt` değil) | Card+ |
+| `hedef: session:` | `db.Schedule.SessionID` — wake, prompt'u **kaynak oturuma** geri teslim eder | Card+ |
+| `neden:` | `db.Schedule.Reason` | Card+ |
+| `oturum modu:` | `sc.EffectiveSessionMode()` — yalnız agent-backed, tekrarlayan zamanlama | Full |
+
+**Artifact** — açmaya değer mi:
+
+```
+ARTIFACT · ART2 · "görev raporu" · markdown · asOf 11:04:22
+origin: tool · session:SES1 · agent:AG1
+grup: raporlar · dosya: artifacts/ART2.md · boyut: 4k karakter
+değişti 2sa önce
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| `dosya:` | `db.Artifact.SourcePath` **varsa o**, yoksa `ContentFile` (`clipPath`). Medya/dosya artifact'ının baytları `SourcePath`'tedir; yalnız `ContentFile` yazılırken her görsel **konumsuz** kalıyordu | Card+ |
+| `boyut:` | `len([]rune(db.Artifact.Content))`, `compactCount` — yalnız `SourcePath == ""` iken. Medyada `Content` yalnızca **alt yazıdır**; aynı sayı dosya boyutu gibi okunurdu | Card+ |
+
+Artifact'lar **versiyonlanmaz** (güncelleme içeriği yerinde ezer), o yüzden
+raporlanacak bir revizyon alanı yoktur.
+
+**Automation** — ne ateşler, ne yapar:
+
+```
+AUTOMATION · AUT3 · done→arşiv · asOf 11:04:22
+tetik: board (move) to:done
+hedef: kartı arşivle (LLM çağrısı yok)
+durum: ● aktif · 12 ateşleme · son 3sa önce
+guardrail: max 50 ateşleme · 60 sn soğuma        (yalnız LevelFull)
+bitiş: 47h58m sonra                              (yalnız LevelFull)
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| `hedef: kartı arşivle` / `kartı taşı → <sütun>` | `db.Automation.BoardAction` (+ `BoardMoveToState`) — bu eylemler **tasarımı gereği** ajansızdır; `TargetAgentID` boş olduğu için hepsi `hedef: ?` yazılıp yanlış yapılandırılmış gibi görünüyordu | Card+ |
+| `bitiş:` | `db.Automation.ExpiresAt` — sayaçlar sağlıklı görünürken kuralı susturabilen tek guardrail | Full |
+
+**Skill** — hangi katmandan geldi, nasıl reklam ediliyor:
+
+```
+SKILL · tionharness-build · asOf 11:04:22
+Build
+Derler ve test eder.
+kaynak: workspace · erişim: shared · görünürlük: summary · grup: araçlar
+ne zaman: Bir derleme kırıldığında                   (yalnız LevelFull)
+```
+
+| Satır | Kaynak alan | Seviye |
+|-------|-------------|--------|
+| `kaynak:` | `skills.Skill.Source` (`global` \| `workspace`) — global skill paylaşılan veri dizinindedir ve workspace araçlarına **salt-okunurdur** | Card+ |
+| `görünürlük:` | `skills.Skill.Visibility` (full/summary/name-only/hidden) — "teklif edilmiyor" ile "yok" farkı | Card+ |
+| `ne zaman:` | `skills.Skill.WhenToUse`, `clip(…, 200)` | Full |
+
+`ikon:` **kaldırıldı** — okuyucunun üzerinde işlem yapabileceği bir bilgi değil,
+buna karşılık her skill kartında bir segment harcıyordu.
+
+**Insight** — `kanıt:` listesi artık `clipList` ile 6 id ile sınırlı (`+N` kuyruklu):
+tekrar eden bir bulgu her oluşumda bir kanıt id'si biriktirir, liste sınırsız
+büyüyordu.
+
+### Tekil yüzeyler (budget · tools · logs)
+
+```
+BUDGET · $3.14 · 2 model · 760k tok · gün 2026-08-06 · asOf 11:04:22
+```
+
+Kapsanan gün **bir kez** yazılır. Başlık eskiden hem tutarın yanında `bugün` hem de
+sonda `gün <tarih>` taşıyordu; bu, yan yana **iki farklı dönem** raporlanıyormuş
+gibi okunuyordu.
+
+```
+TOOLS · 3 MCP sunucu (2 aktif) · 4 araç kapalı · asOf 11:04:22
+● aktif  codebase-memory     npx -y @codebase/mcp
+○ kapalı playwright          npx -y @playwright/mcp
+kapalı araçlar: shell, write_file, delete_file, git_push
+görünürlük: get_view=summary, write_file=hidden
+```
+
+`görünürlük:` = `db.WorkspaceToolConfig.ToolVisibility`, `name=tier` çiftleri
+**sıralı** (map sırası kararlı değildir) ve `clipList` ile sınırlı. Araç
+yüzeyinin diğer yarısıdır: `hidden` bir araç *açıktır* ama hiç reklam edilmez —
+"ajan bu aracı yok sayıyor" diye okunan durum tam olarak budur. Boş map satır
+üretmez.
+
+```
+LOGS · 412 kayıt · son 30 kayıtta 2 hata / 1 uyarı · asOf 11:04:22
+11:03:58 INFO  turn ok (api)
+11:04:12 ERROR provider 429 (provider)
+```
+
+Hata/uyarı sayısı **render edilen pencereyi** sayar, tüm tamponu değil: elenen
+satırları da saymak, gövdenin arkasında duramayacağı bir tarama vaat ederdi.
+Mesajlar `compactPaths`'ten geçer — bir log satırı, açamadığı dosyayı alıntılayan
+düz metindir ve `clip` tam da o kuyruğu keser.
 
 ## Göç 1: coordinator worker-state bloğu (push projeksiyonu)
 
@@ -400,10 +612,53 @@ grafik alanı belirsizdir ("veri yok" ile "yüklenemedi" aynı görünür) ve bu
 işi ilk bakışta güvenilir olmak. Gün ekseni her zaman tam pencere kadar çizilir —
 sessiz bir hafta sonu trendden silinmek yerine boşluk olarak görünür.
 
+#### Commit ısı haritası — `CommitHeatmap`
+
+Panelde `OutcomeSummary` ile workspace özeti bloğunun arasında, GitHub'ınkine
+benzeyen bir yıllık commit ısı haritası çizilir
+(`frontend/src/features/dashboard/CommitHeatmap.tsx`). **Kendi isteğini kendisi
+yapar** — `GET /api/dashboard` zarfına eklenmedi ve üstteki `days` aralık seçicisi
+onu filtrelemez. İki nedeni var: veri **store'dan değil git'ten** gelir (dolayısıyla
+projeksiyonun tek-yükleme iddiasının kapsamına girmez), ve dış süreç çağrısı olduğu
+için yavaşlığı ya da hatası panelin geri kalanını bekletmemelidir.
+
+| | |
+|---|---|
+| Endpoint | `GET /api/dashboard/commit-activity?weeks=52` (`internal/api/dashboard_commit_activity.go`) |
+| `weeks` | 1–52 arasına kırpılır; boş/geçersiz değer **52**'ye düşer (`commitActivityWeeks`) |
+| Yanıt | `{ "weeks": int, "commitsByDay": [{ "day": "YYYY-MM-DD", "value": int64 }], "isGitRepo": bool }` |
+| Kaynak | `git -C <dizin> log --format=%ct --since=<pencere başı RFC3339>`; öncesinde `rev-parse --is-inside-work-tree` |
+| Dizin | `ws(r).Runtime.WorkspaceDefaultDir()` — workspace'in varsayılan proje dizini |
+| Zaman aşımı | `gitCmdTimeout` (5sn, `internal/api/git.go`); aşılırsa **408** |
+
+`commitsByDay` günlük seriler ile **aynı `daySeriesPoint` şeklini** kullanır
+(`day` + `value`), böylece frontend tarafında ayrı bir tip icat edilmedi
+(`frontend/src/types/dashboard.ts` → `CommitActivityDay`).
+
+Kova sınırı **sunucunun yerel günü**dür: `%ct` unix saniyesi `now.Location()`
+içinde `2006-01-02`'ye çevrilip sayılır (`bucketCommitsByLocalDay`). Pencere her
+zaman tam `weeks × 7` gün basılır — commit'i olmayan gün seriden düşmez, `value: 0`
+olarak gelir. Grafiklerin ortak kuralı burada da geçerli.
+
+**Git deposu olmaması hata değildir.** `rev-parse` "not a git repository" ile
+dönerse (`isNotGitRepository`) handler 500 vermez; sıfırlanmış seriyi
+`isGitRepo: false` ile döndürür ve bileşen bunu "Bu çalışma alanı bir Git deposu
+değil." diye yazar — sıfır commit'li gerçek bir depodan ("Son 52 haftada commit
+yok.") ayrı bir cümle. Alan **opsiyoneldir**: onu göndermeyen eski bir sunucudan
+sıfır serisi geldiğinde UI ikinci cümleye düşer.
+
+Saf mantık `commitHeatmapModel.ts`'e ayrıldı ve `CommitHeatmap.test.ts` ile
+sabitlendi: `commitLevel(count, peak)` (0–4 yoğunluk kovası, tepe değere göre
+oranlı), `heatmapMove` (klavye gezinmesi — sol/sağ ±7 gün, yukarı/aşağı ±1,
+`Home`/`End`) ve tooltip'in `focus`/`hover`/`Escape` durum makinesi
+(`heatmapTooltipReducer`). Escape ile kapatılan tooltip, odak o hücrede kaldığı
+sürece geri açılmaz.
+
 ### API
 
 ```
 GET /api/dashboard?days=14                          → sayaçlar + seriler + workspace projeksiyonu
+GET /api/dashboard/commit-activity?weeks=52         → günlük commit sayıları (git log) + isGitRepo
 GET /api/views/{kind}/{id}?level=card   → View (JSON zarf, Body ham DSL)
 GET /api/views/workspace?level=tiny
 ```
@@ -430,6 +685,73 @@ dönüştürücüleri birimi çağrı yerinde yazmaya zorluyor (`dsl.go`), `age(
 her yol için **insan ölçeğinde** sonuç sabitliyor (`1sa önce`, `31s`, `1m30s`),
 tam string değil. Set edilmemiş damga `?` döner — `1970` değil, çünkü bir birim
 hatası tam olarak "1970'ten beri" kılığına giriyor.
+
+## Dosya yolları: `clip` değil `clipPath`
+
+`clip()` sağdan keser. Bir yol için bu tam ters yöndedir: kesilen kısım yolun
+**bilgi taşıyan** yarısıdır.
+
+```
+clip:      C:\Users\user\Desktop\Projects\TionHar…     ← hiçbir şey söylemiyor
+clipPath:  …/features/view/ViewPanel.tsx                ← her şeyi söylüyor
+```
+
+`dsl.go` iki yardımcı sunar:
+
+- **`shortPath(s)`** — `\` → `/` normalizasyonu, kullanıcı ev dizini öneki `~`
+  ile değiştirilir. Ev eşleşmesi **tam segment** sınırındadır (`/home/bil`,
+  `/home/bilal-backup`'ı yutmaz). **Ayırıcı içermeyen string yol değildir** ve
+  olduğu gibi döner — bir başlığı veya araç adını burada yeniden yazmak, değerin
+  ne olduğu hakkında yalan söylemek olur.
+- **`clipPath(s, max)`** — önce `shortPath`, hâlâ uzunsa **kuyruğu** tutar ve
+  kesme işaretini **başa** koyar (`…/`). Kesme mümkün olduğunca ayırıcı sınırında
+  yapılır; yalnız tek bir segment tek başına `max`'ı aşıyorsa segment ortasından
+  kesilir. Ayırıcı içermeyen değer için `clip`'e düşer, yani düz metin hâlâ
+  baştan korunur. Boşluk/newline `clip` gibi tek boşluğa katlanır — projeksiyon
+  satırı **tek satır** kalmak zorundadır.
+
+Kural: değerin **tamamı** yol olabiliyorsa `clipPath`, başlık/prompt gibi
+alanlarda `clip`.
+Şu an `clipPath` kullanan yerler: `artifact.go` (`dosya:` — `Artifact.ContentFile`),
+`flowrun.go` (node `girdi:`/`çıktı:` satırları — sık sık yol taşır),
+`tools.go` (`mcpEndpoint`, stdio `MCPServer.Command` mutlak yorumlayıcı yolu
+olabilir). Testler `dsl_test.go` içinde; ev dizini `homeDir` değişkeni
+üzerinden sabitlenir, böylece beklentiler işletim sistemine bağlı değildir.
+
+### Düz metnin **içindeki** yol: `compactPaths`
+
+`clipPath` yalnız değerin tamamı yol olduğunda işe yarar. Oturum satırlarının
+çoğu ise **düz metindir ve yolu sadece içerir**: bir sohbet mesajı gövdesi, bir
+hata dizesi, `todo` satırındaki `şu an:` etkinliği. Orada `clip` cümleyi keser ve
+kesilen şey tam da yolun bilgi taşıyan kuyruğu olur:
+
+```
+clip:         düzenle C:\Users\user\Desktop\Projects\TionHarness\internal\view\ses…
+compactPaths: düzenle …/internal/view/session.go tamam
+```
+
+- **`compactPaths(s)`** — `s` içinde geçen **her mutlak yolu** yerinde yeniden
+  yazar, çevresindeki metne dokunmaz. Windows (`C:\…`) ve en az iki segmentli
+  POSIX (`/seg/seg…`) yollarını tanır; eşleşme boşluk, tırnak, backtick, `,`,
+  `;`, `)` ve `>` karakterlerinde durur, böylece cümlenin noktalaması yola
+  yapışmaz. Her eşleşme `shortPath`'ten geçer; sonuç hâlâ `inlinePathBudget`
+  (44 rune) üzerindeyse yalnız **son 3 segment** `…/` öneki ile bırakılır.
+  URL'lerin `/host/path` kısmı gibi daha büyük bir token'a yapışık eşleşmeler
+  atlanır. Hiç yol içermeyen string **bayt bayt aynı** döner.
+
+Regex'ler paket düzeyinde bir kez derlenir (`absPathRe`), çağrı başına değil.
+
+Kullanım sırası **`clip(compactPaths(x), N)`** — önce yollar kısalır, sonra
+kalan cümle bütçeye göre kesilir. `clipPath` zaten `shortPath`'ten geçtiği için
+oraya **ikinci kez uygulanmaz**.
+
+Şu an `compactPaths` uygulanan satırlar: `session.go` (`özet:`, `✗ son hata:`,
+`şu an:`, son turların mesaj gövdeleri), `workers.go` (worker özeti),
+`workspace.go` (`failed run` ve `sched` hata satırları), `flowrun.go`
+(`⚠ hata:` ve LevelFull detay satırındaki node çıktısı). **Uygulanmayanlar**
+bilinçlidir: ajan/oturum başlıkları, handle etiketleri, skill adları ve ID'ler —
+bunlar yol değildir, yeniden yazmak değerin ne olduğu hakkında yalan söylemek
+olur.
 
 ## Tasarım tuzakları
 
@@ -475,8 +797,9 @@ Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
   yapılandırılmış olanı değil (yapılandırılmış-ama-boş sütun görünmez). `Sub`
   verilince **tek-kart drill-down** (`projectCard`: durum/öncelik/sahip/termin/
   bağımlılık ⛔/gecikme ⚠/son koşu; bilinmeyen kart id'si hata, boş kart değil).
-- `schedule.go` — tek cron zamanlaması (armed/disabled, son-çalışma statüsü+hatası,
-  sıradaki, hedef agent/flow, prompt). L0/L1 (küçük varlık, L2 yok). Roll-up'ın
+- `schedule.go` — tek zamanlama (armed/disabled, son-çalışma statüsü+hatası,
+  sıradaki, hedef agent/flow/session, prompt; one-shot wake'te cron yerine
+  `tek seferlik` + `ateşleme:` + `neden:`). L0/L1 (küçük varlık, L2 yok). Roll-up'ın
   aksine **devre dışı** zamanlamanın son hatası burada gösterilir: kullanıcı bu
   zamanlamaya inmişse tam da onu soruyordur.
 - `session.go` — kimlik/coordination soyağacı başlığı (harcama **yok**) + rolling summary +
@@ -492,8 +815,9 @@ Yanıt hem yapısal zarfı hem `text`'i taşır; panel `text`'i olduğu gibi bas
 Bilinmeyen kind → 400, olmayan entity → 404.
 
 **Araç** — `internal/tools/builtin_view.go`: `get_view{kind,id,sub,level}`
-(`kind` ∈ flowrun|session|board|workspace|schedule; `sub` = flowrun'da node,
-board'da kart), `toolsetup.go`'da her ajana açık (salt-okunur), kategori
+(`kind` ∈ flowrun|session|board|workspace|schedule|agent|budget|tools|logs|
+artifact|automation|skill|insight|category; `sub` = flowrun'da node, board'da
+kart), `toolsetup.go`'da her ajana açık (salt-okunur), kategori
 `diagnostics`. Çıktı = `View.Text()` + drill-down çağrı ipuçları.
 
 **UI** — `frontend/src/features/view/`:

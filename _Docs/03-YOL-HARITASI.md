@@ -161,7 +161,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 
 ### Araç & yetki katmanı
 - [x] **B1** — ✅ **farklı çözüldü**: Tool arabirimine `ReadOnly()`/`ConcurrencySafe()` metotları eklemek yerine merkezî risk tablosu (`tools/classify.go`: `RiskRead`/`RiskWrite`/`RiskExec`) → izin katmanının tek kaynağı. Bkz. [40](40-PLAN-MODE.md).
-- [~] **B4** — Paralel tool yürütme ✅ (`TurnStep.Batch` ile gruplanır, UI'da "⚡ N paralel araç çağrısı"); kalan: büyük çıktı için disk-spill + referans deseni (bugün 64KB hard-cap var)
+- [x] **B4** — ✅ (2026-08-28) Paralel tool yürütme (`TurnStep.Batch` ile gruplanır, UI'da "⚡ N paralel araç çağrısı") + büyük çıktı için spill & referans deseni: eşiği (`maxToolOutputKB`, varsayılan 100 KB) aşan çıktı `capToolOutputOffload` ile tam olarak bir text artifact'e yazılır, modele baş+son+artifact kimliği döner, orta kısım `read_artifact` ile geri okunur (`internal/tools/registry.go`). Sink yoksa/yazım hata verirse düz kırpmaya düşer.
 - [x] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O) ✅ 2026-06-18 — `internal/agent/hooks.go`, Ayarlar → Hooks; bkz. `_Docs/18-HOOKS.md`
 
 ### Bağlam, bellek, trace

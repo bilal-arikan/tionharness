@@ -355,3 +355,61 @@ tetikleyicisiyle otomatik koşabilir. Model olarak, Task'taki mevcut `FlowID`
 
 - `internal/db/automation_test.go` — `TestAutomationFlowIDRoundTrip`,
   `TestScheduleFlowIDRoundTrip` (create/update round-trip + hedef değiştirme).
+
+---
+
+# Zamanlama Başına Oturum Modu (`sessionMode`)
+
+## Neden
+
+Ajan hedefli bir zamanlama, her ateşlemede ajanın tek ve uzun ömürlü
+`"schedule"` oturumuna tur ekliyordu. Bu, "bir önceki turu hatırlasın" isteyen iş için
+doğru; ama günde defalarca koşan bağımsız bir görev için transkripti sonsuza
+kadar büyüten ve turları birbirine bulaştıran bir davranış. Karar artık
+zamanlama başına verilir.
+
+## Model
+
+- `db.Schedule.SessionMode` (`json:"sessionMode,omitempty"`,
+  `internal/db/models_task.go`).
+- Kabul edilen değerler — `db.ScheduleSessionModeReuse` = `"reuse"`,
+  `db.ScheduleSessionModeSpawn` = `"spawn"`. Boş string de geçerlidir
+  (yazılmamış eski satırlar).
+- `db.ValidScheduleSessionMode(mode)` yalnız `""` / `"reuse"` / `"spawn"`
+  değerlerine `true` döner.
+- `Schedule.EffectiveSessionMode()` **varsayılanı** çözer: boş değer `"reuse"`
+  olur. Yani hiçbir mevcut zamanlamanın davranışı değişmez.
+
+## Davranış
+
+- **`reuse` (varsayılan):** `Scheduler.deliverPrompt` eski yoldan gider —
+  `GetOrCreateKindSession(agentID, "schedule", "⏰ Schedule")` ile ajanın
+  paylaşılan cron thread'ini açar, stuck-guard kontrolünü uygular, per-session
+  turn slot'unu (`turnqueue`) alır ve prompt'u `origin="schedule"` kullanıcı turu
+  olarak yazar.
+- **`spawn`:** `deliverSpawnedPrompt` çağrılır; her ateşleme
+  `LaunchRun(RunSpec{Trigger: TriggerSchedule, Autonomous: true, Spawn: …})` ile
+  **kendi taze oturumunu** açar. Paylaşılan thread'e ait defter tutma (stuck
+  gate, turn slot, ortak transkript) bu yolda hiç uygulanmaz. Oturum başlığı
+  `scheduleSpawnTitle`: zamanlamanın adı varsa `⏰ <ad>`, yoksa prompt'tan
+  türetilen `⏰ <kısa başlık>`.
+- **Akış tabanlı zamanlamada yok sayılır.** `FlowID` set ise ateşleme
+  `deliverFlow` yolundan gider ve akış zaten kendi koşu-başına transkriptine
+  kaydeder.
+
+## API + UI
+
+- `POST /api/schedules` ve `PUT /api/schedules/{id}` `sessionMode` alanını alır
+  (`internal/api/schedules.go`). Bilinmeyen değer **saklanmaz**: her iki yol da
+  `400` + `invalid sessionMode (want reuse or spawn)` döner — aksi hâlde
+  `EffectiveSessionMode` bilinmeyen değeri sessizce `reuse` gibi çalıştırırdı.
+- `ScheduleModal.tsx` — hedef "Ajan" iken görünen **Oturum** alanı
+  (`data-testid="schedule-create-session-mode-select"`): "Aynı oturumu sürdür
+  (varsayılan)" / "Her çalışmada yeni oturum aç". Akış hedefinde alan hiç
+  render edilmez.
+
+## Test
+
+- `internal/agent/scheduler_sessionmode_test.go` —
+  `TestScheduleEffectiveSessionMode` varsayılan tablosunu (`"" → reuse`)
+  sabitler; spawn modunun ayrı oturum açtığı ateşleme yolu ile doğrulanır.

@@ -668,9 +668,23 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 
 ## Sınırlar / Notlar
 
-- Built-in araç-çıktısı kırpması **yoktur**; kullanıcı, modele giden `ToolResult` ile UI'da
-  gösterilen/persist edilen `TurnStep.Output`'u birebir aynı görür (harici hook uygulanmışsa her
-  ikisi de hook'tan geçmiş haliyle gösterilir → tutarlılık korunur).
+- Built-in araç-çıktısı **sıkıştırması** yoktur; tek built-in müdahale, boyut için bir
+  **backstop kırpması**dır (`internal/tools/registry.go`): eşik `maxToolOutputBytes`
+  (varsayılan 100 KB; ayar `maxToolOutputKB`, `applySettings` → `SetMaxToolOutputBytes` ile
+  process-global itilir). Eşiğin altındaki çıktı **hiç dokunulmadan** geçer, yani kullanıcı
+  modele giden `ToolResult` ile UI'da gösterilen/persist edilen `TurnStep.Output`'u birebir
+  aynı görür (harici hook uygulanmışsa her ikisi de hook'tan geçmiş haliyle gösterilir).
+- Eşiği aşan çıktı **atılmaz, artifact'e taşınır** (2026-08-28, `capToolOutputOffload`):
+  ctx'te bir artifact sink varsa (`tools.WithArtifacts` — her native turda oturuma bağlı
+  olarak takılır) **tam çıktı** `text` türünde bir artifact olarak kalıcılaştırılır ve modele
+  baş (`maxToolOutputBytes`'ın %70'i) + son (kalan bütçe) + artifact kimliği verilir. Elenen
+  orta kısım `read_artifact` (`builtin_artifactmgmt.go`) ile geri okunabilir. Baş+son
+  bölünmesinin nedeni: yalnız baş kırpması çıkışı (exit kodu, son satırlar, hata kuyruğu)
+  kaybeder.
+- Sink yoksa (oturumsuz tur, claude-cli köprü registry'si) veya artifact yazımı hata verirse
+  davranış eskisiyle **bayt-bayt aynı** düz kırpmadır (`capToolOutput` → `…[truncated N bytes]`);
+  depolama sorunu çıktıyı bozar ama tool çağrısını başarısız etmez. Test:
+  `internal/tools/registry_cap_test.go`.
 - Komut-özel akıllı kısaltma (git/test/grep'e özgü) built-in tarafta yok; bu iş harici `rtk`/`sqz`
   araçlarının komut-aile kurallarına bırakıldı.
 - claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionHarness'in `ToolResult` katmanından geçmez).

@@ -1,6 +1,116 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-27**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-28**
+
+## Güvenlik sertleştirme: sandbox sınırı, alt süreç ortamı, gizli konsol (2026-08-28) ✅
+
+Sandbox artık NT namespace (`\\?\`, `\\.\`) ve ADS (`dosya:stream`) yazımlarını
+açıkça reddediyor (`internal/tools/sandbox.go`, `5f7db6b1`), ve kök yolu bir kez
+`EvalSymlinks`'ten geçiriliyor: `Root` yalnız sözdizimsel `Abs+Clean` olduğu için
+kökün kendisi symlink olduğunda kök-içi bir dosya gerçek mutlak adıyla verilince
+`underRoot` yanlışlıkla reddediyordu; çözüm `internal/api.underDir` ile de aynı
+sınırı paylaşıyor. `EvalSymlinks` hatasında sözdizimsel yol korunuyor (henüz var
+olmayan çalışma dizini meşru); Windows'ta junction'ları izlemediği ölçülüp yeni
+junction testine yazıldı (`9fb6d3bf`).
+
+Alt süreç ortamından kimlik bilgileri soyuluyor: shell aracı (`849257c7`,
+`internal/tools/builtin_shell.go` + ayar/hook yüzeyi) ve CLI sağlayıcı süreçleri
+(`c4b240db`, yeni `internal/providers/cli_env.go` + testi) yalnız kendi
+kimlik-doğrulama değişkenlerini taşıyor. `codexBaseEnv`'in neden iç içe geçme
+filtresi taşımadığı yorumla açıklandı (`d7b32df8`).
+
+İç içe CLI torunları artık görünür konsol açmıyor (`e5ca55db`,
+`internal/proc/*` + `claudecli.go`/`codexcli.go`). Dokümanda iki düzeltme:
+sınırlandırılmış (confined) turların shell'i yol bazında kısıtlamadığı yazıldı
+(`08496bb8`, `_Docs/26-CALISMA-DIZINI.md`) ve transform verisinin sınırlandırılması
+netleştirildi (`5dda71fd`).
+
+## Araç katmanı: bundle/tier tabloları, kategori sözleşmesi, şema maliyeti (2026-08-28) ✅
+
+Varsayılan araç görünürlüğü elle yazılmış listelerden veri katmanına taşındı. Önce
+parite çıpası olarak her aracın etkin tier'ını dondurun golden tablo eklendi
+(`983dda1f`), sonra paylaşılan bundle soyutlaması + `TierDefaults`/`DefaultTiers`/
+`TierFor` tabloları geldi (`e9915668`), en son `buildRegistry` içindeki
+`MarkNameOnly` (25 ad) ve `MarkHidden` (4 ad) blokları silinip yerlerine
+`ApplyToolDefaults` / `ApplyBundleDefaults` çağrıları kondu; `AttachMCP` name-only
+tier'ı artık sabit yerine `mcp:*` bundle satırından okuyor (`4aca9372`). Golden
+tablo tek satır değişmeden yeşil kaldı.
+
+`builtinCategory` tek doğruluk kaynağı olduğunu iddia ediyordu ama 18 yerleşik araç
+(koordinatör/worker ailesi, otomasyon CRUD, insight üçlüsü, lessons ikilisi,
+`apply_patch`, `run_code`, `render_template`) haritada yoktu ve sessizce "other"a
+düşüyordu. Hepsi mevcut kategorilere eklendi ve haritadan değil paketin kendi
+`Def()` gövdelerinden AST taramasıyla türeyen bir regresyon testiyle kapatıldı
+(`32f72ea6`); tarama sessizce skip'e düşmek yerine yüksek sesle fail ediyor
+(`ea800320`). Rune-sınırı kırpma testleri de boş-geçer olmaktan çıkarıldı
+(`e9ad68da`).
+
+Aşırı büyük araç çıktısı artık kırpılıp kaybolmuyor: `capToolOutputOffload` tam
+çıktıyı metin artifact'ine yazıyor, modele head + tail + artifact handle gidiyor
+(`67b72c18`); çıktı üst sınırının gövdeyi sınırladığı, işaretçiyi sınırlamadığı
+dokümana yazıldı (`c380c590`). Yeni `tools.TierTokens`/`FullSchemaTokens`/
+`CurrentTokens` yardımcıları bir araç grubunun şema token maliyetini tahmin ediyor
+ve UI'da grup satırında gösteriliyor (`ed08f968`). Özetlenmiş araç kataloğunda
+`ToolSearch` için `select:` sözdizimi açıkça yazıldı (`bcf85ad0`).
+
+## Bağlam bütçesi, otonom turlar ve codex-cli düzeltmeleri (2026-08-28) ✅
+
+`EffectiveBudget` `settings.MaxContextTokens` değerini üst sınırsız bir taban gibi
+kullanıyordu: varsayılan 800000, hem auto tavanını (262144) hem de modelin gerçek
+penceresini eziyordu — 200K'lık bir modele 800K transkript tutması söyleniyor,
+compaction buna asla ulaşamıyor ve tur bağlam-taşması kurtarma yolunda ölüyordu.
+Sonuç artık gerçek pencerenin %80'iyle sınırlanıyor (`dcbba21f`).
+
+Koordinatör stall guard'ı taze bir worker notunda tamamen devre dışı kalıyordu —
+tam da phantom spawn'ların en sık olduğu turda. Muafiyet asimetrik yapıldı: judge
+ve düzeltici dürtme her zaman koşuyor, yalnız halt eskalasyonu bastırılıyor;
+guard'ın kendi yazdığı notlar ve `<coordination-status>` artık worker sonucu
+sayılmıyor (`91f70e58`). Otonom (spawn/scheduler/flow) turları `steerable` alanını
+ve oturum grant'lerini kaydediyor, böylece ask/read-only modda bir claude-cli
+otonom turuna "Yönlendir" reddedilmiyor (`602c1578`).
+
+codex-cli'nin kendi çoklu-ajan collab araçları kapatıldı (`[features]
+multi_agent=false, multi_agent_v2=false`) — model `spawn_worker` yerine onları
+seçip `--ephemeral` yüzünden thread store'u olmadığından hata alıyordu
+(`4b60540b`). Buna karşılık `WebSearch`/`WebFetch` yerleşikleri interaction MCP
+köprüsünden codex-cli ajanlarına açıldı (`384ca6c5`) ve ajan başına "sağlayıcının
+native web araması" anahtarı eklendi (model, API, market pack, şablon ve ajan
+ayar formu; `2f8c5731`).
+
+## View sadeleştirmesi ve sohbet/panel arayüzü (2026-08-28) ✅
+
+Token ve maliyet raporlaması yalnız budget view'ında kaldı: ajan, oturum ve
+workspace başlıklarından harcama düşürüldü (`0f354381`), geride kalan bayat
+doküman/yorum iddiaları temizlendi (`693996fb`, `3f3cb70c`).
+
+Sohbet tarafında: girdisinde komut/yol/mesaj taşımayan araçlar (`get_view`,
+`expand`, `read_artifact`, `list_agents`, `list_workers`,
+`set_coordinator_mode`) için adım kartı özeti artık boş kalmıyor — kimlik satırı
+veya en fazla iki skaler `key=value` gösteriliyor (`7e1866dc`); tekil view'larda
+`board · board` gibi tekrarlar tek başlığa çöküyor (`c1e6b8a2`); gelen peer/inbox
+balonları kendi tema renk token'larını aldı (WCAG AA kontrast testiyle,
+`1614b878`). Insight bulgular kanban'ı `min-h-0` zinciriyle panel içinde kalıyor
+ve lens checkbox'ı switch oldu (`437f5109`). Yazılabilir oturum-türü kontrolü
+`shared/lib/sessionKind` modülüne taşındı, salt-okunur rozeti `kind === 'insight'`
+yerine bu kontrolden türeyerek inbox dahil her salt-okunur türde görünüyor
+(`cdaea59b`). Vite build'i artık `dist/.gitkeep`'i silmiyor (`69eb60ec`).
+
+## Tanıtım sitesi: /docs bölümü ve release-host www kökü (2026-08-28) ✅
+
+Siteye `src/content/docs/**/*.md` üzerinden bir docs koleksiyonu eklendi: kenar
+çubuğu, breadcrumb, h2/h3 içindekiler, önceki/sonraki gezinme, üç grupta
+(getting-started/concepts/reference) yedi placeholder sayfa ve `/docs` iniş
+sayfası; `docsUrl` artık `null` değil, uygulamadaki "Docs" bağlantısı canlı
+(`8d0d2786`). `sync-www.sh` `website/dist`'i release-host'un `/srv/www` köküne
+kopyalıyor — 8081 portu boş kök yüzünden 404 dönüyordu. `RELEASE_WWW_PATH`
+bilinçli olarak `RELEASE_PATH`'ten ayrı: aynı olsaydı `rsync --delete`
+yayımlanmış release'leri silerdi (`0196691b`).
+
+**Devam eden (henüz commit'lenmedi):** dashboard commit heatmap'i
+(`frontend/src/features/dashboard/CommitHeatmap.tsx`,
+`internal/api/dashboard_commit_activity.go`) ve insight ajan seçimi
+(`frontend/src/features/insight/insightAgentSelection.ts`) ile view DSL
+sadeleştirmesi çalışılıyor.
 
 ## Public yayın (2026-08-27) ✅
 

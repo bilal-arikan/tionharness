@@ -943,6 +943,46 @@ Kritik ayrımlar:
   kırılım oturum ortasında olmamalı (`_Docs\57`) → kart bunu söyler ve "Bağlamı yenile"
   (`/refresh-context`) aksiyonunu sunar.
 
+### Yazılabilir oturum türleri + "Salt okunur" rozeti (2026-08-24)
+
+Composer her oturumda görünmez: yeni bir **kullanıcı turu** yalnız belirli
+oturum türlerinde başlatılabilir. Kural tek yerde tanımlıdır ve üç katman onu
+aynen yansıtır.
+
+- **Tek doğruluk kaynağı:** `writableSessionKindList` / `IsWritableSessionKind`
+  (`internal/db/models.go`). Liste: `""` (manuel sohbet), `"chat"`, `"spawned"`,
+  `"schedule"`. Geri kalan her tür (task, flow, automation, flow-coordinator,
+  worker, insight, inbox) orkestratörün yazdığı koşu kaydıdır — tam okunur ama
+  yeni bir kullanıcı turunun bağlanacağı koşu yoktur.
+- **`"schedule"` bilinçli istisnadır.** Zamanlayıcı da oraya yazar, ama o bir
+  koşu-başına log değil, ajanın uzun ömürlü cron thread'idir; kullanıcı tikler
+  arasında konuşmaya devam edebilmelidir (sorulanı yanıtlamak, düzeltmek, bağlam
+  eklemek). Çakışma riski yok: kullanıcı turu ile zamanlanmış tur aynı
+  per-session turn slot'unu (`turnqueue`) talep ettiğinden iç içe geçmez,
+  sıraya girer.
+- **Frontend aynası:** `isWritableSessionKind`
+  (`frontend/src/shared/lib/sessionKind.ts`) — backend listesiyle **birlikte**
+  değiştirilmelidir, yoksa composer ile API aynı oturum hakkında farklı şey
+  söyler. Kullanıcıları: `pickInitialSession.ts`, `useSessionsController.ts`
+  (composer kapısı) ve `SessionDetailPanel.tsx` (rozet).
+- **Rozet:** `SessionDetailPanel.tsx`, "Oturum bilgisi" başlığının yanına
+  `<Badge tone="muted">Salt okunur</Badge>` çizer — koşul tam olarak
+  `info && !isWritableSessionKind(info.kind)`. Yani rozet **yalnız** composer'ın
+  gizlendiği oturumlarda görünür; amacı eksik composer'ın hata gibi görünmesini
+  engellemektir. `schedule` oturumunda rozet **çıkmaz**.
+- **API karşılığı:** `rejectNonWritableSession`
+  (`internal/api/session_readonly.go`) aynı kapıyı sunucuda uygular ve `403`
+  döner. Yanına iki kural daha oturur: `rejectReadOnlySession` (rewind — canlı
+  turu yönlendirmez, geçmişi keser, bu yüzden zayıf "yazılamaz" kapısıyla
+  korunur) ve `rejectImmutableSession` (stop/steer + `ask_user` yanıtı; yalnız
+  `IsImmutableSessionKind` = makine transkriptleri, bugün `insight`). Bu kapılar
+  yalnız HTTP uçlarındadır; süreç-içi üreticiler (`send_message`, otomasyon
+  teslimi, koordinatör→worker) kasıtlı olarak dışarıdadır.
+
+Test: `frontend/src/shared/lib/sessionKind.test.ts`,
+`internal/db/models_session_kind_test.go`,
+`internal/api/session_writable_test.go`, `internal/api/session_readonly_test.go`.
+
 ## Doğrulama
 
 - `go build ./...` ve `tsc --noEmit` temiz.
