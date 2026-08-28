@@ -119,7 +119,7 @@ var settingsPatchGoldenFields = []string{
 	"claudeResume", "claudePersistentSession", "claudeSysPromptFile",
 	"delegationMaxDepth", "delegationMaxCalls",
 	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn", "spawnTimeoutMin", "spawnIdleTimeoutMin",
-	"chatTurnTimeoutMin", "chatTurnIdleTimeoutMin",
+	"chatTurnTimeoutMin", "chatTurnIdleTimeoutMin", "codexStdoutIdleMin",
 	"idleResumeMax", "scheduleTimeoutMin", "turnWatchdogMin", "turnIdleWatchdogMin",
 	"shellDefaultTimeoutSec", "shellMaxTimeoutSec", "maxToolOutputKB", "agentMessageMaxKB",
 	"coordinatorMaxWorkers", "coordinatorMaxTurns", "coordinatorMaxDepth",

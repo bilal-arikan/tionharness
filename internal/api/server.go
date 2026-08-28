@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -280,6 +281,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
+	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleMin) * time.Minute)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)

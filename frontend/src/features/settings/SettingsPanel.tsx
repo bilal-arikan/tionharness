@@ -218,6 +218,7 @@ export function SettingsPanel({
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
       chatTurnTimeoutMin: draft.chatTurnTimeoutMin,
       chatTurnIdleTimeoutMin: draft.chatTurnIdleTimeoutMin,
+      codexStdoutIdleMin: draft.codexStdoutIdleMin,
       idleResumeMax: draft.idleResumeMax,
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
       turnWatchdogMin: draft.turnWatchdogMin,

@@ -295,6 +295,22 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 	}
 
+	// A CLI provider that kills a wedged subprocess reports it here so the kill
+	// lands in debug.jsonl with its stdout tail instead of surviving only as a turn
+	// error string. Providers cannot reach the db layer (they sit below it), so the
+	// runtime supplies the sink — same shape as OnEvent above, but kept for the
+	// native path too since it is diagnostics, not streaming.
+	req.OnWatchdog = func(kill providers.WatchdogKill) {
+		r.emitDebug(ctx, db.DebugEvent{
+			Type:   db.DebugError,
+			Name:   kill.Provider + "_watchdog_" + kill.Reason,
+			Model:  kill.Model,
+			DurMs:  kill.Window.Milliseconds(),
+			Err:    true,
+			Detail: debugSummary(kill.Detail, 400),
+		})
+	}
+
 	if !agent.MCPEnabled && !cliMCP {
 		// Extended reasoning is applied only on the plain (non-tool) path: the
 		// native tool loop would need to echo signed thinking blocks back, which

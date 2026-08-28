@@ -208,6 +208,19 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           />
         </Field>
         <Field
+          label="Codex stdout sessizlik penceresi (dk)"
+          hint="Akışa başlamış bir codex-cli alt süreci bu kadar süre hiç çıktı üretmezse süreç ağacı öldürülür ve tur 'takıldı' olarak raporlanır (stdout kuyruğu debug.jsonl'e yazılır). Sohbet boşta süresinden küçük tutun (varsayılan 8; 0 = kapalı)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={draft.codexStdoutIdleMin}
+            onChange={(e) => set('codexStdoutIdleMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
           label="Boşta yeniden başlatma (adet)"
           hint="Boşta izleyicisi bir arka-plan turunu kesince, kaldığı yerden sürmek için taze bir boşta penceresinde kaç kez otomatik yeniden başlatılacağı (varsayılan 1; 0 = kapalı). Sert süre tavanı yeniden başlatılmaz."
         >
