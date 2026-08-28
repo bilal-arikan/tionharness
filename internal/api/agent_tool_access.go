@@ -75,6 +75,10 @@ type agentToolAccessResp struct {
 	Blocked     []string           `json:"blocked"`
 	Servers     []toolAccessServer `json:"servers"`
 	PoolIdleSec int                `json:"poolIdleSec"`
+	// Groups is the same bulk-override grouping the agent tools screen uses
+	// (built-in category or MCP server), carrying the per-turn token cost of each
+	// group: what it costs now, and what pulling it up to "full" would cost.
+	Groups []agentToolGroup `json:"groups"`
 }
 
 // handleAgentToolAccess reports, read-only, which tools the agent can actually
@@ -212,6 +216,16 @@ func (s *Server) handleAgentToolAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(blocked)
 
+	// Group cost rows are derived from the FULL catalog (ToolCatalog), not from
+	// the eager/lazy split above: the lazy catalog carries name+description only,
+	// so pricing a "what if this were full" figure off it would undercount every
+	// on-demand tool by its entire schema.
+	groups, err := agentToolGroups(ctx, wsp, wsp.Runtime.ToolCatalog(ctx, ag), visibilityOf)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, agentToolAccessResp{
 		AgentID:     ag.ID,
 		AgentName:   ag.Name,
@@ -222,5 +236,6 @@ func (s *Server) handleAgentToolAccess(w http.ResponseWriter, r *http.Request) {
 		Blocked:     blocked,
 		Servers:     serverRows,
 		PoolIdleSec: poolIdleSec,
+		Groups:      groups,
 	})
 }

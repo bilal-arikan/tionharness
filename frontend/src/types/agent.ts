@@ -21,6 +21,10 @@ export interface Agent {
   providerInstanceId?: string
   model: string
   thinkingLevel?: string
+  // Opt-in to the CLI provider's OWN web search (codex web_search, Claude Code
+  // WebSearch/WebFetch). Default false: the bridged TionHarness web tools are
+  // the single path, so the natives are switched off.
+  nativeWebSearch?: boolean
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
   permissionMode?: string
   // Visual identity for the roster avatar. Both optional — when empty the UI
@@ -66,6 +70,7 @@ export interface AgentPatch {
   provider?: string
   model?: string
   thinkingLevel?: string
+  nativeWebSearch?: boolean
   permissionMode?: string
   avatar?: string
   color?: string
@@ -111,6 +116,12 @@ export interface AgentToolGroup {
   label: string
   count: number
   tools: string[]
+  // Estimated per-turn context cost of the group: what pulling every member up
+  // to the 'full' tier would cost, and what it costs at its current tiers.
+  // Approximations meant for comparison between groups, not billing. Optional so
+  // an older backend that omits them still type-checks.
+  fullTokens?: number
+  currentTokens?: number
 }
 
 export interface AgentTools {
@@ -189,6 +200,9 @@ export interface AgentToolAccess {
   servers: ToolAccessServer[]
   // Idle window after which a scoped MCP connection is reaped (0 = disabled).
   poolIdleSec: number
+  // Same grouping as the agent tools screen, carrying the per-turn token cost of
+  // each group. Optional: an older backend omits it.
+  groups?: AgentToolGroup[]
 }
 
 // Fresh-start context preview: the static system prompt + tool catalog an agent

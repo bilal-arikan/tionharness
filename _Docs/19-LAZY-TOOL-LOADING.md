@@ -864,3 +864,41 @@ Bu yüzden UI'da gizli araçlar **"katalog dışı"** diye etiketlenir, "bağlam
 değil — ikincisi "kullanılamaz" gibi okunurdu. Sürekli self-management yapan bir ajan
 için doğru hamle tier'ı `summary`/`full`'e çekmektir (workspace `ToolVisibility` veya
 ajan `ToolOverrides`); karar sabit değil, ayarlanabilir.
+
+## Grup başına tahmini token maliyeti (2026-08-28)
+
+Yukarıdaki tablo elle ölçülmüştü; artık aynı hesap **kod tarafında** yapılıyor ve
+UI'da grup satırında görünüyor. Böylece "bu grubu `full` tier'a çekersem tur başına
+ne öderim?" sorusu tahminle değil ölçüyle cevaplanır.
+
+**Hesap** — `internal/tools/toolcost.go` (saf yardımcı, `conversation.EstimateText`
+tahmincisiyle):
+
+| tier | fiyatlanan içerik |
+|---|---|
+| `full` | ad + açıklama + serileştirilmiş `InputSchema` (+ `foldExamples` ile katlanan `Examples`) + sabit çerçeve payı |
+| `summary` | ad + açıklama (katalog satırı) |
+| `name-only` | yalnız ad |
+| `hidden` | 0 — katalogdan tamamen katlanır |
+
+`foldExamples` idempotent olduğu için `prepDef`'ten geçmiş (şemasına örnekler zaten
+gömülü) bir def'i fiyatlamak çift sayıma yol açmaz.
+
+- `tools.FullSchemaTokens(defs)` — hepsi `full` olsaydı.
+- `tools.CurrentTokens(defs, tierOf)` — mevcut tier'larıyla. `tierOf` nil ise
+  panic eder: sessizce 0 raporlamak her grubu ucuz gösterirdi.
+
+**API** — `agentToolGroups` (`internal/api/agent_tools.go`) artık def listesi + tier
+çözücü alıyor ve her grup satırına `fullTokens` / `currentTokens` ekliyor. Alanlar iki
+uçta da görünür: `GET /api/agents/{id}/tools` (`groups[]`) ve
+`GET /api/agents/{id}/tool-access` (yeni `groups[]` alanı). Tool-access tarafında
+maliyet **tam katalogdan** (`Runtime.ToolCatalog`) hesaplanır; lazy katalog yalnız
+ad+açıklama taşıdığı için oradan hesaplansa her on-demand aracın şeması eksik sayılırdı.
+
+**UI** — `AgentToolGroupRow.tsx` satırında `~3.1k tok/tur` rozeti
+(`features/tools/toolCostLabel.ts`); tooltip `full`'e çekmenin farkını yazar. Backend
+alanları göndermezse rozet hiç çizilmez — sahte "0" gösterilmez.
+
+Sayılar **tahmindir**: gruplar arası karşılaştırma için, faturalama için değil. Bu
+yüzden testleri de mutlak değere değil ilişkiye bakar (boş liste 0, uzun şema daha
+pahalı, `Examples` yalnız `full` tier'ı büyütür).

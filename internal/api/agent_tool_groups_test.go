@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
@@ -43,8 +46,22 @@ func TestAgentToolGroupsPayloadShape(t *testing.T) {
 	}
 
 	wsp := &workspace.Workspace{DB: database}
-	names := []string{"Read", "Bash", "WebSearch", "linear__issue", "linear__team"}
-	groups, err := agentToolGroups(ctx, wsp, names)
+	defs := []providers.ToolDef{
+		{Name: "Read", Description: "read a file", InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)},
+		{Name: "Bash", Description: "run a command", InputSchema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}}}`)},
+		{Name: "WebSearch", Description: "search the web", InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)},
+		{Name: "linear__issue", Description: "an issue", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "linear__team", Description: "a team", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	}
+	// Everything eager except WebSearch, so the search group's current cost sits
+	// strictly below its all-full cost.
+	tierOf := func(name string) string {
+		if name == "WebSearch" {
+			return tools.VisibilityHidden
+		}
+		return tools.VisibilityFull
+	}
+	groups, err := agentToolGroups(ctx, wsp, defs, tierOf)
 	if err != nil {
 		t.Fatalf("agentToolGroups: %v", err)
 	}
@@ -76,5 +93,30 @@ func TestAgentToolGroupsPayloadShape(t *testing.T) {
 	// Built-in categories come first, MCP servers after.
 	if groups[len(groups)-1].Kind != "mcp" {
 		t.Fatalf("MCP groups must be last: %+v", groups)
+	}
+
+	// Cost fields: relational assertions only — the estimator's absolute numbers
+	// are an approximation and must not be pinned here.
+	for _, g := range groups {
+		if g.FullTokens <= 0 {
+			t.Fatalf("group %s must report a positive full-tier cost: %+v", g.Key, g)
+		}
+		if g.CurrentTokens > g.FullTokens {
+			t.Fatalf("group %s current cost exceeds all-full cost: %+v", g.Key, g)
+		}
+	}
+	if files.CurrentTokens != files.FullTokens {
+		t.Fatalf("an all-eager group must already cost its full price: %+v", files)
+	}
+	search, ok := byKey["group:search"]
+	if !ok {
+		t.Fatalf("group:search missing from %v", groups)
+	}
+	if search.CurrentTokens >= search.FullTokens {
+		t.Fatalf("a hidden member must make the group cheaper than all-full: %+v", search)
+	}
+	if files.FullTokens <= mcpGroup.FullTokens {
+		t.Fatalf("richer built-in schemas should outweigh the bare MCP ones: files=%d mcp=%d",
+			files.FullTokens, mcpGroup.FullTokens)
 	}
 }

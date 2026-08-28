@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
@@ -88,7 +89,10 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 			blocked = append(blocked, name)
 		}
 	}
-	groups, err := agentToolGroups(r.Context(), ws(r), names)
+	// Cost is reported against the AGENT's effective tiers (overrides applied),
+	// not the workspace defaults — that is the number the row's bulk override
+	// would actually change.
+	groups, err := agentToolGroups(r.Context(), ws(r), catalog, ws(r).Runtime.ToolVisibilityFunc(r.Context(), ag))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -112,22 +116,52 @@ type agentToolGroup struct {
 	Label string   `json:"label"`
 	Count int      `json:"count"`
 	Tools []string `json:"tools"`
+	// FullTokens: estimated per-turn context cost if EVERY tool in the group sat
+	// at the "full" tier — the price of the bulk override the row offers.
+	// CurrentTokens: what the group costs right now at its effective tiers.
+	// Both are conversation.EstimateText approximations (see tools.TierTokens);
+	// they are meant to be compared with each other, not billed against.
+	FullTokens    int `json:"fullTokens"`
+	CurrentTokens int `json:"currentTokens"`
 }
 
 // agentToolGroups derives the group rows from the ACTIVE catalog: only groups
 // that actually have tools right now are returned, so the UI never offers a key
 // that would match nothing. Built-in categories come first in their canonical
 // order, then MCP servers sorted by namespace.
-func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, names []string) ([]agentToolGroup, error) {
-	byCategory := map[string][]string{}
-	byNS := map[string][]string{}
-	for _, name := range names {
-		if ns, _, ok := mcp.SplitNamespaced(name); ok {
-			byNS[ns] = append(byNS[ns], name)
+//
+// defs carry the FULL schemas, so each row can also report what the group costs
+// per turn — at its current tiers and if it were pulled up to "full". tierOf
+// resolves a tool's effective visibility tier for the agent in question; it must
+// be non-nil (an absent resolver would silently price everything at zero).
+func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, defs []providers.ToolDef, tierOf func(name string) string) ([]agentToolGroup, error) {
+	byCategory := map[string][]providers.ToolDef{}
+	byNS := map[string][]providers.ToolDef{}
+	for _, d := range defs {
+		if ns, _, ok := mcp.SplitNamespaced(d.Name); ok {
+			byNS[ns] = append(byNS[ns], d)
 			continue
 		}
-		cat := tools.CategoryOf(name)
-		byCategory[cat] = append(byCategory[cat], name)
+		cat := tools.CategoryOf(d.Name)
+		byCategory[cat] = append(byCategory[cat], d)
+	}
+
+	// row builds one group row: sorted member names plus the two cost figures.
+	row := func(key, kind, label string, members []providers.ToolDef) agentToolGroup {
+		sort.Slice(members, func(i, j int) bool { return members[i].Name < members[j].Name })
+		names := make([]string, 0, len(members))
+		for _, d := range members {
+			names = append(names, d.Name)
+		}
+		return agentToolGroup{
+			Key:           key,
+			Kind:          kind,
+			Label:         label,
+			Count:         len(members),
+			Tools:         names,
+			FullTokens:    tools.FullSchemaTokens(members),
+			CurrentTokens: tools.CurrentTokens(members, tierOf),
+		}
 	}
 
 	out := make([]agentToolGroup, 0, len(byCategory)+len(byNS))
@@ -136,14 +170,7 @@ func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, names []stri
 		if len(members) == 0 {
 			continue
 		}
-		sort.Strings(members)
-		out = append(out, agentToolGroup{
-			Key:   tools.GroupPrefix + cat,
-			Kind:  "builtin",
-			Label: cat,
-			Count: len(members),
-			Tools: members,
-		})
+		out = append(out, row(tools.GroupPrefix+cat, "builtin", cat, members))
 	}
 
 	// Namespace prefix → configured display name, so an MCP group reads as the
@@ -164,19 +191,11 @@ func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, names []stri
 	}
 	sort.Strings(nss)
 	for _, ns := range nss {
-		members := byNS[ns]
-		sort.Strings(members)
 		label := ns
 		if name, found := serverByNS[ns]; found {
 			label = name
 		}
-		out = append(out, agentToolGroup{
-			Key:   ns + "__*",
-			Kind:  "mcp",
-			Label: label,
-			Count: len(members),
-			Tools: members,
-		})
+		out = append(out, row(ns+"__*", "mcp", label, byNS[ns]))
 	}
 	return out, nil
 }

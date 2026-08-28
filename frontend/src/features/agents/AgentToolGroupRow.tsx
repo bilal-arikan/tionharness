@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import type { AgentToolGroup, AgentToolTier } from '@/types'
 import { AgentTierSelector } from '@/features/tools/VisibilityControls'
+import { costHint, costLabel } from '@/features/tools/toolCostLabel'
 
 // AgentToolGroupRow is one bulk-override target: a built-in category
 // ('group:files') or an MCP server ('linear__*'). Picking a tier writes the
@@ -22,6 +23,8 @@ export function AgentToolGroupRow({
   onSelect: (tier: AgentToolTier) => void
   onClear: () => void
 }) {
+  // Per-turn context cost of the group — the number the tier choice moves.
+  const cost = costLabel(group)
   return (
     <li
       data-testid="agent-tool-group-row"
@@ -38,6 +41,15 @@ export function AgentToolGroupRow({
       <span className="text-[11px] text-[var(--color-text-dim)]">
         {group.kind === 'mcp' ? 'MCP' : 'yerleşik'} · {group.count} araç
       </span>
+      {cost && (
+        <span
+          title={costHint(group)}
+          data-testid="agent-tool-group-cost"
+          className="rounded-md border border-[var(--color-border)] px-1 text-[10px] leading-4 text-[var(--color-text-dim)]"
+        >
+          {cost}
+        </span>
+      )}
       <span className="ml-auto flex items-center gap-1.5">
         <AgentTierSelector
           // No override yet → no segment is active; the empty string matches no
