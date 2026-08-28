@@ -243,7 +243,8 @@ type AgentProfilePatch struct {
 	ThinkingLevel      *string
 	// NativeWebSearch toggles the provider's own web search (see
 	// Agent.NativeWebSearch). Pointer so an explicit false (turn it off) is
-	// distinguishable from "not in this patch".
+	// distinguishable from "not in this patch"; the stored field is itself a
+	// pointer whose nil means enabled, so a patch can only set it, never unset it.
 	NativeWebSearch *bool
 	PermissionMode  *string
 	Avatar          *string
@@ -290,7 +291,8 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 			a.ThinkingLevel = *p.ThinkingLevel
 		}
 		if p.NativeWebSearch != nil {
-			a.NativeWebSearch = *p.NativeWebSearch
+			v := *p.NativeWebSearch
+			a.NativeWebSearch = &v
 		}
 		if p.PermissionMode != nil {
 			a.PermissionMode = *p.PermissionMode

@@ -112,13 +112,18 @@ func TestWriteCLIMCPConfigNativeWebSearchWithoutServers(t *testing.T) {
 		return false
 	}
 
+	yes, no := true, false
+
 	for _, tc := range []struct {
 		name            string
-		nativeWebSearch bool
+		nativeWebSearch *bool
 		wantDisallowed  bool
 	}{
-		{name: "disabled", wantDisallowed: true},
-		{name: "enabled", nativeWebSearch: true},
+		// nil = the field was never written: the default is ENABLED, so nothing
+		// may be suppressed.
+		{name: "unset defaults to enabled"},
+		{name: "explicitly enabled", nativeWebSearch: &yes},
+		{name: "explicitly disabled", nativeWebSearch: &no, wantDisallowed: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))

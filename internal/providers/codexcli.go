@@ -177,10 +177,10 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		// turn on a prompt no one can answer in exec mode.
 		DisableUpdatePlan:       true,
 		DisableRequestUserInput: true,
-		// Native web search is opt-in (Request.NativeWebSearch). Off renders
-		// `web_search = false`; on writes NOTHING at all — codex enables its search
-		// by default and `web_search = true` is not a documented/verified key, so
-		// under --strict-config an unknown value would fail the whole turn.
+		// Native web search is opt-OUT (Request.NativeWebSearch, on by default).
+		// Off renders `web_search = false`; on writes NOTHING at all — codex enables
+		// its search by default and `web_search = true` is not a documented/verified
+		// key, so under --strict-config an unknown value would fail the whole turn.
 		DisableWebSearch: !req.NativeWebSearch,
 		// Codex's native multi-agent/collab tools duplicate spawn_worker and are
 		// unusable under --ephemeral (no thread store), so a model that reaches

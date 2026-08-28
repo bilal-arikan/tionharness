@@ -99,10 +99,10 @@ type createAgentReq struct {
 	PermissionMode string `json:"permissionMode"`
 	Avatar         string `json:"avatar"`
 	Color          string `json:"color"`
-	// NativeWebSearch opts into the CLI provider's own web search (see
-	// db.Agent.NativeWebSearch). Defaults OFF: the bridged WebSearch/WebFetch
-	// tools are the default path.
-	NativeWebSearch bool `json:"nativeWebSearch"`
+	// NativeWebSearch gates the CLI provider's own web search (see
+	// db.Agent.NativeWebSearch). Pointer, and omitting it stores nil, which means
+	// ENABLED — new agents can search the web unless the caller sends false.
+	NativeWebSearch *bool `json:"nativeWebSearch"`
 	// MCPEnabled gates tool access. Pointer so we can tell "omitted" (nil →
 	// default on) apart from an explicit false (opt-out). New agents get tools
 	// by default.

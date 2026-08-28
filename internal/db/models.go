@@ -68,15 +68,18 @@ type Agent struct {
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.
 	ThinkingLevel string `json:"thinkingLevel"`
-	// NativeWebSearch opts the agent INTO its CLI provider's OWN web search
-	// (codex `web_search`; Claude Code's WebSearch/WebFetch built-ins). Default
-	// false = native search is switched off, because TionHarness bridges its own
-	// WebSearch/WebFetch tools to both CLIs: leaving the natives on gives the
-	// model two ways to do the same thing, and the native one bypasses the
-	// bridged tool's trace/usage accounting. Turning it on lets the provider
-	// search natively; the call still surfaces as a trace step. Ignored by
-	// non-CLI providers, which get their web tools from the request itself.
-	NativeWebSearch bool `json:"nativeWebSearch,omitempty"`
+	// NativeWebSearch controls whether the agent may use its CLI provider's OWN
+	// web search (codex `web_search`; Claude Code's WebSearch/WebFetch built-ins).
+	//
+	// NIL (field absent on disk, e.g. every agent written before this toggle
+	// existed) MEANS ENABLED — that is the product default: an agent can search
+	// the web out of the box. An explicit false switches the natives off, leaving
+	// TionHarness's bridged WebSearch/WebFetch tools as the only path (their calls
+	// are the ones that carry trace and usage accounting). Read it through
+	// NativeWebSearchEnabled, never as a bare bool: the zero value of a plain bool
+	// would silently mean "off" for every pre-existing agent. Ignored by non-CLI
+	// providers, which get their web tools from the request itself.
+	NativeWebSearch *bool `json:"nativeWebSearch,omitempty"`
 	// PermissionMode gates how the agent's tool use is approved:
 	// "read-only" | "ask" | "auto". Empty defaults to "auto". For the claude-cli
 	// path this maps to the CLI's --permission-mode / --dangerously-skip-permissions
@@ -184,6 +187,14 @@ type Agent struct {
 
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
+}
+
+// NativeWebSearchEnabled resolves the three-state NativeWebSearch toggle: an
+// unset (nil) field means ENABLED, so an agent stored before the toggle existed —
+// and any agent whose owner never touched the checkbox — keeps provider-native
+// web search. Only an explicit false turns it off.
+func (a Agent) NativeWebSearchEnabled() bool {
+	return a.NativeWebSearch == nil || *a.NativeWebSearch
 }
 
 // SessionSchemaVersion is the current session-header format version, stamped on

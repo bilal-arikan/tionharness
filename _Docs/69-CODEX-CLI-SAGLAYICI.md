@@ -785,15 +785,22 @@ bir liste olacak.
 araması **daima açıktı** (yukarıdaki "varsayılan kapalı" tespiti codex'in kendi
 varsayılanı için geçerliydi, TionHarness'in yazdığı config için değil). Zincir:
 
-`db.Agent.NativeWebSearch` (JSON `nativeWebSearch`) → `toolloop.go`
-`req.NativeWebSearch` → `codexcli.go buildConfig` → `codexConfig.DisableWebSearch`
-→ `config.toml`'da `[tools] web_search = false`.
+`db.Agent.NativeWebSearch` (JSON `nativeWebSearch`, `*bool`) →
+`Agent.NativeWebSearchEnabled()` → `toolloop.go` `req.NativeWebSearch` →
+`codexcli.go buildConfig` → `codexConfig.DisableWebSearch` → `config.toml`'da
+`[tools] web_search = false`.
 
-- **Kapalı (varsayılan):** `web_search = false` yazılır; arama yalnız köprülenen
+Toggle **varsayılan açıktır**; `nil` (alan diskte yok) = açık demektir, bu yüzden
+model alanı `*bool`'dur — düz `bool` + `omitempty` ile mevcut ajan dosyaları
+yüklenince sessizce kapanırdı (bkz. `_Docs/11-INTERACTION-MCP.md`).
+
+- **Açık (varsayılan):** config'e bu konuda **hiçbir satır yazılmaz**.
+- **Kapalı (açık `false`):** `web_search = false` yazılır; arama yalnız köprülenen
   `WebSearch`/`WebFetch` araçlarından geçer.
-- **Açık:** config'e bu konuda **hiçbir satır yazılmaz**. `web_search = true`'nun
-  desteklendiği kanıtlanmadı ve tur `--strict-config` ile koşuyor — bilinmeyen bir
-  değer tüm turu düşürürdü. Codex kendi varsayılanıyla devam eder.
+
+Açıkken satır yazılmamasının nedeni: `web_search = true`'nun desteklendiği
+kanıtlanmadı ve tur `--strict-config` ile koşuyor — bilinmeyen bir değer tüm turu
+düşürürdü. Codex kendi varsayılanıyla devam eder.
 
 Taşıma kanalı bilinçli olarak `providers.Request`, `CLIMCPSpec` değil: spec ancak
 `len(spec.Servers) > 0` iken uygulanıyor (`toolloop.go`), dolayısıyla MCP'si kapalı

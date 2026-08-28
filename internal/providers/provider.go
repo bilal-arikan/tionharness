@@ -219,9 +219,10 @@ type Request struct {
 	DisableThinking bool
 	// NativeWebSearch, when set, lets a CLI provider use its OWN web search
 	// (codex: `web_search` stays enabled in config.toml; claude-cli: the native
-	// WebSearch/WebFetch tools stay on the menu). False — the default — switches
-	// those natives off so the bridged TionHarness WebSearch/WebFetch tools are
-	// the only path. Set from the agent's NativeWebSearch toggle. It rides the
+	// WebSearch/WebFetch tools stay on the menu). False switches those natives off
+	// so the bridged TionHarness WebSearch/WebFetch tools are the only path.
+	// Always set explicitly from db.Agent.NativeWebSearchEnabled, whose default is
+	// TRUE — the zero value here is not the product default. It rides the
 	// Request rather than CLIMCPSpec on purpose: the spec is only applied when the
 	// turn wires MCP servers, so an MCP-less agent would silently lose the
 	// setting. HTTP providers ignore it (their web tools are request-level).

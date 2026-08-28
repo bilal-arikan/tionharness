@@ -21,9 +21,10 @@ export interface Agent {
   providerInstanceId?: string
   model: string
   thinkingLevel?: string
-  // Opt-in to the CLI provider's OWN web search (codex web_search, Claude Code
-  // WebSearch/WebFetch). Default false: the bridged TionHarness web tools are
-  // the single path, so the natives are switched off.
+  // The CLI provider's OWN web search (codex web_search, Claude Code
+  // WebSearch/WebFetch). UNDEFINED MEANS ENABLED — that is the default; only an
+  // explicit false switches the natives off and leaves the bridged TionHarness
+  // web tools as the single path.
   nativeWebSearch?: boolean
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.
   permissionMode?: string

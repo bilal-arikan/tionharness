@@ -81,7 +81,9 @@ export function AgentSettingsForm({
   )
   const [model, setModel] = useState(agent.model ?? '')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
-  const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? false)
+  // undefined = the agent never stored the flag, which means ENABLED (see
+  // Agent.nativeWebSearch) — the checkbox must start checked, not cleared.
+  const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? true)
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
@@ -125,7 +127,7 @@ export function AgentSettingsForm({
       providerInstanceId !== (agent.providerInstanceId || agent.provider) ||
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel ?? '') ||
-      nativeWebSearch !== (agent.nativeWebSearch ?? false) ||
+      nativeWebSearch !== (agent.nativeWebSearch ?? true) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       coordinatorMode !== (agent.coordinatorMode ?? false) ||
       coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
@@ -457,17 +459,17 @@ export function AgentSettingsForm({
               className="mt-0.5 accent-[var(--color-accent)]"
             />
             <span>
-              CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin
+              CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin (varsayılan açık)
             </span>
           </label>
         </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-          Kapalıyken (varsayılan) codex'in <code>web_search</code>'ü config'te kapatılır ve
+          Açıkken (varsayılan) sağlayıcı kendi aramasını yapar; çağrı yine de aktivite izinde bir
+          adım olarak görünür. Kapatırsan codex'in <code>web_search</code>'ü config'te kapatılır ve
           claude-cli'nin <code>WebSearch</code>/<code>WebFetch</code> yerleşikleri
           <code>--disallowedTools</code> + <code>permissions.deny</code> ile engellenir; arama
           yalnız TionHarness'in köprülenen <code>WebSearch</code>/<code>WebFetch</code> araçlarından
-          geçer (izleme ve kullanım sayacı bunlarda çalışır). Açıkken sağlayıcı kendi aramasını
-          yapar; çağrı yine de aktivite izinde bir adım olarak görünür.
+          geçer (izleme ve kullanım sayacı bunlarda çalışır).
         </p>
 
         <Field label="Koordinatör">

@@ -250,15 +250,25 @@ tek-atım `-p` modunda geçerli native yedeğe sahip olmadığından koşulsuz k
 
 **Native web arama toggle'ı (2026-08-28).** `db.Agent.NativeWebSearch`
 (JSON `nativeWebSearch`, ajan ayarları formunda "Sağlayıcının kendi web araması")
-CLI sağlayıcının **kendi** aramasını açar/kapatır. Varsayılan **kapalı**:
-`climcp.go` `disallowed` listesine `WebSearch` + `WebFetch` ekler (ve aynı liste
-`writeCLISettings` üzerinden `permissions.deny`'a da düşer), böylece tek yol
-TionHarness'in köprülenen `WebSearch`/`WebFetch` araçları olur — izleme ve kullanım
-sayacı yalnız orada çalışır. Açıkken hiçbir kısıt yazılmaz, native araç menüde
-kalır.
+CLI sağlayıcının **kendi** aramasını açar/kapatır. Varsayılan **açık**.
+
+Alan bilinçli olarak `*bool`'dur ve **üç durumludur**: `nil` (diskte anahtar yok)
+= **açık**, `true` = açık, `false` = kapalı. Düz `bool` ile bu default imkânsızdı —
+`omitempty` `false` değerini hiç yazmadığı için toggle'dan önce yazılmış her ajan
+dosyası yüklenince "kapalı" olurdu. Okuma tek bir yerden yapılır:
+`Agent.NativeWebSearchEnabled()` (`nil` → `true`); ham alanı bool gibi okuma.
+Regresyon kilidi: `internal/db/agent_native_web_search_test.go`.
+
+- **Açık (varsayılan):** hiçbir kısıt yazılmaz, native araç menüde kalır.
+- **Kapalı (açık `false`):** `climcp.go` `disallowed` listesine `WebSearch` +
+  `WebFetch` ekler (aynı liste `writeCLISettings` üzerinden `permissions.deny`'a da
+  düşer), böylece tek yol TionHarness'in köprülenen `WebSearch`/`WebFetch`
+  araçları olur — izleme ve kullanım sayacı yalnız orada çalışır.
 
 Bu suppress **`inter.URL != ""` bloğunun dışındadır**: toggle ajan düzeyindedir,
-interaction endpoint'i olmayan bir turda da geçerli olmalıdır. Aynı nedenle
+interaction endpoint'i olmayan bir turda da geçerli olmalıdır. Varsayılan açık
+olduğu için liste artık çoğu turda boştur, ama kapatan bir ajanda yol yine
+çalışmalıdır. Aynı nedenle
 `writeCLIMCPConfig` MCP sunucusu yokken bile `disallowed` listesini döndürür,
 `toolloop.go` spec'i `path != "" || len(disallowed) > 0` koşuluyla uygular ve
 `ClaudeCLI.mcpArgs` `--settings`/`--disallowedTools` bayraklarını `--mcp-config`

@@ -117,10 +117,11 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 	// Native web search is an AGENT-level toggle, so its suppression must not sit
 	// inside the interaction-endpoint branch below: an agent without an endpoint
 	// (no bridged tools at all) would silently keep the CLI's own WebSearch/
-	// WebFetch even with the toggle off. Off is the default — TionHarness bridges
-	// its own web tools — so this list is normally non-empty, which is why the
-	// caller applies the spec on the strength of `disallowed` alone.
-	if !ag.NativeWebSearch {
+	// WebFetch even with the toggle off. The toggle is ON by default
+	// (NativeWebSearchEnabled: nil = enabled), so this branch only fires for an
+	// agent that explicitly opted out — but when it does, the caller must still
+	// apply the spec on the strength of `disallowed` alone.
+	if !ag.NativeWebSearchEnabled() {
 		disallowed = append(disallowed, "WebSearch", "WebFetch")
 	}
 

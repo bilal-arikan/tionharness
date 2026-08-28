@@ -177,11 +177,12 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// (ThinkingBudget==0 already means off there).
 	req.DisableThinking = thinkingBudgetForLevel(agent.ThinkingLevel) == 0
 
-	// Provider-native web search is opt-in per agent. Off (the default) tells the
-	// CLI providers to switch their own search off so the bridged WebSearch/
-	// WebFetch tools stay the single path; on leaves the native tool available and
-	// its call surfaces as a trace step.
-	req.NativeWebSearch = agent.NativeWebSearch
+	// Provider-native web search is opt-OUT per agent: on unless the agent stores
+	// an explicit false (NativeWebSearchEnabled resolves the nil = enabled
+	// default). On leaves the native tool available and its call surfaces as a
+	// trace step; off tells the CLI providers to switch their own search off so
+	// the bridged WebSearch/WebFetch tools stay the single path.
+	req.NativeWebSearch = agent.NativeWebSearchEnabled()
 
 	// Announce the configured task budget to autonomous turns (API-native
 	// output_config.task_budget): the model sees a running countdown for the
