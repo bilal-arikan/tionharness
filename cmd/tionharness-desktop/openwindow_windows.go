@@ -12,7 +12,8 @@ import (
 // single-window-per-process, so a separate process is how we get a second
 // native window (see _Docs/30-COKLU-PENCERE.md).
 //
-// NOTE: this deliberately uses plain exec.Command, NOT proc.Command. proc.Command
+// NOTE: this deliberately uses plain exec.Command, NOT proc.Command (marker:
+// exec-console-exempt, see internal/proc/console_policy_test.go). proc.Command
 // sets SysProcAttr.HideWindow (STARTF_USESHOWWINDOW + SW_HIDE) to suppress a
 // console flash — correct for console children, but it would start this GUI
 // child's WebView2 window HIDDEN. The child is a -H windowsgui binary with no

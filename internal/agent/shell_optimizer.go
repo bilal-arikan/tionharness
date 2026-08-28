@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,7 +77,7 @@ func (r *Runtime) sqzShellFilter(ctx context.Context) tools.ShellOutputFilter {
 	return func(cmd, output string) (string, *tools.ShellOptimization) {
 		runCtx, cancel := context.WithTimeout(ctx, sqzCompressTimeout)
 		defer cancel()
-		c := exec.CommandContext(runCtx, sqzPath, "compress", "--cmd", cmd)
+		c := proc.CommandContext(runCtx, sqzPath, "compress", "--cmd", cmd)
 		c.Stdin = strings.NewReader(output)
 		var out, errBuf bytes.Buffer
 		c.Stdout = &out

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -176,7 +176,7 @@ func (t CodebaseWorkspaceSearchTool) runCLI(ctx context.Context, tool string, pa
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, t.command, "cli", tool, string(arg))
+	cmd := proc.CommandContext(ctx, t.command, "cli", tool, string(arg))
 	cmd.Env = os.Environ()
 	stdout, err := cmd.Output()
 	if err != nil {

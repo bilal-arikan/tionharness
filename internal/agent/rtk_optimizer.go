@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"strings"
 	"time"
 
@@ -75,7 +77,7 @@ func (r *Runtime) rtkCommandFilter(ctx context.Context) tools.ShellCommandFilter
 		// disabled the whole feature. The OUTPUT is validated instead — it must be a
 		// non-empty, changed, rtk-prefixed command — which is the property we
 		// actually depend on and which cannot drift with rtk's exit-code conventions.
-		c := exec.CommandContext(runCtx, rtkPath, "rewrite", cmd)
+		c := proc.CommandContext(runCtx, rtkPath, "rewrite", cmd)
 		var out, errBuf bytes.Buffer
 		c.Stdout = &out
 		c.Stderr = &errBuf

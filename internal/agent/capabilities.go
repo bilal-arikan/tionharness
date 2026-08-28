@@ -3,7 +3,8 @@ package agent
 import (
 	"context"
 	"os"
-	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -67,7 +68,7 @@ const codebaseMemoryCommandMarker = "codebase-memory-mcp"
 var (
 	codebaseIndexRunning sync.Map
 	runIndexRepository   = func(command, repoPath string) ([]byte, error) {
-		cmd := exec.Command(command, "cli", "index_repository", "--repo-path", repoPath)
+		cmd := proc.Command(command, "cli", "index_repository", "--repo-path", repoPath)
 		cmd.Env = os.Environ()
 		return cmd.CombinedOutput()
 	}

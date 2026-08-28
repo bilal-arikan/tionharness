@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -48,7 +50,7 @@ func runToolCmd(ctx context.Context, name string, args ...string) (out string, f
 	}
 	runCtx, cancel := context.WithTimeout(ctx, toolCmdTimeout)
 	defer cancel()
-	c := exec.CommandContext(runCtx, bin, args...)
+	c := proc.CommandContext(runCtx, bin, args...)
 	var buf bytes.Buffer
 	c.Stdout = &buf
 	c.Stderr = &buf

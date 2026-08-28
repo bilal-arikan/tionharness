@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -199,7 +201,7 @@ func Transcribe(ctx context.Context, audio []byte, lang, modelID string) (string
 	defer cancel()
 
 	// 1) Transcode to 16 kHz mono WAV (whisper.cpp requires it).
-	ff := exec.CommandContext(cctx, ffmpeg, "-y", "-loglevel", "error", "-i", inPath, "-ar", "16000", "-ac", "1", wavPath)
+	ff := proc.CommandContext(cctx, ffmpeg, "-y", "-loglevel", "error", "-i", inPath, "-ar", "16000", "-ac", "1", wavPath)
 	var ffErr bytes.Buffer
 	ff.Stderr = &ffErr
 	if err := ff.Run(); err != nil {
@@ -208,7 +210,7 @@ func Transcribe(ctx context.Context, audio []byte, lang, modelID string) (string
 
 	// 2) Transcribe. -otxt writes "<prefix>.txt"; read that instead of parsing stdout.
 	outPrefix := filepath.Join(tmpDir, "out")
-	wc := exec.CommandContext(cctx, whisper,
+	wc := proc.CommandContext(cctx, whisper,
 		"-m", model, "-l", langCode(lang), "-nt", "-otxt", "-of", outPrefix, "-f", wavPath)
 	wc.Dir = filepath.Dir(whisper) // ggml-cpu-*.dll load from the binary's dir
 	var wcErr bytes.Buffer

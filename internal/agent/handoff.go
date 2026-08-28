@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -420,7 +420,7 @@ func gitOut(dir string, args ...string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), handoffGitTimeout)
 	defer cancel()
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.CommandContext(ctx, "git", full...).Output()
+	out, err := proc.CommandContext(ctx, "git", full...).Output()
 	if err != nil {
 		return ""
 	}

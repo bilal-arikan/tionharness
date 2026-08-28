@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -213,7 +215,7 @@ func Synthesize(ctx context.Context, text, voiceID string) ([]byte, error) {
 
 	cctx, cancel := context.WithTimeout(ctx, synthTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, exe, "--model", model, "--output_file", tmpPath)
+	cmd := proc.CommandContext(cctx, exe, "--model", model, "--output_file", tmpPath)
 	// espeak-ng-data ships next to the binary; run from there so phonemization
 	// resolves (matches the manual test that set-location'd into the piper dir).
 	cmd.Dir = filepath.Dir(exe)

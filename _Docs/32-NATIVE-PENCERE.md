@@ -243,6 +243,35 @@ da kendi konsollarını açmak yerine bu mevcut gizli konsolu miras alır.
 **Ayrım korunmalı:** torun doğurmayan çağrılar (`ProbeAuth`, `cli_preflight.go`, `git.go`) eski
 `proc.CommandContext` ile kalır — onlarda `CREATE_NO_WINDOW` doğru davranıştır.
 
+## Kural testle zorunlu kılındı — kalan tüm çağrı yerleri ✅ (2026-08-28)
+
+Merkezileştirme yapıldıktan sonra da yeni yazılan kodda düz `exec.Command*` sızmaya devam etti;
+her sızıntı, paketli masaüstü uygulamasında yanıp sönen bir terminal demekti. Kalan sekiz çağrı
+yeri `proc` üzerinden geçirildi:
+
+| Dosya | Süreç | Kullanılan yardımcı |
+|-------|-------|----------------------|
+| `internal/agent/rtk_optimizer.go` | `rtk rewrite` | `proc.CommandContext` |
+| `internal/agent/shell_optimizer.go` | `sqz compress` | `proc.CommandContext` |
+| `internal/agent/capabilities.go` | codebase-memory `index_repository` | `proc.Command` |
+| `internal/agent/handoff.go` | `git` | `proc.CommandContext` |
+| `internal/api/external_tools_maint.go` | harici araç bakımı | `proc.CommandContext` |
+| `internal/tools/builtin_codebase_search.go` | codebase-memory CLI | `proc.CommandContext` |
+| `internal/worktree/git.go` (`ExecRunner`) | `git` | `proc.CommandContext` |
+| `internal/stt/stt.go`, `internal/tts/tts.go` | ffmpeg / whisper / piper | `proc.CommandContext` |
+| `cmd/tionharness-desktop/main.go` (`openBrowser`) | `rundll32` | `proc.HideConsole` |
+
+İlk ikisi en görünür olanlardı: `rtk` ve `sqz` her shell aracı çağrısında koşar, yani her komutta
+bir konsol yanıp sönüyordu.
+
+**Regresyon kapısı:** `internal/proc/console_policy_test.go` (`TestNoRawExecCommand`) depo
+ağacını tarar ve `exec.Command`/`exec.CommandContext` içerip `proc.Command*` / `proc.Hide*`
+yardımcılarının hiçbirine dokunmayan her `.go` dosyasında FAIL verir. Taramadan hariç olanlar:
+`internal/proc` (gizleme katmanının kendisi), `dist/`, `frontend/`, `website/`, `node_modules`,
+`*_test.go`. Bilinçli istisna için dosyaya `exec-console-exempt` işaretçisi + gerekçe yorumu
+konur — şu an tek kullanıcısı `cmd/tionharness-desktop/openwindow_windows.go` (GUI çocuğu;
+`SW_HIDE` onun WebView2 penceresini gizlerdi).
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/tionharness-desktop/main_unix.go`
@@ -252,7 +281,8 @@ da kendi konsollarını açmak yerine bu mevcut gizli konsolu miras alır.
 ## Riskler ve ödünleşmeler
 
 1. **`-H windowsgui` + log**: konsol olmayınca stdout logları görünmez. Çözüm: logbuf
-   zaten UI "Loglar" ekranında; ayrıca dosyaya log opsiyonu (`TIONHARNESS_LOG_FILE`) eklenebilir.
+   zaten UI "Loglar" ekranında; ayrıca `app.SetupLogging()` logları koşulsuz olarak
+   data dizini altındaki dosyaya da yazar (`internal/app/app.go`, `config.LogFilePath()`).
 2. **WebView2 sürümü**: çok eski Win10'larda runtime olmayabilir → fallback ele alınır (yukarıda).
 3. **Bağımlılık yüzeyi**: `go-webview2` + `x/sys` eklenir; yalnız desktop hedefinde, kabul edilebilir.
 4. **İki binary**: dağıtımda iki exe (`tionharness.exe` server, `tionharness-desktop.exe` masaüstü).

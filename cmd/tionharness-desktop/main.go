@@ -29,6 +29,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/app"
 	"github.com/bilal-arikan/tionharness/internal/config"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // envWebviewURL, when set, makes this a connect-only secondary window: it boots
@@ -225,5 +226,9 @@ func waitForHealth(base string, timeout time.Duration) bool {
 // openBrowser opens the default browser at url (Windows fallback path).
 func openBrowser(target string) {
 	// rundll32 url.dll avoids a transient console window that `cmd /c start` flashes.
-	_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", target).Start()
+	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
+	// HideConsole, not proc.Command: rundll32 hands off to the browser, and
+	// HideWindow (SW_HIDE) would apply to the window it shows.
+	proc.HideConsole(cmd)
+	_ = cmd.Start()
 }
