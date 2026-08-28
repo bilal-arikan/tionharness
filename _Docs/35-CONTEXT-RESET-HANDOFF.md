@@ -79,7 +79,7 @@ graph LR
 
 ### Handoff artifact formatı (`handoffPrompt`, 9 bölüm)
 
-Rolling-summary'nin 8 bölümünü **reset-kritik** parçalarla genişletir:
+Rolling-summary'nin bölümlerini **reset-kritik** parçalarla genişletir:
 
 1. Objective / Primary Intent
 2. Key Technical Concepts

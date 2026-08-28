@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/prompts"
@@ -49,5 +50,37 @@ func TestCompactPromptFromCtx(t *testing.T) {
 	// mechanism ships broken. (prompts_test.go also locks this for every key.)
 	if err := prompts.Validate("compact", def); err != nil {
 		t.Fatalf("registry compact default invalid: %v", err)
+	}
+}
+
+// TestCompactDefaultSections locks the numbered sections of the shipped
+// compaction template. Section 9 in particular carries the rules the user set
+// mid-conversation; without its own section those constraints get folded into
+// "5. Decisions and User Feedback" and paraphrased away over repeated compactions.
+func TestCompactDefaultSections(t *testing.T) {
+	def := prompts.Default("compact")
+	sections := []string{
+		"1. Primary Request and Intent:",
+		"2. Key Technical Concepts:",
+		"3. Files and Code:",
+		"4. Errors and Fixes:",
+		"5. Decisions and User Feedback:",
+		"6. Pending Tasks:",
+		"7. Current Work:",
+		"8. Next Step:",
+		"9. Standing Constraints:",
+	}
+	for _, s := range sections {
+		if !strings.Contains(def, s) {
+			t.Errorf("compact default is missing section %q", s)
+		}
+	}
+	// The verbatim rule is the whole point of section 9 — a paraphrasing summary
+	// of a prohibition is not the prohibition.
+	if !strings.Contains(def, "Reproduce each one verbatim") {
+		t.Error("section 9 lost its verbatim-reproduction instruction")
+	}
+	if err := prompts.Validate("compact", def); err != nil {
+		t.Fatalf("compact default invalid after section 9: %v", err)
 	}
 }

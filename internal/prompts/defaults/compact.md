@@ -12,6 +12,7 @@ Structure the updated summary using exactly these sections (omit a section only 
 6. Pending Tasks: outstanding work the user explicitly asked for.
 7. Current Work: precisely what was being done most recently.
 8. Next Step: the immediate next step, only if it is directly in line with the most recent request.
+9. Standing Constraints: rules, prohibitions, and operating conventions stated during the conversation that remain in force for the rest of the session. Reproduce each one verbatim — never paraphrase, merge, or summarize them away. Omit only if none were ever stated.
 
 Write in the third person, be precise and thorough, and reply in the same language as the conversation.
 
