@@ -442,28 +442,16 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 		}
 		return ranked[i].e.name < ranked[j].e.name
 	})
-	// Each line carries the match's BUNDLE key, so the bundle vocabulary is
-	// learnable from a search result: the model can then open a whole group with
-	// activate_tools("group:…") instead of guessing names one at a time.
-	matches := make([]string, 0, len(ranked))
+	// Rendering (row shape, bundle tag, overflow notice) is shared with the
+	// claude-cli gateway path via RenderToolSearch, so a change to the result
+	// format lands on both at once instead of drifting apart.
+	rows := make([]ToolSearchRow, 0, len(ranked))
 	for _, r := range ranked {
-		matches = append(matches, fmt.Sprintf("- %s — %s  [%s]", r.e.name, r.e.desc, BundleOf(r.e.name)))
+		rows = append(rows, ToolSearchRow{Name: r.e.name, Desc: r.e.desc})
 	}
-	const max = 30
-	more := ""
-	if len(matches) > max {
-		// Name the bundles the dropped matches live in, so narrowing has a direction.
-		var dropped []string
-		seen := map[string]bool{}
-		for _, r := range ranked[max:] {
-			if k := BundleOf(r.e.name); !seen[k] {
-				seen[k] = true
-				dropped = append(dropped, k)
-			}
-		}
-		sort.Strings(dropped)
-		more = fmt.Sprintf("\n…and %d more; refine the query. The rest live in: %s.", len(matches)-max, strings.Join(dropped, ", "))
-		matches = matches[:max]
-	}
-	return "Matching tools (activate with activate_tools):\n" + strings.Join(matches, "\n") + more, nil
+	return RenderToolSearch(rows, ToolSearchRenderOpts{
+		Header:   "Matching tools (activate with activate_tools):",
+		Max:      ToolSearchMaxRows,
+		BundleOf: BundleOf,
+	}), nil
 }

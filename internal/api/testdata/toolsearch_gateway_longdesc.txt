@@ -1,0 +1,2 @@
+Matching tools (load with activate_tools):
+- zeta_probe — a very long description that keeps going and going past one hundred characters so truncation behavio…  [group:other]

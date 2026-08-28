@@ -939,6 +939,11 @@ func (b *interactionBackend) listBundles(run *chatRun, keys []string) string {
 // tools.bundleListLimit on the native path.
 const gatewayBundleListLimit = 40
 
+// gatewayToolSearchDescLimit caps a tool_search row's description on the gateway
+// path. Bridged CLI descriptions are far longer than the native catalog's
+// summaries, so this path trims them; the native path prints them in full.
+const gatewayToolSearchDescLimit = 100
+
 // callActivateNames is the original name-based activation path.
 func (b *interactionBackend) callActivateNames(token string, run *chatRun, requested []string) (interaction.CallResult, error) {
 	{
@@ -1083,43 +1088,25 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 			bundleOfName[m] = key
 		}
 	}
-	var matches []string
-	for _, r := range ranked {
-		desc := cands[r.name]
-		if len(desc) > 100 {
-			desc = desc[:100] + "…"
-		}
-		line := "- " + r.name + " — " + desc
-		if key := bundleOfName[r.name]; key != "" {
-			line += "  [" + key + "]"
-		}
-		matches = append(matches, line)
-	}
-	if len(matches) == 0 {
+	if len(ranked) == 0 {
 		return interaction.CallResult{Text: fmt.Sprintf("No on-demand tools match %q.", in.Query)}
 	}
-	const max = 30
-	more := ""
-	if len(matches) > max {
-		// Name the bundles the dropped matches live in, so narrowing has a direction.
-		var dropped []string
-		seen := map[string]bool{}
-		for _, r := range ranked[max:] {
-			key := bundleOfName[r.name]
-			if key == "" || seen[key] {
-				continue
-			}
-			seen[key] = true
-			dropped = append(dropped, key)
-		}
-		sort.Strings(dropped)
-		more = fmt.Sprintf("\n…and %d more; refine the query.", len(matches)-max)
-		if len(dropped) > 0 {
-			more += " The rest live in: " + strings.Join(dropped, ", ") + "."
-		}
-		matches = matches[:max]
+	// Row shape, bundle tag and overflow notice come from the SHARED renderer
+	// (internal/tools/toolsearchrender.go), the same one the native builtin uses, so
+	// the two paths cannot drift apart again. Only the genuine differences — the
+	// header wording, the description cap and the untagged-overflow rule — are passed
+	// in as options.
+	rows := make([]tools.ToolSearchRow, 0, len(ranked))
+	for _, r := range ranked {
+		rows = append(rows, tools.ToolSearchRow{Name: r.name, Desc: cands[r.name]})
 	}
-	return interaction.CallResult{Text: "Matching tools (load with activate_tools):\n" + strings.Join(matches, "\n") + more}
+	return interaction.CallResult{Text: tools.RenderToolSearch(rows, tools.ToolSearchRenderOpts{
+		Header:                  "Matching tools (load with activate_tools):",
+		Max:                     tools.ToolSearchMaxRows,
+		DescLimit:               gatewayToolSearchDescLimit,
+		BundleOf:                func(name string) string { return bundleOfName[name] },
+		OmitEmptyDroppedBundles: true,
+	})}
 }
 
 // interactionURL builds the loopback URL a CLI subprocess uses to reach this
