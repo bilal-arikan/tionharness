@@ -76,6 +76,25 @@ func TestCoordinationToolsAreEager(t *testing.T) {
 	}
 }
 
+// TestBridgedWebToolsReachTheWire pins the codex-cli web-tool bridge end of the
+// change: Runtime.BridgeTools advertises WebFetch/WebSearch for codex, and because
+// both are eager built-ins (visibility full) they must land on the EAGER core wire
+// tier — advertised on every turn, with no activate_tools round-trip codex cannot
+// perform. Classifying alone is not enough; they must survive splitInteractionTiers.
+func TestBridgedWebToolsReachTheWire(t *testing.T) {
+	visOf := func(string) string { return tools.VisibilityFull } // eager built-ins
+	bridge := []providers.ToolDef{{Name: "WebFetch"}, {Name: "WebSearch"}}
+	core, ext := splitInteractionTiers(nil, bridge, visOf)
+	for _, name := range []string{"WebFetch", "WebSearch"} {
+		if cliTier(name, visOf) != "core" {
+			t.Errorf("cliTier(%q) = %q, want core", name, cliTier(name, visOf))
+		}
+		if !contains(core, name) {
+			t.Errorf("%q must be advertised on the eager core tier: core=%v ext=%v", name, core, ext)
+		}
+	}
+}
+
 // TestSplitInteractionTiersHonorsVisibility verifies splitInteractionTiers routes a
 // full-promoted tool to core, a summary/name-only tool to extended, and drops a
 // hidden tool from BOTH wire tiers.

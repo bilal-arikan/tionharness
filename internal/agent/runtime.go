@@ -222,6 +222,12 @@ type Runtime struct {
 	// workDir (the physical workspace dir). A session's own WorkingDir overrides it.
 	defaultWorkDir atomic.Pointer[string]
 
+	// defaultAgentID is this workspace's default agent (the one pre-selected for
+	// new sessions), mirrored from per-workspace settings the same way
+	// defaultWorkDir is. Read by the view projector so an agent card can say which
+	// agent is the default; empty = none configured.
+	defaultAgentID atomic.Pointer[string]
+
 	// codebaseMemoryEnabled gates the whole codebase-memory capability system for
 	// this workspace: the prompt hint block, the per-workspace isolated store env,
 	// the cwd auto-index, and the codebase_workspace_search tool. Default on;
@@ -368,6 +374,19 @@ func (r *Runtime) TerseModeEnabled() bool { return r.terseMode.Load() }
 // SetDefaultWorkDir updates this workspace's default working directory for new
 // sessions (set from per-workspace settings). Empty clears it (back to workDir).
 func (r *Runtime) SetDefaultWorkDir(s string) { r.defaultWorkDir.Store(&s) }
+
+// SetDefaultAgentID updates this workspace's default agent id (set from
+// per-workspace settings). Empty clears it.
+func (r *Runtime) SetDefaultAgentID(id string) { r.defaultAgentID.Store(&id) }
+
+// DefaultAgentID returns this workspace's default agent id, or "" when none is
+// configured.
+func (r *Runtime) DefaultAgentID() string {
+	if p := r.defaultAgentID.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
 
 // WorkspaceDefaultDir returns the working dir used when a session has no override:
 // the configured default working dir when set and valid, else the physical
@@ -861,6 +880,16 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	//     profile; only needs the settings bridge reg already dispatches through.
 	if r.settingsBridge != nil {
 		extra = append(extra, tools.NewUpdateUserPreferencesTool(r.settingsBridge).Def())
+	}
+	//   - WebFetch / WebSearch : codex-cli ONLY. Unlike claude-cli, codex ships no
+	//     native WebFetch at all and its own web_search is OFF by default, so a codex
+	//     agent that is given neither ends up with no web access and starts inventing
+	//     sources. Both are eager built-ins (never in BridgeableDefs, and WebFetch is
+	//     in tools.bridgeExcluded), so they are advertised here explicitly and
+	//     dispatched by name through reg.Call below, exactly like the other extras.
+	//     claude-cli is deliberately untouched — it keeps using its own natives.
+	if r.agentProviderKind(agent) == providerKindCodexCLI {
+		extra = append(extra, tools.NewWebFetchTool().Def(), tools.NewWebSearchTool(r.vault).Def())
 	}
 	for _, d := range extra {
 		if allow == nil || allow(d.Name) {
