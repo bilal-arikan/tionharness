@@ -50,6 +50,9 @@ credential-secret
 /.playwright-mcp/
 # Vite's pre-bundled dependency cache.
 /.vite/
+# Scratch screenshots dropped at the repo root by design/UI runs.
+/openpencil-live.png
+/tsk400-step-cards.png
 
 # Dependencies
 /frontend/node_modules/
