@@ -61,9 +61,17 @@ const DefaultSpawnTimeoutMinutes = 20
 // 0 selects this default.
 const DefaultSpawnIdleTimeoutMinutes = 5
 
+// Interactive chat turn bounds. The hard ceiling is generous (a chat turn may
+// legitimately run a long tool loop); the idle window is the one that reclaims a
+// turn whose PROVIDER STREAM died silently — the socket stays half-open, the CLI
+// subprocess never exits, and without this the session hangs forever and its
+// queued inbox messages are never delivered. 3 minutes (180s) of complete
+// silence is far longer than any real inter-step gap on a streaming provider,
+// and a long-but-step-less operation (non-streaming completion, one big tool
+// call) is held alive by startActivityHeartbeat rather than by a wide window.
 const (
 	DefaultChatTurnTimeoutMinutes     = 120
-	DefaultChatTurnIdleTimeoutMinutes = 20
+	DefaultChatTurnIdleTimeoutMinutes = 3
 )
 
 // DefaultIdleResumeMax is the single-shot budget for the OUT-OF-LOOP idle-timeout

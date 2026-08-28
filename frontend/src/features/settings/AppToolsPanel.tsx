@@ -196,7 +196,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         </Field>
         <Field
           label="Sohbet turu boşta süresi (dk)"
-          hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 20; 0 = kapalı)."
+          hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir; takılan bir sağlayıcı akışı böyle geri alınır. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 3; 0 = kapalı)."
         >
           <input
             type="number"

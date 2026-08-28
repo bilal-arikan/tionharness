@@ -48,7 +48,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// cancels generation; only an explicit "stop" control cancels it.
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(clientGone))
 	defer cancel()
-	ctx, stopTimeout := agent.WithActivityTimeout(runCtx, s.tun.ChatTurnTimeout(), s.tun.ChatTurnIdleTimeout())
+	// Inactivity watchdog for the interactive turn: a provider whose stream dies
+	// silently (half-open socket, CLI subprocess that never exits) otherwise pins
+	// this session forever and its queued inbox messages are never delivered. The
+	// chat wrapper installs the heartbeat interval too, so a long step-less
+	// operation is kept alive while a truly stalled stream is still reclaimed.
+	ctx, stopTimeout := agent.WithChatActivityTimeout(runCtx, s.tun.ChatTurnTimeout(), s.tun.ChatTurnIdleTimeout())
 	defer stopTimeout()
 	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)
@@ -627,21 +632,16 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				// instead of vanishing — append an error/stopped step at the end.
 				cause := context.Cause(ctx)
 				stopped := errors.Is(cause, context.Canceled)
-				detail := "provider error: " + cerr.Error()
-				reason := "provider_error"
-				if errors.Is(cause, agent.ErrTurnHardTimeout) {
-					detail = "Sohbet turu mutlak süre sınırına ulaştı. O ana kadarki yanıt korundu."
-					reason = "turn_hard_timeout"
+				detail, reason := chatTurnFailure(cause, cerr)
+				switch reason {
+				case reasonTurnHardTimeout:
 					s.logger.Info("chat turn hit hard timeout", "session", session.ID, "agent", agentRow.ID)
-				} else if errors.Is(cause, agent.ErrTurnIdleTimeout) {
-					detail = "Sohbet turu etkinlik zaman aşımına uğradı. O ana kadarki yanıt korundu."
-					reason = "turn_idle_timeout"
-					s.logger.Info("chat turn hit idle timeout", "session", session.ID, "agent", agentRow.ID)
-				} else if stopped {
-					detail = "Tur manuel olarak durduruldu. O ana kadarki adımlar korundu."
-					reason = "stopped"
+				case reasonTurnIdleTimeout:
+					s.logger.Info("chat turn stalled: no step within the inactivity window",
+						"session", session.ID, "agent", agentRow.ID, "idle", s.tun.ChatTurnIdleTimeout().String())
+				case reasonStopped:
 					s.logger.Info("chat turn stopped by user", "session", session.ID, "agent", agentRow.ID)
-				} else {
+				default:
 					s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
 				}
 				trace := append(append(leadSteps, kept...), agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})

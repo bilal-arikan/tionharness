@@ -92,6 +92,23 @@
   yollar (token/düşünce/tool_delta) zaten her parçada touch ettiğinden heartbeat
   ALMAZ; böylece takılan bir akış hâlâ idle ile geri alınır. Wedge olan tek işlem
   yine sert tavanla sınırlıdır.
+- **İnteraktif sohbet turu da gözcü altında** (TSK440): `runChatTurn`
+  (`internal/api/chat_stream.go`) turu `agent.WithChatActivityTimeout` ile sarar —
+  arka-plan turuyla AYNI sarmalayıcı, yani hem sert tavan (`ChatTurnTimeout`,
+  varsayılan 120 dk) hem boşta penceresi (`ChatTurnIdleTimeout`, varsayılan **3 dk
+  = 180 sn**) hem de **heartbeat aralığı** kurulur. Aralık kurulmazsa
+  `startActivityHeartbeat` sessizce no-op'a düşer ve meşru uzun-ama-adımsız bir
+  işlem (streaming olmayan tamamlama, tek uzun araç çağrısı) dar pencerede kesilirdi;
+  bu yüzden sohbet yolu artık çıplak `WithActivityTimeout`'u KULLANMAZ. Adım akışı
+  tarafında `TouchActivity` iki yerden besler: her step'te `chat_stream.go`'daki
+  onStep geri çağrısı ve `SessionStepEmitter` (`sessionstep.go`).
+  Sağlayıcı akışı sessizce ölünce (yarı-açık soket, çıkmayan CLI alt süreci) tur
+  `ErrTurnIdleTimeout` ile kesilir; kullanıcıya "Sağlayıcı akışı takıldı…" hata
+  kartı yazılır (`chatTurnFailure`, `internal/api/chat_turn_failure.go`), o ana
+  kadarki kısmi yanıt + iz kalıcılaştırılır, `ClearInflight` çağrılır ve tur normal
+  dönerek seri kuyruk işçisinin **sıradaki gelen-kutusu mesajını** teslim etmesinin
+  önü açılır (önceki davranış: oturum sonsuza kadar asılı, kuyruk hiç ilerlemez —
+  WS19/SES578).
 - **Kesinti kurtarma**: `classifyTurnOutcome` iptal nedenini (`ErrTurnIdleTimeout`/
   `ErrTurnHardTimeout`) + loop terminal işaretlerini okuyup "iş BİTMİŞ DEĞİL" notu
   üretir. `reconcileTurnOutcome` bu notu kurtarılan kısmi metnin başına ekler, iz'e

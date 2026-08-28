@@ -328,7 +328,7 @@ type Settings struct {
 	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`        // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
-	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled)
+	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 3); reclaims a turn whose provider stream stalled
 	IdleResumeMax          int `json:"idleResumeMax"`          // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 	ScheduleTimeoutMin     int `json:"scheduleTimeoutMin"`     // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
 	// TurnWatchdogMin bounds a single QUEUED turn (chat, coordinator, worker, wake…)
@@ -513,7 +513,7 @@ func Default() Settings {
 		SpawnTimeoutMin:        20,
 		SpawnIdleTimeoutMin:    5,
 		ChatTurnTimeoutMin:     120,
-		ChatTurnIdleTimeoutMin: 20,
+		ChatTurnIdleTimeoutMin: 3,
 		IdleResumeMax:          1,
 		ScheduleTimeoutMin:     60,
 		TurnWatchdogMin:        120,

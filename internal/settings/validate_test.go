@@ -91,8 +91,8 @@ func TestScheduleTimeoutDefaultIsOneHour(t *testing.T) {
 
 func TestChatTurnTimeoutDefaultsAndDisable(t *testing.T) {
 	d := Default()
-	if d.ChatTurnTimeoutMin != 120 || d.ChatTurnIdleTimeoutMin != 20 {
-		t.Fatalf("chat timeout defaults = (%d, %d), want (120, 20)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
+	if d.ChatTurnTimeoutMin != 120 || d.ChatTurnIdleTimeoutMin != 3 {
+		t.Fatalf("chat timeout defaults = (%d, %d), want (120, 3)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
 	}
 	d.ChatTurnTimeoutMin = 0
 	d.ChatTurnIdleTimeoutMin = 0
