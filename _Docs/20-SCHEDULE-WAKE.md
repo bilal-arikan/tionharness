@@ -18,11 +18,15 @@ Ajan turunda (native veya CLI)
    Scheduler.armWakeLocked → time.AfterFunc(delay, fireWake)
          │
          ▼  (delay sonra)
-   fireWake → deliverWake(sc)
-         ├─ DB: user mesajı yaz (sc.Prompt)
-         ├─ invokeTraced(sc.SessionID) → asistan yanıtı yaz
-         ├─ emitWakeEvent(phase=start) / emitWakeEvent(phase=done)
-         └─ DB: one-shot satırını sil
+   fireWake
+         ├─ DB: ConsumeOneShotSchedule (TESLİMDEN ÖNCE: enabled=false + lastRunAt)
+         │     └─ zaten tüketilmişse teslim edilmeden çıkılır
+         └─ deliverWake(sc)
+               ├─ DB: user mesajı yaz (sc.Prompt)
+               ├─ invokeTraced(sc.SessionID) → asistan yanıtı yaz
+               ├─ emitWakeEvent(phase=start) / emitWakeEvent(phase=done)
+               ├─ başarı → DB: one-shot satırını sil
+               └─ hata  → satır kalır (devre dışı) + lastDeliveryStatus/Error yazılır
 ```
 
 ## Dosyalar
@@ -42,7 +46,8 @@ Ajan turunda (native veya CLI)
 | `internal/api/schedules.go` | One-shot satırları liste filtresi |
 | `internal/tools/builtin_schedulemgmt.go` | One-shot satırları `list_schedules` filtresi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |
-| `internal/agent/wake_test.go` | 3 birim testi |
+| `internal/db/store_schedule.go` | `ConsumeOneShotSchedule` (at-most-once claim), `ErrNotOneShot` |
+| `internal/agent/wake_test.go` | 5 birim testi |
 
 ## Araç parametreleri
 
@@ -67,7 +72,20 @@ Ajan turunda (native veya CLI)
 - Minimum: `MinWakeDelaySec = 5` saniye (1s altı istekler sıkıştırılır)
 - Maksimum: `maxWakeDelay = 1 saat`
 - Timer çakışması: `rebuildLocked` yeniden çağrıldığında eski timer iptal edilir
-- One-shot tüketimi: `fireWake` timer teti sonrasında ilgili DB satırını siler
+- One-shot tüketimi: **at-most-once**. `fireWake`, teslimi denemeden **önce**
+  `db.ConsumeOneShotSchedule` ile satırı atomik olarak sahiplenir
+  (`enabled=false` + `lastRunAt=now`). Satır o anda etkin listeden düştüğü için
+  araya giren bir `Reload` ikinci timer kuramaz, teslim sırasında süreç ölse bile
+  yeniden başlatmada tekrar teslim edilmez. Yarışı kaybeden çağrı
+  (`claimed=false`) teslimi tümüyle atlar.
+- Teslim sonucu: başarılıysa satır silinir; başarısızsa **silinmez** — devre dışı
+  hâlde kalır ve hata `lastDeliveryStatus="failure"` + `lastDeliveryError`'a
+  yazılır (hata yutulmaz, ayrıca Error seviyesinde loglanır). Tüketim
+  bookkeeping'i teslim deadline'ından bağımsız bir `context.Background()` ile
+  yazılır; teslim zaman aşımı işareti düşürmeyi engelleyemez.
+- Bayat (stale) wake: `FireAt` üzerinden `staleWakeAge = 1 saat`'ten fazla geçmiş
+  ya da `lastRunAt > 0` olan bir satır `rebuildLocked` içinde **teslim edilmeden**
+  tüketilir (`lastDeliveryStatus="expired"`), yeniden kuyruğa girmez.
 - Hata yönetimi: `invokeTraced` başarısız olursa, hata metni asistan mesajı olarak sohbete yazılır (sohbet askıda kalmaz)
 
 ## Frontend thinking göstergesi
@@ -85,6 +103,15 @@ internal/agent/wake_test.go
   TestScheduleWake_ArmsOneShot          — DB satırı, OneShot=true, delay sıkıştırma, boş sessionId reddi
   TestDeliverWake_TargetsOriginalSession — wake orijinal sohbet oturumuna enjekte edilir; hata mesajı inline
   TestScheduler_StartSkipsOneShotCron   — cron tablosuna eklenmez; wakeTimers'da 1 timer kurulur
+  TestFireWake_DeliversAtMostOnce       — iki tick = tek teslim; başarısız teslim de tüketilir,
+                                          satır devre dışı + lastDeliveryError dolu, reload re-arm etmez
+  TestScheduler_RetiresStaleWake        — vadesi çok geçmiş wake teslim edilmeden "expired" tüketilir
+
+internal/db/store_schedule_oneshot_test.go
+  TestConsumeOneShotSchedule_AtMostOnce — ilk claim kazanır (enabled=false + lastRunAt),
+                                          ikincisi hatasız ok=false; satır etkin listeden düşer;
+                                          store yeniden açıldığında (restart) claim korunur
+  TestConsumeOneShotSchedule_RejectsCron — cron satırı ErrNotOneShot, bilinmeyen id ErrNotFound
 ```
 
 ## Canlı test özeti (2026-06-18)
@@ -128,8 +155,8 @@ bekleyen wake otomatik düşürülür (`sendMessage` banner'ı temizler).
 | `internal/api/chat_control.go` | `handleCancelWake` |
 | `internal/api/server.go` | `POST /api/chat/wake/cancel` route |
 | `frontend/src/api/chat.ts` | `cancelWake(sessionId)` |
-| `frontend/src/hooks/useChatStream.ts` | `wakeWaits` durumu, `setWakeWait`/`clearWakeWait`/`cancelWake`, `activeWakeWait` |
-| `frontend/src/components/chat/WakeWaitBanner.tsx` | bekleme banner'ı + geri sayım + Durdur |
+| `frontend/src/features/chat/useChatStream.ts` | `wakeWaits` durumu, `setWakeWait`/`clearWakeWait`/`cancelWake`, `activeWakeWait` |
+| `frontend/src/features/chat/WakeWaitBanner.tsx` | bekleme banner'ı + geri sayım + Durdur |
 | `frontend/src/App.tsx` | `phase` armed/start/cancelled/done dallanması + banner render |
 
 ## Async sohbette `ask_user` / `request_confirmation` (2026-06-19)
@@ -392,7 +419,12 @@ zamanlama başına verilir.
   **kendi taze oturumunu** açar. Paylaşılan thread'e ait defter tutma (stuck
   gate, turn slot, ortak transkript) bu yolda hiç uygulanmaz. Oturum başlığı
   `scheduleSpawnTitle`: zamanlamanın adı varsa `⏰ <ad>`, yoksa prompt'tan
-  türetilen `⏰ <kısa başlık>`.
+  türetilen `⏰ <kısa başlık>`. `Kind = "schedule-run"` (ne varsayılan `"spawned"`
+  ne de paylaşılan thread'in `"schedule"`'ı): kenar çubuğunda yine "Otomasyon"
+  cipiyle gruplanır (`kindChipKey`), ama `getOrCreateKindSession` yalnız
+  `(agentID, Kind)` ile eşleştiği için `"schedule"` kullanmak bu tek seferlik
+  oturumu paylaşılan cron thread'iyle çakıştırırdı — bkz.
+  `internal/agent/scheduler.go` `deliverSpawnedPrompt`.
 - **Akış tabanlı zamanlamada yok sayılır.** `FlowID` set ise ateşleme
   `deliverFlow` yolundan gider ve akış zaten kendi koşu-başına transkriptine
   kaydeder.

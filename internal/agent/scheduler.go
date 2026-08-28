@@ -83,8 +83,15 @@ func (s *Scheduler) rebuildLocked(ctx context.Context) error {
 
 	for _, sc := range schedules {
 		// One-shot wakes are timer-driven, not cron-driven: (re-)arm them and skip
-		// the cron table entirely (their CronExpr is empty).
+		// the cron table entirely (their CronExpr is empty). A spent or long-overdue
+		// wake is retired here instead of being armed again, so a row that survived
+		// its delivery (or a wake whose window passed while the app was down) can
+		// never re-enter the timer wheel.
 		if sc.OneShot {
+			if staleWake(sc) {
+				s.retireStaleWake(ctx, sc)
+				continue
+			}
 			s.armWakeLocked(sc)
 			continue
 		}
@@ -151,6 +158,47 @@ func (s *Scheduler) fire(scheduleID string) {
 // a runaway delay can never pin a timer for days.
 const maxWakeDelay = time.Hour
 
+// staleWakeAge is how far past its FireAt a one-shot wake may still be delivered.
+// Beyond it the wake is retired undelivered: the moment it was meant to continue
+// has passed, and re-delivering an ancient prompt only restarts the conversation
+// out of context.
+const staleWakeAge = time.Hour
+
+// staleWake reports whether a one-shot row must not be armed: it was already
+// consumed by a delivery attempt (LastRunAt > 0 — the row only survives because
+// its cleanup failed), or its fire time is overdue past staleWakeAge.
+func staleWake(sc db.Schedule) bool {
+	if sc.LastRunAt > 0 {
+		return true
+	}
+	return sc.FireAt > 0 && time.Since(time.Unix(sc.FireAt, 0)) > staleWakeAge
+}
+
+// retireStaleWake consumes a one-shot row without delivering it, so it leaves the
+// enabled set for good. Safe to call on an already-consumed row.
+func (s *Scheduler) retireStaleWake(ctx context.Context, sc db.Schedule) {
+	if sc.LastRunAt > 0 {
+		// Already delivered once; only the post-delivery cleanup failed.
+		if err := s.db.SetScheduleEnabled(ctx, sc.ID, false); err != nil {
+			s.logger.Warn("spent wake disable failed", "schedule", sc.ID, "error", err)
+			return
+		}
+		s.logger.Info("spent wake disabled; not re-armed", "schedule", sc.ID, "lastRunAt", sc.LastRunAt)
+		return
+	}
+	if _, claimed, err := s.db.ConsumeOneShotSchedule(ctx, sc.ID); err != nil {
+		s.logger.Warn("stale wake retire failed", "schedule", sc.ID, "error", err)
+		return
+	} else if !claimed {
+		return
+	}
+	if err := s.db.SetScheduleDelivery(ctx, sc.ID, "expired",
+		"wake overdue by more than "+staleWakeAge.String()+"; not delivered", 0); err != nil {
+		s.logger.Warn("stale wake delivery record failed", "schedule", sc.ID, "error", err)
+	}
+	s.logger.Info("stale wake retired; not delivered", "schedule", sc.ID, "fireAt", sc.FireAt)
+}
+
 // armWakeLocked schedules a one-shot wake to fire at sc.FireAt (clamped to a
 // sane window). Caller holds s.mu. An overdue wake fires almost immediately.
 func (s *Scheduler) armWakeLocked(sc db.Schedule) {
@@ -165,34 +213,53 @@ func (s *Scheduler) armWakeLocked(sc db.Schedule) {
 	s.wakeTimers[id] = time.AfterFunc(delay, func() { s.fireWake(id) })
 }
 
-// fireWake runs a one-shot wake on its timer: it delivers the wake prompt back
-// into its originating chat session, then removes the spent schedule (a wake is
-// single-use). It owns its own timeout context so the run survives independently.
+// fireWake runs a one-shot wake on its timer: it consumes the schedule row (a
+// wake is at-most-once), then delivers the wake prompt back into its originating
+// chat session. A delivered wake's row is dropped; a failed one is kept disabled
+// with the reason recorded. It owns its own timeout context so the run survives
+// independently.
 func (s *Scheduler) fireWake(scheduleID string) {
 	s.mu.Lock()
 	delete(s.wakeTimers, scheduleID)
 	s.mu.Unlock()
 
+	// Claim the row BEFORE delivering — a wake is at-most-once. Consuming it only
+	// afterwards left it enabled for the whole delivery, which can block for a long
+	// time on the per-session turn slot: every scheduler rebuild in that window
+	// armed a second timer for the same row, and a process death mid-delivery
+	// replayed it on the next boot, so one wake re-fired indefinitely.
+	// Bookkeeping uses its own context: the delivery deadline must not be able to
+	// abort the very write that marks the wake spent.
+	book := context.Background()
+	sc, claimed, err := s.db.ConsumeOneShotSchedule(book, scheduleID)
+	if err != nil {
+		s.logger.Warn("wake fire: claim failed", "schedule", scheduleID, "error", err)
+		return
+	}
+	if !claimed {
+		s.logger.Info("wake fire: already consumed; skipping",
+			"schedule", scheduleID, "session", sc.SessionID)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt.tun.ScheduleTimeout())
 	defer cancel()
 
-	sc, err := s.db.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		s.logger.Warn("wake fire: lookup failed", "schedule", scheduleID, "error", err)
-		return
-	}
 	s.logger.Info("wake fire: begin", "schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
 
-	fireErr := s.deliverWake(ctx, sc)
-	if fireErr != nil {
+	if fireErr := s.deliverWake(ctx, sc); fireErr != nil {
 		s.logger.Error("wake fire: failed",
 			"schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID, "error", fireErr)
-	} else {
-		s.logger.Info("wake fire: ok", "schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
+		// Keep the spent (now disabled) row and record why it failed, so the failure
+		// is visible in the routine list instead of vanishing with the row.
+		if err := s.db.SetScheduleDelivery(book, scheduleID, "failure", fireErr.Error(), 0); err != nil {
+			s.logger.Warn("wake fire: persist delivery failed", "schedule", scheduleID, "error", err)
+		}
+		return
 	}
-	// A wake is single-use: drop the spent row so it never lingers in the routine
-	// list or re-fires after a restart.
-	if err := s.db.DeleteSchedule(ctx, scheduleID); err != nil {
+	s.logger.Info("wake fire: ok", "schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
+	// Delivered: drop the spent row so it never lingers in the routine list.
+	if err := s.db.DeleteSchedule(book, scheduleID); err != nil {
 		s.logger.Warn("wake fire: cleanup failed", "schedule", scheduleID, "error", err)
 	}
 }
@@ -614,6 +681,14 @@ func (s *Scheduler) deliverSpawnedPrompt(ctx context.Context, sc db.Schedule) (s
 		AgentID:    sc.AgentID,
 		Spawn: SpawnOptions{
 			Title: scheduleSpawnTitle(sc),
+			// Kind "schedule-run", NOT the reuse-mode thread's plain "schedule": that
+			// kind is looked up by (agentID, Kind) alone in getOrCreateKindSession
+			// (SourceID is ignored), so reusing it here would make this one-shot
+			// spawn indistinguishable from — and silently absorb turns meant for —
+			// the agent's single persistent "schedule" thread. "schedule-run" still
+			// groups under the sidebar's "Otomasyon" chip (see kindChipKey) without
+			// that collision.
+			Kind: "schedule-run",
 		},
 	})
 	if err != nil {
