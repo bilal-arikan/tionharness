@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Github, Globe } from 'lucide-react'
+import { BookOpen, Globe } from 'lucide-react'
+import { siGithub } from 'simple-icons'
 import type { VersionInfo } from '@/types'
 import { api } from '@/api'
+import { BrandIcon } from '@/shared/components'
 import { formatDate } from '@/shared/lib/intl'
+
+// lucide-react v1 dropped its brand icons, so the GitHub mark comes from
+// simple-icons (already this project's brand-glyph source) through the BrandIcon
+// adapter, which matches lucide's `size` prop and inherits the link's colour.
+const GithubIcon = ({ size }: { size?: number }) => <BrandIcon icon={siGithub} size={size} />
 
 /**
  * Public project entry points. Kept in sync with `website/src/site.config.ts`:
@@ -11,7 +18,7 @@ import { formatDate } from '@/shared/lib/intl'
 const PROJECT_LINKS = [
   { label: 'Web sitesi', href: 'https://tionharness.com', icon: Globe },
   { label: 'Dokümantasyon', href: 'https://tionharness.com/docs', icon: BookOpen },
-  { label: 'GitHub', href: 'https://github.com/bilal-arikan/tionharness', icon: Github },
+  { label: 'GitHub', href: 'https://github.com/bilal-arikan/tionharness', icon: GithubIcon },
 ] as const
 
 export function AboutPanel() {
@@ -33,9 +40,9 @@ export function AboutPanel() {
     <div className="space-y-5 text-sm">
       {/* App identity */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)] text-xl font-bold text-[var(--color-on-accent)] select-none">
-          S
-        </div>
+        {/* The brand mark itself, same asset the splash screen uses, so the
+            monogram never drifts from the favicon and the exe icon. */}
+        <img src="/favicon.svg" alt="TionHarness" className="h-10 w-10 rounded-xl" />
         <div>
           <div className="text-base font-semibold text-[var(--color-text)]">TionHarness</div>
           <div className="text-[var(--color-text-dim)]">Çok-ajanlı AI runtime</div>
@@ -98,8 +105,8 @@ export function AboutPanel() {
       {/* Güncelleme notu */}
       <div className="rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[var(--color-text-dim)]">
         <span className="mr-1.5 text-[var(--color-warning)]">⚠</span>
-        Otomatik güncelleme kontrolü henüz desteklenmiyor. Yeni sürümler için projeyi manuel olarak
-        kontrol edin.
+        Yeni sürüm çıktığında uygulama üstte bir bildirim şeridi gösterir, ancak güncellemeyi
+        kendisi kurmaz — indirme ve kurulum elle yapılır.
       </div>
 
       {/* Depolama açıklaması */}
