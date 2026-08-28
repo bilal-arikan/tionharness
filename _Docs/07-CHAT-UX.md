@@ -387,7 +387,8 @@ kırpıldı:
   | `PlanPrompt` | `plan` | `--color-success` %10 | Veri `useRunningWorkers.ts`
   (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
   tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
-  (coordinatorId anahtarlı pub/sub) → hook. Feed koparsa `api.subscribeReconnect`
+  (coordinatorId anahtarlı pub/sub; iç içe ağaçta event ayrıca
+  `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa `api.subscribeReconnect`
   → `onReconnect` resync eder (kopma sırasındaki event'ler kalıcı kayıptır).
   Detay `_Docs/47`.
 

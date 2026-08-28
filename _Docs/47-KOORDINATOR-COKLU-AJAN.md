@@ -508,7 +508,14 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   `worker` event'i yayınlar (`Target.phase="start"`; spawn + `send_to_worker`
   ikisini de kapsar), `useAppEvents` her `worker` event'ini `coordinatorId` ile
   `shared/lib/workerBus.ts`'e fanlar, `useRunningWorkers` + `CoordinatorSection`
-  abone olup roster'ı tazeler. **`phase="start"` gate'i kritik:** `useAppEvents`'in
+  abone olup roster'ı tazeler. **İç içe ağaçta ikinci anahtar zorunlu:** emit
+  eden taraf (`tagRootCoordinator`) doğrudan koordinatörden farklıysa ağacın
+  kökünü `Target.rootCoordinatorId` olarak da yazar, `useAppEvents`
+  (`workerBusKeys`) iki anahtara birden fanlar. Aksi hâlde bir torun worker'ın
+  start/completed geçişi yalnız alt-koordinatörün anahtarına düşer; kök
+  koordinatörün açık sohbeti roster'ı hiç tazelemez ve ağacın derinliğinde iş
+  sürerken banner bayatlar.
+  **`phase="start"` gate'i kritik:** `useAppEvents`'in
   otonom-tamamlanma dalı `worker` event'inde ghost balonu siler + transkripti
   yeniden yükler + turn-end fanlar + masaüstü toast atar — bunların hepsi yeni
   başlayan bir tur için yanlış, ayrıca 8'li fan-out 8 toast demekti; start

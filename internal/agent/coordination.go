@@ -1795,17 +1795,41 @@ func (r *Runtime) warnCoordinatorCap(coordSessionID string, turns int) {
 // bubble, reloads the transcript and raises a desktop toast — all wrong for a turn
 // that is only just beginning.
 func (r *Runtime) emitWorkerStartEvent(agent db.Agent, workerSessionID, coordSessionID string) {
+	target := map[string]string{
+		"view":          "executions",
+		"sessionId":     workerSessionID,
+		"coordinatorId": coordSessionID,
+		"phase":         "start",
+	}
+	r.tagRootCoordinator(target, coordSessionID)
 	r.publish(events.Event{
-		Type:  events.TypeWorker,
-		Level: "info",
-		Title: "🤖 Worker başladı — " + agent.Name,
-		Target: map[string]string{
-			"view":          "executions",
-			"sessionId":     workerSessionID,
-			"coordinatorId": coordSessionID,
-			"phase":         "start",
-		},
+		Type:   events.TypeWorker,
+		Level:  "info",
+		Title:  "🤖 Worker başladı — " + agent.Name,
+		Target: target,
 	})
+}
+
+// tagRootCoordinator adds "rootCoordinatorId" to a worker event's target when the
+// direct coordinator is itself nested, i.e. the tree root is a DIFFERENT session.
+//
+// The frontend keys its running-worker banner on the coordinator id it is shown
+// under, so a grandchild's transition tagged only with its direct (sub-)coordinator
+// never reaches the root coordinator's open chat and its banner goes stale. The
+// extra tag lets the root refetch on any transition below it.
+//
+// On a lookup failure the field is omitted rather than guessed: a wrong root would
+// fan the refetch out to an unrelated chat, and the direct-coordinator tag still
+// behaves exactly as before.
+func (r *Runtime) tagRootCoordinator(target map[string]string, coordSessionID string) {
+	sess, err := r.db.GetSession(context.Background(), coordSessionID)
+	if err != nil {
+		r.logger.Warn("coordination: root coordinator lookup failed", "coordinator", coordSessionID, "err", err)
+		return
+	}
+	if root := sess.RootCoordinator(); root != "" && root != coordSessionID {
+		target["rootCoordinatorId"] = root
+	}
 }
 
 // emitWorkerEvent publishes a worker status transition so the coordination UI can
@@ -1817,15 +1841,17 @@ func (r *Runtime) emitWorkerEvent(agent db.Agent, workerSessionID, coordSessionI
 	} else if status == "killed" {
 		level = "info"
 	}
+	target := map[string]string{
+		"view":          "executions",
+		"sessionId":     workerSessionID,
+		"coordinatorId": coordSessionID,
+	}
+	r.tagRootCoordinator(target, coordSessionID)
 	r.publish(events.Event{
-		Type:  events.TypeWorker,
-		Level: level,
-		Title: "🤖 Worker " + status + " — " + agent.Name,
-		Target: map[string]string{
-			"view":          "executions",
-			"sessionId":     workerSessionID,
-			"coordinatorId": coordSessionID,
-		},
+		Type:   events.TypeWorker,
+		Level:  level,
+		Title:  "🤖 Worker " + status + " — " + agent.Name,
+		Target: target,
 	})
 }
 

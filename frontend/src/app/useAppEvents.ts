@@ -36,6 +36,19 @@ export interface AppEventDeps {
   markViewUnread: (v: View) => void
 }
 
+// workerBusKeys returns the coordinator session ids a worker event must notify:
+// the direct coordinator plus, for a worker nested deeper than one level, the root
+// of its coordinator tree. Deduplicated, so a top-level worker (whose root IS its
+// coordinator) still yields a single key.
+export function workerBusKeys(e: AppEvent): string[] {
+  const keys: string[] = []
+  const direct = e.target?.coordinatorId
+  if (direct) keys.push(direct)
+  const root = e.target?.rootCoordinatorId
+  if (root && root !== direct) keys.push(root)
+  return keys
+}
+
 export function handleAutonomousCompletion(
   d: Pick<AppEventDeps, 'chat' | 'activeSessionId' | 'setMessages'>,
   e: AppEvent,
@@ -237,9 +250,13 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     handleAutonomousCompletion(d, e)
     // Coordination: every worker transition (start AND completion) tells the
     // coordinator's running-worker banner to refetch its roster, which is what
-    // replaces polling for it.
-    if (e.type === 'worker' && e.target?.coordinatorId) {
-      publishWorkerChange(e.target.coordinatorId)
+    // replaces polling for it. In a NESTED tree the event also carries the tree
+    // root, and both keys must be published: a grandchild's transition only ever
+    // names its direct sub-coordinator, so without the root key the root
+    // coordinator's open chat never refetches and its banner goes stale while
+    // work is still running deeper down.
+    if (e.type === 'worker') {
+      for (const key of workerBusKeys(e)) publishWorkerChange(key)
     }
     // A coordination signal (e.g. the phantom-spawn hard-halt notice) targets the
     // coordinator session directly; route it onto the same bus so the open session's
