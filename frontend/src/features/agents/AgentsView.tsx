@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Trash2, Activity } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { RefreshCw, Trash2, Activity, Pencil } from 'lucide-react'
 import type { Agent, AgentPatch } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
@@ -7,6 +8,7 @@ import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
+import { AgentBulkEditPanel } from './AgentBulkEditPanel'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
@@ -74,10 +76,12 @@ export function AgentsView({
   onError,
   onOpenExecution,
 }: Props) {
+  const { t } = useTranslation('common')
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [systemActionPending, setSystemActionPending] = useState(false)
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
@@ -155,8 +159,11 @@ export function AgentsView({
     )
       return
     for (const id of ids) await onDeleteAgent(id)
+    setBulkEditOpen(false)
     sel.clear()
   }
+
+  const bulkAgents = regularAgents.filter((agent) => sel.selected.has(agent.id))
 
   const submit = () => {
     if (!name.trim()) return
@@ -392,11 +399,29 @@ export function AgentsView({
           )}
         </div>
 
+        {bulkEditOpen && bulkAgents.length > 0 && (
+          <AgentBulkEditPanel
+            agents={bulkAgents}
+            onUpdateAgent={onUpdateAgent}
+            onApplied={() => {
+              setBulkEditOpen(false)
+              sel.clear()
+            }}
+            onCancel={() => setBulkEditOpen(false)}
+            onError={onError}
+          />
+        )}
         <SelectionBar
           count={sel.count}
-          onClear={sel.clear}
+          onClear={() => {
+            setBulkEditOpen(false)
+            sel.clear()
+          }}
           onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
         >
+          <SelectionBarButton icon={<Pencil size={13} />} onClick={() => setBulkEditOpen(true)}>
+            {t('agents.bulkEdit.button')}
+          </SelectionBarButton>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>

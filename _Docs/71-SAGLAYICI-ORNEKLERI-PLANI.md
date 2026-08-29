@@ -8,6 +8,10 @@
 > Faz 5'te eski typed `settings.Settings` alanlarının DTO/Patch/Store yüzeyi
 > kaldırıldı ve dokümanlar güncellendi — plandan sapmalar §7 faz tablosunda ve
 > aşağıdaki notlarda işaretli.
+> Ajan listesindeki toplu düzenleme paneli de tekil create/edit akışıyla aynı
+> `ProviderInstanceModelSelect` bileşenini kullanır. Her ajan mevcut update handler'ına yalnız
+> `{provider: instanceId, model}` patch'iyle gider; handler instance id'yi doğrulayıp
+> `ProviderInstanceID` kaynağını ve türetilmiş `Provider` kind alanını senkronlar.
 >
 > İlgili: `17-TOKEN-OPTIMIZASYON.md` (provider soyutlaması), `51-CLAUDE-CONFIG-BIRLESIK.md`,
 > `69/70` (codex-cli — Faz 0 ön koşuluydu, merge edildi).

@@ -1,10 +1,14 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { TodoItem } from '@/types'
 import { ScrollableCard } from '@/shared/components'
 import { ComposerCard } from './ComposerCard'
 
 interface Props {
   todos: TodoItem[]
+  dismissed: boolean
+  onDismiss: () => void
 }
 
 // Glyph + colour per todo status (mirrors TodoCard).
@@ -18,27 +22,28 @@ const MARK: Record<TodoItem['status'], { icon: string; cls: string }> = {
 // the pending-message tray. Unlike the inline TodoCard (which is frozen into one
 // turn's trace), this always shows the LATEST todo_write for the session and
 // updates as the agent ticks items off, so the list persists across turns and
-// page reloads. Minimizable but NOT dismissable: it defaults collapsed (header
-// only) and stays pinned; the user can expand/collapse but can never close it.
-export function TodoPanel({ todos }: Props) {
+// page reloads. It stays pinned while work remains; once complete, the user can
+// dismiss that session/list pair with the close button.
+export function TodoPanel({ todos, dismissed, onDismiss }: Props) {
+  const { t } = useTranslation()
   const done = todos.filter((t) => t.status === 'completed').length
   const allDone = todos.length > 0 && done === todos.length
-  // Defaults minimized (collapsed): the header still surfaces progress; the user
-  // toggles it open on demand. Not dismissable, it stays pinned above the composer.
   const [open, setOpen] = useState(false)
 
-  if (!todos.length) return null
+  if (!todos.length || dismissed) return null
   const pct = Math.round((done / todos.length) * 100)
 
   return (
     <ComposerCard tone="plain" className="overflow-hidden">
       <div className="flex w-full items-center gap-2 text-xs">
         <button
+          type="button"
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
         >
           <span>{allDone ? '✅' : '📋'}</span>
-          <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
+          <span className="font-medium text-[var(--color-text)]">{t('chat.todos.title')}</span>
           {/* Slim progress bar. */}
           <span className="ml-1 hidden h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-border)] sm:block">
             <span
@@ -51,6 +56,20 @@ export function TodoPanel({ todos }: Props) {
           </span>
           <span className="shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
         </button>
+        {allDone && (
+          <button
+            type="button"
+            aria-label={t('chat.todos.dismiss')}
+            title={t('chat.todos.dismiss')}
+            onClick={(event) => {
+              event.stopPropagation()
+              onDismiss()
+            }}
+            className="mr-1.5 shrink-0 rounded p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {open && (

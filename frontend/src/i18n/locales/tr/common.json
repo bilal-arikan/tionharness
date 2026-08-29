@@ -1,4 +1,22 @@
 {
+  "agents": {
+    "bulkEdit": {
+      "apply": "Uygula",
+      "button": "Düzenle",
+      "cancel": "İptal",
+      "description_one": "Seçili {{count}} ajanın sağlayıcı örneği ve modeli değiştirilecek.",
+      "description_other": "Seçili {{count}} ajanın sağlayıcı örneği ve modeli değiştirilecek.",
+      "error": "Ajanlar güncellenemedi.",
+      "saving": "Kaydediliyor…",
+      "title": "Toplu sağlayıcı ve model düzenleme"
+    }
+  },
+  "chat": {
+    "todos": {
+      "dismiss": "Tamamlanan görev listesini kapat",
+      "title": "Görev Listesi"
+    }
+  },
   "language": {
     "agentHint": "Ajanların varsayılan olarak yanıt verdiği dil. Değiştirmek promptu yeniden dondurur ve prompt cache'ini soğutur.",
     "agentLabel": "Ajan yanıt dili",

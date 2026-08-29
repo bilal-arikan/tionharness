@@ -397,9 +397,21 @@ kırpıldı:
   (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
   tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
   (coordinatorId anahtarlı pub/sub; iç içe ağaçta event ayrıca
-  `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa `api.subscribeReconnect`
-  → `onReconnect` resync eder (kopma sırasındaki event'ler kalıcı kayıptır).
-  Detay `_Docs/47`.
+  `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa
+  `api.subscribeReconnect` → `onReconnect` resync eder (kopma sırasındaki event'ler
+  kalıcı kayıptır). Detay `_Docs/47`.
+
+- **Todo tamamlanma/kapatma (2026-08-29):** `latestTodos` en yeni `todo_write`
+  listesini, tamamlandıktan sonra kullanıcı yeni mesaj gönderse de korur. Bitmemiş
+  listede kapatma düğmesi yoktur. Tüm maddeler tamamlanınca erişilebilir etiketli X
+  görünür; X yalnız paneli kapatır, katla/aç davranışını tetiklemez. Kapatma
+  `localStorage` içinde **session ID + todo occurrence ID + liste imzası** ile saklanır:
+  reload'da aynı occurrence gizli kalır; aynı session'da aynı içerikle yeni bir
+  `todo_write` occurrence'ı eski kapatma kaydından etkilenmeden görünür. Farklı liste ve
+  başka oturum da otomatik görünür. Kapatma geçmişi en yeni 100 kayıtla sınırlıdır;
+  limit aşılınca en eski kayıtlar atılır. Bozuk veya erişilemeyen storage paneli bozmaz.
+  Bu davranış yalnız composer üstü
+  `TodoPanel` içindir; transkriptteki inline `TodoCard` değişmez.
 
 ### Modüler yapı (büyük dosyaların bölünmesi)
 İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.

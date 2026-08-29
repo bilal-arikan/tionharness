@@ -70,7 +70,7 @@ onClick={(e) => {
 | Liste | Bileşen | Normal tık | Toplu eylemler |
 |-------|---------|-----------|----------------|
 | Sohbet | `SessionsSidebar` | Oturumu aç | AI başlık · Sabitle · Arşivle/çıkar · Sil |
-| Ajanlar | `AgentsView` | Ajanı seç | Sil |
+| Ajanlar | `AgentsView` | Ajanı seç | Sağlayıcı örneği + model düzenle · Sil |
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
 | Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
 | Artifact | `ArtifactsPanel` | Artifact aç | **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil |
@@ -84,6 +84,12 @@ onClick={(e) => {
 
 - **Toplu eylemler mevcut tekil API'leri kullanır** — `Promise.all` / döngü ile;
   yeni endpoint yok. Optimistic state güncellenir, hata halinde `reload()`.
+- **Ajan sağlayıcı/model düzenleme:** SelectionBar'daki "Düzenle" paneli tekil
+  create/edit formuyla aynı `ProviderInstanceModelSelect` bileşenini kullanır. Sistem ajanları
+  seçime ve güncellemeye alınmaz. Seçilen her düzenlenebilir ajan için mevcut
+  `updateAgent` yolu yalnız `{ provider: instanceId, model }` patch'ini yollar; backend handler
+  `ProviderInstanceID` tek gerçek kaynak kuralıyla `Provider` kind aynasını senkronlar. Yeni bulk
+  endpoint yoktur. Hata seçimi ve paneli korur; tam başarı seçimi temizler.
 - **Filtre/arama:** Görünmeyen seçili öğeler korunur; SelectionBar "(+N filtre
   dışı)" gösterir (sessions). `orderedIds` yalnız görünürleri içerdiğinden
   shift-aralık tutarlıdır.

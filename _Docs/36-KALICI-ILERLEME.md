@@ -169,6 +169,17 @@ Kalıcı ilerleme yalnız composer üstüne iğnelenen `TodoPanel` üzerinden g�
 davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uyarı notu
 + `executions` sinyaliyle self-heal — hepsi kaldırıldı.)
 
+**Tamamlanan listeyi kullanıcı kapatır (2026-08-29):** En yeni `todo_write` listesi
+tamamlandıktan ve sonraki kullanıcı mesajı geldikten sonra artık otomatik kaybolmaz.
+Bitmemiş liste kapatılamaz; tüm maddeler `completed` olduğunda X görünür. Kullanıcının
+kapatma tercihi `localStorage` içinde session ID + todo occurrence ID + görünür todo
+alanlarından üretilen liste imzasıyla tutulur. Aynı occurrence reload sonrası gizli
+kalır; aynı session'da aynı içerikle yeni bir `todo_write` occurrence'ı eski kapatma
+kaydından etkilenmeden görünür. Yeni/farklı liste ile başka session da etkilenmez.
+Kapatma geçmişi en yeni 100 kayıtla sınırlıdır; limit aşılınca en eski kayıtlar atılır.
+Storage bozuk veya tarayıcı tarafından engelliyse panel
+görünür kalıp çalışmayı sürdürür. Inline trace `TodoCard` bu tercihten bağımsızdır.
+
 ## Dosyalar
 
 - **Yeni:** `internal/progress/progress.go` (+test), `internal/tools/todosink.go`,

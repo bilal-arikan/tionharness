@@ -4495,7 +4495,22 @@ ve Çalışma dizini butonları bir toggle ile gösterilip gizlenebilsin.
   `data-tool-access-toggle` yok, dolayısıyla panelin dışarı-tıklama kapanışına
   takılır — ek kod gerekmedi.
 
-## Görev listesi UX: bilgi panelinden kaldırıldı + TodoPanel minimize/kapatılamaz ✅ (2026-07-24)
+## Görev listesi tamamlandıktan sonra kalıcı kullanıcı kapatması ✅ (2026-08-29)
+
+- `latestTodos`, tamamlanmış listeyi sonraki kullanıcı mesajından sonra artık
+  otomatik gizlemiyor; en yeni `todo_write` oturumun güncel listesi olarak kalıyor.
+- Composer üstü `TodoPanel` bitmemişken kapatılamaz. Tümü tamamlanınca erişilebilir
+  etiketli X görünür ve katla/aç tıklamasından bağımsız çalışır.
+- Kapatma `localStorage`'da session ID + todo occurrence ID + liste imzası bazında
+  kalıcıdır: aynı occurrence reload sonrası gizli kalır; aynı session'da aynı içerikle
+  yeni bir `todo_write` occurrence'ı eski kapatma kaydından etkilenmeden görünür. Farklı
+  liste ve başka session da görünürdür. Kapatma geçmişi en yeni 100 kayıtla sınırlıdır;
+  limit aşılınca en eski kayıtlar atılır. Bozuk/engelli storage güvenli biçimde görünür
+  panel davranışına düşer. Inline `TodoCard` değişmedi.
+- Vitest kapsamı: tamamlanmış listenin sonraki kullanıcı turunda kalması, en yeni
+  liste, legacy `todo_write`, session/liste izolasyonu ve bozuk storage.
+
+## Görev listesi UX: bilgi panelinden kaldırıldı + TodoPanel başlangıçta kapatılamaz ✅ (2026-07-24)
 
 **İstek:** Sohbet bilgisi panelinde görev listesi görünmesin; sohbet sırasında
 açılan görev listesi küçültülmüş başlasın ama kapatılamasın.
@@ -4505,10 +4520,10 @@ açılan görev listesi küçültülmüş başlasın ama kapatılamasın.
   render'ı + `progress` state + `sessionProgress` fetch effect'i (`executions`
   sinyaliyle tazeleme) + ilgili importlar kaldırıldı. `SessionProgressCard.tsx`
   artık kullanılmayan ölü bileşen; API/tip korunur.
-- **`TodoPanel.tsx`:** varsayılan **küçültülmüş** (`open=false`) başlar; ✕ gizle
-  (dismiss) butonu + `dismissedSig`/`sig` mantığı + auto-open `useEffect` kaldırıldı
-  → panel composer üstünde iğneli kalır, yalnız başlıktan katla/aç, **asla
-  kapatılamaz**. `tsc --noEmit` yeşil. Detay `_Docs\36`.
+- **`TodoPanel.tsx` (tarihsel, 2026-08-29'da güncellendi):** varsayılan
+  **küçültülmüş** (`open=false`) başlar. Bu değişiklikte eski genel dismiss mantığı
+  kaldırılmıştı. Güncel davranışta panel bitmemişken kapatılamaz; yalnız tüm maddeler
+  tamamlandığında session + liste imzalı X ile kapatılabilir. Detay `_Docs\36`.
 
 ## 👍/👎 geri bildirimi tur bağlamına enjekte ✅ (2026-07-24)
 

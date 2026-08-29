@@ -1,4 +1,22 @@
 {
+  "agents": {
+    "bulkEdit": {
+      "apply": "Apply",
+      "button": "Edit",
+      "cancel": "Cancel",
+      "description_one": "Provider instance and model will be changed for {{count}} selected agent.",
+      "description_other": "Provider instance and model will be changed for {{count}} selected agents.",
+      "error": "Agents could not be updated.",
+      "saving": "Saving…",
+      "title": "Bulk edit provider and model"
+    }
+  },
+  "chat": {
+    "todos": {
+      "dismiss": "Dismiss completed task list",
+      "title": "Task List"
+    }
+  },
   "language": {
     "agentHint": "The language agents answer in by default. Changing it re-freezes the prompt and cools the prompt cache.",
     "agentLabel": "Agent reply language",

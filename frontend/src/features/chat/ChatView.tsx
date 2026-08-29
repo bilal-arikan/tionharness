@@ -2,7 +2,7 @@
 // floating bottom stack (ask/permission/plan prompts, todo panel, pending tray,
 // wake banner, composer) and the rewind dialog. Extracted from App.tsx so the
 // shell only composes; all chat-turn machinery arrives via the `chat` handle.
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { History } from 'lucide-react'
 import type { Agent, Artifact, Message } from '@/types'
 import { MessageList } from './MessageList'
@@ -20,7 +20,12 @@ import { WorkerWaitBanner } from './WorkerWaitBanner'
 import { useRunningWorkers } from './useRunningWorkers'
 import { TodoPanel } from './TodoPanel'
 import { WorkerStatusStrip } from './WorkerStatusStrip'
-import { latestTodos } from './todos'
+import {
+  dismissCompletedTodo,
+  isCompletedTodoDismissed,
+  latestTodos,
+  todoDismissalKey,
+} from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import type { useChatStream } from './useChatStream'
 import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb'
@@ -134,7 +139,43 @@ export function ChatView({
 
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
-  const currentTodos = useMemo(() => latestTodos(messages), [messages])
+  const currentTodo = useMemo(() => latestTodos(messages), [messages])
+  const currentTodos = currentTodo?.todos ?? []
+  const [locallyDismissedTodo, setLocallyDismissedTodo] = useState<string | null>(null)
+  const todoDismissed = useMemo(() => {
+    if (!activeSessionId) return false
+    if (!currentTodo) return false
+    const key = todoDismissalKey(activeSessionId, currentTodo.occurrenceId, currentTodos)
+    if (locallyDismissedTodo === key) return true
+    if (typeof window === 'undefined') return false
+    try {
+      return isCompletedTodoDismissed(
+        window.localStorage,
+        activeSessionId,
+        currentTodo.occurrenceId,
+        currentTodos,
+      )
+    } catch {
+      return false
+    }
+  }, [activeSessionId, currentTodo, currentTodos, locallyDismissedTodo])
+  const dismissTodo = useCallback(() => {
+    if (!activeSessionId || !currentTodo) return
+    setLocallyDismissedTodo(
+      todoDismissalKey(activeSessionId, currentTodo.occurrenceId, currentTodos),
+    )
+    if (typeof window === 'undefined') return
+    try {
+      dismissCompletedTodo(
+        window.localStorage,
+        activeSessionId,
+        currentTodo.occurrenceId,
+        currentTodos,
+      )
+    } catch {
+      // The in-memory dismissal above still closes the panel for this page load.
+    }
+  }, [activeSessionId, currentTodo, currentTodos])
 
   // Bumped on every composer submit (send OR queue) to jump the transcript to the
   // bottom immediately. Both paths only enqueue — the turn is painted later, when
@@ -268,7 +309,7 @@ export function ChatView({
               so they belong here even though the composer stack is gone. The
               worker banner self-gates: its roster is empty unless THIS session is
               itself a coordinator, so a plain worker log shows nothing. */}
-          <TodoPanel todos={currentTodos} />
+          <TodoPanel todos={currentTodos} dismissed={todoDismissed} onDismiss={dismissTodo} />
           <WorkerWaitBanner
             workers={runningWorkers}
             doneCount={workers.length - runningWorkers.length}
@@ -345,7 +386,7 @@ export function ChatView({
             ) : (
               <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
             ))}
-          <TodoPanel todos={currentTodos} />
+          <TodoPanel todos={currentTodos} dismissed={todoDismissed} onDismiss={dismissTodo} />
           <PendingTray
             items={chat.activeQueued}
             onRemove={chat.removePending}
