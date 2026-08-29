@@ -22,6 +22,11 @@ type SystemAgentDefinition struct {
 	AllowedTools   string
 	Disabled       bool
 
+	// Provider is the provider instance id the system agent runs on. An empty
+	// value seeds the keyless claude-cli default, which is what the read-time
+	// backfill in models.go already resolves it to.
+	Provider string
+
 	// Avatar (single emoji/glyph) and Color (hex) are the canonical visual
 	// identity of a built-in agent, so the same system agent looks the same in
 	// every workspace. Unlike Name/Soul/Model they are only SEEDED, never
@@ -77,7 +82,26 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 				}
 			}
 		}
+		provider := def.Provider
+		if provider == "" {
+			provider = "claude-cli"
+		}
 		if existing, ok := d.FindAgentBySystemKey(def.SystemKey); ok {
+			// Provider backfill: rows seeded before the definitions carried a
+			// provider were written with "" and only resolved to claude-cli at read
+			// time (models.go backfillProviderInstance), so the raw JSON the UI
+			// shows stayed empty. Writing the same value the runtime already
+			// resolved is idempotent; a provider the user picked is left alone.
+			if existing.Provider == "" {
+				if _, err := d.mutateAgentLocked(existing.ID, func(a *Agent) {
+					a.Provider = provider
+					if a.ProviderInstanceID == "" {
+						a.ProviderInstanceID = provider
+					}
+				}); err != nil {
+					return err
+				}
+			}
 			// Seed-only backfill: a row written before the definitions carried a
 			// visual identity has an empty Avatar/Color and gets the canonical one,
 			// which is what makes existing workspaces converge. A value the user
@@ -101,6 +125,7 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 			Name:         def.Name,
 			Soul:         def.SystemPrompt,
 			Identity:     def.Description,
+			Provider:     provider,
 			Model:        def.SuggestedModel,
 			AllowedTools: def.AllowedTools,
 			Avatar:       def.Avatar,

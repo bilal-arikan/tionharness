@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 )
 
@@ -294,4 +296,82 @@ func TestEnsureSystemAgentsSeedsVisualIdentity(t *testing.T) {
 	if insight.Avatar != "🔮" || insight.Color != "#5C6480" {
 		t.Fatalf("new system agent visual identity = (%q, %q)", insight.Avatar, insight.Color)
 	}
+}
+
+// TestEnsureSystemAgentsSeedsProvider covers the three provider states a system
+// agent row can be in: freshly seeded, seeded before definitions carried a
+// provider (empty on disk), and already bound to a provider the user picked.
+func TestEnsureSystemAgentsSeedsProvider(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defs := []SystemAgentDefinition{
+		{SystemKey: "titler", Name: "Titler", SystemPrompt: "title prompt", SuggestedModel: "haiku", AllowedTools: "[]", Provider: "claude-cli"},
+	}
+	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
+		t.Fatal(err)
+	}
+	titler, ok := d.FindAgentBySystemKey("titler")
+	if !ok {
+		t.Fatal("titler not seeded")
+	}
+	if got := readAgentProviderFromDisk(t, d, titler.ID); got != "claude-cli" {
+		t.Fatalf("seeded provider on disk = %q, want %q", got, "claude-cli")
+	}
+
+	// A row written before the definitions carried a provider.
+	legacy, err := d.CreateAgent(ctx, Agent{Name: "Legacy Insight", System: true, SystemKey: "insight"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.mutateAgentLocked(legacy.ID, func(a *Agent) {
+		a.Provider = ""
+		a.ProviderInstanceID = ""
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readAgentProviderFromDisk(t, d, legacy.ID); got != "" {
+		t.Fatalf("legacy provider on disk = %q, want empty precondition", got)
+	}
+
+	// A row the user bound to a different provider must survive untouched.
+	custom, err := d.CreateAgent(ctx, Agent{Name: "Custom Compactor", System: true, SystemKey: "compaction", Provider: "anthropic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defs = append(defs,
+		SystemAgentDefinition{SystemKey: "insight", Name: "Insight", SystemPrompt: "insight prompt", AllowedTools: "[]"},
+		SystemAgentDefinition{SystemKey: "compaction", Name: "Compactor", SystemPrompt: "compact prompt", AllowedTools: "[]", Provider: "claude-cli"},
+	)
+	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
+		t.Fatal(err)
+	}
+	if got := readAgentProviderFromDisk(t, d, legacy.ID); got != "claude-cli" {
+		t.Fatalf("backfilled provider on disk = %q, want %q", got, "claude-cli")
+	}
+	if got := readAgentProviderFromDisk(t, d, custom.ID); got != "anthropic" {
+		t.Fatalf("user provider on disk = %q, want %q", got, "anthropic")
+	}
+}
+
+func readAgentProviderFromDisk(t *testing.T, d *DB, agentID string) string {
+	t.Helper()
+	path, err := d.AgentPath(agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row struct {
+		Provider string `json:"provider"`
+	}
+	if err := json.Unmarshal(raw, &row); err != nil {
+		t.Fatal(err)
+	}
+	return row.Provider
 }

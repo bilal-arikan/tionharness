@@ -64,6 +64,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Generates concise titles for requests and conversations.",
 			SystemPrompt:   prompts.Default("title"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 		},
 		{
@@ -72,6 +73,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Summarizes on-demand board and flow overviews.",
 			SystemPrompt:   prompts.Default("summary"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 		},
 		{
@@ -80,6 +82,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Compacts conversation history into a structured summary.",
 			SystemPrompt:   prompts.Default("compact"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 		},
 		{
@@ -88,6 +91,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Distills reusable lessons from failed agent turns.",
 			SystemPrompt:   prompts.Default("lesson"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 		},
 		{
@@ -96,6 +100,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Analyzes session evidence for recurring, actionable findings.",
 			SystemPrompt:   prompts.Default("insight-analyzer"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 			Disabled:       true,
 		},
@@ -105,6 +110,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Description:    "Applies workspace-opt insight findings to workspace entities.",
 			SystemPrompt:   prompts.Default("insight-applier"),
 			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
 			// Deliberately NO group:files and NO group:config: the applier fixes
 			// workspace ENTITIES (skills, agents, hooks, automations), so it must not
 			// be able to reach Read/Write/Edit/Bash or settings/secret/workspace tools.

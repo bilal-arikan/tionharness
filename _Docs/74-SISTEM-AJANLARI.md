@@ -41,6 +41,15 @@ otomasyon alanları: `_Docs/46-ETIKET-OTOMASYON.md`.
 
 ### Yerleşik worker profilleri (`subagent-*`)
 
+**Sağlayıcı açıkça tohumlanır (2026-08-29).** Yukarıdaki tablodaki altı yerleşik
+tanım `Provider: "claude-cli"` taşır (`internal/agent/systemagents.go`) ve
+`EnsureSystemAgents` boot'ta sağlayıcısı **boş** olan mevcut sistem ajanı
+kayıtlarına bu değeri bir kez yazar (`internal/db/store_agent_system.go`,
+idempotent: dolu bir sağlayıcı asla ezilmez). Böylece UI ajanın sağlayıcısını
+"belirtilmemiş" diye göstermez. Model alanı boş kalmaya devam eder — o, sağlayıcının
+oturum modelidir (bkz. `_Docs/05-ILERLEME.md`, "Model etiketlerinden 'Varsayılan'
+kalktı").
+
 `run_subagent` ve `spawn_worker` hedefi olan altı yerleşik profil de sistem ajanı
 olarak tutulur: `subagent-explore`, `subagent-planner`, `subagent-coder`,
 `subagent-reviewer`, `subagent-validator`, `subagent-config`. Tanımları
