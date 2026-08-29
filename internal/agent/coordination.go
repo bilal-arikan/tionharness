@@ -50,12 +50,18 @@ type coordSlot struct {
 	// exists so concurrent notifications coalesce into the ONE loop instead of
 	// starting a second one.
 	driving    bool
-	pending    bool         // >=1 notification arrived mid-turn; run once more after
-	ackedIdle  bool         // ran the "all workers idle" reconcile turn for this batch
-	hadWorkers bool         // at least one worker was ever spawned (gates the idle sweep)
-	turns      int          // auto-triggered coordinator turns so far (notify-loop cap)
-	capWarn    bool         // whether the "cap reached" warning has been posted
-	workers    atomic.Int64 // active workers under this coordinator
+	pending    bool // >=1 notification arrived mid-turn; run once more after
+	ackedIdle  bool // ran the "all workers idle" reconcile turn for this batch
+	hadWorkers bool // at least one worker was ever spawned (gates the idle sweep)
+	// coordinatorMode records that this slot belongs to a session that actually has
+	// coordinator mode on (set by guardCoordinatorStall, which only ever runs for a
+	// coordinator turn). The stall sweeper uses it to relax the hadWorkers gate: a
+	// coordinator that NARRATED a spawn and never made the call has no workers by
+	// definition, which is exactly the phantom-spawn freeze the sweeper must catch.
+	coordinatorMode bool
+	turns           int          // auto-triggered coordinator turns so far (notify-loop cap)
+	capWarn         bool         // whether the "cap reached" warning has been posted
+	workers         atomic.Int64 // active workers under this coordinator
 	// spawnHallucStreak counts consecutive coordinator turns judged to have CLAIMED a
 	// spawn while making NO coordination tool call — the long-context degradation
 	// freeze. Bounds the corrective nudges so a wedged model cannot burn the notify

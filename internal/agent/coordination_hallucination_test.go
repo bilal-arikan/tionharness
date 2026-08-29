@@ -50,10 +50,12 @@ func TestSlotIsStallCandidate(t *testing.T) {
 		t.Error("a running coordinator must not be a candidate")
 	}
 
-	// Never spawned a worker → nothing to reconcile.
+	// Never spawned a worker and never seen by the guard as a coordinator → nothing
+	// to reconcile. (A slot known to be in coordinator mode IS a candidate without
+	// workers — see TestStallCandidateWithoutWorkers.)
 	s = &coordSlot{hadWorkers: false, lastTurnUnix: now - 600}
 	if slotIsStallCandidate(s, false, now, window) {
-		t.Error("a coordinator that never had workers must not be a candidate")
+		t.Error("a slot with no worker history and no coordinator mode must not be a candidate")
 	}
 
 	// A worker is still running → legitimately waiting, not stalled.

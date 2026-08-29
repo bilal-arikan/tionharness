@@ -743,6 +743,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// archived) so an automation can later scan + repair them.
 			wsp.Runtime.AutoTagTurn(ctx, session.ID, steps, "")
 
+			// Phantom-spawn guard: a coordinator driven by a plain user chat turn never
+			// passes through runCoordinatorTurn, so until now it was the one coordinator
+			// turn kind nothing checked — and it narrated spawns it never made
+			// (WS27/SES90).
+			s.guardCoordinatorChatTurn(ctx, database, wsp.Runtime, session.ID, agentRow, resp.Text, steps)
+
 			// Tag-triggered automations: signal that this session finished a turn. The
 			// runtime dispatches it detached, so a tagged session completing can spawn a
 			// follow-up (the automation loop) without blocking this turn. Fired per

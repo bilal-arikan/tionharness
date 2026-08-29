@@ -89,7 +89,9 @@ Koordinatör stall guard'ı taze bir worker notunda tamamen devre dışı kalıy
 tam da phantom spawn'ların en sık olduğu turda. Muafiyet asimetrik yapıldı: judge
 ve düzeltici dürtme her zaman koşuyor, yalnız halt eskalasyonu bastırılıyor;
 guard'ın kendi yazdığı notlar ve `<coordination-status>` artık worker sonucu
-sayılmıyor (`91f70e58`). Otonom (spawn/scheduler/flow) turları `steerable` alanını
+sayılmıyor (`91f70e58`). Guard ayrıca yalnız runtime tetikli koordinatör
+turlarında değil, kullanıcı sohbet turlarında da koşuyor ve sweeper hiç worker
+doğurmamış bir koordinatörü de aday sayıyor. Otonom (spawn/scheduler/flow) turları `steerable` alanını
 ve oturum grant'lerini kaydediyor, böylece ask/read-only modda bir claude-cli
 otonom turuna "Yönlendir" reddedilmiyor (`602c1578`).
 

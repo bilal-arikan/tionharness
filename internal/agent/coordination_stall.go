@@ -92,6 +92,16 @@ Reply with STRICT JSON and nothing else: {"stalled": true} or {"stalled": false}
 // re-arms.
 func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db.Agent, text string, steps []TurnStep) {
 	slot := r.coordSlotFor(coordSessionID)
+	// Both entry points (the runtime's own coordinator loop and the user chat turn via
+	// GuardCoordinatorStall) leave the slot in the same shape: flagged as a coordinator
+	// (which relaxes the sweeper's hadWorkers gate) and stamped with this turn's time.
+	// runCoordinatorTurn stamps the same value immediately before calling in, so this is
+	// a no-op there; for a chat-driven coordinator it is the only stamp there is, and
+	// without it the sweeper would never consider the session (lastTurnUnix==0).
+	slot.mu.Lock()
+	slot.coordinatorMode = true
+	slot.lastTurnUnix = time.Now().Unix()
+	slot.mu.Unlock()
 	// A real coordination tool call this turn means the model is executing, not
 	// narrating — clear any streak (and any prior hard-halt) and never correct.
 	if turnCalledCoordinationTool(steps) {
@@ -167,6 +177,19 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot,
 			fmt.Sprintf("cumulative stall threshold reached (%d/%d)", total, limit))
 	}
+}
+
+// GuardCoordinatorStall is the exported turn-end phantom-spawn guard, for callers
+// outside this package. The runtime's own coordinator loop reaches the guard directly
+// (runCoordinatorTurn), so a coordinator driven by an ordinary USER chat turn was
+// never checked at all: the WS27/SES90 session narrated two spawns from a kind="chat"
+// turn with no tool call in its journal and nothing caught it. The API chat path calls
+// this after the turn so both kinds of coordinator turn get identical protection.
+//
+// The caller decides eligibility: invoke it only for a session whose coordinator mode
+// is on.
+func (r *Runtime) GuardCoordinatorStall(coordSessionID, agentID string, agent db.Agent, text string, steps []TurnStep) {
+	r.guardCoordinatorStall(coordSessionID, agentID, agent, text, steps)
 }
 
 // hasRecentWorkerNoteInbound reports whether the most recent inbound message is a
@@ -453,14 +476,23 @@ func (r *Runtime) sweepCoordinatorStallsAt(ctx context.Context, now int64) {
 }
 
 // slotIsStallCandidate is the pure, deterministic gate the sweeper applies before
-// spending a judge call: an idle coordinator that spawned workers, has none running
-// now, and has been silent at least `windowSec`. lastTurnUnix==0 (never ran a real
-// turn — e.g. a stubbed test) is excluded. turnBusy comes from the admission queue
-// (a turn of ANY kind holds the session) — a busy session is alive, not stalled.
+// spending a judge call: an idle coordinator that has no worker running now and has
+// been silent at least `windowSec`. lastTurnUnix==0 (never ran a real turn — e.g. a
+// stubbed test) is excluded. turnBusy comes from the admission queue (a turn of ANY
+// kind holds the session) — a busy session is alive, not stalled.
+//
+// hadWorkers used to be required, which made the sweeper structurally blind to the
+// case it exists for: a coordinator that only ever NARRATED spawns never spawned a
+// worker, so it could never become a candidate. The gate is therefore relaxed for a
+// slot known to be in coordinator mode; any other slot still needs a real worker in
+// its history before the sweeper spends a judge call on it.
 func slotIsStallCandidate(slot *coordSlot, turnBusy bool, now, windowSec int64) bool {
 	slot.mu.Lock()
 	defer slot.mu.Unlock()
-	if turnBusy || slot.driving || !slot.hadWorkers {
+	if turnBusy || slot.driving {
+		return false
+	}
+	if !slot.hadWorkers && !slot.coordinatorMode {
 		return false
 	}
 	if slot.workers.Load() > 0 {
