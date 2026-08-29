@@ -311,7 +311,11 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 		}
 		node, ok := g.node(st.Current)
 		if !ok {
-			return st, fmt.Errorf("node %q not found", st.Current)
+			// "unknown node", not "not found": a node body failing to resolve one of
+			// its own references (an agentId, a subflow) also surfaces as "not found",
+			// and the two used to read identically. This branch is only ever the graph
+			// missing the node the run is trying to enter.
+			return st, fmt.Errorf("unknown node %q: the graph has no node with this id", st.Current)
 		}
 		st.Steps++
 

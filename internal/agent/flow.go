@@ -32,7 +32,9 @@ func (f flowRunner) RunAgentNode(ctx context.Context, agentID, prompt string) (s
 func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, outputSchema string) (string, error) {
 	agent, err := f.rt.db.GetAgent(ctx, agentID)
 	if err != nil {
-		return "", fmt.Errorf("agentId %q not found: %w", agentID, err)
+		// The node itself exists — what is missing is the agent it points at. Say
+		// "cannot resolve agentId" so this never reads as a missing node (TSK444).
+		return "", fmt.Errorf("cannot resolve agentId %q: %w", agentID, err)
 	}
 	// Volatile clock/lessons ride the dynamic suffix so the node's static system
 	// prefix stays byte-stable across nodes and runs (cacheable).
@@ -46,7 +48,7 @@ func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, out
 func (f flowRunner) RunAgentNodeThread(ctx context.Context, agentID string, thread []orchestration.Msg, prompt, outputSchema string) (string, error) {
 	agent, err := f.rt.db.GetAgent(ctx, agentID)
 	if err != nil {
-		return "", fmt.Errorf("agentId %q not found: %w", agentID, err)
+		return "", fmt.Errorf("cannot resolve agentId %q: %w", agentID, err)
 	}
 	return f.rt.completeThread(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx, agent), thread, prompt, outputSchema, f.autonomous)
 }
