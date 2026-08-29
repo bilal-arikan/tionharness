@@ -306,13 +306,15 @@ func (InsightFindingsTool) Def() providers.ToolDef {
 			"lens, channel or status. Set cluster:true to collapse near-duplicate findings into one " +
 			"representative + a count (a single root cause often produces many similar findings). By default " +
 			"each finding is one summary line; set verbose:true to also get root cause, proposed fix and file " +
-			"pointer. Read-only.",
+			"pointer. Set runId to the scan run (or the scan SESSION id) whose findings you want — the way to " +
+			"act on just-finished scan instead of the whole untriaged backlog. Read-only.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "lens":    { "type": "string", "description": "Filter to one lens id (e.g. tool-errors)." },
     "channel": { "type": "string", "enum": ["app-fix", "workspace-opt"], "description": "Filter to one channel." },
     "status":  { "type": "string", "enum": ["new", "triaged", "accepted", "applied", "verified", "dismissed"], "description": "Filter to one lifecycle status (e.g. \"new\" for untriaged findings)." },
+    "runId":   { "type": "string", "description": "Only findings produced or re-confirmed by ONE scan run. Accepts the run id or the id of that run's scan session (the {{sessionId}} an insight-scan automation is given)." },
     "cluster": { "type": "boolean", "description": "Collapse near-duplicate findings into clusters (representative + count)." },
     "verbose": { "type": "boolean", "description": "Also print each finding's root cause, proposed fix and file pointer (default false = one summary line per finding). Costly: only set it once you have picked the ids you actually want to act on." },
     "limit":   { "type": "integer", "description": "Max findings (or clusters) to return (default 30)." }
@@ -327,6 +329,7 @@ func (t InsightFindingsTool) Call(ctx context.Context, input json.RawMessage) (s
 		Lens    string `json:"lens"`
 		Channel string `json:"channel"`
 		Status  string `json:"status"`
+		RunID   string `json:"runId"`
 		Cluster bool   `json:"cluster"`
 		Verbose bool   `json:"verbose"`
 		Limit   int    `json:"limit"`
@@ -341,6 +344,23 @@ func (t InsightFindingsTool) Call(ctx context.Context, input json.RawMessage) (s
 		return "", err
 	}
 	findings := store.List(args.Lens, insight.Channel(args.Channel))
+	if ref := strings.TrimSpace(args.RunID); ref != "" {
+		// The caller may pass either identity of a run; resolve through the run log
+		// so a scan SESSION id works too. An unknown ref is an error, not an empty
+		// list: silently returning "no findings" would read as "the scan found
+		// nothing" when it actually means "that run does not exist".
+		run, ok := insight.FindRun(t.db.Root(), ref)
+		if !ok {
+			return "", fmt.Errorf("unknown insight run %q: no run has that run id or scan session id", ref)
+		}
+		filtered := findings[:0]
+		for _, f := range findings {
+			if f.LastRunID == run.ID {
+				filtered = append(filtered, f)
+			}
+		}
+		findings = filtered
+	}
 	if args.Status != "" {
 		filtered := findings[:0]
 		for _, f := range findings {

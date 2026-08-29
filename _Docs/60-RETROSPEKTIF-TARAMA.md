@@ -248,6 +248,52 @@ graph TD
 3. **Aggregate + dedupe:** imzayla birleştir (lessons dedupe emsali); tekrar → `occurrences++`
    + kanıt `sessionIds`.
 
+### 4.1 Oturum başına TEK çok-lensli çağrı (2026-08-29)
+
+Analiz birimi artık **(lens, oturum) çifti değil, oturumun kendisidir**. Bir oturum
+için "due" (ledger'a göre taranması gereken) ve prefilter'dan geçen **tüm lensler tek
+bir analiz çağrısında** gönderilir.
+
+- **Neden:** aynı transkript her lens için ayrı gönderiliyordu. Ölçülen bir koşuda 24
+  çağrının 18'i 0 bulgu döndürdü ve aynı kanıt 5 kez ödendi.
+- **Sözleşme:** `insight.AnalysisRequest.Lenses` çağrının kapsadığı lens kümesidir;
+  `Lens` alanı `Lenses[0]`'dır ve tek-lensli eski şekli çalışır tutar
+  (`AnalysisRequest.LensList()`). Çok lensli çağrıda model her bulguyu `lensId` ile
+  etiketler.
+- **Atıf (`attributeFindings`):** tek lensli çağrıda `lensId` yok sayılır (lens zaten
+  istektir). Çok lensli çağrıda gruptaki hiçbir lensi göstermeyen `lensId` **sessizce
+  düşürülmez**: bulgu grubun ilk lensine yazılır ve `ScanResult.Errors`'a
+  `unknown lensId` satırı eklenir.
+- **Ledger:** yalnız modelin `lensResults` içinde açıkça cevapladığı lens kaydedilir;
+  boş `findings` dizisi cevap sayılır, eksik lens kaydedilmez ve sonraki koşuda yeniden
+  taranır. Parse veya `max_tokens` hatası tüm grubu kayıtsız bırakır.
+  `ScanResult.Analyzed` hâlâ (lens, oturum) çiftini sayar;
+ `MaxAnalyzed` ise artık doğrudan **LLM çağrısı** sayısını sınırlar (bir görev = bir
+  çağrı). Bu semantik değişim aynı `MaxAnalyzed` değerinde etkin lens-oturum iş
+  hacmini grup boyu kadar (varsayılan sekiz lenste yaklaşık 8 kat) artırabilir.
+- **Yanıt bütçesi:** 1500 taban + ek lens başına 500 token; 8 lens için 5000.
+  Eski 4000 tavanı kesilme riski yarattığı için kaldırıldı. Sağlayıcının normalize
+  `stopReason=max_tokens` yanıtı hata olur ve ledger'a hiçbir kayıt yazılmaz.
+- **Dilim:** `buildSlice` grubun **scope birleşimini** alır (`anyScope`), yani gruptaki
+  bir cache lensi cache bölümünü herkes için getirir.
+- **Canlı akış:** sink olayları hâlâ **lens başına** yayılır, transkript kartlarının
+  (lens, oturum) tanesi bozulmaz.
+
+### 4.2 Prompt sırası = prompt-cache sözleşmesi
+
+`analysisUserPrompt` blokları **en kararlıdan en oynağa** dizer:
+
+1. lens talimatları + JSON sözleşmesi + dil direktifi — bir koşunun **her** çağrısında
+   bayt-bayt aynı, dolayısıyla sağlayıcı prefix cache'i ikinci oturumdan itibaren
+   tutabilir;
+2. kayıttaki imzalar (koşu sırasında büyür);
+3. **oturum kanıtı — en sonda.**
+
+Kanıtı başa almak ardışık çağrılara **ortak prefix bırakmaz**, yani cache'in
+istediğinin tam tersidir. Çok-lensli gruplama ile kararlı blok artık tüm lens
+promptlarının birleşimidir: hem daha büyük hem daha çok çağrı tarafından paylaşılır.
+`TestAnalysisUserPromptEvidenceIsLast` bu sırayı sabitler.
+
 ---
 
 ## 5. Finding Modeli + Yaşam Döngüsü
@@ -487,6 +533,22 @@ Yani zincir `workspace-tuning` lensinin ürettiği varlık-hedefli öneriyi (§2
 teslim eder: öneri zaten `skill:<slug>` / `agent:<ad>` / `automation:<ad>` işaretçisi taşır ve
 applier tam olarak o varlıkları düzenleyebilir.
 
+**Tetikleyen koşuya sabitleme (2026-08-29).** Otomasyon promptu "az önce biten tarama"
+diyordu ama filtre yalnız `status:new` idi: 6 bulguluk bir tetik, backlog'daki tüm
+untriaged bulgular üzerinden 30 kümelik iş üretti. Artık:
+
+- Her bulgu, kendisini üreten **veya yeniden doğrulayan** koşunun kimliğiyle damgalanır
+  (`Finding.LastRunID`, `ScanScope.RunID`; `RunInsightScan` bunu `runID` ile doldurur).
+  Tekrar eden bulgu `mergeInto` içinde yeni koşu kimliğini alır, yani "bu koşunun
+  gördükleri" listesi tekrarları da kapsar.
+- `insight_list_findings` **`runId`** parametresi alır. Değer **hem** koşu kimliği **hem
+  de** o koşunun tarama oturumu kimliği olabilir (`insight.FindRun` ikisini de çözer) —
+  çünkü etiket-tetikli otomasyonun elinde yalnız `{{sessionId}}` vardır.
+  Çözülemeyen bir `runId` **hata**dır, boş liste değil: "tarama bir şey bulamadı" gibi
+  okunmasın.
+- Shipped promptu artık `runId: "{{sessionId}}"` ile çağırır
+  (`internal/agent/automation_defaults.go`).
+
 ---
 
 ## 10. Uygulama TODO
@@ -682,6 +744,17 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
       "refresh token was revoked" alır (claude tarafının karşılığı `toolloop.go:265-276`). Çağıran `Concurrency`'yi
       açıkça verdiyse o değer korunur (explicit wins — `MaxSessions` ile aynı sözleşme); karar `insight scan serialized`
       log satırıyla görünür kılınır. Codex sağlayıcısına kilit/heal eklenmesi ayrı iş.
+      **Daraltma denendi ve reddedildi (2026-08-29):** "yalnız auth yenileme bölümünü mutex'e al,
+      concurrency'yi 2-3'e çıkar" fikri kod okunarak elendi — bu süreçte yenileme yapan **hiçbir kod
+      yok**. `providers.prepareShadowHome` (`codexcli_shadowhome.go:53`) base `auth.json`'ı tur-yerel
+      bir home'a **kopyalar**; yenileme `codex exec` **alt sürecinin** içinde, o kopya üzerinde ve
+      sürecin tüm ömrü boyunca olur. Yani kritik bölge alt sürecin kendisidir: bizim sahip olduğumuz
+      koda konulacak bir süreç-içi mutex hiçbir şeyi korumaz, alt süreci kapsayan bir mutex ise
+      zaten `Concurrency=1`'dir. Ek gözlem: shadow home'daki **döndürülmüş** `auth.json` geri
+      yazılmaz, temp dizinle birlikte silinir — her codex turu aynı refresh token'ı yeniden sunar.
+      Gerçek çözüm bu geri-yazmayı kilit altında yapmaktır; o gelene kadar serileştirme kalır.
+      Maliyet bunun yerine **oturum başına tek çok-lensli çağrı** ile düşürüldü (§4.1): serileştirilen
+      çağrıların ~4/5'i ortadan kalkar, politika değişmeden.
 - [x] **MaxAnalyzed bütçesi**: taramada sert LLM-çağrı tavanı (`ScanScope`/`Settings`); aşan çiftler sonraki taramaya kalır.
 - [x] **FilePointer doğrulama** (`CheckFilePointer`): app-fix backlog'da repo'da olmayan LLM-tahmini yolları "⚠ unverified" işaretler.
 - [x] **Fleet rollup** (`fleet.go` + `GET /api/insight/fleet-findings`): tüm workspace'lerin app-fix bulgularını kanonik-imzayla birleştirir.

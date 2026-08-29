@@ -118,6 +118,10 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	// completed analysis) and stamps this id as its SourceID, so it must exist before
 	// Scan starts. The run-log row below shares it.
 	runID := newInsightRunID()
+	// Stamp every finding this run produces/re-confirms with the run id, so the
+	// automation this scan triggers can list exactly ITS findings instead of the
+	// whole status:new backlog.
+	scope.RunID = runID
 	lensIDs := scope.LensIDs
 	if len(lensIDs) == 0 {
 		for _, l := range reg.Enabled() {

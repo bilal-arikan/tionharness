@@ -65,6 +65,9 @@ func ValidStatus(s FindingStatus) bool {
 // Occurrences and records the new evidence session, so a recurring pattern
 // accumulates weight rather than fragmenting into duplicate rows.
 type Finding struct {
+	// AnswerOnly is an in-memory grouped-analysis marker proving that a lens
+	// returned an explicit empty findings array. Scanner consumes it before store.
+	AnswerOnly  bool    `json:"-"`
 	ID          string  `json:"id"`
 	LensID      string  `json:"lensId"`
 	Channel     Channel `json:"channel"`
@@ -92,6 +95,11 @@ type Finding struct {
 	// StatusApplied requires: without it "applied" is an unbacked claim, so the
 	// store refuses the transition (ErrAppliedNeedsEvidence).
 	AppliedEntity *AppliedEntity `json:"appliedEntity,omitempty"`
+	// LastRunID is the scan run (insight.RunRecord.ID) that most recently produced
+	// or re-confirmed this finding. It is what makes "show me what the run that
+	// just finished surfaced" answerable: without it a consumer triggered by one
+	// scan can only ask for status:new and gets the whole untriaged backlog.
+	LastRunID string `json:"lastRunId,omitempty"`
 }
 
 // AppliedEntity names the workspace entity a finding was applied to. Both fields
@@ -230,6 +238,11 @@ func (s *FindingStore) mergeInto(i int, f Finding) (Finding, error) {
 	}
 	if f.Severity != "" {
 		s.items[i].Severity = f.Severity
+	}
+	// A recurrence belongs to the run that saw it again, so a run-scoped listing
+	// includes findings this run re-confirmed, not only brand-new signatures.
+	if f.LastRunID != "" {
+		s.items[i].LastRunID = f.LastRunID
 	}
 	s.items[i].EvidenceSessionIDs = mergeStrings(s.items[i].EvidenceSessionIDs, f.EvidenceSessionIDs)
 	merged := s.items[i]

@@ -21,13 +21,34 @@ type Analyzer interface {
 	Analyze(ctx context.Context, req AnalysisRequest) ([]Finding, error)
 }
 
-// AnalysisRequest is the prepared input for one (lens, session) analysis. The
-// caller has already applied the prefilter and built a compact Transcript slice
-// (errors/tools/debug), so the analyzer only has to reason and emit findings.
+// AnalysisRequest is the prepared input for ONE analyzer call over one session.
+// The caller has already applied the prefilter and built a compact Transcript
+// slice (errors/tools/debug), so the analyzer only has to reason and emit
+// findings.
+//
+// A call covers every lens that is due for that session (Lenses), not one lens:
+// the transcript is the same evidence for all of them, so sending it once per
+// lens paid for the same tokens N times and produced mostly empty replies. A
+// multi-lens analyzer must tag each finding with the lens it belongs to
+// (Finding.LensID); the scanner attributes untagged findings to Lenses[0].
 type AnalysisRequest struct {
-	Lens       Lens
+	// Lens is the primary lens — Lenses[0]. Kept as its own field so an analyzer
+	// (or fake) written against the pre-grouping single-lens shape still works.
+	Lens Lens
+	// Lenses is the full set this one call must cover. Empty on a request built
+	// the old way; use LensList() instead of reading it directly.
+	Lenses     []Lens
 	SessionID  string
 	Transcript string
+}
+
+// LensList returns the lenses the request covers, falling back to the single
+// Lens field when the request was built the pre-grouping way.
+func (r AnalysisRequest) LensList() []Lens {
+	if len(r.Lenses) > 0 {
+		return r.Lenses
+	}
+	return []Lens{r.Lens}
 }
 
 // ScanScope selects what a scan covers.
@@ -39,6 +60,11 @@ type ScanScope struct {
 	MaxAnalyzed     int      // 0 = no cap; hard ceiling on analyzer (LLM) calls this run (cost budget)
 	Concurrency     int      // 0 = default; how many analyzer calls run in parallel
 	SinceUnix       int64    // 0 = no age limit; skip sessions last active before this unix time
+
+	// RunID stamps every finding this scan touches with the run that produced it
+	// (Finding.LastRunID), so a consumer can ask for "what THIS run surfaced"
+	// instead of re-triaging the whole backlog. Empty leaves the stamp alone.
+	RunID string
 
 	// ExcludeKinds lists Session.Kind values the scan must not look at. nil means
 	// the default exclusion — db.MachineTranscriptKinds(), the transcripts the
@@ -129,34 +155,49 @@ func NewScanner(database *db.DB, reg *Registry, ledger *Ledger, findings *Findin
 	}
 }
 
-// analysisTask is one prepared (lens, session) unit whose slow LLM analysis can
-// run concurrently with others; the transcript is built serially in phase 1.
+// analysisTask is one prepared SESSION unit — the transcript plus every lens due
+// for it — whose slow LLM analysis can run concurrently with others; the
+// transcript is built serially in phase 1 and sent ONCE for all its lenses.
 type analysisTask struct {
-	lens       Lens
+	lenses     []Lens
 	sess       db.Session
 	fp         string
 	transcript string
 }
 
+// lensIDs lists the task's lens ids, for error messages.
+func (t analysisTask) lensIDs() string {
+	ids := make([]string, 0, len(t.lenses))
+	for _, l := range t.lenses {
+		ids = append(ids, l.ID)
+	}
+	return strings.Join(ids, "+")
+}
+
 // analysisOutcome pairs a task with its analyzer result, applied serially in
-// phase 3 so all store/ledger/counter mutation stays single-threaded.
+// phase 3 so all store/ledger/counter mutation stays single-threaded. byLens is
+// the findings split per lens (see attributeFindings); unattributed counts the
+// ones whose lensId named no lens of the group.
 type analysisOutcome struct {
-	task  analysisTask
-	found []Finding
-	err   error
+	task         analysisTask
+	byLens       map[string][]Finding
+	answered     map[string]bool
+	unattributed int
+	err          error
 }
 
 // Scan runs one pass in three phases so the slow part parallelizes safely:
 //
 //  1. SERIAL enumerate: skip (lens,session) pairs the ledger already covers,
 //     prefilter the rest with cheap signals (recording clean-prefiltered pairs),
-//     and build the analysis task list — bounded by MaxSessions and MaxAnalyzed.
-//  2. CONCURRENT analyze: run the analyzer (one LLM call per task) through a
-//     bounded worker pool. This is the only parallel phase; nothing here mutates
-//     shared state beyond the per-index outcome slot.
-//  3. SERIAL apply: dedupe findings into the store, record each pair in the
-//     ledger, and tally the rollup. An analyzer error leaves that pair
-//     UN-recorded so the next scan retries it.
+//     and build the analysis task list — ONE task per session carrying all its
+//     due lenses, bounded by MaxSessions and MaxAnalyzed.
+//  2. CONCURRENT analyze: run the analyzer (one LLM call per task, i.e. per
+//     session) through a bounded worker pool. This is the only parallel phase;
+//     nothing here mutates shared state beyond the per-index outcome slot.
+//  3. SERIAL apply: dedupe findings into the store, record EACH lens of the task
+//     in the ledger, and tally the rollup. An analyzer error leaves that task's
+//     whole lens group UN-recorded so the next scan retries it.
 func (s *Scanner) Scan(ctx context.Context, scope ScanScope) (ScanResult, error) {
 	var res ScanResult
 	lenses := s.selectLenses(scope.LensIDs)
@@ -222,6 +263,7 @@ enumerate:
 		events, _ := s.db.ReadDebugEvents(ctx, sess.ID, "", 0) // best-effort: debug journal may be off
 		sig := extractSignals(msgs, events)
 
+		var group []Lens
 		for _, l := range due {
 			if !l.Prefilter.Match(sig) {
 				res.Prefiltered++
@@ -230,15 +272,20 @@ enumerate:
 				}
 				continue
 			}
-			// Cost budget: stop QUEUEING analyzer calls once the cap is hit. Pairs not
-			// queued stay un-recorded → picked up by the next scan.
-			if scope.MaxAnalyzed > 0 && len(tasks) >= scope.MaxAnalyzed {
-				break enumerate
-			}
-			tasks = append(tasks, analysisTask{
-				lens: l, sess: sess, fp: fp, transcript: s.buildSlice(l, sess, msgs, events),
-			})
+			group = append(group, l)
 		}
+		if len(group) == 0 {
+			continue
+		}
+		// Cost budget: stop QUEUEING analyzer calls once the cap is hit. One task is
+		// one LLM call, so the cap now counts calls directly. A session not queued
+		// stays un-recorded → picked up by the next scan.
+		if scope.MaxAnalyzed > 0 && len(tasks) >= scope.MaxAnalyzed {
+			break enumerate
+		}
+		tasks = append(tasks, analysisTask{
+			lenses: group, sess: sess, fp: fp, transcript: s.buildSlice(group, sess, msgs, events),
+		})
 	}
 
 	// ---- Phase 2: analyze (concurrent, bounded) ----
@@ -256,19 +303,27 @@ enumerate:
 			defer wg.Done()
 			defer func() { <-sem }()
 			started := time.Now()
-			found, aErr := s.analyzer.Analyze(ctx, AnalysisRequest{Lens: t.lens, SessionID: t.sess.ID, Transcript: t.transcript})
-			outcomes[i] = analysisOutcome{task: t, found: found, err: aErr}
+			found, aErr := s.analyzer.Analyze(ctx, AnalysisRequest{
+				Lens: t.lenses[0], Lenses: t.lenses, SessionID: t.sess.ID, Transcript: t.transcript,
+			})
+			byLens, answered, unattributed := attributeFindings(t.lenses, found)
+			outcomes[i] = analysisOutcome{task: t, byLens: byLens, answered: answered, unattributed: unattributed, err: aErr}
 			// Live observability, in COMPLETION order (not task order): the caller
-			// renders each finished pair as its own card while the scan is still running.
+			// renders each finished pair as its own card while the scan is still
+			// running. One multi-lens call still reports per LENS, so the transcript
+			// keeps its (lens, session) granularity.
 			if s.sink != nil {
-				s.sink(AnalysisEvent{
-					LensID:       t.lens.ID,
-					SessionID:    t.sess.ID,
-					SessionTitle: t.sess.Title,
-					Findings:     len(found),
-					Err:          aErr,
-					Duration:     time.Since(started),
-				})
+				elapsed := time.Since(started)
+				for _, l := range t.lenses {
+					s.sink(AnalysisEvent{
+						LensID:       l.ID,
+						SessionID:    t.sess.ID,
+						SessionTitle: t.sess.Title,
+						Findings:     len(byLens[l.ID]),
+						Err:          aErr,
+						Duration:     elapsed,
+					})
+				}
 			}
 		}(i, t)
 	}
@@ -278,38 +333,91 @@ enumerate:
 	for _, oc := range outcomes {
 		t := oc.task
 		if oc.err != nil {
-			// Leave this pair un-recorded → retried on the next scan.
-			res.Errors = append(res.Errors, fmt.Sprintf("%s/%s: analyze: %v", t.lens.ID, t.sess.ID, oc.err))
+			// Leave the whole lens group un-recorded → retried on the next scan.
+			res.Errors = append(res.Errors, fmt.Sprintf("%s/%s: analyze: %v", t.lensIDs(), t.sess.ID, oc.err))
 			continue
 		}
+		// A finding the model tagged with an unknown lens is NOT dropped silently: it
+		// is attributed to the group's first lens and the mis-tag is reported, so a
+		// lens prompt that confuses the model is visible instead of invisible.
+		if oc.unattributed > 0 {
+			res.Errors = append(res.Errors, fmt.Sprintf("%s/%s: %d finding(s) carried an unknown lensId, attributed to %s",
+				t.lensIDs(), t.sess.ID, oc.unattributed, t.lenses[0].ID))
+		}
 		now := s.now()
-		for _, f := range oc.found {
-			f.LensID = t.lens.ID
-			f.Channel = t.lens.Channel
-			if f.FirstSeen == 0 {
-				f.FirstSeen = now
-			}
-			f.LastSeen = now
-			if len(f.EvidenceSessionIDs) == 0 {
-				f.EvidenceSessionIDs = []string{t.sess.ID}
-			}
-			stored, uErr := s.findings.Upsert(f)
-			if uErr != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("%s: upsert finding: %v", t.lens.ID, uErr))
+		for _, l := range t.lenses {
+			if !oc.answered[l.ID] {
+				res.Errors = append(res.Errors, fmt.Sprintf("%s/%s: lens %s not answered in grouped call", t.lensIDs(), t.sess.ID, l.ID))
 				continue
 			}
-			res.Findings++
-			// Report the STORED finding, not the fresh one: it carries the id,
-			// lifecycle status and merged evidence a consumer needs (lesson promotion
-			// skips findings the user already closed, which the fresh copy cannot say).
-			res.Produced = append(res.Produced, stored)
+			found := oc.byLens[l.ID]
+			for _, f := range found {
+				f.LensID = l.ID
+				f.Channel = l.Channel
+				f.LastRunID = scope.RunID
+				if f.FirstSeen == 0 {
+					f.FirstSeen = now
+				}
+				f.LastSeen = now
+				if len(f.EvidenceSessionIDs) == 0 {
+					f.EvidenceSessionIDs = []string{t.sess.ID}
+				}
+				stored, uErr := s.findings.Upsert(f)
+				if uErr != nil {
+					res.Errors = append(res.Errors, fmt.Sprintf("%s: upsert finding: %v", l.ID, uErr))
+					continue
+				}
+				res.Findings++
+				// Report the STORED finding, not the fresh one: it carries the id,
+				// lifecycle status and merged evidence a consumer needs (lesson promotion
+				// skips findings the user already closed, which the fresh copy cannot say).
+				res.Produced = append(res.Produced, stored)
+			}
+			if rErr := s.record(l, t.sess, t.fp, len(found), "clean"); rErr != nil {
+				res.Errors = append(res.Errors, rErr.Error())
+			}
+			res.Analyzed++
 		}
-		if rErr := s.record(t.lens, t.sess, t.fp, len(oc.found), "clean"); rErr != nil {
-			res.Errors = append(res.Errors, rErr.Error())
-		}
-		res.Analyzed++
 	}
 	return res, nil
+}
+
+// attributeFindings splits one multi-lens analyzer reply back into per-lens
+// buckets, keyed by lens id. A single-lens call needs no tag at all — the lens IS
+// the request, so whatever the model wrote in lensId is overridden. In a
+// multi-lens call a finding whose lensId names no lens of the group is put on the
+// first lens and COUNTED (second return value) so the caller can report the
+// mis-tag rather than swallow it.
+func attributeFindings(lenses []Lens, found []Finding) (map[string][]Finding, map[string]bool, int) {
+	byLens := make(map[string][]Finding, len(lenses))
+	answered := make(map[string]bool, len(lenses))
+	if len(lenses) == 0 {
+		return byLens, answered, len(found)
+	}
+	known := make(map[string]bool, len(lenses))
+	for _, l := range lenses {
+		known[l.ID] = true
+	}
+	unattributed := 0
+	for _, f := range found {
+		id := strings.TrimSpace(f.LensID)
+		switch {
+		case len(lenses) == 1:
+			id = lenses[0].ID
+		case !known[id]:
+			unattributed++
+			id = lenses[0].ID
+		}
+		answered[id] = true
+		if f.AnswerOnly {
+			continue
+		}
+		byLens[id] = append(byLens[id], f)
+	}
+	if len(lenses) == 1 {
+		answered[lenses[0].ID] = true
+	}
+	return byLens, answered, unattributed
 }
 
 // selectLenses resolves the scope's lens ids. Empty selects all ENABLED lenses;
@@ -429,7 +537,20 @@ func hasScope(l Lens, want string) bool {
 	return false
 }
 
-func (s *Scanner) buildSlice(lens Lens, sess db.Session, msgs []db.Message, events []db.DebugEvent) string {
+// anyScope reports whether ANY lens of a grouped analysis requested a slice
+// surface. One transcript now serves every due lens, so the union of their scopes
+// decides what it carries — a cache lens in the group brings the cache section
+// along for all of them.
+func anyScope(lenses []Lens, want string) bool {
+	for _, l := range lenses {
+		if hasScope(l, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Scanner) buildSlice(lenses []Lens, sess db.Session, msgs []db.Message, events []db.DebugEvent) string {
 	var stepLines []string
 	for _, m := range msgs {
 		for _, st := range view.DecodeSteps(m.Steps) {
@@ -472,7 +593,7 @@ func (s *Scanner) buildSlice(lens Lens, sess db.Session, msgs []db.Message, even
 	// analyzer whether a break sat next to a DELIBERATE adopt (expected) or stood
 	// alone (the signal worth a finding — _Docs/57).
 	var cacheLines []string
-	if hasScope(lens, ScopeCache) {
+	if anyScope(lenses, ScopeCache) {
 		for _, e := range events {
 			switch e.Type {
 			case db.DebugCacheBreak:

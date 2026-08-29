@@ -97,7 +97,9 @@ var defaultAutomations = []defaultAutomation{
 				SessionMode:   db.SessionModeSpawn,
 				PromptTemplate: "Az önce biten içgörü taramasının workspace-opt bulgularını uygula.\n\n" +
 					"Tarama oturumu: {{title}} ({{sessionId}})\n\n" +
-					"insight_list_findings ile channel: \"workspace-opt\", status: \"new\" bulguları çek ve " +
+					"insight_list_findings ile runId: \"{{sessionId}}\", channel: \"workspace-opt\", " +
+					"status: \"new\" bulguları çek — runId taramayı bu tetikleyen çalıştırmaya sabitler, " +
+					"yoksa tüm eski backlog gelir — ve " +
 					"her birini uygun workspace varlığında (skill / agent / hook / automation) düzelt. " +
 					"app-fix kanalına dokunma. Uyguladığın bulguyu insight_apply_finding ile applied işaretle; " +
 					"uygulamadıklarını gerekçesiyle raporla.",

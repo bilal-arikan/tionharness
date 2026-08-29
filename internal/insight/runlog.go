@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Scan-run observability. Every scan now ALSO opens a read-only session
@@ -122,6 +123,29 @@ func readAllRuns(path string) ([]RunRecord, error) {
 		}
 	}
 	return all, sc.Err()
+}
+
+// FindRun resolves a run by either of its two public identities: the run id
+// (RunRecord.ID) or the id of the read-only session the run wrote
+// (RunRecord.SessionID). Both are needed because the caller that most wants a
+// run-scoped view — an automation fired by the scan's session tag — only has the
+// SESSION id in its prompt variables. Newest match wins; a blank ref never
+// matches.
+func FindRun(root, ref string) (RunRecord, bool) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return RunRecord{}, false
+	}
+	all, err := readAllRuns(filepath.Join(root, runsRelPath)) // oldest-first
+	if err != nil {
+		return RunRecord{}, false
+	}
+	for i := len(all) - 1; i >= 0; i-- {
+		if all[i].ID == ref || (all[i].SessionID != "" && all[i].SessionID == ref) {
+			return all[i], true
+		}
+	}
+	return RunRecord{}, false
 }
 
 // ReadRuns returns the most recent run records NEWEST-first, capped at limit

@@ -26,7 +26,7 @@ func TestBuildSliceReportsWhatItDropped(t *testing.T) {
 	s := &Scanner{sliceCap: 400}
 	msgs := []db.Message{errStepsMsg(40, strings.Repeat("x", 40))}
 
-	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
+	out := s.buildSlice([]Lens{{}}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
 
 	if !strings.Contains(out, "more error/recovery step(s) omitted for size") {
 		t.Fatalf("dropped steps were not reported:\n%s", out)
@@ -44,7 +44,7 @@ func TestBuildSliceKeepsRecordsWholeAtTheBoundary(t *testing.T) {
 	s := &Scanner{sliceCap: 400}
 	msgs := []db.Message{errStepsMsg(40, strings.Repeat("y", 40))}
 
-	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
+	out := s.buildSlice([]Lens{{}}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
 
 	// The old byte-slice would end the payload mid-token. Now the last rendered
 	// step line ends with the step's own text, never a partial word boundary
@@ -71,7 +71,7 @@ func TestBuildSliceEmitsBothSectionsWhenEverythingFits(t *testing.T) {
 		{Type: db.DebugGuardrail, Name: "loop_detected", Detail: "aynı araç 5 kez"},
 	}
 
-	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "auth"}, msgs, events)
+	out := s.buildSlice([]Lens{{}}, db.Session{ID: "SES1", Title: "auth"}, msgs, events)
 
 	for _, want := range []string{
 		`SESSION SES1 — "auth"`,
@@ -103,7 +103,7 @@ func TestBuildSliceStepsOutrankEvents(t *testing.T) {
 		})
 	}
 
-	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, events)
+	out := s.buildSlice([]Lens{{}}, db.Session{ID: "SES1", Title: "t"}, msgs, events)
 
 	steps := strings.Count(out, "- [error] reason=")
 	if steps == 0 {
@@ -128,13 +128,13 @@ func TestBuildSliceCacheScope(t *testing.T) {
 	}
 
 	// No cache scope → the section is absent entirely.
-	plain := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, nil, events)
+	plain := s.buildSlice([]Lens{{}}, db.Session{ID: "SES1", Title: "t"}, nil, events)
 	if strings.Contains(plain, "cache_break") || strings.Contains(plain, "Prompt-cache events") {
 		t.Fatalf("a lens without scope:[cache] must not receive cache events:\n%s", plain)
 	}
 
 	// With cache scope → cause, cold size, waste and the epoch event all present.
-	out := s.buildSlice(Lens{Scope: []string{"debug", ScopeCache}}, db.Session{ID: "SES1", Title: "t"}, nil, events)
+	out := s.buildSlice([]Lens{{Scope: []string{"debug", ScopeCache}}}, db.Session{ID: "SES1", Title: "t"}, nil, events)
 	for _, want := range []string{
 		"Prompt-cache events",
 		"cause=ttl-or-server-eviction",

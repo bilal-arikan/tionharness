@@ -21,6 +21,8 @@ type analysisTestProvider struct {
 	request providers.Request
 	err     error
 	calls   int
+	text    string
+	stop    string
 }
 
 func (*analysisTestProvider) Name() string { return "analysis-test" }
@@ -33,7 +35,11 @@ func (p *analysisTestProvider) Complete(_ context.Context, req providers.Request
 	if p.err != nil {
 		return nil, p.err
 	}
-	return &providers.Response{Text: `{"findings":[]}`}, nil
+	text := p.text
+	if text == "" {
+		text = `{"findings":[]}`
+	}
+	return &providers.Response{Text: text, StopReason: p.stop}, nil
 }
 
 func (p *analysisTestProvider) captured() providers.Request {

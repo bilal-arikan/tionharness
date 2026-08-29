@@ -39,9 +39,19 @@ func (r *Runtime) agentProviderKind(agent db.Agent) string {
 // toolloop.go:265-276; codex has no lock/heal yet, so the scan side avoids the
 // race by never issuing two codex analyses at once.
 //
-// Turn-local shadow homes isolate config.toml writes, but each shadow starts
-// from the same base auth.json. Serializing scan analysis still prevents four
-// subprocesses from attempting to refresh the same single-use OAuth token.
+// WHERE THE RACE ACTUALLY IS (checked before trying to narrow this to a mutex):
+// nothing in this process refreshes a codex token. providers.prepareShadowHome
+// (codexcli_shadowhome.go:53) COPIES the base auth.json into a turn-local home,
+// and the refresh happens inside the `codex exec` subprocess, against that copy,
+// for as long as the subprocess runs. So the critical section is the whole
+// subprocess, not a short in-process "refresh section" — an in-process mutex
+// around any code we own would guard nothing, and holding one across the
+// subprocess IS Concurrency=1 by another name. The serialization therefore
+// stays until the shadow home copies the ROTATED auth.json back to the base
+// under a lock (today it is discarded with the temp dir, so every codex turn
+// re-presents the same refresh token). Cost is instead cut by sending one
+// multi-lens analyzer call per session (insight.AnalysisRequest.Lenses), which
+// removes ~4/5 of the serialized calls without touching this policy.
 //
 // Explicit wins: a caller that set Concurrency itself keeps its value (same
 // contract as MaxSessions/MaxAnalyzed).

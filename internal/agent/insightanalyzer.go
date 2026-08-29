@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -19,7 +20,8 @@ import (
 // runtime's guardedComplete funnel (usage-metered, workspace-pinned) — the same
 // path the lesson reflector uses. It asks for a JSON array of findings via
 // structured output; models without structured-output support return free text,
-// so the reply is parsed with a fallback (unparseable → no findings, logged).
+// so free-text replies are extracted and parsed. Unparseable output is an error:
+// scanner must retry rather than ledger a false clean result.
 type insightAnalyzer struct {
 	rt     *Runtime
 	agent  db.Agent
@@ -50,6 +52,7 @@ var insightFindingsSchema = json.RawMessage(`{
       "items": {
         "type": "object",
         "properties": {
+          "lensId":      { "type": "string" },
           "title":       { "type": "string" },
           "rootCause":   { "type": "string" },
           "proposedFix": { "type": "string" },
@@ -64,17 +67,86 @@ var insightFindingsSchema = json.RawMessage(`{
   "required": ["findings"]
 }`)
 
-// analysisUserPrompt assembles the analyzer's user message: the lens prompt, the
-// session evidence, the strict-JSON instruction, and — when lang is non-empty — a
-// directive to write the user-facing prose fields in that language (code
-// identifiers, paths and the signature stay verbatim so dedup/file-pointers hold).
-// knownSigs, when non-empty, lists signatures already on record for this lens's
-// topic so the model reuses one instead of minting a fresh slug for a problem
-// that is already tracked (the store's similarity dedupe is the safety net, not
-// the first line of defence).
+var insightGroupedFindingsSchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "lensResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lensId": { "type": "string" },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title":       { "type": "string" },
+                "rootCause":   { "type": "string" },
+                "proposedFix": { "type": "string" },
+                "filePointer": { "type": "string" },
+                "severity":    { "type": "string", "enum": ["low", "med", "high"] },
+                "signature":   { "type": "string" }
+              },
+              "required": ["title"]
+            }
+          }
+        },
+        "required": ["lensId", "findings"]
+      }
+    }
+  },
+  "required": ["lensResults"]
+}`)
+
+// analysisUserPrompt assembles the analyzer's user message for ONE session and
+// the lens (or lenses) due for it.
+//
+// ORDER IS THE PROMPT-CACHE CONTRACT. The blocks are laid out most-stable first:
+//
+//  1. the lens instructions + the JSON contract + the language directive — byte
+//     identical for EVERY call of a run, so provider prefix caching can hit on
+//     them once the run's second session is analysed;
+//  2. the signatures on record — stable-ish, but the store grows during the run;
+//  3. the session evidence — different for every call, so it goes LAST.
+//
+// Putting the evidence first would give consecutive calls no shared prefix at
+// all, which is the opposite of what a cache needs. With multi-lens grouping the
+// stable block is now the CONCATENATION of every lens prompt, so it is both
+// larger and shared by more calls than before.
+//
+// knownSigs, when non-empty, lists signatures already on record so the model
+// reuses one instead of minting a fresh slug for a problem that is already
+// tracked (the store's similarity dedupe is the safety net, not the first line of
+// defence). lang, when non-empty, directs the user-facing prose fields into that
+// language; code identifiers, paths and the signature stay verbatim so dedup and
+// file pointers hold.
 func analysisUserPrompt(req insight.AnalysisRequest, lang string, knownSigs []string) string {
+	lenses := req.LensList()
 	var b strings.Builder
-	b.WriteString(strings.TrimSpace(req.Lens.Prompt))
+	if len(lenses) <= 1 {
+		b.WriteString(strings.TrimSpace(req.Lens.Prompt))
+	} else {
+		b.WriteString("Analyse the session evidence below through EACH of the following lenses, in one pass. " +
+			"Return one lensResults entry for EVERY lens, including an empty findings array when nothing qualifies.\n")
+		for _, l := range lenses {
+			b.WriteString("\n--- LENS " + l.ID + " ---\n")
+			b.WriteString(strings.TrimSpace(l.Prompt) + "\n")
+		}
+	}
+	if len(lenses) > 1 {
+		b.WriteString("\n\nReturn ONLY JSON of the form {\"lensResults\":[{\"lensId\":...,\"findings\":[{\"title\":...,\"rootCause\":...,\"proposedFix\":...,\"filePointer\":...,\"severity\":\"low|med|high\",\"signature\":...}]}]}. ")
+	} else {
+		b.WriteString("\n\nReturn ONLY JSON of the form {\"findings\":[{\"title\":...,\"rootCause\":...,\"proposedFix\":...,\"filePointer\":...,\"severity\":\"low|med|high\",\"signature\":...}]}. ")
+	}
+	b.WriteString("Use a STABLE signature per problem shape (tool/error shape, not volatile ids). Empty array if nothing qualifies.")
+	if len(lenses) > 1 {
+		b.WriteString(" lensId must be exactly one of: " + strings.Join(lensIDList(lenses), ", ") + ".")
+	}
+	if lang != "" {
+		b.WriteString(" Write the title, rootCause and proposedFix in " + lang +
+			"; keep the signature, code identifiers and file paths verbatim (do not translate them).")
+	}
 	if len(knownSigs) > 0 {
 		b.WriteString("\n\n--- SIGNATURES ALREADY ON RECORD ---\n")
 		for _, s := range knownSigs {
@@ -85,13 +157,16 @@ func analysisUserPrompt(req insight.AnalysisRequest, lang string, knownSigs []st
 	}
 	b.WriteString("\n\n--- SESSION EVIDENCE ---\n")
 	b.WriteString(req.Transcript)
-	b.WriteString("\n\nReturn ONLY JSON of the form {\"findings\":[{\"title\":...,\"rootCause\":...,\"proposedFix\":...,\"filePointer\":...,\"severity\":\"low|med|high\",\"signature\":...}]}. " +
-		"Use a STABLE signature per problem shape (tool/error shape, not volatile ids). Empty array if nothing qualifies.")
-	if lang != "" {
-		b.WriteString(" Write the title, rootCause and proposedFix in " + lang +
-			"; keep the signature, code identifiers and file paths verbatim (do not translate them).")
-	}
 	return b.String()
+}
+
+// lensIDList returns the lens ids of a grouped call, for the enum hint.
+func lensIDList(lenses []insight.Lens) []string {
+	out := make([]string, 0, len(lenses))
+	for _, l := range lenses {
+		out = append(out, l.ID)
+	}
+	return out
 }
 
 func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisRequest) ([]insight.Finding, error) {
@@ -105,12 +180,20 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 	if a.rt != nil && a.rt.tun != nil {
 		lang = a.rt.tun.Language()
 	}
+	lenses := req.LensList()
+	maxTokens := analysisMaxTokens(len(lenses))
+	outputSchema := insightFindingsSchema
+	if len(lenses) > 1 {
+		outputSchema = insightGroupedFindingsSchema
+	}
 	resp, err := a.rt.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "insight-analyzer", a.system), a.agent, providers.Request{
-		Model:        a.agent.Model,
-		System:       a.system,
-		MaxTokens:    1500,
-		OutputSchema: insightFindingsSchema,
-		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang, a.knownSigsFor(req.Lens))}},
+		Model:  a.agent.Model,
+		System: a.system,
+		// A grouped call answers for several lenses at once, so the reply budget
+		// scales with the group instead of truncating everything after the first lens.
+		MaxTokens:    maxTokens,
+		OutputSchema: outputSchema,
+		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang, a.knownSigsFor(lenses))}},
 	}, false)
 	if err != nil {
 		if errors.Is(err, providers.ErrPermanentProviderFailure) {
@@ -124,7 +207,24 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 		return nil, err
 	}
 	a.steps.captureRaw(req.Lens.ID, req.SessionID, resp.Text)
-	return a.parse(resp.Text, req.Lens), nil
+	if resp.StopReason == providers.StopMaxTok {
+		return nil, fmt.Errorf("insight analyzer truncated: %d lenses requested with maxTokens=%d, provider stopReason=%s", len(lenses), maxTokens, resp.StopReason)
+	}
+	return a.parse(resp.Text, lenses)
+}
+
+// analysisMaxTokens sizes the reply budget for a grouped call: a base allowance
+// plus a per-extra-lens slice. The default registry has eight lenses, so an
+// arbitrary 4000-token ceiling would make truncation likely for the full group.
+func analysisMaxTokens(lensCount int) int {
+	const (
+		base    = 1500
+		perLens = 500
+	)
+	if lensCount <= 1 {
+		return base
+	}
+	return base + perLens*(lensCount-1)
 }
 
 // knownSigCount bounds how many stored signatures ride the analysis prompt:
@@ -138,7 +238,9 @@ const knownSigCount = 30
 // first, then the rest of its channel (one root cause is often already filed by
 // a sibling lens); the lessons-mining lens additionally gets the lesson
 // signatures its findings were promoted into.
-func (a *insightAnalyzer) knownSigsFor(lens insight.Lens) []string {
+// A grouped call takes the UNION over its lenses, deduplicated and still capped
+// at knownSigCount.
+func (a *insightAnalyzer) knownSigsFor(lenses []insight.Lens) []string {
 	sigs := make([]string, 0, knownSigCount)
 	seen := make(map[string]bool, knownSigCount)
 	add := func(sig string) {
@@ -149,18 +251,21 @@ func (a *insightAnalyzer) knownSigsFor(lens insight.Lens) []string {
 		seen[sig] = true
 		sigs = append(sigs, sig)
 	}
-	if lens.ID == lessonsMiningLensID && a.rt != nil && a.rt.db != nil {
-		lessons, err := a.rt.db.ListLessons(knownSigCount)
-		if err != nil {
-			a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
-		}
-		for _, l := range lessons {
-			if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
-				add(l.Signature)
+	for _, lens := range lenses {
+		if lens.ID == lessonsMiningLensID && a.rt != nil && a.rt.db != nil {
+			lessons, err := a.rt.db.ListLessons(knownSigCount)
+			if err != nil {
+				a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
+			}
+			for _, l := range lessons {
+				if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
+					add(l.Signature)
+				}
 			}
 		}
-	}
-	if a.findings != nil {
+		if a.findings == nil {
+			continue
+		}
 		for _, f := range a.findings.List(lens.ID, "") {
 			add(f.Signature)
 		}
@@ -180,39 +285,83 @@ func (a *insightAnalyzer) permanentError() error {
 }
 
 // parse maps the model reply into findings, filling channel-independent fields;
-// the scanner stamps LensID/Channel/timestamps. An unparseable reply yields no
-// findings (logged, not an error — the scanner would otherwise retry forever).
-func (a *insightAnalyzer) parse(text string, lens insight.Lens) []insight.Finding {
+// the scanner stamps Channel/timestamps. An unparseable reply is logged and
+// returned as an error so the scanner leaves every grouped lens retryable.
+//
+// LensID: a single-lens call needs no tag (the lens is the request); a grouped
+// call carries the model's lensId through so the scanner can attribute each
+// finding. An unknown or missing tag is left as the model wrote it — the scanner
+// owns the fallback and REPORTS it, so a mis-tag is not hidden here.
+func (a *insightAnalyzer) parse(text string, lenses []insight.Lens) ([]insight.Finding, error) {
+	if len(lenses) == 0 {
+		a.rt.logger.Warn("insight analyzer: reply for no lens")
+		return nil, errors.New("insight analyzer: reply for no lens")
+	}
+	lens := lenses[0]
 	raw := extractJSONObject(text)
 	if raw == "" {
 		a.rt.logger.Warn("insight analyzer: no JSON in reply", "lens", lens.ID)
-		return nil
+		return nil, errors.New("insight analyzer: no JSON in reply")
+	}
+	type rawFinding struct {
+		LensID      string `json:"lensId"`
+		Title       string `json:"title"`
+		RootCause   string `json:"rootCause"`
+		ProposedFix string `json:"proposedFix"`
+		FilePointer string `json:"filePointer"`
+		Severity    string `json:"severity"`
+		Signature   string `json:"signature"`
 	}
 	var parsed struct {
-		Findings []struct {
-			Title       string `json:"title"`
-			RootCause   string `json:"rootCause"`
-			ProposedFix string `json:"proposedFix"`
-			FilePointer string `json:"filePointer"`
-			Severity    string `json:"severity"`
-			Signature   string `json:"signature"`
-		} `json:"findings"`
+		Findings    []rawFinding `json:"findings"`
+		LensResults []struct {
+			LensID   string       `json:"lensId"`
+			Findings []rawFinding `json:"findings"`
+		} `json:"lensResults"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		a.rt.logger.Warn("insight analyzer: JSON parse failed", "lens", lens.ID, "error", err)
-		return nil
+		return nil, fmt.Errorf("insight analyzer: parse JSON: %w", err)
 	}
-	out := make([]insight.Finding, 0, len(parsed.Findings))
-	for _, f := range parsed.Findings {
+	findings := parsed.Findings
+	if len(lenses) > 1 {
+		findings = nil
+		for _, result := range parsed.LensResults {
+			id := strings.TrimSpace(result.LensID)
+			if len(result.Findings) == 0 {
+				findings = append(findings, rawFinding{LensID: id})
+				continue
+			}
+			for _, f := range result.Findings {
+				f.LensID = id
+				findings = append(findings, f)
+			}
+		}
+	}
+	out := make([]insight.Finding, 0, len(findings))
+	for _, f := range findings {
+		if strings.TrimSpace(f.Title) == "" && len(lenses) > 1 {
+			out = append(out, insight.Finding{LensID: strings.TrimSpace(f.LensID), AnswerOnly: true})
+			continue
+		}
 		title := strings.TrimSpace(f.Title)
 		if title == "" {
 			continue
 		}
+		// The signature fallback keys off the lens the finding claims, so two lenses
+		// that saw different problems in one grouped call don't collide on it.
+		sigLens := lens.ID
+		if len(lenses) > 1 {
+			if tagged := strings.TrimSpace(f.LensID); tagged != "" {
+				sigLens = tagged
+			}
+		}
 		sig := strings.TrimSpace(f.Signature)
 		if sig == "" {
-			sig = fallbackSignature(lens.ID, title)
+			sig = fallbackSignature(sigLens, title)
 		}
 		out = append(out, insight.Finding{
+			LensID:      strings.TrimSpace(f.LensID),
 			Signature:   sig,
 			Title:       title,
 			RootCause:   strings.TrimSpace(f.RootCause),
@@ -221,7 +370,7 @@ func (a *insightAnalyzer) parse(text string, lens insight.Lens) []insight.Findin
 			Severity:    normalizeSeverity(f.Severity),
 		})
 	}
-	return out
+	return out, nil
 }
 
 // normalizeSeverity maps whatever the model wrote into the schema's enum
