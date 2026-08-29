@@ -24,12 +24,22 @@ describe('shouldShowSessionsLoadMore', () => {
     ).toBe(false)
   })
 
-  it('stays visible when active chip filters leave rendered sessions', () => {
+  it('is hidden when active chip filters leave 100 or fewer rendered sessions', () => {
     expect(
       shouldShowSessionsLoadMore({
         ...visibleState,
         hasActiveChipFilters: true,
-        filteredSessionCount: 1,
+        filteredSessionCount: 100,
+      }),
+    ).toBe(false)
+  })
+
+  it('stays visible when active chip filters leave more than 100 rendered sessions', () => {
+    expect(
+      shouldShowSessionsLoadMore({
+        ...visibleState,
+        hasActiveChipFilters: true,
+        filteredSessionCount: 101,
       }),
     ).toBe(true)
   })

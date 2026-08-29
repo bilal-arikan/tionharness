@@ -18,6 +18,6 @@ export function shouldShowSessionsLoadMore({
     hasMoreSessions &&
     canLoadMore &&
     query.trim().length < 2 &&
-    (!hasActiveChipFilters || filteredSessionCount > 0)
+    (!hasActiveChipFilters || filteredSessionCount > 100)
   )
 }
