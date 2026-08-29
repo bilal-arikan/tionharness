@@ -19,7 +19,9 @@ import {
   CoordinatorWorkflowPicker,
   WORKFLOW_HELP,
 } from '@/shared/components/CoordinatorWorkflowPicker'
+import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
+import { workerAgent } from '@/shared/lib/workerAgent'
 import { isCoordinatorSession, isWorkerSession } from '@/shared/lib/coordination'
 import { CoordinatorBreadcrumb } from './CoordinatorBreadcrumb'
 import { CoordinatorTreeView } from './CoordinatorTreeView'
@@ -406,33 +408,45 @@ export function CoordinatorSection({
                                   className="shrink-0 text-[var(--color-success)]"
                                 />
                               )}
-                              <span className="truncate text-[11px] font-medium text-[var(--color-text)]">
-                                {w.agentName}
-                              </span>
-                              {/* "delegating" is NOT "running": a sub-coordinator between its
-                              own turns has no live turn, it is waiting on its branch.
-                              Labelling it "çalışıyor" would suggest an answer is coming;
-                              labelling it "bitti" would be worse still — its result does
-                              not exist yet. */}
-                              {/* A parked follow-up (send_to_worker while the worker was
-                              busy): it will be delivered the instant this turn ends. The
-                              badge tells the coordinator the message landed, so it need
-                              not resend or reach for stop_worker. */}
-                              {w.running && w.queued && (
-                                <span
-                                  title="Bekleyen mesaj: bu tur bitince otomatik teslim edilecek"
-                                  className="ml-auto flex items-center gap-1 rounded-full bg-[var(--color-warning)]/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-warning)]"
-                                >
-                                  <Inbox size={9} className="shrink-0" /> kuyrukta
-                                </span>
-                              )}
-                              <span
-                                className={`text-[9px] uppercase tracking-wide text-[var(--color-text-dim)] ${
-                                  w.running && w.queued ? '' : 'ml-auto'
-                                }`}
-                              >
-                                {w.delegating ? 'dağıtıyor' : w.running ? 'çalışıyor' : 'bitti'}
-                              </span>
+                              {/* Same identity chip the chat's wait banner uses: avatar,
+                              agent name, then id · model on the second line — so a worker
+                              reads the same wherever it appears. */}
+                              <AgentIdentity
+                                agent={workerAgent(w)}
+                                size="sm"
+                                showId={Boolean(w.agentId)}
+                                subtitle="model"
+                                className="min-w-0 flex-1"
+                                trailing={
+                                  <span className="flex shrink-0 items-center gap-1">
+                                    {/* A parked follow-up (send_to_worker while the worker
+                                    was busy): it will be delivered the instant this turn
+                                    ends. The badge tells the coordinator the message
+                                    landed, so it need not resend or reach for
+                                    stop_worker. */}
+                                    {w.running && w.queued && (
+                                      <span
+                                        title="Bekleyen mesaj: bu tur bitince otomatik teslim edilecek"
+                                        className="flex items-center gap-1 rounded-full bg-[var(--color-warning)]/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-warning)]"
+                                      >
+                                        <Inbox size={9} className="shrink-0" /> kuyrukta
+                                      </span>
+                                    )}
+                                    {/* "delegating" is NOT "running": a sub-coordinator
+                                    between its own turns has no live turn, it is waiting on
+                                    its branch. Labelling it "çalışıyor" would suggest an
+                                    answer is coming; labelling it "bitti" would be worse
+                                    still — its result does not exist yet. */}
+                                    <span className="whitespace-nowrap text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                                      {w.delegating
+                                        ? 'dağıtıyor'
+                                        : w.running
+                                          ? 'çalışıyor'
+                                          : 'bitti'}
+                                    </span>
+                                  </span>
+                                }
+                              />
                             </div>
                             {w.summary && (
                               <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">

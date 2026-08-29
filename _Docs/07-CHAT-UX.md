@@ -373,7 +373,8 @@ kırpıldı:
   `agentProvider`, `agentModel`, `agentDeleted`; `WorkerInfo`'nun yeni alanları).
   Ajan satırı artık yoksa alanlar boş kalır ve çip `title`/`sessionId` fallback'iyle
   ad gösterir. Çip iki satır olduğu için `max-w-[240px]` ile sınırlanır ve geniş
-  fan-out satırlara sarar.
+  fan-out satırlara sarar. Aynı kimlik çipi sağ paneldeki koordinatör roster'ında da
+  kullanılır (bkz. `_Docs/47`); eşleme `shared/lib/workerAgent.ts` içinde paylaşılır.
 - **Composer üstü yüzen kartlar (2026-08-01):** composer'ın üstündeki **yedi** panel
   (`TodoPanel`, `PendingTray`, `WorkerWaitBanner`, `WakeWaitBanner`, `AskPrompt`,
   `PermissionPrompt`, `PlanPrompt`) geometriyi **tek sarmalayıcıdan** alır:

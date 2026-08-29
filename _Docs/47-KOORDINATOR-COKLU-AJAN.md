@@ -506,6 +506,12 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   yoksa alanlar bilinçli olarak boş kalır (UI `title`/`sessionId`'ye düşer). Alanlar
   yalnız HTTP roster'ına (`internal/api/session_role.go`) eklendi; `internal/view/
   workers.go` koordinatörün metin görünümü olduğu için dokunulmadı.
+  **Roster satırı da aynı çiple (2026-08-29):** `CoordinatorSection.tsx` roster satırı
+  düz `agentName` metni yerine aynı `AgentIdentity`'yi kullanır (`size="sm"`,
+  `showId`, `subtitle="model"`); durum ikonu (`Play`/`CheckCircle2`) çipin solunda,
+  "kuyrukta" rozeti + durum etiketi (`dağıtıyor`/`çalışıyor`/`bitti`) `trailing`
+  içinde kalır, `w.summary` alt satırı değişmez. `WorkerInfo → AgentLike` eşlemesi
+  banner ile ortak: `frontend/src/shared/lib/workerAgent.ts`.
   **Canlı süre + poll→SSE (2026-07-27):** iki eksik kapatıldı.
   (a) `WorkerInfo.StartedAt` (unix sn) eklendi — `workerCtl.startedAt`'tan gelir,
   yalnız ÇALIŞAN worker için dolu; ctl yoksa (worker oturumunda doğrudan açılmış
