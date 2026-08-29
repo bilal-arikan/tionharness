@@ -4,6 +4,7 @@ import { UserBubble } from './UserBubble'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { RewindButton } from './RewindButton'
+import { CopyButton } from './CopyButton'
 import { DirectionBadge } from './DirectionBadge'
 import { ACTION_CLUSTER, META_CLUSTER, TURN_FOOTER_END } from './messageActions'
 
@@ -51,12 +52,11 @@ export const UserTurn = memo(function UserTurn({
           <MessageTime unixSec={m.createdAt} />
           <DirectionBadge label={recipientLabel} />
         </div>
-        {(onRewind || onDelete) && (
-          <div className={ACTION_CLUSTER}>
-            {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
-            {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
-          </div>
-        )}
+        <div className={ACTION_CLUSTER}>
+          {m.text.trim() && <CopyButton text={m.text} />}
+          {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
+          {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
+        </div>
       </div>
     </div>
   )

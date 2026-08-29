@@ -14,6 +14,7 @@ import { AgentHeader } from './AgentHeader'
 import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
 import { DeleteButton } from './DeleteButton'
+import { CopyButton } from './CopyButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
 import { ChangesButton } from './ChangesButton'
 import { hasFileChanges } from '@/shared/lib/fileChanges'
@@ -166,8 +167,10 @@ export const AssistantTurn = memo(function AssistantTurn({
 
   // Whether the in-bubble action row has anything to show at all (a live bubble
   // offers none of them, so it stays clean while streaming).
+  const canCopy = !isLastLive && m.text.trim().length > 0
   const hasActions =
     showChanges ||
+    canCopy ||
     canSpeak ||
     (!!onFeedback && !isLastLive) ||
     canRetry ||
@@ -311,6 +314,7 @@ export const AssistantTurn = memo(function AssistantTurn({
                 onOpenFile={onOpenFile}
               />
             )}
+            {canCopy && <CopyButton text={m.text} />}
             {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables.
                 The adjacent slider sets the GLOBAL read-aloud volume (all bubbles). */}
             {canSpeak && (
