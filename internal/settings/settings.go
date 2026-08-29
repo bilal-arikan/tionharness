@@ -219,7 +219,7 @@ type Settings struct {
 	// take effect on the next turn — is automatically followed by a continuation
 	// turn, up to AutonomousAutoContinueMax times, so unattended work self-completes
 	// instead of stalling. Each continuation is budget-gated; the loop also stops as
-	// soon as a turn makes no tool progress. 0 max selects the built-in default (10).
+	// soon as a turn makes no tool progress. 0 max selects the built-in default (3).
 	AutonomousAutoContinue    bool `json:"autonomousAutoContinue"`
 	AutonomousAutoContinueMax int  `json:"autonomousAutoContinueMax"`
 
@@ -436,9 +436,9 @@ func Default() Settings {
 
 		// Autonomous self-completion: on by default so unattended (scheduler/spawn/
 		// wake) turns that stall after activating tools or with open todos continue
-		// themselves instead of leaving the work half-done. Bounded at 10 turns.
+		// themselves instead of leaving the work half-done. Bounded at 3 turns.
 		AutonomousAutoContinue:    true,
-		AutonomousAutoContinueMax: 10,
+		AutonomousAutoContinueMax: 3,
 
 		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
 		// clobber a file changed out-of-band since it was last read.

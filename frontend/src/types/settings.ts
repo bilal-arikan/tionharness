@@ -157,6 +157,9 @@ export interface AppSettings {
   autonomousConfine: boolean
   // Inject the boot/verification-sequence reminder on autonomous turns.
   autonomousBootSeq: boolean
+  // Self-completion: follow an unfinished autonomous turn with a continuation turn.
+  autonomousAutoContinue: boolean
+  autonomousAutoContinueMax: number // 0 = built-in default (10)
 
   // Workspace backups — periodic zip snapshots of each workspace's data dir.
   backupEnabled: boolean

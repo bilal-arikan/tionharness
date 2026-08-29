@@ -334,7 +334,7 @@ const DefaultDebugJournalCap = 5000
 
 // DefaultAutoContinueMax bounds how many extra turns an autonomous run will
 // auto-issue to finish work the agent left pending, when no explicit max is set.
-const DefaultAutoContinueMax = 10
+const DefaultAutoContinueMax = 3
 
 // DefaultHandoffMaxChain caps consecutive context resets so a loop can't chain forever.
 const DefaultHandoffMaxChain = 20

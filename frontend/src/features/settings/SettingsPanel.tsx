@@ -235,6 +235,8 @@ export function SettingsPanel({
       coordinatorStallMaxNudges: draft.coordinatorStallMaxNudges,
       autonomousConfine: draft.autonomousConfine,
       autonomousBootSeq: draft.autonomousBootSeq,
+      autonomousAutoContinue: draft.autonomousAutoContinue,
+      autonomousAutoContinueMax: draft.autonomousAutoContinueMax,
       backupEnabled: draft.backupEnabled,
       backupIntervalHours: draft.backupIntervalHours,
       backupRetain: draft.backupRetain,

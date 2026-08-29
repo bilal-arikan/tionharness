@@ -417,6 +417,26 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.autonomousBootSeq}
         onChange={(v) => set('autonomousBootSeq', v)}
       />
+      <Toggle
+        label="Otomatik devam (otonom turlarda kendi kendine tamamlama)"
+        hint="Açıkken zamanlama/spawn/wake turu işi yarım bırakırsa (açık todo maddeleri veya son eylemi bir lazy-tool aktivasyonu) oturuma bir 'Otomatik devam' dürtmesi yazılır ve tur devam ettirilir. Kapatınca bu mesaj hiç oluşmaz, yarım kalan otonom tur olduğu yerde durur. Önerilen: AÇIK."
+        checked={draft.autonomousAutoContinue}
+        onChange={(v) => set('autonomousAutoContinue', v)}
+      />
+      {draft.autonomousAutoContinue && (
+        <Field
+          label="Otomatik devam üst sınırı"
+          hint="Bir otonom çalıştırmada en fazla kaç devam turu açılabilir. 0 = yerleşik varsayılan (3)."
+        >
+          <input
+            type="number"
+            min={0}
+            value={draft.autonomousAutoContinueMax}
+            onChange={(e) => set('autonomousAutoContinueMax', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+      )}
     </>
   )
 }
