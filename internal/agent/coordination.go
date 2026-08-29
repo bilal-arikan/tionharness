@@ -1297,11 +1297,11 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// capped and its full text offloaded to an artifact + worker-session handle, so a
 	// single verbose worker can no longer fill the coordinator's window (_Docs/47, P0/P2).
 	notifyResult := r.buildWorkerResult(ctx, workerSessionID, agent.ID, status, replyText)
-	note := formatTaskNotification(workerSessionID, agent.Name, status, notifyResult, countToolSteps(steps), time.Since(turnStart).Milliseconds())
+	note := formatTaskNotification(workerSessionID, agent.ID, agent.Name, agent.Model, status, notifyResult, countToolSteps(steps), time.Since(turnStart).Milliseconds())
 	// Release BEFORE notifying: this worker is done, and whether it took the fleet to
 	// zero decides if the all-idle note folds into this very message (saving the
 	// coordinator a separate reconcile turn).
-	r.notifyCoordinator(coordSessionID, note, workerDone())
+	r.notifyCoordinator(coordSessionID, note, workerDone(), steps)
 }
 
 // RecoverOrphanedTurns reclaims autonomous background turns (worker / plain spawn /
@@ -1377,7 +1377,7 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 					"session", sess.ID, "coordinator", sess.CoordinatorSessionID)
 			case r.isFlowCoordinatorSession(ctx, sess.CoordinatorSessionID):
 			default:
-				note := formatTaskNotification(sess.ID, r.agentName(sess.AgentID), "killed",
+				note := formatTaskNotification(sess.ID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, "killed",
 					"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)
 				r.NotifyCoordinator(sess.CoordinatorSessionID, note)
 			}
@@ -1416,13 +1416,13 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 	// Callers outside runWorker (orphan reclaim, sub-coordinator reports, the settle
 	// backstop) did not observe a zero-crossing, so they never fold. Their all-idle
 	// transition — if any — is the drain loop's standalone backstop to report.
-	r.notifyCoordinator(coordSessionID, note, false)
+	r.notifyCoordinator(coordSessionID, note, false, nil)
 }
 
 // notifyCoordinator is NotifyCoordinator with the last-worker observation from
 // releaseOnce. lastWorker=true means THIS notification's worker took the fleet to
 // zero and may therefore carry the folded <coordination-status> note.
-func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool) {
+func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool, steps []TurnStep) {
 	coordSessionID = strings.TrimSpace(coordSessionID)
 	if coordSessionID == "" || strings.TrimSpace(note) == "" {
 		return
@@ -1458,7 +1458,23 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 	slot.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "worker-note", note); err != nil {
+	stepsJSON := ""
+	if len(steps) > 0 {
+		encoded, err := json.Marshal(steps)
+		if err != nil {
+			cancel()
+			r.logger.Error("coordination: failed to encode worker steps", "coordinator", coordSessionID, "error", err)
+			return
+		}
+		stepsJSON = string(encoded)
+	}
+	if _, err := r.recordInjectedUserMessage(ctx, db.Message{
+		SessionID: coordSessionID,
+		Role:      "user",
+		Origin:    "worker-note",
+		Text:      note,
+		Steps:     stepsJSON,
+	}); err != nil {
 		cancel()
 		// The fold is only valid if the note carrying it actually reached history.
 		// Give the claim back so the drain loop's standalone backstop can still
@@ -2051,11 +2067,13 @@ func (r *Runtime) emitWorkerEvent(agent db.Agent, workerSessionID, coordSessionI
 // completed | timeout | incomplete | failed | killed; result is the worker's final
 // text (for the truncated statuses, prefixed with a note saying so — see
 // turnoutcome.go). Only "completed" means the worker finished its assignment.
-func formatTaskNotification(workerSessionID, agentName, status, result string, toolUses int, durationMs int64) string {
+func formatTaskNotification(workerSessionID, agentID, agentName, agentModel, status, result string, toolUses int, durationMs int64) string {
 	var b strings.Builder
 	b.WriteString("<task-notification>\n")
 	fmt.Fprintf(&b, "<task-id>%s</task-id>\n", workerSessionID)
+	fmt.Fprintf(&b, "<agent-id>%s</agent-id>\n", agentID)
 	fmt.Fprintf(&b, "<agent>%s</agent>\n", agentName)
+	fmt.Fprintf(&b, "<model>%s</model>\n", agentModel)
 	fmt.Fprintf(&b, "<status>%s</status>\n", status)
 	fmt.Fprintf(&b, "<summary>Worker %q %s</summary>\n", agentName, status)
 	if trimmed := strings.TrimSpace(result); trimmed != "" {

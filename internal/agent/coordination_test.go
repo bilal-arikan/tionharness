@@ -16,9 +16,10 @@ import (
 // TestFormatTaskNotification checks the coordinator-facing XML carries the
 // worker id, status, and result.
 func TestFormatTaskNotification(t *testing.T) {
-	note := formatTaskNotification("SES9", "Scout", "completed", "found it in foo.go:42", 3, 1200)
+	note := formatTaskNotification("SES9", "A7", "Scout", "opus-5", "completed", "found it in foo.go:42", 3, 1200)
 	for _, want := range []string{
-		"<task-notification>", "<task-id>SES9</task-id>", "<status>completed</status>",
+		"<task-notification>", "<task-id>SES9</task-id>", "<agent-id>A7</agent-id>",
+		"<agent>Scout</agent>", "<model>opus-5</model>", "<status>completed</status>",
 		"found it in foo.go:42", "<tool_uses>3</tool_uses>", "<duration_ms>1200</duration_ms>",
 	} {
 		if !strings.Contains(note, want) {

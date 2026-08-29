@@ -260,7 +260,10 @@ func (e *CoordinationEngine) OnWorkerFinished(ctx, tf TurnFinished) {
 `Runtime.NotifyCoordinator(coordID, note)`:
 1. `<task-notification>` mesajını koordinatör oturumuna **user** rolüyle
    `AddMessage` eder (Origin="worker-note" → UI "🤖 İşçi bildirimi" olarak
-   render eder, kullanıcı balonu değil).
+   render eder, kullanıcı balonu değil). Bildirim zarfı agent id/ad/model
+   kimliğini taşır; worker turunun `TurnStep[]` izi de mesajın `Steps` alanına
+   kopyalanır. UI kimliği çalışan-worker listesindeki `AgentIdentity` ile,
+   tüm dosya değişikliklerini normal mesajlardaki `DiffCard` ile gösterir.
 2. **Per-session tur kuyruğuna** bir "tur talebi" bırakır.
 
 **Per-session tur kuyruğu** (`Runtime.sessionTurnQueue`): oturum başına tek bir

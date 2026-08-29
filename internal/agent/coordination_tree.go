@@ -216,7 +216,7 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 	if err != nil {
 		return err
 	}
-	note := formatTaskNotification(sessionID, r.agentName(sess.AgentID), status, summary, 0, 0)
+	note := formatTaskNotification(sessionID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, status, summary, 0, 0)
 	r.NotifyCoordinator(sess.CoordinatorSessionID, note)
 	r.logger.Info("coordination: sub-coordinator reported up",
 		"session", sessionID, "coordinator", sess.CoordinatorSessionID,
@@ -260,7 +260,7 @@ func (r *Runtime) settleReportBackstop(ctx context.Context, sessionID string) {
 	summary := "⚠️ Bu alt-koordinatör tüm worker'ları bittikten sonra `report_to_coordinator` çağırmadı; " +
 		"aşağıdaki metin onun son turundan otomatik olarak alındı ve DOĞRULANMIŞ bir sonuç değildir. " +
 		"Eksik görünüyorsa `send_to_worker` ile açık bir rapor iste.\n\n" + last
-	note := formatTaskNotification(sessionID, r.agentName(sess.AgentID), turnStatusIncomplete, summary, 0, 0)
+	note := formatTaskNotification(sessionID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, turnStatusIncomplete, summary, 0, 0)
 	r.logger.Warn("coordination: sub-coordinator did not report; auto-reporting",
 		"session", sessionID, "coordinator", sess.CoordinatorSessionID)
 	r.NotifyCoordinator(sess.CoordinatorSessionID, note)

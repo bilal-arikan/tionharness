@@ -1,8 +1,13 @@
+import type { TurnStep } from '@/types'
+import { extractFileChanges } from '@/shared/lib/fileChanges'
+
 // <task-notification> envelope parser. Split out so TaskNotificationNote.tsx
 // exports only components (fast refresh).
 interface ParsedNotification {
   taskId: string
+  agentId: string
   agent: string
+  model: string
   status: string
   summary: string
   result: string
@@ -26,11 +31,28 @@ export function parseTaskNotification(text: string): ParsedNotification | null {
   if (!text.trimStart().startsWith('<task-notification>')) return null
   return {
     taskId: tagText(text, 'task-id'),
+    agentId: tagText(text, 'agent-id'),
     agent: tagText(text, 'agent'),
+    model: tagText(text, 'model'),
     status: tagText(text, 'status'),
     summary: tagText(text, 'summary'),
     result: tagText(text, 'result'),
     toolUses: tagText(text, 'tool_uses'),
     durationMs: tagText(text, 'duration_ms'),
   }
+}
+
+export function notificationChanges(stepsJSON?: string): TurnStep[] {
+  if (!stepsJSON) return []
+  const steps: TurnStep[] = JSON.parse(stepsJSON)
+  return extractFileChanges(steps).map((change) => ({
+    kind: 'diff',
+    tool: change.tool,
+    path: change.path,
+    patch: change.patch,
+    added: change.added,
+    removed: change.removed,
+    created: change.created,
+    patchTruncated: change.truncated,
+  }))
 }

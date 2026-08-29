@@ -15,6 +15,7 @@ import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
 import { AutoPromptNote } from './AutoPromptNote'
 import { TaskNotificationNote } from './TaskNotificationNote'
+import { parseTaskNotification } from './parseTaskNotification'
 import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
@@ -437,7 +438,12 @@ export function MessageList({
               // card (raw XML is unreadable as a plain note); other origins keep
               // the generic auto-continuation note.
               m.origin === 'worker-note' ? (
-                <TaskNotificationNote message={m} onDelete={onDeleteMessage} />
+                <TaskNotificationNote
+                  message={m}
+                  agent={agentById(parseTaskNotification(m.text)?.agentId)}
+                  onOpenFile={onOpenFile}
+                  onDelete={onDeleteMessage}
+                />
               ) : m.origin ? (
                 <AutoPromptNote message={m} onDelete={onDeleteMessage} />
               ) : (

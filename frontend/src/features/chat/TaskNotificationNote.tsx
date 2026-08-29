@@ -3,8 +3,10 @@ import { Bot, CheckCircle2, ChevronRight, Clock, OctagonX, Wrench, XCircle } fro
 import type { Message } from '@/types'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
-import { parseTaskNotification } from './parseTaskNotification'
+import { notificationChanges, parseTaskNotification } from './parseTaskNotification'
 import { Markdown } from '@/shared/components/markdown/Markdown'
+import { AgentIdentity, type AgentLike } from '@/shared/components/agents/AgentIdentity'
+import { DiffCard } from './DiffCard'
 
 // TaskNotificationNote renders a coordinator's <task-notification> injection
 // (Message.origin === "worker-note") as a compact worker-result card instead of
@@ -26,9 +28,13 @@ function fmtDuration(ms: string): string {
 
 export function TaskNotificationNote({
   message,
+  agent,
+  onOpenFile,
   onDelete,
 }: {
   message: Message
+  agent?: AgentLike
+  onOpenFile?: (path: string) => void
   onDelete?: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -40,6 +46,13 @@ export function TaskNotificationNote({
     : null
   const body = p ? p.result || p.summary : message.text
   const duration = p ? fmtDuration(p.durationMs) : ''
+  const identity = p
+    ? {
+        ...(agent ?? { id: p.agentId, name: p.agent || p.agentId }),
+        model: p.model || agent?.model,
+      }
+    : undefined
+  const changes = notificationChanges(message.steps)
 
   return (
     <div className="group flex flex-col items-center gap-1" data-testid="task-notification">
@@ -54,12 +67,19 @@ export function TaskNotificationNote({
             size={13}
             className={`shrink-0 text-[var(--color-text-dim)] transition-transform ${open ? 'rotate-90' : ''}`}
           />
-          <Bot size={14} className="shrink-0 text-[var(--color-accent)]" />
-          <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium text-[var(--color-accent)]">Worker bildirimi</span>
-            {p?.agent && <span className="text-[var(--color-text)]"> — {p.agent}</span>}
-            {p?.taskId && <span className="text-[var(--color-text-dim)]"> ({p.taskId})</span>}
-          </span>
+          {identity ? (
+            <AgentIdentity
+              agent={identity}
+              size="sm"
+              showId={Boolean(identity.id)}
+              subtitle={identity.provider ? 'model' : identity.model || 'none'}
+              className="min-w-0 flex-1"
+            />
+          ) : (
+            <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-accent)]">
+              Worker bildirimi
+            </span>
+          )}
           {p && status && (
             <span className={`flex shrink-0 items-center gap-1 font-medium ${status.cls}`}>
               <status.Icon size={13} /> {status.label}
@@ -81,8 +101,11 @@ export function TaskNotificationNote({
           </div>
         )}
         {open && (
-          <div className="max-h-80 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text)]">
+          <div className="max-h-80 space-y-2 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text)]">
             <Markdown>{body}</Markdown>
+            {changes.map((change, index) => (
+              <DiffCard key={`${change.path}-${index}`} step={change} onOpenFile={onOpenFile} />
+            ))}
           </div>
         )}
       </div>
