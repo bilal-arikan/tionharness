@@ -957,9 +957,24 @@ func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionI
 type WorkerInfo struct {
 	SessionID string
 	AgentName string
-	Title     string
-	Running   bool
-	Summary   string // first line of the worker's latest reply, when finished
+	// AgentID and the AgentAvatar/AgentColor/AgentProvider/AgentModel/AgentDeleted
+	// fields carry the worker agent's visual identity so a UI can render it with
+	// the same agent-identity component it uses everywhere else (avatar, name, id,
+	// resolved model label) instead of a bare name string. They stay EMPTY when
+	// the agent row cannot be read (deleted and purged, or a session whose agent
+	// no longer exists): that is not an error here — the roster still lists the
+	// worker, and the UI falls back to the session title/id.
+	AgentID       string
+	AgentAvatar   string
+	AgentColor    string
+	AgentProvider string
+	AgentModel    string
+	// AgentDeleted marks a soft-deleted agent, whose sessions outlive it; the UI
+	// badges the identity instead of silently showing a normal-looking agent.
+	AgentDeleted bool
+	Title        string
+	Running      bool
+	Summary      string // first line of the worker's latest reply, when finished
 	// StartedAt is the unix-second stamp of when a RUNNING worker's current turn
 	// began, so the UI can show live elapsed time. Zero when the worker is not
 	// running, or when it is active without a workerCtl (e.g. a turn opened
@@ -1026,11 +1041,22 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 	info := WorkerInfo{
 		SessionID: s.ID,
 		AgentName: r.agentName(s.AgentID),
+		AgentID:   s.AgentID,
 		Title:     s.Title,
 		Running:   r.isSessionActive(s.ID),
 		CreatedAt: s.CreatedAt,
 		UpdatedAt: s.UpdatedAt,
 		Stuck:     hasSessionTag(s.Tags, "stuck"),
+	}
+	// The agent row is read once here for the identity fields. A miss is expected
+	// and NOT swallowed silently: the worker keeps its session id + title, and the
+	// identity fields stay empty so the UI can tell "no agent" from "no avatar".
+	if a, err := r.db.GetAgent(ctx, s.AgentID); err == nil {
+		info.AgentAvatar = a.Avatar
+		info.AgentColor = a.Color
+		info.AgentProvider = a.Provider
+		info.AgentModel = a.Model
+		info.AgentDeleted = a.Deleted
 	}
 	if !info.Running && s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
 		info.Running = true

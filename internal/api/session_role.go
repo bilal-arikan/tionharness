@@ -122,14 +122,23 @@ func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(workers))
 	for _, wk := range workers {
 		out = append(out, map[string]any{
-			"sessionId":  wk.SessionID,
-			"agentName":  wk.AgentName,
-			"title":      wk.Title,
-			"running":    wk.Running,
-			"delegating": wk.Delegating,
-			"queued":     wk.Queued,
-			"summary":    wk.Summary,
-			"startedAt":  wk.StartedAt,
+			"sessionId": wk.SessionID,
+			"agentName": wk.AgentName,
+			// Agent identity, so the panel can render a worker with the shared
+			// agent-identity component (avatar + name + id + model) instead of a
+			// bare name. Empty when the worker's agent row no longer exists.
+			"agentId":       wk.AgentID,
+			"agentAvatar":   wk.AgentAvatar,
+			"agentColor":    wk.AgentColor,
+			"agentProvider": wk.AgentProvider,
+			"agentModel":    wk.AgentModel,
+			"agentDeleted":  wk.AgentDeleted,
+			"title":         wk.Title,
+			"running":       wk.Running,
+			"delegating":    wk.Delegating,
+			"queued":        wk.Queued,
+			"summary":       wk.Summary,
+			"startedAt":     wk.StartedAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workers": out})

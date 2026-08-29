@@ -366,6 +366,14 @@ kırpıldı:
   Koordinatör turu bitip ilk `<task-notification>` düşene kadar sohbetin bitmiş
   görünmesini engeller. Her çipte **canlı geçen süre** (`WorkerInfo.startedAt` + 1sn
   tick; start zamanı bilinmiyorsa süre gizlenir).
+  **Ajan kimliği çipleri (2026-08-29):** çip artık düz metin değil, uygulamanın ortak
+  `AgentIdentity` bileşeni (`size="sm"`, `showId`, `subtitle="model"`, geçen süre
+  `trailing`'de) — avatar + ajan adı + ajan id'si + çözülmüş model etiketi. Veriyi
+  `GET /api/sessions/{id}/workers` taşır (`agentId`, `agentAvatar`, `agentColor`,
+  `agentProvider`, `agentModel`, `agentDeleted`; `WorkerInfo`'nun yeni alanları).
+  Ajan satırı artık yoksa alanlar boş kalır ve çip `title`/`sessionId` fallback'iyle
+  ad gösterir. Çip iki satır olduğu için `max-w-[240px]` ile sınırlanır ve geniş
+  fan-out satırlara sarar.
 - **Composer üstü yüzen kartlar (2026-08-01):** composer'ın üstündeki **yedi** panel
   (`TodoPanel`, `PendingTray`, `WorkerWaitBanner`, `WakeWaitBanner`, `AskPrompt`,
   `PermissionPrompt`, `PlanPrompt`) geometriyi **tek sarmalayıcıdan** alır:

@@ -356,6 +356,18 @@ export interface RunningTurn {
 export interface WorkerInfo {
   sessionId: string
   agentName: string
+  // The worker agent's identity, so a worker can be rendered with the shared
+  // AgentIdentity component (avatar + name + id + model) rather than a bare name.
+  // All empty when the worker's agent row no longer exists — the UI then falls
+  // back to the session title/id.
+  agentId?: string
+  agentAvatar?: string
+  agentColor?: string
+  agentProvider?: string
+  agentModel?: string
+  // True for a soft-deleted agent, whose sessions outlive it; AgentIdentity
+  // badges it instead of showing a normal-looking agent.
+  agentDeleted?: boolean
   title: string
   running: boolean
   summary: string

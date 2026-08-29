@@ -4,9 +4,10 @@
 // waiting, and this makes that explicit. Each running worker is clickable and
 // opens its own session (workers are first-class sessions). See _Docs/47.
 import { useEffect, useState } from 'react'
-import { Users, Play } from 'lucide-react'
+import { Users } from 'lucide-react'
 import type { WorkerInfo } from '@/types'
 import { serverNow } from '@/shared/lib/serverClock'
+import { AgentIdentity, type AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { ComposerCard } from './ComposerCard'
 
 // elapsedLabel renders seconds since startedAt as a compact "Xsn" / "Xdk Ysn".
@@ -20,6 +21,22 @@ function elapsedLabel(startedAt: number, nowSec: number): string | null {
   const m = Math.floor(secs / 60)
   const s = secs % 60
   return s ? `${m}dk ${s}sn` : `${m}dk`
+}
+
+// workerAgent maps a worker onto the shape AgentIdentity renders. The name falls
+// back to the session title and then the session id so a worker whose agent row
+// is gone still reads as something; the visual fields simply stay undefined and
+// AgentIdentity draws its own default avatar.
+function workerAgent(w: WorkerInfo): AgentLike {
+  return {
+    id: w.agentId ?? '',
+    name: w.agentName || w.title || w.sessionId,
+    avatar: w.agentAvatar,
+    color: w.agentColor,
+    provider: w.agentProvider,
+    model: w.agentModel,
+    deleted: w.agentDeleted,
+  }
 }
 
 interface Props {
@@ -65,34 +82,41 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
       </div>
       <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {workers.map((w) => {
-          const label = w.agentName || w.title || w.sessionId
+          const agent = workerAgent(w)
           const elapsed = elapsedLabel(w.startedAt, now)
+          // The chip is two lines now (name over id · model), so it is capped and
+          // allowed to shrink: a wide fan-out wraps into rows instead of pushing
+          // the card past the composer width.
+          const chip =
+            'inline-flex min-w-0 max-w-[240px] items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-left text-[var(--color-text)]'
           const inner = (
-            <>
-              <Play size={10} className="shrink-0 text-[var(--color-accent)]" />
-              <span className="max-w-[220px] truncate">{label}</span>
-              {elapsed && (
-                <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">
-                  {elapsed}
-                </span>
-              )}
-            </>
+            <AgentIdentity
+              agent={agent}
+              size="sm"
+              showId={Boolean(w.agentId)}
+              subtitle="model"
+              trailing={
+                elapsed ? (
+                  <span className="shrink-0 text-[10px] tabular-nums text-[var(--color-text-dim)]">
+                    {elapsed}
+                  </span>
+                ) : null
+              }
+            />
           )
           return (
-            <li key={w.sessionId}>
+            <li key={w.sessionId} className="min-w-0">
               {onSelectSession ? (
                 <button
                   type="button"
                   onClick={() => onSelectSession(w.sessionId)}
-                  title={`${label} — worker oturumunu aç`}
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  title={`${agent.name} — worker oturumunu aç`}
+                  className={`${chip} transition hover:border-[var(--color-accent)]`}
                 >
                   {inner}
                 </button>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs text-[var(--color-text)]">
-                  {inner}
-                </span>
+                <span className={chip}>{inner}</span>
               )}
             </li>
           )

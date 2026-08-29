@@ -499,6 +499,13 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   "sonuçları bekleniyor" + M/T bitti sayacı + worker oturumunu açan çipler. Veri
   `useRunningWorkers.ts` (aynı `GET .../workers`); yalnız `role==='coordinator'`
   oturumlarda etkin.
+  **Çipler ajan kimliğiyle (2026-08-29):** banner çipi ortak `AgentIdentity`
+  bileşenini kullanır (avatar + ad + ajan id + model; geçen süre `trailing`'de).
+  `WorkerInfo` bunun için `AgentID/AgentAvatar/AgentColor/AgentProvider/AgentModel/
+  AgentDeleted` alanlarını taşır — `workerInfoFor` ajanı bir kez okur, ajan satırı
+  yoksa alanlar bilinçli olarak boş kalır (UI `title`/`sessionId`'ye düşer). Alanlar
+  yalnız HTTP roster'ına (`internal/api/session_role.go`) eklendi; `internal/view/
+  workers.go` koordinatörün metin görünümü olduğu için dokunulmadı.
   **Canlı süre + poll→SSE (2026-07-27):** iki eksik kapatıldı.
   (a) `WorkerInfo.StartedAt` (unix sn) eklendi — `workerCtl.startedAt`'tan gelir,
   yalnız ÇALIŞAN worker için dolu; ctl yoksa (worker oturumunda doğrudan açılmış
