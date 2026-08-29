@@ -293,12 +293,16 @@ enumerate:
 			if len(f.EvidenceSessionIDs) == 0 {
 				f.EvidenceSessionIDs = []string{t.sess.ID}
 			}
-			if _, uErr := s.findings.Upsert(f); uErr != nil {
+			stored, uErr := s.findings.Upsert(f)
+			if uErr != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("%s: upsert finding: %v", t.lens.ID, uErr))
 				continue
 			}
 			res.Findings++
-			res.Produced = append(res.Produced, f)
+			// Report the STORED finding, not the fresh one: it carries the id,
+			// lifecycle status and merged evidence a consumer needs (lesson promotion
+			// skips findings the user already closed, which the fresh copy cannot say).
+			res.Produced = append(res.Produced, stored)
 		}
 		if rErr := s.record(t.lens, t.sess, t.fp, len(oc.found), "clean"); rErr != nil {
 			res.Errors = append(res.Errors, rErr.Error())

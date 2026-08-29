@@ -616,6 +616,19 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
 - [x] **GC + auto-verify** (`maintain.go`): applied bulgu 14 gün nüksetmezse `verified`; dismissed/verified 45 günde prune. Scan sonrası çağrılır.
 - [x] **Semantik dedup** iki katman: ingest'te kanonik-imza birleştirme (`dedup.go` `canonSig`) +
       görüntüleme-zamanı lexical kümeleme (`cluster.go` token-Jaccard, `insight_list_findings cluster:true`).
+- [x] **Lens'ten bağımsız birleştirme** (`dedup.go` `canonTopic`): aynı kök neden birden çok lens
+      tarafından farklı slug'la raporlandığında lens başına ayrı kart açılıyordu. `Upsert` önce eski
+      (lens + `canonSig`) eşleşmesini dener, tutmazsa **aynı channel içinde** kanonik konu (lens öneki
+      atılmış, oturum id'si gibi değişken token'lardan arındırılmış imza) ile eşleştirir.
+- [x] **Bilinen imza ipucu tüm lenslerde** (`insightanalyzer.go` `knownSigsFor`): lens'in kendi bulgu
+      imzaları + aynı channel'ın imzaları prompt'a girer, böylece analizci her koşuda yeni slug uydurmaz.
+      `lessons-mining` ayrıca lessons store imzalarını alır.
+- [x] **Parse normalizasyonu** (`insightanalyzer.go`): `severity` şemadaki `low|med|high` kümesine
+      indirgenir ("medium"/"critical" → `med`/`high`); bir oturuma işaret eden `filePointer`
+      ("SESSION SES…") ölü link üretmemesi için boşaltılır.
+- [x] **Kapalı bulgular lessons'a geri basılmaz** (`insightscan.go` `promoteMinedLessons`):
+      `ScanResult.Produced` artık store'daki (birleşmiş) bulguyu taşır, `applied`/`dismissed`/`verified`
+      olanlar atlanır.
 - [x] **Analyzer eşzamanlılık** (`scanner.go`): 3-faz (serial enum → paralel analyze bounded-pool → serial apply); 17dk → dakikalar.
 - [x] **codex-cli taramada serileştirilir** (`internal/agent/insightconcurrency.go`): analiz ajanının sağlayıcı türü
       `codex-cli` ise `ScanScope.Concurrency = 1` yapılır. Neden: her `codex exec` çağrısı `CODEX_HOME/auth.json`'daki

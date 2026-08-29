@@ -32,3 +32,30 @@ func TestAnalysisUserPromptLanguage(t *testing.T) {
 		t.Fatalf("prompt dropped lens/evidence:\n%s", got)
 	}
 }
+
+func TestNormalizeSeverityFallsBackToSchemaValues(t *testing.T) {
+	cases := map[string]string{
+		"low": "low", "Minor": "low", "high": "high", "CRITICAL": "high",
+		"medium": "med", "med": "med", "": "med", "banana": "med",
+	}
+	for in, want := range cases {
+		if got := normalizeSeverity(in); got != want {
+			t.Fatalf("normalizeSeverity(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSanitizeFilePointerDropsSessionReferences(t *testing.T) {
+	cases := map[string]string{
+		"internal/agent/insightscan.go": "internal/agent/insightscan.go",
+		" SESSION SES2047 ":             "",
+		"session: SES12":                "",
+		"SES2047/msg3":                  "",
+		"":                              "",
+	}
+	for in, want := range cases {
+		if got := sanitizeFilePointer(in); got != want {
+			t.Fatalf("sanitizeFilePointer(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

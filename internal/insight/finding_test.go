@@ -93,3 +93,55 @@ func TestFindingSetStatus(t *testing.T) {
 		t.Fatal("SetStatus on missing id should return false")
 	}
 }
+
+func TestFindingUpsertMergesSameTopicAcrossLenses(t *testing.T) {
+	s, err := OpenFindingStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same root cause, two lenses, each with its own lens-prefixed slug.
+	if _, err := s.Upsert(Finding{
+		LensID: "tool-errors", Channel: ChannelAppFix,
+		Signature: "tool-errors:bash_file_too_long", Title: "cmdline limit", LastSeen: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	merged, err := s.Upsert(Finding{
+		LensID: "lessons-mining", Channel: ChannelAppFix,
+		Signature: "lessons-mining:bash file too long", Title: "cmdline limit", LastSeen: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Occurrences != 2 {
+		t.Fatalf("cross-lens repeat should merge, got occurrences=%d", merged.Occurrences)
+	}
+	if got := s.List("", ""); len(got) != 1 {
+		t.Fatalf("expected 1 card for one root cause, got %d", len(got))
+	}
+	// A different channel is never merged, even with the same topic.
+	if _, err := s.Upsert(Finding{
+		LensID: "skill-usage-opt", Channel: ChannelWorkspaceOpt,
+		Signature: "skill-usage-opt:bash_file_too_long", Title: "cmdline limit", LastSeen: 300,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.List("", ""); len(got) != 2 {
+		t.Fatalf("cross-channel merge must not happen, got %d cards", len(got))
+	}
+}
+
+func TestCanonTopicDropsLensPrefixAndVolatileTokens(t *testing.T) {
+	cases := []struct{ lens, sig, want string }{
+		{"tool-errors", "tool-errors:read missing arg", "read missing arg"},
+		{"lessons-mining", "lessons-mining:read_missing-arg", "read missing arg"},
+		{"tool-errors", "tool-errors:timeout in SES2047 msg12", "timeout in"},
+		{"l", "l:low", ""},                      // single short token: too generic to match on
+		{"l", "l:a1f2b3c4d5e6", "a1f2b3c4d5e6"}, // hash fallback signature survives alone
+	}
+	for _, c := range cases {
+		if got := canonTopic(c.lens, c.sig); got != c.want {
+			t.Fatalf("canonTopic(%q, %q) = %q, want %q", c.lens, c.sig, got, c.want)
+		}
+	}
+}

@@ -129,7 +129,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	// first analysis, streams one card per analysed pair, and writes the whole trace
 	// as one assistant message at the end.
 	recorder := newInsightStepRecorder(r, runID, analysisAgent.ID, insightRunTitle(len(lensIDs), 0))
-	analyzer := &insightAnalyzer{rt: r, agent: analysisCfg, system: insightPrompt, steps: recorder}
+	analyzer := &insightAnalyzer{rt: r, agent: analysisCfg, system: insightPrompt, steps: recorder, findings: findings}
 
 	start := time.Now()
 	scanner := insight.NewScanner(r.db, reg, ledger, findings, analyzer, nil)
@@ -257,9 +257,12 @@ const lessonsMiningLensID = "lessons-mining"
 
 // promoteMinedLessons writes lessons-mining findings into the lessons store. The
 // finding's proposedFix is the rule (lesson body); title fronts it for context.
+// Findings the user already closed (applied/dismissed/verified) are skipped: a
+// recurrence still bumps the finding's counter, but re-promoting it would push a
+// rule the user has explicitly acted on back into every future turn's context.
 func (r *Runtime) promoteMinedLessons(produced []insight.Finding) {
 	for _, f := range produced {
-		if f.LensID != lessonsMiningLensID {
+		if f.LensID != lessonsMiningLensID || insight.ClosedStatus(f.Status) {
 			continue
 		}
 		text := f.Title

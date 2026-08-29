@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -27,7 +28,11 @@ type insightAnalyzer struct {
 	// transcript can show it. It is fed HERE rather than through the
 	// insight.Analyzer interface: that interface returns parsed findings only, and
 	// widening it would force every fake analyzer to carry raw-response plumbing.
-	steps        *insightStepRecorder
+	steps *insightStepRecorder
+	// findings is the run's finding store, read-only here: its signatures are
+	// offered back to the model so it reuses them instead of minting a new slug
+	// for a problem already on record. Optional (nil in tests without a store).
+	findings     *insight.FindingStore
 	mu           sync.Mutex
 	permanentErr error
 }
@@ -122,27 +127,47 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 	return a.parse(resp.Text, req.Lens), nil
 }
 
-// knownLessonSigCount bounds how many stored signatures ride the lessons-mining
-// prompt: enough to cover the live topics, small enough not to crowd the
-// evidence. Newest first, since a recurring failure is a recent one.
-const knownLessonSigCount = 30
+// knownSigCount bounds how many stored signatures ride the analysis prompt:
+// enough to cover the live topics, small enough not to crowd the evidence.
+// Newest first, since a recurring failure is a recent one.
+const knownSigCount = 30
 
-// knownSigsFor returns the signatures to offer the model for reuse. Only the
-// lessons-mining lens gets them — it is the one lens whose findings become
-// lessons, so it is the one whose signatures the lessons store already holds.
+// knownSigsFor returns the signatures to offer the model for reuse. EVERY lens
+// gets them: without the hint the analyzer mints a fresh slug each run and the
+// same problem fragments into a new card per scan. The lens's own findings come
+// first, then the rest of its channel (one root cause is often already filed by
+// a sibling lens); the lessons-mining lens additionally gets the lesson
+// signatures its findings were promoted into.
 func (a *insightAnalyzer) knownSigsFor(lens insight.Lens) []string {
-	if lens.ID != lessonsMiningLensID || a.rt == nil || a.rt.db == nil {
-		return nil
+	sigs := make([]string, 0, knownSigCount)
+	seen := make(map[string]bool, knownSigCount)
+	add := func(sig string) {
+		sig = strings.TrimSpace(sig)
+		if sig == "" || seen[sig] || len(sigs) >= knownSigCount {
+			return
+		}
+		seen[sig] = true
+		sigs = append(sigs, sig)
 	}
-	lessons, err := a.rt.db.ListLessons(knownLessonSigCount)
-	if err != nil {
-		a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
-		return nil
+	if lens.ID == lessonsMiningLensID && a.rt != nil && a.rt.db != nil {
+		lessons, err := a.rt.db.ListLessons(knownSigCount)
+		if err != nil {
+			a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
+		}
+		for _, l := range lessons {
+			if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
+				add(l.Signature)
+			}
+		}
 	}
-	sigs := make([]string, 0, len(lessons))
-	for _, l := range lessons {
-		if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
-			sigs = append(sigs, l.Signature)
+	if a.findings != nil {
+		for _, f := range a.findings.List(lens.ID, "") {
+			add(f.Signature)
+		}
+		if lens.Channel != "" {
+			for _, f := range a.findings.List("", lens.Channel) {
+				add(f.Signature)
+			}
 		}
 	}
 	return sigs
@@ -187,21 +212,54 @@ func (a *insightAnalyzer) parse(text string, lens insight.Lens) []insight.Findin
 		if sig == "" {
 			sig = fallbackSignature(lens.ID, title)
 		}
-		sev := f.Severity
-		if sev == "" {
-			sev = "med"
-		}
 		out = append(out, insight.Finding{
 			Signature:   sig,
 			Title:       title,
 			RootCause:   strings.TrimSpace(f.RootCause),
 			ProposedFix: strings.TrimSpace(f.ProposedFix),
-			FilePointer: strings.TrimSpace(f.FilePointer),
-			Severity:    sev,
+			FilePointer: sanitizeFilePointer(f.FilePointer),
+			Severity:    normalizeSeverity(f.Severity),
 		})
 	}
 	return out
 }
+
+// normalizeSeverity maps whatever the model wrote into the schema's enum
+// (low|med|high). Models routinely answer "medium", "critical" or "P2"; storing
+// those verbatim breaks PriorityScore's severity weighting, which only knows the
+// three canonical values. Anything unrecognised falls back to "med".
+func normalizeSeverity(sev string) string {
+	switch strings.ToLower(strings.TrimSpace(sev)) {
+	case "low", "minor", "trivial", "info", "nit", "p3":
+		return "low"
+	case "high", "critical", "crit", "blocker", "severe", "urgent", "major", "p0", "p1":
+		return "high"
+	default:
+		// "med", "medium", "moderate", "normal", "" and anything unknown.
+		return "med"
+	}
+}
+
+// sanitizeFilePointer drops a pointer that names a SESSION rather than a file.
+// The analyzer is asked for a repo-relative path but sometimes cites its
+// evidence instead ("SESSION SES2047", "session SES12/msg3"); storing that makes
+// the UI render a dead file link and makes insight.CheckFilePointer report the
+// finding as an unverified path when there is no path at all.
+func sanitizeFilePointer(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	first := strings.ToLower(strings.Fields(p)[0])
+	first = strings.Trim(first, ":,")
+	if first == "session" || first == "sessions" || sessionIDRef.MatchString(first) {
+		return ""
+	}
+	return p
+}
+
+// sessionIDRef matches a bare session identifier ("ses2047", "ses2047/msg3").
+var sessionIDRef = regexp.MustCompile(`^ses\d+(\b|/|$)`)
 
 // fallbackSignature builds a stable dedupe key from the lens + normalized title
 // when the model omitted one.

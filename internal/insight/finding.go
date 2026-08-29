@@ -87,9 +87,11 @@ type Finding struct {
 	RegressedAt int64 `json:"regressedAt,omitempty"` // unix seconds of the recurrence
 }
 
-// closedStatus reports whether a finding is in a terminal/closed state, so a
-// fresh recurrence of it counts as a regression rather than normal accumulation.
-func closedStatus(s FindingStatus) bool {
+// ClosedStatus reports whether a finding is in a terminal/closed state, so a
+// fresh recurrence of it counts as a regression rather than normal accumulation
+// — and so downstream consumers (lesson promotion) can skip what the user has
+// already applied or dismissed.
+func ClosedStatus(s FindingStatus) bool {
 	switch s {
 	case StatusDismissed, StatusApplied, StatusVerified:
 		return true
@@ -135,35 +137,21 @@ func (s *FindingStore) Upsert(f Finding) (Finding, error) {
 			// Match on the canonical signature (case/punctuation-insensitive) so
 			// formatting variants of the same shape merge instead of duplicating.
 			if s.items[i].LensID == f.LensID && canonSig(s.items[i].Signature) == canon {
-				s.items[i].Occurrences++
-				// A closed finding that recurs is a REGRESSION: flag it (and stamp when)
-				// so a "fixed"/"ignored" issue coming back is surfaced, not buried under
-				// a silently-incrementing counter on a card that still reads as done.
-				if closedStatus(s.items[i].Status) && !s.items[i].Regressed {
-					s.items[i].Regressed = true
-					s.items[i].RegressedAt = f.LastSeen
+				return s.mergeInto(i, f)
+			}
+		}
+		// Lens-independent pass: one root cause is usually visible to several
+		// lenses, each slugging it with its own signature, which used to produce a
+		// separate card per lens. Match on the canonical TOPIC (tool + error shape)
+		// within the same channel so those land on one card.
+		if topic := canonTopic(f.LensID, f.Signature); topic != "" && f.Channel != "" {
+			for i := range s.items {
+				if s.items[i].Channel != f.Channel {
+					continue
 				}
-				if f.LastSeen > 0 {
-					s.items[i].LastSeen = f.LastSeen
+				if canonTopic(s.items[i].LensID, s.items[i].Signature) == topic {
+					return s.mergeInto(i, f)
 				}
-				if f.Title != "" {
-					s.items[i].Title = f.Title
-				}
-				if f.RootCause != "" {
-					s.items[i].RootCause = f.RootCause
-				}
-				if f.ProposedFix != "" {
-					s.items[i].ProposedFix = f.ProposedFix
-				}
-				if f.Severity != "" {
-					s.items[i].Severity = f.Severity
-				}
-				s.items[i].EvidenceSessionIDs = mergeStrings(s.items[i].EvidenceSessionIDs, f.EvidenceSessionIDs)
-				merged := s.items[i]
-				if err := writeFindings(s.path, s.items); err != nil {
-					return Finding{}, err
-				}
-				return merged, nil
 			}
 		}
 	}
@@ -182,6 +170,40 @@ func (s *FindingStore) Upsert(f Finding) (Finding, error) {
 		return Finding{}, err
 	}
 	return f, nil
+}
+
+// mergeInto folds f into the stored finding at index i and persists the store.
+// The caller holds s.mu and has already decided the two denote the same finding.
+func (s *FindingStore) mergeInto(i int, f Finding) (Finding, error) {
+	s.items[i].Occurrences++
+	// A closed finding that recurs is a REGRESSION: flag it (and stamp when)
+	// so a "fixed"/"ignored" issue coming back is surfaced, not buried under
+	// a silently-incrementing counter on a card that still reads as done.
+	if ClosedStatus(s.items[i].Status) && !s.items[i].Regressed {
+		s.items[i].Regressed = true
+		s.items[i].RegressedAt = f.LastSeen
+	}
+	if f.LastSeen > 0 {
+		s.items[i].LastSeen = f.LastSeen
+	}
+	if f.Title != "" {
+		s.items[i].Title = f.Title
+	}
+	if f.RootCause != "" {
+		s.items[i].RootCause = f.RootCause
+	}
+	if f.ProposedFix != "" {
+		s.items[i].ProposedFix = f.ProposedFix
+	}
+	if f.Severity != "" {
+		s.items[i].Severity = f.Severity
+	}
+	s.items[i].EvidenceSessionIDs = mergeStrings(s.items[i].EvidenceSessionIDs, f.EvidenceSessionIDs)
+	merged := s.items[i]
+	if err := writeFindings(s.path, s.items); err != nil {
+		return Finding{}, err
+	}
+	return merged, nil
 }
 
 // List returns findings ranked by PriorityScore (severity + recurrence, regressed
