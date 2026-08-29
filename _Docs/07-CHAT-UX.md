@@ -43,6 +43,48 @@ Başlıktaki `+N -M` sayaçları da satır düzeyindedir: `+`/`-` blok tek birim
 `~` blok kendi diff'indeki gerçek eklenen/silinen **satır** sayısını ekler — yani
 sadece satır silen bir düzenleme `+1` göstermez (`_Docs\57-PROMPT-EPOCH.md`).
 
+#### `compaction` adımı (2026-08-30)
+
+Bağlam katlaması artık düz metin değil, kendi türü olan bir adımdır:
+`agent.StepCompaction` (`kind="compaction"`). Yapısal alanlar `TurnStep`
+üzerinde taşınır — `foldedMsgs`, `beforeTokens`, `afterTokens`, `trigger`
+(`auto` = bütçe eşiği, `manual` = `/compact`, `reactive` = taşma kurtarması).
+`text` alanı eski insan-okur satırı (`🗜 Bağlam otomatik sıkıştırıldı — N mesaj…`)
+**aynen** korur; böylece eski oturumlar ve bu türü bilmeyen istemciler yine
+anlamlı bir şey gösterir. Değerlerin kaynağı `conversation.Compaction`
+(`Prepared.Fold` ve `Manager.ForceCompact` dönüşü) — aynı rakamlar debug
+journal'ına da yazılır.
+
+Frontend tarafında adım `CompactionCard` ile render edilir
+(`frontend/src/features/chat/CompactionCard.tsx`, `TurnSteps.renderStep`
+dispatch'i). Kapalı satır: katlanan mesaj sayısı + `öncesi → sonrası` token
+rozeti; açıldığında tetikleyici ve (varsa) eski insan-okur satırı görünür.
+Yapısal alanlar yoksa (bu türden önce yazılmış oturumlar) kart `text` alanına
+düşer — boş kart göstermez.
+
+**Adımı yayan yollar.** Katlama nerede olursa olsun aynı kart çıkar:
+
+| Yol | Tetikleyici | Kaynak |
+|-----|-------------|--------|
+| İnteraktif tur | `auto` | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go` |
+| Otonom tur (wake/spawn/worker) | `auto` | aynı yardımcı — `wake_turn.go` |
+| `/compact` komutu | `manual` | `Manager.ForceCompact` dönüşü |
+| Tur içi taşma kurtarması | `reactive` | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
+| Yan sohbet (`btw`) | `auto` | `chat_btw.go`; `Prepare`'in paylaşılan katlaması |
+
+`reactive` yol `conversation.CompactInFlightMessages`'ın döndürdüğü
+`ReactiveFold`'u kullanır: tur içi mesaj dilimi katlandığından oturum özeti
+yazılmaz, dolayısıyla debug journal kaydında **fold ordinali yoktur**
+(`fold # n/a (in-flight)`); `savedBytes`/`summaryBytes` ve token rakamları
+gerçek değerlerdir. Bu dalda `compaction` adımı `recovery` adımını **değiştirmez**,
+ona eklenir: `recovery` turun neden yeniden denendiğini, `compaction` katlamanın
+neye mal olduğunu söyler.
+
+`btw` uç noktası tek bir JSON gövdesiyle yanıt verir (SSE yazıcısı yok) ve hiç
+mesaj oluşturmaz (adımın kalıcılaşacağı `Steps` yok) — bu yüzden adım yalnız
+session hub'ına yayınlanır: oturumu açık tutan tüm pencereler katlamayı canlı
+görür.
+
 ### Kalıcılık
 
 #### Canlı adım kartı sözleşmesi (2026-08-21)

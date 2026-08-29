@@ -179,8 +179,14 @@ func TestPrepareJournalsCompaction(t *testing.T) {
 	if !prep.Compacted {
 		t.Fatalf("expected a fold with budget 1")
 	}
-	if prep.FoldedMsgs <= 0 {
-		t.Fatalf("FoldedMsgs = %d, want > 0 (drives the on-screen compaction step)", prep.FoldedMsgs)
+	if prep.Fold.FoldedMsgs <= 0 {
+		t.Fatalf("Fold.FoldedMsgs = %d, want > 0 (drives the on-screen compaction step)", prep.Fold.FoldedMsgs)
+	}
+	if prep.Fold.Trigger != TriggerAuto {
+		t.Fatalf("Fold.Trigger = %q, want %q", prep.Fold.Trigger, TriggerAuto)
+	}
+	if prep.Fold.BeforeTokens <= 0 || prep.Fold.AfterTokens <= 0 {
+		t.Fatalf("Fold tokens = %d→%d, want both > 0", prep.Fold.BeforeTokens, prep.Fold.AfterTokens)
 	}
 
 	evs, err := d.ReadDebugEvents(ctx, sess.ID, db.DebugCompaction, 0)
@@ -242,11 +248,11 @@ func TestCompactionJournalRecordsFoldOrdinalAndSummaryBytes(t *testing.T) {
 		db.Message{Role: providers.RoleUser, Text: "u4"}, db.Message{Role: providers.RoleAssistant, Text: "a4"},
 		db.Message{Role: providers.RoleUser, Text: "u5"}, db.Message{Role: providers.RoleAssistant, Text: "a5"})
 	const secondSummary = "ROLLED UP AGAIN"
-	folded, _, err := m.ForceCompact(ctx, d, stubProvider{summary: secondSummary}, sess2, agent, history)
+	fold, _, err := m.ForceCompact(ctx, d, stubProvider{summary: secondSummary}, sess2, agent, history)
 	if err != nil {
 		t.Fatalf("force compact: %v", err)
 	}
-	if folded == 0 {
+	if fold.FoldedMsgs == 0 {
 		t.Fatalf("expected the manual path to fold")
 	}
 
@@ -316,12 +322,15 @@ func TestForceCompactFiresManualPreCompact(t *testing.T) {
 		triggers = append(triggers, trigger)
 	})
 
-	folded, _, err := m.ForceCompact(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
+	fold, _, err := m.ForceCompact(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {
 		t.Fatalf("force compact: %v", err)
 	}
-	if folded != 2 {
-		t.Fatalf("folded = %d, want 2", folded)
+	if fold.FoldedMsgs != 2 {
+		t.Fatalf("folded = %d, want 2", fold.FoldedMsgs)
+	}
+	if fold.Trigger != TriggerManual {
+		t.Fatalf("fold.Trigger = %q, want %q", fold.Trigger, TriggerManual)
 	}
 	if len(triggers) != 1 || triggers[0] != "manual" {
 		t.Fatalf("triggers = %v, want [manual]", triggers)

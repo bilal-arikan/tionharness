@@ -9,6 +9,7 @@ import {
   Brain,
   ClipboardList,
   CornerDownRight,
+  FoldVertical,
   ListChecks,
   MessageCircleQuestion,
   MessageSquare,
@@ -189,6 +190,15 @@ export const STEP_KINDS: StepKindInfo[] = [
     status: 'active',
     description:
       'Bu tur oturumun sıcak prompt-cache önekini kaybetti ve öneki baştan (soğuk) ödedi. Yalnız “bir şey değişti” sebepleri kart olur: model değişimi ve sistem promptu/araç şeması değişimi. Uzun boşluk sonrası TTL soğuması kart açmaz (normaldir) — o yalnız mesaj debug panelinde ve transkriptteki soğuk ayracında görünür. Prompt epoch açıkken prompt/araç kaynaklı kırılım oturum ortasında BEKLENMEZ; görülüyorsa araştırılmalıdır.',
+  },
+  {
+    kind: 'compaction',
+    label: 'Bağlam sıkıştırma',
+    Icon: FoldVertical,
+    persisted: true,
+    status: 'active',
+    description:
+      'Oturum geçmişi bağlam bütçesinde kalmak için yuvarlanan özete katlandı: kaç mesajın katlandığı, katlama öncesi/sonrası bağlam büyüklüğü ve tetikleyici (auto = bütçe eşiği, manual = /compact, reactive = taşma kurtarması) kartta gösterilir. Katlanan mesajların ham metni modelin bağlamından çıkar; transkript diskte olduğu gibi kalır.',
   },
   {
     kind: 'subagent',

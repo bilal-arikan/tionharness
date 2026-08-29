@@ -102,6 +102,13 @@ const (
 	// carded — a TTL/eviction break is the normal cost of a pause and would be pure
 	// noise inline (it stays in the debug journal and the per-message panel).
 	StepCacheBreak StepKind = "cache_break"
+	// StepCompaction announces that the session's history was folded into the
+	// rolling summary to stay inside the context budget: Text is the human-readable
+	// headline (kept for clients that predate this kind), FoldedMsgs how many
+	// messages were folded, BeforeTokens/AfterTokens the context footprint around
+	// the fold and Trigger what caused it (auto / manual / reactive). Persisted so
+	// the chat history shows where context was lost.
+	StepCompaction StepKind = "compaction"
 	// StepSubagent is one run_subagent invocation rendered as a collapsible nested
 	// agent card: Tool holds the resolved target (profile id or agent name), Text
 	// the delegated task, Output the subagent's final reply, and SubSteps the
@@ -181,6 +188,14 @@ type TurnStep struct {
 	Areas []ContextArea `json:"areas,omitempty"`
 	// ColdTokens is the prefix size a StepCacheBreak step had to re-pay cold.
 	ColdTokens int `json:"coldTokens,omitempty"`
+	// StepCompaction payload: how many messages were folded into the rolling
+	// summary, the context footprint before/after the fold and what triggered it
+	// ("auto" = budget threshold, "manual" = /compact, "reactive" = overflow
+	// recovery).
+	FoldedMsgs   int    `json:"foldedMsgs,omitempty"`
+	BeforeTokens int    `json:"beforeTokens,omitempty"`
+	AfterTokens  int    `json:"afterTokens,omitempty"`
+	Trigger      string `json:"trigger,omitempty"`
 	// Optimizer records that an external token-optimizer (sqz / rtk) shrank this
 	// shell step's output before it re-entered the model's context, so the UI can
 	// show a chip instead of the rewrite being invisible. nil = untouched.

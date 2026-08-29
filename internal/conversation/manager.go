@@ -223,13 +223,32 @@ func (m *Manager) budgetShape() (fraction float64, ceil int) {
 	return m.budgetFraction, m.budgetCeil
 }
 
+// Compaction trigger tags. They name WHY a fold ran and travel all the way to
+// the on-screen compaction step and the debug journal, so the same vocabulary is
+// used in both places.
+const (
+	TriggerAuto     = "auto"     // routine budgeted fold in Prepare
+	TriggerManual   = "manual"   // explicit /compact (ForceCompact)
+	TriggerReactive = "reactive" // mid-turn overflow recovery (CompactInFlightMessages)
+)
+
+// Compaction describes one fold of history into the rolling summary: how many
+// messages went in, the context footprint (messages + fixed overhead) before and
+// after, and what triggered it. Zero value = no fold happened.
+type Compaction struct {
+	FoldedMsgs   int    // messages folded into the summary
+	BeforeTokens int    // estimated context tokens before the fold
+	AfterTokens  int    // estimated context tokens after the fold
+	Trigger      string // TriggerAuto | TriggerManual | TriggerReactive
+}
+
 // Prepared is the result of budgeting a session for one turn.
 type Prepared struct {
 	Summary       string              // rolling summary to inject into the system prompt ("" if none)
 	Messages      []providers.Message // the turns to actually send
 	ContextTokens int                 // estimated tokens of summary + sent messages
 	Compacted     bool                // whether this call folded new messages into the summary
-	FoldedMsgs    int                 // messages folded into the summary this call (0 unless Compacted)
+	Fold          Compaction          // the fold this call performed (zero value unless Compacted)
 	Pressure      float64             // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
 }
 
@@ -258,14 +277,13 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	// preserves the previous message-only behaviour exactly.
 	overhead := contextOverheadFrom(ctx)
 	compacted := false
-	foldedCount := 0
+	var foldStat Compaction
 	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
-			foldedCount = len(fold)
 			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
 			// parity). "auto" = the routine budgeted fold (manual /compact passes
 			// "manual" via its own path).
-			firePreCompact(ctx, "auto")
+			firePreCompact(ctx, TriggerAuto)
 			newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 			if err != nil {
 				return Prepared{}, err
@@ -278,14 +296,22 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			pending = keepTail
 			compacted = true
 			afterTokens := EstimateTokens(summary, pending) + overhead
+			// The on-screen compaction step and the debug journal share one figure
+			// set: the TRUE footprint (messages + fixed overhead) on both sides.
+			foldStat = Compaction{
+				FoldedMsgs:   len(fold),
+				BeforeTokens: before + overhead,
+				AfterTokens:  afterTokens,
+				Trigger:      TriggerAuto,
+			}
 			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
 				"session", session.ID, "agent", agent.ID,
 				"folded_msgs", len(fold), "before_tokens", before, "overhead_tokens", overhead,
 				"after_tokens", afterTokens, "budget", maxTokens)
 			// Journal the fold to debug.jsonl (true footprint = messages + overhead,
 			// the same basis the fold gate above uses).
-			recordCompactionDebug(database, session.ID, agent.ID, "auto",
-				len(fold), before+overhead, afterTokens, maxTokens, len(renderDBMessages(fold)),
+			recordCompactionDebug(database, session.ID, agent.ID, foldStat.Trigger,
+				foldStat.FoldedMsgs, foldStat.BeforeTokens, foldStat.AfterTokens, maxTokens, len(renderDBMessages(fold)),
 				foldIndex, len(summary))
 		}
 	}
@@ -301,50 +327,53 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		pressure = float64(contextTokens+overhead) / float64(maxTokens)
 	}
 
-	foldedMsgs := 0
-	if compacted {
-		foldedMsgs = foldedCount
-	}
 	return Prepared{
 		Summary:       summary,
 		Messages:      toProviderMessages(ctx, pending),
 		ContextTokens: contextTokens,
 		Compacted:     compacted,
-		FoldedMsgs:    foldedMsgs,
+		Fold:          foldStat,
 		Pressure:      pressure,
 	}, nil
 }
 
 // ForceCompact folds all but the most recent keepRecent messages into the
 // rolling summary regardless of the token budget — the manual "/compact" chat
-// command. Returns how many messages were folded and the updated summary; folds
-// nothing (folded == 0) when there are not enough pending messages.
-func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider providers.Provider, session db.Session, agent db.Agent, history []db.Message) (folded int, summary string, err error) {
+// command. Returns the fold (tagged TriggerManual, same shape Prepare reports for
+// the budgeted fold) and the updated summary; folds nothing (zero Compaction)
+// when there are not enough pending messages.
+func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider providers.Provider, session db.Session, agent db.Agent, history []db.Message) (fold Compaction, summary string, err error) {
 	summary = session.Summary
 	start := clampStart(session.SummaryMsgCount, len(history))
 	_, keepRecent := m.limits()
-	fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent)
+	foldMsgs, keepTail, newCount, ok := foldBoundary(history, start, keepRecent)
 	if !ok {
-		return 0, summary, nil // not enough to compact
+		return Compaction{}, summary, nil // not enough to compact
 	}
-	firePreCompact(ctx, "manual")
+	firePreCompact(ctx, TriggerManual)
 	beforeTokens := EstimateTokens(summary, history[start:])
-	newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
+	newSummary, err := m.summarize(ctx, database, provider, agent, summary, foldMsgs)
 	if err != nil {
-		return 0, "", err
+		return Compaction{}, "", err
 	}
 	foldIndex, err := database.SetSessionSummary(ctx, session.ID, newSummary, newCount)
 	if err != nil {
-		return 0, "", err
+		return Compaction{}, "", err
+	}
+	fold = Compaction{
+		FoldedMsgs:   len(foldMsgs),
+		BeforeTokens: beforeTokens,
+		AfterTokens:  EstimateTokens(newSummary, keepTail),
+		Trigger:      TriggerManual,
 	}
 	m.log(slog.LevelInfo, "context compacted (manual /compact)",
-		"session", session.ID, "agent", agent.ID, "folded_msgs", len(fold))
+		"session", session.ID, "agent", agent.ID, "folded_msgs", fold.FoldedMsgs)
 	// Journal the manual fold too; budget 0 → omitted from Detail (manual is
 	// budget-independent).
-	recordCompactionDebug(database, session.ID, agent.ID, "manual",
-		len(fold), beforeTokens, EstimateTokens(newSummary, keepTail), 0, len(renderDBMessages(fold)),
+	recordCompactionDebug(database, session.ID, agent.ID, fold.Trigger,
+		fold.FoldedMsgs, fold.BeforeTokens, fold.AfterTokens, 0, len(renderDBMessages(foldMsgs)),
 		foldIndex, len(newSummary))
-	return len(fold), newSummary, nil
+	return fold, newSummary, nil
 }
 
 // SimulateCompaction reports how THIS turn's budgeted compaction would reshape the

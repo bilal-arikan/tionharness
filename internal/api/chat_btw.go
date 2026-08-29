@@ -7,6 +7,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // btwReq is one side-chat ("btw") question. It carries no attachments and no
@@ -103,6 +104,17 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())
 		return
+	}
+	// The fold above is a real, shared mutation of the session's rolling summary,
+	// so it must not stay invisible just because the side chat has no transcript.
+	// There is no SSE writer here (the btw endpoint answers with a single JSON
+	// body) and no message to persist Steps onto — the side chat creates none — so
+	// the step goes onto the session hub only: every open window on this session
+	// renders the fold live, exactly as it would on a real turn.
+	if prep.Compacted {
+		st := compactionLeadStep(prep.Fold)
+		ws(r).Runtime.EmitSessionStep(session.ID, st)
+		s.publishHub(ws(r).ID, session.ID, sessionhub.KindStep, st, false)
 	}
 
 	// Compose the turn's context (static prefix + volatile suffix) with the SAME

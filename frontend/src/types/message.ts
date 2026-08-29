@@ -26,6 +26,7 @@ export type StepKind =
   | 'subagent'
   | 'context_change'
   | 'cache_break'
+  | 'compaction'
 
 export interface TodoItem {
   content: string
@@ -87,6 +88,16 @@ export interface TurnStep {
   // 'cache_break' payload: the prefix size (tokens) this turn had to re-pay cold
   // after losing the warm prompt cache. `reason` carries the attributed cause.
   coldTokens?: number
+  // 'compaction' payload: how many messages were folded into the rolling summary,
+  // the context footprint before/after the fold and what triggered it. Absent on
+  // traces persisted before these fields existed — the card falls back to `text`.
+  foldedMsgs?: number
+  beforeTokens?: number
+  afterTokens?: number
+  // "auto" (budget threshold) | "manual" (/compact) | "reactive" (overflow
+  // recovery). Kept open as a string: an unknown value is shown verbatim rather
+  // than dropped.
+  trigger?: string
   // Truncation markers set by the SERVER on the transcript READ path only: a
   // long tool payload is cut to a cap so opening a session does not ship
   // megabytes the chat never paints. The persisted trace — and the model's

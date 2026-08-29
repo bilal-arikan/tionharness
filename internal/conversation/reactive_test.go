@@ -31,9 +31,23 @@ func TestCompactInFlightMessages_FoldsAtAssistantBoundary(t *testing.T) {
 		msg(providers.RoleUser, "u4"), msg(providers.RoleAssistant, "a4"),
 		msg(providers.RoleUser, "u5"), msg(providers.RoleAssistant, "a5"),
 	}
-	out, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, 2)
+	out, fold, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, 2)
 	if err != nil || !ok {
 		t.Fatalf("ok=%v err=%v, want ok=true", ok, err)
+	}
+	// The fold report is what makes the reactive compaction visible; a fold that
+	// reports nothing is as silent as no report at all.
+	if fold.Trigger != TriggerReactive {
+		t.Errorf("fold.Trigger = %q, want %q", fold.Trigger, TriggerReactive)
+	}
+	if fold.FoldedMsgs != len(msgs)-(len(out)-1) {
+		t.Errorf("fold.FoldedMsgs = %d, want %d", fold.FoldedMsgs, len(msgs)-(len(out)-1))
+	}
+	if fold.BeforeTokens <= 0 || fold.AfterTokens <= 0 || fold.AfterTokens >= fold.BeforeTokens {
+		t.Errorf("tokens before=%d after=%d, want 0 < after < before", fold.BeforeTokens, fold.AfterTokens)
+	}
+	if fold.SavedBytes <= 0 || fold.SummaryBytes != len("SUM") {
+		t.Errorf("SavedBytes=%d SummaryBytes=%d", fold.SavedBytes, fold.SummaryBytes)
 	}
 	if out[0].Role != providers.RoleUser {
 		t.Errorf("first message role = %q, want user (summary)", out[0].Role)
@@ -50,9 +64,12 @@ func TestCompactInFlightMessages_FoldsAtAssistantBoundary(t *testing.T) {
 func TestCompactInFlightMessages_NoSafeBoundary(t *testing.T) {
 	// Too short to fold under keepRecent → no-op, ok=false, slice unchanged.
 	msgs := []providers.Message{msg(providers.RoleUser, "u1"), msg(providers.RoleAssistant, "a1")}
-	out, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, reactiveKeepRecentTest)
+	out, fold, ok, err := CompactInFlightMessages(context.Background(), nil, stubProvider{summary: "SUM"}, db.Agent{}, msgs, reactiveKeepRecentTest)
 	if err != nil {
 		t.Fatalf("err=%v", err)
+	}
+	if fold != (ReactiveFold{}) {
+		t.Errorf("fold = %+v, want zero value (nothing folded)", fold)
 	}
 	if ok {
 		t.Errorf("ok=true, want false (nothing safe to fold)")

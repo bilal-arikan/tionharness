@@ -384,7 +384,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// channel the manual command uses (live SSE + cross-window publish + persisted
 			// trace via leadSteps below) so the fold shows up like any other turn event.
 			if prep.Compacted {
-				leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.FoldedMsgs)}, leadSteps...)
+				leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.Fold)}, leadSteps...)
 			}
 			for _, st := range leadSteps {
 				sse("step", st)

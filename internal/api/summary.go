@@ -384,12 +384,12 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 	ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 	ctx = conversation.WithClaudeHome(ctx, wsp.Runtime.ClaudeHomeDir())
-	folded, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)
+	fold, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)
 	if err != nil {
 		return "", err
 	}
-	if folded == 0 {
+	if fold.FoldedMsgs == 0 {
 		return "Sıkıştırılacak yeterli eski mesaj yok (son mesajlar zaten bağlam penceresinde tutuluyor).", nil
 	}
-	return fmt.Sprintf("%d mesaj kalıcı özete katlandı; bağlam penceresi küçültüldü.\n\n**Güncel özet:**\n\n%s", folded, summary), nil
+	return fmt.Sprintf("%d mesaj kalıcı özete katlandı; bağlam penceresi küçültüldü.\n\n**Güncel özet:**\n\n%s", fold.FoldedMsgs, summary), nil
 }

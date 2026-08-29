@@ -653,7 +653,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			}
 			if d.compact {
 				cctx := conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
-				folded, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
+				folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
 					ls.compacted = true
@@ -661,10 +661,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					// Signal the autonomous caller that this turn hit the context
 					// limit, so it can decide on an automatic context-reset handoff.
 					markContextOverflow(ctx)
+					// Two steps, two jobs: the recovery card says WHY the turn was
+					// retried, the compaction card says WHAT the fold cost.
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugCompaction, AgentID: agent.ID, Detail: string(d.reason)})
+					cst := reactiveCompactionStep(fold)
+					steps = append(steps, cst)
+					emit(cst)
+					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
 					continue
 				}
 			}
@@ -734,7 +739,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// compact-and-retry as the error-shaped overflow above.
 			if d.compact {
 				cctx := conversation.WithCompactPrompt(ctx, r.CompactPromptTemplate())
-				folded, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
+				folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
 					ls.compacted = true
@@ -743,7 +748,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugCompaction, AgentID: agent.ID, Detail: string(d.reason)})
+					cst := reactiveCompactionStep(fold)
+					steps = append(steps, cst)
+					emit(cst)
+					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
 					continue
 				}
 			}

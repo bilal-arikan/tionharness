@@ -86,7 +86,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// refresh. This is the path that carried the invisible SES548 spawned-turn fold.
 		var compactionStep *agent.TurnStep
 		if prep.Compacted {
-			st := compactionLeadStep(prep.FoldedMsgs)
+			st := compactionLeadStep(prep.Fold)
 			compactionStep = &st
 			if emit != nil {
 				emit(st)
