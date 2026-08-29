@@ -3,6 +3,7 @@ import { Paperclip, ArchiveRestore } from 'lucide-react'
 import type { Agent, Flow, Task } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
+import { taskCardShadowClass } from './taskCardAppearance'
 
 // Priority chip colors/labels, keyed by the stored priority slug.
 const PRIORITY_META: Record<string, { label: string; color: string }> = {
@@ -143,12 +144,8 @@ function TaskCardImpl({
         e.stopPropagation()
         onFileDrop(t, files)
       }}
-      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${
+      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${taskCardShadowClass(recentlyChanged, pending)} ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
-      } ${
-        recentlyChanged && !pending
-          ? 'shadow-[0_0_0_1px_var(--color-accent),0_0_14px_2px_var(--color-accent)]'
-          : ''
       } ${
         pending
           ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'

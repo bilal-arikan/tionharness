@@ -167,6 +167,11 @@ React StrictMode'un çift effect kurulumu ilk sonucu boş kümeyle ezmez. Eski g
 `tionharness:board-last-seen-at` timestamp karşılaştırması kaldırıldı; böylece aynı
 saniyede gerçekleşen değişiklikler kaçmaz ve workspace'ler birbirini etkilemez.
 
+Kart glow'u ve normal kart gölgesi karşılıklı dışlayan tek bir `box-shadow`
+utility'si olarak uygulanır. İki Tailwind shadow utility'sini aynı elementte
+birleştirmek class sırasına göre cascade önceliği vermez; üretilen CSS sırası normal
+gölgeyi kazandırıp glow'u görünmez yapabilir.
+
 İlgili saf store ve regresyon testleri:
 `frontend/src/features/tasks/boardChangeHighlights.ts` ve
 `boardChangeHighlights.test.ts`.
