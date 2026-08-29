@@ -204,7 +204,7 @@ enumerate:
 
 		var due []Lens
 		for _, l := range lenses {
-			if s.ledger.NeedsScan(l.ID, sess.ID, sess.UpdatedAt, fp) {
+			if s.ledger.NeedsScan(l.ID, sess.ID, sess.UpdatedAt, fp, l.Version()) {
 				due = append(due, l)
 			} else {
 				res.Skipped++
@@ -225,7 +225,7 @@ enumerate:
 		for _, l := range due {
 			if !l.Prefilter.Match(sig) {
 				res.Prefiltered++
-				if rErr := s.record(l.ID, sess, fp, 0, "clean"); rErr != nil {
+				if rErr := s.record(l, sess, fp, 0, "clean"); rErr != nil {
 					res.Errors = append(res.Errors, rErr.Error())
 				}
 				continue
@@ -300,7 +300,7 @@ enumerate:
 			res.Findings++
 			res.Produced = append(res.Produced, f)
 		}
-		if rErr := s.record(t.lens.ID, t.sess, t.fp, len(oc.found), "clean"); rErr != nil {
+		if rErr := s.record(t.lens, t.sess, t.fp, len(oc.found), "clean"); rErr != nil {
 			res.Errors = append(res.Errors, rErr.Error())
 		}
 		res.Analyzed++
@@ -323,13 +323,16 @@ func (s *Scanner) selectLenses(ids []string) []Lens {
 	return out
 }
 
-// record upserts a ledger entry for a scanned (lens,session) pair.
-func (s *Scanner) record(lensID string, sess db.Session, fp string, findingCount int, status string) error {
+// record upserts a ledger entry for a scanned (lens,session) pair. It takes the
+// whole Lens (not just its id) so the entry pins the lens version this result was
+// produced with — editing the lens later makes the pair due again.
+func (s *Scanner) record(l Lens, sess db.Session, fp string, findingCount int, status string) error {
 	return s.ledger.Record(LedgerEntry{
-		LensID:          lensID,
+		LensID:          l.ID,
 		SessionID:       sess.ID,
 		SeenUpdatedAt:   sess.UpdatedAt,
 		SeenFingerprint: fp,
+		SeenLensVersion: l.Version(),
 		ScannedAt:       s.now(),
 		FindingCount:    findingCount,
 		Status:          status,

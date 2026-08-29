@@ -588,3 +588,55 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:deferred_tool_schema_load_required -->
 
+## mcp__tionharness_interaction__move_task aracı kaydedilmemiş veya açılmamış
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1916
+- **File:** `internal/agent/mcp_interaction.go ya da tool registry kaydı` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness MCP interaction sağlayıcısında move_task aracı tanımlı değil veya deferred tools listesine eklenmemiş. Araç çağrıldığında 'No such tool available' hatası dönüyor, bu da araçın runtime'da hiç kayıtlı olmadığını gösteriyor.
+
+**Proposed fix:** MCP interaction provider'da (muhtemelen internal/agent/mcp_interaction.go veya tools registry dosyasında) move_task aracının tanım ve kaydını ekle veya düzelt. Araç deferred tools listesine dahil olduğundan ve session startup'ında açıkça expose edildiğinden emin ol.
+
+<!-- insight-sig:tool_not_available:mcp__tionharness_interaction__move_task -->
+
+## Tool registry boşluğu: delete_schedule MCP sunucusu tarafından sunulmuyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES2014
+- **File:** `internal/mcp (tionharness-extended tool registry) veya cmd/tionharness-mcp (MCP server)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** mcp__tionharness_extended__ MCP sunucusu, delete_schedule aracını sunulan araçlar listesinde kaydetmemiştir. Runtime tool çağrısı yaptığında sunucu 'No such tool available' hatasını döndürüyor. Schedules varlığı DB'de bulunmasına rağmen (store_schedule.go), silme işlemi için API sunulmuyor.
+
+**Proposed fix:** mcp__tionharness_extended__ MCP sunucu kaynak kodunda delete_schedule araç uygulamasını kontrol et: (a) araç uygulanmamışsa tamamla, (b) uygulanmışsa tool registry/manifest'e ekle ve schema'sını kaydet, (c) deferred tools listesine dahil etme gerekiyorsa activation flow'unu doğrula.
+
+<!-- insight-sig:mcp__tionharness_extended__delete_schedule:no_such_tool_available -->
+
+## Tool-bundle refaktromatında TionHarness extended araçları kayıt edilmemiş
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1993
+- **File:** `internal/agent/mcp_tionharness.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Tool-bundle refaktoring sonrasında `mcp__tionharness_extended__get_view` ve `mcp__tionharness_extended__create_task` araçları MCP sunucusu tarafından kayıt edilmemiş veya erişilemeyen duruma getirilmiştir. Bu araçlar çağrılmaya çalışıldığında 'No such tool available' hatasıyla başarısız olmaktadır.
+
+**Proposed fix:** Tool-bundle refaktoring sonrasında tionharness MCP sunucu yapılandırmasını denetle: (1) araç kaydı işlemi tamamlanıp tamamlanmadığını kontrol et, (2) araç adlarının döküman/kod/kayıt arasında tutarlı olduğunu doğrula, (3) MCP sunucusu başlangıcında tüm beklenen extended araçların mevcut olduğunu doğrulayan bir başlangıç sağlık kontrolü ekle, (4) gerekirse deferred araç listesine bu araçları ekle.
+
+<!-- insight-sig:mcp__tionharness_extended:tools_unregistered_post_refactor -->
+
+## Bash tool session compaction sonrası disabled hale geliyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1945
+- **File:** `internal/session/ (compaction ve state persistence), internal/agent/ (subagent tool inheritance)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Session compaction işlemi sırasında Bash tool availability state'i yanlış handle edilmiş, disabled flag yanlışlıkla set ediliyor. Bu flag subagent'lere de inherit edilerek onlarda da Bash tool kullanılamaz hale geliyor.
+
+**Proposed fix:** Compaction logic'de (session state persistence) Bash ve diğer temel tool'ların availability state'inin yanlış serialize/deserialize edilmesini gözden geçir. Subagent spawn'unda parent session'ın disabled tool flag'larını override etmek veya session restore sonrasında tool state'i doğrulayıp reset etmek gerekir.
+
+<!-- insight-sig:bash_disabled_post_session_compaction_subagents -->
+

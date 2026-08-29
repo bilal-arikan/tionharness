@@ -17,7 +17,7 @@
 | Kavram | Tanım |
 |--------|-------|
 | **Lens (Scan Intent)** | Tarama amacı. **Workspace'te editlenebilir dosya** (skill gibi). Prefilter + analiz promptu + kanal + kapsam taşır. |
-| **Ledger** | `(lensId, sessionId)` başına inkremental durum. `UpdatedAt` **+ fingerprint** ile "değişti mi?" kararı. |
+| **Ledger** | `(lensId, sessionId)` başına inkremental durum. **fingerprint + lens sürümü** ile "değişti mi?" kararı. |
 | **Finding (Bulgu)** | Tek kanonik şema; imza-dedupe ile tekrarlar `occurrences` biriktirir. |
 | **Channel** | `app-fix` \| `workspace-opt`. Bulgunun yönlendirileceği kanal. |
 
@@ -169,22 +169,39 @@ dondurulur ve yeni prompt'u almaz — bilinçli davranış, çözümü tekil "va
 
 ---
 
-## 3. İnkremental Ledger (fingerprint baştan)
+## 3. İnkremental Ledger (fingerprint + lens sürümü)
 
 **Konum:** `<store>/insight/ledger.jsonl` (dosya-tabanlı, DB-yok mimarisine uygun).
 
 **Kayıt:**
 ```json
 { "lensId": "...", "sessionId": "...", "seenUpdatedAt": 0,
-  "seenFingerprint": "...", "scannedAt": 0, "findingCount": 0, "status": "clean|error" }
+  "seenFingerprint": "...", "seenLensVersion": "...", "scannedAt": 0,
+  "findingCount": 0, "status": "clean|error" }
 ```
 
-**Fingerprint (baştan dahil, TEK tetik):** `Fingerprint(msgCount, summaryMsgCount)` =
+**Fingerprint (içerik tetiği):** `Fingerprint(msgCount, summaryMsgCount)` =
 `"msgCount:summaryMsgCount"` — header'dan hesaplanır (jsonl okumaz). **İçerik değişim
 sinyali fingerprint'tir; `UpdatedAt` tetik DEĞİL** (saniye granülerliği → aynı-saniye içerik
 değişimini kaçırır; ayrıca metadata-only bump'ta da artar → yanlış tetikler). Fingerprint
 her ikisini de doğru çözer: tur append'inde/compaction'da değişir, metadata editinde değişmez.
 `seenUpdatedAt` yalnız gözlem için saklanır. (İleride son-mesaj-id ile güçlendirilebilir.)
+
+**Lens sürümü (ikinci tetik, TSK445):** `Lens.Version()`
+(`internal/insight/lens_version.go`) — lensin *üretimi değiştirebilecek* alanlarının
+sha256 özeti: analiz gövdesi (`Prompt`), `Prefilter`, `Scope` ve `Model`. Kimlik/ad/
+açıklama/`Enabled`/`Path` **dahil değildir** (yeniden adlandırma veya aç-kapa anlamsal
+değişiklik değildir; hash'lense ücretli tam yeniden tarama tetiklerdi). Küme alanları
+(`Scope`, prefilter listeleri) sıralanarak hash'lenir, yani frontmatter'daki sıra
+değişimi sürüm değiştirmez. Böylece bir lensin promptu iyileştirildiğinde, içeriği
+değişmemiş eski oturumlar da yeniden taranır — daha önce bunun tek karşılığı
+hepsi-ya-hiç `Reset(deep=true)` idi.
+
+**Geriye dönük uyumluluk:** sürüm alanı olmadan yazılmış eski satırlar
+(`seenLensVersion: ""`) **güncel kabul edilir** (grandfathering), yeniden taranmaz.
+Aksi hâlde yükseltmeden sonraki ilk tarama tüm ledger'ı geçersiz kılar ve
+`Reset(deep)`'in uyardığı "çoktan düzeltilmiş sorunların bulgularını geri getirme"
+etkisini yaratırdı. Karar `ledger.go` `NeedsScan` yorumunda gerekçesiyle sabitlenmiştir.
 
 **Karar:**
 ```mermaid
@@ -193,7 +210,10 @@ graph LR
     B -- yok --> R[TARA]
     B -- var --> D{fingerprint farkli mi?}
     D -- evet --> R[TARA]
-    D -- hayir --> S[ATLA - metadata bump dahil]
+    D -- hayir --> V{lens surumu farkli mi?}
+    V -- evet --> R[TARA]
+    V -- hayir --> S[ATLA - metadata bump dahil]
+    V -- eski kayit bos surum --> S
 ```
 
 - **Per-lens** tutulur (farklı lens farklı yüzey okur).
@@ -280,7 +300,8 @@ stateDiagram-v2
 | `internal/seed/` | **Paylaşılan** shipped-defaults tazeleme (hash ledger + `Ensure`/`Restore`); tüketiciler: `insight`, `skills` | ✅ Faz 6.4 |
 | `internal/insight/defaults.go` | Gömülü lens ağacı + lens merge politikası (`userLensKeys`) + `RestoreDefault`/`HasDefault` | ✅ Faz 6.4 |
 | `internal/insight/prefilter.go` | Yapısal predikat `Match` (requiresAny/All/excludes/minCount/minTokens) | ✅ Faz 1 |
-| `internal/insight/ledger.go` | İnkremental durum (`UpdatedAt` + fingerprint) | ✅ Faz 1 |
+| `internal/insight/ledger.go` | İnkremental durum (fingerprint + lens sürümü) | ✅ Faz 1 |
+| `internal/insight/lens_version.go` | `Lens.Version()` — lens gövdesi hash'i (yeniden tarama tetiği) | ✅ TSK445 |
 | `internal/insight/defaults.go` + `defaults/*.md` | Gömülü default lensler (`//go:embed`) + seed | ✅ Faz 1 |
 | `internal/insight/scanner.go` | Pipeline + `SessionSignals` extraction + prefilter + inkremental + dedupe (`Analyzer` seam) | ✅ Faz 1 (LLM impl hariç) |
 | `internal/insight/router.go` | Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, insight-sig marker) | ✅ Faz 1 |

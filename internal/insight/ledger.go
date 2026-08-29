@@ -28,11 +28,14 @@ type Ledger struct {
 // LedgerEntry is one scan record. SeenUpdatedAt is the session's UpdatedAt at
 // scan time (primary change signal); SeenFingerprint is the content signature at
 // scan time (so a metadata-only UpdatedAt bump does not force a re-scan).
+// SeenLensVersion is Lens.Version() at scan time — the second change signal, so
+// improving a lens re-scans sessions whose content never changed.
 type LedgerEntry struct {
 	LensID          string `json:"lensId"`
 	SessionID       string `json:"sessionId"`
 	SeenUpdatedAt   int64  `json:"seenUpdatedAt"`
 	SeenFingerprint string `json:"seenFingerprint"`
+	SeenLensVersion string `json:"seenLensVersion,omitempty"`
 	ScannedAt       int64  `json:"scannedAt"`
 	FindingCount    int    `json:"findingCount"`
 	Status          string `json:"status"` // clean | error
@@ -80,17 +83,25 @@ func OpenLedger(root string) (*Ledger, error) {
 }
 
 // NeedsScan reports whether (lensID, session) must be scanned. It is pure (no
-// mutation). The CONTENT FINGERPRINT is the sole change signal (_Docs/60 §3):
+// mutation). There are TWO change signals (_Docs/60 §3):
 //   - no ledger entry        -> scan (first time / new lens backfill)
 //   - fingerprint changed    -> scan (a turn was appended / conversation compacted)
-//   - fingerprint unchanged  -> skip (nothing content-relevant changed; a bare
-//     UpdatedAt bump is metadata-only and must not force a re-scan)
+//   - lens version changed   -> scan (the lens prompt/prefilter/scope/model was
+//     edited, so the same content can now yield a different answer)
+//   - both unchanged         -> skip (a bare UpdatedAt bump is metadata-only)
 //
 // UpdatedAt is deliberately NOT a trigger: it has second granularity (a fast
 // content edit within the same second would be missed) and it also bumps on
 // metadata-only edits (which must be skipped). The fingerprint handles both. The
 // recorded SeenUpdatedAt is kept for observability only.
-func (l *Ledger) NeedsScan(lensID, sessionID string, updatedAt int64, fingerprint string) bool {
+//
+// Backward compatibility: entries written before the version field carry an EMPTY
+// SeenLensVersion. Those are GRANDFATHERED — treated as up to date, not re-scanned.
+// The alternative (re-scan once) would invalidate every existing ledger row on the
+// first scan after upgrading and re-surface findings for issues already fixed —
+// exactly the blast radius Reset(deep) warns about. A user who does want the old
+// rows re-analyzed still has that escape hatch.
+func (l *Ledger) NeedsScan(lensID, sessionID string, updatedAt int64, fingerprint, lensVersion string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	byLens, ok := l.entries[lensID]
@@ -101,7 +112,10 @@ func (l *Ledger) NeedsScan(lensID, sessionID string, updatedAt int64, fingerprin
 	if !ok {
 		return true
 	}
-	return rec.SeenFingerprint != fingerprint
+	if rec.SeenFingerprint != fingerprint {
+		return true
+	}
+	return rec.SeenLensVersion != "" && rec.SeenLensVersion != lensVersion
 }
 
 // Record upserts an entry in memory and appends it to the ledger file.

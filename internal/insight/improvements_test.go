@@ -261,7 +261,7 @@ func TestLedgerCompactBoundsFile(t *testing.T) {
 		t.Fatalf("compact should collapse to 1 line per key, got %d", after)
 	}
 	// Correctness survives compaction: the key is still known (skip on same fp).
-	if l.NeedsScan("x", "S1", 0, "fp") {
+	if l.NeedsScan("x", "S1", 0, "fp", "v1") {
 		t.Fatal("compacted ledger must still remember the scanned key")
 	}
 }
