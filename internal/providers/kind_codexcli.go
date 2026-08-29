@@ -35,7 +35,7 @@ func init() {
 				{Key: FieldKeyConfigDir, Label: "Config Dizini", Type: "dir", Help: "Bos birakilirsa workspace'in codex-home dizini kullanilir (mevcut davranis); doldurulursa bu ornege ozel, izole bir login evi kullanilir."},
 			},
 			Models: []ModelInfo{
-				{ID: "", Label: "Varsayılan", Description: "codex oturumunun aktif modelini kullanır"},
+				{ID: "", Label: "codex oturum modeli", Description: "codex oturumunun aktif modelini kullanır"},
 				{ID: "gpt-5.6-sol", Label: "GPT-5.6 Sol", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-terra", Label: "GPT-5.6 Terra", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-luna", Label: "GPT-5.6 Luna", Description: "En yeni nesil; 400k bağlam"},

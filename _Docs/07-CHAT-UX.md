@@ -1059,7 +1059,7 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   doldurulup `/api/catalog` ile taşınır. **Beş sınıf:** `always-on` (Fable/Mythos → `off` yok, daima
   düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `non-thinking` (**DeepSeek V4 Flash** →
   yalnız `off`); `legacy` (somut eski Claude/MiniMax — reasoning_effort tavanı `high` — DeepSeek Pro →
-  `xhigh/max` yok); `alias` (claude-cli `opus`/`Varsayılan`/özel → tam rampa, provider kırpar).
+  `xhigh/max` yok); `alias` (claude-cli `opus`/boş "claude oturum modeli"/özel → tam rampa, provider kırpar).
   **Gizleme değil pasifleştirme:** desteklenmeyen tiyer butonu gizlenmez, **soluk+disabled** gösterilir
   ve tooltip sebebini yazar (`thinkingTierDisabledReason(cls, tier)` — "her zaman düşünür — kapatılamaz"
   / "düşünmez" / "\"Yüksek\"e düşer"). Composer (`ComposerPicker`) ve ajan formu (`OptionPills`) artık

@@ -43,8 +43,9 @@ export function formatModelVersion(id: string): string {
 
 // modelDisplayName is THE way to show a concrete model id anywhere in the app:
 // the version people talk about ("Opus 5"), the raw id when we cannot name it,
-// and an explicit placeholder when there is no model at all (a turn served by the
-// provider's own default).
+// and an explicit placeholder when there is no model at all. The placeholder
+// says only what we know — that no model id was recorded — because this function
+// has no catalog and therefore cannot name the model that actually ran.
 //
 // Callers should keep the exact id in a `title`. It is the value that has to
 // match a provider invoice or a bug report, so it must stay reachable — just not
@@ -55,7 +56,7 @@ export function formatModelVersion(id: string): string {
 // this one when the id in hand is already concrete: a turn's model, a usage row,
 // a debug event.
 export function modelDisplayName(id: string): string {
-  if (!id) return '(varsayılan)'
+  if (!id) return '(model belirtilmemiş)'
   return formatModelVersion(id) || id
 }
 
@@ -69,10 +70,11 @@ function labelForModel(info: CatalogModel, provider: string): string {
 }
 
 // resolveModelLabel returns a human label for an agent's effective model: the
-// configured model's catalog label (or its raw id when it's a custom value), or
-// the provider's default model label when the agent left the model empty (e.g.
-// claude-cli's "Varsayılan (oturum modeli)"). Falls back to the raw model or
-// provider string when the catalog isn't loaded yet.
+// configured model's catalog label (or its raw id when it's a custom value).
+// When the agent left the model empty, the catalog's own empty-id entry answers
+// — it carries both the honest name of that mode ("claude oturum modeli") and,
+// once observed, the model the provider actually served. Falls back to the raw
+// model or provider string when the catalog isn't loaded yet.
 export function resolveModelLabel(
   catalog: CatalogEntry[],
   provider: string,
@@ -85,8 +87,10 @@ export function resolveModelLabel(
   // A custom model id not present in the curated list. It is already concrete, so
   // it needs no resolution — only prettying, when we recognise the family.
   if (model) return formatModelVersion(model) || model
-  const def = entry.models[0]
-  return def ? labelForModel(def, provider) : provider
+  // Empty model and no empty-id catalog entry to explain it: say exactly that.
+  // Falling back to the catalog's FIRST entry used to print a model the agent was
+  // never configured with — a plausible lie is worse than an admitted gap.
+  return '(model belirtilmemiş)'
 }
 
 // cliProductName maps a provider id to the human-readable name of the local CLI

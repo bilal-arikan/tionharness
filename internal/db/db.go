@@ -62,6 +62,14 @@ type DB struct {
 	// agent configured with the alias "opus" is actually talking to.
 	modelResolutions map[string]ModelResolution
 
+	// globalModelRes is the shared app-level model-resolution store (one per
+	// installation, wired by the workspace manager). It is written alongside
+	// modelResolutions and read only as a fallback, so a fresh workspace can
+	// name the model behind an alias another workspace already learned. nil
+	// when unwired — the workspace-local behaviour is then unchanged.
+	globalModelRes   *GlobalModelResolutions
+	globalModelResMu sync.RWMutex
+
 	// boardHook is an optional observer invoked (best-effort) after a task's
 	// board state changes or a task is created/deleted. It backs board-triggered
 	// automations; the workspace manager wires it to the AutomationEngine. It is

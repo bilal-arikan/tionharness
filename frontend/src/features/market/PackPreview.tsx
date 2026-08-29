@@ -50,7 +50,7 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
       <div className="space-y-1">
         <Row k="Tür" v={pr.kind} />
         <Row k="Base URL" v={pr.baseUrl} />
-        <Row k="Varsayılan model" v={pr.defaultModel} />
+        <Row k="Sağlayıcı modeli" v={pr.defaultModel} />
         <div className="flex flex-wrap gap-1.5 pt-1.5">
           <CapBadge
             label={cacheLabel(pr.promptCache)}
@@ -199,7 +199,7 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
                 </div>
                 {(a.provider || a.model) && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
-                    {a.provider || '(varsayılan sağlayıcı)'}
+                    {a.provider || 'sağlayıcı belirtilmemiş'}
                     {a.model ? ` · ${modelDisplayName(a.model)}` : ''}
                   </div>
                 )}

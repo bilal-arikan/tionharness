@@ -148,7 +148,7 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
       <div className="grid grid-cols-2 gap-1.5">
         <input
           data-testid="provider-instance-default-model-input"
-          placeholder="varsayılan model (opsiyonel)"
+          placeholder="boş = sağlayıcı oturum modeli"
           value={draft.defaultModel}
           onChange={(e) => setDraft((d) => ({ ...d, defaultModel: e.target.value }))}
           className={inputCls}

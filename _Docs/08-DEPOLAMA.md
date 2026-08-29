@@ -61,6 +61,19 @@ store/
 └── counters.json                      # entity-başına insan-okunabilir id sayacı
 ```
 
+Aynı dosya adı **uygulama veri kökünde** de bulunur:
+`<dataDir>/model-resolutions.json` — workspace'ler arası paylaşılan, app-global
+model çözümleme katmanı (`db.GlobalModelResolutions`,
+`internal/db/store_model_resolution_global.go`). Workspace store'u bir çözümleme
+öğrendiğinde ikisine birden yazar (app-global yazım best-effort; hata yutulmaz,
+`slog.Warn` ile bildirilir). Okuma tarafı **değişmez**: `ResolvedModelFor`
+workspace-lokal kalır; yalnız katalog (`internal/api/catalog.go`) workspace değeri
+boş olduğunda `GlobalResolvedModelFor`'a düşer. Böylece yeni açılan bir workspace,
+claude-cli'nin boş model id'si için "Varsayılan" göstermek yerine aynı makinede
+başka bir workspace'in öğrendiği somut modeli gösterir. Store, workspace manager
+tarafından açılışta bir kez açılıp her workspace DB'sine bağlanır
+(`internal/workspace/manager.go`).
+
 ## Kimlik (ID) şeması — insan-okunabilir + tekrar-kullanımsız
 
 > 2026-06-19'dan itibaren yeni entity'ler **kısa, prefix'li** kimlik alır

@@ -66,7 +66,15 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			models := make([]providers.ModelInfo, len(e.Models))
 			copy(models, e.Models)
 			for i := range models {
-				models[i].ResolvedModel = wsp.DB.ResolvedModelFor(e.ID, models[i].ID)
+				resolved := wsp.DB.ResolvedModelFor(e.ID, models[i].ID)
+				if resolved == "" {
+					// This workspace has never completed a turn with the alias, but
+					// another one on the same machine may have. Falling back to the
+					// app-global store is what keeps a freshly created workspace from
+					// showing "Varsayılan" for claude-cli's empty model id.
+					resolved = wsp.DB.GlobalResolvedModelFor(e.ID, models[i].ID)
+				}
+				models[i].ResolvedModel = resolved
 			}
 			dto.Models = models
 		}

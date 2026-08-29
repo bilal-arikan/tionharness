@@ -47,6 +47,11 @@ func (d *DB) NoteModelResolution(ctx context.Context, provider, requested, resol
 		return nil
 	}
 
+	// The app-global mirror is written on every call, not only when the workspace
+	// map changes: another workspace may still be blind to a fact this one has
+	// long known, and Note is itself a no-op once the global store agrees.
+	d.noteGlobalModelResolution(provider, requested, resolved)
+
 	key := modelResolutionKey(provider, requested)
 	d.mu.Lock()
 	defer d.mu.Unlock()

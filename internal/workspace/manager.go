@@ -79,6 +79,11 @@ type Manager struct {
 	// across deletions or restarts. Guarded by mu.
 	wsCounter int64
 
+	// globalModelRes is the installation-wide model-resolution store handed to
+	// every workspace DB as it opens. nil when the document on disk could not be
+	// read, in which case each workspace keeps only its own observations.
+	globalModelRes *db.GlobalModelResolutions
+
 	// settingsBridge is the application-wide settings store + live-apply hook,
 	// wired in after the api server is constructed. Stored so it can be applied
 	// both to existing runtimes (via SetSettingsBridge) and to any workspace
@@ -212,6 +217,15 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 		workspaces: make(map[string]*Workspace),
 	}
 
+	// App-global model resolutions: shared by every workspace DB so an alias one
+	// workspace resolved is nameable in all of them. A corrupt document is not
+	// fatal — it only costs the cross-workspace fallback — but it is reported.
+	if globalModelRes, err := db.OpenGlobalModelResolutions(rootDir); err != nil {
+		logger.Warn("app-global model resolutions unreadable", "error", err)
+	} else {
+		m.globalModelRes = globalModelRes
+	}
+
 	metas, err := m.loadMetas()
 	if err != nil {
 		return nil, err
@@ -305,6 +319,7 @@ func (m *Manager) open(meta Meta) error {
 	if err != nil {
 		return err
 	}
+	database.SetGlobalModelResolutions(m.globalModelRes)
 	// Seed the small core system-agent set for new workspaces, migrate renamed
 	// roles, and backfill older workspaces. Existing customisations are preserved.
 	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {

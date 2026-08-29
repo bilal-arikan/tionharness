@@ -39,7 +39,7 @@ describe('modelDisplayName', () => {
   })
 
   it('marks a row with no model', () => {
-    expect(modelDisplayName('')).toBe('(varsayılan)')
+    expect(modelDisplayName('')).toBe('(model belirtilmemiş)')
   })
 })
 
@@ -52,9 +52,23 @@ const catalog: CatalogEntry[] = [
     appliesToolHooks: true,
     available: true,
     models: [
-      { id: '', label: 'Varsayılan', resolvedModel: 'claude-opus-5' },
+      { id: '', label: 'claude oturum modeli', resolvedModel: 'claude-opus-5' },
       { id: 'sonnet', label: 'Sonnet — dengeli' },
     ],
+  },
+]
+
+// A provider whose catalog offers no empty-id entry: leaving the model empty is
+// then unexplained, and the label must not borrow another entry's name.
+const catalogWithoutSessionEntry: CatalogEntry[] = [
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    needsKey: true,
+    allowCustomModel: true,
+    appliesToolHooks: false,
+    available: true,
+    models: [{ id: 'gpt-5.5-pro', label: 'GPT-5.5 Pro' }],
   },
 ]
 
@@ -73,5 +87,20 @@ describe('resolveModelLabel', () => {
 
   it('keeps an unrecognised custom id verbatim', () => {
     expect(resolveModelLabel(catalog, 'claude-cli', 'my-local-model')).toBe('my-local-model')
+  })
+
+  // Before anything has resolved, the empty-id entry still names the mode
+  // honestly ("session model"), never the word "default".
+  it('names the session-model entry when nothing has resolved yet', () => {
+    const unresolved: CatalogEntry[] = [
+      { ...catalog[0], models: [{ id: '', label: 'claude oturum modeli' }] },
+    ]
+    expect(resolveModelLabel(unresolved, 'claude-cli', '')).toBe('claude oturum modeli')
+  })
+
+  it('admits an unexplained empty model instead of borrowing another entry', () => {
+    expect(resolveModelLabel(catalogWithoutSessionEntry, 'openai', '')).toBe(
+      '(model belirtilmemiş)',
+    )
   })
 })

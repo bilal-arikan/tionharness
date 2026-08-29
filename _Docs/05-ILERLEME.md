@@ -1,6 +1,27 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-28**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-29**
+
+## Model etiketlerinden "Varsayılan" kalktı (2026-08-29) ✅
+
+UI artık boş model id'si için "Varsayılan" yazmıyor; ne çalıştığını söylüyor.
+
+- **Katalog etiketleri.** claude-cli ve codex-cli'nin boş-ID model girdisi
+  `Varsayılan` yerine `claude oturum modeli` / `codex oturum modeli` etiketiyle
+  geliyor (`internal/providers/kind_claudecli.go`, `kind_codexcli.go`). Boş model
+  bir "varsayılan model" değildir: seçim CLI'nin kendi oturumuna bırakılır.
+- **App-global çözümleme.** Öğrenilen istek-model → gerçekte servis edilen model
+  eşlemesi workspace store'unun yanında uygulama veri kökünde de tutuluyor
+  (`internal/db/store_model_resolution_global.go`). Katalog, workspace değeri boş
+  olduğunda buna düşer → **yeni bir workspace ilk turunu koşturmadan önce de**
+  somut model adını gösterebiliyor. Ayrıntı: `_Docs/08-DEPOLAMA.md`.
+- **Frontend.** `modelDisplayName` boş id için `(model belirtilmemiş)` döner;
+  `modelLabel` boş modelde önce katalogun boş-ID etiketini, sonra `resolvedModel`
+  değerini kullanır (`frontend/src/shared/lib/modelLabel.ts` +2 test). Aynı dil
+  `PackPreview.tsx` ("Sağlayıcı modeli", "sağlayıcı belirtilmemiş") ve
+  `ProviderInstanceForm.tsx` placeholder'ında da kullanılıyor.
+- **Sistem ajanları artık açık sağlayıcı ile tohumlanıyor** — bkz.
+  `_Docs/74-SISTEM-AJANLARI.md`.
 
 ## Başlık için ayrı sağlayıcı/model seçimi kaldırıldı (2026-08-28) ✅
 
