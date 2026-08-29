@@ -118,6 +118,24 @@ func (l *Ledger) NeedsScan(lensID, sessionID string, updatedAt int64, fingerprin
 	return rec.SeenLensVersion != "" && rec.SeenLensVersion != lensVersion
 }
 
+// ScannedAfter reports whether any of the given sessions has been scanned (by
+// any lens) strictly after the unix-seconds `after`. It is the evidence behind
+// auto-verification: an applied finding may only be called verified once the
+// sessions it was observed in have actually been looked at again since the fix.
+// An empty session list — or a list with no ledger entry — is NOT evidence.
+func (l *Ledger) ScannedAfter(sessionIDs []string, after int64) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, byLens := range l.entries {
+		for _, id := range sessionIDs {
+			if rec, ok := byLens[id]; ok && rec.ScannedAt > after {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Record upserts an entry in memory and appends it to the ledger file.
 func (l *Ledger) Record(e LedgerEntry) error {
 	l.mu.Lock()

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { LayoutGrid, Trash2 } from 'lucide-react'
 import { api } from '@/api'
-import type { InsightFinding, InsightLens } from '@/types'
+import type { AppliedEntity, InsightFinding, InsightLens } from '@/types'
 import { SelectionBar, SelectionBarButton } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SummaryHeader } from './SummaryHeader'
@@ -59,6 +59,9 @@ function cardBody(f: InsightFinding): string {
 export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, onNote }: Props) {
   const [filter, setFilter] = useState<FindingFilter>({})
   const [modalId, setModalId] = useState<string | null>(null)
+  // Set when the modal was opened to collect "applied" evidence (drag onto that
+  // column) rather than by a plain card click.
+  const [askApplied, setAskApplied] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const sel = useMultiSelect()
 
@@ -82,9 +85,9 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
     [byColumn],
   )
 
-  const setStatus = async (id: string, status: string) => {
+  const setStatus = async (id: string, status: string, evidence?: AppliedEntity) => {
     try {
-      await api.setInsightFindingStatus(id, status)
+      await api.setInsightFindingStatus(id, status, evidence)
       reload()
     } catch (e) {
       onError((e as Error).message)
@@ -115,6 +118,14 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
 
   const bulkStatus = async (status: string) => {
     if (!status) return
+    // "applied" needs per-finding evidence, which a bulk move cannot supply —
+    // firing it anyway would just collect N silent 400s.
+    if (status === 'applied') {
+      onError(
+        '"Uygulandı" toplu işaretlenemez: her bulgu için ayrı uygulama kanıtı (varlık türü + id) gerekir. Kartı açıp tek tek işaretle.',
+      )
+      return
+    }
     const ids = [...sel.selected]
     sel.clear()
     await Promise.all(ids.map((id) => api.setInsightFindingStatus(id, status).catch(() => {})))
@@ -155,7 +166,17 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
               key={col.key}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => {
-                if (dragId) void setStatus(dragId, col.key)
+                if (dragId) {
+                  // A drag carries no evidence, and "applied" requires it — so
+                  // instead of a silent 400, open the card's evidence form.
+                  if (col.key === 'applied') {
+                    setModalId(dragId)
+                    setAskApplied(true)
+                    onNote('"Uygulandı" için uygulama kanıtı gerekiyor: varlık türü + id gir.')
+                  } else {
+                    void setStatus(dragId, col.key)
+                  }
+                }
                 setDragId(null)
               }}
               className="flex min-h-0 w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
@@ -172,6 +193,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                     onDragStart={() => setDragId(f.id)}
                     onClick={(e) => {
                       if (sel.handleClick(e, f.id, orderedIds)) return
+                      setAskApplied(false)
                       setModalId(f.id)
                     }}
                     className={`cursor-pointer rounded-lg border p-2 text-sm shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] ${
@@ -243,7 +265,11 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
       {modalFinding && (
         <FindingModal
           f={modalFinding}
-          onClose={() => setModalId(null)}
+          focusApplied={askApplied}
+          onClose={() => {
+            setModalId(null)
+            setAskApplied(false)
+          }}
           onStatus={setStatus}
           onDelete={remove}
           onAddCard={addCard}

@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"time"
@@ -279,6 +280,9 @@ func (s *Server) handleDeleteInsightFinding(w http.ResponseWriter, r *http.Reque
 
 type insightStatusReq struct {
 	Status string `json:"status"`
+	// Evidence names the workspace entity the fix was applied to. Mandatory for
+	// the "applied" status (insight.ErrAppliedNeedsEvidence); ignored otherwise.
+	Evidence *insight.AppliedEntity `json:"evidence"`
 }
 
 // handleSetInsightFindingStatus updates one finding's lifecycle status (triage:
@@ -299,7 +303,11 @@ func (s *Server) handleSetInsightFindingStatus(w http.ResponseWriter, r *http.Re
 	if writeDBError(w, err, "") {
 		return
 	}
-	found, err := store.SetStatus(r.PathValue("id"), status, time.Now().Unix())
+	found, err := store.SetStatus(r.PathValue("id"), status, time.Now().Unix(), req.Evidence)
+	if errors.Is(err, insight.ErrAppliedNeedsEvidence) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if writeDBError(w, err, "") {
 		return
 	}

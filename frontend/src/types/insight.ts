@@ -27,6 +27,16 @@ export interface InsightLens {
   defaultState?: SeedDefaultState
 }
 
+/**
+ * Evidence for the "applied" status: the workspace entity that was actually
+ * mutated. Both halves are mandatory — the backend rejects a partial one with
+ * 400 "applied requires evidence: entityType+entityId".
+ */
+export interface AppliedEntity {
+  entityType: string
+  entityId: string
+}
+
 export interface InsightFinding {
   id: string
   lensId: string
@@ -44,6 +54,8 @@ export interface InsightFinding {
   lastSeen: number
   appliedAt?: number
   verifiedAt?: number
+  /** Entity the fix was applied to; required for status 'applied', and what auto-verify keys off. */
+  appliedEntity?: AppliedEntity
   /** Set when a closed (dismissed/applied/verified) finding recurred — a "fixed" issue came back. */
   regressed?: boolean
   regressedAt?: number

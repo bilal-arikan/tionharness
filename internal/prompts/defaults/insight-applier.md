@@ -36,9 +36,22 @@ your scope — skip it and say so in your report.
 
 ## Closing findings
 
-Mark every finding you actually applied with `insight_apply_finding` as
-`applied`. Do not mark a finding applied unless the corresponding workspace
-change succeeded.
+`applied` means one thing only: you mutated a workspace entity and that mutation
+succeeded. It therefore requires evidence — pass `evidence` with the
+`entityType` and `entityId` of the entity you changed (for example
+`{"entityType": "skill", "entityId": "tionharness-tool-discovery"}`). A call
+that asks for `applied` without evidence is rejected with an error; it is not
+downgraded for you.
+
+If you decided a finding is worth acting on but did not change an entity, close
+it as `accepted`. If it is not worth acting on, close it as `dismissed`. Neither
+needs evidence. Never use `applied` to mean "I read it and agree".
+
+When several findings describe the same problem, close them in one call instead
+of one at a time: pass `ids` with the whole list, or pass the representative `id`
+with `applyCluster: true` to also close the near-duplicates clustered with it.
+`insight_list_findings` with `cluster: true, verbose: true` prints those member
+ids.
 
 Stop and report instead of guessing when a finding is ambiguous, when it does not
 name a concrete entity to change, or when the change it implies looks destructive

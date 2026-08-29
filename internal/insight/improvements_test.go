@@ -28,7 +28,7 @@ func openStore(t *testing.T) *FindingStore {
 func TestRegressionOnRecurrence(t *testing.T) {
 	s := openStore(t)
 	f, _ := s.Upsert(Finding{LensID: "tool-errors", Channel: ChannelAppFix, Signature: "sigA", Title: "A", LastSeen: 100})
-	if _, err := s.SetStatus(f.ID, StatusDismissed, 110); err != nil {
+	if _, err := s.SetStatus(f.ID, StatusDismissed, 110, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Recurrence of the dismissed finding.
@@ -40,7 +40,7 @@ func TestRegressionOnRecurrence(t *testing.T) {
 		t.Fatalf("status should stay dismissed, got %s", again.Status)
 	}
 	// User re-decides → regression acknowledged/cleared.
-	if _, err := s.SetStatus(again.ID, StatusAccepted, 210); err != nil {
+	if _, err := s.SetStatus(again.ID, StatusAccepted, 210, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, x := range s.List("", "") {
@@ -78,6 +78,18 @@ func TestListRanksByPriority(t *testing.T) {
 	}
 }
 
+// rescanned is a ScanEvidence stub: sessionID -> the time it was last scanned.
+type rescanned map[string]int64
+
+func (r rescanned) ScannedAfter(sessionIDs []string, after int64) bool {
+	for _, id := range sessionIDs {
+		if at, ok := r[id]; ok && at > after {
+			return true
+		}
+	}
+	return false
+}
+
 // TestMaintain: auto-verify applied-not-recurring; prune old resolved; keep regressed applied.
 func TestMaintain(t *testing.T) {
 	s := openStore(t)
@@ -85,12 +97,15 @@ func TestMaintain(t *testing.T) {
 	old := now - DefaultAutoVerifyAge - 1
 	veryOld := now - DefaultPruneAge - 1
 
-	applied, _ := s.Upsert(Finding{LensID: "l", Signature: "a", Title: "applied", Status: StatusApplied, LastSeen: old})
-	appliedReg, _ := s.Upsert(Finding{LensID: "l", Signature: "b", Title: "reg", Status: StatusApplied, Regressed: true, LastSeen: old})
+	ev := &AppliedEntity{EntityType: "skill", EntityID: "s1"}
+	applied, _ := s.Upsert(Finding{LensID: "l", Signature: "a", Title: "applied", Status: StatusApplied,
+		AppliedEntity: ev, AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES1"}, LastSeen: old})
+	appliedReg, _ := s.Upsert(Finding{LensID: "l", Signature: "b", Title: "reg", Status: StatusApplied,
+		AppliedEntity: ev, AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES1"}, Regressed: true, LastSeen: old})
 	s.Upsert(Finding{LensID: "l", Signature: "c", Title: "dismissed-old", Status: StatusDismissed, LastSeen: veryOld})
 	s.Upsert(Finding{LensID: "l", Signature: "d", Title: "new-recent", Status: StatusNew, LastSeen: now})
 
-	res, err := s.Maintain(now, 0, 0)
+	res, err := s.Maintain(now, 0, 0, rescanned{"SES1": old - 50})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +124,65 @@ func TestMaintain(t *testing.T) {
 	}
 	if len(s.List("", "")) != 3 {
 		t.Fatalf("the old dismissed finding should be pruned, remaining=%d", len(s.List("", "")))
+	}
+}
+
+// Age alone is not proof: an applied finding stays applied unless it names the
+// entity it changed AND its sessions were re-scanned after the fix landed.
+func TestMaintainAutoVerifyNeedsEvidenceAndRescan(t *testing.T) {
+	now := int64(1_000_000_000)
+	old := now - DefaultAutoVerifyAge - 1
+	ev := &AppliedEntity{EntityType: "skill", EntityID: "s1"}
+
+	cases := []struct {
+		name    string
+		finding Finding
+		scans   ScanEvidence
+	}{
+		{"no evidence entity", Finding{AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES1"}}, rescanned{"SES1": old - 50}},
+		{"no appliedAt stamp", Finding{AppliedEntity: ev, EvidenceSessionIDs: []string{"SES1"}}, rescanned{"SES1": old - 50}},
+		{"session not re-scanned", Finding{AppliedEntity: ev, AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES1"}}, rescanned{"SES1": old - 500}},
+		{"unknown session", Finding{AppliedEntity: ev, AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES9"}}, rescanned{"SES1": now}},
+		{"nil evidence source", Finding{AppliedEntity: ev, AppliedAt: old - 100, EvidenceSessionIDs: []string{"SES1"}}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openStore(t)
+			f := tc.finding
+			f.LensID, f.Signature, f.Title, f.Status, f.LastSeen = "l", "a", "applied", StatusApplied, old
+			if _, err := s.Upsert(f); err != nil {
+				t.Fatal(err)
+			}
+			res, err := s.Maintain(now, 0, 0, tc.scans)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.AutoVerified != 0 {
+				t.Fatalf("must not auto-verify without evidence: %+v", res)
+			}
+			if got := s.List("", "")[0]; got.Status != StatusApplied {
+				t.Fatalf("expected the finding to stay applied, got %s", got.Status)
+			}
+		})
+	}
+}
+
+func TestLedgerScannedAfter(t *testing.T) {
+	l, err := OpenLedger(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Record(LedgerEntry{LensID: "lens-a", SessionID: "SES1", ScannedAt: 500}); err != nil {
+		t.Fatal(err)
+	}
+	if !l.ScannedAfter([]string{"SES1"}, 400) {
+		t.Fatal("a session scanned at 500 counts as scanned after 400")
+	}
+	if l.ScannedAfter([]string{"SES1"}, 500) {
+		t.Fatal("ScannedAfter is strict: 500 is not after 500")
+	}
+	if l.ScannedAfter([]string{"SES2"}, 0) || l.ScannedAfter(nil, 0) {
+		t.Fatal("unknown/empty sessions are not evidence")
 	}
 }
 

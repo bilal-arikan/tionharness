@@ -13,9 +13,11 @@ package insight
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -85,7 +87,38 @@ type Finding struct {
 	// with came back. It is the signal that a "fixed" issue is not actually fixed.
 	Regressed   bool  `json:"regressed,omitempty"`
 	RegressedAt int64 `json:"regressedAt,omitempty"` // unix seconds of the recurrence
+	// AppliedEntity is the workspace entity that was actually mutated to apply
+	// this finding (e.g. skill/tionharness-tool-discovery). It is the evidence
+	// StatusApplied requires: without it "applied" is an unbacked claim, so the
+	// store refuses the transition (ErrAppliedNeedsEvidence).
+	AppliedEntity *AppliedEntity `json:"appliedEntity,omitempty"`
 }
+
+// AppliedEntity names the workspace entity a finding was applied to. Both fields
+// are mandatory — a type without an id (or the reverse) is not evidence.
+type AppliedEntity struct {
+	EntityType string `json:"entityType"`
+	EntityID   string `json:"entityId"`
+}
+
+// Valid reports whether e carries both halves of the evidence.
+func (e *AppliedEntity) Valid() bool {
+	return e != nil && strings.TrimSpace(e.EntityType) != "" && strings.TrimSpace(e.EntityID) != ""
+}
+
+// String renders the evidence as entityType/entityId.
+func (e *AppliedEntity) String() string {
+	if e == nil {
+		return ""
+	}
+	return e.EntityType + "/" + e.EntityID
+}
+
+// ErrAppliedNeedsEvidence is returned when a caller tries to move a finding to
+// StatusApplied without naming the entity it changed. Closing a finding without
+// having touched anything is what "accepted" and "dismissed" are for; silently
+// downgrading the request would hide the mistake.
+var ErrAppliedNeedsEvidence = errors.New("applied requires evidence: entityType+entityId")
 
 // ClosedStatus reports whether a finding is in a terminal/closed state, so a
 // fresh recurrence of it counts as a regression rather than normal accumulation
@@ -233,12 +266,40 @@ func (s *FindingStore) List(lensID string, channel Channel) []Finding {
 
 // SetStatus updates one finding's lifecycle status by id, stamping AppliedAt/
 // VerifiedAt from the supplied unix-seconds `at` when moving into those states.
-// Returns false when the id is absent.
-func (s *FindingStore) SetStatus(id string, status FindingStatus, at int64) (bool, error) {
+// applied is the evidence entity, mandatory for StatusApplied (see
+// ErrAppliedNeedsEvidence) and ignored otherwise. Returns false when the id is
+// absent.
+func (s *FindingStore) SetStatus(id string, status FindingStatus, at int64, applied *AppliedEntity) (bool, error) {
+	updated, err := s.SetStatusMany([]string{id}, status, at, applied)
+	if err != nil {
+		return false, err
+	}
+	return len(updated) > 0, nil
+}
+
+// SetStatusMany applies one status transition to several findings in a single
+// pass and ONE store rewrite (the per-id loop used to rewrite findings.jsonl
+// once per id). Returns the ids that actually existed, in store order; ids that
+// are absent are simply missing from the result, so the caller can report them.
+//
+// Moving to StatusApplied without valid evidence fails with
+// ErrAppliedNeedsEvidence and writes nothing — the transition is rejected, not
+// downgraded.
+func (s *FindingStore) SetStatusMany(ids []string, status FindingStatus, at int64, applied *AppliedEntity) ([]string, error) {
+	if status == StatusApplied && !applied.Valid() {
+		return nil, ErrAppliedNeedsEvidence
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			want[id] = true
+		}
+	}
+	var updated []string
 	for i := range s.items {
-		if s.items[i].ID != id {
+		if !want[s.items[i].ID] {
 			continue
 		}
 		s.items[i].Status = status
@@ -248,15 +309,19 @@ func (s *FindingStore) SetStatus(id string, status FindingStatus, at int64) (boo
 		switch status {
 		case StatusApplied:
 			s.items[i].AppliedAt = at
+			s.items[i].AppliedEntity = applied
 		case StatusVerified:
 			s.items[i].VerifiedAt = at
 		}
-		if err := writeFindings(s.path, s.items); err != nil {
-			return false, err
-		}
-		return true, nil
+		updated = append(updated, s.items[i].ID)
 	}
-	return false, nil
+	if len(updated) == 0 {
+		return nil, nil
+	}
+	if err := writeFindings(s.path, s.items); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 // Delete removes one finding by id, rewriting the store. Returns false when the

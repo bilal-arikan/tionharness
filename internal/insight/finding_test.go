@@ -1,6 +1,10 @@
 package insight
 
-import "testing"
+import (
+	"errors"
+	"path/filepath"
+	"testing"
+)
 
 func TestFindingUpsertDedupesBySignature(t *testing.T) {
 	root := t.TempDir()
@@ -81,7 +85,8 @@ func TestFindingSetStatus(t *testing.T) {
 	s, _ := OpenFindingStore(root)
 	f, _ := s.Upsert(Finding{LensID: "l", Channel: ChannelWorkspaceOpt, Signature: "s", Title: "t", LastSeen: 1})
 
-	ok, err := s.SetStatus(f.ID, StatusApplied, 999)
+	ev := &AppliedEntity{EntityType: "skill", EntityID: "tionharness-tool-discovery"}
+	ok, err := s.SetStatus(f.ID, StatusApplied, 999, ev)
 	if err != nil || !ok {
 		t.Fatalf("SetStatus: ok=%v err=%v", ok, err)
 	}
@@ -89,8 +94,58 @@ func TestFindingSetStatus(t *testing.T) {
 	if got.Status != StatusApplied || got.AppliedAt != 999 {
 		t.Fatalf("status not applied: %+v", got)
 	}
-	if ok, _ := s.SetStatus("nope", StatusDismissed, 1); ok {
+	if !got.AppliedEntity.Valid() || got.AppliedEntity.EntityID != "tionharness-tool-discovery" {
+		t.Fatalf("evidence not recorded: %+v", got.AppliedEntity)
+	}
+	if ok, _ := s.SetStatus("nope", StatusDismissed, 1, nil); ok {
 		t.Fatal("SetStatus on missing id should return false")
+	}
+}
+
+// The evidence gate: "applied" without a named entity is a claim nobody can
+// check, so it must fail loudly instead of being downgraded to accepted.
+func TestFindingAppliedRequiresEvidence(t *testing.T) {
+	root := t.TempDir()
+	s, _ := OpenFindingStore(root)
+	f, _ := s.Upsert(Finding{LensID: "l", Channel: ChannelWorkspaceOpt, Signature: "s", Title: "t", LastSeen: 1})
+
+	for _, ev := range []*AppliedEntity{nil, {EntityType: "skill"}, {EntityID: "x"}} {
+		if _, err := s.SetStatus(f.ID, StatusApplied, 5, ev); !errors.Is(err, ErrAppliedNeedsEvidence) {
+			t.Fatalf("evidence %+v: expected ErrAppliedNeedsEvidence, got %v", ev, err)
+		}
+	}
+	if got := s.List("", "")[0]; got.Status != StatusNew {
+		t.Fatalf("rejected transition must not change the status: %+v", got)
+	}
+	// accepted/dismissed stay free of the gate.
+	if ok, err := s.SetStatus(f.ID, StatusAccepted, 6, nil); err != nil || !ok {
+		t.Fatalf("accepted without evidence: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestFindingSetStatusMany(t *testing.T) {
+	s, _ := OpenFindingStore(t.TempDir())
+	a, _ := s.Upsert(Finding{LensID: "l", Signature: "a", Title: "a", LastSeen: 1})
+	b, _ := s.Upsert(Finding{LensID: "l", Signature: "b", Title: "b", LastSeen: 2})
+
+	updated, err := s.SetStatusMany([]string{a.ID, b.ID, "missing"}, StatusDismissed, 7, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated) != 2 {
+		t.Fatalf("expected 2 updated ids, got %v", updated)
+	}
+	for _, f := range s.List("", "") {
+		if f.Status != StatusDismissed {
+			t.Fatalf("finding %s not dismissed: %+v", f.ID, f)
+		}
+	}
+	// Reload from disk: one rewrite must have persisted both.
+	reloaded, _ := OpenFindingStore(filepath.Dir(filepath.Dir(s.path)))
+	for _, f := range reloaded.List("", "") {
+		if f.Status != StatusDismissed {
+			t.Fatalf("not persisted: %+v", f)
+		}
 	}
 }
 

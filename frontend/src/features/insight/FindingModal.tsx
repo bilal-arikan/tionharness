@@ -1,23 +1,58 @@
+import { useState } from 'react'
 import { Check, LayoutGrid, Trash2, X } from 'lucide-react'
-import type { InsightFinding } from '@/types'
+import type { AppliedEntity, InsightFinding } from '@/types'
 import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { ChannelBadge, SeverityBadge, RegressedBadge, StatusBadge } from './insightBadges'
 
 interface Props {
   f: InsightFinding
   onClose: () => void
-  onStatus: (id: string, status: string) => void
+  onStatus: (id: string, status: string, evidence?: AppliedEntity) => void
   onDelete: (id: string) => void
   onAddCard: (f: InsightFinding) => void
   onOpenSession: (sid: string) => void
+  /** Open with the "applied" evidence form focused (e.g. after a drag onto that column). */
+  focusApplied?: boolean
 }
+
+// Workspace entity kinds a fix can land on. Free-form on the wire; this list is
+// the guided set so evidence stays comparable across findings.
+const ENTITY_TYPES = [
+  'skill',
+  'agent',
+  'hook',
+  'automation',
+  'flow',
+  'schedule',
+  'mcp-server',
+  'task',
+  'other',
+]
+
+const fieldCls =
+  'rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm'
 
 // FindingModal is the click-through detail popup for one finding: full content
 // (root cause / proposed fix / file / evidence) plus the lifecycle + delete
 // actions. Mirrors the board's TaskFormModal role for the Insight kanban.
-export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpenSession }: Props) {
-  const act = (status: string) => {
-    onStatus(f.id, status)
+export function FindingModal({
+  f,
+  onClose,
+  onStatus,
+  onDelete,
+  onAddCard,
+  onOpenSession,
+  focusApplied,
+}: Props) {
+  const [entityType, setEntityType] = useState(f.appliedEntity?.entityType ?? '')
+  const [entityId, setEntityId] = useState(f.appliedEntity?.entityId ?? '')
+  const evidence: AppliedEntity | undefined =
+    entityType.trim() && entityId.trim()
+      ? { entityType: entityType.trim(), entityId: entityId.trim() }
+      : undefined
+
+  const act = (status: string, ev?: AppliedEntity) => {
+    onStatus(f.id, status, ev)
     onClose()
   }
   return (
@@ -95,6 +130,50 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
           </div>
         </div>
 
+        {/* Evidence for "applied" — mandatory, so it is collected before the action */}
+        <div
+          className={`space-y-1.5 border-t border-[var(--color-border)] px-3 pb-2 pt-2 ${
+            focusApplied ? 'bg-[var(--color-accent-soft)]' : ''
+          }`}
+        >
+          <div className="text-xs font-semibold text-[var(--color-text-dim)]">
+            Uygulama kanıtı (
+            <span className="font-normal">
+              &quot;Uygulandı&quot; için zorunlu — otomatik doğrulama buna bakar
+            </span>
+            )
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className={fieldCls}
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value)}
+              title="Değiştirdiğin varlık türü"
+            >
+              <option value="">Varlık türü…</option>
+              {ENTITY_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              className={`${fieldCls} min-w-52 flex-1`}
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+              placeholder="Varlık id'si (ör. tionharness-tool-discovery)"
+              autoFocus={focusApplied}
+            />
+          </div>
+          {!evidence && (
+            <div className="text-[11px] text-[var(--color-text-dim)]">
+              Varlık türü ve id'si dolmadan &quot;Uygulandı&quot; işaretlenemez: kanıtsız
+              &quot;uygulandı&quot; doğrulanamaz bir iddiadır.
+            </div>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] p-3">
           <button
@@ -104,8 +183,10 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
             <Check className="h-3.5 w-3.5" /> Kabul
           </button>
           <button
-            onClick={() => act('applied')}
-            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+            onClick={() => evidence && act('applied', evidence)}
+            disabled={!evidence}
+            title={evidence ? undefined : 'Önce uygulama kanıtını (varlık türü + id) gir'}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           >
             Uygulandı
           </button>

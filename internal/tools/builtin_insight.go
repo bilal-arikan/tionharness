@@ -25,18 +25,32 @@ func NewInsightApplyFindingTool(database *db.DB) InsightApplyFindingTool {
 func (InsightApplyFindingTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "insight_apply_finding",
-		Description: "Triage an insight finding by setting its status: \"new\" (untriaged), \"triaged\" (reviewed, " +
-			"not yet decided), \"accepted\" (you will act on it), \"dismissed\" (not worth acting on), \"applied\" " +
-			"(the proposed fix has been done) or \"verified\" (the fix is confirmed effective). Records the " +
-			"decision only — it does not mutate the workspace. " +
+		Description: "Triage one or more insight findings by setting their status: \"new\" (untriaged), " +
+			"\"triaged\" (reviewed, not yet decided), \"accepted\" (you will act on it), \"dismissed\" (not worth " +
+			"acting on), \"applied\" (the proposed fix has been done) or \"verified\" (the fix is confirmed " +
+			"effective). Records the decision only — it does not mutate the workspace itself. \"applied\" REQUIRES " +
+			"evidence: the entityType+entityId of the workspace entity you actually changed; without it the call " +
+			"fails (use \"accepted\" or \"dismissed\" for a decision you did not act on). " +
 			"Find ids with insight_list_findings.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "id":     { "type": "string", "description": "The finding id." },
-    "status": { "type": "string", "enum": ["new", "triaged", "accepted", "applied", "verified", "dismissed"], "description": "New lifecycle status." }
+    "id":     { "type": "string", "description": "The finding id. Use it alone, or together with ids." },
+    "ids":    { "type": "array", "items": { "type": "string" }, "description": "Several finding ids to set at once (same status and evidence for all)." },
+    "status": { "type": "string", "enum": ["new", "triaged", "accepted", "applied", "verified", "dismissed"], "description": "New lifecycle status." },
+    "applyCluster": { "type": "boolean", "description": "Also set every finding clustered with the given id(s) — the near-duplicates insight_list_findings collapses under one representative." },
+    "evidence": {
+      "type": "object",
+      "description": "The workspace entity you changed to apply the finding. Mandatory for status \"applied\".",
+      "properties": {
+        "entityType": { "type": "string", "description": "Entity kind you mutated, e.g. skill, agent, hook, automation." },
+        "entityId":   { "type": "string", "description": "Its id/slug, e.g. tionharness-tool-discovery." }
+      },
+      "required": ["entityType", "entityId"],
+      "additionalProperties": false
+    }
   },
-  "required": ["id", "status"],
+  "required": ["status"],
   "additionalProperties": false
 }`),
 	}
@@ -44,8 +58,11 @@ func (InsightApplyFindingTool) Def() providers.ToolDef {
 
 func (t InsightApplyFindingTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+		ID           string                 `json:"id"`
+		IDs          []string               `json:"ids"`
+		Status       string                 `json:"status"`
+		ApplyCluster bool                   `json:"applyCluster"`
+		Evidence     *insight.AppliedEntity `json:"evidence"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
 		return "", argErr(err)
@@ -54,18 +71,95 @@ func (t InsightApplyFindingTool) Call(ctx context.Context, input json.RawMessage
 	if !insight.ValidStatus(status) {
 		return "", fmt.Errorf("invalid status %q", args.Status)
 	}
+	ids := mergeFindingIDs(args.ID, args.IDs)
+	if len(ids) == 0 {
+		return "", fmt.Errorf("no finding id given: pass id and/or ids")
+	}
 	store, err := insight.OpenFindingStore(t.db.Root())
 	if err != nil {
 		return "", err
 	}
-	found, err := store.SetStatus(args.ID, status, time.Now().Unix())
+	if args.ApplyCluster {
+		ids = expandToClusters(store, ids)
+	}
+	updated, err := store.SetStatusMany(ids, status, time.Now().Unix(), args.Evidence)
 	if err != nil {
 		return "", err
 	}
-	if !found {
-		return "", fmt.Errorf("finding %q not found", args.ID)
+	if len(updated) == 0 {
+		return "", fmt.Errorf("finding(s) %s not found", strings.Join(ids, ", "))
 	}
-	return fmt.Sprintf("Finding %s set to %s.", args.ID, args.Status), nil
+	out := fmt.Sprintf("%d finding(s) set to %s: %s.", len(updated), args.Status, strings.Join(updated, ", "))
+	if missing := missingIDs(ids, updated); len(missing) > 0 {
+		out += fmt.Sprintf(" Not found: %s.", strings.Join(missing, ", "))
+	}
+	if args.Evidence.Valid() {
+		out += fmt.Sprintf(" Evidence: %s.", args.Evidence)
+	}
+	return out, nil
+}
+
+// mergeFindingIDs folds the singular id and the ids array into one deduplicated,
+// order-preserving list.
+func mergeFindingIDs(id string, ids []string) []string {
+	out := make([]string, 0, len(ids)+1)
+	seen := map[string]bool{}
+	for _, v := range append([]string{id}, ids...) {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+// expandToClusters adds, for every requested id, the other members of the display
+// cluster it belongs to (internal/insight/cluster.go) — the near-duplicates the
+// list view collapses under one representative, which describe the same root
+// cause and are therefore closed by the same fix.
+func expandToClusters(store *insight.FindingStore, ids []string) []string {
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	out := append([]string(nil), ids...)
+	for _, c := range insight.ClusterFindings(store.List("", "")) {
+		hit := false
+		for _, m := range c.Members {
+			if want[m.ID] {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			continue
+		}
+		for _, m := range c.Members {
+			if !want[m.ID] {
+				want[m.ID] = true
+				out = append(out, m.ID)
+			}
+		}
+	}
+	return out
+}
+
+// missingIDs returns the requested ids the store did not carry, so a partially
+// matching batch reports the gap instead of silently succeeding.
+func missingIDs(requested, updated []string) []string {
+	done := make(map[string]bool, len(updated))
+	for _, id := range updated {
+		done[id] = true
+	}
+	var missing []string
+	for _, id := range requested {
+		if !done[id] {
+			missing = append(missing, id)
+		}
+	}
+	return missing
 }
 
 // InsightScanner is the runtime capability the insight_scan tool delegates to.
@@ -279,6 +373,27 @@ func (t InsightFindingsTool) Call(ctx context.Context, input json.RawMessage) (s
 			if c.Size > 1 {
 				fmt.Fprintf(&b, " — +%d similar", c.Size-1)
 			}
+			if !args.Verbose {
+				continue
+			}
+			if f.RootCause != "" {
+				fmt.Fprintf(&b, "\n  cause: %s", f.RootCause)
+			}
+			if f.ProposedFix != "" {
+				fmt.Fprintf(&b, "\n  fix: %s", f.ProposedFix)
+			}
+			if f.FilePointer != "" {
+				fmt.Fprintf(&b, "\n  file: %s", f.FilePointer)
+			}
+			// The member ids matter in verbose mode: they are what you pass to
+			// insight_apply_finding (or reproduce with applyCluster) to close the
+			// whole cluster, and without them the representative hides them.
+			if c.Size > 1 {
+				fmt.Fprintf(&b, "\n  members: %s", strings.Join(clusterMemberIDs(c), ", "))
+			}
+		}
+		if !args.Verbose {
+			b.WriteString("\n\nSummary view — call again with verbose:true for root cause, proposed fix, file pointer and cluster member ids.")
 		}
 		return b.String(), nil
 	}
@@ -317,6 +432,16 @@ func (t InsightFindingsTool) Call(ctx context.Context, input json.RawMessage) (s
 		b.WriteString("\n\nSummary view — call again with verbose:true for root cause, proposed fix and file pointer.")
 	}
 	return b.String(), nil
+}
+
+// clusterMemberIDs lists every id in a cluster, representative first (it is
+// Members[0] by construction).
+func clusterMemberIDs(c insight.Cluster) []string {
+	out := make([]string, 0, len(c.Members))
+	for _, m := range c.Members {
+		out = append(out, m.ID)
+	}
+	return out
 }
 
 // regressedMark returns a compact marker for a regressed finding (a closed issue

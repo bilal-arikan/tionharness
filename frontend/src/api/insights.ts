@@ -1,5 +1,6 @@
 // Retrospective session scanning (Insight, _Docs/60) — workspace-scoped.
 import type {
+  AppliedEntity,
   InsightLens,
   InsightFinding,
   InsightSettings,
@@ -38,10 +39,14 @@ export const insightApi = {
     return req<InsightFinding[]>(`/api/insight/findings${q ? `?${q}` : ''}`)
   },
 
-  setInsightFindingStatus: (id: string, status: string) =>
+  // status 'applied' additionally requires evidence — the workspace entity that
+  // was actually changed. The backend rejects it with 400 "applied requires
+  // evidence: entityType+entityId" when it is missing or half-filled, so callers
+  // must collect it before offering the action.
+  setInsightFindingStatus: (id: string, status: string, evidence?: AppliedEntity) =>
     req<{ result: string; status: string }>(`/api/insight/findings/${id}/status`, {
       method: 'POST',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(evidence ? { status, evidence } : { status }),
     }),
 
   deleteInsightFinding: (id: string) =>

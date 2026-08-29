@@ -257,8 +257,42 @@ graph TD
   "signature": "...", "title": "...", "rootCause": "...",
   "evidenceSessionIds": ["..."], "occurrences": 1, "severity": "low|med|high",
   "proposedFix": "...", "filePointer": "internal/...", "status": "new",
-  "appliedAt": 0, "verifiedAt": 0 }
+  "appliedAt": 0, "verifiedAt": 0,
+  "appliedEntity": { "entityType": "skill", "entityId": "tionharness-tool-discovery" } }
 ```
+
+**Kanıt kapısı (`appliedEntity`).** `applied` statüsü "okudum, katılıyorum" demek
+değildir: bir workspace varlığının gerçekten değiştirildiğini iddia eder. Bu yüzden
+`SetStatusMany` (dolayısıyla `SetStatus`, `insight_apply_finding` ve
+`POST /api/insight/findings/{id}/status`) `applied` geçişini **kanıtsız reddeder** —
+`ErrAppliedNeedsEvidence` ("applied requires evidence: entityType+entityId"), API'de
+`400`. Sessizce `accepted`'a düşürme yoktur; karar eylemsizse zaten `accepted` ya da
+`dismissed` kullanılır (bu ikisi kanıt istemez).
+
+### Geriye dönük kayıtlar (kanıtsız `applied`)
+
+Kanıt kapısı **yalnız yeni geçişlere** uygulanır. Kural devreye girmeden önce
+`applied` işaretlenmiş kayıtlarda `appliedEntity` yoktur ve bunlar diskte olduğu
+gibi durur (ör. WS5 store'unda 18 kayıt: `<store>/insight/findings.jsonl`).
+
+**Kod davranışı değiştirilmedi; tek seferlik migrasyon da yazılmadı.** Sonucu net
+olarak şudur:
+
+- `verifiable()` (`internal/insight/maintain.go`) `appliedEntity` geçersizse
+  `false` döner → bu kayıtlar **hiçbir zaman auto-verify olmaz**.
+- `Maintain` prune'u yalnız `dismissed`/`verified` kayıtları siler → bu kayıtlar
+  **prune de edilmez**.
+- Yani kanıtsız eski `applied` kayıtlar, elle dokunulmadıkça `Uygulandı`
+  kolonunda süresiz asılı kalır. Bu bir hata değil, bilinçli sonuçtur: sistem
+  doğrulayamadığı bir "uygulandı" iddiasını kendiliğinden kapatmaz.
+
+**Önerilen elle aksiyon** (bulgu başına, Insight panosundan):
+
+1. Fix gerçekten uygulandıysa → bulgu kartını aç, uygulama kanıtını (varlık türü +
+   id) gir ve tekrar **Uygulandı** işaretle. Kayıt artık `appliedAt` + `appliedEntity`
+   ile yazılır ve auto-verify hattına girer.
+2. Fix uygulanmadıysa veya artık geçersizse → **Yoksay** (`dismissed`). Böylece
+   normal prune eşiğine (`pruneDays`) takılıp temizlenir.
 
 ```mermaid
 stateDiagram-v2
@@ -345,6 +379,10 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
   (PUT sonrası otomatik tarama cron'u anında re-arm edilir)
   - `scanSinceDays` — sadece son N günde aktif oturumları tara (0 = tüm geçmiş); eski oturum gürültüsünü keser.
   - `autoVerifyDays` / `pruneDays` — bulgu bakımı eşikleri (0 = varsayılan 14 / 45 gün): applied bulgu N gün nüksetmezse auto-verify; dismissed/verified bulgu N gün dokunulmazsa silinir (`maintain.go`).
+    Auto-verify **yalnız yaşa bakmaz** (bkz. §"Kanıt kapısı"): bulgunun `appliedEntity` + `appliedAt`
+    alanları dolu olmalı ve ledger'da kanıt oturumlarından en az biri `scannedAt > appliedAt` ile
+    yeniden taranmış olmalıdır (`Ledger.ScannedAfter`, `Maintain(..., scans ScanEvidence)`). Kimse
+    yeniden bakmadıysa bulgu `applied` kalır — "nüksetmedi" ile "kimse bakmadı" karıştırılmaz.
   - `autoScanAgentId` — analiz ajanı (manuel + cron): seçili ajan KENDİ provider+model'iyle çalışır. Soyut "varsayılan" seçeneği yoktur; UI açılışta boşsa mevcut **ilk ajanı** otomatik seçer (picker clearable değil). Kayıtlı değer boşsa backend yine ilk ajana (ucuz başlık modeliyle) düşer.
 - `POST /api/insight/findings/{id}/status` — bulgu statü geçişi (triage) ✅
 - `DELETE /api/insight/findings/{id}` — bulguyu kalıcı siler (`FindingStore.Delete`; dismiss'ten farklı) ✅
@@ -613,7 +651,14 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
       `Regressed`+`RegressedAt` işaretlenir; `SetStatus` yeni kararda temizler. Backlog + panel + tool "⚠REGRESSED" gösterir.
 - [x] **Kompozit öncelik skoru** (`priority.go`): `severity×occurrences` + regresyon bonusu − kapalı cezası;
       `List` artık tarihe değil skora göre sıralı → 100-bulgu triage'ı kullanılır.
-- [x] **GC + auto-verify** (`maintain.go`): applied bulgu 14 gün nüksetmezse `verified`; dismissed/verified 45 günde prune. Scan sonrası çağrılır.
+- [x] **GC + auto-verify** (`maintain.go`): applied bulgu 14 gün nüksetmez **ve** kanıtı varsa
+      (`appliedEntity` + `appliedAt` + ledger'da `scannedAt > appliedAt`) `verified`; dismissed/verified
+      45 günde prune. Scan sonrası ledger `ScanEvidence` olarak verilerek çağrılır.
+- [x] **Apply kanıt kapısı + toplu triage** (`finding.go`, `builtin_insight.go`): `applied` için
+      `evidence` (entityType+entityId) zorunlu, kanıtsız çağrı hata döner; `insight_apply_finding`
+      artık `ids` dizisi ve `applyCluster` (temsilcinin kümesindeki üyeleri de kapatır) kabul eder ve
+      tek dosya yazımıyla `SetStatusMany` üzerinden yürür. `insight_list_findings cluster:true`
+      `verbose:true` ile temsilcinin cause/fix/file satırlarını ve küme üye id'lerini basar.
 - [x] **Semantik dedup** iki katman: ingest'te kanonik-imza birleştirme (`dedup.go` `canonSig`) +
       görüntüleme-zamanı lexical kümeleme (`cluster.go` token-Jaccard, `insight_list_findings cluster:true`).
 - [x] **Lens'ten bağımsız birleştirme** (`dedup.go` `canonTopic`): aynı kök neden birden çok lens

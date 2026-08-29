@@ -51,6 +51,15 @@ lessons store automatically and ride future turns.
    asks you to actually *implement* a fix, do that with your normal tools (edit a
    skill, a CLAUDE.md note, app code) and then mark the finding `applied`.
 
+   `applied` requires **evidence**: pass `evidence` with the `entityType` and
+   `entityId` you changed (e.g. `{"entityType":"skill","entityId":"tionharness-insight"}`).
+   Without it the call fails — a decision you did not act on is `accepted` or
+   `dismissed`, never `applied`.
+
+   To close several findings at once, pass `ids` (a list), or pass one `id` with
+   `applyCluster: true` to also close the near-duplicates clustered with it.
+   `insight_list_findings` with `cluster:true, verbose:true` prints those member ids.
+
 ## Automation
 
 **A scan session is tagged `insight-scan`** and fires the turn-finished signal when it

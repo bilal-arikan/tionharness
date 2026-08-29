@@ -36,7 +36,7 @@ func seedFindings(t *testing.T) (*db.DB, string) {
 		LensID: "context-hygiene", Channel: insight.ChannelWorkspaceOpt, Signature: "sigB",
 		Title: "Old thing", LastSeen: 2,
 	})
-	if _, err := store.SetStatus(other.ID, insight.StatusDismissed, 3); err != nil {
+	if _, err := store.SetStatus(other.ID, insight.StatusDismissed, 3, nil); err != nil {
 		t.Fatalf("set status: %v", err)
 	}
 	return database, f.ID
@@ -174,4 +174,124 @@ func TestInsightApplyFindingSetsStatus(t *testing.T) {
 	if _, err := tool.Call(context.Background(), json.RawMessage(`{"id":"`+newID+`","status":"bogus"}`)); err == nil {
 		t.Fatal("an invalid status should error")
 	}
+	// No id at all must error rather than touching everything.
+	if _, err := tool.Call(context.Background(), json.RawMessage(`{"status":"accepted"}`)); err == nil {
+		t.Fatal("a call without id/ids should error")
+	}
+}
+
+// TestInsightApplyFindingEvidenceGate proves "applied" is refused without the
+// entity evidence and accepted with it — and that the refusal leaves the status
+// untouched instead of quietly downgrading it.
+func TestInsightApplyFindingEvidenceGate(t *testing.T) {
+	database, newID := seedFindings(t)
+	tool := NewInsightApplyFindingTool(database)
+
+	_, err := tool.Call(context.Background(), json.RawMessage(`{"id":"`+newID+`","status":"applied"}`))
+	if err == nil || !strings.Contains(err.Error(), "applied requires evidence") {
+		t.Fatalf("applied without evidence must fail with the evidence error, got %v", err)
+	}
+	store, _ := insight.OpenFindingStore(database.Root())
+	if got := findByID(t, store, newID); got.Status == insight.StatusApplied {
+		t.Fatalf("a refused transition must not be persisted: %+v", got)
+	}
+
+	out, err := tool.Call(context.Background(), json.RawMessage(
+		`{"id":"`+newID+`","status":"applied","evidence":{"entityType":"skill","entityId":"tionharness-tool-discovery"}}`))
+	if err != nil {
+		t.Fatalf("applied with evidence: %v", err)
+	}
+	if !strings.Contains(out, "skill/tionharness-tool-discovery") {
+		t.Fatalf("the result should echo the evidence: %s", out)
+	}
+	store, _ = insight.OpenFindingStore(database.Root())
+	got := findByID(t, store, newID)
+	if got.Status != insight.StatusApplied || !got.AppliedEntity.Valid() {
+		t.Fatalf("evidence not persisted: %+v", got)
+	}
+}
+
+// TestInsightApplyFindingIDsAndCluster covers the batch (ids) and applyCluster
+// paths: several ids in one call, and one id closing its near-duplicates.
+func TestInsightApplyFindingIDsAndCluster(t *testing.T) {
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	store, err := insight.OpenFindingStore(database.Root())
+	if err != nil {
+		t.Fatalf("open findings: %v", err)
+	}
+	// Two lexically near-identical findings (one cluster) + one unrelated.
+	a, _ := store.Upsert(insight.Finding{LensID: "l", Channel: insight.ChannelWorkspaceOpt, Signature: "s1",
+		Title: "a disabled tool was offered to the model", RootCause: "registry advertises disabled tools", LastSeen: 3})
+	b, _ := store.Upsert(insight.Finding{LensID: "l2", Channel: insight.ChannelWorkspaceOpt, Signature: "s2",
+		Title: "a disabled tool was offered to the model again", RootCause: "registry advertises disabled tools", LastSeen: 2})
+	c, _ := store.Upsert(insight.Finding{LensID: "l3", Channel: insight.ChannelWorkspaceOpt, Signature: "s3",
+		Title: "skills never loaded before use", RootCause: "prompt omits the skill step", LastSeen: 1})
+	tool := NewInsightApplyFindingTool(database)
+
+	// ids: explicit batch.
+	out, err := tool.Call(context.Background(), json.RawMessage(`{"ids":["`+a.ID+`","`+c.ID+`"],"status":"triaged"}`))
+	if err != nil {
+		t.Fatalf("batch apply: %v", err)
+	}
+	if !strings.Contains(out, a.ID) || !strings.Contains(out, c.ID) {
+		t.Fatalf("both ids should be reported: %s", out)
+	}
+	store, _ = insight.OpenFindingStore(database.Root())
+	if findByID(t, store, b.ID).Status == insight.StatusTriaged {
+		t.Fatal("an id outside the batch must not be touched")
+	}
+
+	// applyCluster: a alone closes b too, but not the unrelated c.
+	if _, err := tool.Call(context.Background(), json.RawMessage(
+		`{"id":"`+a.ID+`","status":"dismissed","applyCluster":true}`)); err != nil {
+		t.Fatalf("cluster apply: %v", err)
+	}
+	store, _ = insight.OpenFindingStore(database.Root())
+	if findByID(t, store, b.ID).Status != insight.StatusDismissed {
+		t.Fatal("applyCluster must also close the clustered duplicate")
+	}
+	if findByID(t, store, c.ID).Status == insight.StatusDismissed {
+		t.Fatal("applyCluster must not reach an unrelated finding")
+	}
+}
+
+// TestInsightListFindingsClusterVerbose proves the cluster branch honors verbose:
+// detail lines plus the member ids you need to close the whole cluster.
+func TestInsightListFindingsClusterVerbose(t *testing.T) {
+	database, newID := seedFindings(t)
+	tool := NewInsightFindingsTool(database)
+
+	compact, err := tool.Call(context.Background(), json.RawMessage(`{"cluster":true}`))
+	if err != nil {
+		t.Fatalf("cluster list: %v", err)
+	}
+	if strings.Contains(compact, "cause:") {
+		t.Fatalf("cluster summary mode must stay one line per cluster:\n%s", compact)
+	}
+
+	verbose, err := tool.Call(context.Background(), json.RawMessage(`{"cluster":true,"verbose":true}`))
+	if err != nil {
+		t.Fatalf("cluster list verbose: %v", err)
+	}
+	for _, want := range []string{newID, "cause: registry advertises a disabled tool", "fix: filter tool list", "file: internal/tools/registry.go"} {
+		if !strings.Contains(verbose, want) {
+			t.Fatalf("verbose cluster output must contain %q:\n%s", want, verbose)
+		}
+	}
+}
+
+// findByID returns one finding from the store, failing the test when absent.
+func findByID(t *testing.T, store *insight.FindingStore, id string) insight.Finding {
+	t.Helper()
+	for _, f := range store.List("", "") {
+		if f.ID == id {
+			return f
+		}
+	}
+	t.Fatalf("finding %s not found", id)
+	return insight.Finding{}
 }
