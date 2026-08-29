@@ -196,20 +196,21 @@ func (d *DB) dir(parts ...string) string {
 func (d *DB) Root() string { return d.root }
 
 const (
-	dirAgents       = "agents"
-	dirSessions     = "sessions"
-	dirTasks        = "tasks"
-	dirSchedules    = "schedules"
-	dirMCP          = "mcp-servers"
-	dirFlows        = "flows"
-	dirFlowRuns     = "flow-runs"
-	dirSessionAsks  = "session-asks"
-	dirAutomations  = "automations"
-	dirArtifacts    = "artifacts"
-	dirRender       = "render" // per-session render_template output (transient, swept)
-	dirHooks        = "hooks"
-	dirUsage        = "usage"
-	dirSessionUsage = "session-usage"
+	dirAgents             = "agents"
+	dirSessions           = "sessions"
+	dirTasks              = "tasks"
+	dirSchedules          = "schedules"
+	dirMCP                = "mcp-servers"
+	dirFlows              = "flows"
+	dirFlowRuns           = "flow-runs"
+	dirFlowRunStateDeltas = "flow-run-state-deltas"
+	dirSessionAsks        = "session-asks"
+	dirAutomations        = "automations"
+	dirArtifacts          = "artifacts"
+	dirRender             = "render" // per-session render_template output (transient, swept)
+	dirHooks              = "hooks"
+	dirUsage              = "usage"
+	dirSessionUsage       = "session-usage"
 )
 
 // countersFile stores the per-entity id sequence at the workspace store root.
@@ -432,6 +433,11 @@ func (d *DB) load() error {
 	// mirroring ListRunningFlowRuns.
 	var runningFlowRuns int64
 	for _, r := range flowRuns {
+		materialized, err := d.materializeFlowRunState(r.ID, r.State)
+		if err != nil {
+			return err
+		}
+		r.State = materialized
 		d.flowRuns[r.ID] = r
 		if r.Status == FlowRunning {
 			runningFlowRuns++

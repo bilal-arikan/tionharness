@@ -2,7 +2,13 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 )
 
@@ -120,6 +126,11 @@ func (d *DB) persistFlowRunLocked(prev string, r FlowRun) error {
 	if err := dbPersistLocked(d, d.flowRuns, dirFlowRuns, r.ID, r); err != nil {
 		return err
 	}
+	// Checkpoint first, cleanup second: a crash can leave a detectable stale
+	// journal, but can never leave deltas without their checkpoint.
+	if err := d.deleteFlowRunStateDeltasLocked(r.ID); err != nil {
+		return err
+	}
 	d.applyFlowRunDelta(prev, r.Status)
 	return nil
 }
@@ -141,7 +152,195 @@ func (d *DB) applyFlowRunDelta(prev, next string) {
 func (d *DB) deleteFlowRunLocked(r FlowRun) {
 	delete(d.flowRuns, r.ID)
 	_ = removeFile(d.dir(dirFlowRuns, r.ID+".json"))
+	_ = d.deleteFlowRunStateDeltasLocked(r.ID)
 	d.applyFlowRunDelta(r.Status, "")
+}
+
+func flowStateCheckpointID(state string) string {
+	sum := sha256.Sum256([]byte(state))
+	return hex.EncodeToString(sum[:])
+}
+
+func (d *DB) flowRunDeltaDir(id string) string { return d.dir(dirFlowRunStateDeltas, id) }
+
+func (d *DB) deleteFlowRunStateDeltasLocked(id string) error {
+	err := os.RemoveAll(d.flowRunDeltaDir(id))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+func (d *DB) loadFlowRunStateDeltas(id string) ([]FlowRunStateDelta, error) {
+	entries, err := os.ReadDir(d.flowRunDeltaDir(id))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+			files = append(files, entry.Name())
+		}
+	}
+	sort.Strings(files)
+	deltas := make([]FlowRunStateDelta, 0, len(files))
+	for _, name := range files {
+		data, err := os.ReadFile(filepath.Join(d.flowRunDeltaDir(id), name))
+		if err != nil {
+			return nil, err
+		}
+		var delta FlowRunStateDelta
+		if err := json.Unmarshal(data, &delta); err != nil {
+			return nil, fmt.Errorf("flow run %s delta %s: %w", id, name, err)
+		}
+		deltas = append(deltas, delta)
+	}
+	return deltas, nil
+}
+
+func applyFlowRunStateDelta(state string, deltas []FlowRunStateDelta) (string, error) {
+	if len(deltas) == 0 {
+		return state, nil
+	}
+	checkpointID := flowStateCheckpointID(state)
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(state), &document); err != nil {
+		return "", err
+	}
+	for i, delta := range deltas {
+		expected := uint64(i + 1)
+		if delta.Version != FlowRunStateDeltaVersion {
+			return "", fmt.Errorf("unsupported delta version %d", delta.Version)
+		}
+		if delta.CheckpointID != checkpointID {
+			return "", fmt.Errorf("delta checkpoint mismatch: got %q want %q", delta.CheckpointID, checkpointID)
+		}
+		if delta.Sequence != expected {
+			return "", fmt.Errorf("delta sequence %d, want %d", delta.Sequence, expected)
+		}
+		for key, value := range delta.Scalars {
+			document[key] = value
+		}
+		var outputs map[string]string
+		if raw := document["outputs"]; len(raw) > 0 {
+			if err := json.Unmarshal(raw, &outputs); err != nil {
+				return "", err
+			}
+		}
+		if outputs == nil {
+			outputs = map[string]string{}
+		}
+		for key, value := range delta.OutputsUpsert {
+			outputs[key] = value
+		}
+		for _, key := range delta.OutputsDelete {
+			delete(outputs, key)
+		}
+		if len(delta.OutputsUpsert) > 0 || len(delta.OutputsDelete) > 0 {
+			document["outputs"], _ = json.Marshal(outputs)
+		}
+		for key, tail := range map[string][]json.RawMessage{"trace": delta.TraceAppend, "thread": delta.ThreadAppend} {
+			if len(tail) == 0 {
+				continue
+			}
+			var values []json.RawMessage
+			if raw := document[key]; len(raw) > 0 {
+				if err := json.Unmarshal(raw, &values); err != nil {
+					return "", err
+				}
+			}
+			values = append(values, tail...)
+			document[key], _ = json.Marshal(values)
+		}
+		if delta.Spawned != nil {
+			document["spawned"] = delta.Spawned
+		}
+	}
+	data, err := json.Marshal(document)
+	return string(data), err
+}
+
+func (d *DB) materializeFlowRunState(id, checkpoint string) (string, error) {
+	deltas, err := d.loadFlowRunStateDeltas(id)
+	if err != nil {
+		return "", err
+	}
+	state, err := applyFlowRunStateDelta(checkpoint, deltas)
+	if err != nil {
+		return "", fmt.Errorf("materialize flow run %s: %w", id, err)
+	}
+	return state, nil
+}
+
+// FlowRunStateJournalInfo returns the immutable checkpoint identity and the
+// last durable sequence. Callers use it to continue a journal after restart.
+func (d *DB) FlowRunStateJournalInfo(ctx context.Context, id string) (string, uint64, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if _, ok := d.flowRuns[id]; !ok {
+		return "", 0, ErrNotFound
+	}
+	data, err := os.ReadFile(d.dir(dirFlowRuns, id+".json"))
+	if err != nil {
+		return "", 0, err
+	}
+	var checkpoint FlowRun
+	if err := json.Unmarshal(data, &checkpoint); err != nil {
+		return "", 0, err
+	}
+	deltas, err := d.loadFlowRunStateDeltas(id)
+	if err != nil {
+		return "", 0, err
+	}
+	if _, err := applyFlowRunStateDelta(checkpoint.State, deltas); err != nil {
+		return "", 0, err
+	}
+	return flowStateCheckpointID(checkpoint.State), uint64(len(deltas)), nil
+}
+
+// AppendFlowRunStateDelta atomically adds one ordered sidecar and updates the
+// in-memory materialized State exposed to all DB/API readers.
+func (d *DB) AppendFlowRunStateDelta(ctx context.Context, id string, delta FlowRunStateDelta) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return ErrNotFound
+	}
+	deltas, err := d.loadFlowRunStateDeltas(id)
+	if err != nil {
+		return err
+	}
+	checkpointData, err := os.ReadFile(d.dir(dirFlowRuns, id+".json"))
+	if err != nil {
+		return err
+	}
+	var checkpoint FlowRun
+	if err := json.Unmarshal(checkpointData, &checkpoint); err != nil {
+		return err
+	}
+	if delta.Sequence != uint64(len(deltas)+1) {
+		return fmt.Errorf("delta sequence %d, want %d", delta.Sequence, len(deltas)+1)
+	}
+	if delta.CheckpointID != flowStateCheckpointID(checkpoint.State) {
+		return fmt.Errorf("delta checkpoint mismatch")
+	}
+	all := append(deltas, delta)
+	materialized, err := applyFlowRunStateDelta(checkpoint.State, all)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(d.flowRunDeltaDir(id), fmt.Sprintf("%020d.json", delta.Sequence))
+	if err := atomicWriteJSON(path, delta); err != nil {
+		return err
+	}
+	r.State = materialized
+	r.UpdatedAt = now()
+	d.flowRuns[id] = r
+	return nil
 }
 
 // HasRunningFlowRuns reports, in O(1) and WITHOUT taking d.mu, whether any flow
