@@ -252,7 +252,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
                               type="button"
                               onClick={() => restore(w.workspaceId, a.name)}
                               disabled={isRestoring}
-                              className="rounded bg-[var(--color-danger)] px-2 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+                              className="rounded bg-[var(--color-danger)] px-2 py-1 text-[11px] font-medium text-[var(--color-on-danger)] hover:opacity-90 disabled:opacity-40"
                             >
                               {isRestoring ? 'Geri yükleniyor…' : 'Eminim, geri yükle'}
                             </button>
@@ -271,7 +271,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
                               type="button"
                               onClick={() => del(w.workspaceId, a.name)}
                               disabled={isDeleting}
-                              className="rounded bg-[var(--color-danger)] px-2 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+                              className="rounded bg-[var(--color-danger)] px-2 py-1 text-[11px] font-medium text-[var(--color-on-danger)] hover:opacity-90 disabled:opacity-40"
                             >
                               {isDeleting ? 'Siliniyor…' : 'Eminim, sil'}
                             </button>

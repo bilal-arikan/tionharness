@@ -2,6 +2,7 @@ import { useContext, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
   chromeFor,
+  nodeHeaderForeground,
   statusRing,
   START_TINT,
   END_TINT,
@@ -82,7 +83,7 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
       )}
       <div
         className="flex items-center gap-1.5 rounded-t-lg px-2 py-1 text-[11px] font-semibold"
-        style={{ background: chrome.accent, color: '#fff' }}
+        style={{ background: chrome.accent, color: nodeHeaderForeground(chrome.accent) }}
       >
         <chrome.Icon size={13} className="shrink-0" />
         <span className="truncate">{title || chrome.label}</span>

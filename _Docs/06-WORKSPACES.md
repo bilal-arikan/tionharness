@@ -42,15 +42,18 @@ Paket ayrıntısı: `_Docs/21-MARKET.md`; otomasyon davranışı:
 Görünüm ayarları artık **uygulama-geneli Ayarlar'da değil**, NavRail ▸ **Workspace**
 penceresinin **Görünüm** sekmesindedir (`WorkspaceView.tsx` sekmeleri: Genel ▸
 **Görünüm** ▸ Proje ▸ Promptlar & Dosyalar). Ayar **aktif workspace'e özeldir**:
-her workspace kendi tema paletini, temel modunu (koyu/açık/sistem) ve vurgu
-rengini (accent) saklar; **workspace değiştirince arayüz teması da değişir**.
+her workspace renk ailesi ile koyu/açık varyantı birlikte kodlayan tek bir
+`themePreset` seçimi saklar (ör. `violet-dark` veya `violet-light`);
+**workspace değiştirince arayüz teması da değişir**.
 
-- **Saklama:** `ws-settings.json` içinde `theme`/`accent`/`themePreset` alanları
+- **Saklama:** `ws-settings.json` içindeki `themePreset` alanı
   (`internal/workspace/settings.go` → `WSSettings`). Boş alan = **uygulama-geneli
-  görünümü miras alır** (`settings.json`'daki `theme`/`accent`/`themePreset`
-  varsayılan rolünü sürdürür).
-- **Çözümleme:** `frontend/src/shared/lib/theme.ts::resolveAppearance(ws, global)` her
-  alanı tek tek birleştirir (boş → global). `applyAppearance` belgeye uygular.
+  görünümü miras alır** (`settings.json`'daki `themePreset` varsayılan rolünü
+  sürdürür). `theme` ve `accent` yalnız geriye dönük uyumluluk için tutulan,
+  görünüm uygulamasında kullanılmayan eski alanlardır.
+- **Çözümleme:** `frontend/src/shared/lib/theme.ts::resolveAppearance(ws, global)`
+  workspace `themePreset` değeri boşsa global değeri seçer; `applyAppearance`
+  preset'in eksiksiz token paletini belgeye uygular.
 - **Uygulama akışı:** `App.tsx` global görünümü ve aktif workspace override'ını
   iki ref'te tutar; workspace değişiminde `GET /api/workspace-settings` ile
   override çekilip `applyResolvedTheme()` çağrılır. Global ayar kaydı (örn. Profil)

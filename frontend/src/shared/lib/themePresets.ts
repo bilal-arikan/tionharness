@@ -26,6 +26,7 @@ export interface PresetTokens {
   warning: string
   onWarning: string
   danger: string
+  onDanger: string
 }
 
 export interface ThemePreset {
@@ -55,6 +56,7 @@ type Neutrals = Pick<
   | 'warning'
   | 'onWarning'
   | 'danger'
+  | 'onDanger'
 >
 
 const DARK_NEUTRALS: Neutrals = {
@@ -72,6 +74,7 @@ const DARK_NEUTRALS: Neutrals = {
   warning: '#fbbf24',
   onWarning: '#000000',
   danger: '#f87171',
+  onDanger: '#000000',
 }
 
 const LIGHT_NEUTRALS: Neutrals = {
@@ -89,6 +92,7 @@ const LIGHT_NEUTRALS: Neutrals = {
   warning: '#a54a07',
   onWarning: '#ffffff',
   danger: '#b91c1c',
+  onDanger: '#ffffff',
 }
 
 // One entry per color family. Each carries the accent (+ soft selected-surface
@@ -164,6 +168,46 @@ const COLORS: ColorDef[] = [
     darkOnAccent: '#000000',
     lightAccent: '#3b7e93',
     lightSoft: '#d9eaf0',
+    lightOnAccent: '#ffffff',
+  },
+  {
+    id: 'cyan',
+    label: 'Camgöbeği',
+    darkAccent: '#22d3ee',
+    darkSoft: '#12343b',
+    darkOnAccent: '#000000',
+    lightAccent: '#0e7490',
+    lightSoft: '#d5f1f5',
+    lightOnAccent: '#ffffff',
+  },
+  {
+    id: 'lime',
+    label: 'Lime',
+    darkAccent: '#a3e635',
+    darkSoft: '#293817',
+    darkOnAccent: '#000000',
+    lightAccent: '#4d7c0f',
+    lightSoft: '#e6f2d1',
+    lightOnAccent: '#ffffff',
+  },
+  {
+    id: 'orange',
+    label: 'Turuncu',
+    darkAccent: '#fb923c',
+    darkSoft: '#3d2717',
+    darkOnAccent: '#000000',
+    lightAccent: '#c2410c',
+    lightSoft: '#f8e2d4',
+    lightOnAccent: '#ffffff',
+  },
+  {
+    id: 'fuchsia',
+    label: 'Fuşya',
+    darkAccent: '#e879f9',
+    darkSoft: '#38213e',
+    darkOnAccent: '#000000',
+    lightAccent: '#a21caf',
+    lightSoft: '#f3dcf5',
     lightOnAccent: '#ffffff',
   },
 ]

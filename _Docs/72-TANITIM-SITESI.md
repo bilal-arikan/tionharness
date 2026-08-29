@@ -154,7 +154,7 @@ cd ../../website && PUBLIC_FEED_URL=http://localhost:8080 npm run build && npm r
 | Site dosyası | Kaynağı |
 |---|---|
 | `src/styles/theme.css` | `frontend/src/index.css` (`@theme` token'ları) |
-| `src/content/themes.ts` | `frontend/src/shared/lib/themePresets.ts` (6 renk × açık/koyu) |
+| `src/content/themes.ts` | `frontend/src/shared/lib/themePresets.ts` (10 renk × açık/koyu) |
 
 Tailwind importu da uygulamadaki gibi **üç parçalıdır** (`theme.css` + `preflight.css` +
 `utilities.css`), çünkü Chrome 150 büyük bir `@layer` içindeki `@media` bildirimlerini

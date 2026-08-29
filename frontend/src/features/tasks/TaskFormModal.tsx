@@ -14,7 +14,7 @@ import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
 import { TaskArtifactRefs } from './TaskArtifactRefs'
 import { Button, ModalOverlay, toast } from '@/shared/components'
-import { normalizeAvatar } from '@/shared/lib/avatar'
+import { avatarForeground, normalizeAvatar } from '@/shared/lib/avatar'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 
 function parseDeps(raw: string): string[] {
@@ -347,7 +347,7 @@ export function TaskFormModal({
                       className="rounded-full px-2.5 py-1 text-xs transition"
                       style={
                         active
-                          ? { backgroundColor: p.color, color: '#fff' }
+                          ? { backgroundColor: p.color, color: avatarForeground(p.color) }
                           : {
                               backgroundColor: 'var(--color-surface-2)',
                               color: 'var(--color-text-dim)',

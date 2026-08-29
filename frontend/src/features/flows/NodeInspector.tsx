@@ -7,7 +7,7 @@ import {
   WORKFLOW_HELP,
 } from '@/shared/components/CoordinatorWorkflowPicker'
 import { Workflow } from 'lucide-react'
-import { chromeFor } from './nodeStyles'
+import { chromeFor, nodeHeaderForeground } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
 
 interface Props {
@@ -74,7 +74,7 @@ export function NodeInspector({
       <div className="flex items-center gap-2">
         <span
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
-          style={{ background: chrome.accent, color: '#fff' }}
+          style={{ background: chrome.accent, color: nodeHeaderForeground(chrome.accent) }}
         >
           <chrome.Icon size={14} />
         </span>

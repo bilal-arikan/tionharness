@@ -23,16 +23,13 @@ export const VISIBILITY_TIERS: {
     value: 'summary',
     label: 'Özet',
     hint: 'Katalogda isim + kısa özet görünür; tam şema gerektiğinde on-demand yüklenir.',
-    // Olive green chip so it no longer matches the "Tam" (success green) tier; the
-    // label text is orange for extra contrast.
-    color: '#6b8e23',
-    labelColor: '#f97316',
+    color: 'var(--color-info)',
   },
   {
     value: 'name-only',
     label: 'İsim',
     hint: 'Katalogda yalnız isim görünür (özet bastırılır); şema tool_search/activate_tools ile yüklenir.',
-    color: 'var(--color-warning,#d97706)',
+    color: 'var(--color-warning)',
   },
   {
     value: 'hidden',

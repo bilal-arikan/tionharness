@@ -5,6 +5,36 @@ import type { Node, Edge } from 'vis-network'
 import type { WorkspaceGraph, WorkspaceGraphEdge, WorkspaceNodeType, BoardColumnDef } from '@/types'
 import { avatarForeground } from '@/shared/lib/avatar'
 
+interface GraphTheme {
+  bg: string
+  surface: string
+  surface2: string
+  border: string
+  text: string
+  textDim: string
+  accent: string
+  onAccent: string
+}
+
+function graphTheme(): GraphTheme {
+  const styles = getComputedStyle(document.documentElement)
+  const color = (token: string): string => {
+    const value = styles.getPropertyValue(token).trim()
+    if (!value) throw new Error(`Missing graph theme token: ${token}`)
+    return value
+  }
+  return {
+    bg: color('--color-bg'),
+    surface: color('--color-surface'),
+    surface2: color('--color-surface-2'),
+    border: color('--color-border'),
+    text: color('--color-text'),
+    textDim: color('--color-text-dim'),
+    accent: color('--color-accent'),
+    onAccent: color('--color-on-accent'),
+  }
+}
+
 // Edge colors per workspace relationship kind, so the network reads at a glance.
 const EDGE_COLOR: Record<WorkspaceGraphEdge['kind'], string> = {
   owns: '#10b981', // emerald — agent owns task
@@ -173,7 +203,11 @@ const HIST_Y = 440
 // colColor (when provided) maps a board-column key → its configured color, so
 // task nodes pick up their column's hue instead of the hard-coded STATUS_COLOR
 // fallback (which only knows the five built-in statuses).
-function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, string>): Node {
+function nodeFor(
+  n: WorkspaceGraph['nodes'][number],
+  theme: GraphTheme,
+  colColor?: Map<string, string>,
+): Node {
   if (n.type === 'agent') {
     const c = n.color || '#7c3aed'
     // The agent's identity glyph is baked into the node image; label only
@@ -199,12 +233,12 @@ function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, stri
       size: 28,
       image: avatar,
       brokenImage: avatar,
-      color: { background: c, border: c, highlight: { background: c, border: '#fff' } },
+      color: { background: c, border: c, highlight: { background: c, border: theme.text } },
       font: {
-        color: 'var(--color-text)',
+        color: theme.text,
         size: 14,
         strokeWidth: 3,
-        strokeColor: 'var(--color-bg)',
+        strokeColor: theme.bg,
       },
     }
   }
@@ -275,11 +309,11 @@ function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, stri
       ]),
       shape: 'box',
       color: {
-        background: archived ? 'rgba(24,24,27,0.6)' : 'rgba(24,24,27,0.95)',
+        background: archived ? theme.surface : theme.surface2,
         border: c,
-        highlight: { background: '#27272a', border: c },
+        highlight: { background: theme.surface2, border: c },
       },
-      font: { color: archived ? '#a1a1aa' : '#d4d4d8', size: 11 },
+      font: { color: archived ? theme.textDim : theme.text, size: 11 },
       shapeProperties: { borderRadius: 6, borderDashes: archived ? [4, 3] : false },
       margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
     }
@@ -328,6 +362,7 @@ export function workspaceToVis(
   // Falls back to the static defaults when omitted.
   boardColumns?: BoardColumnDef[],
 ): VisData {
+  const theme = graphTheme()
   // Effective live-mode column anchors: user-defined when non-empty, else the
   // built-in defaults (a workspace with no saved columns degrades to the 5
   // standard statuses rather than going column-less).
@@ -354,7 +389,9 @@ export function workspaceToVis(
     graph.nodes.filter((n) => n.type === 'task').map((n) => [n.id, n.status]),
   )
 
-  const nodes: Node[] = graph.nodes.filter((n) => show(n.type)).map((n) => nodeFor(n, colColor))
+  const nodes: Node[] = graph.nodes
+    .filter((n) => show(n.type))
+    .map((n) => nodeFor(n, theme, colColor))
 
   const edges: Edge[] = []
   const addEdge = (kind: string, from: string, to: string, style: Partial<Edge>) => {
@@ -377,7 +414,7 @@ export function workspaceToVis(
         // physics:false (without `fixed`) → the solver never moves it, but the
         // user can still drag it and it stays put.
         physics: false,
-        color: { background: 'rgba(30,39,51,0.9)', border: col.color },
+        color: { background: theme.surface2, border: col.color },
         font: { color: col.color, size: 15, bold: { color: col.color } } as Node['font'],
         margin: { top: 8, bottom: 8, left: 14, right: 14 } as Node['margin'],
         widthConstraint: { minimum: 110 } as Node['widthConstraint'],
@@ -391,7 +428,7 @@ export function workspaceToVis(
         id: edgeId('col', t.id, col),
         from: t.id,
         to: col,
-        color: { color: '#334155', opacity: 0.5 },
+        color: { color: theme.border, opacity: 0.5 },
         width: 1,
         length: 150,
         dashes: true,
@@ -409,8 +446,8 @@ export function workspaceToVis(
         y: HIST_Y,
         physics: false, // immune to forces, but user-draggable
 
-        color: { background: 'rgba(30,39,51,0.7)', border: '#52525b' },
-        font: { color: '#a1a1aa', size: 13 } as Node['font'],
+        color: { background: theme.surface2, border: theme.border },
+        font: { color: theme.textDim, size: 13 } as Node['font'],
         margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
         widthConstraint: { minimum: 90 } as Node['widthConstraint'],
       })
@@ -421,7 +458,7 @@ export function workspaceToVis(
           id: edgeId('hist', n.id, HIST_ID),
           from: n.id,
           to: HIST_ID,
-          color: { color: '#3f3f46', opacity: 0.4 },
+          color: { color: theme.border, opacity: 0.4 },
           width: 0.8,
           // Long spring so the many archive cards fan out into a wide ring around
           // the anchor rather than piling onto the same spot.
@@ -464,8 +501,8 @@ export function workspaceToVis(
         x: IDLE_X,
         y: IDLE_Y,
         physics: false, // immune to forces, but user-draggable
-        color: { background: 'rgba(30,39,51,0.7)', border: '#475569' },
-        font: { color: '#94a3b8', size: 13 } as Node['font'],
+        color: { background: theme.surface2, border: theme.border },
+        font: { color: theme.textDim, size: 13 } as Node['font'],
         margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
         widthConstraint: { minimum: 90 } as Node['widthConstraint'],
       })
@@ -474,7 +511,7 @@ export function workspaceToVis(
           id: edgeId('idle', a.id, IDLE_ID),
           from: a.id,
           to: IDLE_ID,
-          color: { color: '#475569', opacity: 0.35 },
+          color: { color: theme.border, opacity: 0.35 },
           width: 1,
           // Wide spring so running instances spread around the "Çalışıyor" core
           // instead of stacking.
@@ -488,12 +525,12 @@ export function workspaceToVis(
     // Active bonds: agent → the task/flow it is running (or owns in_progress).
     for (const [agentId, target] of activeTarget) {
       addEdge('active', agentId, target, {
-        color: { color: 'var(--color-accent)', highlight: '#fff', opacity: 1 },
+        color: { color: theme.accent, highlight: theme.onAccent, opacity: 1 },
         width: 3,
         arrows: { to: { enabled: true, scaleFactor: 0.7 } },
         shadow: {
           enabled: true,
-          color: 'var(--color-accent)',
+          color: theme.accent,
           size: 12,
           x: 0,
           y: 0,
@@ -519,11 +556,11 @@ export function workspaceToVis(
         nd.borderWidth = 3
         nd.color = {
           background: (nd.color as { background?: string })?.background ?? '#7c3aed',
-          border: '#fff',
+          border: theme.text,
         }
         nd.shadow = {
           enabled: true,
-          color: 'var(--color-accent)',
+          color: theme.accent,
           size: 22,
           x: 0,
           y: 0,

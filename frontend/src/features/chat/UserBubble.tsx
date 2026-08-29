@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { Agent, Artifact, Attachment } from '@/types'
-import { resolveColor } from '@/shared/lib/avatar'
+import { avatarForeground, resolveColor } from '@/shared/lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
 import { Lightbox } from '@/shared/components'
 import { imageURL } from '@/shared/lib/attachments'
@@ -61,7 +61,7 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
         className="mx-0.5 rounded px-1 font-semibold"
         style={
           color
-            ? { backgroundColor: color, color: '#fff' }
+            ? { backgroundColor: color, color: avatarForeground(color) }
             : {
                 backgroundColor: 'color-mix(in srgb, var(--color-text) 18%, transparent)',
                 color: 'var(--color-text)',

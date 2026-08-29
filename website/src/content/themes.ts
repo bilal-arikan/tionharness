@@ -1,5 +1,5 @@
 /**
- * Mirrors frontend/src/shared/lib/themePresets.ts. Six colour families, each with
+ * Mirrors frontend/src/shared/lib/themePresets.ts. Ten colour families, each with
  * a dark and a light variant, sharing a constant neutral ramp -- switching a
  * colour only repaints the accent, never the canvas hue.
  *
@@ -58,4 +58,8 @@ export const themeColors: ThemeColor[] = [
   { id: 'rose', label: 'Rose', darkAccent: '#fb7185', darkSoft: '#3a1f29', lightAccent: '#e11d48', lightSoft: '#fbe0e6' },
   { id: 'amber', label: 'Amber', darkAccent: '#f59e0b', darkSoft: '#3a2a12', lightAccent: '#b45309', lightSoft: '#f7e6cf' },
   { id: 'nord', label: 'Nord', darkAccent: '#88c0d0', darkSoft: '#2b3d44', lightAccent: '#3b7e93', lightSoft: '#d9eaf0' },
+  { id: 'cyan', label: 'Cyan', darkAccent: '#22d3ee', darkSoft: '#12343b', lightAccent: '#0e7490', lightSoft: '#d5f1f5' },
+  { id: 'lime', label: 'Lime', darkAccent: '#a3e635', darkSoft: '#293817', lightAccent: '#4d7c0f', lightSoft: '#e6f2d1' },
+  { id: 'orange', label: 'Orange', darkAccent: '#fb923c', darkSoft: '#3d2717', lightAccent: '#c2410c', lightSoft: '#f8e2d4' },
+  { id: 'fuchsia', label: 'Fuchsia', darkAccent: '#e879f9', darkSoft: '#38213e', lightAccent: '#a21caf', lightSoft: '#f3dcf5' },
 ]

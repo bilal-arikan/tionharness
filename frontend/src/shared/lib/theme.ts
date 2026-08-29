@@ -18,6 +18,7 @@ function setPalette(root: HTMLElement, t: PresetTokens) {
   root.style.setProperty('--color-warning', t.warning)
   root.style.setProperty('--color-on-warning', t.onWarning)
   root.style.setProperty('--color-danger', t.danger)
+  root.style.setProperty('--color-on-danger', t.onDanger)
 }
 
 // applyTheme reflects the selected theme preset onto the document root so the CSS

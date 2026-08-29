@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, FlowNodeType } from '@/types'
+import { avatarForeground } from '@/shared/lib/avatar'
 import type { NodeStatus } from './flowGraph'
 
 // useIsEndNode reports whether a node is terminal (has no outgoing edge), so the
@@ -94,6 +95,10 @@ const CHROME: Record<string, NodeChrome> = {
 
 export function chromeFor(type: string): NodeChrome {
   return CHROME[type] ?? { accent: 'var(--color-border)', label: type, Icon: Circle }
+}
+
+export function nodeHeaderForeground(accent: string): string {
+  return accent.startsWith('#') ? avatarForeground(accent) : 'var(--color-on-accent)'
 }
 
 // statusRing returns an extra box-shadow style for a node's run status.
