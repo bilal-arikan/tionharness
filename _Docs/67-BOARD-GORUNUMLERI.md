@@ -1,6 +1,6 @@
 # 67 — Board Görünümleri: filtre çubuğu, gruplama ekseni ve kayıtlı görünümler
 
-> **Uygulandı.** Kanban panosunun üstüne bir *görünüm katmanı* eklendi: tek veri
+> **Uygulandı.** Kanban panosunun üstüne bir _görünüm katmanı_ eklendi: tek veri
 > kümesi, çok eksende gruplanabilen sütunlar, facet filtreleri ve workspace
 > başına kaydedilen görünüm önayarları.
 
@@ -9,12 +9,12 @@
 Kanban 30 kartta iyi, 300 kartta çöker. Sebep panonun kendisi değil, panonun
 **tek eksenli ve filtresiz** olmasıydı:
 
-| Eksik | Sonuç |
-|-------|-------|
-| Filtre yok | Her açılışta tüm workspace tek ekranda |
-| Tek gruplama ekseni (`boardState`) | "Hangi ajan neyle meşgul" sorusu panoda cevapsız |
-| `startDate` / `dueDate` / `progress` UI'da yok | Backend'in sakladığı alanlar ölü veri |
-| `dependencies` yalnızca rozet | Bloke işler görünmez |
+| Eksik                                          | Sonuç                                            |
+| ---------------------------------------------- | ------------------------------------------------ |
+| Filtre yok                                     | Her açılışta tüm workspace tek ekranda           |
+| Tek gruplama ekseni (`boardState`)             | "Hangi ajan neyle meşgul" sorusu panoda cevapsız |
+| `startDate` / `dueDate` / `progress` UI'da yok | Backend'in sakladığı alanlar ölü veri            |
+| `dependencies` yalnızca rozet                  | Bloke işler görünmez                             |
 
 Veri modeli zaten hazırdı (`db.Task`: `priority`, `tags`, `dueDate`,
 `dependencies`, `progress`). Eksik olan tek şey onları **eksen** olarak
@@ -49,15 +49,15 @@ kapatırdı.
 Facet'ler arası **AND**, facet içi **OR**. Boş dizi / boş string = facet pasif.
 `BoardFilter{}` her kartı eşler.
 
-| Facet | Tip | Not |
-|-------|-----|-----|
-| `text` | string | başlık + açıklama, alt-dize |
-| `priorities` | çoklu | `critical\|high\|medium\|low` |
-| `tags` | çoklu | serbest |
-| `agentIds` | çoklu | `"-"` = atanmamış (sentinel) |
-| `columns` | çoklu | `boardState` anahtarları |
-| `dues` | çoklu | `overdue\|today\|week\|none` |
-| `dep` | **tekil** | `blocked\|ready` |
+| Facet        | Tip       | Not                           |
+| ------------ | --------- | ----------------------------- |
+| `text`       | string    | başlık + açıklama, alt-dize   |
+| `priorities` | çoklu     | `critical\|high\|medium\|low` |
+| `tags`       | çoklu     | serbest                       |
+| `agentIds`   | çoklu     | `"-"` = atanmamış (sentinel)  |
+| `columns`    | çoklu     | `boardState` anahtarları      |
+| `dues`       | çoklu     | `overdue\|today\|week\|none`  |
+| `dep`        | **tekil** | `blocked\|ready`              |
 
 `dep` bilinçli olarak tekil: bir kartın "bloke" ve "hazır" olması aynı anda
 mümkün değil, dolayısıyla radyo düğmesi — çoklu seçim yanlış bir zihinsel model
@@ -71,19 +71,19 @@ yaptığı için "LOGIN" yazıldığında "Login" başlığı eşleşmiyordu. De
 küçültme ise ters yönde bozuk: `İ`→`i`+birleşik nokta, bu da "istanbul"u
 kaçırıyor. `foldForSearch()` her iki formu düz `i`'ye katlar — arama için
 noktalı/noktasız ayrımı anlamsız. Regresyon testi:
-`filterTasks.test.ts` › *treats dotted and dotless I as interchangeable*.
+`filterTasks.test.ts` › _treats dotted and dotless I as interchangeable_.
 
 ## Gruplama ekseni
 
 Asıl kaldıraç. Sütunlar sabit okunmak yerine eksenden **türetilir**:
 
-| Eksen | Sütunlar | Sürükleme neyi yazar |
-|-------|----------|----------------------|
-| `status` | workspace'in `boardColumns` listesi (aynen) | `boardState` |
-| `agent` | kart sahibi olan ajanlar + "Atanmamış" | `ownerAgentId` |
-| `priority` | Kritik→Düşük + "Önceliksiz" | `priority` |
-| `tag` | kullanılan etiketler + "Etiketsiz" | `tags` (ekler) |
-| `due` | Gecikmiş / Bugün / Bu hafta / Tarihsiz | — (reddedilir) |
+| Eksen      | Sütunlar                                    | Sürükleme neyi yazar |
+| ---------- | ------------------------------------------- | -------------------- |
+| `status`   | workspace'in `boardColumns` listesi (aynen) | `boardState`         |
+| `agent`    | kart sahibi olan ajanlar + "Atanmamış"      | `ownerAgentId`       |
+| `priority` | Kritik→Düşük + "Önceliksiz"                 | `priority`           |
+| `tag`      | kullanılan etiketler + "Etiketsiz"          | `tags` (ekler)       |
+| `due`      | Gecikmiş / Bugün / Bu hafta / Tarihsiz      | — (reddedilir)       |
 
 Türetilmiş eksenler yalnızca **dolu** sütunları üretir: 30 ajanlı bir
 workspace'te 4'ü kart sahibiyse 26 boş sütun çizilmez. "Değer yok" sütunu
@@ -101,7 +101,7 @@ Tanımlar `WSSettings.BoardViews` içinde, `BoardColumns` ile aynı desende: ayn
 
 **Hazır görünümler kaydedilmez** — istemci tarafında sabittir:
 Tümü · Bugün · Bloke · Ajansız · Gecikmiş. Bir hazır görünümü düzenleyip
-"Kaydet"e basmak her zaman *yeni* bir görünüm üretir.
+"Kaydet"e basmak her zaman _yeni_ bir görünüm üretir.
 
 ### Aktif görünüm neden ayarlarda değil?
 
@@ -117,7 +117,7 @@ bu durumda seçim sessizce "Tümü"ye düşer — türetilmiş, effect'siz.
 
 Üçü de "kullanıcı gördüğünün her şey olduğunu sanır" sınıfından:
 
-1. **Toplu seçim** — `orderedIds` artık yalnızca *görünen* kartlardan kurulur.
+1. **Toplu seçim** — `orderedIds` artık yalnızca _görünen_ kartlardan kurulur.
    Aksi hâlde Shift+Click aralığı ekranda olmayan kartları seçer ve toplu silme
    görünmeyen işi silerdi.
 2. **Sayaç** — filtre aktifken `12 / 87` gösterilir, sadece `12` değil.
@@ -152,21 +152,40 @@ kutu veya placeholder yok.
 
 Test: `frontend/src/features/tasks/cardImage.test.ts`.
 
+## Açılışta değişen kart vurgusu (TSK461)
+
+İlgili workspace'in Boards ekranı açık değilken SSE üzerinden gelen `board`
+olaylarının `taskId` değerleri workspace bazlı pending listede tutulur. Başka bir
+workspace'in Boards ekranının açık olması olayı görülmüş saymaz. Yalnız `create`, `update` ve `move`
+işlemleri kaydedilir; `delete` ile `columns_changed` kart vurgusu üretmez.
+
+`TaskBoard`, ilk başarılı task listesi yüklendiğinde kendi workspace'inin pending
+ID'lerini tek sefer tüketir ve yalnız hâlâ mevcut olan kartlarla kesişimi glow
+olarak gösterir. Vurgu pano açık kaldığı sürece korunur; ekrandan çıkıp Boards'u
+ikinci kez açınca pending liste boş olduğundan kaybolur. Tüketim ref ile korunur;
+React StrictMode'un çift effect kurulumu ilk sonucu boş kümeyle ezmez. Eski global
+`tionharness:board-last-seen-at` timestamp karşılaştırması kaldırıldı; böylece aynı
+saniyede gerçekleşen değişiklikler kaçmaz ve workspace'ler birbirini etkilemez.
+
+İlgili saf store ve regresyon testleri:
+`frontend/src/features/tasks/boardChangeHighlights.ts` ve
+`boardChangeHighlights.test.ts`.
+
 ## Dosyalar
 
-| Dosya | Rol |
-|-------|-----|
-| `internal/db/models_board_view.go` | `BoardFilter`, `BoardViewDef`, doğrulama |
-| `internal/workspace/settings.go` | `BoardViews` alanı + patch + apply |
-| `internal/api/workspace_settings.go` | DTO + 400 doğrulama + SSE yayını |
-| `frontend/src/features/tasks/views/boardViewTypes.ts` | hazır görünümler, etiketler, slug |
-| `.../views/filterTasks.ts` | facet değerlendirme, arama katlaması, sıralama, topo |
-| `.../views/deriveColumns.ts` | eksen → sütun, sürükleme → patch |
-| `.../views/useBoardView.ts` | seçim + düzenleme + kalıcılık |
-| `.../views/BoardFilterBar.tsx` | çubuk |
-| `.../views/FacetDropdown.tsx` | tek facet menüsü |
-| `.../views/SavedViewMenu.tsx` | görünüm seçici |
-| `.../cardImage.ts` | kartın önizleyeceği görsel artifact'ın seçimi (saf) |
+| Dosya                                                 | Rol                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| `internal/db/models_board_view.go`                    | `BoardFilter`, `BoardViewDef`, doğrulama             |
+| `internal/workspace/settings.go`                      | `BoardViews` alanı + patch + apply                   |
+| `internal/api/workspace_settings.go`                  | DTO + 400 doğrulama + SSE yayını                     |
+| `frontend/src/features/tasks/views/boardViewTypes.ts` | hazır görünümler, etiketler, slug                    |
+| `.../views/filterTasks.ts`                            | facet değerlendirme, arama katlaması, sıralama, topo |
+| `.../views/deriveColumns.ts`                          | eksen → sütun, sürükleme → patch                     |
+| `.../views/useBoardView.ts`                           | seçim + düzenleme + kalıcılık                        |
+| `.../views/BoardFilterBar.tsx`                        | çubuk                                                |
+| `.../views/FacetDropdown.tsx`                         | tek facet menüsü                                     |
+| `.../views/SavedViewMenu.tsx`                         | görünüm seçici                                       |
+| `.../cardImage.ts`                                    | kartın önizleyeceği görsel artifact'ın seçimi (saf)  |
 
 Testler: `filterTasks.test.ts`, `deriveColumns.test.ts` (saf fonksiyonlar),
 `models_board_view_test.go` (doğrulama).

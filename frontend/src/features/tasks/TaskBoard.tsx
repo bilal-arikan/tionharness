@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
-import { api } from '@/api'
+import { api, getActiveWorkspace } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Agent, Artifact, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
@@ -24,6 +24,7 @@ import { useBoardView } from './views/useBoardView'
 import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTasks'
 import { DROP_REFUSED_REASON, columnKeysOf, deriveColumns, dropPatch } from './views/deriveColumns'
 import { todayISO } from './views/filterTasks'
+import { consumePendingBoardChanges } from './boardChangeHighlights'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -47,10 +48,6 @@ function columnColor(color: string): string {
 // Current unix time in seconds, matching the backend's task timestamps — used
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
-
-// Persists across reloads/reopens (not just remounts) so a card someone else
-// moved while this tab was closed still glows the next time the board opens.
-const BOARD_LAST_SEEN_KEY = 'tionharness:board-last-seen-at'
 
 interface Props {
   agents: Agent[]
@@ -83,11 +80,11 @@ export function TaskBoard({ agents, onError }: Props) {
   // the active board. The backend excludes archived from the default list, so the
   // archived view asks for the full list (?archived=1) and keeps just the archived.
   const [showArchived, setShowArchived] = useState(false)
-  // Cards that changed since the board was last opened — glow until this
-  // TaskBoard instance unmounts (view switch), never on a timer. Computed once,
-  // from the first task load after mount, against BOARD_LAST_SEEN_KEY.
+  // Cards changed by SSE while Boards was closed — glow until this TaskBoard
+  // instance unmounts (view switch), never on a timer.
   const [recentlyChangedIds, setRecentlyChangedIds] = useState<Set<string>>(new Set())
   const glowComputedRef = useRef(false)
+  const [loadedSuccessfully, setLoadedSuccessfully] = useState(false)
 
   // Image artifacts only — the board needs them just to render card previews, so
   // it asks the server for that kind instead of pulling the whole artifact list.
@@ -104,7 +101,10 @@ export function TaskBoard({ agents, onError }: Props) {
   const reload = () =>
     api
       .listTasks(showArchived)
-      .then((list) => setTasks(showArchived ? list.filter((t) => t.archived) : list))
+      .then((list) => {
+        setTasks(showArchived ? list.filter((t) => t.archived) : list)
+        setLoadedSuccessfully(true)
+      })
       .catch((e) => onError(e.message))
       .finally(() => setLoading(false))
 
@@ -149,16 +149,19 @@ export function TaskBoard({ agents, onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardTick])
 
-  // Snapshot which cards changed since the board's last visit, exactly once
-  // per mount (glowComputedRef guards against boardTick's later reloads
-  // re-running this and picking up in-session moves as "changed since open").
+  // Consume pending SSE task ids after the first successful list load. The ref
+  // also prevents React StrictMode's repeated effect setup from consuming twice
+  // and replacing the first result with an empty set.
   useEffect(() => {
-    if (loading || glowComputedRef.current) return
+    if (!loadedSuccessfully || glowComputedRef.current) return
     glowComputedRef.current = true
-    const lastSeen = Number(localStorage.getItem(BOARD_LAST_SEEN_KEY) ?? '0')
-    setRecentlyChangedIds(new Set(tasks.filter((t) => t.updatedAt > lastSeen).map((t) => t.id)))
-    localStorage.setItem(BOARD_LAST_SEEN_KEY, String(nowSec()))
-  }, [loading, tasks])
+    const workspaceId = getActiveWorkspace()
+    if (!workspaceId) return
+    const pendingIds = consumePendingBoardChanges(workspaceId)
+    setRecentlyChangedIds(
+      new Set(tasks.filter((task) => pendingIds.has(task.id)).map((task) => task.id)),
+    )
+  }, [loadedSuccessfully, tasks])
 
   // Reload when switching between the active board and the archived view.
   useEffect(() => {

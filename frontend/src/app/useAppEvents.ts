@@ -19,6 +19,7 @@ import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import { publishWorkerChange, publishWorkerChangeAll } from '@/shared/lib/workerBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
+import { recordPendingBoardChange } from '@/features/tasks/boardChangeHighlights'
 
 export interface AppEventDeps {
   chat: ReturnType<typeof useChatStream>
@@ -84,6 +85,10 @@ export function handleAutonomousCompletion(
 // to the event's target (chat session, board, or logs). Reads the deps snapshot
 // refreshed each render, so it always sees current closures/state.
 function onEvent(d: AppEventDeps, e: AppEvent) {
+  // Card highlights are visit-based, not timestamp-based: remember task CRUD
+  // received while this window is not showing that workspace's Board.
+  recordPendingBoardChange(e, d.view === 'board' ? getActiveWorkspace() : null)
+
   // Application settings changed elsewhere — by an agent (update_settings) or
   // by another open window's Settings save: re-apply the client-side prefs
   // (theme/accent/notifications) live and signal the open Settings screen to
