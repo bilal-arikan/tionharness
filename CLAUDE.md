@@ -253,6 +253,16 @@ paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
   `--no-verify` kullanılmadıysa korur — hâlâ BOM'suz yazmak esas kuraldır.
 - **Harici araç isteyen testler `t.Skip` ile geçitlenir** (rg, python, node, claude CLI, ağ).
   Yeni bir testin böyle bir bağımlılığı varsa aynı deseni izle, yoksa CI kırılır.
+- **Arka plan goroutine'i başlatan test, dönmeden önce `drainSpawns(t, rt)` çağırmalı**
+  (`internal/agent/spawn_test.go`). Windows açık dosyayı silmeyi reddeder, bu yüzden
+  `t.TempDir()` temizliği hâlâ yazan bir goroutine'e denk gelirse test
+  `TempDir RemoveAll cleanup: ... Dizin boş değil` ile **rastgele** düşer (POSIX'te
+  görünmez). `spawnActive`'in sıfıra inmesi tek başına yetmez: bir worker'ın son işi
+  koordinatörünü bilgilendirmektir ve `NotifyCoordinator` → `drainCoordinator`'ı
+  **ayrı bir goroutine'de** başlatır; o sayaçta yer almaz. `drainSpawns` artık
+  `backgroundWorkPending()` ile koordinatör drain'ini ve oturum tur slotlarını da
+  bekler — `SpawnSession`, `ReportToCoordinator` veya `NotifyCoordinator` çağıran
+  her testin sonuna koy.
 - `-race` bu makinede CGO kapalı olduğu için koşmaz; CI (linux) koşar.
 
 ## internal/db dizin haritası

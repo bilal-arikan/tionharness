@@ -341,6 +341,11 @@ func TestOwesReportSurvivesRestart(t *testing.T) {
 	if pending, _ := rt.db.ListPendingCoordinatorReports(ctx); len(pending) != 0 {
 		t.Errorf("nothing should still be owed, got %d", len(pending))
 	}
+
+	// ReportToCoordinator notified the root, which started a coordinator drain in its
+	// own goroutine. Let it finish before the test returns, or its writes race the
+	// t.TempDir() cleanup and Windows fails RemoveAll on the still-open session file.
+	drainSpawns(t, rt)
 }
 
 // TestSettleBackstopReportsIncomplete verifies the backstop hands SOMETHING

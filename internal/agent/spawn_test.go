@@ -21,15 +21,67 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// drainSpawns waits for all fire-and-forget spawn goroutines to finish so the
-// t.TempDir() cleanup does not race their background writes (Windows locks the
-// session file while it is being written, failing RemoveAll).
+// drainSpawns waits for all fire-and-forget background goroutines to finish so the
+// t.TempDir() cleanup does not race their writes (Windows refuses to unlink a file
+// that is still open, failing RemoveAll — POSIX allows it, which is why this only
+// ever broke on Windows).
+//
+// spawnActive alone is NOT a sufficient barrier. A worker's last act is to notify
+// its coordinator, and NotifyCoordinator starts drainCoordinator in its OWN
+// goroutine, which is not counted by spawnActive: the worker goroutine then exits,
+// spawnActive drops to 0, the test returns, and the still-running coordinator turn
+// keeps writing to <tmp>/store/sessions/<coord>/ while RemoveAll walks it. Measured
+// directly: at the moment spawnActive hit 0, drainCoordinator was live and the
+// coordinator's turn slot was busy in 6 of 6 runs.
+//
+// So this also waits for every coordinator drain loop to stop driving and for the
+// per-session turn slots to clear.
 func drainSpawns(t *testing.T, rt *Runtime) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		if !rt.backgroundWorkPending() {
+			return
+		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	if rt.backgroundWorkPending() {
+		// Not fatal: the assertions have already run, and failing here would turn a
+		// slow machine into a red build. It IS worth reporting — a drain that never
+		// settles is the condition that makes cleanup flaky.
+		t.Logf("drainSpawns: background work still pending after 5s (spawnActive=%d queued=%d)",
+			rt.spawnActive.Load(), rt.spawnQueueLen())
+	}
+}
+
+// backgroundWorkPending reports whether any fire-and-forget goroutine that writes to
+// the store is still in flight: a spawn/worker turn, a queued spawn, or a coordinator
+// drain loop (which outlives the worker that armed it).
+func (r *Runtime) backgroundWorkPending() bool {
+	if r.spawnActive.Load() > 0 || r.spawnQueueLen() > 0 {
+		return true
+	}
+	pending := false
+	r.coordSlots.Range(func(key, value any) bool {
+		slot, ok := value.(*coordSlot)
+		if !ok {
+			return true
+		}
+		slot.mu.Lock()
+		busy := slot.driving || slot.pending
+		slot.mu.Unlock()
+		if !busy {
+			if id, ok := key.(string); ok && r.sessionTurnBusy(id) {
+				busy = true
+			}
+		}
+		if busy {
+			pending = true
+			return false
+		}
+		return true
+	})
+	return pending
 }
 
 // TestSpawnSession_OpensIndependentSession verifies the synchronous part of a

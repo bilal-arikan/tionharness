@@ -357,10 +357,12 @@ ve halt edilir.
 - **Guard kendi notunu saymaz.** `hasRecentWorkerNoteInbound` en son inbound'u
   ararken `Origin="coordination-guard"` mesajlarını atlar; yoksa ilk nudge kendi
   önkoşulunu geçersizler ve ikinci stall'da halt açılırdı.
-- **`<coordination-status>` muafiyet SAĞLAMAZ.** O not `appendCoordinationStatus`
-  içinde aynı `worker-note` origin'i ile yazılır ama bir worker *sonucu* değil,
-  "harekete geç" **talimatıdır**; içerik kontrolüyle ayrıldı. Onu düz metinle
-  yanıtlayan tur diğerleri gibi yargılanır ve halt edilebilir.
+- **`<coordination-status>` muafiyet SAĞLAMAZ.** O not aynı `worker-note`
+  origin'i ile yazılır ama bir worker *sonucu* değil, "harekete geç"
+  **talimatıdır**; içerik kontrolüyle ayrıldı. Onu düz metinle yanıtlayan tur
+  diğerleri gibi yargılanır ve halt edilebilir. Not artık iki yoldan gelebilir —
+  son worker'ın bildirimine **iliştirilmiş** olarak (olağan yol) veya tek başına
+  (backstop); ayrım aşağıdaki "all-idle sinyali" bölümünde.
 
 Test seam: `Runtime.stallJudgeFn` (üretimde nil) — yargıç sonrası kademeler canlı
 sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_test.go`
@@ -368,6 +370,53 @@ sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_t
 `TestCoordinatorStallGuardNudgesPhantomSpawnAfterWorkerNote`,
 `TestCoordinatorStallGuardNeverHaltsWhileWorkerNoteFresh`,
 `TestCoordinationStatusNoteIsNotAWorkerResult`).
+
+---
+
+## All-idle sinyali: son worker bildirimine iliştirme
+
+Tüm workerlar bittiğinde koordinatöre "hepsi bitti" sinyali gider. Bu sinyal
+**iki yoldan** ulaşır ve ayrım maliyet içindir:
+
+- **İliştirilmiş (olağan yol).** Fleet'i sıfıra indiren worker'ın kendi
+  `<task-notification>`'ının sonuna `<coordination-status>` eklenir
+  (`attachCoordinationStatus`). Koordinatör son sonucu ve "herkes bitti"
+  bilgisini **aynı turda** okur.
+- **Tek başına (backstop).** All-idle geçişini hiçbir bildirim gözlemlemediyse
+  (birleştirilmiş/coalesced yığında kaçırılan bildirim, boot'ta reclaim edilen
+  orphan, settle) `drainCoordinator` notu tek başına enjekte edip **bir tur daha**
+  koşar. Canlılık garantisi budur ve korunmuştur.
+
+**Neden:** eskiden her all-idle geçişi ikinci yoldan giderdi — son worker'ın
+sonucunu okuyan tur biter, ardından yalnızca "workerlar bitti" demek için tüm
+konuşmanın yeniden gönderildiği **ekstra bir LLM turu** daha koşardı. Kullanıcıya
+görünen davranış: "bütün workerlar cevaplarını döndü, sonra bir de *workerlar
+bitti* cevabı geliyor." İliştirme bu turu kaldırır; sinyal aynı, taşıyıcı farklı.
+
+**Son worker kararı sayaç okumasıyla değil, sıfır-geçişiyle verilir.**
+`releaseOnce` (`coordination.go`) worker sayacını `slot.mu` altında düşürür ve
+"sıfıra ben indirdim" cevabını **tek** çağırana döner; `runWorker` bu cevabı
+`notifyCoordinator(..., lastWorker)`'a geçirir. Bildirim anında sayacı yeniden
+okumak yeterli değildi: eşzamanlı biten N worker'ın hepsi 0 görüp kendini son
+sanıyor ve not çoğalıyordu (yük altında 3 kopya ölçüldü).
+
+**Bayrak ikilisi.** `ackedIdle` "bu geçiş için reconcile yapıldı" demektir;
+`idleFolded` ise "bu geçiş iliştirme ile raporlandı" der. İkincisi olmadan,
+sıfır-geçişinden *sonra* düşen kardeş bildirimleri `ackedIdle`'ı temizliyor ve
+drain loop notu tekrar basıyordu — iliştirmenin kazancı geri alınıyordu. Yeni
+`spawn_worker` / `send_to_worker` her iki bayrağı da temizler: yeni dalga kendi
+all-idle sinyalini hak eder.
+
+Yalnız `workers > 0` koşuluyla bastırmak **yanlıştır** — hiç worker'ı olmayan bir
+uyandırmada (orphan reclaim) tek sinyal kaynağı backstop'tur ve susturulmamalıdır.
+
+Testler (`coordination_idle_fold_test.go`):
+`TestLastWorkerNotificationCarriesIdleStatus` (tek tur, iliştirilmiş not),
+`TestIdleStatusNotFoldedWhileWorkersRemain` (koşan worker varken iliştirme yok),
+`TestIdleStatusFoldedOnceAcrossConcurrentFinishes` (eşzamanlı bitişte tek kopya,
+drain sonrası dahil), `TestSecondWaveGetsItsOwnIdleSignal`,
+`TestIdleReconcileStillFiresForUnobservedTransition` (backstop korunur),
+`TestReleaseOnceIsIdempotent`, `TestFoldReleasedWhenNotePersistFails`.
 
 ---
 
@@ -1188,6 +1237,7 @@ yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
 | **Çoklu pencere / ekran** | Rol toggle'ı ve worker geçişleri SSE ile yayılır (`emitCoordinationModeEvent` + `workerBus`); ağaç paneli aynı akışa abone. İki pencere aynı anda toggle ederse son yazan kazanır ve ikisi de olayı görür. |
 | **Aynı oturumda çift tur** | Tek tur kilidi artık `internal/turnqueue` (2026-08-11): her giriş yolu — worker, spawn, wake, peer, /compact, kullanıcı mesajı, koordinatör oto-turu — aynı FIFO'dan geçer. `coordSlot` yalnız koordinatör politikasını tutar. `_Docs/58`. |
 | **Kullanıcı "Durdur" → idle-reconcile turu kaçağı** (2026-08-06) | Kullanıcı koordinatörün canlı turunu durdurunca (`run.cancel` → tur `context.Canceled`) `runCoordinatorTurn` "⏹️ durduruldu" yazıyordu ama ayrı goroutine'deki `drainCoordinator` dönmeye devam edip idle-reconcile dalına düşüyordu; workerlar önceden bittiyse (`hadWorkers && workers==0`) `<coordination-status>...finished...</coordination-status>` notunu enjekte edip **bir tur daha** koşuyordu → durdurma "devam ediyor" gibi görünüyordu. → `runCoordinatorTurn` insan-stop dalında (watchdog kesintisinden `classifyTurnContext` ile ayrık plain `context.Canceled`) tek-seferlik `slot.stopRequested` set eder; `drainCoordinator` **yalnızca no-pending idle-reconcile'ı** bastırır: pending bir worker bildirimi VARSA (çalışan/yeni-biten worker) o bildirim Stop'u geçersizler ve tur yine koşar (`pending` dalı `stopRequested`'ı temizler) — **çalışan worker'lar Durdur'a rağmen koordinatörü sürdürebilir**. Pending yoksa idle-reconcile atlanıp temiz çıkılır (`running=false`, `scheduleSettleBackstop` korunur — mid-node üst-rapor borcu için). Kalıcı değil: hâlâ koşan bir worker bitince `enqueueCoordinatorTurn` ile loop'u yeniden başlatır. Testler: `TestUserStopSkipsIdleReconcile` (worker yok → tam durur), `TestUserStopHonoursPendingWorker` (pending bildirim Stop'u geçersizler). |
+| **All-idle sinyali için ekstra LLM turu** (2026-08-29) | Tüm workerlar bitince koordinatör önce son worker'ın `<task-notification>`'ını okuyup turunu bitiriyor, ardından `drainCoordinator` yalnızca `<coordination-status>` notunu enjekte etmek için **bir tur daha** koşuyordu — tüm konuşmanın yeniden gönderildiği tam bir LLM çağrısı, bilgi değeri "az önce okuduğun workerlar bitti". → Sinyal, fleet'i sıfıra indiren worker'ın kendi bildirimine iliştiriliyor (`attachCoordinationStatus`), böylece sonuç ve all-idle **tek turda** okunuyor; tek-başına not gerçek backstop hâllerine (kaçırılan/coalesced bildirim, orphan reclaim, settle) indi. Son worker kararı sayaç okumasıyla değil `releaseOnce`'ın `slot.mu` altındaki **sıfır-geçişi** ile veriliyor — eşzamanlı biten N worker'ın hepsi 0 görüp kendini son sanınca not çoğalıyordu (yük altında 3 kopya). Ayrıca `idleFolded` bayrağı eklendi: sıfır-geçişinden sonra düşen kardeş bildirimleri `ackedIdle`'ı temizleyip drain loop'a notu tekrar bastırıyordu. Testler: `coordination_idle_fold_test.go` (7 test). |
 
 **Bilinçli kapsam dışı (bilinmesi gerekenler):**
 
