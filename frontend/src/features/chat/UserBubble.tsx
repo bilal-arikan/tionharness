@@ -4,6 +4,7 @@ import { resolveColor } from '@/shared/lib/avatar'
 import { AttachmentChip } from './AttachmentChip'
 import { Lightbox } from '@/shared/components'
 import { imageURL } from '@/shared/lib/attachments'
+import { Markdown } from '@/shared/components/markdown/Markdown'
 
 // MENTION_RE matches an "@token" the way the composer inserts a name reference:
 // "@" then non-space, non-"@" characters. A mention is a plain reference to an
@@ -165,11 +166,17 @@ export function UserBubble({
       <div className="flex flex-col items-end">
         {text.trim() && (
           <div
-            className={`max-w-[80%] min-w-0 whitespace-pre-wrap break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-[var(--color-on-accent)] ${
+            className={`max-w-[80%] min-w-0 break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-[var(--color-on-accent)] ${
               hasMention ? 'ring-1 ring-white/40' : ''
             } ${clamp ? 'line-clamp-2' : ''}`}
           >
-            {quotedCmd ? quotedCmd : hasMention ? renderWithMentions(text, agents) : text}
+            {quotedCmd ? (
+              quotedCmd
+            ) : hasMention ? (
+              <div className="whitespace-pre-wrap">{renderWithMentions(text, agents)}</div>
+            ) : (
+              <Markdown>{text}</Markdown>
+            )}
           </div>
         )}
         {chips}

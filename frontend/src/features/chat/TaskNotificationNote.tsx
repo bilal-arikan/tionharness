@@ -4,6 +4,7 @@ import type { Message } from '@/types'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { parseTaskNotification } from './parseTaskNotification'
+import { Markdown } from '@/shared/components/markdown/Markdown'
 
 // TaskNotificationNote renders a coordinator's <task-notification> injection
 // (Message.origin === "worker-note") as a compact worker-result card instead of
@@ -80,10 +81,8 @@ export function TaskNotificationNote({
           </div>
         )}
         {open && (
-          <div className="max-h-80 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2">
-            <pre className="whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-[var(--color-text)]">
-              {body}
-            </pre>
+          <div className="max-h-80 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text)]">
+            <Markdown>{body}</Markdown>
           </div>
         )}
       </div>
