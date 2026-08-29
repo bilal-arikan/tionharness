@@ -234,11 +234,14 @@ export function useSessionsController({
   // persist the correction to the backend. A DELETED agent is left in place so the
   // empty state can say so: quietly starting the next chat with a different agent
   // than the user picked is worse than telling them their pick is gone.
+  // System agents are never valid fallbacks — the backend rejects them as the
+  // default (see workspace.ErrDefaultAgentSystem) — so skip them here too, or a
+  // roster whose first live agent is a system agent retries this write forever.
   useEffect(() => {
     if (!wsSettingsLoaded || agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
-      const fallback = agents[0].id
-      void persistDefaultAgent(fallback)
+      const fallback = agents.find((a) => !a.system)?.id
+      if (fallback) void persistDefaultAgent(fallback)
     }
   }, [agents, defaultAgentId, defaultAgentDeleted, persistDefaultAgent, wsSettingsLoaded])
 
