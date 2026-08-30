@@ -479,7 +479,7 @@ export function MessageList({
               row = (
                 <AssistantTurn
                   message={m}
-                  agent={agentById(m.agentId)}
+                  agent={agentById(m.agentId ?? (isLastLive ? pendingAgentId : undefined))}
                   sessionId={sessionId}
                   isLastLive={isLastLive}
                   workedMs={workedMs}
