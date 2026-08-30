@@ -85,6 +85,10 @@ func TestSkillPartialUpdatePreservesFields(t *testing.T) {
 
 func TestTaskReferencesAreValidated(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
+	// Task creation normally launches detached board-automation and worktree
+	// handlers. They are unrelated to reference validation and may still touch the
+	// TempDir while Windows cleanup runs.
+	wsp.DB.SetBoardHook(nil)
 	task, err := wsp.DB.CreateTask(context.Background(), db.Task{Title: "task"})
 	if err != nil {
 		t.Fatal(err)

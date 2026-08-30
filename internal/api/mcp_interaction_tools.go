@@ -37,8 +37,6 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 			return interaction.CallResult{Text: tools.FormatMultiAnswer(questions, ans)}, nil
 		case "ctx":
 			return interaction.CallResult{}, ctx.Err()
-		case "done":
-			return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
 		default:
 			return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
 		}
@@ -76,8 +74,6 @@ func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, q
 		return interaction.CallResult{Text: normalize(ans)}, nil
 	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case "done":
-		return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
 	default:
 		return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
 	}
@@ -140,8 +136,6 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		}
 	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case "done":
-		return interaction.CallResult{Text: permDecision(false, in.Input, "the turn ended before approval")}, nil
 	default:
 		return interaction.CallResult{Text: permDecision(false, in.Input, "no approval within the time limit")}, nil
 	}
@@ -179,8 +173,6 @@ func (b *interactionBackend) callExitPlan(ctx context.Context, run *chatRun, inp
 		return interaction.CallResult{Text: permDecision(false, input, "the user rejected the plan and asked to revise it: "+ans)}, nil
 	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case "done":
-		return interaction.CallResult{Text: permDecision(false, input, "the turn ended before the plan was approved")}, nil
 	default:
 		return interaction.CallResult{Text: permDecision(false, input, "no plan approval within the time limit")}, nil
 	}

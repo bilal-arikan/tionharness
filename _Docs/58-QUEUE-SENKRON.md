@@ -260,6 +260,18 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
 - `internal/api/mcp_interaction_tools.go` — CLI ask/confirm/permission/plan →
   `openInteraction` + `waitInteractionCLI` (run.emit+run.answer yerine).
 
+**Codex tur-sonu yarışı (2026-08-30):** Codex `turn.completed` olayını MCP
+`ask_user` HTTP isteği hâlâ beklerken yayınlayabilir. Bu nedenle `run.done`, CLI
+interaction yaşam döngüsünün iptal sinyali değildir; `waitInteractionCLI` yalnız
+kullanıcı cevabı, MCP istek context'i veya 15 dakikalık ask timeout ile çözülür.
+Provider turunun kapanması pending kartı tek başına düşüremez. Codex'in HTTP
+context iptali `run.done`'dan hemen önce gelirse 250 ms yaşam-döngüsü grace'i bu
+sıralama yarışını tanır; canlı run'daki gerçek istek iptali hâlâ kartı kapatır.
+Tamamlanma olayı gelip MCP item sonucu gelmezse Codex parser trace'e 0-byte başarı değil açık hata
+(`no tool result was received`) yazar. Regresyonlar:
+`TestInteractionBackend_AskSurvivesTurnEnded`,
+`TestCodexParserIncompleteMCPToolIsVisibleError`.
+
 **Frontend (tamam — tam cutover):**
 - `api/sessionStream.ts` — cursor + epoch + gap-detect + auto-reconnect SSE.
 - `features/chat/chatStreamHub.ts` — hub olaylarını uygular (ghost bubble, delta,

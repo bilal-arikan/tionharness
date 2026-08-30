@@ -402,6 +402,10 @@ func (p *codexStreamParser) finish() (*Response, error) {
 	// Emit any tool step whose completion never arrived, so the UI still sees it.
 	for i := range p.resp.Trace {
 		if p.resp.Trace[i].Kind == "tool" {
+			if !p.emitted[i] && p.resp.Trace[i].Output == "" {
+				p.resp.Trace[i].IsError = true
+				p.resp.Trace[i].Output = "codex CLI ended before the tool call completed; no tool result was received"
+			}
 			p.emit(i)
 		}
 	}

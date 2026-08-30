@@ -312,7 +312,7 @@ func specHasTool(specs []interaction.ToolSpec, name string) bool {
 	return false
 }
 
-func TestInteractionBackend_AskTurnEnded(t *testing.T) {
+func TestInteractionBackend_AskSurvivesTurnEnded(t *testing.T) {
 	srv := &Server{
 		runs:         newChatRuns(),
 		hub:          sessionhub.New("test", 0),
@@ -320,19 +320,36 @@ func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 	}
 	run := srv.runs.register("r2", "s-r2", "ws1", func() {})
 	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
+	ctx, cancel := context.WithCancel(context.Background())
 
-	// End the turn (closes run.done) while the ask is blocked; waitInteractionCLI
-	// must unblock with an error result so the model proceeds on its own.
+	// Codex can report turn.completed while the MCP request is still blocked.
+	// Closing run.done must not cancel the interaction before the user answers.
 	go func() {
-		time.Sleep(20 * time.Millisecond)
-		srv.runs.unregister("r2")
+		for {
+			srv.interactions.mu.Lock()
+			var id string
+			for _, interactions := range srv.interactions.bySession {
+				for id = range interactions {
+					break
+				}
+			}
+			srv.interactions.mu.Unlock()
+			if id != "" {
+				cancel() // Codex closes the MCP HTTP request just before run teardown.
+				srv.runs.unregister("r2")
+				time.Sleep(20 * time.Millisecond)
+				srv.resolveInteraction("ws1", "s-r2", id, "answered after turn completion", "test")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
 	}()
-	res, err := b.Call(context.Background(), run.token, "ask_user", json.RawMessage(`{"question":"q"}`))
+	res, err := b.Call(ctx, run.token, "ask_user", json.RawMessage(`{"question":"q"}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
-	if !res.IsError {
-		t.Fatalf("want error result after turn ended, got %+v", res)
+	if res.IsError || res.Text != "answered after turn completion" {
+		t.Fatalf("ask was cancelled by turn completion: %+v", res)
 	}
 }
 

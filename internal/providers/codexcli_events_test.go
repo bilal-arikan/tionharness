@@ -454,3 +454,20 @@ func TestCodexParserUnknownItemKind(t *testing.T) {
 		t.Errorf("step = %+v", step)
 	}
 }
+
+func TestCodexParserIncompleteMCPToolIsVisibleError(t *testing.T) {
+	p := newCodexParser("", nil)
+	feedAll(p, fxThreadStarted, fxTurnStarted, fxMCPStarted, fxTurnCompleted)
+
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if len(resp.Trace) != 1 {
+		t.Fatalf("Trace = %+v, want one incomplete tool", resp.Trace)
+	}
+	step := resp.Trace[0]
+	if !step.IsError || !strings.Contains(step.Output, "no tool result was received") {
+		t.Fatalf("incomplete MCP call must be a visible error, got %+v", step)
+	}
+}

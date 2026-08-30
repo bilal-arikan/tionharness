@@ -142,24 +142,55 @@ func (s *Server) waitInteraction(ctx, clientGone context.Context, pi *pendingInt
 	}
 }
 
-// waitInteractionCLI is the claude-cli variant of waitInteraction: it blocks on
-// the answer, the turn ending (run.done), request cancellation, or the ask
-// timeout. reason is "" on a real answer, else one of "done" | "ctx" | "timeout"
+// waitInteractionCLI is the CLI variant of waitInteraction: it blocks on the
+// answer, request cancellation, or the ask timeout. The provider may report a
+// completed turn while its MCP request is still in flight (observed with codex
+// exec); run.done therefore must not resolve the interaction. The MCP request
+// context remains the authority for whether the caller can still receive the
+// answer. reason is "" on a real answer, else one of "ctx" | "timeout"
 // so the CLI tool can return its provider-specific fallback text. Non-answer
 // exits CAS-close the interaction so no window is left showing a dead card.
+
 func (s *Server) waitInteractionCLI(ctx context.Context, run *chatRun, pi *pendingInteraction) (string, string) {
-	select {
-	case ans := <-pi.answer:
-		return ans, ""
-	case <-run.done:
-		s.cancelInteraction(pi, "turn_ended")
-		return "", "done"
-	case <-ctx.Done():
-		s.cancelInteraction(pi, "cancelled")
-		return "", "ctx"
-	case <-time.After(askTimeout):
-		s.cancelInteraction(pi, "timeout")
-		return "", "timeout"
+	ctxDone := ctx.Done()
+	runDone := run.done
+	timer := time.NewTimer(askTimeout)
+	defer timer.Stop()
+	for {
+		select {
+		case ans := <-pi.answer:
+			return ans, ""
+		case <-runDone:
+			// Provider finalization is not interaction finalization. Keep the MCP
+			// call alive for the answer and stop selecting the closed channel.
+			runDone = nil
+		case <-ctxDone:
+			if runDone == nil {
+				ctxDone = nil
+				continue
+			}
+			// Codex cancels the HTTP request immediately before chat teardown closes
+			// run.done. Give that ordering race a bounded window; a request cancelled
+			// while its run remains live is still a real caller cancellation.
+			grace := time.NewTimer(250 * time.Millisecond)
+			select {
+			case <-runDone:
+				runDone = nil
+				ctxDone = nil
+				if !grace.Stop() {
+					select {
+					case <-grace.C:
+					default:
+					}
+				}
+			case <-grace.C:
+				s.cancelInteraction(pi, "cancelled")
+				return "", "ctx"
+			}
+		case <-timer.C:
+			s.cancelInteraction(pi, "timeout")
+			return "", "timeout"
+		}
 	}
 }
 
