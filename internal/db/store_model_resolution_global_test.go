@@ -68,6 +68,35 @@ func TestGlobalResolvedModelForFallback(t *testing.T) {
 	if got := fresh.GlobalResolvedModelFor("claude-cli", ""); got != "claude-opus-5" {
 		t.Fatalf("global fallback = %q, want claude-opus-5", got)
 	}
+
+	// A workspace-local observation remains authoritative. The global value is
+	// only a fallback and must never replace a choice this workspace learned.
+	if err := fresh.NoteModelResolution(t.Context(), "claude-cli", "", "claude-sonnet-5"); err != nil {
+		t.Fatal(err)
+	}
+	if err := global.Note("claude-cli", "", "claude-opus-5"); err != nil {
+		t.Fatal(err)
+	}
+	if got := fresh.ResolvedModelFor("claude-cli", ""); got != "claude-sonnet-5" {
+		t.Fatalf("workspace-local after global change = %q, want claude-sonnet-5", got)
+	}
+}
+
+func TestGlobalModelResolutionNoteIsIdempotent(t *testing.T) {
+	global, err := OpenGlobalModelResolutions(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := global.Note("claude-cli", "opus", "claude-opus-5"); err != nil {
+		t.Fatal(err)
+	}
+	first := global.m[modelResolutionKey("claude-cli", "opus")]
+	if err := global.Note("claude-cli", "opus", "claude-opus-5"); err != nil {
+		t.Fatal(err)
+	}
+	if second := global.m[modelResolutionKey("claude-cli", "opus")]; second != first {
+		t.Fatalf("idempotent note changed resolution: first=%+v second=%+v", first, second)
+	}
 }
 
 func TestGlobalModelResolutionsSurvivesReopen(t *testing.T) {

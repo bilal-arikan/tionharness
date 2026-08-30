@@ -317,8 +317,8 @@ func TestEnsureSystemAgentsSeedsProvider(t *testing.T) {
 	if !ok {
 		t.Fatal("titler not seeded")
 	}
-	if got := readAgentProviderFromDisk(t, d, titler.ID); got != "claude-cli" {
-		t.Fatalf("seeded provider on disk = %q, want %q", got, "claude-cli")
+	if provider, instanceID := readAgentProviderFieldsFromDisk(t, d, titler.ID); provider != "claude-cli" || instanceID != "claude-cli" {
+		t.Fatalf("seeded provider fields on disk = (%q, %q), want (%q, %q)", provider, instanceID, "claude-cli", "claude-cli")
 	}
 
 	// A row written before the definitions carried a provider.
@@ -332,8 +332,8 @@ func TestEnsureSystemAgentsSeedsProvider(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if got := readAgentProviderFromDisk(t, d, legacy.ID); got != "" {
-		t.Fatalf("legacy provider on disk = %q, want empty precondition", got)
+	if provider, instanceID := readAgentProviderFieldsFromDisk(t, d, legacy.ID); provider != "" || instanceID != "" {
+		t.Fatalf("legacy provider fields on disk = (%q, %q), want empty precondition", provider, instanceID)
 	}
 
 	// A row the user bound to a different provider must survive untouched.
@@ -349,15 +349,15 @@ func TestEnsureSystemAgentsSeedsProvider(t *testing.T) {
 	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
 		t.Fatal(err)
 	}
-	if got := readAgentProviderFromDisk(t, d, legacy.ID); got != "claude-cli" {
-		t.Fatalf("backfilled provider on disk = %q, want %q", got, "claude-cli")
+	if provider, instanceID := readAgentProviderFieldsFromDisk(t, d, legacy.ID); provider != "claude-cli" || instanceID != "claude-cli" {
+		t.Fatalf("backfilled provider fields on disk = (%q, %q), want (%q, %q)", provider, instanceID, "claude-cli", "claude-cli")
 	}
-	if got := readAgentProviderFromDisk(t, d, custom.ID); got != "anthropic" {
-		t.Fatalf("user provider on disk = %q, want %q", got, "anthropic")
+	if provider, instanceID := readAgentProviderFieldsFromDisk(t, d, custom.ID); provider != "anthropic" || instanceID != "anthropic" {
+		t.Fatalf("user provider fields on disk = (%q, %q), want (%q, %q)", provider, instanceID, "anthropic", "anthropic")
 	}
 }
 
-func readAgentProviderFromDisk(t *testing.T, d *DB, agentID string) string {
+func readAgentProviderFieldsFromDisk(t *testing.T, d *DB, agentID string) (string, string) {
 	t.Helper()
 	path, err := d.AgentPath(agentID)
 	if err != nil {
@@ -368,10 +368,11 @@ func readAgentProviderFromDisk(t *testing.T, d *DB, agentID string) string {
 		t.Fatal(err)
 	}
 	var row struct {
-		Provider string `json:"provider"`
+		Provider           string `json:"provider"`
+		ProviderInstanceID string `json:"providerInstanceId"`
 	}
 	if err := json.Unmarshal(raw, &row); err != nil {
 		t.Fatal(err)
 	}
-	return row.Provider
+	return row.Provider, row.ProviderInstanceID
 }
