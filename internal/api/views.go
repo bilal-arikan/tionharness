@@ -106,3 +106,33 @@ func (s *Server) handleGetViewChildren(w http.ResponseWriter, r *http.Request) {
 		"children": handles,
 	})
 }
+
+// handleGetViewNeighborhood exposes the Explorer focus graph's complete direct
+// neighborhood. The projector is built from ws(r), so refs can resolve only
+// against the workspace selected by the request middleware.
+func (s *Server) handleGetViewNeighborhood(w http.ResponseWriter, r *http.Request) {
+	ref := view.Ref{
+		Kind: view.Kind(strings.TrimSpace(r.PathValue("kind"))),
+		ID:   strings.TrimSpace(r.PathValue("id")),
+		Sub:  strings.TrimSpace(r.URL.Query().Get("sub")),
+	}
+
+	neighborhood, err := s.viewProjector(r).Neighborhood(r.Context(), ref)
+	if err != nil {
+		status := http.StatusNotFound
+		if strings.Contains(err.Error(), "unsupported kind") || strings.Contains(err.Error(), "children unsupported") ||
+			strings.Contains(err.Error(), "no id") || strings.Contains(err.Error(), "unknown category") {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	if neighborhood.Parents == nil {
+		neighborhood.Parents = []view.Handle{}
+	}
+	if neighborhood.Children == nil {
+		neighborhood.Children = []view.Handle{}
+	}
+	writeJSON(w, http.StatusOK, neighborhood)
+}

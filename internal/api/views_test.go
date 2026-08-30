@@ -235,6 +235,66 @@ func TestGetViewChildrenRejectsUnknownKind(t *testing.T) {
 	}
 }
 
+func TestGetViewNeighborhoodContractAndWorkspaceIsolation(t *testing.T) {
+	ctx := context.Background()
+	workspaceA, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open workspace A: %v", err)
+	}
+	t.Cleanup(func() { workspaceA.Close() })
+	workspaceB, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open workspace B: %v", err)
+	}
+	t.Cleanup(func() { workspaceB.Close() })
+
+	agent, err := workspaceA.CreateAgent(ctx, db.Agent{Name: "builder"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	session, err := workspaceA.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "focus"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetViewNeighborhood, workspaceA,
+		"/api/views/session/"+session.ID+"/neighborhood",
+		map[string]string{"kind": "session", "id": session.ID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeView(t, rec.Body.Bytes())
+	if got["focus"] == nil || got["parents"] == nil || got["children"] == nil {
+		t.Fatalf("incomplete neighborhood contract: %s", rec.Body.String())
+	}
+	if got["hiddenParentCount"] != float64(0) || got["hiddenChildCount"] != float64(0) {
+		t.Fatalf("unexpected hidden counts: %s", rec.Body.String())
+	}
+	parents, _ := got["parents"].([]any)
+	if len(parents) != 2 { // sessions category + owning agent
+		t.Fatalf("parents=%d, want 2: %s", len(parents), rec.Body.String())
+	}
+	children, _ := got["children"].([]any)
+	if len(children) != 0 {
+		t.Fatalf("leaf children=%d: %s", len(children), rec.Body.String())
+	}
+
+	// Same ref against another workspace must not resolve or degrade to a leaf.
+	rec = serveFlowRuns((&Server{}).handleGetViewNeighborhood, workspaceB,
+		"/api/views/session/"+session.ID+"/neighborhood",
+		map[string]string{"kind": "session", "id": session.ID})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-workspace status=%d, want 404: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = serveFlowRuns((&Server{}).handleGetViewNeighborhood, workspaceA,
+		"/api/views/session/UNKNOWN/neighborhood",
+		map[string]string{"kind": "session", "id": "UNKNOWN"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown ref status=%d, want 404: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestGetViewProjectsArtifactAndAutomation pins the TSK66 leaves end to end: a
 // saved artifact and an automation rule render their metadata through the same
 // projection endpoint as every other kind.

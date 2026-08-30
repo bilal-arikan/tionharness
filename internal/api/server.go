@@ -687,6 +687,9 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
 	// Explorer map drill-down: the structural child handles of a node (_Docs/68).
 	mux.HandleFunc("GET /api/views/{kind}/{id}/children", s.handleGetViewChildren)
+	// Explorer focus graph: complete direct parents + children, without a
+	// backend presentation cap. The UI owns visual overflow (_Docs/68).
+	mux.HandleFunc("GET /api/views/{kind}/{id}/neighborhood", s.handleGetViewNeighborhood)
 
 	// Workspace overview: counters + chart series + the workspace projection,
 	// in one call (_Docs/66).

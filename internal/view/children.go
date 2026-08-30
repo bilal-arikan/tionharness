@@ -68,6 +68,167 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 	}
 }
 
+// Neighborhood is the complete, one-hop structural neighborhood used by the
+// Explorer focus graph. Unlike Children it does not apply categoryTopN: visual
+// overflow belongs to the client, and every direct relationship must remain
+// available through this contract. No recursive walk is performed, so cycles
+// and self-loops cannot cause unbounded traversal.
+type Neighborhood struct {
+	Focus             Handle   `json:"focus"`
+	Parents           []Handle `json:"parents"`
+	Children          []Handle `json:"children"`
+	HiddenParentCount int      `json:"hiddenParentCount"`
+	HiddenChildCount  int      `json:"hiddenChildCount"`
+}
+
+// Neighborhood resolves focus plus every direct incoming and outgoing
+// structural edge in the current projector/store. Handles are de-duplicated by
+// Ref and sorted by Ref.String, making multi-parent, cycle and self-loop output
+// stable without dropping a relationship silently.
+func (p *Projector) Neighborhood(ctx context.Context, focus Ref) (Neighborhood, error) {
+	if err := validateStructuralRef(focus); err != nil {
+		return Neighborhood{}, err
+	}
+	projected, err := p.Project(ctx, focus, LevelCard)
+	if err != nil {
+		return Neighborhood{}, err
+	}
+
+	children, err := p.structuralChildren(ctx, focus)
+	if err != nil {
+		return Neighborhood{}, err
+	}
+	candidates, err := p.structuralNodes(ctx)
+	if err != nil {
+		return Neighborhood{}, err
+	}
+
+	parents := make([]Handle, 0)
+	for _, candidate := range candidates {
+		candidateChildren, childErr := p.structuralChildren(ctx, candidate.Ref)
+		if childErr != nil {
+			if candidate.Ref.Kind == KindCategory &&
+				(candidate.Ref.ID == CategorySkills || candidate.Ref.ID == CategoryInsights) {
+				continue
+			}
+			return Neighborhood{}, childErr
+		}
+		for _, child := range candidateChildren {
+			if child.Ref == focus {
+				parents = append(parents, candidate)
+				break
+			}
+		}
+	}
+
+	return Neighborhood{
+		Focus:    Handle{Label: projected.Header, Ref: focus, Level: LevelCard},
+		Parents:  uniqueSortedHandles(parents),
+		Children: uniqueSortedHandles(children),
+	}, nil
+}
+
+func validateStructuralRef(ref Ref) error {
+	if ref.ID == "" {
+		return fmt.Errorf("view: ref has no id")
+	}
+	want := ""
+	switch ref.Kind {
+	case KindSpace:
+		want = WorkspaceRefID
+	case KindBoard:
+		want = BoardRefID
+	case KindBudget:
+		want = BudgetRefID
+	case KindTools:
+		want = ToolsRefID
+	case KindLogs:
+		want = LogsRefID
+	}
+	if want != "" && ref.ID != want {
+		return fmt.Errorf("view: unknown %s ref %q", ref.Kind, ref.ID)
+	}
+	return nil
+}
+
+// structuralChildren is Children without the legacy per-node presentation cap.
+func (p *Projector) structuralChildren(ctx context.Context, ref Ref) ([]Handle, error) {
+	switch ref.Kind {
+	case KindSpace:
+		return workspaceChildren(), nil
+	case KindCategory:
+		return p.categoryMembers(ctx, ref.ID)
+	case KindBoard:
+		if ref.Sub != "" {
+			return nil, nil
+		}
+		return p.boardColumnChildren(ctx)
+	case KindAgent:
+		return p.agentSessionChildren(ctx, ref.ID)
+	case KindSession:
+		return p.sessionWorkerChildren(ctx, ref.ID)
+	case KindBudget, KindTools, KindFlowRun, KindSchedule,
+		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("view: children unsupported for kind %q", ref.Kind)
+	}
+}
+
+// structuralNodes enumerates every possible parent node once. It uses the same
+// store-backed relationship builders as Children, preserving workspace scope.
+func (p *Projector) structuralNodes(ctx context.Context) ([]Handle, error) {
+	root := Handle{Label: "workspace", Ref: Ref{Kind: KindSpace, ID: WorkspaceRefID}, Level: LevelCard}
+	nodes := []Handle{root}
+	rootChildren := workspaceChildren()
+	nodes = append(nodes, rootChildren...)
+
+	for _, node := range rootChildren {
+		children, err := p.structuralChildren(ctx, node.Ref)
+		if err != nil {
+			// Skills and insights are optional projector sources. Their absence
+			// must not prevent resolving an unrelated focus node.
+			if node.Ref.Kind == KindCategory &&
+				(node.Ref.ID == CategorySkills || node.Ref.ID == CategoryInsights) {
+				continue
+			}
+			return nil, err
+		}
+		nodes = append(nodes, children...)
+	}
+
+	// Sessions can also parent worker sessions, and agents parent their sessions.
+	// Both kinds are already present through root categories; expanding them here
+	// is enough to discover every incoming structural edge without recursion.
+	base := uniqueSortedHandles(nodes)
+	for _, node := range base {
+		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindSession {
+			continue
+		}
+		children, err := p.structuralChildren(ctx, node.Ref)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, children...)
+	}
+	return uniqueSortedHandles(nodes), nil
+}
+
+func uniqueSortedHandles(handles []Handle) []Handle {
+	byRef := make(map[Ref]Handle, len(handles))
+	for _, handle := range handles {
+		if _, exists := byRef[handle.Ref]; !exists {
+			byRef[handle.Ref] = handle
+		}
+	}
+	out := make([]Handle, 0, len(byRef))
+	for _, handle := range byRef {
+		out = append(out, handle)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Ref.String() < out[j].Ref.String() })
+	return out
+}
+
 // IsExpandable reports whether a ref has structural children worth expanding —
 // the map/agent affordance for "can I drill into this?". It mirrors the kinds
 // Children resolves to a non-nil edge set: the workspace root, a category, a

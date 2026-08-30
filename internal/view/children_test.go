@@ -45,8 +45,13 @@ func (s *fakeStore) ListMCPServers(_ context.Context) ([]db.MCPServer, error) { 
 
 func (s *fakeStore) GetFlowRun(context.Context, string) (db.FlowRun, error) { return db.FlowRun{}, nil }
 func (s *fakeStore) GetFlow(context.Context, string) (db.Flow, error)       { return db.Flow{}, nil }
-func (s *fakeStore) GetSession(context.Context, string) (db.Session, error) {
-	return db.Session{}, nil
+func (s *fakeStore) GetSession(_ context.Context, id string) (db.Session, error) {
+	for _, session := range s.sessions {
+		if session.ID == id {
+			return session, nil
+		}
+	}
+	return db.Session{}, fmt.Errorf("session %s not found", id)
 }
 func (s *fakeStore) ListMessagesTail(context.Context, string, int) ([]db.Message, int, error) {
 	return nil, 0, nil
@@ -59,7 +64,14 @@ func (s *fakeStore) GetSchedule(context.Context, string) (db.Schedule, error) {
 	return db.Schedule{}, nil
 }
 func (s *fakeStore) UsageForDay(context.Context, string) ([]db.Usage, error) { return nil, nil }
-func (s *fakeStore) GetAgent(context.Context, string) (db.Agent, error)      { return db.Agent{}, nil }
+func (s *fakeStore) GetAgent(_ context.Context, id string) (db.Agent, error) {
+	for _, agent := range s.agents {
+		if agent.ID == id {
+			return agent, nil
+		}
+	}
+	return db.Agent{}, fmt.Errorf("agent %s not found", id)
+}
 func (s *fakeStore) GetUsageToday(context.Context, string) (db.Usage, error) { return db.Usage{}, nil }
 func (s *fakeStore) GetWorkspaceToolConfig(context.Context) (db.WorkspaceToolConfig, error) {
 	return db.WorkspaceToolConfig{}, nil
@@ -262,6 +274,83 @@ func TestChildrenCapsAtTopN(t *testing.T) {
 	if len(hs) != categoryTopN {
 		t.Errorf("children capped wrong: got %d, want %d", len(hs), categoryTopN)
 	}
+}
+
+func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
+	now := time.Now().Unix()
+	sessions := []db.Session{
+		{ID: "A", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "B"},
+		{ID: "B", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "A"},
+		{ID: "SELF", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "SELF"},
+	}
+	for i := 0; i < categoryTopN+15; i++ {
+		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
+	}
+	p := NewProjector(&fakeStore{
+		agents:   []db.Agent{{ID: "AG1", Name: "builder"}},
+		sessions: sessions,
+	})
+	ctx := context.Background()
+
+	root, err := p.Neighborhood(ctx, Ref{Kind: KindSpace, ID: WorkspaceRefID})
+	if err != nil {
+		t.Fatalf("root neighborhood: %v", err)
+	}
+	if len(root.Parents) != 0 || len(root.Children) != 11 {
+		t.Fatalf("root neighborhood parents=%d children=%d", len(root.Parents), len(root.Children))
+	}
+
+	category, err := p.Neighborhood(ctx, Ref{Kind: KindCategory, ID: CategorySessions})
+	if err != nil {
+		t.Fatalf("category neighborhood: %v", err)
+	}
+	if len(category.Children) != len(sessions) {
+		t.Fatalf("uncapped children=%d, want %d", len(category.Children), len(sessions))
+	}
+	if category.HiddenParentCount != 0 || category.HiddenChildCount != 0 {
+		t.Fatalf("unexpected hidden counts: %+v", category)
+	}
+
+	cycle, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "A"})
+	if err != nil {
+		t.Fatalf("cycle neighborhood: %v", err)
+	}
+	if !hasHandleRef(cycle.Children, Ref{Kind: KindSession, ID: "B"}) {
+		t.Errorf("cycle child B missing: %+v", cycle.Children)
+	}
+	// Category + agent + peer coordinator are three distinct direct parents.
+	if len(cycle.Parents) != 3 {
+		t.Errorf("multi-parent count=%d, want 3: %+v", len(cycle.Parents), cycle.Parents)
+	}
+
+	self, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "SELF"})
+	if err != nil {
+		t.Fatalf("self-loop neighborhood: %v", err)
+	}
+	selfRef := Ref{Kind: KindSession, ID: "SELF"}
+	if !hasHandleRef(self.Parents, selfRef) || !hasHandleRef(self.Children, selfRef) {
+		t.Errorf("self-loop missing from parents or children: %+v", self)
+	}
+
+	leaf, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "S0"})
+	if err != nil {
+		t.Fatalf("leaf neighborhood: %v", err)
+	}
+	if len(leaf.Children) != 0 {
+		t.Errorf("leaf children=%+v", leaf.Children)
+	}
+	if _, err := p.Neighborhood(ctx, Ref{Kind: KindSession, ID: "UNKNOWN"}); err == nil {
+		t.Error("unknown ref must return an error")
+	}
+}
+
+func hasHandleRef(handles []Handle, want Ref) bool {
+	for _, handle := range handles {
+		if handle.Ref == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestChildrenArtifactsAndAutomations(t *testing.T) {

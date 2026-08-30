@@ -93,6 +93,11 @@ derinlik/çocuk cap'i şart (§8.1).
    session handle'ları; `board` → sütun handle'ları; vb.
 4. **Endpoint:** `GET /api/views/{kind}/{id}/children` → `[]Handle`. Özet için
    mevcut `GET /api/views/{kind}/{id}` korunur.
+   Odak grafiği için `GET /api/views/{kind}/{id}/neighborhood?sub=...` tek çağrıda
+   `focus`, doğrudan `parents`, doğrudan `children`, `hiddenParentCount` ve
+   `hiddenChildCount` döndürür. Bu endpoint backend'de parent/child cap uygulamaz;
+   görsel taşma istemcide `+N` düğümü/drawer ile yönetilir. Mevcut `/children` ve
+   ajan `expand` yolundaki güvenlik sınırı geriye uyumluluk için değişmez.
 5. **Elision & cost sözleşmesi korunur:** kategori/harita düğümü kaç öğe gizlediğini
    (`Elided`+birim) ve `~N tok`'u taşır.
 6. **TSK66 ek Kind'ler:** `artifact`/`automation`/`skill`/`insight`/`logs` +
@@ -142,8 +147,10 @@ derinlik/çocuk cap'i şart (§8.1).
 
 ## 8. Dahil edilen iyileştirmeler (tasarım gereği)
 
-1. **Döngü koruması:** graf olduğu için visited-set + max derinlik (öner: 6) + düğüm
-   başına çocuk cap'i (öner: 50, kalan `Elided`). Sonsuz açılımı önler.
+1. **Döngü koruması:** lazy gezinmede visited-set + max derinlik sonsuz açılımı
+   önler. Odak komşuluğu recursive traversal yapmaz; sonlu workspace snapshot'ında
+   ref bazlı tekilleştirilmiş tek-hop kenarları döndürür. Kullanıcı görünür node
+   sayısına backend ürün limiti uygulanmaz.
 2. **Tek veri kaynağı:** her şey View katmanı üstüne kurulur; paralel "özet toplayıcı"
    YAZILMAZ (iki kaynak zamanla çelişir — bu projenin tekrarlanan dersi).
 3. **DOI pruning:** ekran dolunca "ilgisiz" dalları soldur/katla (focus+context).
