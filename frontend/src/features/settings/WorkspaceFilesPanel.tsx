@@ -1,4 +1,4 @@
-// Per-workspace "Promptlar & Dosyalar" category: edit the workspace's config
+// Top-level "Promptlar" view: edit the active workspace's config
 // files (runtime prompts, instructions, README) that live under
 // <workspace>/config/. Self-loading + self-saving (own Save button), since these
 // files are written directly rather than through the app-settings patch flow.

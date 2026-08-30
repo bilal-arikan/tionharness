@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -52,6 +53,25 @@ func TestFocusViewRejectsUnknownView(t *testing.T) {
 	}
 	if sink.called {
 		t.Fatal("sink should not be called for an invalid view")
+	}
+}
+
+func TestFocusViewSchemaMatchesNavigationReshuffle(t *testing.T) {
+	var schema struct {
+		Properties struct {
+			View struct {
+				Enum []string `json:"enum"`
+			} `json:"view"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(NewFocusViewTool().Def().InputSchema, &schema); err != nil {
+		t.Fatalf("decode schema: %v", err)
+	}
+	if !slices.Contains(schema.Properties.View.Enum, "prompts") {
+		t.Fatal("focus_view schema must expose top-level prompts view")
+	}
+	if slices.Contains(schema.Properties.View.Enum, "logs") {
+		t.Fatal("focus_view schema must not expose retired top-level logs view")
 	}
 }
 

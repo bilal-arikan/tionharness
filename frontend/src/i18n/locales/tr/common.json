@@ -1,4 +1,10 @@
 {
+  "common": {
+    "save": "Kaydet",
+    "saved": "Kayıtlı",
+    "saving": "Kaydediliyor…",
+    "unsavedChanges": "Kaydedilmemiş değişiklik"
+  },
   "agents": {
     "bulkEdit": {
       "apply": "Uygula",
@@ -23,6 +29,9 @@
     "followAgent": "Ajan dilini izle ({{language}})",
     "uiHint": "Uygulamanın kendi düğme, etiket ve mesajlarının dili. Ajanın yanıt dilinden bağımsızdır.",
     "uiLabel": "Arayüz dili"
+  },
+  "navigation": {
+    "promptsFiles": "Promptlar"
   },
   "time": {
     "bucket": {
@@ -52,5 +61,10 @@
     "minutesShort_one": "{{count}} dk",
     "minutesShort_other": "{{count}} dk",
     "yesterday": "Dün"
+  },
+  "workspace": {
+    "tabs": {
+      "logs": "Loglar"
+    }
   }
 }

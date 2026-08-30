@@ -1,4 +1,10 @@
 {
+  "common": {
+    "save": "Save",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "unsavedChanges": "Unsaved changes"
+  },
   "agents": {
     "bulkEdit": {
       "apply": "Apply",
@@ -23,6 +29,9 @@
     "followAgent": "Follow the agent language ({{language}})",
     "uiHint": "Language of the app's own buttons, labels and messages. Independent of the agent's reply language.",
     "uiLabel": "Interface language"
+  },
+  "navigation": {
+    "promptsFiles": "Prompts"
   },
   "time": {
     "bucket": {
@@ -52,5 +61,10 @@
     "minutesShort_one": "{{count}} min",
     "minutesShort_other": "{{count}} min",
     "yesterday": "Yesterday"
+  },
+  "workspace": {
+    "tabs": {
+      "logs": "Logs"
+    }
   }
 }

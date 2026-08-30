@@ -4,6 +4,7 @@ import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
 import { NAV } from './navItems'
+import { useTranslation } from 'react-i18next'
 
 export type View =
   | 'dashboard'
@@ -19,7 +20,7 @@ export type View =
   | 'tools'
   | 'market'
   | 'budget'
-  | 'logs'
+  | 'prompts'
   | 'insights'
   | 'workspace'
   | 'settings'
@@ -145,6 +146,7 @@ export function NavRail({
   onSwitchWorkspace,
   onCreateWorkspace,
 }: Props) {
+  const { t } = useTranslation()
   // The active workspace's signals rolled up for its label: any busy view, any
   // unsaved edit. (Other workspaces surface via the unread-badge set.)
   const anyBusy = (busyViews?.size ?? 0) > 0
@@ -245,6 +247,7 @@ export function NavRail({
       {/* View navigation */}
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
         {NAV.map((item) => {
+          const label = item.labelKey ? t(item.labelKey) : item.label
           const Icon = item.icon
           const isActive = view === item.key
           const busy = busyViews?.has(item.key) ?? false
@@ -255,18 +258,18 @@ export function NavRail({
               key={item.key}
               onClick={() => onSelectView(item.key)}
               data-testid={`nav-${item.key}`}
-              aria-label={item.label}
+              aria-label={label}
               aria-current={isActive ? 'page' : undefined}
               title={
                 collapsed
-                  ? `${item.label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}`
+                  ? `${label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}`
                   : undefined
               }
               className={navItemClass(isActive, collapsed)}
             >
               {isActive && <ActiveBar />}
               <Icon size={18} strokeWidth={2} className="shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && <span>{label}</span>}
               <NavDots busy={busy} unread={unread} dirty={dirty} collapsed={collapsed} />
             </button>
           )

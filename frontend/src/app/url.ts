@@ -26,7 +26,7 @@ const VIEWS: View[] = [
   'tools',
   'market',
   'budget',
-  'logs',
+  'prompts',
   'insights',
   'workspace',
   'settings',
@@ -73,6 +73,13 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'w' && parts[1]) {
     workspaceId = parts[1]
     rest = parts.slice(2)
+  }
+
+  // Navigation reshuffle compatibility: logs now lives under Workspace, while
+  // workspace/files moved to the top-level Prompts view.
+  if (rest[0] === 'logs') return { workspaceId, view: 'workspace', id: 'logs', query }
+  if (rest[0] === 'workspace' && rest[1] === 'files') {
+    return { workspaceId, view: 'prompts', id: null, query }
   }
 
   const view = resolveView(rest[0])

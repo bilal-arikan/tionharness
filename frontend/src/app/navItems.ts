@@ -14,13 +14,13 @@ import {
   Plug,
   Store,
   Wallet,
-  ScrollText,
+  FileText,
   Lightbulb,
   type LucideIcon,
 } from 'lucide-react'
 import type { View } from './NavRail'
 
-export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
+export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIcon }[] = [
   { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
@@ -34,6 +34,6 @@ export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'tools', label: 'Araçlar & MCP', icon: Plug },
   { key: 'market', label: 'Market', icon: Store },
   { key: 'budget', label: 'Bütçe', icon: Wallet },
-  { key: 'logs', label: 'Loglar', icon: ScrollText },
+  { key: 'prompts', label: 'Prompts', labelKey: 'navigation.promptsFiles', icon: FileText },
   { key: 'insights', label: 'İçgörü', icon: Lightbulb },
 ]

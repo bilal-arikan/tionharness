@@ -41,7 +41,7 @@ Paket ayrıntısı: `_Docs/21-MARKET.md`; otomasyon davranışı:
 
 Görünüm ayarları artık **uygulama-geneli Ayarlar'da değil**, NavRail ▸ **Workspace**
 penceresinin **Görünüm** sekmesindedir (`WorkspaceView.tsx` sekmeleri: Genel ▸
-**Görünüm** ▸ Proje ▸ Promptlar & Dosyalar). Ayar **aktif workspace'e özeldir**:
+**Görünüm** ▸ Proje ▸ Loglar). Ayar **aktif workspace'e özeldir**:
 her workspace renk ailesi ile koyu/açık varyantı birlikte kodlayan tek bir
 `themePreset` seçimi saklar (ör. `violet-dark` veya `violet-light`);
 **workspace değiştirince arayüz teması da değişir**.
@@ -71,7 +71,7 @@ her workspace renk ailesi ile koyu/açık varyantı birlikte kodlayan tek bir
 
 Workspace'i taşınabilir bir **şablon paketine** dönüştürme (eski "Şablon olarak yayınla")
 artık `WorkspaceView`'in kendi **Dışa Aktar** sekmesindedir (Genel ▸ Görünüm ▸ Proje ▸
-Promptlar & Dosyalar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
+Loglar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
 detaylandırıldı. Panel: `frontend/src/features/workspace/WorkspaceExportPanel.tsx`.
 
 - **Öğe-bazlı seçim (2026-07-01):** Ajanlar, Akışlar, Workspace skill'leri, Zamanlamalar
@@ -89,7 +89,7 @@ detaylandırıldı. Panel: `frontend/src/features/workspace/WorkspaceExportPanel
   `coordinatorMode`/`coordinatorWorkflow`/`coordinatorPrompt` varsayılanı da taşınır —
   yayınlanan bir ekip orkestrasyon şeklini de, ajana özel delegasyon yönergesini de
   kaybetmez.
-- **Promptlar & README (2026-07-01):** "Promptlar & Dosyalar" ekranındaki runtime promptları
+- **Promptlar & README (2026-07-01):** NavRail'deki **Promptlar** ekranındaki runtime promptları
   (summary/reflect/title/…) ve README de dışa aktarılabilir — **yalnız varsayılandan farklı
   olanlar**. Panel `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.
   Backend `WorkspacePayload.Prompts/Readme` taşır; install'da `config/prompts/` + `config/README.md`
@@ -168,7 +168,7 @@ DATA_DIR/
 
 > **`config/` klasörü (2026-06-17):** runtime yardımcı promptları (summary/reflect/title),
 > workspace talimatları ve README **editlenebilir dosyalar** olarak burada tutulur. Hem
-> kullanıcı (diskten) hem uygulama (Ayarlar ▸ Bu Workspace ▸ Promptlar & Dosyalar) düzenler.
+> kullanıcı (diskten) hem uygulama (NavRail ▸ Promptlar) düzenler.
 > Bir prompt dosyası boş/yoksa uygulama gömülü varsayılana düşer. Detay: `agent/wsconfig.go`,
 > `api/workspace_config.go`.
 
@@ -362,7 +362,7 @@ kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
   Seviyeler (lite/full/ultra) bilerek alınmadı: seçici yok, ölü ağırlık olurdu.
 - **Kod:** `internal/agent/tersemode.go`, `WSSettings.TerseMode` → `Runtime.SetTerseMode`.
 - **UI:** Workspace ▸ Genel ▸ "Yanıt stili" ▸ *Terse mod (caveman)*; metin Workspace ▸
-  Promptlar & Dosyalar ▸ "Terse (caveman) yanıt stili".
+  Promptlar ▸ "Terse (caveman) yanıt stili".
 
 ## Notlar / Gelecek
 

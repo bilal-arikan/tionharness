@@ -9908,3 +9908,14 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   `"spawned"` → `"schedule-run"`), `_Docs/20-SCHEDULE-WAKE.md`.
 - **Testler:** `go test ./...` (tam takım) + `frontend`: `tsc -b --noEmit`,
   `vitest run` (323/323) — hepsi yeşil.
+
+## TSK466 — Navigasyon yerleşimi: Workspace Logları + üst seviye Promptlar & Dosyalar (2026-08-30)
+
+- **Loglar** bağımsız NavRail öğesinden çıkarılıp `Workspace ▸ Loglar` sekmesine taşındı.
+  `LogsPanel` burada kendi başlığı ve tam genişlikte kaydırma alanıyla render edilir.
+- **Promptlar & Dosyalar** workspace alt sekmesinden çıkarılıp üst seviye NavRail görünümü oldu;
+  mevcut `WorkspaceFilesPanel` ve kaydet/kirli-durum davranışı korundu.
+- Eski `#/w/{workspace}/logs` bağlantıları `workspace/logs`'a,
+  `#/w/{workspace}/workspace/files` bağlantıları üst seviye `prompts` görünümüne yönlenir.
+- `focus_view` sözleşmesi canlı üst seviye görünümle eşitlendi: `prompts` eklendi, bağımsız
+  `logs` kaldırıldı.

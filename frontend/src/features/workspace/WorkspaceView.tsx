@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Boxes,
-  FileText,
+  ScrollText,
   FolderGit2,
   Lightbulb,
   Palette,
@@ -13,16 +13,24 @@ import type { WorkspaceSettings } from '@/types'
 import type { Appearance } from '@/shared/lib/theme'
 import { WorkspacePanel } from '@/features/settings/WorkspacePanel'
 import { AppearancePanel } from '@/features/settings/appPanels'
-import { WorkspaceFilesPanel, type FilesSaveState } from '@/features/settings/WorkspaceFilesPanel'
+import { LogsPanel } from '@/features/logs/LogsPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { RecommendationsPanel } from './RecommendationsPanel'
 import { Button, CollapsibleListShell, toast } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
+import { useTranslation } from 'react-i18next'
 
-type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export' | 'recommendations'
+type Tab = 'general' | 'appearance' | 'project' | 'logs' | 'export' | 'recommendations'
 
-const TAB_KEYS: Tab[] = ['general', 'appearance', 'project', 'files', 'export', 'recommendations']
+export const WORKSPACE_TAB_KEYS: Tab[] = [
+  'general',
+  'appearance',
+  'project',
+  'logs',
+  'export',
+  'recommendations',
+]
 
 interface Props {
   onError: (msg: string) => void
@@ -35,7 +43,6 @@ interface Props {
   // Re-trigger the post-create recommendation toast on demand (bumps recsTrigger in
   // App) — used by the Öneriler tab's "show cards" button.
   onShowRecommendations?: () => void
-  onGoToAgents: () => void
   // Active sub-tab, URL-synced by the parent (#/w/{ws}/workspace/{tab}).
   tab?: string | null
   onTabChange?: (t: string) => void
@@ -44,40 +51,35 @@ interface Props {
   onToggleNav?: () => void
 }
 
-const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
+const TABS: { key: Tab; label: string; labelKey?: string; icon: LucideIcon }[] = [
   { key: 'general', label: 'Genel', icon: Boxes },
   { key: 'appearance', label: 'Görünüm', icon: Palette },
   { key: 'project', label: 'Proje', icon: FolderGit2 },
-  { key: 'files', label: 'Promptlar & Dosyalar', icon: FileText },
+  { key: 'logs', label: 'Logs', labelKey: 'workspace.tabs.logs', icon: ScrollText },
   { key: 'export', label: 'Dışa Aktar', icon: PackageCheck },
   { key: 'recommendations', label: 'Öneriler', icon: Lightbulb },
 ]
 
 // WorkspaceView is the dedicated workspace window opened from the NavRail. A
 // left sub-navbar (like the Settings / Logs screens) selects between the active
-// workspace's General settings, its Project (path + git), and its prompt/
-// instruction Files. Moved out of the Settings screen so workspace + path
-// details have their own navbar-opened window.
+// workspace's General settings, Project (path + git), and logs.
 export function WorkspaceView({
   onError,
   onWorkspaceChanged,
   onDeleteWorkspace,
   onAppearanceSaved,
   onShowRecommendations,
-  onGoToAgents,
   tab: tabProp,
   onTabChange,
   navOpen,
   onToggleNav,
 }: Props) {
-  const tab: Tab = TAB_KEYS.includes(tabProp as Tab) ? (tabProp as Tab) : 'general'
+  const { t: translate } = useTranslation()
+  const tab: Tab = WORKSPACE_TAB_KEYS.includes(tabProp as Tab) ? (tabProp as Tab) : 'general'
   const setTab = (t: Tab) => onTabChange?.(t)
   const [ws, setWs] = useState<WorkspaceSettings | null>(null)
   const [wsOrig, setWsOrig] = useState<WorkspaceSettings | null>(null)
   const [saving, setSaving] = useState(false)
-  // The Files tab reports its own save state so the shared top header can show
-  // its Kaydet/Kayıtlı (lifted out of the panel).
-  const [filesState, setFilesState] = useState<FilesSaveState | null>(null)
 
   useEffect(() => {
     api
@@ -127,20 +129,13 @@ export function WorkspaceView({
     }
   }
 
-  // The top header hosts the Save button for every tab. General/Project save the
-  // persisted ws-settings; Files saves its config files (state lifted up).
-  const filesTab = tab === 'files'
-  const headerDirty = filesTab ? !!filesState?.dirty : dirty
-  const headerSaving = filesTab ? !!filesState?.saving : saving
-  const onHeaderSave = filesTab ? filesState?.save : save
-  // The Appearance tab manages its own Save/Reset buttons (live preview) and the
-  // Export tab has its own publish action, so the shared header Save is hidden there.
+  const headerDirty = dirty
+  const headerSaving = saving
+  const onHeaderSave = save
+  // Appearance/Export/Recommendations manage their own actions. Logs renders its
+  // own PaneHeader, so the workspace header is omitted for that tab.
   const showSave =
-    tab === 'appearance' || tab === 'export' || tab === 'recommendations'
-      ? false
-      : filesTab
-        ? !!filesState
-        : true
+    tab === 'appearance' || tab === 'export' || tab === 'recommendations' ? false : tab !== 'logs'
   const activeMeta = TABS.find((t) => t.key === tab)
 
   // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
@@ -170,9 +165,11 @@ export function WorkspaceView({
               }`}
             >
               <t.icon size={16} className="shrink-0" />
-              <span className="flex-1 truncate">{t.label}</span>
-              {(t.key === 'files'
-                ? !!filesState?.dirty
+              <span className="flex-1 truncate">
+                {t.labelKey ? translate(t.labelKey) : t.label}
+              </span>
+              {(t.key === 'logs'
+                ? false
                 : t.key === 'appearance' || t.key === 'export' || t.key === 'recommendations'
                   ? false
                   : dirty) && (
@@ -191,33 +188,39 @@ export function WorkspaceView({
           intrinsic width, so a wide prompt preview (code blocks/tables/long lines
           in the Files tab) pushes the whole column past the viewport. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            {activeMeta && (
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                <activeMeta.icon size={14} />
-              </span>
+        {tab !== 'logs' && (
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              {activeMeta && (
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                  <activeMeta.icon size={14} />
+                </span>
+              )}
+              {activeMeta
+                ? activeMeta.labelKey
+                  ? translate(activeMeta.labelKey)
+                  : activeMeta.label
+                : ''}
+            </span>
+            {showSave && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[var(--color-text-dim)]">
+                  {headerDirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
+                </span>
+                <Button onClick={onHeaderSave} disabled={!headerDirty || headerSaving}>
+                  {headerSaving ? 'Kaydediliyor…' : 'Kaydet'}
+                </Button>
+              </div>
             )}
-            {activeMeta?.label ?? ''}
-          </span>
-          {showSave && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-[var(--color-text-dim)]">
-                {headerDirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
-              </span>
-              <Button onClick={onHeaderSave} disabled={!headerDirty || headerSaving}>
-                {headerSaving ? 'Kaydediliyor…' : 'Kaydet'}
-              </Button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* The Files/prompts tab spans the full width so prompt editors render
-            wide (and default to the split edit+preview view); the form tabs stay
-            in a comfortable centered column. */}
+        {/* Logs spans the full pane; form tabs stay in a centered column. */}
         <div
-          className={`mx-auto w-full min-w-0 flex-1 space-y-4 overflow-y-auto p-6 ${
-            tab === 'files' ? 'max-w-none' : 'max-w-2xl'
+          className={`mx-auto w-full min-w-0 flex-1 ${
+            tab === 'logs'
+              ? 'flex max-w-none overflow-hidden'
+              : 'max-w-2xl space-y-4 overflow-y-auto p-6'
           }`}
         >
           {!ws ? (
@@ -236,12 +239,10 @@ export function WorkspaceView({
             <WorkspaceExportPanel ws={ws} onError={onError} />
           ) : tab === 'recommendations' ? (
             <RecommendationsPanel onError={onError} onShowCards={onShowRecommendations} />
+          ) : tab === 'logs' ? (
+            <LogsPanel onError={onError} />
           ) : (
-            <WorkspaceFilesPanel
-              onError={onError}
-              onGoToAgents={onGoToAgents}
-              onState={setFilesState}
-            />
+            <div />
           )}
         </div>
       </div>

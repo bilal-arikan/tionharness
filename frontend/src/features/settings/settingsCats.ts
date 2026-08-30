@@ -6,8 +6,6 @@ import {
   Command,
   Blocks,
   Info,
-  Boxes,
-  FileText,
   Wrench,
   SlidersHorizontal,
   Webhook,
@@ -36,11 +34,6 @@ export const APP_CATS: CatMeta[] = [
   { key: 'commands', label: 'Komutlar', icon: Command },
   { key: 'stepkinds', label: 'Adım Türleri', icon: Blocks },
   { key: 'about', label: 'Hakkında', icon: Info },
-]
-
-export const WS_CATS: CatMeta[] = [
-  { key: 'workspace', label: 'Genel', icon: Boxes },
-  { key: 'wsfiles', label: 'Promptlar & Dosyalar', icon: FileText },
 ]
 
 // Setters threaded into the per-category panels.

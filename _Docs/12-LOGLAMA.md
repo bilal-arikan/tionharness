@@ -206,7 +206,7 @@ Invoke-RestMethod "http://127.0.0.1:8090/api/logs?q=provider"
 
 ## UI: Loglar ekranı
 
-`frontend/src/features/logs/LogsPanel.tsx` (NavRail → "📜 Loglar"):
+`frontend/src/features/logs/LogsPanel.tsx` (NavRail → Workspace → Loglar):
 
 - **Canlı takip (SSE):** "Canlı" açıkken kayıtlar `/api/events` `log` olayından
   canlı akar (30sn'de bir mutabakat poll'u SSE kopmalarını kapatır); yeni satıra

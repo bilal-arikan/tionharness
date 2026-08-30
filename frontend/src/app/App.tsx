@@ -43,10 +43,11 @@ import { ToolsPanel as ToolCatalogPanel } from '@/features/tools/ToolsPanel'
 import { MarketPanel } from '@/features/market/MarketPanel'
 import { BudgetPanel } from '@/features/budget/BudgetPanel'
 import { DashboardPanel } from '@/features/dashboard/DashboardPanel'
-import { LogsPanel } from '@/features/logs/LogsPanel'
 import { InsightPanel } from '@/features/insight/InsightPanel'
 import { SettingsPanel } from '@/features/settings/SettingsPanel'
 import { WorkspaceView } from '@/features/workspace/WorkspaceView'
+import { PromptsView } from '@/features/settings/PromptsView'
+import { useTranslation } from 'react-i18next'
 import { OnboardingScreen } from '@/features/workspace/OnboardingScreen'
 import { ClaudeAuthGate } from '@/features/workspace/ClaudeAuthGate'
 import { WorkspaceRecommendations } from '@/features/workspace/WorkspaceRecommendations'
@@ -63,6 +64,7 @@ import { initServerStt } from '@/shared/lib/stt'
 const RECS_SEEN_KEY = 'ws-recs-offered'
 
 export default function App() {
+  const { t } = useTranslation()
   // Error reporting funnels every `onError(msg)` sink into a toast. Kept under the
   // old `setError` name/signature so the ~20 `onError={setError}` call sites and
   // the setError-taking hooks (useWorkspaces/useAppearance/…) are unchanged.
@@ -110,7 +112,7 @@ export default function App() {
   const paletteCommands = useMemo<Command[]>(() => {
     const nav = (Object.keys(VIEW_TITLE) as View[]).map((v) => ({
       id: `view:${v}`,
-      label: VIEW_TITLE[v],
+      label: v === 'prompts' ? t(VIEW_TITLE[v]) : VIEW_TITLE[v],
       group: 'Git',
       keywords: v,
       run: () => setView(v),
@@ -123,7 +125,7 @@ export default function App() {
       run: () => switchWorkspace(w.id),
     }))
     return [...nav, ...ws]
-  }, [workspaces, switchWorkspace])
+  }, [t, workspaces, switchWorkspace])
 
   // Post-create claude-cli readiness gate: bumped once per successful workspace
   // creation so ClaudeAuthGate (re-)probes the new workspace's login state and
@@ -805,7 +807,9 @@ export default function App() {
           />
         )}
         {view === 'budget' && <BudgetPanel onError={setError} />}
-        {view === 'logs' && <LogsPanel onError={setError} />}
+        {view === 'prompts' && (
+          <PromptsView onError={setError} onGoToAgents={() => selectView('agents')} />
+        )}
         {view === 'insights' && (
           <InsightPanel
             onError={setError}
@@ -824,7 +828,6 @@ export default function App() {
             onDeleteWorkspace={deleteActiveWorkspace}
             onAppearanceSaved={onAppearanceSaved}
             onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
-            onGoToAgents={() => selectView('agents')}
             tab={links.workspaceTab}
             onTabChange={links.setWorkspaceTab}
             navOpen={workspaceNav.open}

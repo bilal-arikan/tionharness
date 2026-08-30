@@ -62,7 +62,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
       <Toggle
         label="Terse mod (caveman)"
-        hint="Açıkken bu workspace'teki her ajanın statik system promptuna sıkıştırılmış-yanıt talimatı eklenir: dolgu sözcükler, nezaket kalıpları ve hedging düşer; kod, komut, dosya yolu ve hata metinleri harfi harfine korunur. Güvenlik uyarıları ve geri alınamaz işlem onayları bilerek uzun yazılır. Metin düzenlenebilir bir workspace promptudur (Promptlar & Dosyalar ▸ 'Terse (caveman) yanıt stili'), yani kuralları kendine göre değiştirebilirsin. Statik prefix'te olduğu için prompt-cache penceresi başına bir kez ödenir. Değişiklik açık oturumlara /refresh-context veya yeni oturumla yansır."
+        hint="Açıkken bu workspace'teki her ajanın statik system promptuna sıkıştırılmış-yanıt talimatı eklenir: dolgu sözcükler, nezaket kalıpları ve hedging düşer; kod, komut, dosya yolu ve hata metinleri harfi harfine korunur. Güvenlik uyarıları ve geri alınamaz işlem onayları bilerek uzun yazılır. Metin düzenlenebilir bir workspace promptudur (Promptlar ▸ 'Terse (caveman) yanıt stili'), yani kuralları kendine göre değiştirebilirsin. Statik prefix'te olduğu için prompt-cache penceresi başına bir kez ödenir. Değişiklik açık oturumlara /refresh-context veya yeni oturumla yansır."
         checked={ws.terseMode}
         onChange={(v) => setWsField('terseMode', v)}
       />

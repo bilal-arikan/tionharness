@@ -23,7 +23,7 @@ var focusableViews = map[string]bool{
 	"chat": true, "executions": true, "agents": true, "network": true,
 	"board": true, "schedules": true, "memory": true, "flows": true,
 	"artifacts": true, "skills": true, "market": true, "budget": true,
-	"logs": true, "workspace": true, "settings": true,
+	"prompts": true, "workspace": true, "settings": true,
 }
 
 // FocusViewTool lets an agent drive the user's UI to a specific view (and
@@ -41,14 +41,14 @@ func (FocusViewTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "focus_view",
 		Description: "Drive the user's UI to a screen to direct their attention (e.g. open the " +
-			"artifacts/board/flows view, or jump to a chat session). Does NOT block — it navigates " +
+			"artifacts/board/flows/prompts view, or jump to a chat session). Does NOT block — it navigates " +
 			"open windows and returns. For 'chat'/'executions' the optional sessionId selects a " +
 			"session (defaults to THIS session); for 'agents'/'memory' agentId selects an agent " +
 			"(defaults to the responding agent). Use to show, not to ask.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "view": { "type": "string", "enum": ["chat","executions","agents","network","board","schedules","memory","flows","artifacts","skills","market","budget","logs","workspace","settings"], "description": "The screen to open." },
+    "view": { "type": "string", "enum": ["chat","executions","agents","network","board","schedules","memory","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
     "sessionId": { "type": "string", "description": "Optional session to select (chat/executions views). Defaults to the current session." },
     "agentId": { "type": "string", "description": "Optional agent to select (agents/memory views). Defaults to the responding agent." }
   },
