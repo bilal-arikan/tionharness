@@ -2,16 +2,76 @@ package api
 
 import (
 	"context"
+	"strings"
+
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-// claudeResumePlan captures the claude-cli resume decision for one turn so the
-// caller can persist the rotated session id afterwards. See planClaudeResume.
-type claudeResumePlan struct {
-	active    bool // resume engaged this turn (toggle on + single-agent claude-cli)
-	sentCount int  // raw message count the CLI will know AFTER this turn's user msg
+// cliResumePlan captures one CLI resume decision so the caller can persist the
+// returned session/thread id and updated transcript boundary afterwards.
+type cliResumePlan struct {
+	active    bool
+	sentCount int // raw message count the CLI will know AFTER this turn's user msg
+}
+
+// planCLIResume keeps Claude's existing opt-in/persistent-session semantics and
+// adds Codex's scoped durable-thread path. Non-CLI providers remain inert.
+func (s *Server) planCLIResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, agentRow db.Agent, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
+	switch provider.Name() {
+	case "claude-cli":
+		return s.planClaudeResume(ctx, provider, agentCount, session, rawHistory, compacted, llmReq)
+	case "codex-cli":
+		return s.planCodexResume(ctx, provider, agentCount, session, agentRow, rawHistory, compacted, llmReq)
+	default:
+		return cliResumePlan{}
+	}
+}
+
+// planCodexResume enables warm `codex exec resume` only when three independent
+// safety gates hold: one responding agent, one session participant, and the
+// default session persona. Its opaque scope also includes provider/model and the
+// frozen static system prompt; changing persona or CODEX_HOME makes the stored
+// thread unverifiable and forces a cold, full-summary restart.
+func (s *Server) planCodexResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, agentRow db.Agent, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
+	resumer, ok := provider.(providers.ScopedCLIResumer)
+	multiParticipant := len(db.SessionParticipants(session)) > 1
+	personaMatch := strings.TrimSpace(session.AgentID) != "" && session.AgentID == agentRow.ID
+	scope := strings.Join([]string{
+		session.ID,
+		agentRow.ID,
+		agentRow.ProviderRef(),
+		agentRow.Model,
+		llmReq.System,
+	}, "\x00")
+	enabled := ok && agentCount == 1 && !multiParticipant && personaMatch && resumer.ResumeScopeReady(scope)
+	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory), compacted)
+	if !enabled {
+		return plan
+	}
+
+	// The scope is required even on a cold turn: it selects the durable, isolated
+	// CODEX_HOME where this turn's rollout is written for the next resume.
+	llmReq.CLIResumeScope = scope
+	if resumeID != "" && !resumer.CanResumeScoped(scope, resumeID) {
+		if s.logger != nil {
+			s.logger.Info("codex resume reset: thread is absent from the scoped home",
+				"component", "conversation", "session", session.ID,
+				"agent", agentRow.ID, "prev_cli_session", resumeID)
+		}
+		resumeID = ""
+	}
+	if resumeID != "" {
+		llmReq.ResumeSessionID = resumeID
+		llmReq.Messages = conversation.ToProviderMessages(ctx, rawHistory[deltaStart:])
+	}
+	if compacted && session.CLISessionID != "" && s.logger != nil {
+		s.logger.Info("cli resume reset: fold re-baselined the codex-cli session",
+			"component", "conversation", "session", session.ID,
+			"prev_cli_session", session.CLISessionID, "raw_msgs", len(rawHistory))
+	}
+	return plan
 }
 
 // planClaudeResume decides whether to resume the claude-cli session for this turn
@@ -22,7 +82,7 @@ type claudeResumePlan struct {
 // thread would collide). rawHistory is the un-annotated message list (it includes
 // this turn's just-added user message). Returns a plan whose sentCount is stored
 // after the turn together with the rotated Response.SessionID.
-func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, compacted bool, llmReq *providers.Request) claudeResumePlan {
+func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
 	set := s.settings.Get()
 	// A multi-participant thread (2+ agents have taken part) must NOT warm-resume:
 	// the CLI session id is tracked per session, so resuming it for a DIFFERENT agent
@@ -83,14 +143,8 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 // does not catch that, and resuming one agent's CLI session for another loses the
 // author-labeled history + continues the wrong persona.
 //
-// NOT extended to codex-cli: this whole mechanism exists to trim the transcript
-// to the unseen delta because claude-cli's --resume session id ROTATES and the
-// prior warm session becomes unreachable across a cold start, so TionHarness must
-// track sentCount/deltaStart itself. codex's thread_id is STABLE across resumes
-// (verified — see the codex contract §1.6), so codex needs no delta-tracking gate
-// here at all; it resumes the same thread_id every turn regardless of this
-// function. Gating it through claudeResumeDecision's sentCount bookkeeping would
-// apply claude's rotation-driven logic to a provider that doesn't rotate.
+// Codex has a separate scoped-home gate in planCodexResume. Keeping this helper
+// Claude-only preserves the ClaudePersistentSession precedence contract.
 func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, providerName string, multiParticipant bool) bool {
 	return claudeResume && !persistentSession && agentCount == 1 && providerName == "claude-cli" && !multiParticipant
 }
@@ -103,11 +157,11 @@ func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, pro
 // only when a prior id exists, the boundary is in (0, rawLen], and there is at
 // least one unseen message — otherwise it falls back to cold (e.g. after edits
 // shrank the history past the boundary).
-func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen int, compacted bool) (plan claudeResumePlan, resumeID string, deltaStart int) {
+func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen int, compacted bool) (plan cliResumePlan, resumeID string, deltaStart int) {
 	if !enabled {
-		return claudeResumePlan{}, "", 0
+		return cliResumePlan{}, "", 0
 	}
-	plan = claudeResumePlan{active: true, sentCount: rawLen}
+	plan = cliResumePlan{active: true, sentCount: rawLen}
 	// A fold just re-baselined the transcript into the rolling summary. Warm-resuming
 	// here would keep the CLI's now-stale FULL history warm server-side and merely
 	// stack the fresh summary on top — the fold would never actually shrink the CLI's

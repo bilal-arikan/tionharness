@@ -112,7 +112,7 @@ func TestCodexSandboxArgs(t *testing.T) {
 // with "unexpected argument '-s' found".
 func TestCodexBuildArgsFlagOrder(t *testing.T) {
 	c := NewCodexCLI("codex", "", "")
-	args := c.buildArgs(Request{PermissionMode: "read-only", ResumeSessionID: "01a01457-0c11-71d0-b495-615d96b8b913"}, "gpt-5.4-mini")
+	args := c.buildArgs(Request{PermissionMode: "read-only", CLIResumeScope: "SES1/AGT1", ResumeSessionID: "01a01457-0c11-71d0-b495-615d96b8b913"}, "gpt-5.4-mini")
 
 	idx := func(want string) int {
 		for i, a := range args {
@@ -169,6 +169,16 @@ func TestCodexBuildArgsNoResumeWhenFresh(t *testing.T) {
 		}
 		if a == "-m" {
 			t.Fatalf("empty model must not emit -m: %v", args)
+		}
+	}
+}
+
+func TestCodexBuildArgsRejectsUnscopedResume(t *testing.T) {
+	c := NewCodexCLI("codex", "", "")
+	args := c.buildArgs(Request{ResumeSessionID: "thread-without-safe-home"}, "")
+	for _, arg := range args {
+		if arg == "resume" {
+			t.Fatalf("unscoped resume escaped home safety gate: %v", args)
 		}
 	}
 }

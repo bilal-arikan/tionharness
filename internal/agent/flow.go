@@ -449,22 +449,38 @@ func (r *Runtime) prepareResume(ctx context.Context, runID, input string) (db.Fl
 	flow, err := r.db.GetFlow(ctx, run.FlowID)
 	if err != nil {
 		// Flow deleted while waiting: fail the run cleanly.
-		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted")
+		if finishErr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted"); finishErr != nil {
+			return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("flow %s missing and failure status persistence failed: %v (original: %w)", run.FlowID, finishErr, err)
+		}
 		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("flow %s: %w", run.FlowID, err)
 	}
 	g, err := orchestration.ParseGraph(flow.Graph)
 	if err != nil {
-		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error())
+		if finishErr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error()); finishErr != nil {
+			return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("persist graph-parse failure: %v (original: %w)", finishErr, err)
+		}
 		return run, orchestration.Graph{}, orchestration.State{}, err
 	}
 	var st orchestration.State
-	if uerr := json.Unmarshal([]byte(run.State), &st); uerr != nil || st.Outputs == nil {
-		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "corrupted run state")
+	if uerr := json.Unmarshal([]byte(run.State), &st); uerr != nil {
+		if finishErr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "corrupted run state"); finishErr != nil {
+			return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("persist corrupt-state failure: %v (original: %w)", finishErr, uerr)
+		}
 		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("corrupted run state: %w", uerr)
 	}
+	if st.Outputs == nil {
+		if finishErr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "corrupted run state: missing outputs"); finishErr != nil {
+			return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("persist missing-outputs failure: %w", finishErr)
+		}
+		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("corrupted run state: missing outputs")
+	}
 	st.Last = input
-	if data, merr := json.Marshal(st); merr == nil {
-		_ = r.db.SetFlowRunState(ctx, run.ID, string(data))
+	data, err := json.Marshal(st)
+	if err != nil {
+		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("marshal resumed flow state: %w", err)
+	}
+	if err := r.db.SetFlowRunState(ctx, run.ID, string(data)); err != nil {
+		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("persist resumed flow state: %w", err)
 	}
 	return run, g, st, nil
 }
@@ -506,19 +522,31 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 		}
 	})
 
+	checkpointID, sequence, journalErr := r.db.FlowRunStateJournalInfo(ctx, run.ID)
+	if journalErr != nil {
+		if err := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", fmt.Sprintf("load flow state journal: %v", journalErr)); err != nil {
+			r.logger.Warn("finish corrupt-journal flow run failed", "run", run.ID, "error", err)
+		}
+		run.Status = db.FlowFailure
+		run.Error = fmt.Sprintf("load flow state journal: %v", journalErr)
+		return run
+	}
+	deltaWriter := newFlowStateDeltaWriter(checkpointID, sequence, st)
 	save := func(s orchestration.State) error {
-		data, err := json.Marshal(s)
+		delta, err := deltaWriter.next(s)
 		if err != nil {
 			return err
 		}
-		return r.db.SetFlowRunState(ctx, run.ID, string(data))
+		return r.db.AppendFlowRunStateDelta(ctx, run.ID, delta)
 	}
 
 	final, runErr := eng.Run(ctx, g, input, st, save)
 
-	// Best-effort final state snapshot (in case the last save raced the error).
-	if data, err := json.Marshal(final); err == nil {
-		_ = r.db.SetFlowRunState(ctx, run.ID, string(data))
+	data, marshalErr := json.Marshal(final)
+	if marshalErr != nil && runErr == nil {
+		runErr = fmt.Errorf("marshal final flow state: %w", marshalErr)
+	}
+	if marshalErr == nil {
 		run.State = string(data)
 	}
 
@@ -526,14 +554,19 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	// waiting status and return — NOT terminal. ResumeWaitingFlow revives it when
 	// input arrives; boot never auto-resumes it (it's not "running").
 	if runErr == nil && final.WaitingAt != "" {
-		data, _ := json.Marshal(final)
 		if err := r.db.MarkFlowRunWaiting(ctx, run.ID, string(data)); err != nil {
-			r.logger.Warn("mark flow run waiting failed", "run", run.ID, "error", err)
+			runErr = fmt.Errorf("checkpoint waiting flow state: %w", err)
+		} else {
+			run.Status = db.FlowWaiting
+			run.State = string(data)
+			r.logger.Info("flow run waiting for input", "flow", run.FlowID, "run", run.ID, "node", final.WaitingAt)
+			return run
 		}
-		run.Status = db.FlowWaiting
-		run.State = string(data)
-		r.logger.Info("flow run waiting for input", "flow", run.FlowID, "run", run.ID, "node", final.WaitingAt)
-		return run
+	}
+	if marshalErr == nil {
+		if err := r.db.SetFlowRunState(ctx, run.ID, string(data)); err != nil && runErr == nil {
+			runErr = fmt.Errorf("checkpoint final flow state: %w", err)
+		}
 	}
 
 	status := db.FlowSuccess
@@ -866,10 +899,15 @@ func (r *Runtime) ResumeRunningFlows(ctx context.Context) {
 		}
 		var st orchestration.State
 		if err := json.Unmarshal([]byte(run.State), &st); err != nil || st.Outputs == nil {
-			if err != nil {
-				r.logger.Warn("resume: flow state restore failed, restarting from scratch", "run", run.ID, "error", err)
+			restoreErr := err
+			if restoreErr == nil {
+				restoreErr = fmt.Errorf("missing outputs")
 			}
-			st = orchestration.NewState(g)
+			r.logger.Warn("resume: flow state restore failed", "run", run.ID, "error", restoreErr)
+			if ferr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", fmt.Sprintf("corrupted run state: %v", restoreErr)); ferr != nil {
+				r.logger.Warn("resume: finish corrupt-state run failed", "run", run.ID, "error", ferr)
+			}
+			continue
 		}
 		r.logger.Info("resuming flow run", "run", run.ID, "from", st.Current)
 		go r.driveFlow(ctx, run, g, run.Input, st, true, nil)

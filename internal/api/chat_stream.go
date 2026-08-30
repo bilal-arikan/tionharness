@@ -368,6 +368,9 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())
 				return
 			}
+			if prep.Compacted {
+				wsp.Runtime.DropWarmCLISession(session.ID)
+			}
 
 			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, feedbackRecap, passContext)
 			// Prompt-epoch drift step: if the static context changed since the frozen
@@ -384,16 +387,18 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// channel the manual command uses (live SSE + cross-window publish + persisted
 			// trace via leadSteps below) so the fold shows up like any other turn event.
 			if prep.Compacted {
-				leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.Fold)}, leadSteps...)
+				leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.Fold, provider)}, leadSteps...)
 			}
 			for _, st := range leadSteps {
 				sse("step", st)
 				wsp.Runtime.EmitSessionStep(session.ID, st)
 				s.publishHub(wsp.ID, session.ID, sessionhub.KindStep, st, false)
 			}
-			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
-			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
-			resumePlan := s.planClaudeResume(ctx, provider, len(agents), session, rawHistory, prep.Compacted, &llmReq)
+			// Safe CLI resume: Claude retains its existing opt-in/persistent-session
+			// gates; Codex additionally requires one participant, the default persona
+			// and a durable scoped home. A fold always leaves the compacted request intact
+			// and starts fresh from TionHarness summary + recent tail.
+			resumePlan := s.planCLIResume(ctx, provider, len(agents), session, agentRow, rawHistory, prep.Compacted, &llmReq)
 
 			// Attach a per-agent artifact sink so create_artifact / update_artifact
 			// persist content stamped with this session + agent — both on the native
@@ -585,6 +590,9 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						// (interaction_open/resolved), not broadcast as plain hub steps —
 						// otherwise a passive window would show a card it cannot resolve.
 					default:
+						if st.Running || st.Append {
+							break
+						}
 						kept = append(kept, st)
 						// Durable activity (thinking/tool/todo/diff/recovery/error/…) →
 						// seq'd on the hub so every window renders it live and a reconnect
@@ -697,8 +705,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "persist_error", aerr.Error())
 				return
 			}
-			// Persist the rotated claude-cli session id so the NEXT turn resumes it and
-			// sends only the new delta. sentCount+1 accounts for this turn's assistant
+			// Persist the CLI session/thread id so the NEXT turn resumes it and sends
+			// only the new delta. sentCount+1 accounts for this turn's assistant
 			// reply, which the CLI already holds server-side (no need to resend it).
 			if resumePlan.active && resp.SessionID != "" {
 				if rerr := database.SetSessionCLIResume(ctx, session.ID, resp.SessionID, resumePlan.sentCount+1); rerr != nil {

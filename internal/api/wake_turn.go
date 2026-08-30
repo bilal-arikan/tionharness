@@ -72,6 +72,9 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)
 		}
+		if prep.Compacted {
+			wsp.Runtime.DropWarmCLISession(session.ID)
+		}
 		// freshSession=false: a wake always continues an existing conversation.
 		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, toolRecap, feedbackRecap, "")
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);
@@ -86,7 +89,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// refresh. This is the path that carried the invisible SES548 spawned-turn fold.
 		var compactionStep *agent.TurnStep
 		if prep.Compacted {
-			st := compactionLeadStep(prep.Fold)
+			st := compactionLeadStep(prep.Fold, provider)
 			compactionStep = &st
 			if emit != nil {
 				emit(st)

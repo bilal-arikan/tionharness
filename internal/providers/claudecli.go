@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -54,7 +55,9 @@ type ClaudeCLI struct {
 	// generated settings.json (permission deny-list + PreToolUse/PostToolUse hooks)
 	// for this turn. Lifecycle mirrors mcpConfigPath: set fresh by ConfigureMCP each
 	// MCP turn (possibly "") and only emitted on the MCP path.
-	settingsPath string
+	settingsPath         string
+	nativeCompactionOnce sync.Once
+	nativeCompactionOK   bool
 }
 
 // NewClaudeCLI creates a provider that invokes the given claude binary. configDir,
@@ -140,6 +143,17 @@ func (c *ClaudeCLI) ConfigDir() string { return c.configDir }
 
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
+
+// NativeCompactionEvents requires the first Claude Code version locally
+// verified with --include-hook-events and compact_boundary stream events.
+func (c *ClaudeCLI) NativeCompactionEvents() bool {
+	c.nativeCompactionOnce.Do(func() {
+		c.nativeCompactionOK = cliVersionAtLeast(c.binPath, 2, 1, 238)
+	})
+	return c.nativeCompactionOK
+}
+
+var _ CLICompactionLifecycle = (*ClaudeCLI)(nil)
 
 // permissionModeArgs maps TionHarness's permission mode onto the claude CLI's
 // permission flags. In headless (-p) mode the default mode cannot prompt for
@@ -300,18 +314,24 @@ type cliMessage struct {
 }
 
 type cliEvent struct {
-	Type           string                     `json:"type"`
-	Subtype        string                     `json:"subtype"`
-	Message        *cliMessage                `json:"message"`
-	IsError        bool                       `json:"is_error"`
-	APIErrorStatus string                     `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
-	Error          string                     `json:"error"`            // standalone error line (e.g. {"error":"authentication_failed"})
-	Result         string                     `json:"result"`
-	Usage          *cliUsage                  `json:"usage"`
-	ModelUsage     map[string]json.RawMessage `json:"modelUsage"`
-	NumTurns       int                        `json:"num_turns"`       // result event: internal tool-loop API round-trips this turn
-	SessionID      string                     `json:"session_id"`      // emitted on system/init and result events
-	RateLimit      *cliRateLimit              `json:"rate_limit_info"` // emitted on rate_limit_event
+	Type            string                     `json:"type"`
+	Subtype         string                     `json:"subtype"`
+	Message         *cliMessage                `json:"message"`
+	IsError         bool                       `json:"is_error"`
+	APIErrorStatus  string                     `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
+	Error           string                     `json:"error"`            // standalone error line (e.g. {"error":"authentication_failed"})
+	Result          string                     `json:"result"`
+	Usage           *cliUsage                  `json:"usage"`
+	ModelUsage      map[string]json.RawMessage `json:"modelUsage"`
+	NumTurns        int                        `json:"num_turns"`       // result event: internal tool-loop API round-trips this turn
+	SessionID       string                     `json:"session_id"`      // emitted on system/init and result events
+	RateLimit       *cliRateLimit              `json:"rate_limit_info"` // emitted on rate_limit_event
+	CompactMetadata *struct {
+		Trigger string `json:"trigger"`
+	} `json:"compact_metadata"`
+	Status        *string `json:"status"`
+	CompactResult string  `json:"compact_result"`
+	CompactError  string  `json:"compact_error"`
 	// result envelope (CLI 2.1.238): stop_reason is the model's stop cause,
 	// terminal_reason why the CLI itself ended the turn ("api_error", ...).
 	// The result text alone can be a bare sentence, so terminal_reason is the
@@ -330,6 +350,7 @@ type cliEvent struct {
 	// system/hook_response events (hook lifecycle).
 	HookName  string `json:"hook_name"`
 	HookEvent string `json:"hook_event"`
+	HookID    string `json:"hook_id"`
 	ExitCode  int    `json:"exit_code"`
 	Outcome   string `json:"outcome"`
 	Stderr    string `json:"stderr"`
@@ -380,6 +401,9 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// Note: do NOT use --bare here — it skips keychain reads and breaks the
 	// OAuth/subscription login ("Not logged in"). stream-json needs --verbose.
 	args := []string{"-p", "--output-format", "stream-json", "--verbose"}
+	if c.NativeCompactionEvents() {
+		args = append(args, "--include-hook-events")
+	}
 
 	model := req.Model
 	if model == "" {
@@ -944,9 +968,20 @@ type cliStreamParser struct {
 	// carry several parallel tool_use blocks) into several stream events sharing the
 	// same message id. Track the current message's tool trace indices so the 2nd+
 	// tool_use of a message allocates a batch id and stamps the earlier ones too.
-	curMsgID    string // assistant message id currently being accumulated
-	curMsgTools []int  // trace indices of that message's tool steps
-	batchSeq    int    // 1-based batch id allocator (unique within the turn)
+	curMsgID                    string // assistant message id currently being accumulated
+	curMsgTools                 []int  // trace indices of that message's tool steps
+	batchSeq                    int    // 1-based batch id allocator (unique within the turn)
+	nativeCompactionID          string
+	nativeCompactionHasStart    bool
+	nativeCompactionDone        bool
+	nativeCompactionSignal      string
+	nativeCompactionHookID      string
+	nativeCompactionFailed      bool
+	nativeCompactionStatusStart bool
+	nativeCompactionSeq         int
+	nativeCompactionMu          sync.Mutex
+	nativeCompactionTimer       *time.Timer
+	nativeCompactionTimeout     time.Duration
 }
 
 // primaryModelUsage returns the model key that consumed the most tokens in a
@@ -1181,6 +1216,25 @@ func (p *cliStreamParser) feed(line string) {
 
 	switch ev.Type {
 	case "system":
+		if ev.Subtype == "status" {
+			if ev.Status != nil && *ev.Status == "compacting" {
+				p.startNativeCompaction("")
+			}
+			switch ev.CompactResult {
+			case "success":
+				p.completeNativeCompaction(ev, "status")
+			case "failed":
+				p.failNativeCompaction()
+			}
+		}
+		if ev.Subtype == "hook_started" && ev.HookEvent == "PreCompact" {
+			p.startNativeCompaction(ev.HookID)
+		}
+		if ev.Subtype == "compact_boundary" {
+			p.completeNativeCompaction(ev, "boundary")
+		} else if ev.Subtype == "hook_response" && ev.HookEvent == "PostCompact" {
+			p.completeNativeCompaction(ev, "post")
+		}
 		// hook_response reports how each configured hook ran. A hook that exits
 		// non-zero can silently strip a tool call or block an edit, and the turn
 		// still ends "successfully" — so make the failure visible. Successful
@@ -1395,9 +1449,111 @@ func (p *cliStreamParser) feed(line string) {
 	}
 }
 
+func (p *cliStreamParser) startNativeCompaction(id string) {
+	p.nativeCompactionMu.Lock()
+	defer p.nativeCompactionMu.Unlock()
+	statusStart := id == ""
+	if !p.nativeCompactionDone && !p.nativeCompactionFailed && p.nativeCompactionID != "" && (statusStart || p.nativeCompactionStatusStart) {
+		return
+	}
+	if p.nativeCompactionTimer != nil {
+		p.nativeCompactionTimer.Stop()
+		p.nativeCompactionTimer = nil
+	}
+	if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
+		p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+	}
+	if id == "" {
+		p.nativeCompactionSeq++
+		id = fmt.Sprintf("claude-compact-%d", p.nativeCompactionSeq)
+	}
+	p.nativeCompactionID = id
+	p.nativeCompactionHasStart = true
+	p.nativeCompactionDone = false
+	p.nativeCompactionFailed = false
+	p.nativeCompactionStatusStart = statusStart
+	p.nativeCompactionSignal = ""
+	p.nativeCompactionHookID = ""
+	if p.onEvent != nil {
+		p.onEvent(TraceStep{ID: id, Running: true, Kind: "compaction", Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact"})
+		timeout := p.nativeCompactionTimeout
+		if timeout <= 0 {
+			timeout = 2 * time.Minute
+		}
+		p.nativeCompactionTimer = time.AfterFunc(timeout, func() {
+			p.nativeCompactionMu.Lock()
+			defer p.nativeCompactionMu.Unlock()
+			if !p.nativeCompactionDone && p.nativeCompactionID == id {
+				p.onEvent(TraceStep{Kind: "tombstone", Ref: id})
+				p.nativeCompactionID = ""
+				p.nativeCompactionHasStart = false
+				p.nativeCompactionTimer = nil
+			}
+		})
+	}
+}
+
+func (p *cliStreamParser) failNativeCompaction() {
+	p.nativeCompactionMu.Lock()
+	defer p.nativeCompactionMu.Unlock()
+	if p.nativeCompactionTimer != nil {
+		p.nativeCompactionTimer.Stop()
+		p.nativeCompactionTimer = nil
+	}
+	if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
+		p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+	}
+	p.nativeCompactionFailed = true
+	p.nativeCompactionDone = false
+}
+
+func (p *cliStreamParser) completeNativeCompaction(ev cliEvent, signal string) {
+	p.nativeCompactionMu.Lock()
+	defer p.nativeCompactionMu.Unlock()
+	if p.nativeCompactionFailed {
+		return
+	}
+	if p.nativeCompactionDone {
+		// With a PreCompact start, every completion signal belongs to that one
+		// correlated cycle. Without hooks, consecutive boundary events are distinct
+		// compactions; a boundary+PostCompact pair is duplicate evidence for one.
+		if p.nativeCompactionHasStart || signal != p.nativeCompactionSignal || (signal == "post" && ev.HookID == p.nativeCompactionHookID) {
+			return
+		}
+		p.nativeCompactionID = ""
+		p.nativeCompactionDone = false
+	}
+	p.nativeCompactionDone = true
+	p.nativeCompactionSignal = signal
+	p.nativeCompactionHookID = ev.HookID
+	if p.nativeCompactionTimer != nil {
+		p.nativeCompactionTimer.Stop()
+		p.nativeCompactionTimer = nil
+	}
+	id := p.nativeCompactionID
+	if id == "" {
+		id = ev.HookID
+	}
+	step := TraceStep{ID: id, Kind: "compaction", Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact"}
+	if ev.CompactMetadata != nil {
+		step.Trigger = ev.CompactMetadata.Trigger
+	}
+	p.resp.Trace = append(p.resp.Trace, step)
+	p.emit(len(p.resp.Trace) - 1)
+}
+
 // finish resolves the final answer and emits any tool steps whose result never
 // arrived (so the UI still sees them).
 func (p *cliStreamParser) finish() (*Response, error) {
+	p.nativeCompactionMu.Lock()
+	if p.nativeCompactionTimer != nil {
+		p.nativeCompactionTimer.Stop()
+		p.nativeCompactionTimer = nil
+		if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
+			p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+		}
+	}
+	p.nativeCompactionMu.Unlock()
 	if p.hadError {
 		return nil, fmt.Errorf("claude CLI error: %s", p.errText)
 	}

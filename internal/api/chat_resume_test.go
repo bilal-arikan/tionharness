@@ -1,6 +1,26 @@
 package api
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+)
+
+type scopedResumeTestProvider struct {
+	ready bool
+	can   bool
+}
+
+func (p *scopedResumeTestProvider) Name() string { return "codex-cli" }
+func (p *scopedResumeTestProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
+	return nil, nil
+}
+func (p *scopedResumeTestProvider) ResumeScopeReady(string) bool { return p.ready }
+func (p *scopedResumeTestProvider) CanResumeScoped(string, string) bool {
+	return p.can
+}
 
 // TestResumeGateEnabled locks the ClaudeResume ⟂ ClaudePersistentSession contract:
 // persistent-session ALWAYS supersedes --resume, and the delta path is claude-cli +
@@ -81,6 +101,89 @@ func TestClaudeResumeDecision(t *testing.T) {
 			}
 			if c.wantActive && plan.sentCount != c.wantSent {
 				t.Errorf("sentCount = %d, want %d", plan.sentCount, c.wantSent)
+			}
+		})
+	}
+}
+
+func TestPlanCodexResumeWarmDelta(t *testing.T) {
+	s := &Server{}
+	p := &scopedResumeTestProvider{ready: true, can: true}
+	session := db.Session{
+		ID:              "SES1",
+		AgentID:         "AGT1",
+		Participants:    []string{"AGT1"},
+		CLISessionID:    "thread-1",
+		CLISentMsgCount: 2,
+	}
+	agentRow := db.Agent{ID: "AGT1", Provider: "codex-cli", Model: "gpt-test"}
+	raw := []db.Message{{Role: providers.RoleUser}, {Role: providers.RoleAssistant}, {Role: providers.RoleUser}}
+	req := providers.Request{System: "stable persona", Messages: []providers.Message{{Role: providers.RoleUser, Text: "full prepared tail"}}}
+
+	plan := s.planCodexResume(context.Background(), p, 1, session, agentRow, raw, false, &req)
+	if !plan.active || plan.sentCount != len(raw) {
+		t.Fatalf("plan = %+v, want active boundary %d", plan, len(raw))
+	}
+	if req.ResumeSessionID != "thread-1" {
+		t.Fatalf("ResumeSessionID = %q", req.ResumeSessionID)
+	}
+	if req.CLIResumeScope == "" {
+		t.Fatal("CLIResumeScope is empty")
+	}
+	if len(req.Messages) != 1 || req.Messages[0].Role != providers.RoleUser {
+		t.Fatalf("delta messages = %+v", req.Messages)
+	}
+}
+
+func TestPlanCodexResumeFoldStartsFreshFromPreparedTail(t *testing.T) {
+	s := &Server{}
+	p := &scopedResumeTestProvider{ready: true, can: true}
+	session := db.Session{ID: "SES1", AgentID: "AGT1", CLISessionID: "thread-1", CLISentMsgCount: 2}
+	agentRow := db.Agent{ID: "AGT1", Provider: "codex-cli", Model: "gpt-test"}
+	raw := []db.Message{{Role: providers.RoleUser}, {Role: providers.RoleAssistant}, {Role: providers.RoleUser}}
+	prepared := []providers.Message{{Role: providers.RoleUser, Text: "summary-backed recent tail"}}
+	req := providers.Request{System: "stable persona", Summary: "summary", Messages: prepared}
+
+	plan := s.planCodexResume(context.Background(), p, 1, session, agentRow, raw, true, &req)
+	if !plan.active {
+		t.Fatal("folded codex turn should capture a fresh thread")
+	}
+	if req.ResumeSessionID != "" {
+		t.Fatalf("fold resumed stale thread %q", req.ResumeSessionID)
+	}
+	if len(req.Messages) != 1 || req.Messages[0].Text != prepared[0].Text {
+		t.Fatalf("prepared summary tail was replaced: %+v", req.Messages)
+	}
+	if req.CLIResumeScope == "" {
+		t.Fatal("fresh folded turn needs a durable scope for its new thread")
+	}
+}
+
+func TestPlanCodexResumeSafetyGates(t *testing.T) {
+	cases := []struct {
+		name         string
+		ready        bool
+		agentCount   int
+		sessionAgent string
+		participants []string
+	}{
+		{"home unavailable", false, 1, "AGT1", nil},
+		{"multi agent turn", true, 2, "AGT1", nil},
+		{"different persona", true, 1, "AGT2", nil},
+		{"multi participant session", true, 1, "AGT1", []string{"AGT1", "AGT2"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Server{}
+			p := &scopedResumeTestProvider{ready: tc.ready, can: true}
+			session := db.Session{ID: "SES1", AgentID: tc.sessionAgent, Participants: tc.participants, CLISessionID: "thread-1", CLISentMsgCount: 1}
+			agentRow := db.Agent{ID: "AGT1", Provider: "codex-cli", Model: "gpt-test"}
+			raw := []db.Message{{Role: providers.RoleAssistant}, {Role: providers.RoleUser}}
+			req := providers.Request{System: "persona", Messages: []providers.Message{{Role: providers.RoleUser}}}
+
+			plan := s.planCodexResume(context.Background(), p, tc.agentCount, session, agentRow, raw, false, &req)
+			if plan.active || req.ResumeSessionID != "" || req.CLIResumeScope != "" {
+				t.Fatalf("unsafe resume engaged: plan=%+v req=%+v", plan, req)
 			}
 		})
 	}

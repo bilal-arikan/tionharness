@@ -22,13 +22,15 @@ type scriptedResp struct {
 // native tool loop through its recovery branches deterministically (no key, no
 // network). Calls past the script return a plain end_turn.
 type fakeProvider struct {
-	calls  int
-	script []scriptedResp
+	calls    int
+	script   []scriptedResp
+	requests []providers.Request
 }
 
 func (f *fakeProvider) Name() string { return "fake" }
 
-func (f *fakeProvider) Complete(_ context.Context, _ providers.Request) (*providers.Response, error) {
+func (f *fakeProvider) Complete(_ context.Context, req providers.Request) (*providers.Response, error) {
+	f.requests = append(f.requests, req)
 	i := f.calls
 	f.calls++
 	if i >= len(f.script) {
@@ -111,7 +113,7 @@ func TestLoop_ReactiveCompact(t *testing.T) {
 		{stop: providers.StopEndTurn, text: "recovered answer"},                 // retry after compaction
 	}}
 
-	req := providers.Request{Messages: msgs}
+	req := providers.Request{Messages: msgs, ResumeSessionID: "stale-pre-fold-thread", CLIResumeScope: "scope"}
 	resp, steps, err := rt.CompleteWithToolsTraced(context.Background(), agent, fp, req, false)
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -121,6 +123,12 @@ func TestLoop_ReactiveCompact(t *testing.T) {
 	}
 	if fp.calls != 3 {
 		t.Errorf("provider calls = %d, want 3 (overflow + summarize + retry)", fp.calls)
+	}
+	if got := fp.requests[len(fp.requests)-1].ResumeSessionID; got != "" {
+		t.Errorf("reactive fold retried stale CLI session %q", got)
+	}
+	if got := fp.requests[len(fp.requests)-1].CLIResumeScope; got != "scope" {
+		t.Errorf("reactive fold lost durable scope %q", got)
 	}
 	if !hasRecovery(steps, string(contCompactRetry)) {
 		t.Errorf("no reactive_compact_retry StepRecovery in trace: %+v", steps)

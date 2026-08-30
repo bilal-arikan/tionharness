@@ -172,15 +172,26 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 // typed compaction card; Text keeps the original human-readable line so a client
 // that does not know the compaction kind (and every already-persisted session)
 // still shows something sensible.
-func compactionLeadStep(fold conversation.Compaction) agent.TurnStep {
-	return agent.TurnStep{
+func compactionLeadStep(fold conversation.Compaction, provider providers.Provider) agent.TurnStep {
+	step := agent.TurnStep{
 		Kind:         agent.StepCompaction,
 		Text:         fmt.Sprintf("🗜 Bağlam otomatik sıkıştırıldı — %d mesaj kalıcı özete katlandı.", fold.FoldedMsgs),
 		FoldedMsgs:   fold.FoldedMsgs,
 		BeforeTokens: fold.BeforeTokens,
 		AfterTokens:  fold.AfterTokens,
 		Trigger:      fold.Trigger,
+		Source:       "tionharness",
 	}
+	if provider != nil {
+		if _, ok := providers.AsCLI(provider); ok {
+			step.Provider = provider.Name()
+			// Neither supported CLI currently exposes a documented, reliable native
+			// compaction event. A TionHarness fold therefore invalidates the warm CLI
+			// transcript and the request starts fresh from summary + recent tail.
+			step.SessionAction = "restart-summary"
+		}
+	}
+	return step
 }
 
 // consumeContextChangeLead returns a one-element lead trace (a context_change

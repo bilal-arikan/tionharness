@@ -35,6 +35,9 @@ type inflightRecorder struct {
 }
 
 func (rec *inflightRecorder) onStep(st agent.TurnStep) {
+	if st.Running || st.Append {
+		return
+	}
 	switch st.Kind {
 	case agent.StepDelta:
 		rec.partial.WriteString(st.Text)

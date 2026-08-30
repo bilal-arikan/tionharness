@@ -17,6 +17,22 @@ const TRIGGER_LABEL: Record<string, string> = {
   reactive: 'taşma kurtarması',
 }
 
+const SOURCE_LABEL: Record<string, string> = {
+  tionharness: 'TionHarness',
+  'cli-native': 'CLI yerel',
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  'claude-cli': 'Claude CLI',
+  'codex-cli': 'Codex CLI',
+}
+
+const SESSION_ACTION_LABEL: Record<string, string> = {
+  resume: 'oturumu sürdür',
+  'native-compact': 'yerel sıkıştırma',
+  'restart-summary': 'özetle yeniden başlat',
+}
+
 // CompactionCard reports that the session's history was folded into the rolling
 // summary to stay inside the context budget. It renders from the structural
 // fields (folded message count, before/after context size, trigger) when the
@@ -24,15 +40,18 @@ const TRIGGER_LABEL: Record<string, string> = {
 // `text`, so the card falls back to that headline instead of rendering empty.
 export function CompactionCard({ step }: Props) {
   const [open, setOpen] = useState(false)
-  const { foldedMsgs, beforeTokens, afterTokens, trigger } = step
+  const { foldedMsgs, beforeTokens, afterTokens, trigger, source, provider, sessionAction } = step
   const fallback = step.text?.trim()
-  const headline = foldedMsgs
-    ? `Bağlam sıkıştırıldı — ${foldedMsgs} mesaj özete katlandı`
-    : (fallback ?? 'Bağlam sıkıştırıldı')
+  const headline = step.running
+    ? 'CLI bağlamı sıkıştırılıyor…'
+    : foldedMsgs
+      ? `Bağlam sıkıştırıldı — ${foldedMsgs} mesaj özete katlandı`
+      : (fallback ?? 'Bağlam sıkıştırıldı')
   // Expandable only when there is something beyond the collapsed row: the
-  // original headline (when structural fields produced their own) or the trigger.
+  // original headline (when structural fields produced their own), trigger or
+  // provenance/action metadata.
   const detail = foldedMsgs && fallback && fallback !== headline ? fallback : undefined
-  const expandable = !!detail || !!trigger
+  const expandable = !!detail || !!trigger || !!source || !!provider || !!sessionAction
   const shrink = !!beforeTokens && !!afterTokens
 
   return (
@@ -61,6 +80,24 @@ export function CompactionCard({ step }: Props) {
           {trigger && (
             <p className={detail ? 'mt-1.5' : undefined}>
               Tetikleyici: <span className="font-mono">{TRIGGER_LABEL[trigger] ?? trigger}</span>
+            </p>
+          )}
+          {source && (
+            <p className={detail || trigger ? 'mt-1.5' : undefined}>
+              Kaynak: <span className="font-mono">{SOURCE_LABEL[source] ?? source}</span>
+            </p>
+          )}
+          {provider && (
+            <p className={detail || trigger || source ? 'mt-1.5' : undefined}>
+              Sağlayıcı: <span className="font-mono">{PROVIDER_LABEL[provider] ?? provider}</span>
+            </p>
+          )}
+          {sessionAction && (
+            <p className={detail || trigger || source || provider ? 'mt-1.5' : undefined}>
+              Oturum işlemi:{' '}
+              <span className="font-mono">
+                {SESSION_ACTION_LABEL[sessionAction] ?? sessionAction}
+              </span>
             </p>
           )}
         </div>

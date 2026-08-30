@@ -73,6 +73,17 @@ func needsAutoContinue(steps []TurnStep) bool {
 	return false
 }
 
+// shouldAutoContinue suppresses the generic unfinished-work nudge while a
+// coordinator still has live workers. Their completion notifications are the
+// continuation trigger; nudging now would make the coordinator race ahead and
+// show a misleading unfinished-turn message while it waits for delegated work.
+func (r *Runtime) shouldAutoContinue(sessionID string, steps []TurnStep) bool {
+	if r.coordSlotFor(sessionID).workers.Load() > 0 {
+		return false
+	}
+	return needsAutoContinue(steps)
+}
+
 // maybeAutoContinue keeps an autonomous run going until its work is actually done.
 // After the caller has persisted the turn's reply, this inspects the trace: if it
 // signals unfinished work (needsAutoContinue) it issues a continuation turn on the
@@ -91,7 +102,7 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 	max := r.tun.AutoContinueMax()
 	steps := lastSteps
 	for i := 0; i < max; i++ {
-		if !needsAutoContinue(steps) {
+		if !r.shouldAutoContinue(sessionID, steps) {
 			return
 		}
 		// The preceding turn may have consumed the whole spawn/schedule deadline; a

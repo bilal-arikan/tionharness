@@ -34,6 +34,21 @@ afterEach(() => {
 })
 
 describe('CompactionCard', () => {
+  it('renders an in-progress native compaction without invented token figures', () => {
+    const container = renderCard({
+      kind: 'compaction',
+      id: 'cmp-1',
+      running: true,
+      source: 'cli-native',
+      provider: 'codex-cli',
+      sessionAction: 'native-compact',
+    })
+
+    const text = header(container).textContent ?? ''
+    expect(text).toContain('CLI bağlamı sıkıştırılıyor…')
+    expect(text).not.toContain('tok')
+  })
+
   it('renders the folded message count and the token badge from structural fields', () => {
     const container = renderCard({
       kind: 'compaction',
@@ -84,5 +99,34 @@ describe('CompactionCard', () => {
 
     act(() => header(container).click())
     expect(container.textContent).toContain('weird')
+  })
+
+  it.each([
+    [{ source: 'tionharness' }, 'Kaynak: TionHarness'],
+    [{ source: 'cli-native' }, 'Kaynak: CLI yerel'],
+    [{ provider: 'claude-cli' }, 'Sağlayıcı: Claude CLI'],
+    [{ provider: 'codex-cli' }, 'Sağlayıcı: Codex CLI'],
+    [{ sessionAction: 'resume' }, 'Oturum işlemi: oturumu sürdür'],
+    [{ sessionAction: 'native-compact' }, 'Oturum işlemi: yerel sıkıştırma'],
+    [{ sessionAction: 'restart-summary' }, 'Oturum işlemi: özetle yeniden başlat'],
+  ] as const)('renders the Turkish compaction metadata label %#', (payload, expected) => {
+    const container = renderCard({ kind: 'compaction', ...payload })
+
+    act(() => header(container).click())
+    expect(container.textContent).toContain(expected)
+  })
+
+  it('renders unknown provenance and session action values verbatim', () => {
+    const container = renderCard({
+      kind: 'compaction',
+      source: 'future-source',
+      provider: 'future-provider',
+      sessionAction: 'future-action',
+    })
+
+    act(() => header(container).click())
+    expect(container.textContent).toContain('future-source')
+    expect(container.textContent).toContain('future-provider')
+    expect(container.textContent).toContain('future-action')
   })
 })

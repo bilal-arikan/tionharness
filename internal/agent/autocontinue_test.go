@@ -56,6 +56,22 @@ func TestNeedsAutoContinue(t *testing.T) {
 	}
 }
 
+func TestShouldAutoContinueSuppressedWhileWorkerRunning(t *testing.T) {
+	rt := testRuntime(t)
+	sessionID := "SES-coordinator"
+	steps := []TurnStep{todoStep("in_progress")}
+
+	rt.coordSlotFor(sessionID).workers.Add(1)
+	if rt.shouldAutoContinue(sessionID, steps) {
+		t.Fatal("auto-continue must be suppressed while a worker is running")
+	}
+
+	rt.coordSlotFor(sessionID).workers.Add(-1)
+	if !rt.shouldAutoContinue(sessionID, steps) {
+		t.Fatal("open work must trigger auto-continue after workers finish")
+	}
+}
+
 func TestHasToolStep(t *testing.T) {
 	if hasToolStep([]TurnStep{{Kind: StepText}, {Kind: StepThinking}}) {
 		t.Error("text/thinking only should have no tool progress")

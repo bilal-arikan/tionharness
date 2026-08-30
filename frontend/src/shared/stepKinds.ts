@@ -198,7 +198,7 @@ export const STEP_KINDS: StepKindInfo[] = [
     persisted: true,
     status: 'active',
     description:
-      'Oturum geçmişi bağlam bütçesinde kalmak için yuvarlanan özete katlandı: kaç mesajın katlandığı, katlama öncesi/sonrası bağlam büyüklüğü ve tetikleyici (auto = bütçe eşiği, manual = /compact, reactive = taşma kurtarması) kartta gösterilir. Katlanan mesajların ham metni modelin bağlamından çıkar; transkript diskte olduğu gibi kalır.',
+      'Oturum geçmişi bağlam bütçesinde kalmak için yuvarlanan özete katlandı: kaç mesajın katlandığı, katlama öncesi/sonrası bağlam büyüklüğü, tetikleyici (auto = bütçe eşiği, manual = /compact, reactive = taşma kurtarması), kaynak ve CLI oturum işlemi kartta gösterilir. Katlanan mesajların ham metni modelin bağlamından çıkar; transkript diskte olduğu gibi kalır.',
   },
   {
     kind: 'subagent',

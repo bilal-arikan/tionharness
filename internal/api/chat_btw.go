@@ -105,6 +105,9 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())
 		return
 	}
+	if prep.Compacted {
+		ws(r).Runtime.DropWarmCLISession(session.ID)
+	}
 	// The fold above is a real, shared mutation of the session's rolling summary,
 	// so it must not stay invisible just because the side chat has no transcript.
 	// There is no SSE writer here (the btw endpoint answers with a single JSON
@@ -112,7 +115,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// the step goes onto the session hub only: every open window on this session
 	// renders the fold live, exactly as it would on a real turn.
 	if prep.Compacted {
-		st := compactionLeadStep(prep.Fold)
+		st := compactionLeadStep(prep.Fold, provider)
 		ws(r).Runtime.EmitSessionStep(session.ID, st)
 		s.publishHub(ws(r).ID, session.ID, sessionhub.KindStep, st, false)
 	}

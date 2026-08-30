@@ -5,6 +5,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // reactiveCompactionStep builds the on-screen card for a REACTIVE fold — the
@@ -14,15 +15,23 @@ import (
 // produced it; only the trigger and the wording differ ("mid-turn" instead of
 // "otomatik"). It does NOT replace the recovery step emitted alongside it: the
 // recovery card explains why the turn was retried, this one what the retry cost.
-func reactiveCompactionStep(fold conversation.ReactiveFold) TurnStep {
-	return TurnStep{
+func reactiveCompactionStep(fold conversation.ReactiveFold, provider providers.Provider) TurnStep {
+	step := TurnStep{
 		Kind:         StepCompaction,
 		Text:         fmt.Sprintf("🗜 Bağlam tur içinde sıkıştırıldı — %d mesaj özete katlandı (%d→%d token).", fold.FoldedMsgs, fold.BeforeTokens, fold.AfterTokens),
 		FoldedMsgs:   fold.FoldedMsgs,
 		BeforeTokens: fold.BeforeTokens,
 		AfterTokens:  fold.AfterTokens,
 		Trigger:      fold.Trigger,
+		Source:       "tionharness",
 	}
+	if provider != nil {
+		if _, ok := providers.AsCLI(provider); ok {
+			step.Provider = provider.Name()
+			step.SessionAction = "restart-summary"
+		}
+	}
+	return step
 }
 
 // reactiveCompactionEvent builds the debug-journal entry for the same fold, with

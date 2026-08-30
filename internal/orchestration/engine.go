@@ -201,7 +201,9 @@ func NewState(g Graph) State {
 	return State{Current: g.Start, Outputs: map[string]string{}}
 }
 
-// SaveFunc persists the state mid-run (called after each node).
+// SaveFunc durably persists the transition from the previously saved State to
+// its argument. Implementations may journal a delta; calls are ordered and the
+// engine does not mutate a State after passing it to SaveFunc.
 type SaveFunc func(State) error
 
 // Engine drives a graph to completion using an AgentRunner.
@@ -299,7 +301,8 @@ func (e *Engine) runCoordinatorNodeSafe(ctx context.Context, node Node, prompt s
 }
 
 // Run advances the graph from st.Current until it finishes (Current == ""),
-// hits the step cap, or an agent errors. It persists after each node via save.
+// hits the step cap, or an agent errors. State mutation for a completed node is
+// finished before save is called; a successful save is the resume boundary.
 // The returned State is terminal; the final output is State.Last.
 func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save SaveFunc) (State, error) {
 	if st.Outputs == nil {

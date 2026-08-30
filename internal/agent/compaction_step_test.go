@@ -21,7 +21,7 @@ func TestReactiveCompactionStepCarriesFoldFigures(t *testing.T) {
 		SummaryBytes: 512,
 	}
 
-	step := reactiveCompactionStep(fold)
+	step := reactiveCompactionStep(fold, nil)
 
 	if step.Kind != StepCompaction {
 		t.Fatalf("Kind = %q, want %q", step.Kind, StepCompaction)
@@ -54,7 +54,7 @@ func TestReactiveCompactionStepJSONKeys(t *testing.T) {
 			AfterTokens:  120,
 			Trigger:      conversation.TriggerReactive,
 		},
-	})
+	}, nil)
 
 	raw, err := json.Marshal(step)
 	if err != nil {
@@ -71,6 +71,7 @@ func TestReactiveCompactionStepJSONKeys(t *testing.T) {
 		"beforeTokens": `900`,
 		"afterTokens":  `120`,
 		"trigger":      `"reactive"`,
+		"source":       `"tionharness"`,
 	}
 	for key, wantVal := range want {
 		val, ok := got[key]
@@ -85,7 +86,7 @@ func TestReactiveCompactionStepJSONKeys(t *testing.T) {
 	if _, ok := got["text"]; !ok {
 		t.Errorf("missing key %q in %s", "text", raw)
 	}
-	if extra := keysBeyond(got, "kind", "text", "foldedMsgs", "beforeTokens", "afterTokens", "trigger"); len(extra) > 0 {
+	if extra := keysBeyond(got, "kind", "text", "foldedMsgs", "beforeTokens", "afterTokens", "trigger", "source"); len(extra) > 0 {
 		t.Errorf("unexpected keys %v in %s", extra, raw)
 	}
 }
@@ -93,7 +94,7 @@ func TestReactiveCompactionStepJSONKeys(t *testing.T) {
 // TestReactiveCompactionStepOmitsZeroFields guards the omitempty tags: a zero
 // fold must not ship 0-valued counters the UI would render as a real fold.
 func TestReactiveCompactionStepOmitsZeroFields(t *testing.T) {
-	raw, err := json.Marshal(reactiveCompactionStep(conversation.ReactiveFold{}))
+	raw, err := json.Marshal(reactiveCompactionStep(conversation.ReactiveFold{}, nil))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

@@ -28,6 +28,7 @@ func TestInflightRecorder(t *testing.T) {
 
 	rec := &inflightRecorder{db: database, sessionID: sess.ID, agentID: "AGT1", replyID: "MSG_reply", startedAt: 42}
 	rec.onStep(agent.TurnStep{Kind: agent.StepTool, Tool: "Write", Output: "ok"})
+	rec.onStep(agent.TurnStep{Kind: agent.StepCompaction, ID: "cmp-live", Running: true, Source: "cli-native"})
 	rec.onStep(agent.TurnStep{Kind: agent.StepDelta, Text: "partial "})
 	rec.onStep(agent.TurnStep{Kind: agent.StepDelta, Text: "answer"})
 	// Rewind the write throttle so the next step flushes a fresh snapshot (the
@@ -50,6 +51,9 @@ func TestInflightRecorder(t *testing.T) {
 	}
 	if strings.Contains(got.Steps, "TRANSIENT") {
 		t.Errorf("transient step kinds must not be persisted: %s", got.Steps)
+	}
+	if strings.Contains(got.Steps, "cmp-live") {
+		t.Errorf("running compaction frame must not be persisted: %s", got.Steps)
 	}
 
 	trace := rec.interruptedTrace("boom", "provider_error")

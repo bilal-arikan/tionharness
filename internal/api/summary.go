@@ -19,6 +19,19 @@ type summaryReq struct {
 	Kind string `json:"kind"`
 }
 
+type summaryResult struct {
+	Body     string
+	Fold     conversation.Compaction
+	Provider providers.Provider
+}
+
+func (r summaryResult) stepsJSON() string {
+	if r.Fold.FoldedMsgs == 0 {
+		return "[]"
+	}
+	return string(mustJSON([]agent.TurnStep{compactionLeadStep(r.Fold, r.Provider)}))
+}
+
 // summaryHeaders gives each summary kind a self-explanatory chat header so the
 // resulting assistant message reads clearly on its own.
 var summaryHeaders = map[string]string{
@@ -103,7 +116,7 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// Run the command. On failure, clear the "working" bubble in every window
 	// (turn_error + commit); the persisted "/kind" user message stays as an honest
 	// record that the command was attempted.
-	body, err := s.runSummaryKind(ctx, wsp, session, kind, compactHistory)
+	result, err := s.runSummaryKind(ctx, wsp, session, kind, compactHistory)
 	if err != nil {
 		s.recordSummaryFailure(ctx, wsp, session, kind, err)
 		s.logger.Warn("summary command failed", "session", session.ID, "kind", kind, "error", err)
@@ -115,8 +128,8 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 		SessionID: session.ID,
 		Role:      providers.RoleAssistant,
 		AgentID:   session.AgentID,
-		Text:      header + "\n\n" + body,
-		Steps:     "[]",
+		Text:      header + "\n\n" + result.Body,
+		Steps:     result.stepsJSON(),
 	})
 	if writeDBError(w, err, "session not found") {
 		return
@@ -227,7 +240,7 @@ func summaryBusyLabel(kind string) string {
 // runSummaryKind executes one slash command and returns its assistant-message
 // body. compact folds older history into the rolling summary; refresh-context
 // drops the frozen prompt snapshot; the rest go through the model-summary path.
-func (s *Server) runSummaryKind(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, compactHistory []db.Message) (string, error) {
+func (s *Server) runSummaryKind(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, compactHistory []db.Message) (summaryResult, error) {
 	switch kind {
 	case "compact":
 		return s.compactSession(ctx, wsp, session, compactHistory)
@@ -237,11 +250,12 @@ func (s *Server) runSummaryKind(ctx context.Context, wsp *workspace.Workspace, s
 		// one-time cache re-write). No-op text when the feature is off.
 		if wsp.Runtime.PromptEpochEnabled() {
 			wsp.Runtime.RefreshPromptEpoch(ctx, session.ID)
-			return "Statik bağlam snapshot'ı temizlendi: bir sonraki tur güncel araç kataloğu, skill listesi ve talimatlarla yeniden derlenecek (bilinçli tek seferlik cache yeniden yazımı).", nil
+			return summaryResult{Body: "Statik bağlam snapshot'ı temizlendi: bir sonraki tur güncel araç kataloğu, skill listesi ve talimatlarla yeniden derlenecek (bilinçli tek seferlik cache yeniden yazımı)."}, nil
 		}
-		return "Prompt-epoch (donmuş bağlam snapshot'ı) bu workspace'te kapalı; her tur zaten canlı durumdan derleniyor — yenilenecek bir snapshot yok.", nil
+		return summaryResult{Body: "Prompt-epoch (donmuş bağlam snapshot'ı) bu workspace'te kapalı; her tur zaten canlı durumdan derleniyor — yenilenecek bir snapshot yok."}, nil
 	default:
-		return wsp.Runtime.Summarize(ctx, session.AgentID, kind)
+		body, err := wsp.Runtime.Summarize(ctx, session.AgentID, kind)
+		return summaryResult{Body: body}, err
 	}
 }
 
@@ -363,20 +377,20 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 // compactSession forces a conversation compaction now: it folds older history
 // into the rolling summary (via the conversation Manager) and returns a short
 // human-readable report for the chat.
-func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (string, error) {
+func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (summaryResult, error) {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
-		return "", err
+		return summaryResult{}, err
 	}
 	provider, err := s.providers.Get(agentRow.ProviderRef())
 	if err != nil {
-		return "", err
+		return summaryResult{}, err
 	}
 	// Out-of-loop path: pin this app's CLI homes before ForceCompact's direct
 	// provider.Complete, mirroring guardedComplete (else the CLI falls back to the
 	// ambient home and can fail auth even when TionHarness is logged in).
 	if err := wsp.Runtime.PinCLIHome(provider); err != nil {
-		return "", err
+		return summaryResult{}, err
 	}
 	// history is the pre-command snapshot captured by the caller (before the
 	// "/compact" user message was appended), so the fold boundary matches the real
@@ -386,10 +400,22 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	ctx = conversation.WithClaudeHome(ctx, wsp.Runtime.ClaudeHomeDir())
 	fold, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)
 	if err != nil {
-		return "", err
+		return summaryResult{}, err
 	}
 	if fold.FoldedMsgs == 0 {
-		return "Sıkıştırılacak yeterli eski mesaj yok (son mesajlar zaten bağlam penceresinde tutuluyor).", nil
+		return summaryResult{Body: "Sıkıştırılacak yeterli eski mesaj yok (son mesajlar zaten bağlam penceresinde tutuluyor)."}, nil
 	}
-	return fmt.Sprintf("%d mesaj kalıcı özete katlandı; bağlam penceresi küçültüldü.\n\n**Güncel özet:**\n\n%s", fold.FoldedMsgs, summary), nil
+	// A CLI's warm transcript still contains the pre-fold history. Invalidate both
+	// durable resume metadata and Claude's live persistent process so the next chat
+	// turn starts from TionHarness's summary + recent tail. The complete TionHarness
+	// transcript remains on disk.
+	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, "", 0); err != nil {
+		return summaryResult{}, fmt.Errorf("reset CLI resume after compaction: %w", err)
+	}
+	wsp.Runtime.DropWarmCLISession(session.ID)
+	return summaryResult{
+		Body:     fmt.Sprintf("%d mesaj kalıcı özete katlandı; bağlam penceresi küçültüldü.\n\n**Güncel özet:**\n\n%s", fold.FoldedMsgs, summary),
+		Fold:     fold,
+		Provider: provider,
+	}, nil
 }

@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/exttools"
 	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
@@ -32,7 +34,9 @@ type CodexCLI struct {
 
 	// mcpProbe overrides the remote-MCP reachability probe. Nil means the real
 	// network probe; tests set it to stay offline.
-	mcpProbe codexMCPProbe
+	mcpProbe             codexMCPProbe
+	nativeCompactionOnce sync.Once
+	nativeCompactionOK   bool
 }
 
 // NewCodexCLI creates a provider that invokes the given codex binary. configDir,
@@ -45,6 +49,30 @@ func NewCodexCLI(binPath, model, configDir string) *CodexCLI {
 
 // Name implements Provider.
 func (c *CodexCLI) Name() string { return "codex-cli" }
+
+// NativeCompactionEvents reports whether this installed exec transport has the
+// documented context_compaction item lifecycle. App Server uses a separate
+// camelCase protocol and is not implied by this capability.
+func (c *CodexCLI) NativeCompactionEvents() bool {
+	c.nativeCompactionOnce.Do(func() {
+		c.nativeCompactionOK = cliVersionAtLeast(c.binPath, 0, 148, 0)
+	})
+	return c.nativeCompactionOK
+}
+
+func cliVersionAtLeast(path string, wantMajor, wantMinor, wantPatch int) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	version, err := exttools.LocalVersion(ctx, path, []string{"--version"})
+	if err != nil {
+		return false
+	}
+	major, minor, patch, ok := exttools.ParseVersion(version)
+	if !ok {
+		return false
+	}
+	return major > wantMajor || major == wantMajor && (minor > wantMinor || minor == wantMinor && patch >= wantPatch)
+}
 
 // Installed reports whether the configured codex binary resolves to an
 // executable — an absolute/relative path that exists, or a bare name found on
@@ -121,7 +149,14 @@ func codexSandboxArgs(mode string) []string {
 // The prompt is NOT an argument — it goes on stdin, because Windows caps a
 // process command line at ~32 KB and a full turn prompt overflows that.
 func (c *CodexCLI) buildArgs(req Request, model string) []string {
-	args := []string{"exec", "--json", "--ephemeral",
+	args := []string{"exec", "--json"}
+	// A scoped chat turn needs Codex's rollout file for `exec resume` on the next
+	// turn. Every other invocation (title, compaction summary, insight, auth probe)
+	// stays ephemeral inside its disposable shadow home.
+	if req.CLIResumeScope == "" {
+		args = append(args, "--ephemeral")
+	}
+	args = append(args,
 		// The workspace sandbox is not necessarily a git repo; without this codex
 		// refuses to run outside one.
 		"--skip-git-repo-check",
@@ -143,7 +178,7 @@ func (c *CodexCLI) buildArgs(req Request, model string) []string {
 		// field handling, not which layers are read), and the config we render is
 		// schema-valid, so this does not reject it.
 		"--strict-config",
-	}
+	)
 	if model != "" {
 		args = append(args, "-m", model)
 	}
@@ -156,7 +191,7 @@ func (c *CodexCLI) buildArgs(req Request, model string) []string {
 	// Resume keeps the CLI's server-side thread (and its prompt cache) warm, so
 	// only the new turn needs to be sent. Unlike claude-cli's rotating session id
 	// the codex thread id is STABLE, so the caller can store it once.
-	if req.ResumeSessionID != "" {
+	if req.ResumeSessionID != "" && req.CLIResumeScope != "" {
 		args = append(args, "resume", req.ResumeSessionID)
 	}
 	return args
@@ -243,9 +278,9 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 // that refused to start. args and prompt are parameters rather than derived
 // here so tests can drive the whole recovery path with a fake codex binary.
 func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
-	home, cleanupHome, err := prepareShadowHome(c.configDir)
+	home, cleanupHome, err := prepareCodexTurnHome(c.configDir, req.CLIResumeScope)
 	if err != nil {
-		return nil, fmt.Errorf("codex CLI: prepare shadow CODEX_HOME: %w", err)
+		return nil, fmt.Errorf("codex CLI: prepare turn CODEX_HOME: %w", err)
 	}
 	defer cleanupHome()
 

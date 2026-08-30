@@ -1,0 +1,76 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"testing"
+
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+)
+
+func TestManualCompactReplyPersistsCompactionStep(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	agentRow, err := database.CreateAgent(ctx, db.Agent{Name: "Ada", Provider: "codex-cli"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	session, err := database.CreateSession(ctx, db.Session{AgentID: agentRow.ID, Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	result := summaryResult{
+		Body: "özet",
+		Fold: conversation.Compaction{
+			FoldedMsgs:   6,
+			BeforeTokens: 42000,
+			AfterTokens:  8000,
+			Trigger:      conversation.TriggerManual,
+		},
+		Provider: providers.NewCodexCLI("codex", "", ""),
+	}
+	message, err := database.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleAssistant,
+		AgentID:   agentRow.ID,
+		Text:      result.Body,
+		Steps:     result.stepsJSON(),
+	})
+	if err != nil {
+		t.Fatalf("persist reply: %v", err)
+	}
+
+	var steps []agent.TurnStep
+	if err := json.Unmarshal([]byte(message.Steps), &steps); err != nil {
+		t.Fatalf("parse persisted steps: %v", err)
+	}
+	if len(steps) != 1 {
+		t.Fatalf("persisted steps = %d, want 1: %s", len(steps), message.Steps)
+	}
+	step := steps[0]
+	if step.Kind != agent.StepCompaction || step.Trigger != conversation.TriggerManual {
+		t.Fatalf("unexpected compaction identity: %+v", step)
+	}
+	if step.Source != "tionharness" || step.Provider != "codex-cli" || step.SessionAction != "restart-summary" {
+		t.Fatalf("unexpected compaction provenance: %+v", step)
+	}
+	if step.FoldedMsgs != 6 || step.BeforeTokens != 42000 || step.AfterTokens != 8000 {
+		t.Fatalf("unexpected compaction metrics: %+v", step)
+	}
+}
+
+func TestSummaryResultWithoutFoldHasNoSteps(t *testing.T) {
+	if got := (summaryResult{Body: "nothing to fold"}).stepsJSON(); got != "[]" {
+		t.Fatalf("steps = %s, want []", got)
+	}
+}
