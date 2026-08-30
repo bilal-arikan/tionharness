@@ -3,8 +3,18 @@ package api
 import (
 	"net/http"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
+
+// resolvedCatalogModel keeps the catalog's resolution precedence explicit:
+// workspace evidence wins, and machine-global evidence only fills a gap.
+func resolvedCatalogModel(database *db.DB, provider, requested string) string {
+	if resolved := database.ResolvedModelFor(provider, requested); resolved != "" {
+		return resolved
+	}
+	return database.GlobalResolvedModelFor(provider, requested)
+}
 
 // catalogEntryDTO is a catalog entry plus whether the provider is configured
 // and usable right now.
@@ -66,15 +76,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			models := make([]providers.ModelInfo, len(e.Models))
 			copy(models, e.Models)
 			for i := range models {
-				resolved := wsp.DB.ResolvedModelFor(e.ID, models[i].ID)
-				if resolved == "" {
-					// This workspace has never completed a turn with the alias, but
-					// another one on the same machine may have. Falling back to the
-					// app-global store is what keeps a freshly created workspace from
-					// showing "Varsayılan" for claude-cli's empty model id.
-					resolved = wsp.DB.GlobalResolvedModelFor(e.ID, models[i].ID)
-				}
-				models[i].ResolvedModel = resolved
+				models[i].ResolvedModel = resolvedCatalogModel(wsp.DB, e.ID, models[i].ID)
 			}
 			dto.Models = models
 		}

@@ -2,7 +2,8 @@ import { Sparkles, Users, GitBranch, Clock, Zap } from 'lucide-react'
 import type { Pack, WorkspacePayload } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import { Markdown } from '@/shared/components/markdown/Markdown'
-import { modelDisplayName } from '@/shared/lib/modelLabel'
+import { resolveModelLabel } from '@/shared/lib/modelLabel'
+import { useCatalog } from '@/shared/lib/catalog'
 import {
   cacheLabel,
   flowNodeSummary,
@@ -23,6 +24,7 @@ import {
 
 // PackPreview renders a kind-appropriate preview of the selected pack's payload.
 export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }) {
+  const catalog = useCatalog()
   const p = pack.payload
   if (pack.kind === 'skill' && p?.skill?.body) {
     return <Markdown>{stripFrontmatter(p.skill.body)}</Markdown>
@@ -34,9 +36,7 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
         {a.soul && <p className="text-xs leading-relaxed text-[var(--color-text)]">{a.soul}</p>}
         <div className="space-y-1">
           <Row k="Sağlayıcı" v={a.provider} />
-          {/* A pack's model may be an alias this install has never resolved, so
-              this names it only when the id is already concrete. */}
-          <Row k="Model" v={modelDisplayName(a.model ?? '')} />
+          <Row k="Model" v={resolveModelLabel(catalog, a.provider ?? '', a.model ?? '')} />
           <Row k="Düşünme" v={a.thinkingLevel} />
           <Row k="İzin modu" v={a.permissionMode} />
           <Row k="Skills" v={a.skills?.join(', ')} />
@@ -91,7 +91,7 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
     )
   }
   if (pack.kind === 'workspace' && p?.workspace) {
-    return <WorkspacePackPreview wsp={p.workspace} />
+    return <WorkspacePackPreview wsp={p.workspace} catalog={catalog} />
   }
   if (pack.kind === 'mcp' && p?.mcp) {
     const m = p.mcp
@@ -142,7 +142,13 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
 // WorkspacePackPreview renders the full starter ecosystem of a workspace-template
 // pack: a stat strip plus the agent team (with config), flows (with node types),
 // schedules, automations, embedded skills, instructions and board layout.
-function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
+function WorkspacePackPreview({
+  wsp,
+  catalog,
+}: {
+  wsp: WorkspacePayload
+  catalog: ReturnType<typeof useCatalog>
+}) {
   const agents = wsp.agents ?? []
   const flows = wsp.flows ?? []
   const schedules = wsp.schedules ?? []
@@ -200,7 +206,8 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
                 {(a.provider || a.model) && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
                     {a.provider || 'sağlayıcı belirtilmemiş'}
-                    {a.model ? ` · ${modelDisplayName(a.model)}` : ''}
+                    {' · '}
+                    {resolveModelLabel(catalog, a.provider ?? '', a.model ?? '')}
                   </div>
                 )}
                 {a.soul && (

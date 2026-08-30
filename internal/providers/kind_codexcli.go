@@ -39,7 +39,7 @@ func init() {
 				{ID: "gpt-5.6-sol", Label: "GPT-5.6 Sol", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-terra", Label: "GPT-5.6 Terra", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-luna", Label: "GPT-5.6 Luna", Description: "En yeni nesil; 400k bağlam"},
-				{ID: "gpt-5.5", Label: "GPT-5.5 — varsayılan", Description: "codex-cli varsayılanı"},
+				{ID: "gpt-5.5", Label: "GPT-5.5", Description: "Codex CLI modeli"},
 				{ID: "gpt-5.4", Label: "GPT-5.4", Description: "ChatGPT hesabıyla kullanılamaz (API faturalı)"},
 				{ID: "gpt-5.4-mini", Label: "GPT-5.4 Mini — hızlı", Description: "En hızlı/ucuz; basit görevler"},
 				{ID: "gpt-5.2", Label: "GPT-5.2", Description: "ChatGPT hesabıyla kullanılamaz (API faturalı)"},

@@ -74,14 +74,15 @@ function labelForModel(info: CatalogModel, provider: string): string {
 // When the agent left the model empty, the catalog's own empty-id entry answers
 // — it carries both the honest name of that mode ("claude oturum modeli") and,
 // once observed, the model the provider actually served. Falls back to the raw
-// model or provider string when the catalog isn't loaded yet.
+// concrete model id when the catalog isn't loaded yet; an empty model stays an
+// explicit unknown instead of borrowing the provider name.
 export function resolveModelLabel(
   catalog: CatalogEntry[],
   provider: string,
   model: string,
 ): string {
   const entry = catalog.find((c) => c.id === provider)
-  if (!entry) return model || provider
+  if (!entry) return model ? formatModelVersion(model) || model : '(model belirtilmemiş)'
   const exact = entry.models.find((m) => m.id === model)
   if (exact) return labelForModel(exact, provider)
   // A custom model id not present in the curated list. It is already concrete, so

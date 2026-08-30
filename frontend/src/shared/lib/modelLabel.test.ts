@@ -89,6 +89,10 @@ describe('resolveModelLabel', () => {
     expect(resolveModelLabel(catalog, 'claude-cli', 'my-local-model')).toBe('my-local-model')
   })
 
+  it('admits an empty model when the provider catalog is unavailable', () => {
+    expect(resolveModelLabel([], 'claude-cli', '')).toBe('(model belirtilmemiş)')
+  })
+
   // Before anything has resolved, the empty-id entry still names the mode
   // honestly ("session model"), never the word "default".
   it('names the session-model entry when nothing has resolved yet', () => {
