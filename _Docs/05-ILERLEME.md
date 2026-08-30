@@ -10080,3 +10080,39 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   delete, otomatik stash/reset veya force cleanup yapılmaz; görev worktree'si ve dalı korunur.
 - Workspace worktree ayarları açılışta snapshot edilir. `worktreeBaseRef` değişikliği
   mevcut workspace yeniden açıldıktan sonra yeni yaşam döngüsünde geçerli olur.
+
+## CLI compaction görünürlüğü ve summary-backed restart (2026-08-30)
+
+- Compaction kartı `source`, `provider` ve `sessionAction` provenance alanlarını
+  kalıcı taşır. Codex 0.148.0 `exec --json` wire sözleşmesindeki
+  `context_compaction` item'ı parse edilir: `item.started` canlı çalışan kart,
+  `item.completed` aynı ID ile tek kalıcı `cli-native/native-compact` karttır.
+  App Server'ın `contextCompaction` camelCase sözleşmesi ayrı transporttur.
+- Claude Code 2.1.238'de `--include-hook-events` etkinleştirilir. Native
+  `PreCompact` hook başlangıcı çalışan karttır; `compact_boundary` birincil,
+  `PostCompact` hook yanıtı ek tamamlanma kanıtıdır. İkisi aynı turda gelirse
+  tamamlanma deduplicate edilir. Event token sayısı vermiyorsa tahmin yapılmaz.
+- Claude `PreCompact` sonrasında iki dakika içinde completion kanıtı gelmezse
+  çalışan kart tombstone ile geri çekilir; rolling-summary fallback değişmez.
+- Claude Code 2.1.238 `system/status` lifecycle'ı da aynı korelasyona katılır:
+  `status=compacting` çalışan kartı başlatır, `compact_result=failed` onu geri çeker,
+  `compact_result=success` tek `cli-native/native-compact` tamamlanması üretir.
+  Ardından gelen `compact_boundary`/`PostCompact` aynı lifecycle için yinelenmez;
+  native lifecycle rolling summary veya `SummaryMsgCount` değiştirmez.
+- Capability kurulu CLI sürümüne göre fail-closed açılır: Codex `>=0.148.0`,
+  Claude Code `>=2.1.238`. Eksik/eski binary'de rolling-summary fallback korunur.
+  Running frame inflight/persisted trace'e girmez; tamamlanmış native event debug
+  journal'a bir kez yazılır.
+- Codex normal tek-katılımcılı turları izole resume home + `exec resume` ile delta
+  gönderir. Persona/provider/model/statik prompt scope değişimi veya rollout
+  yokluğu full summary-backed cold start yapar.
+- TionHarness fold'u sonrası Codex/Claude resume edilmez. Auto, wake, side-chat ve
+  manuel `/compact` yolları Claude persistent warm sürecini düşürür; manuel yol
+  ayrıca DB resume metadata'sını temizler.
+- Manuel `/compact` başarı mesajındaki boş `Steps: "[]"` kaldırıldı. Gerçek fold,
+  `trigger=manual`, `source=tionharness` ve CLI için
+  `sessionAction=restart-summary` içeren kalıcı `compaction` TurnStep yazar.
+- Doğrulama: provider/agent paket testleri, `go build ./...`, `go vet ./...`,
+  frontend `tsc` + build + ilgili kart testleri + Prettier ve `git diff --check`
+  geçti. Tam `internal/api` paketi, bu görev dışındaki görsel-artifact dalında
+  `IMAGE_DECODE_FAILED` veren iki test nedeniyle kırmızı kaldı.

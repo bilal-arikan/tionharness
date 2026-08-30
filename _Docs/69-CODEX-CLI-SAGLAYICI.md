@@ -202,7 +202,11 @@ dizin olmalı**; değilse `~/.codex`. TionHarness kalıcı kimlik bilgisini sağ
 ├── auth.json                              ← kalıcı login durumu
 ├── models_cache.json                      ← model kataloğu cache'i
 ├── installation_id                        ← kararlı kurulum kimliği
-└── .shadow/turn-<benzersiz>/              ← tur boyunca CODEX_HOME
+├── resume-homes/<scope-sha256>/           ← normal chat için kalıcı CODEX_HOME
+│   ├── auth.json / models_cache.json / installation_id
+│   ├── config.toml
+│   └── sessions/.../rollout-<thread-id>.jsonl
+└── .shadow/turn-<benzersiz>/              ← yardımcı çağrı boyunca CODEX_HOME
     ├── .owner                             ← sahip PID + süreç başlangıç zamanı
     ├── auth.json                          ← base home'dan atomik snapshot
     ├── models_cache.json                  ← base home'dan atomik snapshot
@@ -210,18 +214,26 @@ dizin olmalı**; değilse `~/.codex`. TionHarness kalıcı kimlik bilgisini sağ
     └── config.toml                        ← yalnız bu turun config'i
 ```
 
-`prepareShadowHome` (`internal/providers/codexcli_shadowhome.go`) her normal tur
-için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json`,
+`prepareShadowHome` (`internal/providers/codexcli_shadowhome.go`) yardımcı LLM
+çağrıları ve resume kapsamı olmayan turlar için `os.MkdirTemp` ile benzersiz dizin
+üretir. Base home'daki `auth.json`,
 `models_cache.json` ve `installation_id` geçici dosyaya yazılıp `sync` edildikten
 sonra atomik olarak yerine taşınır; her tur bağımsız bir snapshot kullanır.
 `auth.json` login durumunu taşırken son iki dosya Codex'in model kataloğunu ve
 kurulum kimliğini yeniden edinmek için cold-start ağ turu yapmasını önler. Bu
 dosyalardan biri yoksa kopyalama bilinçli bir no-op'tur; özellikle auth yokluğunda
 Codex normal "login yok" hatasını üretir. Tur sonunda yalnız shadow dizin silinir;
-base home ve kalıcı durum korunur. `codex exec` aynı nedenle oturum dosyası da
-bırakmamak üzere
-`--json --ephemeral` ile çağrılır (`internal/providers/codexcli.go:123-145,
-237-241,363-372`).
+base home ve kalıcı durum korunur. Bu çağrılar oturum dosyası bırakmamak üzere
+`--json --ephemeral` ile çalışır.
+
+Normal tek-katılımcılı chat turları farklıdır: API, session + varsayılan persona +
+provider/model + donmuş statik sistem promptundan opak bir resume scope üretir;
+Codex bunu hash'leyip `<base>/resume-homes/<sha256>/` altında kalıcı ve izole bir
+CODEX_HOME seçer. Bu turlarda `--ephemeral` kullanılmaz; rollout dosyası aynı
+scope'taki sonraki `exec resume <thread_id>` çağrısı için kalır. Farklı persona,
+provider/model, prompt scope veya base home eski thread'i doğrulayamaz ve full
+TionHarness transkriptiyle cold başlar. Fold veya manuel `/compact` da warm thread'i
+resume etmez: TionHarness summary + recent tail fresh bir Codex thread'ine gider.
 
 Normal cleanup çalışmazsa sonraki tur, bir saatten eski `turn-*` dizinlerini
 orphan adayı olarak tarar. Her shadow home oluşturulurken `.owner` dosyasına sahip
@@ -632,6 +644,12 @@ Prompt cache **ilk turda bile** çalışıyor (Codex kendi sistem promptunu cach
    ve "CLI varsayılanını kullan" (boş model) girişi bu yüzden şart.
 4. **401 israfı doğrulandı** — login'siz koşuda WS'te 5 + HTTPS'te 5 retry,
    ~35 sn. Sağlayıcı ilk `error` olayında auth imzasını görüp süreci öldürmeli.
+5. **Native compaction lifecycle mevcut (0.148.0+)** — `exec --json`, snake_case
+   `context_compaction` item'ını `item.started` ve `item.completed` olarak taşır.
+   App Server'ın camelCase `contextCompaction` item'ı ve `thread/compact/start`
+   RPC'si ayrı transport sözleşmesidir. TionHarness exec parser'ı yalnız kendi
+   wire adını kabul eder; `/compact` enjekte etmez. Event görülmezse mevcut
+   rolling-summary + fresh summary-backed thread fallback'i çalışır.
 
 ---
 
@@ -955,8 +973,8 @@ yalnız aktive edilen araçlar kadar büyür).
    dayanıyor. TionHarness'in `read-only` izin modu için **gerçek** bir garanti.
 2. **`--output-schema`** — `Request.OutputSchema` CLI yolunda da desteklenebilir
    (claude-cli'de yok).
-3. **Sabit `thread_id`** — resume anahtarı dönmüyor; `chat_resume.go`'daki
-   rotasyon takibi Codex için gereksiz (daha basit).
+3. **Sabit `thread_id`** — resume anahtarı dönmüyor; mesaj delta sınırı yine
+   TionHarness'te tutuluyor, fakat Claude'daki dönen-id semantiği yok.
 4. **Ölçülmüş reasoning token** — `deriveThinkingTokens` tahmini yerine gerçek sayı.
 5. **`codex mcp-server`** — Codex'in kendisi TionHarness'e MCP sunucusu olarak
    takılabilir (ajan → ajan delegasyonu için alternatif desen).

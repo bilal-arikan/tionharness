@@ -111,7 +111,7 @@ Testler: `codexcli_test.go`, `codexcli_events_test.go`, `codexcli_config_test.go
 | `internal/agent/runtime.go:741` | `provider == "" \|\| provider == "claude-cli"` → CLI-kind kümesi |
 | `internal/agent/climcp.go` | Ortak parça (`promptToolForMode`, sunucu listesi) çıkarılıp paylaşılır |
 | `internal/api/catalog_codexcli.go` (yeni) | `codex --version` probe + login durumu (`catalog_claudecli.go` deseni) |
-| `internal/api/chat_resume.go` | Codex'te thread id **dönmüyor** → rotasyon takibi bypass |
+| `internal/api/chat_resume.go` | Sabit thread id + mesaj delta sınırı; session/persona/home güvenlik kapıları; fold sonrası fresh thread |
 | `internal/conversation/clioverhead.go` | Codex için ayrı overhead katsayısı |
 | `internal/exttools/catalog.go` | `codex` binary'sini tespit edilen harici araçlara ekle |
 | `frontend/src/features/settings/` | Sağlayıcı ayarları: Codex CLI yolu + config evi + login butonu |
@@ -241,10 +241,14 @@ kartı doluyor.
 
 ### Faz 3 — Resume + cache + config evi ⏱ ~1 gün
 
-1. `codexhome.go`: `<workspace>/codex-home` oluştur/tohumla (global `~/.codex`'ten
-   auth kopyalama — `claudehome.go` deseni).
-2. `Complete`: `req.ResumeSessionID` → `codex exec resume <thread_id>`.
-3. `chat_resume.go`: Codex'te id sabit → rotasyon takibi bypass.
+1. `codexhome.go`: app-global base home'u pinle; normal chat için
+   `<base>/resume-homes/<scope-hash>` altında session/persona-izole kalıcı home,
+   yardımcı çağrılar için turn-local shadow home kullan.
+2. `Complete`: yalnız güvenli `CLIResumeScope` ile `req.ResumeSessionID` →
+   `codex exec resume <thread_id>`; scoped chat'te `--ephemeral` kullanma.
+3. `chat_resume.go`: tek katılımcı + varsayılan persona + aynı provider/model/
+   frozen-system scope + aynı base home kapıları; normal turda delta resume,
+   fold veya `/compact` sonrası TionHarness summary + recent tail ile fresh thread.
 4. Cache muhasebesi: `cached_input_tokens` → `CacheReadTokens`,
    `cache_write_input_tokens` → `CacheWriteTokens`.
 5. `reasoning_output_tokens` → `Usage.ThinkingTokens` (**türetme yok**;

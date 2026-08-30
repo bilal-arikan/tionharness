@@ -196,7 +196,7 @@ Sol alt-navbar (Settings/Logs benzeri) üç sekme:
   `git init` (yoksa), klasör hiç yoksa **"Klasörü oluştur + git init"** (istek alanı
   `createDir`; yalnız bu daldan gönderilir ki yazım hatası boş klasör açmasın),
   origin remote URL + `user.name`/`user.email` ayarları.
-- **Promptlar & Dosyalar** — düzenlenebilir config dosyaları (`WorkspaceFilesPanel`).
+- **Promptlar** — düzenlenebilir config dosyaları (`WorkspaceFilesPanel`).
 
 Git endpoint'leri (`internal/api/git.go`): `GET /api/fs/gitinfo?path=`,
 `POST /api/git/init`, `POST /api/git/config` (origin remote + commit kimliği).

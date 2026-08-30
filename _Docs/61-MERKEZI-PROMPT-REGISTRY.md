@@ -71,7 +71,7 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
 - `GET/PATCH /api/workspace-config` — `promptMeta` (label/hint/placeholders/
   epochAffecting) eklendi; `promptKeys` artık 16 anahtar (2026-08-01: `terse`).
   `""` yazmak dosyayı temizler (default devralır).
-- Ayarlar → Promptlar & Dosyalar: tüm anahtarlar registry metadata'sıyla render
+- Navbar → Promptlar: tüm anahtarlar registry metadata'sıyla render
   edilir; "özelleştirildi" etiketi, "yeni oturumlarda etkili" epoch rozeti ve
   eksik-yer-tutucu uyarısı eklendi. Editörler **içeriğe göre otomatik boyutlanır**
   (`PromptEditor autoSize` — UYGULAMA-GENELİ varsayılan; taban `rows`-farkındalı

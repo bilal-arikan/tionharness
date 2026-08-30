@@ -235,9 +235,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - `Markdown.tsx` — GFM markdown: başlık, liste, tablo, görev listesi, satır-içi
   kod. Özel render'lar: kod blokları (`CodeBlock`), linkler (yerel yol → tıklanır
   `onOpenFile`, http → yeni sekme), görseller (yerel yol → `/api/files`).
-  `urlTransform` kimlik fonksiyonuyla devre dışı (aksi halde `C:` bir protokol
-  sanılıp yerel yollar düşürülür); Windows ters-bölü yolları parse öncesi `/`'e
-  normalize edilir. Görsel yolu **göreli** de olabilir (`![a](output/images/a.png)`):
+  `urlTransform`, yalnız Windows dosya hedefleri ve inline görseller için özel
+  geçiş verir; diğer hedeflerde `react-markdown` güvenli şema filtresi korunur.
+  Ortak parser'ın ürettiği Windows link hedefleri ve açık Markdown linklerindeki
+  ters bölüler parse/render öncesi `/`'e normalize edilir; görünen metin değişmez.
+  Görsel yolu **göreli** de olabilir (`![a](output/images/a.png)`):
   backend `/api/files?path=` parametresi mutlak değilse yolu aktif workspace
   sandbox köküne göre çözer (`internal/api/files.go`); `..` ile kaçış 400 döner.
 - `CodeBlock.tsx` — dil etiketi + kopyala düğmesi + `highlight.js` vurgusu;
@@ -419,7 +421,11 @@ kırpıldı:
   `//host/x` kuyruğu "yol" sanılıp şeması kesiliyor ve WebSearch/WebFetch adımının
   yanındaki link tıklanamaz sahte bir dosya çipine dönüşüyordu (TSK423). Cümle
   sonu noktalama (`.,;:!?`) ve dengesiz kapanış parantezi linkin dışında bırakılır;
-  şemasız `www.host` linkleri `urlHref` ile `https://` alır.
+  şemasız `www.host` linkleri `urlHref` ile `https://` alır. Tırnaklı yollar
+  boşluklarıyla birlikte; tırnaksız Windows yolları ise açık `:satır[:sütun]`
+  sonlandırıcısı bulunduğunda tek segment olarak linklenir. Aynı `splitPaths`
+  parser'ı Markdown metin düğümlerinde de kullanılır; kod/link/görsel düğümlerine
+  yeniden ayrıştırma uygulanmaz.
 - `lib/paths.ts` → `isExternalUrl` tek kaynaktır; `Markdown.tsx` ve `Gallery.tsx`
   kendi kopya `isExternal` yardımcılarını kullanmaz. `mediaUrl` uzak (http/https)
   bir görsel adresini artık `/api/files?path=…` ile sarmalamaz, olduğu gibi geçirir.
@@ -1158,10 +1164,13 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
 
 ### CLI-native compaction kartı (2026-08-30)
 
-- Codex `context_compaction` ve Claude `PreCompact` başlangıcı aynı ID'li
+- Codex `context_compaction` ve Claude `status=compacting`/`PreCompact` başlangıcı aynı ID'li
   `running` kart gösterir; running frame kalıcı mesaja veya inflight sidecar'a yazılmaz.
-- Codex `item.completed`, Claude `compact_boundary` veya `PostCompact` kanıtı
+- Codex `item.completed`, Claude `compact_result=success`, `compact_boundary` veya `PostCompact` kanıtı
   kalıcı `source=cli-native`, `sessionAction=native-compact` kart üretir.
+- Claude `compact_result=failed` çalışan kartı tombstone ile kapatır; tamamlanmış
+  compaction üretmez. Aynı lifecycle içindeki başarı/boundary/PostCompact sinyalleri
+  tek tamamlanmış karta deduplicate edilir.
 - Claude completion sinyali eksikse çalışan kart iki dakika sonra tombstone ile
   kapanır; tamamlanmış compaction uydurulmaz.
 - Provider event'i token ölçümü vermiyorsa kart token rozeti göstermez.
