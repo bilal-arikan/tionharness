@@ -1,4 +1,4 @@
-import { useMemo, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -25,6 +25,8 @@ interface Props {
   onOverflowClick: (side: 'parents' | 'children', handles: ViewHandle[]) => void
 }
 
+const SINGLE_CLICK_DELAY_MS = 250
+
 // Positions come from the pure focus model; canvas owns only pan/zoom and input.
 export function ExplorerGraph({
   nodes,
@@ -34,6 +36,15 @@ export function ExplorerGraph({
   onOverflowClick,
 }: Props) {
   const nodeTypes = useMemo<NodeTypes>(() => ({ explorer: ExplorerNode }), [])
+  const pendingNodeClick = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelPendingNodeClick = () => {
+    if (pendingNodeClick.current === null) return
+    clearTimeout(pendingNodeClick.current)
+    pendingNodeClick.current = null
+  }
+
+  useEffect(() => cancelPendingNodeClick, [])
 
   const activateNode = (node: ExplorerRFNode, focusNode: boolean) => {
     if (node.data.overflow) {
@@ -80,14 +91,19 @@ export function ExplorerGraph({
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodeClick={(_, n) => {
+          onNodeClick={(event, n) => {
             const data = (n as ExplorerRFNode).data
             if (data.overflow) onOverflowClick(data.overflow.side, data.overflow.handles)
-            else onNodeClick(data.ref)
-          }}
-          onNodeDoubleClick={(_, n) => {
-            const data = (n as ExplorerRFNode).data
-            if (!data.overflow) onNodeDoubleClick(data.ref)
+            else if (event.detail >= 2) {
+              cancelPendingNodeClick()
+              onNodeDoubleClick(data.ref)
+            } else {
+              cancelPendingNodeClick()
+              pendingNodeClick.current = setTimeout(() => {
+                pendingNodeClick.current = null
+                onNodeClick(data.ref)
+              }, SINGLE_CLICK_DELAY_MS)
+            }
           }}
           nodesDraggable={false}
           nodesConnectable={false}

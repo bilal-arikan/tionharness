@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, type ReactNode } from 'react'
+import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ViewHandle, ViewRef } from '@/types'
@@ -13,16 +13,35 @@ import type { ExplorerRFNode } from './explorerModel'
 
 vi.mock('@xyflow/react', () => ({
   ReactFlowProvider: ({ children }: { children: ReactNode }) => children,
-  ReactFlow: ({ nodes, children }: { nodes: ExplorerRFNode[]; children: ReactNode }) => (
-    <div>
-      {nodes.map((node) => (
-        <button key={node.id} className="react-flow__node" data-id={node.id}>
-          {node.data.label}
-        </button>
-      ))}
-      {children}
-    </div>
-  ),
+  ReactFlow: ({
+    nodes,
+    children,
+    onNodeClick,
+  }: {
+    nodes: ExplorerRFNode[]
+    children: ReactNode
+    onNodeClick: (event: React.MouseEvent, node: ExplorerRFNode) => void
+  }) => {
+    const [renderVersion, setRenderVersion] = useState(0)
+    return (
+      <div>
+        {nodes.map((node) => (
+          <button
+            key={`${node.id}:${renderVersion}`}
+            className="react-flow__node"
+            data-id={node.id}
+            onClick={(event) => {
+              onNodeClick(event, node)
+              setRenderVersion((version) => version + 1)
+            }}
+          >
+            {node.data.label}
+          </button>
+        ))}
+        {children}
+      </div>
+    )
+  },
   Background: () => null,
   Controls: () => null,
   MiniMap: () => null,
@@ -57,6 +76,95 @@ const roots: Root[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())
   document.body.replaceChildren()
+  vi.useRealTimers()
+})
+
+describe('ExplorerGraph pointer interaction', () => {
+  it('delays a single click before selecting the node', () => {
+    vi.useFakeTimers()
+    const select = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    act(() =>
+      root.render(
+        <ExplorerGraph
+          nodes={[node('agent:P', refs.parent, 0, 0)]}
+          edges={[]}
+          onNodeClick={select}
+          onNodeDoubleClick={() => {}}
+          onOverflowClick={() => {}}
+        />,
+      ),
+    )
+
+    act(() => container.querySelector<HTMLElement>('.react-flow__node')!.click())
+    expect(select).not.toHaveBeenCalled()
+    act(() => vi.runAllTimers())
+    expect(select).toHaveBeenCalledOnce()
+    expect(select).toHaveBeenCalledWith(refs.parent)
+  })
+
+  it('cancels pending selection and focuses across a click-triggered node rerender', () => {
+    vi.useFakeTimers()
+    const select = vi.fn()
+    const focus = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    act(() =>
+      root.render(
+        <ExplorerGraph
+          nodes={[node('agent:P', refs.parent, 0, 0)]}
+          edges={[]}
+          onNodeClick={select}
+          onNodeDoubleClick={focus}
+          onOverflowClick={() => {}}
+        />,
+      ),
+    )
+    const firstTarget = container.querySelector<HTMLElement>('.react-flow__node')!
+    act(() => firstTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })))
+    const secondTarget = container.querySelector<HTMLElement>('.react-flow__node')!
+    expect(secondTarget).not.toBe(firstTarget)
+    act(() => {
+      secondTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
+      secondTarget.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }))
+    })
+    act(() => vi.runAllTimers())
+
+    expect(select).not.toHaveBeenCalled()
+    expect(focus).toHaveBeenCalledOnce()
+    expect(focus).toHaveBeenCalledWith(refs.parent)
+  })
+
+  it('opens an overflow node immediately on pointer click', () => {
+    vi.useFakeTimers()
+    const handles: ViewHandle[] = [{ label: 'Child', ref: refs.child }]
+    const openOverflow = vi.fn()
+    const overflow = node('__overflow:children', refs.focus, 2, 0)
+    overflow.data.overflow = { side: 'children', handles }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    act(() =>
+      root.render(
+        <ExplorerGraph
+          nodes={[overflow]}
+          edges={[]}
+          onNodeClick={() => {}}
+          onNodeDoubleClick={() => {}}
+          onOverflowClick={openOverflow}
+        />,
+      ),
+    )
+
+    act(() => container.querySelector<HTMLElement>('.react-flow__node')!.click())
+    expect(openOverflow).toHaveBeenCalledWith('children', handles)
+  })
 })
 
 describe('ExplorerGraph keyboard interaction', () => {
