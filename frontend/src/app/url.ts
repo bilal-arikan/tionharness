@@ -166,7 +166,7 @@ export function routeIdForView(
     case 'insights':
       return state.insightTab
     case 'explorer':
-      // The selected map node's ref string (e.g. "category:sessions"). The root
+      // The focused map node's ref string (e.g. "category:sessions"). The root
       // carries no segment so a plain #/…/explorer stays clean.
       return state.explorerNode
     case 'flows':

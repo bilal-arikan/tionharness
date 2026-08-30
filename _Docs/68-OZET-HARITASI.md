@@ -24,15 +24,15 @@ degree-of-interest (DOI) tree**. Ekranı doldurmadan yalnız ilgili dalı açık
 
 `internal/view/` bu haritanın motorudur. Zaten hazır olan primitifler:
 
-| İhtiyaç | Mevcut karşılığı |
-|---|---|
-| Düğüm adresi | `view.Ref{Kind, ID, Sub}` (`session:SES1`, `board:board#in_progress`) |
-| Düğüm özeti | `Projector.Project(ctx, ref, level) → View` |
-| Çocuk düğümlere kenar | `View.Handle{Label, Ref, Level}` (drill-down işaretçisi) |
-| Semantic zoom (bütçe) | `Level` = `tiny/card/full` |
-| Ajan erişimi | `get_view` aracı (Ref çözer, Handle takip eder) |
-| Kırılma izi | `ViewPanel.trail` (frontend'te zaten var) |
-| Kök | `ProjectWorkspace` (`workspace` roll-up) |
+| İhtiyaç               | Mevcut karşılığı                                                      |
+| --------------------- | --------------------------------------------------------------------- |
+| Düğüm adresi          | `view.Ref{Kind, ID, Sub}` (`session:SES1`, `board:board#in_progress`) |
+| Düğüm özeti           | `Projector.Project(ctx, ref, level) → View`                           |
+| Çocuk düğümlere kenar | `View.Handle{Label, Ref, Level}` (drill-down işaretçisi)              |
+| Semantic zoom (bütçe) | `Level` = `tiny/card/full`                                            |
+| Ajan erişimi          | `get_view` aracı (Ref çözer, Handle takip eder)                       |
+| Kırılma izi           | `ViewPanel.trail` (frontend'te zaten var)                             |
+| Kök                   | `ProjectWorkspace` (`workspace` roll-up)                              |
 
 **Sonuç:** ajan-tarafı zaten gezilebilir; eksik olan (a) kategori/eksik-Kind düğümleri,
 (b) "problem-odaklı" değil "yapısal" çocuk listesi, (c) görsel harita ekranı.
@@ -63,12 +63,13 @@ workspace (root)
 ```
 
 TSK66 notları:
+
 - Kök **11 düğüm** (eskiden 6); boş kovacık da görünür (harita şekli içerikle değişmez).
 - Yeni kovacıkların üyeleri **yapraktır** — tıklayınca yan panelde metadata projeksiyonu
   açılır, içerik (artifact body / skill body / bulgu detayı) ilgili ekranda kalır.
 - `logs` yapraktır: ring-buffer kuyruğu inline render edilir.
 - skills/findings/logs db'de değil → `Projector.WithSources(Sources{Skills, Findings,
-  Logs})`; `internal/insight` view'i import ettiği için findings view-local `InsightFinding`
+Logs})`; `internal/insight` view'i import ettiği için findings view-local `InsightFinding`
   tipine api-adapter'ıyla bağlanır (cycle yok).
 
 **Dikkat: bu bir AĞAÇ değil GRAF.** `agent → session`, `session(coordinator) →
@@ -170,25 +171,27 @@ Forge belgesi `_Docs/design/explore-focus-graph.op`, görsel kanıt
    YAZILMAZ (iki kaynak zamanla çelişir — bu projenin tekrarlanan dersi).
 3. **DOI pruning:** ekran dolunca "ilgisiz" dalları soldur/katla (focus+context).
 4. **Sessiz kesme yok:** elision düğümde görünür.
-6. **Maliyet görünürlüğü:** her düğümde `~N tok`; pahalı dal ajana/kullanıcıya belli.
-7. **Stabil kimlik + deep-link:** `Ref.String()` cache anahtarı + URL + "aynı düğüm mü?".
+5. **Maliyet görünürlüğü:** her düğümde `~N tok`; pahalı dal ajana/kullanıcıya belli.
+6. **Stabil kimlik + deep-link:** `Ref.String()` cache anahtarı + URL + "aynı düğüm mü?".
 
 ## 9. Fazlar
 
 - **Faz 1 — Backend:** ✅ (2026-08-06) yeni Kind'ler (`agent/budget/tools/category`),
   `ProjectAgent/Budget/Tools/Category`, `Children(ref)` metodu, `GET
-  /api/views/{kind}/{id}/children` endpoint + testler (`view/*_test.go` fixture deseni +
+/api/views/{kind}/{id}/children` endpoint + testler (`view/*_test.go` fixture deseni +
   `fakeStore`). `go build ./... && go vet ./... && go test ./internal/view/...
-  ./internal/api/...` ✅.
+./internal/api/...` ✅.
 - **Faz 2 — Frontend:** ✅ (2026-08-06) `features/explorer` ekranı — React Flow lazy-expand
   (deterministik katmanlı yerleşim, elkjs eklenmedi), gömülü `ViewPanel` yan-özet paneli,
   semantic zoom (uzak zoom → tek satır), canlı SSE (`'explorer'` tick, yalnız
   açık dallar). NavRail "Harita" girişi + `api.viewChildren`. `tsc --noEmit` ✅.
   **Deferred → Faz 3:** URL deep-link (`useAppNavigation` entegrasyonu) ve `expand` ajan aracı.
 - **Faz 3 — Agent/MCP + cila:** ✅ (2026-08-06) **`expand` aracı** (ajan, haritayla aynı
-  backend + testler), **URL deep-link** (`#/w/{ws}/explorer/{refString}` — seçili düğüm
-  geri-yüklenir; `useDeepLinks`/`useAppNavigation`/`url.ts`), **ekran-içi arama** (eşleşmeyeni
-  soldurur), **DOI pruning** (kök-dışı seçimde odak = seçili + ataları + doğrudan çocukları,
+  backend + testler), **URL deep-link** (`#/w/{ws}/explorer/{refString}` — odak düğümü
+  geri-yüklenir; geçersiz/workspace dışı ref açık hata + workspace kökü dönüşü sunar;
+  `useDeepLinks`/`useAppNavigation`/`url.ts`), **ekran-içi arama** (eşleşmeyeni soldurur;
+  sonuçta tek tık yalnız seçer, çift tık odaklar), **DOI pruning** (kök-dışı seçimde
+  odak = seçili + ataları + doğrudan çocukları,
   gerisi solar), **kök otomatik-açılım**. `go test` + `tsc --noEmit` + vitest ✅.
   **Ertelendi (opsiyonel):** MCP resource tree, sigma.js (büyük-workspace performansı).
 - **TSK66 — Yeni kovacıklar + accordion:** ✅ (2026-08-06) root 6 → **11 node**

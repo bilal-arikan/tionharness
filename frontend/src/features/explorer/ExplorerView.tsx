@@ -19,10 +19,10 @@ interface Props {
   // Open a session transcript (wired by App to setView('chat') + selectSession),
   // so a session node on the map is one click from its conversation.
   onOpenSession?: (sessionId: string) => void
-  // Deep-link: the selected node's ref string, restored from the URL on entry and
-  // reported back on every selection change so the map is shareable/restorable.
+  // Deep-link: the focus node's ref string, restored from the URL on entry and
+  // reported back on every focus change so the map is shareable/restorable.
   focusNode?: string | null
-  onFocusNode?: (refString: string) => void
+  onFocusNode?: (refString: string | null) => void
 }
 
 // ExplorerView is the "Harita" screen: a one-hop focus graph over the View layer.
@@ -36,8 +36,26 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     side: 'parents' | 'children'
     handles: ViewHandle[]
   } | null>(null)
-  const { nodes, edges, select, focus, selectedRef, focusLoading, focusError, refreshFocused } =
-    useExplorerGraph({ search, onError, initialFocus: focusNode, onFocus: onFocusNode })
+  const {
+    nodes,
+    edges,
+    select,
+    focus,
+    selectedRef,
+    focusLoading,
+    focusError,
+    deepLinkError,
+    fallbackToRoot,
+    refreshFocused,
+  } = useExplorerGraph({ search, onError, initialFocus: focusNode, onFocus: onFocusNode })
+  const searchResults = search.trim()
+    ? nodes.filter(
+        (node) =>
+          !node.data.overflow &&
+          (node.data.label.toLowerCase().includes(search.trim().toLowerCase()) ||
+            refToString(node.data.ref).toLowerCase().includes(search.trim().toLowerCase())),
+      )
+    : []
 
   // Live update refreshes only the current focus neighborhood.
   const tick = useRefreshTrigger('explorer')
@@ -72,6 +90,29 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
             >
               <X size={13} />
             </button>
+          )}
+          {search && searchResults.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Harita arama sonuçları"
+              className="absolute left-0 top-8 z-30 w-72 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
+            >
+              {searchResults.map((node) => (
+                <button
+                  key={node.id}
+                  role="option"
+                  aria-selected={node.data.selected}
+                  onClick={() => select(node.data.ref)}
+                  onDoubleClick={() => focus(node.data.ref)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
+                >
+                  <span className="min-w-0 flex-1 truncate">{node.data.label}</span>
+                  <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
+                    {node.data.ref.kind}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -109,18 +150,26 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
               Odak çevresi yükleniyor…
             </div>
           )}
-          {!focusLoading && focusError && (
+          {!focusLoading && (deepLinkError || focusError) && (
             <div
               role="alert"
               className="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-danger)] bg-[var(--color-surface)] px-3 py-2 text-xs shadow-lg"
             >
-              <span>Odak çevresi yüklenemedi: {focusError}</span>
+              <span>Odak çevresi yüklenemedi: {deepLinkError || focusError}</span>
               <button
-                onClick={refreshFocused}
+                onClick={fallbackToRoot}
                 className="rounded border border-[var(--color-border)] px-2 py-1 font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               >
-                Tekrar dene
+                Workspace köküne dön
               </button>
+              {focusError && !deepLinkError && (
+                <button
+                  onClick={refreshFocused}
+                  className="rounded border border-[var(--color-border)] px-2 py-1 font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  Tekrar dene
+                </button>
+              )}
             </div>
           )}
           {overflow && (

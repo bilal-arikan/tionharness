@@ -10,10 +10,16 @@ const mocks = vi.hoisted(() => ({
   graphState: {} as Record<string, unknown>,
   refreshFocused: vi.fn(),
   graphProps: {} as Record<string, unknown>,
+  viewPanelProps: {} as Record<string, unknown>,
 }))
 
 vi.mock('@/shared/hooks/useRefreshTrigger', () => ({ useRefreshTrigger: () => 0 }))
-vi.mock('@/features/view/ViewPanel', () => ({ ViewPanel: () => <div>detail panel</div> }))
+vi.mock('@/features/view/ViewPanel', () => ({
+  ViewPanel: (props: Record<string, unknown>) => {
+    mocks.viewPanelProps = props
+    return <div>detail panel</div>
+  },
+}))
 vi.mock('./ExplorerGraph', () => ({
   ExplorerGraph: (props: Record<string, unknown>) => {
     mocks.graphProps = props
@@ -48,6 +54,8 @@ beforeEach(() => {
     selectedRef: rootRef,
     focusLoading: false,
     focusError: undefined,
+    deepLinkError: undefined,
+    fallbackToRoot: vi.fn(),
     refreshFocused: mocks.refreshFocused,
   }
 })
@@ -90,6 +98,48 @@ describe('ExplorerView focus request status', () => {
     act(() => retry?.click())
 
     expect(mocks.refreshFocused).toHaveBeenCalledOnce()
+  })
+
+  it('offers a workspace-root fallback for an invalid deep-link', () => {
+    mocks.graphState.deepLinkError = 'Geçersiz odak bağlantısı: galaxy:x'
+    const container = renderView()
+
+    act(() => {
+      ;[...container.querySelectorAll('button')]
+        .find((button) => button.textContent?.includes('Workspace köküne dön'))
+        ?.click()
+    })
+
+    expect(mocks.graphState.fallbackToRoot).toHaveBeenCalledOnce()
+  })
+
+  it('keeps search selection separate from focus and focuses on double click', () => {
+    const ref: ViewRef = { kind: 'agent', id: 'AG1' }
+    mocks.graphState.nodes = [{ id: 'agent:AG1', data: { ref, label: 'Builder', selected: false } }]
+    const container = renderView()
+    const input = container.querySelector('input')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, 'build')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const result = container.querySelector('[role="option"]') as HTMLButtonElement
+
+    act(() => result.click())
+    expect(mocks.graphState.select).toHaveBeenCalledWith(ref)
+    expect(mocks.graphState.focus).not.toHaveBeenCalled()
+
+    act(() => result.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+    expect(mocks.graphState.focus).toHaveBeenCalledWith(ref)
+  })
+
+  it('shows the selected node in the existing detail panel', () => {
+    const selectedRef: ViewRef = { kind: 'skill', id: 'reviewer' }
+    mocks.graphState.selectedRef = selectedRef
+
+    renderView()
+
+    expect(mocks.viewPanelProps.target).toEqual(selectedRef)
   })
 
   it('opens every overflow handle in a selectable list', () => {

@@ -226,8 +226,8 @@ Detay: `_Docs/74-SISTEM-AJANLARI.md`.
 `DialStdio` çocuk sürecin stderr'ini `io.Discard`'a veriyordu ("chatty server pipe'ı
 doldurup bloke etmesin" gerekçesiyle). Endişe haklı ama bedeli ağır: stdio MCP
 sunucusunun kendini açıklayabildiği **tek kanal** buydu. 2026-08-27'de
-`codebase-memory-mcp` her yeni istemciyi *"CBM daemon is active or starting but could
-not accept this client within 30000 ms"* diyerek reddedip çıktı; logda görünen tek
+`codebase-memory-mcp` her yeni istemciyi _"CBM daemon is active or starting but could
+not accept this client within 30000 ms"_ diyerek reddedip çıktı; logda görünen tek
 şey `mcp initialize: mcp read: EOF` oldu — "bir pipe kapandı" der, sebebini demez.
 WS5'teki bütün ajan turları ilk LLM çağrısına gelmeden durdu ve log 32 saniyede bir
 aynı boş uyarıyı tekrarladı.
@@ -447,6 +447,7 @@ Proje `Desktop\Projects\TionSwarm`'dan **`Desktop\Projects\TionHarness`**'e kopy
 **3342 eşleşme / 795 dosya**, üç casing formu (`TionSwarm`/`tionswarm`/`TIONSWARM`).
 
 **Değişenler:**
+
 - Go modülü `github.com/bilal-arikan/tionharness`; `cmd/tionharness`, `cmd/tionharness-desktop`.
 - Veri dizini `~/.tionswarm` → **`~/.tionharness`**; env öneki `TIONSWARM_*` → **`TIONHARNESS_*`** (49 değişken).
 - Frontend `localStorage` önekleri `tionswarm.*` → `tionharness.*` (~35 anahtar).
@@ -458,6 +459,7 @@ temiz kesim yapıldı. Bunun yerine canlı veri dizini **elle taşındı** (aşa
 
 **Canlı veri dizini taşındı (2026-08-24):** `~/.tionswarm` → **`~/.tionharness`**
 (~2.4 GB, 19k dosya, 14 workspace). Dizin adı değişiminin yanında:
+
 - İçerideki 260 yol yeniden adlandırıldı — `skills/tionswarm-*`, çalışma-dizini durum
   klasörleri `.tionswarm/`, `logs/tionswarm.log`, `claude-home/projects/C--…--tionswarm-workspaces-*`.
 - 1105 metin dosyasında (json/md/py/ps1/txt/toml/html) referanslar düzeltildi; `.jsonl`
@@ -504,6 +506,7 @@ edilemiyor — `Desktop-city-cleaner` önce yanlışlıkla ölü sanıldı) her 
 `...-TionSwarm` projesi de `delete_project` ile kaldırıldı.
 
 **Depo dışı yüzeyler de çevrildi (2026-08-24):**
+
 - **Craft workspace:** 5 skill `tionharness-*`, source slug'ı `tionharness`, görünen ad
   ve `workingDirectory`. Workspace klasörü/slug'ı (`ws_tionswarm`) uygulama açıkken
   taşınamaz → bekliyor.
@@ -542,6 +545,7 @@ listesinde bu ifadenin olmamasıydı → oturum düşmesi jenerik hata sayılıp
 retry ediliyordu.
 
 **Değişiklikler (`internal/providers/claudecli.go`).**
+
 - `isAuthErrorText`: `failed to authenticate` ve `oauth session expired` eklendi
   (eski girdiler korundu).
 - `cliEvent`: `stop_reason`, `terminal_reason`, `permission_denials` (yeni
@@ -671,7 +675,7 @@ mevcut kurulumda üç kırık ortaya çıktı; hepsi hem kodda hem diskte kapat�
 - **Ölü `--resume` id'leri (bildirilen hata).** claude-cli transkriptleri config
   evinin içinde durduğu için, ev `<workspace>/claude-home` → `<dataDir>/claude-home`
   taşınınca oturumların `cliSessionId` alanı eski evi gösteriyordu: `No conversation
-  found with session ID: …` + exit 1, üstelik "yeniden denenebilir" göründüğü için
+found with session ID: …` + exit 1, üstelik "yeniden denenebilir" göründüğü için
   aynı ölü id ile 3 tur harcanıp oturum `stuck` etiketleniyordu.
   → `ClaudeCLI.CanResume(id)` ön-kontrolü (`claudecli_resumecheck.go`) +
   `planClaudeResume` bulunmayan id'de **soğuk** başlar (tam transkript korunur);
@@ -723,10 +727,10 @@ tamamlandıktan sonra kalan yüzey işi:
   komutunu gösteren yardım metni (backend login endpoint'i bu turda yok,
   sessizce çalışmayan buton yerine gerçek komut tercih edildi).
 - **Doğrulama:** `go build ./...` temiz; `go test ./internal/providers/
-  ./internal/exttools/ -count=1` yeşil (`internal/api` paketi, bu işin dışında
+./internal/exttools/ -count=1` yeşil (`internal/api` paketi, bu işin dışında
   başka bir worker'ın bıraktığı `TestSteerableForTurn` çift tanımından derleme
   hatası veriyor — ayrıca raporlandı, bu turun kapsamı değil). Frontend `tsc
-  --noEmit` ve `vitest run` (245+ test) temiz; dokunulan dosyalar prettier'e
+--noEmit` ve `vitest run` (245+ test) temiz; dokunulan dosyalar prettier'e
   uygun (config'li).
 - Detay ve plan-vs-gerçek farkları → `_Docs/70-CODEX-CLI-UYGULAMA-PLANI.md` §8.
 
@@ -762,12 +766,12 @@ havuzu (`min(2×CPU, 16)`). İki garanti **kasıtlı**:
 
 **Paralelleştirilen yollar:**
 
-| Yol | Ne okuyordu |
-|---|---|
-| `loadJSONDir` (db.go) | Tüm entity dizinleri: agents, tasks, schedules, mcp, flows, flow-runs, session-asks, automations, artifacts, hooks, usage, session-usage |
-| Artifact içerikleri (db.go `load`) | Metin artifact'lerinin ayrı gövde dosyaları (WS1'de 156 artifact) |
-| `loadSessions` (store.go) | Oturum başına `session.json` + `messages.jsonl` — en büyük kalem |
-| `recoverInflight` (inflight.go) | Oturum başına `inflight.json` sondası; temiz kapanışta hepsi ıska ama **ıska da soğuk bir dosya açması** |
+| Yol                                | Ne okuyordu                                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `loadJSONDir` (db.go)              | Tüm entity dizinleri: agents, tasks, schedules, mcp, flows, flow-runs, session-asks, automations, artifacts, hooks, usage, session-usage |
+| Artifact içerikleri (db.go `load`) | Metin artifact'lerinin ayrı gövde dosyaları (WS1'de 156 artifact)                                                                        |
+| `loadSessions` (store.go)          | Oturum başına `session.json` + `messages.jsonl` — en büyük kalem                                                                         |
+| `recoverInflight` (inflight.go)    | Oturum başına `inflight.json` sondası; temiz kapanışta hepsi ıska ama **ıska da soğuk bir dosya açması**                                 |
 
 `recoverInflight` ayrıca yeniden yapılandırıldı: sondalar kilit **dışında** ve
 eşzamanlı koşuyor, mutasyon geçişi seri ve kilitli kalıyor. Oturum id'leri
@@ -778,9 +782,9 @@ arasında tekrarlanabilir olsun. Okunamayan sidecar artık **sessizce atlanmıyo
 **Kontrollü ölçüm** (aynı ağacın yarısı seri / yarısı 16 worker — iki yarı da
 eşit soğuk):
 
-| Store | Seri | Paralel | Hızlanma |
-|---|---|---|---|
-| WS5 (701 dosya) | 13,48 ms/dosya | 2,13 ms/dosya | **6,3×** |
+| Store            | Seri           | Paralel       | Hızlanma |
+| ---------------- | -------------- | ------------- | -------- |
+| WS5 (701 dosya)  | 13,48 ms/dosya | 2,13 ms/dosya | **6,3×** |
 | WS16 (265 dosya) | 25,67 ms/dosya | 8,69 ms/dosya | **3,0×** |
 
 Gerçekçi bant **3–6×** → 59 sn'lik toplam boot ~10–20 sn'ye iner.
@@ -804,7 +808,7 @@ döndürür: `sessions`, `loadedSessions`, `messages`, `messageBytes` + entity
 sayıları. İki yerden okunur:
 
 - **Boot log'u** — workspace başına `store opened workspace=… ms=… sessions=…
-  messages=… message_mb=…` (`internal/workspace/manager.go`). Yavaş açılışta
+messages=… message_mb=…` (`internal/workspace/manager.go`). Yavaş açılışta
   sorumlu workspace doğrudan görünür.
 - **`GET /api/debug/store-stats`** — workspace başına satır + `totals`
   (`debug_store_stats.go`). Global uç; workspace-scoped değil.
@@ -818,23 +822,23 @@ tuttuğu için "loaded" sayılmaz, aksi hâlde ayak izi olduğundan büyük gör
 çağrıda oturumun **tüm** mesaj slice'ını kopyalıyordu; çağrı yerlerinin çoğu
 aslında son 1–64 mesajı istiyordu.
 
-| Yeni okuyucu | Ne döner |
-|---|---|
-| `ListMessagesTail(ctx, sid, n)` | Son n mesaj **+ kuyruğun başlangıç indeksi** |
-| `LastMessage(ctx, sid)` | Son mesaj, `ok=false` = boş oturum |
-| `FindMessage(ctx, sid, mid)` | Tek mesaj; `ErrMessageNotFound` ≠ `ErrNotFound` |
-| `StreamMessages(ctx, sid, fn)` | Kopyasız gezinti; `fn false` dönerse durur |
+| Yeni okuyucu                    | Ne döner                                        |
+| ------------------------------- | ----------------------------------------------- |
+| `ListMessagesTail(ctx, sid, n)` | Son n mesaj **+ kuyruğun başlangıç indeksi**    |
+| `LastMessage(ctx, sid)`         | Son mesaj, `ok=false` = boş oturum              |
+| `FindMessage(ctx, sid, mid)`    | Tek mesaj; `ErrMessageNotFound` ≠ `ErrNotFound` |
+| `StreamMessages(ctx, sid, fn)`  | Kopyasız gezinti; `fn false` dönerse durur      |
 
 Taşınan çağrı yerleri:
 
-| Yer | Önce | Sonra |
-|---|---|---|
-| `api/session_stream.go` `publishAutonomousReply` | tam kopya → son mesaj | `LastMessage` |
-| `view/project.go` `loadSession` | tam kopya → son 40 | `ListMessagesTail`; `TailFrom` artık ikinci dönüş değeri |
-| `api/sessions.go` `handleMessageSteps` | tam kopya → tek mesaj | `FindMessage` |
-| `api/session_changes.go` | tam kopya → sadece diff step'leri | `StreamMessages` |
-| `api/chat_queue.go` `writeChatReply` | tam kopya → son assistant | `ListMessagesTail(16)` + kuyruk kesikse tam tarama |
-| `api/todos.go` `todoContextBlock` | tam kopya → son checklist | `ListMessagesTail(64)` + kuyruk kesikse tam tarama |
+| Yer                                              | Önce                              | Sonra                                                    |
+| ------------------------------------------------ | --------------------------------- | -------------------------------------------------------- |
+| `api/session_stream.go` `publishAutonomousReply` | tam kopya → son mesaj             | `LastMessage`                                            |
+| `view/project.go` `loadSession`                  | tam kopya → son 40                | `ListMessagesTail`; `TailFrom` artık ikinci dönüş değeri |
+| `api/sessions.go` `handleMessageSteps`           | tam kopya → tek mesaj             | `FindMessage`                                            |
+| `api/session_changes.go`                         | tam kopya → sadece diff step'leri | `StreamMessages`                                         |
+| `api/chat_queue.go` `writeChatReply`             | tam kopya → son assistant         | `ListMessagesTail(16)` + kuyruk kesikse tam tarama       |
+| `api/todos.go` `todoContextBlock`                | tam kopya → son checklist         | `ListMessagesTail(64)` + kuyruk kesikse tam tarama       |
 
 Son iki satırdaki geri düşüş **kasıtlı ve gerekli**: kuyruk kesilmişse
 "bulunamadı" henüz kesin değildir, sessizce boş dönmek yalan olurdu.
@@ -856,9 +860,9 @@ manager'sız sunucuda panik yerine boş rapor).
 
 İlk gerçek ölçüm iki tahmini bozdu:
 
-| | Tahmin | Ölçülen |
-|---|---|---|
-| Mesajların RAM maliyeti | 250–400 MB | **95 MB** (300 MB RSS'in ~%32'si) |
+|                          | Tahmin           | Ölçülen                           |
+| ------------------------ | ---------------- | --------------------------------- |
+| Mesajların RAM maliyeti  | 250–400 MB       | **95 MB** (300 MB RSS'in ~%32'si) |
 | Boot yavaşlığının sebebi | 93 MB JSON parse | **Soğuk dosya açma, 15 ms/dosya** |
 
 `Message.Steps` diskte zaten JSON **string** olduğundan struct'a dönüşte 3–4×
@@ -934,11 +938,12 @@ derleyici böylece 6 çağrı yerinin hepsini işaretliyor ve ileride eklenecek 
 durum-geçiş yolu sayacı sessizce atlayamıyor. Okuma (`HasRunningRuns` /
 `HasRunningFlowRuns`) `d.mu`'ya **hiç dokunmaz**.
 
-Sayaç *cevap* değil **hızlı-negatif kapısı**: 0 ise tarama hiç koşmaz (boşta hâli),
->0 ise tarama koşar — o an makine zaten meşgul. Böylece fazla-sayma zararsız, tek
-gerçek risk eksik-sayma. Ona karşı `ReconcileRunCounters` (`store_runcount.go`) mevcut
-flow sweeper'ının 20. tick'inde (10 dk) çalışır, sapmayı düzeltir **ve `Error`
-seviyesinde loglar** — sessiz self-heal hatayı görünmez kılardı.
+Sayaç _cevap_ değil **hızlı-negatif kapısı**: 0 ise tarama hiç koşmaz (boşta hâli),
+
+> 0 ise tarama koşar — o an makine zaten meşgul. Böylece fazla-sayma zararsız, tek
+> gerçek risk eksik-sayma. Ona karşı `ReconcileRunCounters` (`store_runcount.go`) mevcut
+> flow sweeper'ının 20. tick'inde (10 dk) çalışır, sapmayı düzeltir **ve `Error`
+> seviyesinde loglar** — sessiz self-heal hatayı görünmez kılardı.
 
 **Ölçüm** (`BenchmarkWorkspaceRunning`, 2000 flow-run'lı store):
 272.932 ns/op + 385 KB/çağrı → **27,8 ns/op, 0 alloc**. ~9.800×. 125 çağrı/s × 273 µs
@@ -1131,10 +1136,10 @@ DeepSeek 2026-08-06'da zammı duyurdu; yeni tarife **2026-08-16 16:00 UTC**'de
 yürürlüğe giriyor ve düz oran yerine **peak/off-peak** ikili tarifeye geçiyor
 (peak: 01:00–04:00 ve 06:00–10:00 UTC — günde 7 saat; off-peak yarı fiyat).
 
-| Model | off-peak (tabloda bu var) | peak (2×) | cache-hit input (off-peak) |
-|---|---|---|---|
-| V4 Flash | $0.22 / $0.66 | $0.44 / $1.32 | $0.007 (~0.032× input) |
-| V4 Pro | $0.66 / $1.98 | $1.32 / $3.96 | $0.022 (~0.033× input) |
+| Model    | off-peak (tabloda bu var) | peak (2×)     | cache-hit input (off-peak) |
+| -------- | ------------------------- | ------------- | -------------------------- |
+| V4 Flash | $0.22 / $0.66             | $0.44 / $1.32 | $0.007 (~0.032× input)     |
+| V4 Pro   | $0.66 / $1.98             | $1.32 / $3.96 | $0.022 (~0.033× input)     |
 
 Eskisi flash $0.14/$0.28, pro $0.435/$0.87 idi → output tarafında peak'te ~4.5–4.7×,
 off-peak'te ~2.3× artış. Cache-hit indirimi de sığlaştı ($0.0028 → $0.007).
@@ -1255,7 +1260,7 @@ aynen duruyor — bu bir varsayılan, taşıma değil.
   yalnız o bilir.
 - **`SpawnWorker` OR kuralı.** Ajan varsayılanı yeteneği **ekler**, açıkça istenmiş
   olanı asla kaldırmaz. Derinlik tavanında **sessizce** düz worker'a düşer — açık
-  `coordinator: true` orada hâlâ *hata* verir; asimetri bilinçli: açık istek cevap
+  `coordinator: true` orada hâlâ _hata_ verir; asimetri bilinçli: açık istek cevap
   bekleyen bir taleptir, varsayılan yalnızca bir tercih.
 - **Reçete doğrulaması katmana göre.** API create/update bilinmeyen slug'ı **reddeder**
   (etkileşimli düzenleme = yazım hatası görünür olmalı); seed/install'da `resolvableRecipe`
@@ -1357,6 +1362,7 @@ Aynı imza 02.08–11.08 arası **beş kez** tekrarlamış; hepsinde `go run` ç
 olurdu). Panic/OOM değil, hepsi dış zorla-sonlandırma.
 
 **Düzeltme (`scripts/dev.ps1`):**
+
 - **Derle-sonra-çalıştır:** `go build -o bin\tionharness-dev.exe ./cmd/tionharness` + exe'yi doğrudan
   başlat. Tek süreç → öksüz sunucu ve sahte "çöktü" imkânsız; **gerçek exit kodu ve panic
   trace** stderr yakalamasına düşer. Derleme hatası da Vite başlamadan, net biçimde patlar.
@@ -1495,32 +1501,34 @@ Dosyalar: `internal/db/debug_journal.go` (TurnDebug += 5 alan + `DebugCacheBreak
 `internal/agent/{cachebreak,trace,runtime}.go` (`CacheBreak` + `pendingCacheBreaks` +
 `StepCacheBreak`/`ColdTokens`), `internal/api/{chat_turn,chat_stream}.go`
 (`consumeCacheBreakLead`), frontend `features/chat/{CacheBreakCard,CacheWarmthStrip}.tsx`
-+ `MessageMeta`/`MessageList`/`TurnSteps`/`AssistantTurn`/`MessageDebugPanel`/`ChatView`
-+ `shared/stepKinds.ts`. Testler: `TestGetTurnDebugCacheBreak`, `TestInlineCacheBreak`,
-`TestConsumeCacheBreak`, `TestCacheBreakStep`. Go suite + tsc + vitest (167) + build yeşil.
-Detay: `_Docs\50` P7, `_Docs\07` "Prompt-cache görünürlüğü".
+
+- `MessageMeta`/`MessageList`/`TurnSteps`/`AssistantTurn`/`MessageDebugPanel`/`ChatView`
+- `shared/stepKinds.ts`. Testler: `TestGetTurnDebugCacheBreak`, `TestInlineCacheBreak`,
+  `TestConsumeCacheBreak`, `TestCacheBreakStep`. Go suite + tsc + vitest (167) + build yeşil.
+  Detay: `_Docs\50` P7, `_Docs\07` "Prompt-cache görünürlüğü".
 
 **Devamı — Insight cache lensleri (aynı gün):** mevcut `context-cache-opt` lensi
 `cache_break ≥ 2` ile prefilter'dan geçiyor ama `buildSlice` cache olaylarını **hiç
 yazmadığı** için analize kanıtsız dilim gidiyordu; ayrıca `Lens.Scope` frontmatter'da
 vardı ama hiçbir yerde kullanılmıyordu. Üçü birden düzeltildi: (1) `ScopeCache`
 ("cache") ile opt-in "## Prompt-cache events" bölümü — `cause`/`coldTokens`/`wasteUsd`
-+ `at=` damgası + araya `epoch` olayları (adopt'suz kırılım kuralı ancak böyle
-uygulanabilir); (2) `extractSignals` sebebi ayrı sinyal olarak indeksler
-(`cache_break:<cause>`, `cooling_waste`) — bu da `parseMinCount`'un ilk-iki-noktadan
-bölme hatasını açığa çıkardı (bileşik anahtar bozulup eşik sessizce düşüyordu → lens
-her oturumu eşlerdi), son-iki-noktadan bölmeye geçildi; (3) yeni **`cache-cooling-waste`**
-lensi TTL soğumasını *tempo* problemi olarak ele alır (schedule aralığı, oturum ömrü,
-prefix boyu), `context-cache-opt` ise yalnız `prompt-or-tools-changed`'e bakar. Testler:
-`TestBuildSliceCacheScope`, `TestExtractSignalsCacheCause`, `TestParseMinCountCompoundKey`,
-`TestEmbeddedDefaultsAllParse` (7 lens + scope + bileşik minCount). Detay: `_Docs\60` Faz 6.3.
-**Devamı — shipped-defaults tazeleme (`internal/seed`, aynı gün):** yukarıdaki iş bir üst
-sorunu açığa çıkardı — `insight.EnsureDefaults` "dosya varsa dokunma" dediği için lens
-düzeltmeleri mevcut kurulumlara **hiç ulaşmıyordu**; uygulamayı güncellemek lensleri
-güncellemiyordu. Skills'te zaten çalışan "shipped-hash ledger" deseni paylaşılan
-**`internal/seed`** paketine çıkarıldı ve insight ikinci tüketici oldu.
 
-Çekirdek fikir: *"kullanıcı düzenledi mi?"yi tahmin etmek yerine ne gönderdiğimizi kaydet.*
+- `at=` damgası + araya `epoch` olayları (adopt'suz kırılım kuralı ancak böyle
+  uygulanabilir); (2) `extractSignals` sebebi ayrı sinyal olarak indeksler
+  (`cache_break:<cause>`, `cooling_waste`) — bu da `parseMinCount`'un ilk-iki-noktadan
+  bölme hatasını açığa çıkardı (bileşik anahtar bozulup eşik sessizce düşüyordu → lens
+  her oturumu eşlerdi), son-iki-noktadan bölmeye geçildi; (3) yeni **`cache-cooling-waste`**
+  lensi TTL soğumasını _tempo_ problemi olarak ele alır (schedule aralığı, oturum ömrü,
+  prefix boyu), `context-cache-opt` ise yalnız `prompt-or-tools-changed`'e bakar. Testler:
+  `TestBuildSliceCacheScope`, `TestExtractSignalsCacheCause`, `TestParseMinCountCompoundKey`,
+  `TestEmbeddedDefaultsAllParse` (7 lens + scope + bileşik minCount). Detay: `_Docs\60` Faz 6.3.
+  **Devamı — shipped-defaults tazeleme (`internal/seed`, aynı gün):** yukarıdaki iş bir üst
+  sorunu açığa çıkardı — `insight.EnsureDefaults` "dosya varsa dokunma" dediği için lens
+  düzeltmeleri mevcut kurulumlara **hiç ulaşmıyordu**; uygulamayı güncellemek lensleri
+  güncellemiyordu. Skills'te zaten çalışan "shipped-hash ledger" deseni paylaşılan
+  **`internal/seed`** paketine çıkarıldı ve insight ikinci tüketici oldu.
+
+Çekirdek fikir: _"kullanıcı düzenledi mi?"yi tahmin etmek yerine ne gönderdiğimizi kaydet._
 `.shipped-versions.json` her dosya için tüm-dosya (`Files`) ve yalnız-gövde (`Bodies`) sha256'sı
 tutar → "dokunulmamış" kanıtlanabilir olgu olur, güvenle tazelenir. `Bodies` şart: uygulamanın
 KENDİSİ frontmatter'ı yerinde yazıyor (skills'te görünürlük, lenste `enabled` toggle'ı), tüm-dosya
@@ -1693,11 +1701,12 @@ zorunlu `id`), `tools/builtin_list_test.go` (gerçek `Name` sıralaması).
 context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
 
 **Nasıl:**
+
 - **Paylaşılan kontrat** (`internal/tools/listpage.go`): `PageArgs` (limit≤0 → 20,
-  >100 → 100, offset<0 → 0), `SlicePage` (filtre-sonrası sayfalama), `SortOrder`
-  (updated/created/name × asc/desc; bilinmeyen anahtar = **açık hata**, sessiz düşüş yok),
-  `SortByField` (per-entity getter'larla tip güvenli karşılaştırıcı), `SplitTags`/
-  `HasAllTags` (AND semantiği). `pageResult` zarfı marshal'lar.
+  > 100 → 100, offset<0 → 0), `SlicePage` (filtre-sonrası sayfalama), `SortOrder`
+  > (updated/created/name × asc/desc; bilinmeyen anahtar = **açık hata**, sessiz düşüş yok),
+  > `SortByField` (per-entity getter'larla tip güvenli karşılaştırıcı), `SplitTags`/
+  > `HasAllTags` (AND semantiği). `pageResult` zarfı marshal'lar.
 - **7 tool** aynı desende: filtre → sırala → sayfala → zarf. Filtreler:
   `list_agents` (provider/model substring + state enabled|disabled), `list_tasks`
   (boardState/priority/ownerAgentId/tags), `list_flows` (tags; **flow modelinde
@@ -1708,11 +1717,11 @@ context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
   `list_workers` (state running|idle|stuck; yalnız koordinatör oturumunda),
   `list_workspaces` (yalnız pagination; updated_* → created_* belgelenmiş vekil).
 - **API tarafı** (`internal/api/listparams.go`): `listQueryParams` (limit/offset/sort
-  + `listing` bayrağı — parametre yoksa **legacy davranış: düz dizi**, UI bozulmaz),
-  `boolQuery` (enabled=1/0/true/false), `pageJSONResponse`. Uygulandığı endpoint'ler:
-  `/api/agents`, `/api/tasks`, `/api/flows`, `/api/automations`, `/api/schedules`,
-  `/api/workspaces`. (`list_workers` bir REST kaynağı değil — koordinatör oturum içi
-  durum; HTTP endpoint'i yok.)
+  - `listing` bayrağı — parametre yoksa **legacy davranış: düz dizi**, UI bozulmaz),
+    `boolQuery` (enabled=1/0/true/false), `pageJSONResponse`. Uygulandığı endpoint'ler:
+    `/api/agents`, `/api/tasks`, `/api/flows`, `/api/automations`, `/api/schedules`,
+    `/api/workspaces`. (`list_workers` bir REST kaynağı değil — koordinatör oturum içi
+    durum; HTTP endpoint'i yok.)
 - **Bug fix:** `list_workers` sıralaması filtrelenmemiş `rows` üzerinden karşılaştırıcı
   kuruyordu — filtre aktifken (örn. `state=running&sort=name_asc`) yanlış elemanlar
   karşılaştırılıyordu. Artık `SortByField(matches, …)` + regresyon testi.
@@ -1735,9 +1744,10 @@ testi — filtre+sort kombinasyonu dahil, `api/listparams_test.go`). Frontend et
 frontend'de büyük listeler için gerçek "load more".
 
 **Nasıl:**
+
 - **Tools — 4 araç kontrata geçti:**
   - `list_artifacts` (`internal/tools/builtin_artifactmgmt.go`): `limit/offset/sort`
-    + `sessionId`/`kind`/`origin` filtreleri; name = başlık.
+    - `sessionId`/`kind`/`origin` filtreleri; name = başlık.
   - `list_hooks` (`internal/tools/builtin_hookmgmt.go`): `limit/offset/sort` +
     `event` filtresi; hook'lar değişmez olduğundan `updated_*` → oluşturma zamanı
     (belgelenmiş vekil), `name_*` açık hata (name alanı yok).
@@ -1763,7 +1773,7 @@ frontend'de büyük listeler için gerçek "load more".
 - **Dokunulan dosyalar:** `internal/tools/builtin_{artifactmgmt,hookmgmt,mcpmgmt,sessions}.go`,
   `internal/tools/builtin_{list,sessions}_test.go`, `internal/api/{artifacts,sessions,executions}.go`,
   `frontend/src/{api/artifacts.ts, features/artifacts/ArtifactsPanel.tsx,
-  app/useSessionsController.ts, features/tasks/TaskFormModal.tsx, shared/hooks/useDebouncedValue.ts}`.
+app/useSessionsController.ts, features/tasks/TaskFormModal.tsx, shared/hooks/useDebouncedValue.ts}`.
   (Not: ilk `tsc -b`'de `App.tsx:678` tip hatası göründü — working tree'deki BAŞKA işin
   `api/agents.ts` (P1.3, `{agent, warning?}` dönüşü) değişikliği `AgentsView` prop'uyla
   uyumsuzdu; o iş `AgentsView.tsx`'i eşzamanlı güncellediği için ikinci koşuda temizdi —
@@ -1786,6 +1796,7 @@ pencerede, `Daha fazla yükle (X/Y)` pencereyi büyütür; filtre değişince pe
 sıfırlanır.
 
 **Nasıl:**
+
 - `useSessionsController.ts`: `SESSIONS_PAGE_SIZE = 100`; ilk yükleme + refresh
   aynı pencereyi (`sessionsLimitRef`) yeniden çeker — sayfa derinliği olan
   kullanıcı her event'te ilk sayfaya çökmez; `loadMoreSessions` offset'ten
@@ -1817,6 +1828,7 @@ yeni kovacıklar: **Artifacts, Otomasyonlar, Skill'ler, İçgörüler, Günlükl
 vardı). Kök 6 → **11 node**.
 
 **Nasıl:**
+
 - **Single-expand (accordion):** `explorerModel.nextExpandedSet(expanded, key, parentByKey)`
   saf fonksiyonu — genişletilen node'la aynı parent'a sahip diğer açık node'ları kapatır.
   `useExplorerGraph` artık `parentByKey`'i `fetchChildren`'da tutar (her çocuğun parent'ı
@@ -1829,7 +1841,7 @@ vardı). Kök 6 → **11 node**.
   grup/açıklama), `insight.go` (bulgu: severity/durum/oluşum/kanıt), `logs.go` (process log
   ring-buffer kuyruğu — budget/tools gibi yaprak).
 - **Kaynaklar:** skills/logs/findings db'de değil → `Projector.WithSources(Sources{Skills,
-  Findings, Logs})` (narrow interface'ler; nil = "yok" satırı, asla sessiz boşluk değil).
+Findings, Logs})` (narrow interface'ler; nil = "yok" satırı, asla sessiz boşluk değil).
   `internal/insight` zaten `view`'i import ettiği için (cycle!) findings view-local
   `InsightFinding` tipine bir adapter'la bağlanır (2026-08-10'dan beri
   `tools/viewprojector.go`; önce `api/findingsSource` idi). `Store` arayüzüne
@@ -1874,17 +1886,21 @@ grafı **aynı backend'le** dolaşabiliyor; harita URL ile paylaşılabiliyor, a
 odak+bağlam ile soldurma yapıyor.
 
 **Nasıl:**
+
 - **`expand` aracı** (`internal/tools/builtin_expand.go`) — `expand{kind,id,sub}` →
   `Projector.Children`'ı sarar (haritayla birebir aynı). Her çocuğu doğru sonraki çağrıya
   yönlendirir: çocuğu olan → `expand`, yaprak → `get_view`. Singleton id defaulting
   (workspace/board), bilinmeyen kind/kategori = hata. `toolsetup.go`'da her ajana açık,
   kategori `diagnostics`. View paketine `IsExpandable(ref)` helper'ı. Testler:
   `builtin_expand_test.go`.
-- **URL deep-link** — `#/w/{ws}/explorer/{refString}`: seçili düğüm URL'ye yazılır ve
-  girişte geri-yüklenir. `url.ts` (VIEWS'a `explorer`, `routeIdForView`), `useDeepLinks`
+- **URL deep-link** — `#/w/{ws}/explorer/{refString}`: odak düğümü URL'ye yazılır ve
+  girişte/yenilemede geri-yüklenir. Geçersiz veya workspace dışında kalan ref açık hata
+  gösterir ve workspace köküne güvenli dönüş sunar. `url.ts` (VIEWS'a `explorer`,
+  `routeIdForView`), `useDeepLinks`
   (`explorerNode` state), `useAppNavigation` (applyRoute + route.id). `parseRef` (refString
   → ViewRef; "col:" kategori kolonu ve "#sub" doğru ayrışır).
-- **Ekran-içi arama** — başlıkta arama kutusu; eşleşmeyen görünür düğümleri soldurur.
+- **Ekran-içi arama** — başlıkta arama kutusu; eşleşmeyen görünür düğümleri soldurur;
+  sonuçta tek tık yalnız seçimi, çift tık odağı değiştirir.
 - **DOI pruning** — kök-dışı bir düğüm seçilince odak = seçili + ataları + doğrudan
   çocukları; gerisi (ve kenarları) solar. Küçük/odaksız harita soldurmaz. Soldurma
   gizlemez — düğüm hâlâ tıklanabilir.
@@ -1902,6 +1918,7 @@ drill-down; seçili düğümün tam projeksiyonu (ajanın gördüğü ham DSL) y
 Bu ekran **Ağ'dan ayrıdır** — Ağ ilişki grafiği, Harita durum-drill-down.
 
 **Nasıl:** Yeni `features/explorer/`:
+
 - `explorerModel.ts` — graf modeli + **deterministik katmanlı yerleşim** (derinlik→sütun,
   kardeş→satır) ve döngü-kırıcı visited-set (her düğüm bir kez yerleşir, DAG/döngü
   geri-kenarı çizilir). elkjs/dagre eklenmedi.
@@ -1930,6 +1947,7 @@ dokunulmadı.
 
 **Nasıl:** `internal/view`'a dört yeni **Kind** (`agent`/`budget`/`tools`/`category`) ve
 her biri için ayrı dosyada bir projeksiyon:
+
 - `agent.go` — `ProjectAgent`: ajan kimliği + bugünkü token/maliyet (`billing.RollupOf`,
   yeniden fiyatlama yok) + oturum sayısı (aktif) + son etkinlik; handle'lar ajanın
   oturumları, `agentSessionHandles` cap + elision.
@@ -1948,7 +1966,8 @@ her biri için ayrı dosyada bir projeksiyon:
 `GetWorkspaceToolConfig`); leaf-paket disiplini korundu. API: `handleGetView`'in yanına
 `GET /api/views/{kind}/{id}/children` route'u (`views.go`). Testler mevcut
 `view/*_test.go` fixture desenini izler (hand-built `db.*` + `fakeStore`); her projeksiyon
-+ `Children` + endpoint için kapsam. `go build ./... && go vet ./... && go test
+
+- `Children` + endpoint için kapsam. `go build ./... && go vet ./... && go test
 ./internal/view/... ./internal/api/...` ✅.
 
 ## UI: Chat header'da "◱ Özet" → "Coord"; koordinasyon kendi drawer'ına, projeksiyon detay paneline (2026-08-06) ✅
@@ -2143,7 +2162,8 @@ değişmez). Üç çağrı sitesi (`chat_stream`/`chat_btw`/`wake_turn`) overhea
 kullandığı **aynı** `systemFillers` üzerinden (`s.contextOverheadTokens`) hesaplayıp
 ctx'e koyar → metre ve motor artık oranın **iki tarafında da** aynı temeli kullanır.
 Testler: `TestPrepareOverheadRaisesPressure`, `TestWithContextOverheadNoOp`. `go build`
-+ `go test ./internal/conversation/... ./internal/api/...` ✅.
+
+- `go test ./internal/conversation/... ./internal/api/...` ✅.
 
 **Tradeoff:** Fold artık gerçek footprint bütçeyi aşınca (daha erken) tetiklenir → biraz
 daha sık özetleyici (summarize) LLM çağrısı; istenen düzeltme tam da bu. Büyük sabit yük
@@ -2220,7 +2240,8 @@ recipe ağaçta tekrarlanmasın diye); handoff ise aynı mantıksal oturumun dev
 doğru. Üç handoff yolu (manuel `/handoff`, `handoff_session` aracı, oto-handoff) aynı
 helper'dan geçtiği için hepsi kapsanır. Test: `handoff_test.go` (koordinatör ayarları
 taşınır + lineage sızmaz; koordinatör-olmayan ebeveyn bayrak uydurmaz). `go build ./...`
-+ `go vet` + `go test ./internal/agent` ✅.
+
+- `go vet` + `go test ./internal/agent` ✅.
 
 ## Fix: compact sırasında kuyruk paneli kaybolması (seri slot tutulmuyordu) (2026-08-05) ✅
 
@@ -2240,17 +2261,18 @@ komutlarını (`/compact`, `/refresh-context`, `/handoff`) seri send-queue'ya HE
 yönde de uydurur. Slot meşgulse (bir tur akıyorsa) `idleSignal` broadcast kanalında
 **bloklayarak bekler** (poll değil), tur bitince slot'u kapar; komut sürerken gelen
 mesaj tray'de WAITING kalır (`kickInbox` running iken no-op), `release()` flag'i temizler
-+ idle broadcast + worker'ı kick eder (birikeni drenajlar). `ctx` iptali (istemci
-kopması) yan etki öncesi temiz çıkar. `running=false` set eden iki yer (worker
-drain-tamam + release) `signalInboxIdleLocked` ile bekleyeni uyandırır. İlk sürümdeki
-`holdInbox` (tur akıyorsa `held=false` ile pas geçen band-aid) bununla değiştirildi —
-artık komut, önündeki turu bekler, arkasındakileri de bloklar.
-`handleSessionSummary` + `handleSessionHandoff` `acquireInboxSlot` + `defer release`
-ile sarıldı (compact/refresh-context/handoff kapsanır). Testler: `inbox_hold_test.go`
-(held iken dispatch engellenir; worker koşarken beklenir + uyanır; ctx iptalinde
-worker'a dokunmadan çıkar). `go build ./...` + `go vet` + `go test ./internal/api
+
+- idle broadcast + worker'ı kick eder (birikeni drenajlar). `ctx` iptali (istemci
+  kopması) yan etki öncesi temiz çıkar. `running=false` set eden iki yer (worker
+  drain-tamam + release) `signalInboxIdleLocked` ile bekleyeni uyandırır. İlk sürümdeki
+  `holdInbox` (tur akıyorsa `held=false` ile pas geçen band-aid) bununla değiştirildi —
+  artık komut, önündeki turu bekler, arkasındakileri de bloklar.
+  `handleSessionSummary` + `handleSessionHandoff` `acquireInboxSlot` + `defer release`
+  ile sarıldı (compact/refresh-context/handoff kapsanır). Testler: `inbox_hold_test.go`
+  (held iken dispatch engellenir; worker koşarken beklenir + uyanır; ctx iptalinde
+  worker'a dokunmadan çıkar). `go build ./...` + `go vet` + `go test ./internal/api
 ./internal/providers` ✅ (race detector bu makinede gcc yokluğundan çalıştırılamadı;
-kilitleme tek `inbox.mu` altında, capture-then-select lost-wakeup'a karşı güvenli).
+  kilitleme tek `inbox.mu` altında, capture-then-select lost-wakeup'a karşı güvenli).
 
 ## View: board tek-kart + schedule projeksiyonu + aksiyon-kuyruğu drill-down (2026-08-05) ✅
 
@@ -2311,29 +2333,29 @@ ekranıyla tek kaynaktan.
   paylaşılan `ModalOverlay`'e; 6 tam-panel yükleyici `LoadingState`'e taşındı.
   (`PromptEditor` tam-ekran + `ServerManagement` testid'li bilinçli ad-hoc bırakıldı.)
 - **Toast (yeni):** Hata-özel `ErrorToast` → çok-tonlu **`Toast`** (error/success/info)
-  + `Toaster` host + modül-seviye `toast.*` API (context'siz, her yerden çağrılır).
-  Mevcut `onError` sink'leri `toast.error`'a yönlendi (geriye-uyumlu).
-  - **Pozitif toast'lar (yeni):** Başarıyla tamamlanan kullanıcı aksiyonlarına kısa
+  - `Toaster` host + modül-seviye `toast.*` API (context'siz, her yerden çağrılır).
+    Mevcut `onError` sink'leri `toast.error`'a yönlendi (geriye-uyumlu).
+  * **Pozitif toast'lar (yeni):** Başarıyla tamamlanan kullanıcı aksiyonlarına kısa
     `toast.success`/`toast.info` eklendi. **Ayarlar:** ayar kaydet (`SettingsPanel`),
     görünüm kaydet/genele sıfırla (`AppearancePanel`), workspace dosyaları kaydet
     (`WorkspaceFilesPanel`), sır ekle/güncelle/sil + panoya kopyala (`SecretsPanel`),
     hook ekle/güncelle/sil (`HooksPanel`), MCP sunucusu ekle/güncelle/sil
     (`useToolsPanelState`). **Workspace:** oluştur/ekle/sil (`useWorkspaces`), genel
     ayar kaydet (`WorkspaceView`). **Akışlar:** oluştur/şablondan oluştur/kaydet/sil
-    + toplu sil (`flowActions`). **Görevler:** oluştur/güncelle/sil (`TaskFormModal`).
-    **Zamanlama/otomasyon:** oluştur/güncelle (`ScheduleModal`/`AutomationModal`),
-    sil (`AutomationBoard`). **İçgörü:** ayar kaydet (`SettingsTab`), lens kaydet
-    (`LensList`), ders sil (`LessonsList`). **Sağlayıcı/kimlik:** özel sağlayıcı sil
-    (`ProvidersPanel`), claude-cli kimlik kaydet/sil (`ClaudeAuthDialog`).
-    **Market/registry:** paket kur (`MarketPanel`), registry ekle/sil
-    (`RegistryManager`), katalogdan MCP ekle (`useToolsPanelState.addImportable`).
-    **Artifact:** kaydet/sil (`ArtifactsPanel`). Yalnız onaylanmış başarıda (await
-    çözülüp hata fırlamadıysa) tetiklenir; hata yolu değişmedi, gürültü (her
-    tuş/otomatik-kayıt/toggle) yok. **Ton düzeltmesi:** `MarketPanel` kurulum
-    başarısını `onError('✓ …')` ile KIRMIZI hata toast'ında gösteriyordu →
-    `toast.success`'e alındı. Bilinçli atlananlar: zaten inline sonuç gösteren
-    `BackupPanel`, MCP import, `ExternalToolsPanel` bakım aksiyonları.
-  - **Kopyala geri bildirimi → tek kanal:** Tüm kopya butonlarındaki inline
+    - toplu sil (`flowActions`). **Görevler:** oluştur/güncelle/sil (`TaskFormModal`).
+      **Zamanlama/otomasyon:** oluştur/güncelle (`ScheduleModal`/`AutomationModal`),
+      sil (`AutomationBoard`). **İçgörü:** ayar kaydet (`SettingsTab`), lens kaydet
+      (`LensList`), ders sil (`LessonsList`). **Sağlayıcı/kimlik:** özel sağlayıcı sil
+      (`ProvidersPanel`), claude-cli kimlik kaydet/sil (`ClaudeAuthDialog`).
+      **Market/registry:** paket kur (`MarketPanel`), registry ekle/sil
+      (`RegistryManager`), katalogdan MCP ekle (`useToolsPanelState.addImportable`).
+      **Artifact:** kaydet/sil (`ArtifactsPanel`). Yalnız onaylanmış başarıda (await
+      çözülüp hata fırlamadıysa) tetiklenir; hata yolu değişmedi, gürültü (her
+      tuş/otomatik-kayıt/toggle) yok. **Ton düzeltmesi:** `MarketPanel` kurulum
+      başarısını `onError('✓ …')` ile KIRMIZI hata toast'ında gösteriyordu →
+      `toast.success`'e alındı. Bilinçli atlananlar: zaten inline sonuç gösteren
+      `BackupPanel`, MCP import, `ExternalToolsPanel` bakım aksiyonları.
+  * **Kopyala geri bildirimi → tek kanal:** Tüm kopya butonlarındaki inline
     "Kopyalandı"/✓-checkmark swap'ları (yerel `copied`/`done` state + `setTimeout`)
     kaldırılıp tek `toast.info('Panoya kopyalandı')` kanalına taşındı: `CopyPathButton`,
     `PromptEditor`, markdown `CodeBlock`/`MermaidDiagram`, `AgentContextModal`,
@@ -2381,7 +2403,7 @@ ekranıyla tek kaynaktan.
   (resume gate zaten kapalı).
 - **Log:** Mevcut bir warm CLI oturumunu düşüren fold, Loglar'a
   `component=conversation` altında `cli resume reset: fold re-baselined the
-  claude-cli session` (prev_cli_session + raw_msgs) satırıyla işaretlenir —
+claude-cli session` (prev_cli_session + raw_msgs) satırıyla işaretlenir —
   "context compacted" fold logunun yanında; tek cache-cold turu açıklar. İlk-tur /
   edit kaynaklı zaten-cold turlar loglanmaz (gürültü değil).
 
@@ -2395,13 +2417,13 @@ ekranıyla tek kaynaktan.
   "conclude existing workers…" derken concluding kotayı boşaltmıyordu.
 - **Çözüm:** (1) `agent.SpawnResult`/`tools.SpawnResult`'a `TreeBudgetUsed/Total`
   eklendi; her `spawn_worker` sonucu `Tree budget: N/M live … (K remaining)` satırı
-  + %75/%90 `⚠️` uyarısı gösterir (`treeBudgetLine`). (2) `checkCoordinatorTreeBudget`
-  → `evalCoordinatorTreeBudget` yalnız **CANLI** worker sayar
-  (`countsAgainstTreeBudget` = koşan tur veya dallanan alt-koordinatör); bitenler
-  otomatik **reclaim**. (3) Tükenme hatası artık hâlâ aktif sayılan worker'ları
-  listeler (`coordTreeBudget.activeList`). Mutex/kilit mantığı (per-tree spawn lock)
-  değişmedi.
-- **Not (semantik):** Tavan artık *lifetime-toplam* değil, *eşzamanlı-canlı* worker
+  - %75/%90 `⚠️` uyarısı gösterir (`treeBudgetLine`). (2) `checkCoordinatorTreeBudget`
+    → `evalCoordinatorTreeBudget` yalnız **CANLI** worker sayar
+    (`countsAgainstTreeBudget` = koşan tur veya dallanan alt-koordinatör); bitenler
+    otomatik **reclaim**. (3) Tükenme hatası artık hâlâ aktif sayılan worker'ları
+    listeler (`coordTreeBudget.activeList`). Mutex/kilit mantığı (per-tree spawn lock)
+    değişmedi.
+- **Not (semantik):** Tavan artık _lifetime-toplam_ değil, _eşzamanlı-canlı_ worker
   tavanıdır. Üstel eşzamanlı patlama korumasını korur; ardışık batch üretimi ajan
   başına günlük token bütçesiyle sınırlanır.
 - **Dosyalar:** `internal/agent/coordination.go`, `internal/agent/spawn.go`,
@@ -2471,7 +2493,7 @@ ekranıyla tek kaynaktan.
   `guardCoordinatorStall` yalnız temiz turda). Bağlı yollar: spawn / worker / inbox /
   wake / schedule / koordinatör.
 - **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/... ./internal/settings/...
-  ./internal/api/...` ✅ (533 test, `idleresume_test.go` 8 senaryo dâhil), frontend
+./internal/api/...` ✅ (533 test, `idleresume_test.go` 8 senaryo dâhil), frontend
   `tsc -b` ✅ + prettier ✅.
 
 ## send_to_worker meşgul-worker kuyruğu (2026-08-04) ✅
@@ -2488,8 +2510,8 @@ ekranıyla tek kaynaktan.
   Teslim `runWorker`'ın en-son çalışan `defer drainWorkerQueue`'una bağlı: tüm slot
   release + `untrackSession`'dan sonra kuyruğu `workerQueueMu` altında pop edip
   sıradaki turu başlatır (teslim edilemezse koordinatöre `failed` bildirimi). Busy-check
-  + enqueue tek kritik bölümde → lost-update/TOCTOU yok. `Send`/`SendToWorker` imzası
-  artık `(tools.SendResult, error)`.
+  - enqueue tek kritik bölümde → lost-update/TOCTOU yok. `Send`/`SendToWorker` imzası
+    artık `(tools.SendResult, error)`.
 - **Doğrulama:** `go build ./internal/agent/... ./internal/tools/...` ✅,
   `go test ./internal/agent ./internal/tools` ✅ (585 test; yeni `worker_queue_test.go`:
   busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen teslim).
@@ -2523,7 +2545,7 @@ ekranıyla tek kaynaktan.
   yazımını izinli köklerine (bu client MCP root ilan etmediği için de cwd'sine)
   kısıtlıyor; TionHarness ise ajana çıktı yolu olarak oturum scratchpad'ini
   veriyordu → `browser_take_screenshot`/PDF her çağrı `File access denied:
-  outside allowed roots`. Ek: paylaşılan havuz bağlantısı bayat oturuma çözülüyordu
+outside allowed roots`. Ek: paylaşılan havuz bağlantısı bayat oturuma çözülüyordu
   (SES4'te SES1 scratchpad'i).
 - **Fix:** `mcp.ServerConfig`'e `Dir` (stdio alt-sürecin cwd'si; `DialStdio`
   `cmd.Dir`) + yeni `internal/agent/mcp_playwright.go`
@@ -2542,8 +2564,8 @@ ekranıyla tek kaynaktan.
 
 - **Sorun (FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8):** Kabuk
   araçları (Bash/PowerShell) kapalı oturumlarda ajana bu bildirilmiyordu. Ajan
-  bare `PowerShell`/`Bash` çağırıp *"No such tool available … not enabled in this
-  context"* alıyor, muadiline geçmeyip **aynı çağrıyı tekrarlıyor** ve 5 dk'lık tur
+  bare `PowerShell`/`Bash` çağırıp _"No such tool available … not enabled in this
+  context"_ alıyor, muadiline geçmeyip **aynı çağrıyı tekrarlıyor** ve 5 dk'lık tur
   zaman aşımına düşüyordu. Ayrıca terminal varsayan rehberlik (`rtk`, `go test`,
   `npm`) shell'siz ajanlara da telkin ediliyordu.
 - **Çözüm (`internal/agent/runtime.go` → `ShellToolsContextBlock`):** Blok artık
@@ -2572,7 +2594,7 @@ ekranıyla tek kaynaktan.
   - `view/session.go`: `latestTodos` silindi → `LatestTodos` + yerel Türkçe satır
   - `api/todos.go`: `latestSessionTodos` + `parseMessageSteps` + `stepTodos`
     **silindi** → `LatestTodos` + `RenderChecklist`
-  - `agent/handoff.go`: *(hiç yoktu — alan ölüydü)* → artık dolduruyor
+  - `agent/handoff.go`: _(hiç yoktu — alan ölüydü)_ → artık dolduruyor
 - **Adım çözme artık tek evde.** `agent.TurnStep`'i yapısal çözen kod dört yerde
   tekrarlıyordu; üçü silindi, geriye `view/step.go` kaldı.
 - **Bilinçli fark:** sistem-prompt bloğu bitmiş listeyi **gizler** (izlenecek şey
@@ -2590,7 +2612,7 @@ ekranıyla tek kaynaktan.
 ## View katmanı göç 2 (kısmi): insight paylaşılan primitifler (2026-08-04) ✅
 
 - **Önce bir düzeltme:** [66](66-VIEW-KATMANI.md)'da aday olarak "insight
-  prefilter" yazıyordu — **yanlış adaydı**. `Prefilter.Match` bir *filtre*
+  prefilter" yazıyordu — **yanlış adaydı**. `Prefilter.Match` bir _filtre_
   (`SessionSignals` → `bool`), hiç metin üretmiyor; view katmanıyla paylaşacağı
   bir şey yok. Asıl duplicate özetleyici **`Scanner.buildSlice`**. Doküman düzeltildi.
 - **`buildSlice` bilerek `View` YAPILMADI.** Farklı soru ("bu hipotez için kanıt
@@ -2724,7 +2746,7 @@ ekranıyla tek kaynaktan.
   görebilelim". Tasarım notu: [66-VIEW-KATMANI.md](66-VIEW-KATMANI.md).
 - **Yeni paket `internal/view`** (leaf; `db`+`orchestration` okur):
   `Project(ref, level) → View{Header, Body, Handles, AsOf, Source, Elided,
-  Tokens}`. Üretim **deterministik**: L0 sayım + L1 kural-tabanlı sinyal, LLM yok
+Tokens}`. Üretim **deterministik**: L0 sayım + L1 kural-tabanlı sinyal, LLM yok
   → sayılar uydurulamaz. Bütçe tier'ları `tiny`/`card`/`full`. Çıktı JSON değil **satır-bazlı kompakt
   DSL** (JSON'un tekrar eden anahtarları bu ölçekte saf token israfı).
 - **İlk entity: flow run** (`flowrun.go`). Paralel node'un çocukları ebeveyne
@@ -2747,13 +2769,14 @@ ekranıyla tek kaynaktan.
   başlığı + `RunView` özet satırı) → sağdan `ViewPanel` sheet'i: level
   seçici, `asOf` + `~N tok`, **ham DSL monospace** (güzelleştirilmiş kart değil →
   projeksiyon yanlışsa kullanıcı görür), `elided` satırı, tıklanabilir handle'lar
-  + breadcrumb, Kopyala.
+  - breadcrumb, Kopyala.
 - **Testler:** `internal/view/flowrun_test.go` (7 senaryo) +
   `internal/api/views_test.go` (200/400/404). Tüm backend suite + frontend build
   yeşil.
 - **Sırada:** faz 4 = `board` + `session` view'ları ve mevcut ad-hoc
   özetleyicilerin (conversation summarizer, coordinator worker-state bloğu)
   bu katmana göçü — kabul testi eskisinin **silinmesi**.
+
 ## Edit/Read eşleştirme sağlamlığı (2026-08-04) ✅
 
 - **İstek (FND-84c0981b + unicode bulguları):** `old_string` hafızadan yeniden
@@ -2775,6 +2798,7 @@ ekranıyla tek kaynaktan.
 - **Doğrulama:** `go build ./...` ✅, `go test ./internal/tools` 246 ✅ (yeni
   `builtin_edit_match_test.go` + `builtin_patch_match_test.go`: fuzzy trailing-ws /
   girinti / CRLF-koruma / ambiguity / no-match tanılama).
+
 ## MCP "indekslenmemiş proje" onarım kuralı (2026-08-04) ✅
 
 - **İstek:** `mcp__codebase-memory-mcp__search_code` indekslenmemiş projeyle
@@ -2865,7 +2889,7 @@ ekranıyla tek kaynaktan.
   eklendi — etiket ve pano'nun yanına.
 - **Semantik — "her-N" (tekrarlı, stateless):** `TokenThreshold` bir *aralık*tır;
   kümülatif harcama her katını geçince ateşler (100k → 100k/200k/300k…). Geçiş,
-  `RecordUsage` içinde *önceki* vs *yeni* toplamdan `crossedMultiple`'la stateless
+  `RecordUsage` içinde _önceki_ vs _yeni_ toplamdan `crossedMultiple`'la stateless
   tespit edilir → **per-scope defter yok**. `TokenScope`: `session` (oturum ömrü,
   `SessionUsage`) veya `workspace` (bugünkü toplam, `WorkspaceTokensToday`). Token =
   `input+output+cacheRead+cacheWrite`. Guardrail'ler (cooldown/maxIter/expiry) ortak.
@@ -2904,8 +2928,8 @@ ekranıyla tek kaynaktan.
 
 - **Sorun (WS17/SES101 nüksü):** 2026-08-02'de eklenen `guardSpawnHallucination`
   prose-regex'i (`coordSpawnClaimRe`) uzun koşuda **sözlük-kaymasını kaçırdı**.
-  Koordinatör 15 tur sonra fantom spawn'ı "worker" demeden anlattı: *"Round 15
-  açıldı — 2 kol · SES144 (Kol AM) · SES145 (Kol AN)"*. Regex yalnız `worker`+fiil
+  Koordinatör 15 tur sonra fantom spawn'ı "worker" demeden anlattı: _"Round 15
+  açıldı — 2 kol · SES144 (Kol AM) · SES145 (Kol AN)"_. Regex yalnız `worker`+fiil
   ya da `[running]` aradığı için eşleşmedi → guard hiç ateşlenmedi (debug'da 0
   guardrail), koordinatör olmayan SES144/145'i bekleyip dondu. 42 önceki
   `spawn_worker` gerçekti; yalnız son tur `steps=[]`.
@@ -2934,7 +2958,7 @@ ekranıyla tek kaynaktan.
 - **Kod/Test:** `coordination_stall.go`, `coordination.go` (`coordSlot.lastTurnUnix`,
   guard çağrısı agent taşır), sweeper `manager.go`'da başlatılır. Test:
   `coordination_hallucination_test.go` → `parseStallVerdict` + `slotIsStallCandidate`
-  + `turnCalledCoordinationTool` (regex testi kaldırıldı). go build/vet/test yeşil.
+  - `turnCalledCoordinationTool` (regex testi kaldırıldı). go build/vet/test yeşil.
 
 ## API workspace kapsamı: `?workspace=` sessizce yok sayılıyordu ✅ (2026-08-02)
 
@@ -3140,7 +3164,7 @@ ekranıyla tek kaynaktan.
 ## Harici araçlar: `claude` (Claude Code CLI) katalogda + yol geçersiz kılma ✅ (2026-08-01)
 
 - **Sorun:** Ayarlar ▸ Harici Araçlar paneli TionHarness'in yanında kullanılabilecek
-  *opsiyonel* CLI'ları listeliyordu, ama en kritik ikili — anahtarsız `claude-cli`
+  _opsiyonel_ CLI'ları listeliyordu, ama en kritik ikili — anahtarsız `claude-cli`
   sağlayıcısının çalıştırdığı `claude` — listede yoktu. "Hangi sürüm kurulu, güncel
   mi, nerede?" soruları model seçicideki rozete ve Sağlayıcılar ekranına dağılmıştı;
   bir claude-cli ajanı bozulduğunda tam da bu panele bakılıyordu.
@@ -3173,9 +3197,9 @@ ekranıyla tek kaynaktan.
   gösteriyordu; iki ekran ayrışmıştı.)
 - **Çözüm:** `systemFillers` artık `Runtime.SkillsCatalogBlockForAgent`'ı ayrı bir
   filler olarak ekliyor — `role:"skills"`, etiket **"Skill kataloğu"**, `Count` =
-  ilan edilen skill sayısı (`countCatalogSkills`, `- \`slug\`` satırlarını sayar).
-  Frontend'de `ROLE_COLORS.skills` (sky `#0ea5e9`) ile kendi rengi var; çubuk ve
-  legend başka değişiklik istemedi (ikisi de `info.fillers` üzerinden generic).
+  ilan edilen skill sayısı (`countCatalogSkills`, `- \`slug\``satırlarını sayar).
+Frontend'de`ROLE_COLORS.skills`(sky`#0ea5e9`) ile kendi rengi var; çubuk ve
+legend başka değişiklik istemedi (ikisi de `info.fillers` üzerinden generic).
 - **Neden ayrı segment:** şişmiş bir skill kütüphanesi, sistem promptundan bağımsız
   olarak kullanıcının **küçültebileceği** bir maliyet (ajandan skill kaldır /
   name-only tier). Aynı kovada gizlenince aksiyon alınamıyordu.
@@ -3183,6 +3207,7 @@ ekranıyla tek kaynaktan.
   görünmemeli — tool sonuçları tur-içi; kalıcı geçmişe yalnız user/assistant
   mesajları yazılır (`historyToPreviewMessages`), yani bir sonraki turun penceresine
   taşınmaz. Ayrı segment olan tek şey katalogdur.
+
 ### Devamı: ölçer tek kaynağa bağlandı (drift kalıcı kapandı)
 
 Yukarıdaki eksik, tek bir skill kataloğundan ibaret değildi: `systemFillers`
@@ -3222,8 +3247,8 @@ Ajan önizlemesinin kendi statik-prefix kopyası (`agent_context.go`) kaldırıl
 artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
 
 - **Kopya gerçekten sapmıştı** (varsayım değil, ölçüldü): ajan-adı notu hâlâ eski
-  metni taşıyordu — *"In this chat, the user picks which agent should answer by
-  starting a message with `@<AgentName>`"* — oysa `buildStaticPrefix` bu notu çoktan
+  metni taşıyordu — _"In this chat, the user picks which agent should answer by
+  starting a message with `@<AgentName>`"_ — oysa `buildStaticPrefix` bu notu çoktan
   yeniden yazmıştı (@name artık **yönlendirme değil, salt isim referansı**; ayrıca
   `spawn_session` sonucunun bu sohbete dönmeyeceği uyarısı eklenmişti). Yani önizleme,
   ajanın **artık almadığı** bir metni gösteriyordu. Kopya ayrıca capability bloğunu
@@ -3247,7 +3272,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
   loglayacak kadar yaşadı, sonra kendisi öldü.
 - **Kök neden (tanı boşluğu):** `internal/app/app.go:62` slog'u **stdout**'a yazar
   (+ `~/.tionharness/logs` aynası), ama Go runtime fatal'ları (`fatal error: out of
-  memory`, panic trace) **stderr**'e gider. `dev.ps1` backend'i `-NoNewWindow` ile
+memory`, panic trace) **stderr**'e gider. `dev.ps1` backend'i `-NoNewWindow` ile
   başlatıp stderr'i **hiçbir yere yönlendirmiyordu** → crash metni konsolla
   birlikte yok oldu. Ayrıca script'in temizlik yolu `taskkill /T /F` kullanıyor;
   bu, uygulama logunda **hiç iz bırakmaz** → "biz öldürdük" ile "kendi öldü"
@@ -3272,7 +3297,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
   `Stop-Tree`/`Write-Lifecycle` gerçek fonksiyonlar AST ile çıkarılıp iki senaryoda
   test edildi (canlı süreç öldürülür ve loglanır; ölmüş süreç öldürülmez, `exit=7`
   doğru okunur). Çalışan 8090 sunucusuna dokunulmadı.
-- **Not (çözülmedi):** bu değişiklik 05:26 ölümünü *açıklamaz*, **bir dahakini
+- **Not (çözülmedi):** bu değişiklik 05:26 ölümünü _açıklamaz_, **bir dahakini
   açıklanabilir kılar**. O olayın iki adayı hâlâ ayrıştırılamıyor: (a) konsolun
   Ctrl+C/kapatılmasıyla `finally` → `taskkill /T /F` (çocuğun önce ölmesi bununla
   birebir uyuşuyor), (b) Go runtime fatal / OOM (03:20–05:26 arasında 36 opus
@@ -3329,7 +3354,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
   `mono` kaldırıldı (artık insan adı, id değil).
 - **İki bilinçli istisna — ham kalır:**
   1. Debug kartındaki **raw event listesi** (`eventLabel`, `llm_call`): kullanıcı orada model
-     *hakkında* değil **günlüğün kendisini** okuyor; çevirmek görünümün tek işini bozar.
+     _hakkında_ değil **günlüğün kendisini** okuyor; çevirmek görünümün tek işini bozar.
   2. Market'teki **`ModelList`** (sağlayıcı paketinin model id kataloğu): orada id **içeriğin
      kendisi** — kopyalanıp config'e yazılır ve fiyat tablosu tam id ile anahtarlanır. İki
      farklı id aynı isme düşebileceği için çevirmek eşlemeyi bozar; mono biçim doğru.
@@ -3472,7 +3497,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
     korunuyor) doğrulandı.
 - **Canlı LLM denemesi ✅ (claude-cli/sonnet, 3 seviye):** ertelenmiş rapor sahada
   çalıştı (alt-koordinatörün ilk turu `completed` gitmedi, `<task-progress
-  delegating>` gitti; kök "bu bir sonuç değil" dedi), alt-koordinatör
+delegating>` gitti; kök "bu bir sonuç değil" dedi), alt-koordinatör
   `report_to_coordinator`'ı kendisi çağırdı, kök `ALPHA+BETA` sentezini aldı.
   Ayrı koşuda backstop **kasıtlı tetiklendi** ("asla rapor etme" talimatıyla) →
   otomatik `status=incomplete` + "doğrulanmış sonuç değildir" uyarısı gitti,
@@ -3485,7 +3510,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
   temizledi → self-heal yalnız workspace açılışında koştuğu için o workspace
   restart'a kadar öldü. Eşzamanlılık büyüttü (refresh token'ları tek kullanımlık,
   ağaç tek claude-home'a 4+ süreç koşuyor). Üç parça: **aday sıralaması**
-  (`credentialRank`, birincil ölçüt *canlı access token* — diskte "refresh token
+  (`credentialRank`, birincil ölçüt _canlı access token_ — diskte "refresh token
   harcanmış mı" bilgisi yok; ilk denemem sadece expiry damgalarına bakıp tuzağa
   düşmüştü, bayat home'un `refreshTokenExpiresAt`'i 4 gün ileridedir), **her tur
   self-heal** (`toolloop.go` — kayıp tüm oturumu değil tek turu götürür) ve
@@ -3642,8 +3667,7 @@ artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
   `Read` edilir. Takas bilinçli: gömülü ek oturumun **her turunda** yeniden
   gönderilir, listelenen ek yalnız gerektiğinde bir `Read` maliyeti çıkarır.
   32 KB (~8K token) tipik "config/stack-trace yapıştır" vakasını kapsar.
-- **Composer'da dizin ve branch alt alta** (`WorkDirBadge`): 1. satır klasör adı,
-  2. satır `⎇ branch`. Yan yanayken ikisi aynı genişlik için yarışıyordu; artık
+- **Composer'da dizin ve branch alt alta** (`WorkDirBadge`): 1. satır klasör adı, 2. satır `⎇ branch`. Yan yanayken ikisi aynı genişlik için yarışıyordu; artık
   yanındaki ajan seçicisiyle aynı iki-satırlı yapıda, composer satırı hizalı.
   Telefonda yine yalnız ikon.
 
@@ -3692,7 +3716,7 @@ mutlak yol, köksüz etiket, büyük-dosya ipucu, boyut birimleri).
 İki küçük ama uygulama-geneli UX düzeltmesi.
 
 - **Ajan ID'si ikinci satırda, modelin solunda.** `AgentIdentity` (`shared/components/
-  agents/`) `showId` ile ID'yi ismin **yanına** basıyordu; uzun isimlerde ikisi aynı
+agents/`) `showId` ile ID'yi ismin **yanına** basıyordu; uzun isimlerde ikisi aynı
   satırda yarışıyordu. Artık ikinci satır `ID · model` düzeninde: ID sola sabitlenmiş
   ve asla kırpılmıyor (`shrink-0`), model kalan genişliği alıyor (`truncate`). Tek
   bileşen olduğu için composer ajan seçici, sohbet balonu başlığı, oturum katılımcıları,
@@ -3717,7 +3741,7 @@ Balon altbilgisindeki "⏱ süre" ve canlı sayaç frontend'de türetiliyordu; i
 sunucuya taşındı.
 
 - **Tamamlanmış tur süresi:** `MessageList` `asistan.createdAt − önceki kullanıcı
-  mesajı.createdAt` hesaplıyordu. Oysa backend turu zaten ölçüp `Message.DurationMs`
+mesajı.createdAt` hesaplıyordu. Oysa backend turu zaten ölçüp `Message.DurationMs`
   olarak kaydediyordu (`chat_stream.go` `agentStart`; otonom yollarda `turnmeta.apply`)
   ve frontend bu alanı **hiç kullanmıyordu**. Artık `durationMs` gösteriliyor; saniye
   yuvarlaması yerine ms hassasiyeti (`formatDurationMs`, <10 sn'de "3.4 sn"). Eski
@@ -3752,6 +3776,7 @@ araç çağırıyordu (68 tool call). Kök neden ayarın **hiç uygulanamaması*
 - **Yeni değer:** `spawnTimeoutMin` = **120 dk** (global `~/.tionharness/settings.json`
   → tüm workspace'ler; `internal/settings` app-seviyesi, workspace-scoped değil).
   Kod default'u (`DefaultSpawnTimeoutMinutes = 20`) değişmedi — yalnız fallback.
+
 ## Kesilen worker turu artık "completed" diye raporlanmıyor ✅ (2026-07-28)
 
 Yukarıdaki SES17'nin ikinci yarısı: tur 20 dk'da kesildiği hâlde koordinatöre
@@ -3765,7 +3790,7 @@ limiti/guardrail halt/bağlam tükenmesinde `StepRecovery` ekleyip `nil` dönüy
   watchdog iptali ile kullanıcının "Durdur"u **ayırt edilemiyordu** (ikisi de
   `context.Canceled`), yani süre dolması "killed" olarak da raporlanabilirdi.
 - **Yeni `internal/agent/turnoutcome.go`** — `classifyTurnOutcome(ctx, steps,
-  hard, idle)`: ctx cause + trace'teki **terminal** `termReason` işaretlerini
+hard, idle)`: ctx cause + trace'teki **terminal** `termReason` işaretlerini
   okur (mid-turn `contReason`'larla çakışmaz) → `timeout` / `incomplete` /
   `completed`. `applyTurnOutcome` kurtarılan metnin **önüne** ne olduğunu
   anlatan Türkçe not koyar (metin atılmaz — işin nereye kadar geldiğinin tek
@@ -3850,6 +3875,7 @@ kurulacak; o zamana kadar yarı-uygulanmış hali beklenti yaratıp karşılamı
 
   worker onu alınca boyanıyordu; yukarı kaydırmış kullanıcı o ana kadar hiçbir tepki
   görmüyordu.
+
 - **Bekleme göstergesi:** bağımsız `WorkingDots` balonu artık `pending`'in yanı sıra
   `streaming` ile de çıkar, ve `App` oturum açılışında `GET /api/sessions/active`'ten
   o oturumu `markPending` ile tohumlar (yalnız EKLER — kuyruğa yeni atılmış tur
@@ -3902,6 +3928,7 @@ namespace'i yüzünden Windows `127.0.0.1`'ine ulaşamıyordu (`Errno 111`).
   `schedule-run-now`, `schedule-edit`, `schedule-delete` — sonuncusu artık popup
   içinde, `schedule-create-*`); kartlara `automation-row`/`data-automation-id` eklendi.
 - Detay: `46-ETIKET-OTOMASYON.md` ▸ "UI — 3 SÜTUNLU PANO".
+
 ## Frontend format otomasyonu (Prettier + pre-commit hook) ✅ (2026-07-29)
 
 Frontend'in tek bir format otoritesi yoktu; elle tutarlı yazılıyordu ve config'siz bir
@@ -3934,12 +3961,14 @@ açtığı panel **salt bilgi** — hiçbir ayarı değiştirmez (değişiklik y
 - Frontend: `features/chat/composer/ToolAccessPanel.tsx` (üç sekme: Aktif · Talep üzerine ·
   MCP, arama kutusu), `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi),
   `toolAccessGroups.ts` (saf grup/filtre). Built-in'ler kategoriye, MCP araçları sunucuya
+
 ## Otomasyon ekranı 3 sütunlu panoya çevrildi ✅ (2026-07-28)
 
 Sekmeli görünüm (⏰ Zamanlamalar / 🏷 Etiket / 🗂 Pano) yerine **üç şeritli pano**:
 üç kural türü artık aynı anda yan yana görünüyor, sekme değiştirmeye gerek yok.
 Her şeridin başlığında sayaç + kısa açıklama + **`+`** butonu var; `+` o türün
 **oluşturma popup'ını** açar. Kurallar salt-okunur kart; düzenleme de aynı
+
 - Doğrulama: `go build ./...` + `go vet` + `go test ./internal/market/... ./internal/ingest/...`
   (19 test) yeşil, `npx tsc --noEmit` yeşil.
 - **Kalan (içerik kararı):** şablonlar hâlâ yalnız agents + lineer flow + schedule taşıyor;
@@ -3963,7 +3992,8 @@ eklenecek (bkz. `41` madde 11: `EnterWorktree`/`ExitWorktree` ile birleşik tasa
 **%24.8** (~2.5K token). Bağlamın asıl yükü `Write` (%39–44) ve `Read` (%16–34) — sqz
 ikisini de kapsamıyor, yani shell sıkıştırma tek başına belirleyici değil.
 
-  artık paketle taşınabiliyor** (önceden sessizce düşüyordu).
+artık paketle taşınabiliyor** (önceden sessizce düşüyordu).
+
 - **`NODE_ICON` 5 → 12 node tipi** (start/end/loop/await-input/subflow/spawn/join eklendi);
   workspace önizlemesindeki akış çipleri tüm non-lineer tipleri gösterir.
 - **Ölü kod/tip temizliği** — kaldırılmış `memory` türüne ait yorumlar, `AgentPayload.capabilities`,
@@ -4056,8 +4086,8 @@ yarıda kalan koşu resume'da düğümü baştan (yeni oturumla) çalıştırır
   Oturumlar'da "Akış Koordinatörü" kind rozeti. Workflow seçici tek paylaşılan bileşen
   (`shared/components/CoordinatorWorkflowPicker`); `CoordinatorSection` de ona taşındı.
 - Not: bu iş sırasında `internal/agent` test paketi zaten derlenmiyordu — `bootseq_test.go`
-popup'tan (kalem ikonu) yapılır — ekranın yarısını yiyen satır-içi form ve
-satır-içi editör kaldırıldı.
+  popup'tan (kalem ikonu) yapılır — ekranın yarısını yiyen satır-içi form ve
+  satır-içi editör kaldırıldı.
 
 - `Schedules.tsx` (795 satır) + `Automations.tsx` (911 satır) ikilisi silindi; yerine
   12 odaklı dosya: `AutomationBoard.tsx` (ekran + veri + mutasyonlar),
@@ -4090,6 +4120,7 @@ Market, son alt sistemlerin gerisinde kalmıştı. Detay tablo: **`_Docs\21-MARK
 - **MCP paketi hibrit kapsama uyduruldu** — `MCPPayload`'a `description`/`headersConfig`/
   `scope`; `installMCPPack` sabit `Scope:"shared"` yerine payload'ı aktarır (allow-list'li).
   `mcp_adapter` `.mcp.json`'daki `headers` bloğunu okur → **auth başlıklı HTTP MCP sunucusu
+
 ## Flow paleti: node butonlarında (ⓘ) açıklama balonu ✅ (2026-07-27)
 
 Flow editöründe sol paletteki node tipleri yalnız ad + ikon gösteriyordu; ne işe
@@ -4146,6 +4177,7 @@ worker yüzünden banner çoktan rapor vermiş bir worker'da asılı kalır.
 
 `api/system.ts` zaten CLOSED olan kaynağı 2sn backoff'la yeniden kuruyordu, ama kimseye
 "kaçırdın, tazele" demiyordu. Eklenenler:
+
 - **`sharedES.onopen`** → ilk açılış değilse `reconnectSubs`'a sinyal (`everConnected`
   bayrağı ilk açılışı ayırt eder; feed idle'dan kapanınca sıfırlanır → sonraki açılış
   yine "ilk" sayılır, çünkü yeni aboneler kendi başlangıç fetch'ini yapar).
@@ -4386,17 +4418,18 @@ alıyor ama `withActivityTimeout`'u yoktu → spawn/worker paritesiyle sarıldı
 
 Bu iki endpoint (frontend hiçbirini çağırmıyor — yalnız dış otomasyon/eski istemci)
 turu **inline** koşup `inbox.json`'a yazmıyordu → mid-turn crash'te mesaj kayboluyor
-+ kuyruğu atlıyordu. Artık ikisi de serial send-queue'ya enqueue eder (kalıcı,
-crash-recoverable, tek-tur garantili) ve per-session hub'ı gözler: `handleChatStream`
-hub'ı legacy SSE frame şekline çevirip relay eder (streaming sözleşmesi korunur),
-`handleChat` terminal olayı bekleyip kalıcı yanıtı DB'den döndürür. Korelasyon: taze
-`clientMsgId` → `runChatTurn` + kuyruk bariyerleri terminal hub olaylarına (turn_done/
-turn_error) damgalar (öndeki turun terminal'i erken kapatmaz); slow-drop'a karşı
-`Replay` gap-fill. `failTurn` artık hub'a da turn_error yayınlıyor (önceden yalnız SSE
-sink → hub istemcileri reload'da görüyordu). Yeni dosya `internal/api/chat_queue.go`
-(iki handler + relay helper'ları); eski inline gövdeler `chat.go`/`chat_stream.go`'dan
-silindi (`inflightRecorder` testte kullanıldığı için korundu). `go build`/`go vet`
-temiz, agent+api **339 test** yeşil. Detay: `_Docs/58`.
+
+- kuyruğu atlıyordu. Artık ikisi de serial send-queue'ya enqueue eder (kalıcı,
+  crash-recoverable, tek-tur garantili) ve per-session hub'ı gözler: `handleChatStream`
+  hub'ı legacy SSE frame şekline çevirip relay eder (streaming sözleşmesi korunur),
+  `handleChat` terminal olayı bekleyip kalıcı yanıtı DB'den döndürür. Korelasyon: taze
+  `clientMsgId` → `runChatTurn` + kuyruk bariyerleri terminal hub olaylarına (turn_done/
+  turn_error) damgalar (öndeki turun terminal'i erken kapatmaz); slow-drop'a karşı
+  `Replay` gap-fill. `failTurn` artık hub'a da turn_error yayınlıyor (önceden yalnız SSE
+  sink → hub istemcileri reload'da görüyordu). Yeni dosya `internal/api/chat_queue.go`
+  (iki handler + relay helper'ları); eski inline gövdeler `chat.go`/`chat_stream.go`'dan
+  silindi (`inflightRecorder` testte kullanıldığı için korundu). `go build`/`go vet`
+  temiz, agent+api **339 test** yeşil. Detay: `_Docs/58`.
 
 ## Per-session tur kilidi TÜM oturumlara genelleştirildi ✅ (2026-07-25)
 
@@ -4424,6 +4457,7 @@ de `claimSessionTurnSlot`'a bağlandı → worker/spawn turları da her turla se
 yerine opsiyonel "Proje dizini (path)" girilebilsin.
 
 **Ne yapıldı:**
+
 - **Backend:** `createWorkspaceReq.Path` → `ProjectDir`. Data dir daima app varsayılanı
   (`workspaces.Create(name, "", "")`). `ProjectDir` doluysa identity patch'iyle workspace'in
   `DefaultWorkingDir`'ine yazılır.
@@ -4439,6 +4473,7 @@ sağlayıcı/ajan net belirtilsin ya da mevcut ajanlardan ilki seçilsin. Aynıs
 ekranındaki ajan seçiminde de geçerli olsun.
 
 **Ne yapıldı:**
+
 - **Workspace ayarları:** `WSSettings.DefaultProvider/DefaultModel` (struct + patch + DTO +
   frontend `WorkspaceSettings`/patch) tamamen kaldırıldı; `WorkspacePanel`'deki
   "Varsayılan sağlayıcı + model" bloğu + banner metni silindi (`ProviderModelSelect` importu da).
@@ -4468,6 +4503,7 @@ ekranındaki ajan seçiminde de geçerli olsun.
 istenirse silinebilsin, eski workspace'lere de eklensin, şablonlar arasına da eklensin.
 
 **Ne yapıldı:**
+
 - **Model:** `db.Flow` += `Seed string` (shipped default işaretçisi).
 - **Seed mantığı:** `internal/agent/flow_defaults.go` — `defaultFlows` (tek doğruluk kaynağı;
   "Yanıtla & Doğrula" akışı) + `EnsureDefaultFlows(ctx, db, storeDir)`. İdempotent
@@ -4506,6 +4542,7 @@ yoksa satır eski düz div olarak kalır. `tsc` yeşil. Detay `_Docs\47`.
 ve Çalışma dizini butonları bir toggle ile gösterilip gizlenebilsin.
 
 **Ne yapıldı (yalnız frontend, `Composer.tsx`):**
+
 - Üç per-turn kontrolü (`ComposerPicker` düşünme + `ComposerPicker` izin +
   `WorkDirBadge`) `display:contents` sarmalayıcıya alındı → toolbar gap'i bozulmaz.
   Sarmalayıcı dar ekranda `hidden`, `md:contents` ile **`md:`'den itibaren daima
@@ -4540,6 +4577,7 @@ ve Çalışma dizini butonları bir toggle ile gösterilip gizlenebilsin.
 açılan görev listesi küçültülmüş başlasın ama kapatılamasın.
 
 **Ne yapıldı (yalnız frontend):**
+
 - **Bilgi paneli:** `SessionDetailPanel.tsx`'ten `ProgressCard` (Görev Listesi)
   render'ı + `progress` state + `sessionProgress` fetch effect'i (`executions`
   sinyaliyle tazeleme) + ilgili importlar kaldırıldı. `SessionProgressCard.tsx`
@@ -4829,7 +4867,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 ## Yeni default skill `tionharness-terse` (caveman-esinli terse mod) ✅ (2026-07-13)
 
 - **Ne:** Gömülü skill `internal/skills/defaults/tionharness-terse/SKILL.md` (`🪨 TionHarness
-  Terse Mode`, `access: shared`). Caveman skill'inin (github.com/JuliusBrussee/caveman)
+Terse Mode`, `access: shared`). Caveman skill'inin (github.com/JuliusBrussee/caveman)
   özünü TionHarness'e uyarlar: dolgu/nezaket/hedge at, teknik özü koru; **kod/komut/yol/
   hata string'leri byte-for-byte aynen**. 3 seviye (`lite`/`full`/`ultra`), dil-koruyan
   (çeviri yok), oturum-sürekli, "normal mode" ile kapanır.
@@ -4850,7 +4888,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
   SessionsOverview'ında görünürken ajanın `list_sessions`'ında **hiç** görünmüyordu
   → ajan "session listesi eksik geliyor" durumu yaşıyordu (WS5/SES158 teşhisi).
 - **Nasıl:** `internal/tools/builtin_sessions.go` — filtre `kindFilter != "" &&
-  !sessKindMatches(...)` oldu; `sessKindMatches` (legacy `""`→chat) + `sessKindLabel`
+!sessKindMatches(...)` oldu; `sessKindMatches` (legacy `""`→chat) + `sessKindLabel`
   yardımcıları eklendi; şema/açıklama güncellendi. Test `builtin_sessions_test.go`
   yeni davranışa göre yazıldı; self-management SKILL.md + `27-CROSS-SESSION-SEARCH.md`
   senkron. `go build ./...` + `go test ./internal/tools/` yeşil. **Not:** çalışan
@@ -4939,7 +4977,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 - **Fix 2 — idle reconciliation sweep:** `drainCoordinator` çıkışta, koordinatör worker
   spawn etmişse (`hadWorkers`) ve **tüm** worker'lar bitmişse (`workers==0`) ve bu batch
   için henüz yapılmadıysa (`ackedIdle`), tek-seferlik `<coordination-status>All workers
-  finished…</coordination-status>` notu ekleyip bir otoriter tur daha koşar. `ackedIdle`
+finished…</coordination-status>` notu ekleyip bir otoriter tur daha koşar. `ackedIdle`
   bir sonraki bildirimde re-arm olur; `CoordinatorMaxTurns` cap'i sınırlar → sonsuz döngü
   yok. LLM bir bildirimi atlasa bile stall imkânsız.
 - **Testler:** `TestIdleReconcileSweepRunsFinalTurn` (process+reconcile, one-shot, re-arm),
@@ -4991,8 +5029,8 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
     yeniden görevlendirebilir/sonuçlandırabilir;
   - **koordinatör** (yarıda ölmüş) → bir koordinatör turu re-enqueue → geçmişten devam;
   - **düz spawn** → interrupted reply (donuk görünmesin).
-  Idempotent (reply eklenince son mesaj assistant olur, ikinci boot atlar), archived
-  session'lara dokunmaz.
+    Idempotent (reply eklenince son mesaj assistant olur, ikinci boot atlar), archived
+    session'lara dokunmaz.
 - **Testler:** `internal/agent/recover_orphan_test.go` (worker kurtarma + koordinatör
   bildirimi + idempotent + tamamlanmış worker'a dokunmama).
 - **SpawnIdleTimeoutMin Settings UI:** AppToolsPanel'e "Spawn boşta süresi (dk)" alanı
@@ -5105,7 +5143,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 - **Confined imza kapatma:** `DisableGitSigningEnv()` → `commit.gpgsign=false` +
   `tag.gpgsign=false` (git `GIT_CONFIG_COUNT/KEY/VALUE` env-injection). Yalnız
   **confined (otonom/spawn) shell'lerde** enjekte edilir (`hardenShellCmd(cmd,
-  t.sb.Confined)`); interaktif turlar imzayı korur (insan passphrase girebilir).
+t.sb.Confined)`); interaktif turlar imzayı korur (insan passphrase girebilir).
   Böylece nezaretsiz `git commit` GPG pinentry'de asılamaz.
 
 ## Çapraz-session farkındalığı: tamamen ayarsız → her zaman açık + list_sessions sayfalama ✅ (2026-07-11)
@@ -5137,8 +5175,8 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 ## Artifact arşivleme + "Kalıcı ilerleme" oturum sızıntısı düzeltmesi ✅ (2026-07-11)
 
 - **TSK46 (iki parça):**
-  1. **Artifact arşivleme** — Artifact'ler artık oturumlar gibi *yumuşak,
-     geri-alınabilir* şekilde arşivlenebiliyor (silinmiyor). Model'e
+  1. **Artifact arşivleme** — Artifact'ler artık oturumlar gibi _yumuşak,
+     geri-alınabilir_ şekilde arşivlenebiliyor (silinmiyor). Model'e
      `Archived bool` alanı (`models_artifact.go`), store'a `SetArtifactArchived`
      (`store_artifact.go`, `SetArtifactGroup` desenini izler), API'ye
      `PUT /api/artifacts/{id}/archive` (`artifacts.go` + `server.go`) eklendi.
@@ -5176,7 +5214,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 ## sqz PreToolUse köprü uyumsuzluğu — teşhis + workaround (2026-07-11, kod değişikliği yok)
 
 - **Bulgu:** WS5'te `sqz` (token sıkıştırıcı) HOK1 olarak **enabled** ve CLI
-  `--settings`'ine doğru forward ediliyor, ama `sqz gain` → *son 7 günde 0 sıkıştırma*
+  `--settings`'ine doğru forward ediliyor, ama `sqz gain` → _son 7 günde 0 sıkıştırma_
   (tarihsel 25). Sebep: `sqz hook claude` **yalnız `tool_name == "Bash"`** olan çağrıları
   yeniden yazıyor; TionHarness shell'i claude-cli'ye **MCP-namespaced** isimle köprülüyor
   (`mcp__tionharness_interaction__PowerShell` — 463 çağrı — ve `__Bash` — 49), ayrıca
@@ -5210,7 +5248,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
   hang'de subprocess öldürülür → `cmd.Wait` döner → **retryable** net hata döner →
   self-healing bir kez retry eder, ghost temizlenir, kuyruk açılır.
 - Doğrulama: `go build ./...` + `go vet ./internal/providers` + `go test
-  ./internal/providers -short` yeşil.
+./internal/providers -short` yeşil.
 
 ## `/compact` + `/handoff` claude-home seam düzeltmesi ✅ (2026-07-11)
 
@@ -5557,9 +5595,10 @@ sqz'yi PostToolUse output-rewrite moduna alıp `runPostToolHooks`'ta `len(önce)
 ## Token-optimizer UI callout + hook matcher düzeltmesi + API GET no-store ✅ (2026-07-10)
 
 Token-optimizer capability'sinin (rtk/sqz) devamı — UI tarafı + bir gerçek matcher bug'ı
-+ canlı testte yakalanan bir cache bug'ı.
 
-- **UI callout (`ExternalToolsPanel.tsx`):** "Token / bağlam optimizasyonu" grubunun altına
+- canlı testte yakalanan bir cache bug'ı.
+
+* **UI callout (`ExternalToolsPanel.tsx`):** "Token / bağlam optimizasyonu" grubunun altına
   codebase-memory callout'unun eşdeğeri "⚡ Token optimizasyonu entegrasyonu" bloğu eklendi —
   rtk/sqz hook olarak bağlıysa ajanın promptuna bilgi bloğu enjekte edildiğini, çıktının otomatik
   kısaltıldığını (kayıp değil) ve matcher'ın `Bash,PowerShell` olması gerektiğini açıklar. **Matcher
@@ -5567,10 +5606,10 @@ Token-optimizer capability'sinin (rtk/sqz) devamı — UI tarafı + bir gerçek 
   backend `hookMatches` aynası: boş/`*`/`PowerShell` → kapsar) ⚠ rozeti + tek-tık **"Matcher'ı
   düzelt"** butonu (`fixMatcher` → mevcut matcher'a `PowerShell`'i merge eder, diğer alanları korur,
   `updateHook` PUT). `data-testid="fix-matcher"`.
-- **Gerçek matcher bug'ı (WS5 + WS1):** rtk/sqz hook'ları `matcher=Bash` ile kayıtlıydı; ajanlar
+* **Gerçek matcher bug'ı (WS5 + WS1):** rtk/sqz hook'ları `matcher=Bash` ile kayıtlıydı; ajanlar
   Windows'ta `PowerShell` aracını kullandığı için hook'lar **hiç ateşlenmiyordu**. Canlı UI butonuyla
   düzeltildi → ikisi de `Bash,PowerShell`.
-- **API GET no-store (`api/client.ts`):** canlı testte yakalandı — `req()` `fetch`'i default cache
+* **API GET no-store (`api/client.ts`):** canlı testte yakalandı — `req()` `fetch`'i default cache
   ile çağırıyordu, tarayıcı `/api/hooks` gibi GET'leri **stale servis edebiliyordu** (panel bir
   değişiklikten sonra eski veriyi gösteriyordu). `fetch(path, { cache: 'no-store', … })` eklendi;
   çağıran `init.cache` ile hâlâ override edebilir. Tüm GET domain modülleri için canlı-veri tazeliği.
@@ -5611,7 +5650,7 @@ v6/v7 transkriptlerinde TS vs CA output-token dökümü (dedup usage; karakter b
 - **Kök neden: benchmark ajanı AGT10'un personası** ("focused implementation engineer …
   running code to verify") + TR yanıt tercihi. Görev metinleri birebir aynı (diff'lendi);
   TS statik prefix'i (5k char, epoch sidecar'dan okundu) verbosity talimatı içermiyor.
-  Runtime'ın kendi output ek yükü küçük: todo_write ~1.2k char (~%3).
+  Runtime'ın kendi output ek yükü küçük: todo_write ~~1.2k char (~~%3).
 - **Sonuç:** 1.7× fark büyük ölçüde persona-kaynaklı titizlik (daha çok test, cross-check,
   dosya bölme) — kalite/maliyet dengesi, runtime bug'ı değil. Adil kıyas için TS koşusu
   boş-persona ajanla (AGT9 CoderEmpty benzeri, thinking-off) tekrarlanmalı.
@@ -5660,10 +5699,10 @@ noktası düzeltildi:
   Go'ya geçersiz UTF-8 olarak ulaşır (ör. `talimatlar��`). Ajan bu oturumda ws-settings ve
   agent-soul'ları **bozuk** okumuştu. **Yeni:** `internal/tools/builtin_shell_encoding.go` —
   yalnızca legacy host'a (pwsh'e değil) bir UTF-8 prelude enjekte eder: `[Console]::OutputEncoding`
-  + `$OutputEncoding` = UTF-8 (BOM'suz) ve `$PSDefaultParameterValues` ile Get-Content/Select-String/
-  Import-Csv okuma default'u `utf8`. **Yazma davranışına dokunulmaz** (global `*:Encoding` set
-  edilmez → BOM regresyonu yok). Canlı doğrulandı: prelude'suz mojibake, prelude'lu çıktı orijinal
-  UTF-8 baytlarıyla birebir. Test: `builtin_shell_encoding_test.go`.
+  - `$OutputEncoding` = UTF-8 (BOM'suz) ve `$PSDefaultParameterValues` ile Get-Content/Select-String/
+    Import-Csv okuma default'u `utf8`. **Yazma davranışına dokunulmaz** (global `*:Encoding` set
+    edilmez → BOM regresyonu yok). Canlı doğrulandı: prelude'suz mojibake, prelude'lu çıktı orijinal
+    UTF-8 baytlarıyla birebir. Test: `builtin_shell_encoding_test.go`.
 - **Lazy-tool same-batch reddi (#1).** İki-tier claude-cli köprüsünde extended (deferred) tier
   boş başlar, `activate_tools`'tan **sonraki** turda büyür; ajan `activate_tools`'u aktive edilen
   aracı **aynı yanıtta** çağırırsa CLI `No such tool available` döner. Araçları eager CORE'a taşımak
@@ -5742,32 +5781,34 @@ tüm **bütçe-ölçekleme aparatı** (`contextBudgetTokens`/`SetContextBudget`/
 `ContextBudgetTokens`/`budgetScaleFor`/`budgetScaleLocked`/`defaultContextBudgetTokens` +
 `DefaultCompactMax*`) + `server.go` iki çağrı; settings `CompactToolOutput/MaxLines/MaxBytes`
 (struct/DTO/patch/default/clamp); DB `Usage.CompactSavedBytes` + `SessionUsage.CompactSavedBytes`
-+ `AddCompactionSavings`/`AddSessionCompactionSavings`; API `budget/usage/session_usage`
-`compactSavedBytes`; frontend `ContextPanel` sıkıştırma bölümü + `BudgetPanel` Tasarruf Merkezi
-(tek Prompt-cache hücresi kaldı, "Sıkıştırma" trend metriği düştü) + `SessionUsageCard`/
-`SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`; testler.
-`KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → korundu.
-Doküman `17-TOKEN-OPTIMIZASYON.md` harici-delegasyon anlatısına dönüştürüldü, `tionharness-settings`
-skill'i güncellendi. `go build ./...` + `go test` (agent/db/settings/api **312 test**) +
-frontend `tsc --noEmit` temiz.
+
+- `AddCompactionSavings`/`AddSessionCompactionSavings`; API `budget/usage/session_usage`
+  `compactSavedBytes`; frontend `ContextPanel` sıkıştırma bölümü + `BudgetPanel` Tasarruf Merkezi
+  (tek Prompt-cache hücresi kaldı, "Sıkıştırma" trend metriği düştü) + `SessionUsageCard`/
+  `SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`; testler.
+  `KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → korundu.
+  Doküman `17-TOKEN-OPTIMIZASYON.md` harici-delegasyon anlatısına dönüştürüldü, `tionharness-settings`
+  skill'i güncellendi. `go build ./...` + `go test` (agent/db/settings/api **312 test**) +
+  frontend `tsc --noEmit` temiz.
 
 ## Araç-çıktısı LLM-özeti ("Sistem B") tamamen kaldırıldı ✅ (2026-07-10)
 
 Araç çıktısı token optimizasyonundaki opt-in **LLM intent-aware özet** geçişi uçtan uca
 silindi; yalnız **deterministik (Sistem A, ücretsiz kural tabanlı)** sıkıştırma kaldı.
 Gerekçe: server-tarafı `clear_tool_uses` / API-native compaction (eskiyen/taşan sonuçlar)
-+ retrieval katmanı bu ihtiyacı zaten karşılıyordu; ekstra ucuz-model çağrısı + gecikme +
-tek-sağlayıcı sınırı değmiyordu (Sistem A ise sağlayıcıdan bağımsız giriş-noktası kalkanı,
-kalıyor). Silinenler: `compactor.go` B dalı + `summarizeToolOutput`/`toolSummarySystemPrompt`;
-tunables `CompactLLM*`/`CompactModel` + `SetToolCompaction` imzası (artık 3 arg); settings
-`CompactLlmSummary`/`CompactLLMThreshold`/`CompactModel` (struct/DTO/patch/clamp/default);
-DB `Usage.CompactSavedBytesLLM` + `AddLLMCompactionSavings`/`AddSessionLLMCompactionSavings`;
-API `budget.go`/`usage.go`/`session_usage.go` `compactSavedBytesLLM` alanları; frontend
-`ContextPanel` "Sistem B" bölümü + `BudgetPanel` Tasarruf Merkezi 3→2 hücre + trend tek seri
-+ `SessionUsageCard`/`SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`.
-`KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → dokunulmadı.
-Doküman: `17-TOKEN-OPTIMIZASYON.md` tek-sisteme indirildi, `tionharness-settings` skill güncellendi.
-`go build ./...` + `go test` (agent/db/settings 226 test) + frontend `tsc --noEmit` temiz.
+
+- retrieval katmanı bu ihtiyacı zaten karşılıyordu; ekstra ucuz-model çağrısı + gecikme +
+  tek-sağlayıcı sınırı değmiyordu (Sistem A ise sağlayıcıdan bağımsız giriş-noktası kalkanı,
+  kalıyor). Silinenler: `compactor.go` B dalı + `summarizeToolOutput`/`toolSummarySystemPrompt`;
+  tunables `CompactLLM*`/`CompactModel` + `SetToolCompaction` imzası (artık 3 arg); settings
+  `CompactLlmSummary`/`CompactLLMThreshold`/`CompactModel` (struct/DTO/patch/clamp/default);
+  DB `Usage.CompactSavedBytesLLM` + `AddLLMCompactionSavings`/`AddSessionLLMCompactionSavings`;
+  API `budget.go`/`usage.go`/`session_usage.go` `compactSavedBytesLLM` alanları; frontend
+  `ContextPanel` "Sistem B" bölümü + `BudgetPanel` Tasarruf Merkezi 3→2 hücre + trend tek seri
+- `SessionUsageCard`/`SessionDetailPanel`/`SettingsPanel` + `types/{settings,usage,agent}.ts`.
+  `KindCompact`/`UsageKindCompact` **paylaşımlı** (ana konuşma compaction'ı) → dokunulmadı.
+  Doküman: `17-TOKEN-OPTIMIZASYON.md` tek-sisteme indirildi, `tionharness-settings` skill güncellendi.
+  `go build ./...` + `go test` (agent/db/settings 226 test) + frontend `tsc --noEmit` temiz.
 
 ## Cross-session bloğu artık aktif oturumları OTOMATİK göndermiyor ✅ (2026-07-10)
 
@@ -5833,14 +5874,15 @@ olarak render ediliyor: `TurnStep.Batch` (tur içi 1-tabanlı grup id, `omitempt
 — **native döngü** her çok-çağrılı cevaba grup id atar (`toolloop.go` `batchSeq`;
 tool kartı + izin/guardrail hataları dahil), **claude-cli yolu** stream-json'da
 aynı API mesaj id'sini paylaşan `tool_use` event'lerini gruplar (`cliMessage.ID`
-+ parser `curMsgID/curMsgTools/batchSeq`; CLI bir mesajı bloklara bölerek
-yayınladığı için 2. çağrıda geriye dönük damgalama). Frontend: `TurnSteps.tsx`
-ardışık aynı-batch adımları "⚡ N paralel araç çağrısı (tek istekte)" başlıklı
-vurgulu çerçevede kümeler (tekil render'a düşen grup düz satıra döner);
-`renderStep` yardımcıya çıkarıldı. Test: `claudecli_batch_test.go` (bölünmüş
-mesaj + tekil + tek-event'te 3'lü senaryosu); suite 801/30 paket + tsc yeşil.
-effortLevel düzeltmesiyle birlikte batching görünürlüğü de tamam — v4
-benchmark'ta gruplar chat'te doğrudan izlenebilir.
+
+- parser `curMsgID/curMsgTools/batchSeq`; CLI bir mesajı bloklara bölerek
+  yayınladığı için 2. çağrıda geriye dönük damgalama). Frontend: `TurnSteps.tsx`
+  ardışık aynı-batch adımları "⚡ N paralel araç çağrısı (tek istekte)" başlıklı
+  vurgulu çerçevede kümeler (tekil render'a düşen grup düz satıra döner);
+  `renderStep` yardımcıya çıkarıldı. Test: `claudecli_batch_test.go` (bölünmüş
+  mesaj + tekil + tek-event'te 3'lü senaryosu); suite 801/30 paket + tsc yeşil.
+  effortLevel düzeltmesiyle birlikte batching görünürlüğü de tamam — v4
+  benchmark'ta gruplar chat'te doğrudan izlenebilir.
 
 ## Benchmark serileşmesinin GERÇEK kök nedeni: `effortLevel` ✅ (2026-07-09, akşam)
 
@@ -5912,6 +5954,7 @@ Kartlar artık workspace artifact'larına **birden fazla referans** taşıyabili
 (`Task.ArtifactIDs []string`, `models_task.go`; API create/update thread'lendi,
 `store_task.go` UpdateTask kopyalar). Artifact yaşam döngüsünden bağımsız — kart
 silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da atlanır.
+
 - **Frontend:** yeni `TaskArtifactRefs.tsx` bileşeni (chip listesi + "Var olan"
   arama-picker'ı + dosya sürükle-bırak alanı) TaskFormModal'a "Ekler" bölümü olarak
   eklendi. Dosya bırakınca: `/api/uploads` (bucket = kart id / `board`) → `createArtifact`
@@ -5979,9 +6022,9 @@ silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da a
   (d) frontend: `AppEvent.node` + `FlowNodeEvent` tipi, `shared/lib/flowNodeBus.ts` (runId-keyed
   pub/sub), `useAppEvents.onFlowNode` → bus'a fan-out, `system.ts` üçüncü SSE callback'i;
   (e) `RunView` `run.id`'ye abone → canvas node durumu (asla geri sarmaz: pending→running→done/error)
-  + "Adım izi" panelinde biten node çıktıları anında + çalışan node için "…çalışıyor" satırı;
-  3sn poll caught-up olunca canlı ekler dedupe olur. `go build ./...` + flow/engine testleri
-  (3/3) + `tsc` + `vite build` temiz.
+  - "Adım izi" panelinde biten node çıktıları anında + çalışan node için "…çalışıyor" satırı;
+    3sn poll caught-up olunca canlı ekler dedupe olur. `go build ./...` + flow/engine testleri
+    (3/3) + `tsc` + `vite build` temiz.
 
 ## Aktivite (Executions) ekranı canlı transkript ✅ (2026-07-09)
 
@@ -6057,15 +6100,16 @@ canlı formuyla merge edilir (`mergeFrozenToolDefs`); kapatılan araç yürütme
 fail-closed kalır. Stale drift dinamik suffix notu + `epoch` debug olaylarıyla
 görünür; workspace toggle `PromptEpochEnabled` (default açık) → Ayarlar →
 Workspace paneli. Test: `promptepoch_test.go` (10 senaryo); suite 796/30 paket
-+ tsc yeşil. **Ek (aynı gün): Debug viz** — "Prompt-cache olayları" kartı
-(`PromptCacheEvents.tsx` + `buildPromptCacheSummary`): `epoch` + `cache_break`
-olayları rozetli zaman çizelgesinde (donduruldu/adopte/stale/yenilendi/kırılım);
-ham olay filtresi `epoch` tipini aldı; epoch emit'leri `WithSessionID` damgalı
-(damgasız ctx'te olaylar düşüyordu — düzeltildi). **Canlı E2E doğrulandı**
-(izole :8099, gerçek fable-5): `created → stale → refreshed → created` dizisi,
-donmuş sidecar drift'i almadı → refresh sonrası aldı, kararlı turda olay yok,
-`cache_break` 0. Yan bulgu: izole claude-home'da aralıklı `authentication_failed`
-(token rotasyonu şüphesi, retry'la geçiyor) — epoch-dışı, ayrı araştırma.
+
+- tsc yeşil. **Ek (aynı gün): Debug viz** — "Prompt-cache olayları" kartı
+  (`PromptCacheEvents.tsx` + `buildPromptCacheSummary`): `epoch` + `cache_break`
+  olayları rozetli zaman çizelgesinde (donduruldu/adopte/stale/yenilendi/kırılım);
+  ham olay filtresi `epoch` tipini aldı; epoch emit'leri `WithSessionID` damgalı
+  (damgasız ctx'te olaylar düşüyordu — düzeltildi). **Canlı E2E doğrulandı**
+  (izole :8099, gerçek fable-5): `created → stale → refreshed → created` dizisi,
+  donmuş sidecar drift'i almadı → refresh sonrası aldı, kararlı turda olay yok,
+  `cache_break` 0. Yan bulgu: izole claude-home'da aralıklı `authentication_failed`
+  (token rotasyonu şüphesi, retry'la geçiyor) — epoch-dışı, ayrı araştırma.
 
 ## Board kartı: collapsible bağımlılıklar + pbi-kayması kök-neden ✅ (2026-07-08)
 
@@ -6086,6 +6130,7 @@ donmuş sidecar drift'i almadı → refresh sonrası aldı, kararlı turda olay 
 ## Board kartı: asenkron başlık + optimistic oluşturma ✅ (2026-07-08)
 
 Board'da kart oluşturma iki iyileştirme aldı:
+
 - **Asenkron AI başlık** (`internal/api/tasks.go` `handleCreateTask`): başlık boş
   bırakıldığında create artık LLM'i **beklemez**. Önce içerikten türetilmiş anlık
   bir placeholder (`placeholderTitle`: ilk satır, 60 rune + `…`) damgalanır ve kart
@@ -6107,6 +6152,7 @@ Board'da kart oluşturma iki iyileştirme aldı:
 ## Prompt-cache denetimi: hedge breakpoint + blok-bazlı coalesce ✅ (2026-07-08)
 
 Cache-kırılım denetiminin iki düzeltmesi (`internal/providers/anthropic.go`):
+
 - **Hedge breakpoint:** kayan history breakpoint'ine ek, bir önceki taşıyabilen
   mesajın son bloğuna 4. breakpoint — >20 bloklu paralel tool batch'lerinde
   Anthropic'in ~20-blok lookback ufku yüzünden tüm geçmişin miss olmasını önler
@@ -6142,6 +6188,7 @@ enjeksiyon uçtan uca doğrulandı; E2E'nin yakaladığı 4 bug düzeltildi
 ## Bütçe/maliyet ekranı hesaplama düzeltmeleri (4 bulgu) ✅ (2026-07-08)
 
 Bütçe · oturum bilgisi · sohbet-debug · debug popup'larının hesap denetimi. Dört düzeltme, hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda (tek nokta → dört ekran):
+
 - **claude-cli tahmini cache tasarrufu $0 idi → düzeltildi** (`billing.PriceStat`): estimated dalı maliyeti tahmin edip tasarrufu `0` bırakıyordu; artık `ep.CacheSavings(cacheRead)` da tahmin ediliyor (`priced=false` korunur). Varsayılan anahtarsız sağlayıcıda Tasarruf Merkezi/oturum kazancı/mesaj-debug artık gerçek cache ROI'yi gösteriyor.
 - **claude-cli cache-write primi 2× → 1.25×** (`providers.EstimateFor`): 1s-TTL primi (`CacheWrite1hMult`) yalnız native anthropic client'a özgü; Claude Code CLI 5dk TTL kullanır. Override sıfırlandı → ~%60 fazla fiyatlandırma giderildi.
 - **Bağlam penceresi çubuğu segment↔toplam** (`session_info.go`): "kullanılan" başlığı `+MsgOverhead` sayıyor, segmentler saymıyordu → çubuk %100'e ulaşmıyordu. `buildFillers` artık mesaj başına `conversation.MsgOverhead` ekliyor + `ContextTokens` filler toplamından türetiliyor (birebir). `MsgOverhead` dışa açıldı.
@@ -6159,6 +6206,7 @@ arkasında — gate kapalıyken hiç register edilmez. Sonuç: model çıplak `P
 zaten self-recovered permission-deny sayıyor; fonksiyonel bug değil ama modeli yanıltıyordu).
 
 **Çözüm — dinamik render (tek-kaynak):**
+
 - Statik talimatlardan shell vaadi çıkarıldı; yalnız fs araçları (`Read/Write/Edit/LS/Glob/Grep`)
   "always-on" kaldı. Shell satırı "gated — enabled olunca environment context söyler" notuna dönüştü.
   (Hem embedded `internal/workspace/defaults/default-instructions.md` hem canlı WS10 `config/instructions.md`.)
@@ -6210,8 +6258,8 @@ Her aşamada `tsc -b` + `vite build` yeşil; eslint problem sayısı 116 → 102
   hook'ları), `features/<domain>/` (chat, sessions, agents, flows, tasks,
   schedules, executions, artifacts, skills, tools, market, budget, logs,
   network, settings, workspace), `shared/` (components [eski common + markdown
-  + çapraz-feature agent widget'ları], hooks, lib). `api/` + `types/` barrel'ları
-  değişmedi. `tsconfig.app.json` `paths` + vite `resolve.alias` ile `@/*` = `src/*`.
+  - çapraz-feature agent widget'ları], hooks, lib). `api/` + `types/` barrel'ları
+    değişmedi. `tsconfig.app.json` `paths` + vite `resolve.alias` ile `@/*` = `src/*`.
 - **Aşama 2 — App.tsx decompose:** 1.446 → ~630 satır kompozisyon kökü. Yeni
   `app/` modülleri: `viewRegistry` (VIEW_TITLE/HEADERLESS + `isChatKind`),
   `lazyPanels`, `useAppearance`, `useDeepLinks`, `useSessionsController`
@@ -6220,15 +6268,15 @@ Her aşamada `tsc -b` + `vite build` yeşil; eslint problem sayısı 116 → 102
   `features/chat/ChatView` (transcript + alt yığın).
 - **Aşama 3 — dev dosya bölmeleri (saf kod taşıma):**
   `useChatStream` 1006→375 + 7 modül (`chatStreamSend/AutoLive/Commands/
-  Interventions/History/Types/Helpers`); `FlowsPanel` 1143→~450 +
+Interventions/History/Types/Helpers`); `FlowsPanel` 1143→~450 +
   `FlowsListPane/FlowsHeader/FlowEditorView/flowActions/flowGraphOps/
-  flowsPanelShared`; `MarketPanel` 1089→370 + `MarketGrid/PackDetailModal/
-  PackPreview/previewParts/marketHelpers`; `ToolsPanel` 1033→314 +
+flowsPanelShared`; `MarketPanel` 1089→370 + `MarketGrid/PackDetailModal/
+PackPreview/previewParts/marketHelpers`; `ToolsPanel` 1033→314 +
   `useToolsPanelState/ServerManagement/ToolDetail/VisibilityControls`;
   `SessionDetailPanel` 897→429 + 9 bölüm modülü.
 - **Eski→yeni yol eşlemesi (eski dokümanlardaki atıflar için):**
   `components/panels/X` → `features/<domain>/X` · `components/chat|sessions|
-  agents|flow|artifacts|workspace|settings/` → `features/<domain>/` ·
+agents|flow|artifacts|workspace|settings/` → `features/<domain>/` ·
   `components/common/` → `shared/components/` · `components/markdown/` →
   `shared/components/markdown/` · `hooks/`+`lib/` → feature'a aitse
   `features/<domain>/`, genel ise `shared/hooks|lib/`, app-kabuğuysa `app/`.
@@ -6267,7 +6315,7 @@ karşılığı hata→ders döngüsü. Detay: `_Docs/56-SELF-HEALING.md` (Faz F 
    bağlı olmadan verbatim echo alır.
 2. **Refusal + server-side fallback:** `AnthropicRefusalFallback` ayarı (**varsayılan
    AÇIK**, Anthropic'in Fable rehberi) → Fable-sınıfı isteklere `fallbacks:
-   [claude-opus-4-8]` + `server-side-fallback-2026-06-01` beta; sınıflandırıcı reddi aynı
+[claude-opus-4-8]` + `server-side-fallback-2026-06-01` beta; sınıflandırıcı reddi aynı
    çağrıda Opus 4.8'le karşılanır. `stop_details` parse edilir (`Response.StopDetails`);
    araç döngüsünde `refusal` artık boş balon yerine kategori+açıklamalı hata kartı üretir.
    Mid-output fallback echo kuralı için `sanitizeFallbackEcho` (sınır öncesi thinking/
@@ -6302,7 +6350,7 @@ oturumları işaretleyen katman. Detay: `_Docs/56-SELF-HEALING.md`.
 
 - **Faz A** `internal/agent/errclass.go`: provider hata taksonomisi
   (`rate_limit/overloaded/server_error/timeout` retry-edilebilir; `auth/billing/
-  cancelled/unknown` terminal) + `decideRecovery`'de `contProviderRetry` — jitter'lı
+cancelled/unknown` terminal) + `decideRecovery`'de `contProviderRetry` — jitter'lı
   backoff'la sınırlı retry (`maxProviderRetries` ayarı, vars. 2). İptal artık
   `termCancelled`.
 - **Faz C** `internal/conversation/repair.go` `RepairSequence`: her provider çağrısı
@@ -6328,6 +6376,7 @@ doğrulama" popup'ı açılabilsin; claude-cli hiç yoksa kullanıcı Sağlayıc
 yönlendirilsin.
 
 **Backend:**
+
 - `providers.ClaudeCLI.Installed()` (yeni): yapılandırılmış `binPath`'i `exec.LookPath` ile
   çözer — CLI binary'si mevcut mu (login'den bağımsız). "CLI yok" ile "CLI var ama login yok"
   ayrımını sağlar.
@@ -6336,6 +6385,7 @@ yönlendirilsin.
   döner (login probe'u boşa çalıştırmaz).
 
 **Frontend:**
+
 - `api.checkWorkspaceClaudeAuth` dönüş tipine `installed` eklendi.
 - `useWorkspaces.createWorkspace` artık oluşturulan workspace'i (veya hatada `undefined`)
   döndürüyor → çağıran taraf oluşturma-sonrası kapı çalıştırabiliyor.
@@ -6365,6 +6415,7 @@ yönlendirilsin.
 İkisi de ek sunucu/süreç GEREKTİRMEZ — mevcut /v1/messages isteğinin alanlarıdır.
 
 **P2 — Sunucu-tarafı web search + web fetch (`AnthropicWebTools`, varsayılan kapalı):**
+
 - `Request.WebTools` → `toAnthropicTools` (yeni `serverToolOpts` yapısı): `web_search` +
   `web_fetch` sunucu araçları isteğe eklenir; aramayı Anthropic yürütür, alıntılı sonuçlar
   aynı yanıtta döner. 4.6+ modellerde `_20260209` dinamik-filtreli sürüm
@@ -6377,6 +6428,7 @@ yönlendirilsin.
 - Yalnız `provider.Name()=="anthropic"` + native tool loop (araçları açık ajanlar).
 
 **P3 — Server-side compaction (`AnthropicServerCompaction`, varsayılan kapalı):**
+
 - `WithBetas` üçüncü parametre → `compact-2026-01-12` beta başlığı +
   `context_management.edits`'e `{type:"compact_20260112"}` (sunucu-varsayılan ~150K tetik).
   Context-editing ile bağımsız; ikisi açıkken iki edit birden gönderilir.
@@ -6400,6 +6452,7 @@ bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; fron
 **İstek:** _Docs/55 yol haritasının P1, P6, P7, P4 maddelerinin uygulanması.
 
 **P1 — Structured Outputs (`output_config.format`):**
+
 - `Request.OutputSchema` → `applyOutputSchema` (yalnız destekleyen modeller: Fable/Mythos,
   Opus 4.8, Sonnet 5, Haiku 4.5, legacy 4.5/4.1 — Opus 4.6/4.7 ve Sonnet 4.6 matriste YOK).
 - **Titler**: `{"title": string}` şeması + JSON-parse-else-fallback (claude-cli serbest metin
@@ -6409,6 +6462,7 @@ bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; fron
   JSON'ından üst-düzey alan çekilip eşleştirilir (`{"verdict":"SHIP"}` → parse-proof karar).
 
 **P6 — Mid-conversation system messages (Opus 4.8):**
+
 - `toAnthropicMessages` artık RoleSystem'ı düşürmüyor: Opus 4.8'de `{"role":"system"}` olarak
   geçer (cache-safe operatör kanalı); diğer modellerde `foldSystemMessages` metni ÖNCEKİ user
   mesajına `<system-reminder>` bloğu olarak katlar (rol alternasyonu korunur — steer'in
@@ -6416,6 +6470,7 @@ bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; fron
   system rolüyle gönderilir.
 
 **P7 — küçükler:**
+
 - **Strict tool use**: `ToolDef.Strict` → `strict:true` (fs süiti Read/Write/Edit/LS/Glob +
   Grep); registry `foldStrict` şemaya `additionalProperties:false` + `required:[]` enjekte
   eder; PTC'li (allowed_callers) araçlarda otomatik düşer (uyumsuz).
@@ -6428,6 +6483,7 @@ bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; fron
   davranış değişmez, yalnız drift görünür olur).
 
 **P4 — Programmatic Tool Calling (`code_execution_20260120`):**
+
 - `AnthropicProgrammaticTools` ayarı (varsayılan kapalı) → tunables → tool loop: uygun
   builtinler (`CodeModeEligible`, MCP hariç) `allowed_callers:["code_execution_20260120"]`
   ile işaretlenir; code-execution sunucu aracı listeye eklenir.
@@ -6449,6 +6505,7 @@ caller sınıflandırma, effort/clamp), PTC tool-marshal testleri. ✅ build/vet
 Tool Search'ün TionHarness'e eklenmesi (optimizasyon araştırması madde 1-2).
 
 **Task Budgets (`task-budgets-2026-03-13` beta):**
+
 - `providers.Request.TaskBudgetTokens` + `anthropic.go applyTaskBudget`: adaptive-sınıf
   modellerde (Opus 4.7/4.8, Sonnet 5, Fable 5 — `SupportsTaskBudget`) isteğe
   `output_config.task_budget {type:"tokens", total:N}` + beta başlığı eklenir; API
@@ -6460,6 +6517,7 @@ Tool Search'ün TionHarness'e eklenmesi (optimizasyon araştırması madde 1-2).
   (etkileşimli sohbet bütçesiz kalır). UI: Ayarlar → Bağlam → "Otonom görev bütçesi".
 
 **Native Tool Search (`tool_search_tool_regex_20251119`):**
+
 - `ToolDef.DeferLoading` + `tools.Registry.DeferredDefs`: TAM katalog gönderilir —
   eager araçlar normal, lazy/hidden/MCP araçları `defer_loading:true` ile; aktive
   edilenler sıcak kalır (deferred değil). Herhangi bir deferred def varsa Anthropic
@@ -6472,7 +6530,7 @@ Tool Search'ün TionHarness'e eklenmesi (optimizasyon araştırması madde 1-2).
   coalesce edilmez, breakpoint/dinamik binmez. `pause_turn` stop-reason'ı döngüde
   otomatik devam ettirilir (asistan içerik verbatim eklenir, ek user mesajı yok).
 - Kapı: `AnthropicNativeToolSearch` ayarı (varsayılan kapalı) + `provider.Name() ==
-  "anthropic"` (minimax-anthropic/custom uçlar sunucu araç tipini reddeder). Mevcut
+"anthropic"` (minimax-anthropic/custom uçlar sunucu araç tipini reddeder). Mevcut
   activate_tools/tool_search builtinleri yanında çalışmaya devam eder.
 
 Testler: `anthropic_toolsearch_test.go` (task budget resolver, defer serileştirme,
@@ -6484,6 +6542,7 @@ frontend `tsc` temiz.
 **İstek:** Kapsamlı optimizasyon denetiminin 1,2,3,4,6,7,9 numaralı maddelerinin uygulanması.
 
 **Ne yapıldı (backend):**
+
 - **Adaptive thinking (kritik düzeltme):** `providers/anthropic.go` — `thinking:{type:"enabled",budget_tokens}`
   formatı Opus 4.7/4.8, Sonnet 5 ve Fable 5'te **400 döndürüyordu** (kataloğun tamamı). `thinkingFor`
   artık model-sınıf farkındalı: adaptive sınıfta `{type:"adaptive", display:"summarized"}` +
@@ -6521,6 +6580,7 @@ frontend `tsc` temiz.
 yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
 
 **Ne yapıldı (yalnız frontend):**
+
 - `AgentToolsSection.tsx`: yasaklı araç `<li>` içindeki ayrı `X` butonu kaldırıldı;
   chip'in tamamı artık `unblock` butonu (`data-testid="agent-tool-blocked"` üstünde
   onClick). Hover'da `Ban` ikonu `X`'e döner + kırmızı vurgu. Eski `agent-tool-unblock`
@@ -6536,6 +6596,7 @@ yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
 "Görev Listesi" bubble'ının arka-plan dolgusu kalksın; benzer UI bileşenlerinde de.
 
 **Ne yapıldı (yalnız frontend):**
+
 - **Auto-scroll:** `MessageList.tsx` — kaydırma yalnız kullanıcı en-alta "pinned"
   iken çalışıyordu; yukarı kaydırıp mesaj gönderince gönderilen mesaj görünmüyordu.
   `prevLastId` ref'i eklendi: en yeni tur **insanın kendi** turu (role `user`,
@@ -6553,6 +6614,7 @@ yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
 **İstek:** Artifactları da skiller gibi gruplayabilelim.
 
 **Ne yapıldı:**
+
 - **Backend:** `Artifact` modeline first-class `Group string` alanı (`models_artifact.go`);
   `DB.SetArtifactGroup(ctx, id, group)` yalnız `group`'u yazar (`store_artifact.go`);
   `handleSetArtifactGroup` + rota `PUT /api/artifacts/{id}/group` (`artifacts.go`,
@@ -6561,11 +6623,11 @@ yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
 - **Frontend:** `Artifact.group?` tipi + `api.setArtifactGroup`. `ArtifactsPanel`
   `useGroupedList` ile kovalanır (arama+origin filtresinden **sonra**): katlanabilir
   grup başlıkları, tümünü katla/aç, SelectionBar'da grup input'u (`datalist` önerili)
-  + "Ata"/"Grupsuz" (Enter da uygular). `orderedIds` görünür (katlanmamış) sırayı
-  izler → shift-aralık folded grupları atlar. Detay başlığında grup rozeti. Collapse
-  durumu `tionharness.artifactsCollapsedGroups`'ta kalıcı.
+  - "Ata"/"Grupsuz" (Enter da uygular). `orderedIds` görünür (katlanmamış) sırayı
+    izler → shift-aralık folded grupları atlar. Detay başlığında grup rozeti. Collapse
+    durumu `tionharness.artifactsCollapsedGroups`'ta kalıcı.
 - **Doğrulama:** `go build ./...` + `go test ./internal/db ./internal/api` (135 passed)
-  + frontend `tsc` yeşil. Docs: `45-COKLU-SECIM.md` (tablo + not), `SKILL.md` artifact satırı.
+  - frontend `tsc` yeşil. Docs: `45-COKLU-SECIM.md` (tablo + not), `SKILL.md` artifact satırı.
 
 ## Composer odağı: yalnız yeni sohbet açılınca input'a odaklan ✅ (2026-07-07)
 
@@ -6573,6 +6635,7 @@ yasak kalksın. (2) Ajana atanan skiller liste değil chip olarak görünsün.
 oturumu açılınca** olsun; mevcut oturumlara tıklayınca input otomatik odaklanmasın.
 
 **Ne yapıldı (yalnız frontend):**
+
 - **Kök neden:** `Composer.tsx` odak effect'i `[sessionId, disabled]`'e bağlıydı →
   Composer oturum geçişinde remount olmadığı için (`composerKey` yalnız rewind'de artar)
   **her** oturum değişiminde `taRef.focus()` çalışıyordu (mevcut oturuma tıklayınca da).
@@ -6590,6 +6653,7 @@ oturumu açılınca** olsun; mevcut oturumlara tıklayınca input otomatik odakl
 grupları içinde güncelden eskiye doğru sıralansın.
 
 **Ne yapıldı:**
+
 - **Backend:** `skills.Skill`'e `ModifiedAt int64` (`json:"modifiedAt"`, Unix saniye)
   alanı eklendi; `store.go scanDir` her `SKILL.md`'yi `os.Stat` ile damgalar (best-effort,
   stat başarısızsa 0). API `Skill`'i doğrudan serialize ettiği için ek endpoint gerekmedi.
@@ -6658,9 +6722,10 @@ reddediliyordu; artık **her görev** silinebilir (yalnız var-olma kontrolü ka
 yok id → net hata, sessiz no-op değil). Açıklamalar + dosya-başı güvenlik yorumu +
 `list_tasks` açıklaması güncellendi (`CreatedBy` yalnız provenance/gösterim için
 damgalanmaya devam eder). Test `TestDeleteTaskGuard` → `TestDeleteTaskAny` (kullanıcı
-+ ajan görevi silinebilir + yok-id hatası). Self-management default SKILL + proje
-skill notu güncellendi. `go build ./...` + `go test ./internal/tools -run Task` (4)
-yeşil.
+
+- ajan görevi silinebilir + yok-id hatası). Self-management default SKILL + proje
+  skill notu güncellendi. `go build ./...` + `go test ./internal/tools -run Task` (4)
+  yeşil.
 
 ## Chat başlığı = oturum title + ayrı "Debug" paneli ✅ (2026-07-06)
 
@@ -6670,8 +6735,9 @@ bilgisi" içindeki Debug parçalarını **yeni bir panele** taşı; title'daki D
 butonuyla açılsın.
 
 **Ne yapıldı (frontend):**
+
 - **Başlık:** `App.tsx` chat header artık `VIEW_TITLE`+ajan yerine `sessions.find(
-  ...).title` gösterir (fallback: ajan adı → "Yeni sohbet"). Diğer view'ler
+...).title` gösterir (fallback: ajan adı → "Yeni sohbet"). Diğer view'ler
   değişmedi.
 - **Debug butonu:** header'da "Bağlam" ile "Detay" arasına `Bug` ikonlu buton →
   `setDebugOpen(true)`.
@@ -6689,13 +6755,14 @@ butonuyla açılsın.
 genişlikteydi; sürükleyerek genişletilebilir olsun.
 
 **Ne yapıldı:**
+
 - **`useResizableSidebar` hook'una `invert` seçeneği:** sağ-taraf paneli sol
   kenardan sürüklendiğinde (clientX azalırken) **büyümesi** için delta ters
   çevrilir. Deps'e eklendi.
 - **`ResizeHandle`'a `side` prop'u:** `'right'` (varsayılan, sol-liste kolonları)
   veya `'left'` (sağ panel). `left-0`/`right-0` konumlandırma.
 - **SessionDetailPanel:** sabit `w-80` → `useResizableSidebar({storageKey:
-  'tionharness.sessionInfoWidth', default 320, min 280, max 640, invert:true})` +
+'tionharness.sessionInfoWidth', default 320, min 280, max 640, invert:true})` +
   inline `style.width`. Sol kenarda `ResizeHandle side="left"`. Handle içerik
   kaydırılınca kaymasın diye aside `overflow-hidden` yapıldı, scroll **iç
   sarmalayıcıya** taşındı (ListPane deseni). Mobil çekmece için genişlik
@@ -6708,6 +6775,7 @@ genişlikteydi; sürükleyerek genişletilebilir olsun.
 timeline" görselleştirmelerini TionHarness'e ekle.
 
 **Ne yapıldı (yalnız frontend; mevcut `debug.jsonl` verisinden, ekstra backend yok):**
+
 - **Veri katmanı (saf):** `frontend/src/components/sessions/viz/flowVizData.ts` —
   `buildToolSankey` (tool olaylarını `Ajan → Araç → Tamam|Hata` mermaid `sankey-beta`
   koduna toplar; hata dalı yalnız hata varsa) + `buildConcurrencyTimeline` (zaman
@@ -6751,6 +6819,7 @@ tek tabloda topluca (aranabilir/filtrelenebilir/sıralanabilir) görebilmek. Akt
 ekranında yürütme listesinin en üstünde bu tabloyu açan bir buton olsun.
 
 **Ne yapıldı:**
+
 - **Paylaşılan meta çıkarıldı:** `frontend/src/components/panels/executionsShared.tsx`
   — `KIND_META`/`FILTERS`/`kindMeta`/`shortId`/`StatusPill` `ExecutionsPanel`'den
   buraya taşındı; hem panel listesi hem yeni tablo aynı kaynağı kullanır (kind rozeti/
@@ -6772,12 +6841,13 @@ ekranında yürütme listesinin en üstünde bu tabloyu açan bir buton olsun.
 promptuna **kısa + cachelenebilir** bir bilgi bloğu enjekte et → ajan varlığını
 bilsin ve workspace indeksleme/arama araçlarını kullansın. Tespit + genişletme
 katmanı **generic** olsun (ileride başka tool'lar tek kayıtla eklenebilsin). Ayrıca
-her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım: **_Docs/54**.
+her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım: **\_Docs/54**.
 
 **Ne yapıldı:**
+
 - **Generic katman:** `internal/agent/capabilities.go` — `Capability{ID, Detect, Context}`
-  + `[]capabilities` kaydı + `(*Runtime).CapabilityContext(ctx, cwd)`. `Detect` MCP-sunucu
-  varlığı / on-PATH binary / settings-flag olabilir → yeni tool = slice'a bir kayıt.
+  - `[]capabilities` kaydı + `(*Runtime).CapabilityContext(ctx, cwd)`. `Detect` MCP-sunucu
+    varlığı / on-PATH binary / settings-flag olabilir → yeni tool = slice'a bir kayıt.
 - **İlk müşteri codebase-memory:** enabled stdio MCP sunucusunun `Command`'ında
   `codebase-memory-mcp` işareti aranarak tespit; kısa statik blok (araç-tercihi + izole
   store + cwd'den türetilen `project` id, `projectIDForPath`). Path→id kuralı
@@ -6792,7 +6862,7 @@ her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım
   karışmaz.
 - **Auto-index (§C):** `(*Runtime).EnsureCodebaseIndexed(ctx, cwd)` — best-effort, arka
   plan, `(cwd,store)` başına süreç-içi tek sefer (`cbmIndexed sync.Map`); `command cli
-  index_repository` + `CBM_CACHE_DIR`. Hata **loglanır** (yutulmaz), guard silinip sonraki
+index_repository` + `CBM_CACHE_DIR`. Hata **loglanır** (yutulmaz), guard silinip sonraki
   tur retry olur.
 - **Test:** `capabilities_test.go` — `projectIDForPath` (gerçek örnekler), `codebaseMemoryCommand`
   (stdio-match/http-skip/absent), `CBMStoreDir`. `go build ./...` + `go test ./internal/agent`
@@ -6805,7 +6875,7 @@ her workspace kendi **izole** codebase-memory store'unu kullansın. Tam tasarım
   `CategorySearch`; yalnız enabled codebase-memory sunucusu varsa kayıtlı. (3) **Frontend** —
   `ToolsPanel.tsx` MCP sunucu satırında **"izole store"** rozeti+tooltip
   (`data-testid="mcp-server-isolated-store"`). `go build`/`go test ./internal/agent
-  ./internal/tools` + `npm run build` yeşil.
+./internal/tools` + `npm run build` yeşil.
 - **Aç/kapa toggle + canlı duman testi (2026-07-07):** Tüm yetenek workspace ayarıyla
   açılıp kapanır (default açık): `WSSettings.CodebaseMemoryEnabled` → `Runtime` atomic gate →
   `codebaseMemoryCmd` tek choke-point (kapalı → hint/auto-index/tool/env hepsi kaybolur).
@@ -6824,6 +6894,7 @@ verilmeyince **yanlış (Default) workspace'i** arşivlediği tespit edildi. Bu 
 kapatan workspace-scoped toplu-arşiv aracı gerekiyordu.
 
 **Ne yapıldı:**
+
 - **Araç:** `internal/tools/builtin_sessionarchive.go` `archive_sessions` — `r.db`'ye
   bağlı (fiziksel workspace scope), **mevcut oturumu daima hariç tutar**
   (`SessionIDFrom(ctx)` build anında). Filtreler: `idle_days` (N günden eski),
@@ -6843,9 +6914,10 @@ kapatan workspace-scoped toplu-arşiv aracı gerekiyordu.
 
 **İstek:** the external agent project'ın "Source Templates / `render_template`" özelliğini TionHarness'e taşı —
 motor markalı HTML şablonu doldurur, modele **yalnız dosya yolu** döner (HTML değil → token
-tasarrufu), sohbette **inline izole iframe**'de gösterilir. Tam tasarım: **_Docs/53**.
+tasarrufu), sohbette **inline izole iframe**'de gösterilir. Tam tasarım: **\_Docs/53**.
 
 **Ne yapıldı:**
+
 - **Motor:** Go `html/template` (auto-escape/XSS-güvenli). `internal/tools/render_template.go`
   (saf: render + sidecar `.meta.json` oku + missing-field), `builtin_render_template.go` (Tool),
   `builtin_render_template_test.go` (8 test: escape, soft-warn, hard-fail'ler, traversal, no-session).
@@ -6854,7 +6926,7 @@ tasarrufu), sohbette **inline izole iframe**'de gösterilir. Tam tasarım: **_Do
 - **Kayıt:** `toolsetup.go` builtins + `MarkNameOnly("render_template")`. Shell gate GEREKTİRMEZ (saf render).
 - **Servis:** `internal/api/files.go` `serveTextFile` — `GET /api/files?path&as=text` yalnız render
   kökü altını (`underDir` whitelist) `text/plain`+`nosniff` ile döndürür (asla `text/html`).
-- **Inline UI:** `HtmlPreview.tsx` (```html-preview``` → `<iframe srcDoc sandbox="allow-scripts">`,
+- **Inline UI:** `HtmlPreview.tsx` (`html-preview` → `<iframe srcDoc sandbox="allow-scripts">`,
   opaque origin, tab desteği) + `CodeBlock.tsx` dispatch + `attachments.tsx` `fileTextURL`.
 - **Şablonlar:** skill-bundled `tionharness-templates` (report + email şablonu + meta). "Template store"
   alt-sistemi KURULMADI (source kavramı yok; `${SKILL_DIR}` yeterli).
@@ -6880,10 +6952,12 @@ yerine OAuth authorization-code + PKCE akışını **Go'da kendimiz** kurduk. OA
 sabitleri sağlayıcının resmî CLI'ından ve public client-metadata dokümanından alınır
 (domain'ler `platform.claude.com`/`claude.com/cai`'ye taşınmış — eski `console.anthropic.com`
 değil):
+
 - public client_id, authorize `claude.com/cai/oauth/authorize`,
   token `platform.claude.com/v1/oauth/token`, redirect `platform.claude.com/oauth/code/callback`, S256.
 
 **Parçalar:**
+
 - `internal/claudeauth/oauth.go` — `Begin()` (PKCE verifier/state + authorize URL),
   `Exchange()` (kod→credential, state doğrulama, `code#state` parse), `WriteCredentials()`
   (`<home>/.credentials.json`'a `claudeAiOauth{...}` atomik yaz, .bak yedek). Birim test 3/3.
@@ -6928,6 +7002,7 @@ oturumsuz 403). Tek dosya: `internal/claudeauth/oauth.go` (`loopbackClientID` co
 panelinde görebilmek ve durdurma/yeniden başlatma yapabilmek. 3 tier uygulandı:
 
 **Tier 1 — Gör + Durdur (backend-driven, detached/autonomous turlar için de sağlam):**
+
 - `chatRun`'a `startedAt` + `provider` (setter `setProvider`, `chat_stream` agents[0]'dan
   doldurur); `chatRuns.sessionRunInfo(sid)` snapshot döndürür.
 - `sessionInfoResp`'e `running {runId, startedAt, autonomous, provider}` + `warmCliProcess`.
@@ -6959,12 +7034,13 @@ ile reddediliyordu. Bu hata **jenerik `claude CLI failed: exit status 1`'e** dü
 gerektirdiği söylenmiyordu. (Rate-limit için çözülmüştü, auth atlanmıştı.)
 
 **5 maddelik çözüm:**
+
 1. **Sınıflandırma (retry-EDİLMEZ):** `claudecli.go` yeni `isAuthErrorText` +
    parser `notLoggedIn`/`authMsg` alanları; `feed()` hem standalone
    `{"error":"authentication_failed"}` satırını (yeni `cliEvent.Error`) hem result-error'ı
    yakalar. `runAttempt` rate-limit dalının üstünde net, retry-edilmez auth hatası döndürür.
 2. **Aksiyon mesajı:** Hata metni ilgili `CLAUDE_CONFIG_DIR=<claude-home>` yolunu + "`claude
-   /login` çalıştır veya API-key sağlayıcıya al" önerisini gömer.
+/login` çalıştır veya API-key sağlayıcıya al" önerisini gömer.
 3. **Ön-uçuş probe:** `ClaudeCLI.ProbeAuth(ctx)` (araçsız minimal `claude -p`, aktif
    workspace'in claude-home'unu test eder) + `GET /api/workspace-settings/claude-auth`
    (`handleWorkspaceClaudeAuth`) + Ayarlar→Sağlayıcılar'da **"Bu workspace login doğrula"**
@@ -7031,9 +7107,9 @@ geçerliyse (içinde `store/` var) taşınmadan kayıt defterine eklenip aktifle
 - **Composer textarea max-yükseklik:** `max-h-[5.5rem]` (~3 satır) → `max-h-[12rem]`
   (~7 satır); aşınca iç kaydırma. Doğrulandı: clientH=192px, scroll aktif.
 - **Budget ekranı responsive:** özet kart satırları `flex` → `grid grid-cols-2
-  lg:grid-cols-4`; Tasarruf Merkezi `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+lg:grid-cols-4`; Tasarruf Merkezi `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
   (divide yönü de responsive); Köken+Trend `grid-cols-2` → `grid-cols-1
-  lg:grid-cols-2`; provider/ajan tabloları `overflow-x-auto` + `min-w` ile yatay
+lg:grid-cols-2`; provider/ajan tabloları `overflow-x-auto` + `min-w` ile yatay
   kaydırılır; içerik dolgusu `p-5` → `p-3 md:p-5`. Doğrulandı: 430px'de yatay taşma
   0, özet 2 sütun; 1280px'de 4 sütun. Tema-uyumlu gradient de eklendi (composer).
 
@@ -7044,7 +7120,7 @@ Composer artık transkriptin **üstüne yüzen bir overlay** (App.tsx chat view'
 
 - **Gradient arka plan (tema-uyumlu):** composer sarmalayıcısı
   `bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(...var(--color-bg)_85%...)]
-  to-transparent` — mesaj balonları alttan geçerken şeffaf üst kısımdan görünüp arka
+to-transparent` — mesaj balonları alttan geçerken şeffaf üst kısımdan görünüp arka
   plana karışarak composer'ın **arkasına kayar** (açık/koyu temada tutarlı).
 - **Opak input:** iç input kartı `bg-[var(--color-surface)]` + `shadow-lg` — okunur,
   gradient'in üstünde net durur.
@@ -7140,6 +7216,7 @@ login** setini kullanır. Detay `51-CLAUDE-CONFIG-BIRLESIK.md`.
 - `go build ./...` ✅ · etkilenen 4 paket testi 241 passed.
 
 **Ek (UI + güvenlik):**
+
 - Settings → Sağlayıcılar → "claude config dizini" alanı **salt-okunur** yapıldı
   (`ProvidersPanel.tsx endpoint2ReadOnly`; per-workspace türetiliyor, global yalnız
   fallback). `tsc --noEmit` temiz.
@@ -7205,7 +7282,7 @@ Düzeltme: patch objesine `claudePersistentSession: draft.claudePersistentSessio
   atıflı kaydeder (model / prompt-tools / TTL-server). Debug kartında "Cache kırılması" pill +
   anomali. Claude Code `promptCacheBreakDetection` muadili.
 - **P3 — API-native context editing:** anthropic `context_management` beta (`clear_tool_uses_
-  20250919`), ayar `anthropicContextEditing` (vars. kapalı), ContextPanel toggle'ı. Microcompact
+20250919`), ayar `anthropicContextEditing` (vars. kapalı), ContextPanel toggle'ı. Microcompact
   muadili; client-side fold'a ek.
 - **P5 — TTL/breakpoint kararlılığı:** tüm anthropic breakpoint'leri tek `cacheTTL="1h"`
   sabitinden türer (karışık-TTL drift'i imkânsız); `TestCacheBreakpointStability` tek stabil
@@ -7216,6 +7293,7 @@ build edildi (tek-binary'e gömülü). Dokümanlar: `_Docs\50` (P2–P5 ✅), `_
 olayı), default skill `tionharness-settings`.
 
 **Canlı doğrulandı ✅ (2026-07-05, OpenRouter `anthropic/claude-haiku-4.5`, gerçek API):**
+
 - **P1** — statik System (~8.2k tok) + geçmiş, **dinamik her tur değişmesine rağmen** turn-2'de
   `cache_read=8197` HIT aldı (P1'den önce dinamik system'de olduğu için bu 0 olurdu).
 - **P2** — stabil özet head'i turn-2'de `cache_read=8216` HIT → özet cache'li önekin parçası.
@@ -7226,7 +7304,6 @@ olayı), default skill `tionharness-settings`.
 > Not: Native anthropic anahtarı store'da sahte (`asdfasdf…`) olduğu için doğrulama gerçek
 > OpenRouter anahtarıyla yapıldı (aynı native cache kod yolu: OpenAICompat cacheSystem). Kullanıcının
 > backend'i yeni kodu almak için `.\scripts\dev.ps1` ile yeniden başlatılmalı (şu an çalışan örnek yok).
-
 
 ## Ağ ekranı mobilde kasması giderildi (vis-network lite modu) ✅ (2026-07-05)
 
@@ -7242,6 +7319,7 @@ tam kalite korunur. Build temiz; mobil (390px) canvas temiz render ediyor.
 
 > ⚠️ `VisNetworkGraph.tsx` bu oturumda eşzamanlı bir süreç tarafından bir kez geri
 > alındı; değişiklikler yeniden uygulandı.
+
 ## Ağ ekranı: istatistik + yenile başlık çubuğuna taşındı ✅ (2026-07-05)
 
 `NetworkPanel` App'in generic başlığını kullanıyordu ("Ağ"). Artık kendi başlık
@@ -7324,6 +7402,7 @@ AgentTools / TaskBoard anchor fallback kullanır.
 
 Playwright: Tools (tık→Ctrl+tık = 2 seçili), Artifacts (default-seçili + Ctrl+tık başka
 satır = 2 seçili). Build temiz.
+
 ## Ekran seçimleri oturum boyunca korunuyor (reload'da sıfırlanır) ✅ (2026-07-05)
 
 İstek: farklı ekranlar arasında gezerken seçili öğe (sohbet, aktivite, ajan, hafıza
@@ -7340,6 +7419,7 @@ Skills, Araçlar, Akışlar — paneller kendi seçimini tutup App'e geri yazmı
 `useState` benzeri ama değeri **modül-içi bir Map**'te tutar → component unmount/remount
 arası korunur, ama localStorage'a yazılmaz → tam sayfa reload / uygulama yeniden açılış
 sıfırlar. Panellerde seçim state'i buna geçirildi:
+
 - `ArtifactsPanel` → `artifacts.activeId`
 - `SkillsPanel` → `skills.activeSlug`
 - `ToolsPanel` → `tools.selectedName`
@@ -7348,6 +7428,7 @@ sıfırlar. Panellerde seçim state'i buna geçirildi:
 
 Playwright: 8 ekranın hepsinde seç → başka ekrana git → geri dön → seçim korunuyor.
 Build temiz.
+
 ## Hafıza (memory): bilgi inputu + Belge(ikon) + Yansıt üst-title'a ✅ (2026-07-04)
 
 - `memory` `HEADERLESS_VIEWS`'e eklendi; `MemoryPanel` kendi `PaneHeader`'ını render
@@ -7368,6 +7449,7 @@ Sohbet mesaj kaydırma konteyneri (`MessageList` `role="log"`) **ve** üstte sab
 (pinned) soru overlay'i yatay padding'i dar telefonlarda **1px**'e düşürüldü:
 `px-6` → **`px-[1px] md:px-6`** (ikisinde de). Dar (`<md`) = 1px, geniş (`md+`) = 24px
 (değişmedi). Playwright: 390px→1px, 1280px→24px. Build temiz.
+
 ## Flow: daraltılabilir "Node ekle" paleti + yukarı büyüyen run input ✅ (2026-07-04)
 
 - "Node ekle" başlığı chevron'lu toggle (`paletteOpen`, localStorage kalıcı); daraltınca node
@@ -7402,16 +7484,18 @@ bitişiklik korunur, composer navbar arkasına kaçmaz. Playwright (390px): comp
    avatar'ına paralel; hem schedule hem otomasyon formunda.
 
 Playwright: isim inputu 0, toggle en solda, iki FlowPicker'da da ikon, header nowrap
-+ copy/X title yanında, cache chip'inde (i). Build temiz.
+
+- copy/X title yanında, cache chip'inde (i). Build temiz.
 
 ## Bağlam modalı: token özeti + CLI ek yükü açılır-kapanır (default kapalı) ✅ (2026-07-04)
 
 `SessionContextModal` ve `AgentContextModal`'da token istatistik satırı (Toplam,
 Sistem, Skills, … ~token tahmini) ve "CLI ek yükü" bloğu tek bir açılır-kapanır
 şeride alındı. **Default kapalı**; başlık çubuğu "Token özeti · Toplam N (~tahmini)"
-+ varsa "CLI ek yükü" rozetini gösterir, `ChevronRight` 90° dönerek durumu belli
-eder. Playwright: default `aria-expanded=false`, kapalıyken detay (`Mesajlar (…)`)
-gizli, tıklayınca açılıyor. Build temiz.
+
+- varsa "CLI ek yükü" rozetini gösterir, `ChevronRight` 90° dönerek durumu belli
+  eder. Playwright: default `aria-expanded=false`, kapalıyken detay (`Mesajlar (…)`)
+  gizli, tıklayınca açılıyor. Build temiz.
 
 ## Flow değişken popover'ı kırpılma fix + run input info butonu ✅ (2026-07-04)
 
@@ -7598,7 +7682,7 @@ seçilen bir **orkestrasyon akışını** (Flow) da başlatabilsin. Task'taki me
   `db/store_automation.go`, `agent/scheduler.go`, `agent/automation.go`,
   `api/schedules.go`, `api/automations.go`, `tools/builtin_schedulemgmt.go`,
   `tools/builtin_automationmgmt.go`, `frontend/{types/task.ts, api/tasks.ts,
-  panels/Schedules.tsx, panels/Automations.tsx}`. Detay `20-SCHEDULE-WAKE.md`,
+panels/Schedules.tsx, panels/Automations.tsx}`. Detay `20-SCHEDULE-WAKE.md`,
   `46-ETIKET-OTOMASYON.md`.
 
 ## Logs: sayaç + Kopyala + Aç üst-title'a taşındı ✅ (2026-07-04)
@@ -7796,6 +7880,7 @@ asıl büyüyen kısmın (mesaj geçmişi) rolling breakpoint'i **her tur ıskal
 Agent SDK) devrediyor; TionHarness kendi yazdığı için boşluk oluşmuş.
 
 **Yapılan (yalnız `extendedCache`/`cacheSystem` açıkken; cache-kapalı yol birebir korundu):**
+
 - `anthropic.go`: `systemField` artık **statik-only** (tam cache'lenebilir); `toAnthropicMessages`
   yeni imza `(msgs, extendedCache, dynamic)` — rolling breakpoint son **persist** mesaj bloğunda,
   volatile dinamik onun **gerisinde** trailing text-blok olarak (request-time, persist edilmez).
@@ -7977,7 +8062,7 @@ alındı. `tsc -b && vite build` temiz; Playwright ile doğrulandı (border 0px,
 ## Flow editörü: popup boyutu + palet sürükle-bırak ✅ (2026-07-04)
 
 - **Popup boyutu board popup'ına eşitlendi** (`TaskFormModal`): `max-h-[90vh] w-full
-  max-w-2xl rounded-xl` (önceki `w-80 max-h-[85vh]` yerine).
+max-w-2xl rounded-xl` (önceki `w-80 max-h-[85vh]` yerine).
 - **Palet sürükle-bırak ile node ekleme:** node listesindeki tipler `draggable`;
   `FlowCanvas` `CanvasInner`'a ayrıldı (ReactFlowProvider altında `screenToFlowPosition`
   erişimi için), `onDrop` bırakma noktasını graf uzayına çevirip `onDropNode` →
@@ -8116,13 +8201,13 @@ Kullanıcı isteğiyle 5 UI iyileştirmesi. `tsc -b && vite build` temiz.
 3. **`run_code`'a built-in araç binding'leri** (`_Docs\44`): code-execution artık yalnız
    MCP'yi değil, **TionHarness built-in araçlarını** da `tionharness` Python modülü olarak sunar
    (`from tionharness import <tool>`). `codemode.WriteBindings(dir, entries, builtins, allow)`
-   + `Config.Builtin` dispatcher (reserved `tionharness__<tool>` namespace, bare-name
-   allow/gate/dispatch); built-in'ler **tur ctx**'iyle `reg.Call`'a gider → sink/oturum
-   davranışı direkt-çağrıyla birebir. Eligibility hard-exclude (`CodeModeEligible`:
-   interaktif/exec-in-exec/delegasyon/meta/worker araçları hariç) + ajan tool-filter.
-   run_code artık **MCP'siz** de kullanılabilir (built-in'ler yeter; `toolsetup.go`'da
-   `len(entries)>0` koşulu kaldırıldı). Testler: bindings (built-in modül + collision
-   guard), builtin_runcode (dispatch + discovery), bridge (routing). Tam suite 660 yeşil.
+   - `Config.Builtin` dispatcher (reserved `tionharness__<tool>` namespace, bare-name
+     allow/gate/dispatch); built-in'ler **tur ctx**'iyle `reg.Call`'a gider → sink/oturum
+     davranışı direkt-çağrıyla birebir. Eligibility hard-exclude (`CodeModeEligible`:
+     interaktif/exec-in-exec/delegasyon/meta/worker araçları hariç) + ajan tool-filter.
+     run_code artık **MCP'siz** de kullanılabilir (built-in'ler yeter; `toolsetup.go`'da
+     `len(entries)>0` koşulu kaldırıldı). Testler: bindings (built-in modül + collision
+     guard), builtin_runcode (dispatch + discovery), bridge (routing). Tam suite 660 yeşil.
 
 ## Mobil/dikey ekran uyumu — F3 (liste panelleri tek-sütun) ✅ (2026-07-04)
 
@@ -8158,6 +8243,9 @@ araçlar artık hazırdır. Duruş koşulları: iş bitti (`!needsAutoContinue`)
 ilerlemesi yapmadı (`hasToolStep`=false → no-progress guard), sağlayıcı hatası veya
 **günlük bütçe** stop'u (guardedComplete zaten enforce eder). Çağrı noktaları:
 `runSpawn` (spawn.go) + scheduler deliver (scheduler.go), `FireTurnFinished`'ten önce.
+Koordinatörün çalışan worker'ı varken genel oto-devam dürtmesi bastırılır; worker
+sonucu zaten `<task-notification>` ile sonraki koordinatör turunu açar ve meşru
+bekleme hali yanıltıcı “önceki tur yarım kaldı” mesajı üretmez.
 Ayar `autonomousAutoContinue` (vars. açık) + `autonomousAutoContinueMax` (vars. 10) —
 settings→tunables köprüsü `SetAutoContinue` (server.go applySettings), Tunables
 `AutoContinue()`/`AutoContinueMax()`. settings paketi build+test yeşil; agent/api
@@ -8185,35 +8273,37 @@ canlıda doğrulandı. Aynı testte bulgu: `handleChatStream`/`wake_turn` oturum
 kilidi kullanmıyor, `drainCoordinator` da `isSessionActive`'e bakmıyor → kullanıcı
 stream turu ile koordinatör oto-turu aynı oturumda **paralel** koşabiliyor
 (canlıda gözlendi, zararsızdı; tasarım kararı bekliyor). Detay + zaman çizelgesi
-+ çözüm seçenekleri: `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §10.
+
+- çözüm seçenekleri: `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §10.
 
 ## Araç konsolidasyonu — birleşik built-in araçlar ✅ (2026-07-04)
 
 Fazla/parçalı built-in araçlar tek çok-amaçlı araçlara indirildi (per-tur bağlam
-+ şema tekrarı azaldı, yetenek aynı). CRUD aileleri zaten standarttı, dokunulmadı.
 
-- **`update_session`** (yeni, `tools/builtin_sessionupdate.go`): altı ayrı aracı
+- şema tekrarı azaldı, yetenek aynı). CRUD aileleri zaten standarttı, dokunulmadı.
+
+* **`update_session`** (yeni, `tools/builtin_sessionupdate.go`): altı ayrı aracı
   birleştirir — `set_session_title` / `set_working_dir` / `archive_session` /
   `set_session_goal` / `complete_goal` / `set_session_tags` **kaldırıldı**. Tek
   çağrıda title/working_dir/goal/goal_done/tags(add,remove veya replace)/archive
   alanlarından verilenleri uygular; mutasyondan önce hepsini doğrular (yarım
   güncelleme yok). `sessionFrom` (SessionSink ⊇ GoalSink) tek sink'ten okur →
   CLI köprüsünde tek `sessionAttach`. Görünürlük: name-only.
-- **`secret`** (birleşik, `tools/builtin_secret.go`): `secret_list`/`_get`/`_set`/
+* **`secret`** (birleşik, `tools/builtin_secret.go`): `secret_list`/`_get`/`_set`/
   `_delete` **kaldırıldı** → tek araç `action: list|get|set|delete`. `builtin_secretmgmt.go`
   silindi; artık yalnız `buildRegistry`'de vault varken kayıtlı (hidden). RiskWrite
   (eskiden de reads RiskWrite idi → regresyon yok).
-- **`shell_manage`** (birleşik, `tools/builtin_shell_bg.go`): `shell_output`/`_kill`/
+* **`shell_manage`** (birleşik, `tools/builtin_shell_bg.go`): `shell_output`/`_kill`/
   `_list` **kaldırıldı** → tek araç `action: output|kill|list`. Görünürlük: name-only.
-- **Tag editörleri folded**: `set_flow_tags`/`set_schedule_tags` **kaldırıldı** →
+* **Tag editörleri folded**: `set_flow_tags`/`set_schedule_tags` **kaldırıldı** →
   `update_flow`/`update_schedule` artık `tags` alanı alıyor (ayrı `SetFlowTags`/
   `SetScheduleTags` ile persist, `SetScheduleEnabled` deseni gibi). Session tag'leri
   `update_session`'da.
-- Wiring: `toolsetup.go`+`toolsetup_selfmanage.go` (kayıt+MarkNameOnly/MarkHidden),
+* Wiring: `toolsetup.go`+`toolsetup_selfmanage.go` (kayıt+MarkNameOnly/MarkHidden),
   `mcp_interaction.go` (spec+sinkToolTable), `categories.go`, frontend `toolIcons.ts`,
   `default-instructions.md`. Tüm testler yeşil (650 passed / 34 paket). Detay:
   `_Docs\24-SELF-MANAGEMENT.md`.
-- **Gömülü default skiller güncellendi (2026-07-04, ayrı tur):** 3 skill (`tionharness-guide`,
+* **Gömülü default skiller güncellendi (2026-07-04, ayrı tur):** 3 skill (`tionharness-guide`,
   `tionharness-progress`, `tionharness-self-management`) yeni araç isimlerine (`update_session`,
   `secret`) göre düzeltildi. **Bulgu:** `skills.EnsureDefaults` diske seed ederken
   **mevcut dosyanın üzerine yazmıyor** → önceden çalışmış kurulumlarda global skills
@@ -8307,7 +8397,7 @@ eklendi. Canlı doğrulandı (Playwright, WS2/AGT9 + WS1/SES89).
   bağlam** en üstte → Sistem promptu (Markdown/Ham `right`'ta) → **Skills** (varsa,
   Markdown/Ham'a saygılı) → lazy araçlar; hepsi katlanabilir + Skills token chip.
 - Doğrulama: `go build ./...` + `go test ./internal/api/...` (73) + `npx tsc
-  --noEmit` temiz. Canlı: tek-toggle (aria-expanded true→false, 5→4), Tümünü
+--noEmit` temiz. Canlı: tek-toggle (aria-expanded true→false, 5→4), Tümünü
   kapat→0, Tümünü aç→geri; Skills bölümü AGT9 modalında chip 973 + başlık render.
 - Not: kullanıcının 8090'daki backend'i (dün başlatılmış eski binary) bu
   değişiklikleri içermez → yeni davranış için backend yeniden başlatılmalı
@@ -8353,7 +8443,7 @@ eklendi. Canlı doğrulandı (Playwright, WS2/AGT9 + WS1/SES89).
   **UI:** yeni **"Özet (katlanmış mesajların yerine geçer)"** katlanabilir bölümü +
   **"Artık gönderilmeyen (özete katlanmış)"** açık-turuncu grup (vars. KAPALI);
   `MessageCard`'a `dropped` varyantı (turuncu border/bg + `DroppedTag "katlandı ·
-  gönderilmiyor"`), `Stat`'a `dropped` (turuncu chip), token chip'lerine Özet +
+gönderilmiyor"`), `Stat`'a `dropped` (turuncu chip), token chip'lerine Özet +
   Katlanmış, `copy()`'ye `# Summary (folded)`. **Bulk fix:** `CollapsibleSection`
   mount'ta (nonce değişmeden) artık `bulk`'u uygulamıyor (`seenNonce` ref) →
   `defaultOpen` korunuyor (dropped/cache grupları kapalı açılır), Tümünü aç/kapat
@@ -8392,6 +8482,7 @@ canlı görünmüyordu — çünkü chat'in canlı akışı `chat_stream`'in **i
 yayınlanmaz). Süreç-geneli `/api/events` bus'ı yalnız kaba bildirim taşıyordu.
 
 **Yapılan — süreç-geneli canlı adım köprüsü:**
+
 - `events.Event`'e `Step json.RawMessage` alanı (opaque TurnStep JSON; events paketi
   agent'ı import etmez — `db.Message.Steps` deseni). `handleEvents` `Type=="session_step"`
   frame'lerini ayrı SSE event adı **`step`** ile yazar (bildirim/badge yolu `notify`
@@ -8558,7 +8649,7 @@ kapatılması (the external agent project↔TionHarness backlog `_Docs/41`).
   fail-open) — `enabled` toggle'lanabilirler için `FileFreshnessGuard`/`EnableShell`/
   `EnableCLIHooks`/`AutonomousConfine`'dan. Frontend: `HooksPanel.tsx` altına dashed-border
   read-only bölüm (scope/event badge + ayar anahtarı + Aktif/Pasif); `types/hook.ts
-  BuiltinHook` + `api/hooks.ts listBuiltinHooks`.
+BuiltinHook` + `api/hooks.ts listBuiltinHooks`.
 - **#2 (freshness-guard'ı CLI yoluna taşı) YAPILMADI — bilinçli:** CLI'nin **native**
   Read/Edit/Write'ı zaten kendi read-before-write guard'ını uyguluyor (TionHarness'in
   `readtracker.go`'su bunu "mirrors Claude Code's readFileState guard" diye kopyaladı).
@@ -8631,6 +8722,7 @@ skill `tionharness-session-debug` (desen G/H). `go build`/`go test ./internal/ag
 type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındalığı.
 
 **Çözüm:**
+
 - **`Read`** (`builtin_fs.go` `renderNumbered`): çıktı artık **satır-numaralı** (`%6d\t…`,
   cat -n stili; Edit için "önek+tab'ı sıyır" notu açıklamaya eklendi). **`offset`**
   (1-tabanlı başlangıç) + **`limit`** (satır sayısı, vars. 2000) ile büyük dosyanın
@@ -8668,7 +8760,7 @@ type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındal
   artefaktı dosyaya yazılmaz). Yalnız verbatim eşleşme başarısızsa devreye girer; başarılı
   eşleşmeyi asla değiştirmez.
 - **Test:** `TestFSReadWindow`, `TestFSEditToleratesLineNumbers`, `TestGrepOutputModes/
-  Context/OnlyMatching` (Go motoruna sabitli), `TestGrepRGFastPath` (rg yoksa skip),
+Context/OnlyMatching` (Go motoruna sabitli), `TestGrepRGFastPath` (rg yoksa skip),
   `TestGlobMtimeSortAndIgnore/PathArg`; mevcut Read-eşitlik testleri `Contains`'e
   güncellendi. `go build`/`vet`/`test` (366) yeşil. (`run_in_background` paralel bir çalışmada
   `builtin_shell_bg.go` `ShellManager` + `shell_output`/`shell_kill`/`shell_list` ile
@@ -8676,19 +8768,20 @@ type/multiline/head_limit, Glob mtime sıralama + path, ve .gitignore farkındal
 
 ## Feature: Dosya tazelik guard'ı — Edit/Write "read-before-write" (Claude Code paritesi) ✅ (2026-07-03)
 
-**İstek:** Claude Code'un Edit toolundaki *"File has been modified since read… Read
-it again before attempting to write it"* tespiti bizde yoktu; ekleyelim.
+**İstek:** Claude Code'un Edit toolundaki _"File has been modified since read… Read
+it again before attempting to write it"_ tespiti bizde yoktu; ekleyelim.
 
 **Sorun:** TionHarness'in `Edit`/`Write` araçları önceki bir `Read`'i takip etmiyordu →
 bir oturum dosyayı okuduktan sonra dosya dışarıdan (kullanıcı/linter/başka tool)
 değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
 
 **Çözüm:** Session-scoped **`ReadTracker`** (içerik-hash tabanlı tazelik temeli):
+
 - **`internal/tools/readtracker.go`** (yeni): `ReadRecord{ModTime,Size,Sum(sha256),
-  Partial}` + concurrency-safe `ReadTracker` (nil = no-op, guard kapalı). `Read`
+Partial}` + concurrency-safe `ReadTracker` (nil = no-op, guard kapalı). `Read`
   aracı okuma anında (truncation ÖNCESİ, tam içerik hash'i → >256KB dosyalar da
-  kapsanır) temeli kaydeder. `checkFreshness` = kayıt yok → *"file has not been read
-  yet"*, içerik hash'i uyuşmuyor → *"file has been modified since it was last read"*.
+  kapsanır) temeli kaydeder. `checkFreshness` = kayıt yok → _"file has not been read
+  yet"_, içerik hash'i uyuşmuyor → _"file has been modified since it was last read"_.
   Karşılaştırma mtime değil **içerik-hash** (cloud-sync/AV kaynaklı sahte mtime
   bump'larında yanlış-pozitif yok, mtime değişmeyen gerçek edit'i de yakalar).
 - **`builtin_fs.go`:** `Read` kaydeder; `Edit` mutasyondan önce `checkFreshness`;
@@ -8696,7 +8789,7 @@ değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
   yazımdan sonra temeli yeni içeriğe tazeler (`recordWritten`) → aynı dosyada edit
   zinciri araya Read istemez. Tool açıklamalarına "önce Read" notu eklendi.
 - **Ayar/gating:** `Tunables.fileFreshnessGuard` (default **açık**) + `settings.
-  FileFreshnessGuard` (Default/public/patch/store + `server.go applySettings`); default
+FileFreshnessGuard` (Default/public/patch/store + `server.go applySettings`); default
   skill `tionharness-settings`'e belgelendi. `buildRegistry` session-id'yi (`SessionIDFrom`)
   çözüp `Runtime.readTrackers` (sync.Map, session-başına kalıcı) üzerinden tracker'ı
   3 fs tool'a bağlar; katalog/preview build'lerinde (session yok) veya ayar kapalıysa
@@ -8711,6 +8804,7 @@ değişse bile edit **sessizce üzerine yazıyordu** (stale-write footgun).
 
 **Çözüm:** Skills ekranı zaten çoklu-seçim (`useMultiSelect`) + `SelectionBar`
 (toplu görünürlük + sil) taşıyordu; buna **toplu grup atama** eklendi.
+
 - **Backend:** `Store.SetGroup(slug, group)` — SKILL.md'nin yalnız `group`
   frontmatter'ını `setFrontmatterFields` ile yeniden yazar (gövdeye/diğer alanlara
   dokunmaz), `category` alias'ını düşürür (ikisi çelişmesin), boş grup → grupsuz.
@@ -8758,7 +8852,7 @@ koordinatör modu gibi) + farklı koordinasyon yöntemleri.
 - **Prompt/skill:** `api/coordinator_prompt.go` (`composeTurnRequest`'te koşullu enjekte,
   wake yolunu da kapsar) + gömülü default skill `tionharness-coordinator`.
 - **API:** `session_info`'ya `role`+`coordinatorSessionId`; `PUT /api/sessions/{id}/role`
-  + `GET /api/sessions/{id}/workers`.
+  - `GET /api/sessions/{id}/workers`.
 - **UI:** `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running varken 3sn
   poll) SessionDetailPanel'de; `worker`/`coordination` SSE tipleri executions'a bağlı.
 - **Sapma:** tasarımdaki ayrı `CoordinationEngine` turn-hook yerine geri bildirim
@@ -8790,6 +8884,7 @@ koordinatör modu gibi) + farklı koordinasyon yöntemleri.
 aktarırken **bir grup içinde** aktaralım ki mevcut skiller'e karışmasın.
 
 **Çözüm (ingest pipeline'a `Group` opsiyonu):**
+
 - `ingest.Options.Group` eklendi — doluysa her içe aktarılan skill'in `group`
   frontmatter'ı olarak yazılır (Skills UI'da tek katlanabilir başlık altında toplanır;
   `Skill.Group` zaten vardı). Boşsa kaynağın kendi `group`'u **korunur** (eskiden
@@ -8818,6 +8913,7 @@ sıkıştırıyor (sqz `tool_name`'i umursamıyor, rtk sadece `rtk ` ekliyor) �
 kusur matcher'daydı.
 
 **Çözüm:**
+
 - `agent/hooks.go` `hookMatches` artık **virgülle ayrılmış alternatif** glob'ları
   destekliyor (`Bash,PowerShell` → herhangi biri eşleşirse tetiklenir; `filepath.Match`
   süslü parantez desteklemediği için). Boşluk-toleranslı.
@@ -8839,6 +8935,7 @@ anahtarı geçersiz çıktı), gerçek `sqz-mcp`; görev: 5 dizinin girdi sayım
 (ground truth 336). Metrikler `debug.jsonl`.
 
 **Sonuç (özet — tam tablo `_Docs/44` §12):**
+
 - **A klasik:** ✅ 336 · 3 iterasyon · in+out 19.098 tok · bağlama 4.366 B araç çıktısı · 7,3 s
 - **B1 kod (naif):** ❌ **533 — yanlış!** Script sıkıştırılmış dönüşü `len()` ile
   saydı; model veriyi görmediği için fark edemedi → **§7 doğruluk riski canlı
@@ -8868,6 +8965,7 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
 `Automation` entity'sidir ama UI'da Schedules ekranında ayrı bölümde gösterilir.
 
 **Yapılan (backend):**
+
 - **Etiket alanları:** `Session.Tags` / `Flow.Tags` / `Schedule.Tags` (`[]string`,
   omitempty; `Task.Tags` zaten vardı). Store setter'ları `SetSessionTags` /
   `SetFlowTags` / `SetScheduleTags` + paylaşımlı `normalizeTags` (trim/dedup/boş-at).
@@ -8896,6 +8994,7 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
   arayüzüne `Tags`/`SetTags` eklendi.
 
 **Yapılan (frontend):**
+
 - Types: `Session/Flow/Schedule.tags`, yeni `Automation`, `SessionInfo.tags`.
 - API client: `setSessionTags/setFlowTags/setScheduleTags` + automation CRUD.
 - Yeniden kullanılabilir `common/TagEditor.tsx` (chip editörü, Enter/virgül ekler,
@@ -8906,7 +9005,8 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
   (aç-kapa, iterasyon sayacı, spawn-etiket editörü, limit dolunca sıfırla, sil).
 
 **Doğrulama:** `go build ./...` + 143 test (db+agent, yeni automation_test'ler dahil)
-+ 73 api test + `npx tsc --noEmit` yeşil.
+
+- 73 api test + `npx tsc --noEmit` yeşil.
 
 **Sıradaki:** Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca); opsiyonel
 `tionharness-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi.
@@ -8917,6 +9017,7 @@ guardrail'ler (maks. iterasyon, cooldown, aç/kapa) ile önlenir. Otomasyon ayr�
 MCP çağrılarını sohbet trace'inde kart olarak göstermek (`_Docs/44` kalan işler).
 
 **Yapılan:**
+
 - **Settings toggle `enableCodeMode`:** `settings.go` (Settings/DTO/Patch/mapping) +
   `store.go` apply + `api/server.go` `applySettings → SetCodeMode` (canlı) +
   `app.go`'da `TIONHARNESS_CODE_MODE` artık `EnableShell` gibi **tek seferlik boot seed**
@@ -8942,6 +9043,7 @@ MCP çağrılarını sohbet trace'inde kart olarak göstermek (`_Docs/44` kalan 
 ortamında occupancy baseline'ı.
 
 **Yapılan:**
+
 - **Yeni ölçüm aracı `cmd/measure-codemode`** (main/servers/report): data dizinindeki
   tüm workspace'lerin etkin MCP sunucularına gerçekten bağlanır (`mcp.ListServerTools`),
   üç senaryoyu raporlar: eager-full / tier-lazy (bugünkü default) / code-mode.
@@ -8955,9 +9057,9 @@ ortamında occupancy baseline'ı.
   p50 68.299 · out p50 515 tok; 336 araç olayının yalnız ~5'i gerçek harici MCP.
 - **Dürüst bulgu:** şema-occupancy'yi tier-lazy zaten çözmüş (69 tok < 374 tok!) —
   kod-modunun gerçek değeri **aktivasyon churn'ü + ara verinin bağlam dışında kalması
-  + tur sayısı düşüşü**. Faz 3 ölçüm metriği buna göre güncellendi: görev-başına
-  toplam token + tur sayısı + bağlama giren araç-çıktısı baytı (şema tokenı değil).
-  Detay + tablolar: `_Docs/44` §11.
+  - tur sayısı düşüşü**. Faz 3 ölçüm metriği buna göre güncellendi: görev-başına
+    toplam token + tur sayısı + bağlama giren araç-çıktısı baytı (şema tokenı değil).
+    Detay + tablolar: `_Docs/44` §11.
 
 **Sıradaki:** Faz 3 — MCP-yoğun çok-adımlı senaryoda klasik vs kod-modu A/B
 (`turn-debug` ile görev-başına toplam maliyet).
@@ -8969,6 +9071,7 @@ modda script içi mutasyon çağrıları onay UI'ına düşsün) + per-call göz
 geri kazanılması (debug.jsonl).
 
 **Yapılan:**
+
 - **`codemode.Bridge` genişletildi** (`bridge.go`): `Start` artık `Config` alıyor
   (`Call`/`Allow`/`Gate`/`Observe`). `Gate` dispatch'ten önce çalışır; red, script'e
   loud `MCPError` (isError=true) olarak döner ve özet "(N denied by permission gate)"
@@ -8998,6 +9101,7 @@ geri kazanılması (debug.jsonl).
 şema olarak değil, üretilmiş Python binding'leri olarak sunmak (occupancy düşürme).
 
 **Yapılan:**
+
 - **Yeni paket `internal/codemode`:** `bridge.go` (per-execution loopback HTTP köprüsü —
   127.0.0.1 rastgele port, rastgele Bearer token, agent tool-filter parity, 200 çağrı/koşu
   tavanı, 120s per-call timeout, çağrı sayacı/özeti) + `bindings.go` (`.tionharness/mcp/`
@@ -9034,6 +9138,7 @@ toggle'ını kaldır — araç zaten Araçlar ekranından (ajan denylist) aktif/
 edilebiliyor; ikinci bir master toggle gereksiz.
 
 **Yapılan (self-management master toggle'ının 2026-07-01'de kaldırılmasıyla aynı desen):**
+
 - **Backend gate kaldırıldı:** `run_subagent` artık **daima kurulu** (native
   `toolsetup.go`, CLI köprüsü `mcp_interaction.go`, `subagent.go RunSubagentRunner`
   koşulsuz). `Tunables.delegation`/`SetDelegationEnabled`/`DelegationEnabled` silindi;
@@ -9061,6 +9166,7 @@ maliyet olan ham transkript her turda tam ücretleniyordu (OpenRouter yolunda ge
 breakpoint'i zaten vardı).
 
 **Yapılan:**
+
 - `contentBlock`'a `CacheControl` alanı eklendi; `toAnthropicMessages` artık
   `extendedCache bool` parametresi alıyor ve caching açıkken **son mesajın son bloğuna**
   kayan bir breakpoint (1h TTL) koyuyor. `Complete` + `Stream` çağrıları güncellendi.
@@ -9105,6 +9211,7 @@ eşliyordu. Eksikler tamamlandı:
 37–43 arası dokümanlar hiç listelenmiyordu (36'dan 44'e atlıyordu).
 
 **Yapılan:**
+
 - `40-COKLU-SECIM.md` → **`45-COKLU-SECIM.md`** (git mv; dosya başlığına numara notu,
   `05-ILERLEME` içindeki referans güncellendi). Plan modu 40'ta kaldı.
 - `00-GENEL-BAKIS.md` index'ine 37/38/39/40/41/42/43/45 + `analiz-craftagent-arac-eslestirme.md`
@@ -9131,6 +9238,7 @@ anahtarını tamamen kaldır — pause artık yalnız workspace-özel olsun, Zam
 ekranından açıp kapatmak yeterli.
 
 **Yapılan:**
+
 - **App-geneli pause tamamen kaldırıldı (backend):** `settings.Settings/snapshot/patch`'ten
   `PauseAutonomy` alanı, `store.go` patch-apply'ı, `api/server.go`'daki
   `tun.SetAutonomyPaused(...)` çağrısı silindi. `agent.Tunables`'tan `pauseAutonomy`
@@ -9156,6 +9264,7 @@ dönüp çarkı yeniden çevirmek için. Kapsam kullanıcı kararıyla **yalnız
 geri-yükleme yok; kod için git zaten var).
 
 **Yapılan:**
+
 - **Backend truncate:** `db.DeleteMessagesFrom(sessionID, msgID)` — verilen mesaj + sonrasını
   siler, JSONL'i yeniden yazar; silinen sayıyı döndürür. Truncation noktası özet sınırından
   önceyse (`SummaryMsgCount > idx`) **artık geçersiz rolling-summary sessizce sıfırlanır**
@@ -9182,6 +9291,7 @@ geri-yükleme yok; kod için git zaten var).
 workspace'lerin default (seed) promptu yap — summary/reflect/title gibi.
 
 **Yapılan:**
+
 - **Editlenebilir 4. runtime prompt:** `agent.PromptKeys`'e `"compact"` eklendi →
   config API (`GET/PUT /api/workspace-config`) ve WorkspaceFilesPanel bu key üzerinden
   döndüğü için **otomatik editlenebilir** oldu (`config/prompts/compact.md`). Default
@@ -9221,6 +9331,7 @@ sistem promptu gibi yap (TionHarness'te monolitik sistem promptu yok — workspa
 onun yerini tutar). (3) `ClaudeResume`'u default açık yap.
 
 **Yapılan:**
+
 - **Skill 4-tier görünürlük (araç muadili tek seçici):** skiller artık `full` /
   `summary` / `name-only` / `hidden` tier'larından **tam birini** taşır. Önceden 3
   durum vardı (full / name-only / `auto_summary:false`≈hidden); eksik **summary**
@@ -9255,6 +9366,7 @@ sıcak prefix'i turlar arası **tutarlı** koruyamaması.
 değilse); Flows, Workspace skill'leri ve Schedules'ı ajanlar gibi **tek tek** seçilebilir yap.
 
 **Yapılan:**
+
 - **Payload:** `market.WorkspacePayload`'a `Prompts map[string]string` (yalnız varsayılandan
   farklı runtime prompt override'ları) + `Readme string` eklendi (`internal/market/pack.go`).
 - **Export builder** (`buildWorkspaceTemplatePayload`): her `agent.PromptKeys` anahtarını okur,
@@ -9278,6 +9390,7 @@ değilse); Flows, Workspace skill'leri ve Schedules'ı ajanlar gibi **tek tek** 
 **İstek:** Dışa aktarım paneline **canlı önizleme** ekle.
 
 **Yapılan:**
+
 - `WorkspaceExportPanel`'e, kategori toggle'larının altında **Önizleme** kartı eklendi:
   mevcut seçimin tam çıktısını pill'lerle gösterir (N ajan / akış / zamanlama / skill /
   talimat / pano sütunu). Kapalı veya 0 olan kalemler soluk + üstü çizili.
@@ -9293,13 +9406,13 @@ değilse); Flows, Workspace skill'leri ve Schedules'ı ajanlar gibi **tek tek** 
 **İstek:** Dışa aktarıma **isim/açıklama/sürüm** alanı desteği ve **ajan bağımlılık uyarısı** ekle.
 
 **Yapılan:**
+
 - **Metadata alanları:** `WorkspaceExportPanel`'in üstüne **Şablon adı / Açıklama / Sürüm**
   girişleri kondu. Ad `ws.name`'den seed edilir; açıklama/sürüm boşsa sunucu varsayılan üretir.
-  Frontend `WorkspaceExportMeta` (`name?/description?/version?`) `api.publishPack(...)`'ın yeni
-  4. argümanı olarak geçer; boş alanlar düşürülür.
+  Frontend `WorkspaceExportMeta` (`name?/description?/version?`) `api.publishPack(...)`'ın yeni 4. argümanı olarak geçer; boş alanlar düşürülür.
 - **Backend:** `publishRequest`'e `Name/Description/Version` (omitempty) eklendi;
   `handlePublishMarket` workspace kind'ında bunları trim edip `BuildWorkspacePack(slug, name,
-  desc, version, …)`'e verir. `BuildWorkspacePack` imzasına `version` parametresi eklendi
+desc, version, …)`'e verir. `BuildWorkspacePack` imzasına `version` parametresi eklendi
   (boş → `1.0.0`). Slug artık kullanıcı adından türetilir → farklı ad = farklı pack id.
 - **Bağımlılık uyarısı:** panel, hariç bırakılan ajanlara bağlı akış/zamanlamaları uyarı
   kutusunda listeler. Flow bağımlılığı `flow.graph` JSON'u client'ta parse edilip
@@ -9315,6 +9428,7 @@ değilse); Flows, Workspace skill'leri ve Schedules'ı ajanlar gibi **tek tek** 
 alt-panele taşınsın (feature detaylandırılacak); export alırken **neyin dahil edileceği** seçilebilsin.
 
 **Yapılan:**
+
 - **Yeni alt-sekme:** `WorkspaceView.tsx`'e `export` sekmesi ("Dışa Aktar", `PackageCheck` ikonu)
   eklendi (TAB_KEYS + TABS + render dalı). Kendi publish aksiyonu olduğu için header "Kaydet"
   butonu bu sekmede gizli (appearance gibi). Genel (`WorkspacePanel`) tab'ındaki eski
@@ -9372,6 +9486,7 @@ yalnız `/memory · /board · /flows` slash-komutlarının anlık genel-bakış 
 anti-decay), düzenlenemez.
 
 **Yapılan:**
+
 - Etiket "Özet promptu" → **"Genel bakış promptu"**, hint bunun slash-komut özeti olduğunu
   ve konuşma özetlemesi olmadığını açıkça belirtiyor (`WorkspaceFilesPanel.tsx`).
 - **Asıl compaction promptu salt-okunur gösteriliyor:** `conversation.CompactionPromptText()`
@@ -9385,16 +9500,17 @@ her araca skill'lerdeki gibi görünürlük seçilebilsin — **4 tier, biri se�
 UI'da görünmeyenler (örnekler, when-to-use) gösterilsin.
 
 **Yapılan:**
+
 - **Backend:** `tools.Visibility{Full,Summary,NameOnly,Hidden}` + `SetVisibility`/
   `VisibilityOf` (registry). `WorkspaceToolConfig.ToolVisibility map[string]string`
   (eski `HiddenTools`/`ShownTools` listeleri yüklemede map'e migrate). `toolsetup`
   override'ları en son `SetVisibility` ile uygular. `workspace-tools` API `visibility`
-  + `examples` döndürür, PUT `toolVisibility` map'i alır (`validVisibility` doğrular).
+  - `examples` döndürür, PUT `toolVisibility` map'i alır (`validVisibility` doğrular).
 - **Self-manage:** master toggle kaldırıldı → paket daima kurulu, varsayılan `hidden`.
   **Tam sökme (aynı gün):** `settings.EnableSelfManage` alanı + `TIONHARNESS_ENABLE_SELFMANAGE`
   env + `Tunables.SelfManageEnabled`/`selfManage` + ayar UI toggle'ı **tamamen silindi**;
   `spawn_session` CLI köprüsünde koşulsuz ilan edilir. `TestInteractionAdvertisedNames`
-  + `store_test` güncellendi.
+  - `store_test` güncellendi.
 - **UI:** `ToolsPanel` per-tool 4'lü segment (Tam/Özet/İsim/Gizli) + tier-renkli
   `VisibilityBadge`; toplu + per-server hızlı eylem 4 tier'a genişledi. Detay görünümü
   **örnek çağrıları** + tam (çok-paragraflı) açıklamayı gösterir.
@@ -9413,6 +9529,7 @@ kaldırılsın; onun yerine her tema **renginin** açık ve koyu karşılığı 
 2 varyant = 12 preset. Ayrı base-mode ve accent picker yok.
 
 **Frontend:**
+
 - `lib/themePresets.ts` yeniden yazıldı: `COLORS` (aile tanımı, dark+light accent/soft) →
   `THEME_PRESETS` (düz, aile başına 2) + `THEME_COLORS` (picker için aile+varyant) +
   `DEFAULT_PRESET='violet-dark'`. Neutrals (bg/surface/text) mod başına sabit, yalnız
@@ -9425,6 +9542,7 @@ kaldırılsın; onun yerine her tema **renginin** açık ve koyu karşılığı 
 - `App.tsx`: appearance ref/`applyClientPrefs`/ws-override yalnız `themePreset`.
 
 **Backend:**
+
 - `settings.Default().ThemePreset` `"midnight-violet"` → `"violet-dark"`; alan yorumu
   güncellendi. `Theme`/`Accent` alanları geriye-uyum için kaldı (artık UI'yı etkilemiyor).
 - `cmd/tionharness-desktop/titlebar_windows.go`: preset→renk haritası kaldırıldı; titlebar
@@ -9487,6 +9605,7 @@ Artifacts" bloğu (inline media + gallery JSON + `![alt]` kuralları) her tur st
 token'dan çok dikkat/context-rot maliyeti.
 
 **Yapılan:**
+
 - **Adım 1 — Boilerplate birleştirme:** `internal/skills/store.go` `renderCatalog` içindeki
   skills `deferNote` tek kısa cümleye indirildi (`ToolSearch select:...` + "Available Tools
   notuna bak"). Mekanizmanın tam açıklaması (DEFERRED'ın anlamı, `"No such tool available"`
@@ -9513,6 +9632,7 @@ Bilinçli **eager** (her tur tam şemayla giden, "behavioral nudge") üç araç 
 `core_memory_append`/`replace` (neredeyse aynı uzun açıklamayı tekrarlıyor).
 
 **Yapılan (Strateji A — eager kalır, sıfır davranış riski):**
+
 - `internal/tools/subagent.go`: `run_subagent` açıklaması ~yarıya, field açıklamaları kısaltıldı;
   `Examples` **3 → 1** (örnekler `foldExamples` ile her tur eager şemaya katlanıyordu → en büyük kalem).
 - `internal/tools/builtin_artifact.go`: `create_artifact` açıklaması kısaltıldı (image/binary + base64-etme uyarısı korundu).
@@ -9531,10 +9651,10 @@ kendi `tionharness_extended` araçları ise zaten yalnız-ad. Tutarsızlık + he
 **Yapılan:** `internal/tools/registry.go` `AttachMCP` artık her MCP aracını `lazy` **VE**
 `nameOnly` işaretliyor (tek satırlık ekleme: `r.nameOnly[e.NamespacedName] = true`).
 Mevcut `VisibleLazyCatalog`/`writeLazyToolLine` mekanizması açıklamayı boşaltıp yalnız
-`- \`mcp__server__tool\`` basıyor. İsimler listede kaldığı için `tool_search`/`activate_tools`
-ve CLI `ToolSearch select:<name>` ile araçlar hâlâ keşfedilip yüklenir. `go build ./internal/tools/...`
-+ `go test ./internal/tools/...` temiz. Tahmini tasarruf: chrome ~30 araç için ~800–1200 token/tur.
-Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
+`- \`mcp__server__tool\``basıyor. İsimler listede kaldığı için`tool_search`/`activate_tools`ve CLI`ToolSearch select:<name>`ile araçlar hâlâ keşfedilip yüklenir.`go build ./internal/tools/...`
+
+- `go test ./internal/tools/...` temiz. Tahmini tasarruf: chrome ~30 araç için ~800–1200 token/tur.
+  Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
 
 **Manuel override (UI):** MCP araçları artık varsayılan NameOnly olduğundan, kullanıcının
 bunu sunucu bazında geri alabilmesi için `ToolsPanel` MCP sunucu kartına her satırda
@@ -9547,6 +9667,7 @@ değişmedi — mevcut `setWorkspaceToolsVisibility` override'ı kullanılıyor.
 sunucu başına gruplanırken). Tutarsız ve taranması zor.
 
 **Yapılan (tek-kaynak, backend → frontend):**
+
 - **Backend:** `internal/tools/categories.go` — `CategoryOf(name) string`, isim→kategori
   açık eşlemesi (10 fonksiyonel anahtar: `files`, `search`, `memory`, `agents`,
   `automation`, `interaction`, `artifacts`, `skills-mcp`, `config`, `diagnostics`;
@@ -9571,6 +9692,7 @@ sunucu başına gruplanırken). Tutarsız ve taranması zor.
 UI kaldırıldıktan sonra backend kalıntıları da tamamen temizlendi.
 
 **Bütçe/limit sistemi (tamamen kaldırıldı — ajanlar artık koşulsuz sınırsız):**
+
 - `db.Agent.DailyCallLimit`/`DailyTokenLimit` alanları (`db/models.go`) + `db.UpdateBudget`
   (`db/store_usage.go`) silindi.
 - `agent/budget.go`: `ErrBudgetExceeded`, `ensureBudget`, `billableTokens` silindi;
@@ -9587,7 +9709,7 @@ UI kaldırıldıktan sonra backend kalıntıları da tamamen temizlendi.
 - Frontend: `types/agent.ts` (AgentUsage), `types/usage.ts` (BudgetAgentRow),
   `types/market.ts`, `types/settings.ts` limit alanları + `ChatMeters.tsx` overBudget
   mantığı temizlendi (spend pill yalnız çağrı+maliyet gösteriyor). **Spend takibi
-  (RecordUsage + Bütçe ekranı) korunur** — yalnız *limit* kavramı gitti.
+  (RecordUsage + Bütçe ekranı) korunur** — yalnız _limit_ kavramı gitti.
 
 **Ölü ayarlar (`mcpGatewayUrl`, `logLevel`):** settings.go (struct/Default/DTO/Patch),
 store.go (apply + logLevel clamp), validate.go (+ validate_test.go logLevel case) ve
@@ -9606,6 +9728,7 @@ altında yanıtı sessizce düşürüyordu) nedeniyle hiçbir zaman üretim-haz�
 CLI ise daha önce OAuth yönlendirmesi yüzünden bırakılmıştı.
 
 **Kaldırılanlar:**
+
 - Dosyalar: `providers/antigravitycli.go`, `antigravitycli_live_test.go`, `kind_antigravity.go`.
 - `registry.go`: `antigravityCLIPath`/`antigravityKey` alanları, `findAgy`,
   `SetAntigravityCLIPath`/`SetAntigravityKey`/`AntigravityCLIAvailable`, `NewRegistry`
@@ -9759,7 +9882,7 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 - **Not:** Provider/model dinamik kaldı — sistem ajanı model pinlemiyor, worker
   koordinatörün provider/instance/model/permission değerlerini klonluyor.
 - **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/... ./internal/api/...
-  ./internal/prompts/... ./internal/db/...` ✅, `npm run format:check` + `npm test` ✅.
+./internal/prompts/... ./internal/db/...` ✅, `npm run format:check` + `npm test` ✅.
   Ayrıntı: `_Docs/74-SISTEM-AJANLARI.md`, `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §17.
 
 ## TSK335 — Tema denetimi B+C: overlay token'ı + toggle knob (2026-08-27)
@@ -9815,8 +9938,8 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
     `PRIVATE_KEY`, `AUTH_KEY`, `SESSION_KEY`, `SIGNING_KEY`, `_KEY`) + sağlayıcı
     ön ekleri (`ANTHROPIC_`, `OPENAI_`, `OPENROUTER_`, `AZURE_OPENAI_`,
     `GEMINI_`, `GROQ_`, `MISTRAL_`, `DEEPSEEK_`, `XAI_`, `HUGGINGFACE_`, `HF_`)
-    + tekil adlar (`CREDENTIAL_SECRET`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_AUTH`,
-    `PGPASSFILE`). Eşleşme büyük/küçük harf duyarsız.
+    - tekil adlar (`CREDENTIAL_SECRET`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_AUTH`,
+      `PGPASSFILE`). Eşleşme büyük/küçük harf duyarsız.
   - `StripCredentialEnv(env)` / `CredentialSafeEnv(base)` — filtrelenmiş env +
     `TIONHARNESS_STRIPPED_ENV` işaretçisi.
 - **Neden denylist (allowlist değil):** `transform_data`'nın katı allowlist'i
@@ -9836,7 +9959,7 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   foreground + `run_in_background` hepsi bu tek closure'dan geçtiği için
   kapsam tamdır.
 - **Testler:** `internal/proc/env_credentials_test.go`
-  (`TestCredentialSafeEnvStripsSecretsKeepsPath` — sır adı *ve değeri* yok,
+  (`TestCredentialSafeEnvStripsSecretsKeepsPath` — sır adı _ve değeri_ yok,
   `PATH`/`GOPATH` duruyor, işaretçi doğru; `TestCredentialSafeEnvDropsInheritedMarker`;
   `TestIsCredentialEnvName` — pozitif/negatif set) ve
   `internal/tools/builtin_shell_harden_test.go`

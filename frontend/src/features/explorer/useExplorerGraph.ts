@@ -8,7 +8,7 @@ interface Options {
   search: string
   onError?: (msg: string) => void
   initialFocus?: string | null
-  onFocus?: (refString: string) => void
+  onFocus?: (refString: string | null) => void
 }
 
 interface CacheEntry {
@@ -18,9 +18,13 @@ interface CacheEntry {
 }
 
 export function useExplorerGraph({ search, onError, initialFocus, onFocus }: Options) {
-  const initialRef = () => (initialFocus ? parseRef(initialFocus) : null) ?? ROOT_REF
+  const parsedInitialFocus = initialFocus ? parseRef(initialFocus) : ROOT_REF
+  const initialRef = () => parsedInitialFocus ?? ROOT_REF
   const [focusRef, setFocusRef] = useState<ViewRef>(initialRef)
   const [selectedRef, setSelectedRef] = useState<ViewRef>(initialRef)
+  const [deepLinkError, setDeepLinkError] = useState<string | undefined>(() =>
+    initialFocus && !parsedInitialFocus ? `Geçersiz odak bağlantısı: ${initialFocus}` : undefined,
+  )
   const [cache, setCache] = useState<Record<string, CacheEntry>>({})
   const cacheRef = useRef(cache)
   const activeRequest = useRef<AbortController | null>(null)
@@ -28,6 +32,25 @@ export function useExplorerGraph({ search, onError, initialFocus, onFocus }: Opt
   useEffect(() => {
     cacheRef.current = cache
   }, [cache])
+
+  useEffect(() => {
+    const next = initialFocus ? parseRef(initialFocus) : ROOT_REF
+    if (!next) {
+      // URL navigation is external state; mirror it atomically into graph state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDeepLinkError(`Geçersiz odak bağlantısı: ${initialFocus}`)
+      setFocusRef((current) =>
+        refToString(current) === refToString(ROOT_REF) ? current : ROOT_REF,
+      )
+      setSelectedRef((current) =>
+        refToString(current) === refToString(ROOT_REF) ? current : ROOT_REF,
+      )
+      return
+    }
+    setDeepLinkError(undefined)
+    setFocusRef((current) => (refToString(current) === refToString(next) ? current : next))
+    setSelectedRef((current) => (refToString(current) === refToString(next) ? current : next))
+  }, [initialFocus])
 
   const fetchFocus = useCallback(
     async (ref: ViewRef, force = false) => {
@@ -65,12 +88,14 @@ export function useExplorerGraph({ search, onError, initialFocus, onFocus }: Opt
   const select = useCallback((ref: ViewRef) => setSelectedRef(ref), [])
   const focus = useCallback(
     (ref: ViewRef) => {
+      setDeepLinkError(undefined)
       setFocusRef(ref)
       setSelectedRef(ref)
-      onFocus?.(refToString(ref))
+      onFocus?.(refToString(ref) === refToString(ROOT_REF) ? null : refToString(ref))
     },
     [onFocus],
   )
+  const fallbackToRoot = useCallback(() => focus(ROOT_REF), [focus])
   const refreshFocused = useCallback(() => void fetchFocus(focusRef, true), [fetchFocus, focusRef])
 
   const focusKey = refToString(focusRef)
@@ -96,6 +121,8 @@ export function useExplorerGraph({ search, onError, initialFocus, onFocus }: Opt
     focusRef,
     focusLoading: entry?.loading ?? false,
     focusError: entry?.error,
+    deepLinkError,
+    fallbackToRoot,
     refreshFocused,
   }
 }
