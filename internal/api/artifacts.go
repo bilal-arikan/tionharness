@@ -539,6 +539,12 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, sourceArtifactForbidden)
 			return
 		}
+		stagedOwned := false
+		defer func() {
+			if !stagedOwned {
+				_ = os.Remove(stagedPath)
+			}
+		}()
 		data, readErr := readArtifactImageFile(stagedPath)
 		if readErr != nil {
 			if errors.Is(readErr, errArtifactImageTooLarge) {
@@ -555,7 +561,7 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 			writeArtifactImageValidationError(w, validationErr)
 			return
 		}
-		a, err = wsp.DB.CreateDerivedArtifact(r.Context(), row, func(id string, parent db.Artifact) (string, func() error, error) {
+		a, err = wsp.DB.CreateDerivedArtifact(r.Context(), row, func(derived *db.Artifact, parent db.Artifact) (string, func() error, error) {
 			parentPath, parentSafe := workspaceArtifactPath(wsp, parent.SourcePath)
 			if !parentSafe {
 				return "", nil, os.ErrPermission
@@ -567,7 +573,8 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 			if closeErr := parentFile.Close(); closeErr != nil {
 				return "", nil, closeErr
 			}
-			rel := filepath.ToSlash(filepath.Join("artifacts", req.SessionID, id+ext))
+			derived.SessionID = parent.SessionID
+			rel := filepath.ToSlash(filepath.Join("artifacts", parent.SessionID, derived.ID+ext))
 			target, safe := workspaceArtifactPath(wsp, rel)
 			if !safe {
 				return "", nil, errors.New("unsafe derived artifact target")
@@ -578,6 +585,7 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 			if err := os.Rename(stagedPath, target); err != nil {
 				return "", nil, err
 			}
+			stagedOwned = true
 			return rel, func() error { return os.Remove(target) }, nil
 		})
 	}

@@ -83,13 +83,16 @@ func (d *DB) persistArtifactLocked(a *Artifact) error {
 			d.readArtifactContent(a)
 		}
 	}
-	d.artifacts[a.ID] = *a // in-memory keeps the full content
 	// The on-disk JSON omits the body when it lives in a content file.
 	stored := *a
 	if stored.ContentFile != "" {
 		stored.Content = ""
 	}
-	return atomicWriteJSON(d.dir(dirArtifacts, a.ID+".json"), stored)
+	if err := atomicWriteJSON(d.dir(dirArtifacts, a.ID+".json"), stored); err != nil {
+		return err
+	}
+	d.artifacts[a.ID] = *a // in-memory keeps the full content
+	return nil
 }
 
 // CreateArtifact inserts a new artifact and returns the stored row.
@@ -106,10 +109,10 @@ func (d *DB) CreateArtifact(ctx context.Context, a Artifact) (Artifact, error) {
 }
 
 // CreateDerivedArtifact validates and persists a derived image while holding the
-// artifact store lock. prepare receives the reserved immutable artifact ID and
-// must atomically place the file at its returned workspace-relative path. Its
-// cleanup callback runs if JSON persistence fails.
-func (d *DB) CreateDerivedArtifact(ctx context.Context, a Artifact, prepare func(string, Artifact) (string, func() error, error)) (Artifact, error) {
+// artifact store lock. prepare receives the mutable derived row (with its
+// reserved immutable ID) and must atomically place the file at its returned
+// workspace-relative path. Its cleanup callback runs if JSON persistence fails.
+func (d *DB) CreateDerivedArtifact(ctx context.Context, a Artifact, prepare func(*Artifact, Artifact) (string, func() error, error)) (Artifact, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	parent, ok := d.artifacts[a.DerivedFromArtifactID]
@@ -123,7 +126,7 @@ func (d *DB) CreateDerivedArtifact(ctx context.Context, a Artifact, prepare func
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	a.Kind = ArtifactImage
-	rel, cleanup, err := prepare(a.ID, parent)
+	rel, cleanup, err := prepare(&a, parent)
 	if err != nil {
 		return Artifact{}, err
 	}

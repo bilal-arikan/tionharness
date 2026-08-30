@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"image"
@@ -166,6 +167,115 @@ func TestCreateDerivedArtifactConcurrentPreservesOriginal(t *testing.T) {
 	afterBytes, err := os.ReadFile(originalPath)
 	if err != nil || int64(len(afterBytes)) != int64(len(originalBytes)) || sha256.Sum256(afterBytes) != originalHash {
 		t.Fatalf("original bytes changed: len=%d err=%v", len(afterBytes), err)
+	}
+}
+
+func TestCreateDerivedArtifactUsesParentSession(t *testing.T) {
+	server, wsp := newWorkspaceServer(t)
+	ctx := context.Background()
+	parentRel := "artifacts/SES-parent/original.png"
+	parentPath := filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(parentRel))
+	if err := os.MkdirAll(filepath.Dir(parentPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(parentPath, validTestPNG(t, 2, 2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	parent, err := wsp.DB.CreateArtifact(ctx, db.Artifact{
+		SessionID: "SES-parent", Title: "Original", Kind: db.ArtifactImage, SourcePath: parentRel,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedRel := "artifacts/staging/spoof.png"
+	stagedPath := filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(stagedRel))
+	if err := os.MkdirAll(filepath.Dir(stagedPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stagedPath, validTestPNG(t, 1, 1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(createArtifactReq{
+		SessionID: "SES-spoofed", Title: "Derived", Kind: db.ArtifactImage,
+		SourcePath: stagedRel, DerivedFromArtifactID: parent.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/artifacts", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), workspaceCtxKey, wsp))
+	rec := httptest.NewRecorder()
+	server.handleCreateArtifact(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var derived db.Artifact
+	if err := json.Unmarshal(rec.Body.Bytes(), &derived); err != nil {
+		t.Fatal(err)
+	}
+	if derived.SessionID != parent.SessionID {
+		t.Fatalf("session = %q, want %q", derived.SessionID, parent.SessionID)
+	}
+	wantPrefix := "artifacts/" + parent.SessionID + "/"
+	if !strings.HasPrefix(derived.SourcePath, wantPrefix) {
+		t.Fatalf("source path = %q, want prefix %q", derived.SourcePath, wantPrefix)
+	}
+	if _, err := os.Stat(filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(derived.SourcePath))); err != nil {
+		t.Fatalf("derived file: %v", err)
+	}
+}
+
+func TestCreateDerivedArtifactFailureRemovesStaging(t *testing.T) {
+	server, wsp := newWorkspaceServer(t)
+	ctx := context.Background()
+	nonImage, err := wsp.DB.CreateArtifact(ctx, db.Artifact{SessionID: "SES1", Title: "Text", Kind: db.ArtifactText})
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingSource, err := wsp.DB.CreateArtifact(ctx, db.Artifact{
+		SessionID: "SES1", Title: "Missing source", Kind: db.ArtifactImage,
+		SourcePath: "artifacts/SES1/missing.png",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name     string
+		parentID string
+		status   int
+	}{
+		{name: "missing parent", parentID: "missing", status: http.StatusNotFound},
+		{name: "non-image parent", parentID: nonImage.ID, status: http.StatusUnprocessableEntity},
+		{name: "missing parent source", parentID: missingSource.ID, status: http.StatusNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stagedRel := "artifacts/staging/" + strings.ReplaceAll(test.name, " ", "-") + ".png"
+			stagedPath := filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(stagedRel))
+			if err := os.MkdirAll(filepath.Dir(stagedPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(stagedPath, validTestPNG(t, 1, 1), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(createArtifactReq{
+				SessionID: "SES1", Title: "Derived", Kind: db.ArtifactImage,
+				SourcePath: stagedRel, DerivedFromArtifactID: test.parentID,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/artifacts", bytes.NewReader(body))
+			req = req.WithContext(context.WithValue(req.Context(), workspaceCtxKey, wsp))
+			rec := httptest.NewRecorder()
+			server.handleCreateArtifact(rec, req)
+			if rec.Code != test.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, test.status, rec.Body.String())
+			}
+			if _, err := os.Stat(stagedPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("staging remains: %v", err)
+			}
+		})
 	}
 }
 

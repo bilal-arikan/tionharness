@@ -7,6 +7,11 @@ import { artifactApi } from '@/api/artifacts'
 import type { Artifact } from '@/types'
 import { MAX_SOURCE_BYTES } from '@/features/image-annotator/imageAnnotatorLimits'
 import { readImageResponse } from './imageArtifactSource'
+import type {
+  AnnotatorExport,
+  DrawableSource,
+} from '@/features/image-annotator/imageAnnotatorExport'
+import { i18next } from '@/i18n'
 
 const apiMock = vi.hoisted(() => ({
   getArtifact: vi.fn(),
@@ -15,7 +20,19 @@ const apiMock = vi.hoisted(() => ({
   createArtifact: vi.fn(),
 }))
 
+let annotatorProps: null | {
+  source: DrawableSource
+  onSave(result: AnnotatorExport): Promise<void>
+  onClose(): void
+} = null
+
 vi.mock('@/api', () => ({ api: apiMock }))
+vi.mock('@/features/image-annotator/ImageAnnotator', () => ({
+  ImageAnnotator: (props: NonNullable<typeof annotatorProps>) => {
+    annotatorProps = props
+    return <div data-testid="image-annotator" />
+  },
+}))
 
 import { ArtifactPreviewModal } from './ArtifactPreviewModal'
 
@@ -33,6 +50,8 @@ const imageArtifact: Artifact = {
   updatedAt: 1,
 }
 
+const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {
@@ -46,6 +65,9 @@ describe('artifact-origin image source', () => {
   let root: Root | null
 
   beforeEach(() => {
+    void i18next.changeLanguage('tr')
+    vi.clearAllMocks()
+    annotatorProps = null
     container = document.createElement('div')
     document.body.appendChild(container)
     root = null
@@ -104,7 +126,7 @@ describe('artifact-origin image source', () => {
     const close = vi.fn()
     const onError = vi.fn()
     apiMock.getArtifactSource.mockResolvedValue(
-      new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+      new Response(pngHeader, {
         headers: { 'Content-Type': 'image/png' },
       }),
     )
@@ -139,7 +161,7 @@ describe('artifact-origin image source', () => {
   it('closes the owned bitmap exactly once when unmounted after opening', async () => {
     const close = vi.fn()
     apiMock.getArtifactSource.mockResolvedValue(
-      new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+      new Response(pngHeader, {
         headers: { 'Content-Type': 'image/png' },
       }),
     )
@@ -164,5 +186,97 @@ describe('artifact-origin image source', () => {
     })
 
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('creates and reveals a derived artifact without updating the original', async () => {
+    const close = vi.fn()
+    const onOpenFull = vi.fn()
+    apiMock.getArtifactSource.mockResolvedValue(
+      new Response(pngHeader, {
+        headers: { 'Content-Type': 'image/png' },
+      }),
+    )
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 1, height: 1, close } as ImageBitmap),
+    )
+    apiMock.uploadFile.mockResolvedValue({ relPath: 'artifacts/SES1/staged.png' })
+    apiMock.createArtifact.mockResolvedValue({ ...imageArtifact, id: 'ART2' })
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(
+        <ArtifactPreviewModal artifactId="ART1" onClose={vi.fn()} onOpenFull={onOpenFull} />,
+      )
+    })
+    await act(async () => {})
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('button[title="Orijinali koruyarak üzerine çiz"]')
+        ?.click(),
+    )
+    await act(async () => {})
+    expect(annotatorProps).not.toBeNull()
+    await act(async () =>
+      annotatorProps?.onSave({
+        blob: new Blob(['png'], { type: 'image/png' }),
+        mime: 'image/png',
+        width: 1,
+        height: 1,
+      }),
+    )
+
+    expect(apiMock.createArtifact).toHaveBeenCalledWith({
+      title: 'Kaynak — Düzenleme',
+      kind: 'image',
+      sessionId: 'SES1',
+      sourcePath: 'artifacts/SES1/staged.png',
+      origin: 'manual',
+      derivedFromArtifactId: 'ART1',
+    })
+    expect(apiMock.getArtifact).toHaveBeenCalledWith('ART1')
+    expect(apiMock.getArtifact).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledOnce()
+    expect(onOpenFull).toHaveBeenCalledWith('ART2')
+  })
+
+  it('keeps the editor open and rejects when derived artifact persistence fails', async () => {
+    const close = vi.fn()
+    const failure = new Error('DERIVED_ARTIFACT_SAVE_FAILED')
+    apiMock.getArtifactSource.mockResolvedValue(
+      new Response(pngHeader, {
+        headers: { 'Content-Type': 'image/png' },
+      }),
+    )
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 1, height: 1, close } as ImageBitmap),
+    )
+    apiMock.uploadFile.mockResolvedValue({ relPath: 'artifacts/SES1/staged.png' })
+    apiMock.createArtifact.mockRejectedValue(failure)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<ArtifactPreviewModal artifactId="ART1" onClose={vi.fn()} />)
+    })
+    await act(async () => {})
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('button[title="Orijinali koruyarak üzerine çiz"]')
+        ?.click(),
+    )
+    await act(async () => {})
+    expect(annotatorProps).not.toBeNull()
+
+    await expect(
+      annotatorProps?.onSave({
+        blob: new Blob(['png'], { type: 'image/png' }),
+        mime: 'image/png',
+        width: 1,
+        height: 1,
+      }),
+    ).rejects.toThrow('DERIVED_ARTIFACT_SAVE_FAILED')
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+    expect(close).not.toHaveBeenCalled()
   })
 })

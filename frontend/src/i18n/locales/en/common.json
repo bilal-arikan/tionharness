@@ -1,9 +1,28 @@
 {
+  "artifactAnnotation": {
+    "derivedTitle": "{{title}} — Edit",
+    "draw": "Draw on image",
+    "drawTitle": "Draw on a copy while preserving the original"
+  },
   "common": {
     "save": "Save",
     "saved": "Saved",
     "saving": "Saving…",
     "unsavedChanges": "Unsaved changes"
+  },
+  "imageAnnotator": {
+    "cancel": "Cancel",
+    "canvas": "Drawing canvas",
+    "clear": "Clear drawing",
+    "close": "Close",
+    "closeQuestion": "There are unsaved drawings. Exit without saving?",
+    "decodeError": "Image could not be opened; the file may be corrupt.",
+    "dialogLabel": "Draw on image",
+    "penSize": "Pen size",
+    "pointerCaptureError": "Pointer could not be captured. Try drawing again.",
+    "redo": "Redo",
+    "save": "Save image",
+    "undo": "Undo"
   },
   "agents": {
     "bulkEdit": {

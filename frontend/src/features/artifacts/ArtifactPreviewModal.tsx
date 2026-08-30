@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, ExternalLink, Loader2, Pencil } from 'lucide-react'
 import { api } from '@/api'
 import type { Artifact } from '@/types'
@@ -25,6 +26,7 @@ interface Props {
 // renders it via the shared ArtifactView. Escape / backdrop click closes it; the
 // header offers a shortcut to open the dedicated Artifacts screen for editing.
 export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError }: Props) {
+  const { t } = useTranslation('common')
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [loading, setLoading] = useState(true)
   const [annotatorSource, setAnnotatorSource] = useState<DrawableSource | null>(null)
@@ -92,7 +94,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
       try {
         bitmap = await createImageBitmap(blob)
       } catch {
-        throw new Error('Görsel açılamadı; dosya bozuk olabilir.')
+        throw new Error(t('imageAnnotator.decodeError'))
       }
       try {
         validateImageSource(
@@ -166,7 +168,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
               <button
                 onClick={() => void openEditor()}
                 disabled={openingEditor}
-                title="Orijinali koruyarak üzerine çiz"
+                title={t('artifactAnnotation.drawTitle')}
                 className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
               >
                 {openingEditor ? (
@@ -174,7 +176,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
                 ) : (
                   <Pencil size={14} />
                 )}
-                <span className="hidden sm:inline">Üzerine çiz</span>
+                <span className="hidden sm:inline">{t('artifactAnnotation.draw')}</span>
               </button>
             )}
             {onOpenFull && (
@@ -228,7 +230,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
               new File([blob], `${artifact.id}-derived.${extension}`, { type: mime }),
             )
             const derived = await api.createArtifact({
-              title: `${artifact.title} — Düzenleme`,
+              title: t('artifactAnnotation.derivedTitle', { title: artifact.title }),
               kind: 'image',
               sessionId: artifact.sessionId,
               sourcePath: upload.relPath,

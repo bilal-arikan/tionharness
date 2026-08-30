@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, ModalOverlay } from '@/shared/components'
 import {
   drawStrokes,
@@ -31,10 +32,11 @@ interface Props {
   onClose(): void
 }
 
-const closeQuestion = 'Kaydedilmemiş çizimler var. Kaydetmeden çıkılsın mı?'
-
 export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }: Props) {
+  const { t } = useTranslation('common')
+  const defaultPenWidth = Math.max(2, source.width / 300)
   const [model, setModel] = useState(() => createDrawingModel(initialStrokes))
+  const [penWidth, setPenWidth] = useState(defaultPenWidth)
   const modelRef = useRef(model)
   const [baseline, setBaseline] = useState(() => snapshot(createDrawingModel(initialStrokes)))
   const [error, setError] = useState<string | null>(null)
@@ -133,8 +135,8 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
   }
 
   const close = useCallback(() => {
-    if (!dirty || window.confirm(closeQuestion)) onClose()
-  }, [dirty, onClose])
+    if (!dirty || window.confirm(t('imageAnnotator.closeQuestion'))) onClose()
+  }, [dirty, onClose, t])
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -184,41 +186,55 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="Görsel üzerine çiz"
+        aria-label={t('imageAnnotator.dialogLabel')}
         className="flex h-[min(90vh,900px)] w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]"
       >
         <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-3">
           <Button
-            aria-label="Geri al"
+            aria-label={t('imageAnnotator.undo')}
             disabled={!model.undo.length || !!model.active}
             onClick={() => apply(undo(modelRef.current))}
           >
-            Geri al
+            {t('imageAnnotator.undo')}
           </Button>
           <Button
-            aria-label="Yinele"
+            aria-label={t('imageAnnotator.redo')}
             disabled={!model.redo.length || !!model.active}
             onClick={() => apply(redo(modelRef.current))}
           >
-            Yinele
+            {t('imageAnnotator.redo')}
           </Button>
           <Button
-            aria-label="Çizimi temizle"
+            aria-label={t('imageAnnotator.clear')}
             disabled={!model.strokes.length || !!model.active}
             onClick={() => apply(clear(modelRef.current))}
           >
-            Temizle
+            {t('imageAnnotator.clear')}
           </Button>
+          <label className="flex items-center gap-2 text-sm" htmlFor="image-annotator-pen-width">
+            {t('imageAnnotator.penSize')}
+            <input
+              id="image-annotator-pen-width"
+              aria-label={t('imageAnnotator.penSize')}
+              type="range"
+              min={Math.max(1, defaultPenWidth / 2)}
+              max={Math.max(12, defaultPenWidth * 4)}
+              step={Math.max(0.5, defaultPenWidth / 4)}
+              value={penWidth}
+              onChange={(event) => setPenWidth(Number(event.currentTarget.value))}
+              aria-valuetext={`${penWidth}px`}
+            />
+          </label>
           <span className="flex-1" />
-          <Button aria-label="Kapat" onClick={close}>
-            Vazgeç
+          <Button aria-label={t('imageAnnotator.close')} onClick={close}>
+            {t('imageAnnotator.cancel')}
           </Button>
           <Button
-            aria-label="Görseli kaydet"
+            aria-label={t('imageAnnotator.save')}
             disabled={!dirty || saving}
             onClick={() => void save()}
           >
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </header>
         {error && (
@@ -226,10 +242,10 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
             {error}
           </p>
         )}
-        <div className="min-h-0 flex-1 bg-black/20 p-2">
+        <div className="min-h-0 flex-1 bg-transparent p-2" data-testid="drawing-viewport">
           <canvas
             ref={canvasRef}
-            aria-label="Çizim alanı"
+            aria-label={t('imageAnnotator.canvas')}
             className="mx-auto block h-full max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
             style={{ touchAction: 'none', aspectRatio: `${source.width} / ${source.height}` }}
             onPointerDown={(event) => {
@@ -238,7 +254,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
               try {
                 event.currentTarget.setPointerCapture(event.pointerId)
               } catch {
-                setError('İşaretçi yakalanamadı. Çizimi yeniden deneyin.')
+                setError(t('imageAnnotator.pointerCaptureError'))
                 return
               }
               activePointerRef.current = event.pointerId
@@ -246,7 +262,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
                 modelRef.current,
                 pointFromEvent(event),
                 '#ef4444',
-                Math.max(2, source.width / 300),
+                penWidth,
               )
               apply(result.model, result.warning)
               if (!result.model.active) activePointerRef.current = null
