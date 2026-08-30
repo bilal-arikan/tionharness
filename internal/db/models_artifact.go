@@ -45,6 +45,10 @@ type Artifact struct {
 	// artifacts). It dedups repeated writes of the same file within a session.
 	SourcePath string `json:"sourcePath,omitempty"`
 
+	// DerivedFromArtifactID links an immutable derived artifact to its source.
+	// Empty keeps legacy artifact JSON fully compatible.
+	DerivedFromArtifactID string `json:"derivedFromArtifactId,omitempty"`
+
 	// ContentFile is the workspace-relative path (artifacts/<id><ext>) of the
 	// real file holding a text artifact's body. When set, the body lives on disk
 	// (not embedded in this JSON) and is read back into Content on load. Empty for

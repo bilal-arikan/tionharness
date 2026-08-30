@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
-import { X, ExternalLink, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, ExternalLink, Loader2, Pencil } from 'lucide-react'
 import { api } from '@/api'
 import type { Artifact } from '@/types'
 import { ModalOverlay } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
 import { KIND_ICON, KIND_LABEL } from './artifactMeta'
 import { OriginBadge } from './OriginBadge'
+import { ImageAnnotator } from '@/features/image-annotator/ImageAnnotator'
+import type { DrawableSource } from '@/features/image-annotator/imageAnnotatorExport'
+import { validateImageSource } from '@/features/image-annotator/imageAnnotatorLimits'
+import { readImageResponse } from './imageArtifactSource'
 
 interface Props {
   artifactId: string
@@ -23,6 +27,27 @@ interface Props {
 export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError }: Props) {
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [loading, setLoading] = useState(true)
+  const [annotatorSource, setAnnotatorSource] = useState<DrawableSource | null>(null)
+  const [openingEditor, setOpeningEditor] = useState(false)
+  const editorGenerationRef = useRef(0)
+  const editorAbortRef = useRef<AbortController | null>(null)
+  const bitmapRef = useRef<ImageBitmap | null>(null)
+
+  const closeBitmap = () => {
+    const bitmap = bitmapRef.current
+    bitmapRef.current = null
+    bitmap?.close()
+  }
+
+  useEffect(
+    () => () => {
+      editorGenerationRef.current += 1
+      editorAbortRef.current?.abort()
+      editorAbortRef.current = null
+      closeBitmap()
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +70,74 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
   }, [artifactId, onError])
 
   const Icon = artifact ? KIND_ICON[artifact.kind] : null
+
+  const openEditor = async () => {
+    if (!artifact || artifact.kind !== 'image' || !artifact.sourcePath) return
+    editorAbortRef.current?.abort()
+    const controller = new AbortController()
+    editorAbortRef.current = controller
+    const generation = ++editorGenerationRef.current
+    setOpeningEditor(true)
+    let bitmap: ImageBitmap | null = null
+    try {
+      const response = await api.getArtifactSource(artifact.id, controller.signal)
+      const declaredLength = Number(response.headers.get('Content-Length') || '0')
+      const bytes = await readImageResponse(response)
+      const mime = response.headers.get('Content-Type')?.split(';')[0].trim() || ''
+      const imageBuffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer
+      const blob = new Blob([imageBuffer], { type: mime })
+      try {
+        bitmap = await createImageBitmap(blob)
+      } catch {
+        throw new Error('Görsel açılamadı; dosya bozuk olabilir.')
+      }
+      try {
+        validateImageSource(
+          mime,
+          bytes,
+          bitmap.width,
+          bitmap.height,
+          declaredLength || bytes.length,
+        )
+      } catch (error) {
+        bitmap.close()
+        bitmap = null
+        throw error
+      }
+      if (generation !== editorGenerationRef.current) {
+        bitmap.close()
+        bitmap = null
+        return
+      }
+      closeBitmap()
+      bitmapRef.current = bitmap
+      const drawableBitmap = bitmap
+      setAnnotatorSource({
+        width: bitmap.width,
+        height: bitmap.height,
+        opaque: mime === 'image/jpeg',
+        draw: (ctx) => ctx.drawImage(drawableBitmap, 0, 0),
+      })
+      bitmap = null
+    } catch (error) {
+      bitmap?.close()
+      if (generation === editorGenerationRef.current && !controller.signal.aborted)
+        onError?.((error as Error).message)
+    } finally {
+      if (generation === editorGenerationRef.current) {
+        editorAbortRef.current = null
+        setOpeningEditor(false)
+      }
+    }
+  }
+
+  const closeEditor = () => {
+    closeBitmap()
+    setAnnotatorSource(null)
+  }
 
   return (
     <ModalOverlay onClose={onClose} className="backdrop-blur-sm">
@@ -69,6 +162,21 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {artifact?.kind === 'image' && artifact.sourcePath && (
+              <button
+                onClick={() => void openEditor()}
+                disabled={openingEditor}
+                title="Orijinali koruyarak üzerine çiz"
+                className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-50"
+              >
+                {openingEditor ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Pencil size={14} />
+                )}
+                <span className="hidden sm:inline">Üzerine çiz</span>
+              </button>
+            )}
             {onOpenFull && (
               <button
                 onClick={() => onOpenFull(artifactId)}
@@ -109,6 +217,29 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
           )}
         </div>
       </div>
+      {artifact && annotatorSource && (
+        <ImageAnnotator
+          source={annotatorSource}
+          onClose={closeEditor}
+          onSave={async ({ blob, mime }) => {
+            const extension = mime === 'image/webp' ? 'webp' : 'png'
+            const upload = await api.uploadFile(
+              artifact.sessionId || '_shared',
+              new File([blob], `${artifact.id}-derived.${extension}`, { type: mime }),
+            )
+            const derived = await api.createArtifact({
+              title: `${artifact.title} — Düzenleme`,
+              kind: 'image',
+              sessionId: artifact.sessionId,
+              sourcePath: upload.relPath,
+              origin: 'manual',
+              derivedFromArtifactId: artifact.id,
+            })
+            closeEditor()
+            onOpenFull?.(derived.id)
+          }}
+        />
+      )}
     </ModalOverlay>
   )
 }

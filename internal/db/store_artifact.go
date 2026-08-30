@@ -2,10 +2,16 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+)
+
+var (
+	ErrArtifactParentNotFound = errors.New("artifact parent not found")
+	ErrArtifactParentNotImage = errors.New("artifact parent is not an image")
 )
 
 // ---- Artifacts ----
@@ -97,6 +103,38 @@ func (d *DB) CreateArtifact(ctx context.Context, a Artifact) (Artifact, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return a, d.persistArtifactLocked(&a)
+}
+
+// CreateDerivedArtifact validates and persists a derived image while holding the
+// artifact store lock. prepare receives the reserved immutable artifact ID and
+// must atomically place the file at its returned workspace-relative path. Its
+// cleanup callback runs if JSON persistence fails.
+func (d *DB) CreateDerivedArtifact(ctx context.Context, a Artifact, prepare func(string, Artifact) (string, func() error, error)) (Artifact, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	parent, ok := d.artifacts[a.DerivedFromArtifactID]
+	if !ok {
+		return Artifact{}, ErrArtifactParentNotFound
+	}
+	if parent.Kind != ArtifactImage || parent.SourcePath == "" {
+		return Artifact{}, ErrArtifactParentNotImage
+	}
+	a.ID = d.nextID(idArtifact)
+	a.CreatedAt = now()
+	a.UpdatedAt = a.CreatedAt
+	a.Kind = ArtifactImage
+	rel, cleanup, err := prepare(a.ID, parent)
+	if err != nil {
+		return Artifact{}, err
+	}
+	a.SourcePath = rel
+	if err := d.persistArtifactLocked(&a); err != nil {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			return Artifact{}, fmt.Errorf("persist derived artifact: %w; orphan cleanup: %v", err, cleanupErr)
+		}
+		return Artifact{}, err
+	}
+	return a, nil
 }
 
 // GetArtifact loads an artifact by id.
