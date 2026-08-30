@@ -21,6 +21,7 @@ import { SessionProcessCard } from './SessionProcessCard'
 import { SessionContextUsage } from './SessionContextUsage'
 import { SessionAgentsSection } from './SessionAgentsSection'
 import { SessionUsageCard } from './SessionUsageCard'
+import { SessionExecutionCard } from './SessionExecutionCard'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
@@ -463,6 +464,10 @@ export function SessionDetailPanel({
               />
               <Row label="Mesaj sayısı" value={String(info.messageCount)} />
             </Section>
+
+            {(info.executionType === 'subagent' || info.category === 'subagent') && (
+              <SessionExecutionCard info={info} />
+            )}
 
             {/* Context window usage (/context-style) */}
             <SessionContextUsage

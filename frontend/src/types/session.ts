@@ -297,6 +297,23 @@ export interface SessionInfo {
   agentName: string
   messageCount: number
   unread: boolean
+  executionType?: string
+  category?: string
+  contextMode?: string
+  targetProfile?: string
+  targetAgentId?: string
+  runState?: string
+  runStateAt?: number
+  terminal?: boolean
+  durationMs?: number
+  inputTokens?: number
+  outputTokens?: number
+  toolCallCount?: number
+  stopReason?: string
+  // Stable machine reason only. Backend deliberately excludes raw error text and
+  // tool payloads from this detail surface.
+  errorSummary?: string
+  persistedSteps?: number
   // Free-form labels (also drive tag-triggered automations).
   tags?: string[]
   // Context-reset lineage: the session this one continues (born from /handoff)

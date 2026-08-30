@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -23,11 +25,26 @@ type sessionInfoResp struct {
 	State string `json:"state"`
 	// Pinned floats the session to the top of the sidebar list; the info panel
 	// owns the toggle, so it needs the current value to label the button.
-	Pinned       bool   `json:"pinned"`
-	AgentID      string `json:"agentId"`
-	AgentName    string `json:"agentName"`
-	MessageCount int    `json:"messageCount"`
-	Unread       bool   `json:"unread"`
+	Pinned         bool   `json:"pinned"`
+	AgentID        string `json:"agentId"`
+	AgentName      string `json:"agentName"`
+	MessageCount   int    `json:"messageCount"`
+	Unread         bool   `json:"unread"`
+	ExecutionType  string `json:"executionType,omitempty"`
+	Category       string `json:"category,omitempty"`
+	ContextMode    string `json:"contextMode,omitempty"`
+	TargetProfile  string `json:"targetProfile,omitempty"`
+	TargetAgentID  string `json:"targetAgentId,omitempty"`
+	RunState       string `json:"runState,omitempty"`
+	RunStateAt     int64  `json:"runStateAt,omitempty"`
+	Terminal       bool   `json:"terminal"`
+	DurationMs     int64  `json:"durationMs"`
+	InputTokens    int    `json:"inputTokens"`
+	OutputTokens   int    `json:"outputTokens"`
+	ToolCallCount  int    `json:"toolCallCount"`
+	StopReason     string `json:"stopReason,omitempty"`
+	ErrorSummary   string `json:"errorSummary,omitempty"`
+	PersistedSteps int    `json:"persistedSteps"`
 	// Context-reset lineage: the session this one continues (if born from a
 	// /handoff) and the handoff artifact written into this session at reset.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
@@ -199,6 +216,15 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		AgentID:                  session.AgentID,
 		MessageCount:             session.MessageCount,
 		Unread:                   session.Unread,
+		ExecutionType:            session.ExecutionType,
+		Category:                 session.Category,
+		ContextMode:              session.ContextMode,
+		TargetProfile:            session.TargetProfile,
+		TargetAgentID:            session.TargetAgentID,
+		RunState:                 session.RunState,
+		RunStateAt:               session.RunStateAt,
+		Terminal:                 terminalRunState(session.RunState),
+		ToolCallCount:            session.ToolCallCount,
 		Tags:                     session.Tags,
 		ParentSessionID:          session.ParentSessionID,
 		HandoffArtifactID:        session.HandoffArtifactID,
@@ -215,6 +241,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		SummaryMsgCount:          session.SummaryMsgCount,
 		SummaryTokens:            conversation.EstimateText(session.Summary),
 	}
+	applyExecutionObservability(&resp, history)
 
 	// On-disk footprint: walk the session's folder.
 	if dir, err := wsp.DB.SessionDir(id); err == nil {
@@ -296,6 +323,82 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	resp.WarmCLIProcess = wsp.Runtime.HasWarmCLISession(id)
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// applyExecutionObservability derives safe, persisted execution facts from the
+// transcript. It never returns tool inputs/outputs or free-form error text: child
+// sessions are internal and their detail endpoint must not become a secret leak.
+func applyExecutionObservability(resp *sessionInfoResp, history []db.Message) {
+	for _, message := range history {
+		if message.Role != "assistant" {
+			continue
+		}
+		resp.DurationMs += message.DurationMs
+		if message.Usage != nil {
+			resp.InputTokens += message.Usage.InputTokens
+			resp.OutputTokens += message.Usage.OutputTokens
+		}
+		if message.StopReason != "" {
+			resp.StopReason = message.StopReason
+		}
+		if message.Steps == "" || message.Steps == "[]" {
+			continue
+		}
+		var steps []agent.TurnStep
+		if err := json.Unmarshal([]byte(message.Steps), &steps); err != nil {
+			// A malformed persisted trace is observable instead of silently ignored.
+			resp.ErrorSummary = "persisted_steps_invalid"
+			continue
+		}
+		resp.PersistedSteps += countPersistedSteps(steps)
+		if summary := lastStepErrorSummary(steps); summary != "" {
+			resp.ErrorSummary = summary
+		}
+	}
+}
+
+func lastStepErrorSummary(steps []agent.TurnStep) string {
+	last := ""
+	for _, step := range steps {
+		if step.Kind == agent.StepError && step.Reason != "" {
+			last = safeStepErrorSummary(step.Reason)
+		}
+		if nested := lastStepErrorSummary(step.SubSteps); nested != "" {
+			last = nested
+		}
+	}
+	return last
+}
+
+// safeStepErrorSummary only exposes stable reason tags emitted by trusted code.
+// Persisted traces may be corrupted or attacker-controlled, so unknown values
+// collapse to a fixed summary instead of reflecting free-form content.
+func safeStepErrorSummary(reason string) string {
+	switch reason {
+	case "permission_denied", "provider_error", "user_stopped", "stopped",
+		"turn_hard_timeout", "turn_idle_timeout", "flow_setup", "flow_failure",
+		"mcp_repair", "mcp_args", "refusal":
+		return reason
+	default:
+		return "persisted_step_error"
+	}
+}
+
+func countPersistedSteps(steps []agent.TurnStep) int {
+	total := len(steps)
+	for _, step := range steps {
+		total += countPersistedSteps(step.SubSteps)
+	}
+	return total
+}
+
+func terminalRunState(state string) bool {
+	switch state {
+	case "completed", "failed", "killed", "timeout", "incomplete":
+		return true
+	default:
+		return false
+	}
 }
 
 // dirSize walks a folder, returning total bytes and regular-file count.

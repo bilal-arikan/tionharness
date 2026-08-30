@@ -106,9 +106,14 @@ export function SessionTitleBlock({
           onClick={() => onSelectSession?.(info.parentSessionId!)}
           disabled={!onSelectSession}
           className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:cursor-default disabled:hover:text-[var(--color-text-dim)]"
-          title="Bu oturum bir context reset (handoff) ile önceki oturumdan devraldı"
+          title={
+            info.executionType === 'subagent'
+              ? 'Bu alt-ajan oturumunu başlatan parent oturum'
+              : 'Bu oturum bir context reset (handoff) ile önceki oturumdan devraldı'
+          }
         >
-          ↩ Devraldığı oturum: <span className="font-mono">{info.parentSessionId}</span>
+          ↩ {info.executionType === 'subagent' ? 'Parent oturum' : 'Devraldığı oturum'}:{' '}
+          <span className="font-mono">{info.parentSessionId}</span>
         </button>
       )}
     </div>

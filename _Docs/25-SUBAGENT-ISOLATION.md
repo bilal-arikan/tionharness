@@ -358,6 +358,17 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
    (`toolloop.go fillCancelledResults` zaten var).
 6. **Profil kaynağı:** önce kod sabiti (A2.1), sonra `settings.json`.
 
+## Kalıcı child session gözlemlenebilirliği (2026-08-30)
+
+Kalıcı `subagent` session detayında hedef (`targetProfile` / `targetAgentId`),
+`contextMode`, parent bağlantısı, `executionType` / `category`, `runState` ve
+terminal işareti gösterilir. Assistant mesajlarından süre, giriş/çıkış tokenları,
+stop reason ve kalıcı `TurnStep` sayısı türetilir; session header'daki araç çağrı
+sayısı aynı kartta sunulur. Hata özeti yalnız kararlı `TurnStep.reason` değeridir.
+Ham hata metni ile tool input/output detail API'ye kopyalanmaz; internal child
+transcript görünürlüğü böylece genişlemez. Legacy session alanları ve handoff parent
+bağlantısı korunur.
+
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)
