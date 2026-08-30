@@ -12,6 +12,14 @@ export interface Session {
   // Broad category of what produced the transcript: chat | task | flow |
   // schedule. Drives the executions feed's kind badge.
   kind: string
+  // Stable execution classification. New UI classification must prefer these
+  // fields over legacy kind; old persisted sessions may omit both.
+  executionType?: string
+  category?: string
+  contextMode?: string
+  visibility?: string
+  targetProfile?: string
+  targetAgentId?: string
   // Links the session to the entity that owns it (a task or flow id); empty for
   // plain chat and agent-keyed kinds (schedule).
   sourceId?: string

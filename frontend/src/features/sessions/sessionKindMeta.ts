@@ -8,6 +8,7 @@ import {
   Compass,
   Zap,
   Telescope,
+  Bot,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -33,6 +34,7 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   // 'automation-run', same rationale.
   'schedule-run': { label: 'Otomasyon', icon: Clock },
   spawned: { label: 'Spawn', icon: Sparkles },
+  subagent: { label: 'Subagent', icon: Bot },
   // A flow's coordinator node opens one of these per run (see internal/agent/
   // flow_coordinator.go); its workers hang off it like any coordinator's.
   'flow-coordinator': { label: 'Akış Koordinatörü', icon: Compass },
@@ -50,6 +52,7 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
 // default, so the sidebar shows everything and the user unticks what they don't
 // want to see.
 export const WORKER_CHIP = 'worker'
+export const SUBAGENT_CHIP = 'subagent'
 export const ARCHIVED_CHIP = 'archived'
 export const OTHER_CHIP = 'other'
 
@@ -58,6 +61,7 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'task', label: 'Görev' },
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
+  { key: SUBAGENT_CHIP, label: 'Subagent Oturumları' },
   // Cron schedules are time-triggered automations, so the chip unifies both
   // kinds under one "Otomasyon" label (matching the management screen's umbrella
   // naming). The per-row icon still distinguishes them (Clock vs Zap).
@@ -131,16 +135,36 @@ export function kindChipKey(kind: string): string {
   return SESSION_CHIPS.some((c) => c.key === kind) ? kind : OTHER_CHIP
 }
 
+// sessionChipKey classifies new sessions by stable metadata first. Legacy
+// sessions retain their old kind-based placement when those fields are absent.
+export function sessionChipKey(s: {
+  kind: string
+  category?: string
+  executionType?: string
+}): string {
+  if (s.category === 'subagent') return SUBAGENT_CHIP
+  if (s.category && ALL_SESSION_CHIPS.includes(s.category)) return s.category
+  if (s.executionType === 'subagent') return SUBAGENT_CHIP
+  if (s.executionType && ALL_SESSION_CHIPS.includes(s.executionType)) return s.executionType
+  return kindChipKey(s.kind)
+}
+
 // sessionMatchesChips reports whether a session survives the sidebar's chip
 // selection: its kind chip must be on, and a worker/archived session also needs
 // its scope chip on.
 export function sessionMatchesChips(
-  s: { kind: string; isWorker: boolean; isArchived: boolean },
+  s: {
+    kind: string
+    category?: string
+    executionType?: string
+    isWorker: boolean
+    isArchived: boolean
+  },
   selected: ReadonlySet<string>,
 ): boolean {
   if (s.isArchived && !selected.has(ARCHIVED_CHIP)) return false
   if (s.isWorker && !selected.has(WORKER_CHIP)) return false
-  return selected.has(kindChipKey(s.kind))
+  return selected.has(sessionChipKey(s))
 }
 
 export function kindMeta(kind: string) {

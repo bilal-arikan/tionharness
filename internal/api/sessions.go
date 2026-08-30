@@ -76,7 +76,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		sessions = []db.Session{}
 	}
 
-	// Filters: kind (chat|spawned|worker|flow|task|schedule) and state
+	// Filters: kind (legacy producer kind), category, executionType and state
 	// (active|archived). With any of limit/offset/sort present the response is
 	// the standard {items,total,offset,limit,hasMore} envelope; without them it
 	// stays the legacy full unwrapped list so existing UI clients keep working.
@@ -86,10 +86,18 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := strings.TrimSpace(q.Get("kind"))
+	category := strings.TrimSpace(q.Get("category"))
+	executionType := strings.TrimSpace(q.Get("executionType"))
 	state := strings.TrimSpace(q.Get("state"))
 	matches := make([]db.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if kind != "" && s.Kind != kind {
+			continue
+		}
+		if category != "" && s.Category != category {
+			continue
+		}
+		if executionType != "" && s.ExecutionType != executionType {
 			continue
 		}
 		if state != "" && s.State != state {

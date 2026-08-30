@@ -34,6 +34,8 @@ import {
   SESSION_CHIPS_OFF_KEY,
   sessionMatchesChips,
   WORKER_CHIP,
+  SUBAGENT_CHIP,
+  sessionChipKey,
 } from './sessionKindMeta'
 import { RunStateBadge, StatusPill } from './sessionKindBadges'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
@@ -166,6 +168,17 @@ export function SessionsSidebar({
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
 
+  const chipCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const s of sessions) {
+      const key = sessionChipKey(s)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      if (isWorkerSession(s)) counts.set(WORKER_CHIP, (counts.get(WORKER_CHIP) ?? 0) + 1)
+      if (s.state === 'archived') counts.set(ARCHIVED_CHIP, (counts.get(ARCHIVED_CHIP) ?? 0) + 1)
+    }
+    return counts
+  }, [sessions])
+
   // coordinatorSessionId → how many of its DIRECT workers have a live turn. A
   // coordinator usually sits idle while its branch works, so without this the row
   // looks finished while the tree is still busy. Counting direct children only
@@ -194,6 +207,8 @@ export function SessionsSidebar({
     for (const s of sessions) {
       const shape = {
         kind: s.kind,
+        category: s.category,
+        executionType: s.executionType,
         isWorker: isWorkerSession(s),
         isArchived: s.state === 'archived',
       }
@@ -341,15 +356,25 @@ export function SessionsSidebar({
 
       {/* Multi-select chips: every session kind plus the Worker and Arşiv scopes.
           All start selected — unticking a chip hides that slice. */}
+      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">
+        Yüklenenlerde
+      </div>
       <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
         {SESSION_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
-          const Icon = f.key === WORKER_CHIP ? Users : f.key === ARCHIVED_CHIP ? Archive : null
+          const Icon =
+            f.key === WORKER_CHIP
+              ? Users
+              : f.key === ARCHIVED_CHIP
+                ? Archive
+                : f.key === SUBAGENT_CHIP
+                  ? Sparkles
+                  : null
           return (
             <button
               key={f.key}
               onClick={(e) => clickChip(f.key, e)}
-              title={`${f.label} — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
+              title={`${f.label}: yüklenen ${sessions.length} oturumda ${chipCounts.get(f.key) ?? 0} — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
@@ -360,6 +385,7 @@ export function SessionsSidebar({
             >
               {Icon && <Icon size={11} />}
               {f.label}
+              <span className="opacity-60">{chipCounts.get(f.key) ?? 0}</span>
             </button>
           )
         })}
@@ -392,7 +418,7 @@ export function SessionsSidebar({
                 // Its own turn is idle, but workers below it are running.
                 const liveWorkers = liveWorkerCounts.get(s.id) ?? 0
                 const hasDraft = draftIds.has(s.id)
-                const meta = kindMeta(s.kind)
+                const meta = kindMeta(sessionChipKey(s))
                 const KindIcon = meta.icon
                 const isSelected = sel.isSelected(s.id)
                 return (

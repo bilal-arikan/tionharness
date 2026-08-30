@@ -3,8 +3,6 @@ export function shouldShowSessionsLoadMore({
   hasMoreSessions,
   canLoadMore,
   query,
-  hasActiveChipFilters,
-  filteredSessionCount,
 }: {
   loading: boolean
   hasMoreSessions: boolean
@@ -13,11 +11,5 @@ export function shouldShowSessionsLoadMore({
   hasActiveChipFilters: boolean
   filteredSessionCount: number
 }) {
-  return (
-    !loading &&
-    hasMoreSessions &&
-    canLoadMore &&
-    query.trim().length < 2 &&
-    (!hasActiveChipFilters || filteredSessionCount > 100)
-  )
+  return !loading && hasMoreSessions && canLoadMore && query.trim().length < 2
 }

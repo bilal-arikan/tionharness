@@ -15,31 +15,12 @@ describe('shouldShowSessionsLoadMore', () => {
     expect(shouldShowSessionsLoadMore(visibleState)).toBe(true)
   })
 
-  it('is hidden when active chip filters leave no rendered sessions', () => {
+  it('stays visible for a filtered page with few local matches while server has more', () => {
     expect(
       shouldShowSessionsLoadMore({
         ...visibleState,
         hasActiveChipFilters: true,
-      }),
-    ).toBe(false)
-  })
-
-  it('is hidden when active chip filters leave 100 or fewer rendered sessions', () => {
-    expect(
-      shouldShowSessionsLoadMore({
-        ...visibleState,
-        hasActiveChipFilters: true,
-        filteredSessionCount: 100,
-      }),
-    ).toBe(false)
-  })
-
-  it('stays visible when active chip filters leave more than 100 rendered sessions', () => {
-    expect(
-      shouldShowSessionsLoadMore({
-        ...visibleState,
-        hasActiveChipFilters: true,
-        filteredSessionCount: 101,
+        filteredSessionCount: 1,
       }),
     ).toBe(true)
   })
@@ -54,5 +35,18 @@ describe('shouldShowSessionsLoadMore', () => {
 
   it('requires a load-more callback', () => {
     expect(shouldShowSessionsLoadMore({ ...visibleState, canLoadMore: false })).toBe(false)
+  })
+
+  it('stays available across consecutive pages without local matches until server ends', () => {
+    const pageStates = [true, true, false].map((hasMoreSessions) =>
+      shouldShowSessionsLoadMore({
+        ...visibleState,
+        hasMoreSessions,
+        hasActiveChipFilters: true,
+        filteredSessionCount: 0,
+      }),
+    )
+
+    expect(pageStates).toEqual([true, true, false])
   })
 })
