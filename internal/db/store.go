@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // ---- Agents ----
@@ -420,6 +422,58 @@ func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
 	return d.createSessionLocked(s)
 }
 
+// CreateChildSession validates and atomically creates an execution child linked
+// to an existing parent. It is the sole creation path for delegated executions.
+func (d *DB) CreateChildSession(ctx context.Context, s Session) (Session, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if strings.TrimSpace(s.ParentSessionID) == "" {
+		return Session{}, fmt.Errorf("child session requires parentSessionId")
+	}
+	if _, ok := d.sessions[s.ParentSessionID]; !ok {
+		return Session{}, fmt.Errorf("parent session %q: %w", s.ParentSessionID, ErrNotFound)
+	}
+	if err := validateSessionMeta(s); err != nil {
+		return Session{}, err
+	}
+	return d.createSessionLocked(s)
+}
+
+func validateSessionMeta(s Session) error {
+	if err := validateSessionEnums(s); err != nil {
+		return err
+	}
+	if (s.TargetProfile == "") == (s.TargetAgentID == "") {
+		return fmt.Errorf("child session requires exactly one targetProfile or targetAgentId")
+	}
+	return nil
+}
+
+func validateSessionEnums(s Session) error {
+	if !oneOf(s.ExecutionType, ExecutionInteractive, ExecutionSubagent, ExecutionWorker, ExecutionFlow, ExecutionSchedule, ExecutionAutomation, ExecutionSystem) {
+		return fmt.Errorf("invalid executionType %q", s.ExecutionType)
+	}
+	if !oneOf(s.Category, CategoryChat, CategorySubagent, CategoryWorker, CategoryFlow, CategoryAutomation, CategorySystem) {
+		return fmt.Errorf("invalid category %q", s.Category)
+	}
+	if !oneOf(s.ContextMode, ContextIsolated, ContextInherited) {
+		return fmt.Errorf("invalid contextMode %q", s.ContextMode)
+	}
+	if !oneOf(s.Visibility, VisibilityUser, VisibilityInternal) {
+		return fmt.Errorf("invalid visibility %q", s.Visibility)
+	}
+	return nil
+}
+
+func oneOf(v string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if v == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *DB) createSessionLocked(s Session) (Session, error) {
 	s.ID = d.nextID(idSession)
 	s.CreatedAt = now()
@@ -429,6 +483,10 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	}
 	if s.State == "" {
 		s.State = "active"
+	}
+	s = normalizeSessionMeta(s)
+	if err := validateSessionEnums(s); err != nil {
+		return Session{}, err
 	}
 	if s.SchemaVersion == 0 {
 		s.SchemaVersion = SessionSchemaVersion
@@ -460,6 +518,37 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	}
 	d.messages[s.ID] = nil
 	return s, d.persistSessionLocked(s)
+}
+
+func normalizeSessionMeta(s Session) Session {
+	if s.ExecutionType == "" {
+		s.ExecutionType = ExecutionInteractive
+		if s.Kind == "worker" {
+			s.ExecutionType = ExecutionWorker
+		}
+		if s.Kind == "flow" {
+			s.ExecutionType = ExecutionFlow
+		}
+		if s.Kind == "schedule" {
+			s.ExecutionType = ExecutionSchedule
+		}
+	}
+	if s.Category == "" {
+		s.Category = CategoryChat
+		if s.Kind == "worker" {
+			s.Category = CategoryWorker
+		}
+		if s.Kind == "flow" {
+			s.Category = CategoryFlow
+		}
+	}
+	if s.ContextMode == "" {
+		s.ContextMode = ContextIsolated
+	}
+	if s.Visibility == "" {
+		s.Visibility = VisibilityUser
+	}
+	return s
 }
 
 func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error) {
@@ -922,7 +1011,7 @@ func (d *DB) GetSession(ctx context.Context, id string) (Session, error) {
 	if !ok {
 		return Session{}, ErrNotFound
 	}
-	return s, nil
+	return normalizeSessionMeta(s), nil
 }
 
 // ListSessions returns sessions for an agent (or all if agentID is empty),
@@ -932,6 +1021,7 @@ func (d *DB) ListSessions(ctx context.Context, agentID string) ([]Session, error
 	defer d.mu.RUnlock()
 	out := make([]Session, 0, len(d.sessions))
 	for _, s := range d.sessions {
+		s = normalizeSessionMeta(s)
 		if agentID == "" || s.AgentID == agentID {
 			out = append(out, s)
 		}

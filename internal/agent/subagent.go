@@ -3,10 +3,12 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/prompts"
@@ -256,6 +258,11 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Async mode: detach into a persistent background session (fire-and-forget).
 	// Only real agents reach here (the ephemeral case was rejected by Guard 4).
 	if spec.Wait == "async" {
+		parentID := SessionIDFrom(ctx)
+		if parentID == "" {
+			return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
+		}
+		childMeta := subagentSessionMeta(parentID, agent, ephemeral, spec)
 		// The detached session inherits the caller's turn directory. A sync subagent
 		// already runs in it (it shares this context); an async one used to fall back
 		// to the workspace default and quietly work on the wrong repository.
@@ -264,6 +271,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 			CreatedBy:     caller.ID,
 			WorkingDir:    r.effectiveWorkDir(ctx),
 			NoQueue:       true,
+			ChildSession:  &childMeta,
 		})
 		if err != nil {
 			return tools.RunAgentResult{}, err
@@ -285,6 +293,19 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		visited: childVisited,
 		calls:   cur.calls,
 	})
+	parentID := SessionIDFrom(ctx)
+	if parentID == "" {
+		return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
+	}
+	child, err := r.db.CreateChildSession(ctx, subagentSessionMeta(parentID, agent, ephemeral, spec))
+	if err != nil {
+		return tools.RunAgentResult{}, err
+	}
+	childCtx = WithSessionID(childCtx, child.ID)
+	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: strings.TrimSpace(spec.Task)}); err != nil {
+		return tools.RunAgentResult{}, err
+	}
+	_ = r.db.SetSessionRunState(ctx, child.ID, "running", time.Now().Unix())
 
 	// Build the request: a clean isolated context (default) or the caller's
 	// conversation (inherited). Isolation is the whole point — the subagent works
@@ -331,9 +352,30 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 
 	// Run in an isolated trace. autonomous=true keeps it headless (interactive
 	// tools like ask_user no-op) and enforces the caller's daily budget.
+	started := time.Now()
 	resp, steps, err := r.completeTraced(WithCallKind(childCtx, KindSubagent), agent, provider, req, true, onStep)
 	if err != nil {
+		state := "failed"
+		if errors.Is(err, context.Canceled) {
+			state = "killed"
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			state = "timeout"
+		}
+		summary := "subagent failed (" + string(classifyProviderError(err)) + ")"
+		if persistErr := r.recordChildAssistantMessage(ctx, child.ID, agent.ID, summary, steps, nil, time.Since(started).Milliseconds(), state); persistErr != nil {
+			return tools.RunAgentResult{}, fmt.Errorf("subagent %q failed: %w (persist transcript: %v)", agent.Name, err, persistErr)
+		}
 		return tools.RunAgentResult{}, fmt.Errorf("subagent %q failed: %w", agent.Name, err)
+	}
+	meta := &turnMeta{}
+	meta.capture(resp)
+	state := "completed"
+	if resp.StopReason == providers.StopMaxTok {
+		state = "incomplete"
+	}
+	if err := r.recordChildAssistantMessage(ctx, child.ID, agent.ID, resp.Text, steps, meta, time.Since(started).Milliseconds(), state); err != nil {
+		return tools.RunAgentResult{}, err
 	}
 	// Hand the subagent's nested trace to the parent loop (when a sink is wired) so
 	// it renders as a collapsible StepSubagent. The returned trace is authoritative
@@ -350,6 +392,36 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		}
 	}
 	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
+}
+
+func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec tools.RunAgentSpec) db.Session {
+	contextMode := strings.TrimSpace(spec.Context)
+	if contextMode == "" {
+		contextMode = db.ContextIsolated
+	}
+	s := db.Session{Kind: "subagent", ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal, RunState: "running"}
+	if ephemeral {
+		s.TargetProfile = strings.TrimSpace(spec.Target)
+	} else {
+		s.TargetAgentID = agent.ID
+	}
+	return s
+}
+
+// childTranscriptSteps keeps execution trace shape while dropping raw tool
+// arguments. Arguments may contain credentials or environment secrets and are
+// not needed to understand the delegated run after completion.
+func childTranscriptSteps(steps []TurnStep) []TurnStep {
+	out := append([]TurnStep(nil), steps...)
+	for i := range out {
+		if out[i].Kind == StepTool {
+			out[i].Input = nil
+		}
+		if len(out[i].SubSteps) > 0 {
+			out[i].SubSteps = childTranscriptSteps(out[i].SubSteps)
+		}
+	}
+	return out
 }
 
 // resolveSubagentTarget maps a run_subagent target to a runnable agent. An exact

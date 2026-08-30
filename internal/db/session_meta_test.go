@@ -149,3 +149,67 @@ func TestSessionModelSnapshot(t *testing.T) {
 	}
 	_ = ag2 // used
 }
+
+func TestCreateChildSessionMetadataPersists(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	parent, err := d.CreateSession(ctx, Session{Kind: "chat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := d.CreateChildSession(ctx, Session{
+		ParentSessionID: parent.ID, ExecutionType: ExecutionSubagent,
+		Category: CategorySubagent, ContextMode: ContextInherited,
+		Visibility: VisibilityInternal, TargetProfile: "coder", Kind: "subagent",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child.SchemaVersion != 3 || child.ParentSessionID != parent.ID || child.TargetProfile != "coder" {
+		t.Fatalf("child metadata = %+v", child)
+	}
+	reopened, err := Open(d.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := reopened.GetSession(ctx, child.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ExecutionType != ExecutionSubagent || got.Category != CategorySubagent || got.ContextMode != ContextInherited || got.Visibility != VisibilityInternal {
+		t.Fatalf("reopened metadata = %+v", got)
+	}
+}
+
+func TestCreateChildSessionRejectsInvalidMetadata(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	parent, _ := d.CreateSession(ctx, Session{})
+	_, err = d.CreateChildSession(ctx, Session{ParentSessionID: parent.ID, ExecutionType: "bogus", Category: CategorySubagent, ContextMode: ContextIsolated, Visibility: VisibilityInternal, TargetProfile: "coder"})
+	if err == nil {
+		t.Fatal("expected invalid executionType error")
+	}
+}
+
+func TestLegacySessionMetadataFallbackPreservesKind(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.mu.Lock()
+	d.sessions["legacy"] = Session{ID: "legacy", Kind: "worker"}
+	d.mu.Unlock()
+	got, err := d.GetSession(context.Background(), "legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != "worker" || got.ExecutionType != ExecutionWorker || got.Category != CategoryWorker || got.Visibility != VisibilityUser {
+		t.Fatalf("legacy fallback = %+v", got)
+	}
+}

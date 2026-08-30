@@ -89,7 +89,8 @@ type SpawnOptions struct {
 	CoordinatorMaxTurns int
 
 	// NoQueue preserves callers that require an immediate SessionID.
-	NoQueue bool
+	NoQueue      bool
+	ChildSession *db.Session
 	// onDrop releases caller-owned reservations if shutdown discards this spawn.
 	onDrop func(error)
 }
@@ -237,7 +238,7 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
-	session, err := r.db.CreateSession(ctx, db.Session{
+	newSession := db.Session{
 		AgentID:                  agent.ID,
 		Kind:                     kind,
 		SourceID:                 "spawn:" + uuid.NewString(),
@@ -254,7 +255,19 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		CoordinatorMode:     opts.CoordinatorMode,
 		CoordinatorWorkflow: strings.TrimSpace(opts.CoordinatorWorkflow),
 		CoordinatorMaxTurns: opts.CoordinatorMaxTurns,
-	})
+	}
+	if opts.ChildSession != nil {
+		meta := *opts.ChildSession
+		meta.AgentID, meta.Kind, meta.SourceID, meta.Title, meta.WorkingDir = newSession.AgentID, newSession.Kind, newSession.SourceID, newSession.Title, newSession.WorkingDir
+		newSession = meta
+	}
+	var session db.Session
+	var err error
+	if opts.ChildSession != nil {
+		session, err = r.db.CreateChildSession(ctx, newSession)
+	} else {
+		session, err = r.db.CreateSession(ctx, newSession)
+	}
 	if err != nil {
 		r.releaseSpawnSlot()
 		return SpawnResult{}, err
@@ -372,16 +385,30 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 				"session", sessionID, "agent", agent.ID, "status", outcome.Status,
 				"hardCap", hardCap, "idleCap", idleCap)
 			steps = appendOutcomeStep(steps, outcome)
-			if addErr := r.recordAssistantMessage(ctx, sessionID, agent.ID, outcome.Note, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
-				r.logger.Warn("spawn: failed to record truncated reply", "session", sessionID, "error", addErr)
+			if opts.ChildSession == nil {
+				if addErr := r.recordAssistantMessage(ctx, sessionID, agent.ID, outcome.Note, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
+					r.logger.Warn("spawn: failed to record truncated reply", "session", sessionID, "error", addErr)
+				}
 			}
 		} else {
 			r.logger.Error("spawn: agent invoke failed",
 				"session", sessionID, "agent", agent.ID,
 				"provider", agent.Provider, "model", agent.Model, "error", err)
-			r.recordTurnError(ctx, sessionID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Spawn turu çalıştırılamadı:")
+			if opts.ChildSession == nil {
+				r.recordTurnError(ctx, sessionID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Spawn turu çalıştırılamadı:")
+			}
 		}
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
+		if opts.ChildSession != nil {
+			state := "failed"
+			if outcome.Status == "killed" || outcome.Status == "timeout" || outcome.Status == "incomplete" {
+				state = outcome.Status
+			}
+			summary := "subagent failed (" + string(classifyProviderError(err)) + ")"
+			if persistErr := r.recordChildAssistantMessage(ctx, sessionID, agent.ID, summary, steps, meta, time.Since(turnStart).Milliseconds(), state); persistErr != nil {
+				r.logger.Error("spawn: failed to persist child failure", "session", sessionID, "error", persistErr)
+			}
+		}
 		r.AutoTagTurn(ctx, sessionID, steps, "spawn_error")
 		return
 	}
@@ -397,10 +424,27 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 		steps = appendOutcomeStep(steps, outcome)
 		output = applyTurnOutcome(output, outcome)
 	}
-
-	output, addErr := r.recordAssistantReply(ctx, sessionID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu spawn için boş yanıt döndürdü.")
+	if strings.TrimSpace(output) == "" {
+		output = "ℹ️ Ajan bu spawn için boş yanıt döndürdü."
+	}
+	var addErr error
+	if opts.ChildSession != nil {
+		state := "completed"
+		if outcome.Truncated() {
+			state = outcome.Status
+		}
+		addErr = r.recordChildAssistantMessage(ctx, sessionID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), state)
+	} else {
+		output, addErr = r.recordAssistantReply(ctx, sessionID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu spawn için boş yanıt döndürdü.")
+	}
 	if addErr != nil {
 		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", addErr)
+		if opts.ChildSession != nil {
+			r.emitDebug(turnCtx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: debugSummary(addErr.Error(), 500), Err: true})
+			r.emitSpawnEvent(agent, sessionID, prompt, false)
+			r.AutoTagTurn(ctx, sessionID, steps, "spawn_error")
+			return
+		}
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID, "status", outcome.Status)
 	// Self-completion: if the spawned turn stalled with unfinished work (activated

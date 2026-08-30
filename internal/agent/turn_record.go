@@ -2,10 +2,30 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
+
+// recordChildAssistantMessage is the single persistence seam for delegated
+// session transcripts. It redacts tool arguments before writing and only marks
+// the child successful after that write commits. A transcript failure therefore
+// cannot leave a child looking completed.
+func (r *Runtime) recordChildAssistantMessage(ctx context.Context, sessionID, agentID, text string, steps []TurnStep, meta *turnMeta, elapsedMs int64, terminalState string) error {
+	if err := r.recordAssistantMessage(ctx, sessionID, agentID, text, childTranscriptSteps(steps), meta, elapsedMs); err != nil {
+		stateErr := r.db.SetSessionRunState(ctx, sessionID, turnStatusFailed, time.Now().Unix())
+		if stateErr != nil {
+			return fmt.Errorf("persist child transcript: %w (persist failed run state: %v)", err, stateErr)
+		}
+		return fmt.Errorf("persist child transcript: %w", err)
+	}
+	if err := r.db.SetSessionRunState(ctx, sessionID, terminalState, time.Now().Unix()); err != nil {
+		return fmt.Errorf("persist child %s run state: %w", terminalState, err)
+	}
+	return nil
+}
 
 // This file holds the shared reply/error recording for session-reuse continuation
 // turns — a turn delivered into an EXISTING session (scheduled prompt, wake, and

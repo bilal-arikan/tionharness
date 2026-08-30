@@ -209,8 +209,32 @@ func (a Agent) NativeWebSearchEnabled() bool {
 // new sessions (Session.SchemaVersion). Bump it whenever header fields are added
 // so a future loader can branch on the version. 1 = first versioned header
 // (added pinned + the enriched per-message fields). 2 = generic participant model
-// (Session.Participants + per-message AuthorKind/AuthorID/RecipientID).
-const SessionSchemaVersion = 2
+// (Session.Participants + per-message AuthorKind/AuthorID/RecipientID). 3 adds
+// execution lineage/classification metadata.
+const SessionSchemaVersion = 3
+
+const (
+	ExecutionInteractive = "interactive"
+	ExecutionSubagent    = "subagent"
+	ExecutionWorker      = "worker"
+	ExecutionFlow        = "flow"
+	ExecutionSchedule    = "schedule"
+	ExecutionAutomation  = "automation"
+	ExecutionSystem      = "system"
+
+	CategoryChat       = "chat"
+	CategorySubagent   = "subagent"
+	CategoryWorker     = "worker"
+	CategoryFlow       = "flow"
+	CategoryAutomation = "automation"
+	CategorySystem     = "system"
+
+	ContextIsolated  = "isolated"
+	ContextInherited = "inherited"
+
+	VisibilityUser     = "user"
+	VisibilityInternal = "internal"
+)
 
 // UserParticipantID is the stable participant id of the human principal — the
 // top-authority participant every session implicitly contains. A human-authored
@@ -344,12 +368,18 @@ const (
 // Session, so a single streamable transcript viewer and the unified "executions"
 // feed can render task runs, flow runs and scheduled deliveries like any chat.
 type Session struct {
-	ID           string `json:"id"`
-	AgentID      string `json:"agentId"`
-	Kind         string `json:"kind"`
-	SourceID     string `json:"sourceId,omitempty"`
-	Title        string `json:"title"`
-	MessageCount int    `json:"messageCount"`
+	ID            string `json:"id"`
+	AgentID       string `json:"agentId"`
+	Kind          string `json:"kind"`
+	SourceID      string `json:"sourceId,omitempty"`
+	ExecutionType string `json:"executionType,omitempty"`
+	Category      string `json:"category,omitempty"`
+	ContextMode   string `json:"contextMode,omitempty"`
+	Visibility    string `json:"visibility,omitempty"`
+	TargetProfile string `json:"targetProfile,omitempty"`
+	TargetAgentID string `json:"targetAgentId,omitempty"`
+	Title         string `json:"title"`
+	MessageCount  int    `json:"messageCount"`
 	// ToolCallCount is the session's LIFETIME count of executed tool calls, summed
 	// from each persisted assistant message's tool steps (kind=="tool"). Like
 	// MessageCount it is a monotonic per-session counter; a counter-triggered
