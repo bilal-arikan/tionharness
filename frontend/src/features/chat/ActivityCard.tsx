@@ -133,7 +133,14 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
                 Girdi
               </div>
               <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
-                {typeof step.input === 'string' ? step.input : JSON.stringify(step.input, null, 2)}
+                <PathText
+                  text={
+                    typeof step.input === 'string'
+                      ? step.input
+                      : JSON.stringify(step.input, null, 2)
+                  }
+                  onOpenFile={onOpenFile}
+                />
               </pre>
             </div>
           )}
@@ -164,7 +171,10 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
                     step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
                   }`}
                 >
-                  {output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}
+                  <PathText
+                    text={output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}
+                    onOpenFile={onOpenFile}
+                  />
                 </pre>
                 {/* The server cut this payload before sending the transcript.
                     The whole turn's full trace is one click away — the "tam iz"

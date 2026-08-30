@@ -8,8 +8,12 @@ const VIDEO_EXT = /\.(mp4|webm|ogg|ogv|mov|m4v)$/i
 // dotted file names like internal/agent/titler.go. Kept deliberately strict to
 // avoid turning ordinary prose into links.
 const PATH_SRC =
-  /(?:[A-Za-z]:\\[^\s"'`<>()]+|(?:\.{0,2}\/)[^\s"'`<>()]+|[\w.-]+\/[\w./-]+\.\w+|[\w-]+\.(?:go|ts|tsx|js|jsx|py|rs|md|json|sql|css|html|sh|yaml|yml|toml))/
+  /(?:[A-Za-z]:[\\/][^\s"'`<>]+|(?:\.{0,2}\/)[^\s"'`<>]+|[\w.-]+\/[\w./-]+\.\w+(?::\d+(?::\d+)?)?|[\w-]+\.(?:go|ts|tsx|js|jsx|py|rs|md|json|sql|css|html|sh|yaml|yml|toml)(?::\d+(?::\d+)?)?)/
     .source
+
+// Quoting is the only unambiguous way to include spaces in a path embedded in
+// prose. Keep the quote/backtick outside the clickable segment.
+const QUOTED_PATH_SRC = /(["'`])((?:[A-Za-z]:[\\/]|\.{0,2}\/|\/)[^\r\n"'`]+)\1/.source
 
 // An absolute http(s) URL, or a scheme-less "www.host/..." one. Must be tried
 // BEFORE PATH_SRC: the path pattern's "(?:\.{0,2}\/)" branch happily matches the
@@ -18,12 +22,12 @@ const PATH_SRC =
 const URL_SRC = /(?:https?:\/\/|www\.)[^\s"'`<>]+/.source
 
 const URL_ONLY_RE = new RegExp(`^${URL_SRC}$`, 'i')
-const LINK_RE = new RegExp(`${URL_SRC}|${PATH_SRC}`, 'gi')
+const LINK_RE = new RegExp(`${URL_SRC}|${QUOTED_PATH_SRC}|${PATH_SRC}`, 'gi')
 
 // Sentence punctuation that follows a URL in prose far more often than it is
 // part of it — "see https://x.dev/a." must not link the trailing dot. Closing
 // brackets are only dropped when unbalanced, so wiki-style ...(a_(b)) survives.
-function trimUrlTail(url: string): { url: string; tail: string } {
+function trimLinkTail(url: string): { value: string; tail: string } {
   let end = url.length
   for (; end > 0; end--) {
     const ch = url[end - 1]
@@ -38,7 +42,7 @@ function trimUrlTail(url: string): { url: string; tail: string } {
     }
     break
   }
-  return { url: url.slice(0, end), tail: url.slice(end) }
+  return { value: url.slice(0, end), tail: url.slice(end) }
 }
 
 /** True for an absolute http(s) URL — never a local path. */
@@ -84,6 +88,13 @@ export type SegmentKind = 'text' | 'path' | 'url'
 export interface PathSegment {
   text: string
   kind: SegmentKind
+  /** File path without a trailing :line[:column] location. */
+  target?: string
+}
+
+/** Split a path reference into its displayed value and openable file path. */
+export function pathTarget(path: string): string {
+  return path.replace(/:\d+(?::\d+)?$/, '')
 }
 
 /**
@@ -97,20 +108,34 @@ export function splitPaths(text: string): PathSegment[] {
   let last = 0
   for (const m of text.matchAll(LINK_RE)) {
     const idx = m.index ?? 0
-    let hit = m[0]
-    let tail = ''
-    if (isUrl(hit)) {
-      const trimmed = trimUrlTail(hit)
-      hit = trimmed.url
-      tail = trimmed.tail
-    }
+    const quoted = m[1] && m[2]
+    const prefix = quoted ? m[1] : ''
+    let hit = quoted ? m[2] : m[0]
+    const trimmed = trimLinkTail(hit)
+    hit = trimmed.value
+    const tail = trimmed.tail
     if (idx > last) out.push({ text: text.slice(last, idx), kind: 'text' })
-    out.push({ text: hit, kind: isUrl(hit) ? 'url' : 'path' })
+    if (prefix) out.push({ text: prefix, kind: 'text' })
+    const kind = isUrl(hit) ? 'url' : 'path'
+    out.push({ text: hit, kind, ...(kind === 'path' ? { target: pathTarget(hit) } : {}) })
     if (tail) out.push({ text: tail, kind: 'text' })
+    if (prefix) out.push({ text: prefix, kind: 'text' })
     last = idx + m[0].length
   }
   if (last < text.length) out.push({ text: text.slice(last), kind: 'text' })
   return out
+}
+
+/**
+ * Markdown consumes backslashes as escapes in link destinations. Only
+ * normalize actual Windows path destinations; URLs and prose remain byte-for-
+ * byte unchanged. Angle-bracket destinations are supported as well.
+ */
+export function normalizeMarkdownPaths(markdown: string): string {
+  return markdown.replace(
+    /(!?\[[^\]]*\]\(\s*<?)([A-Za-z]:\\[^\r\n>]*?)(>?\s*(?:["'][^"']*["'])?\))/g,
+    (_match, before, path, after) => before + path.replace(/\\/g, '/') + after,
+  )
 }
 
 /** Replace the current user's home directory prefix with ~ for display. */

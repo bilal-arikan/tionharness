@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { displayPath, isUrl, mediaUrl, shortPath, splitPaths, urlHref } from './paths'
+import {
+  displayPath,
+  isUrl,
+  mediaUrl,
+  normalizeMarkdownPaths,
+  pathTarget,
+  shortPath,
+  splitPaths,
+  urlHref,
+} from './paths'
 
 describe('displayPath', () => {
   it('collapses a Windows home path to ~\\', () => {
@@ -92,6 +101,55 @@ describe('splitPaths', () => {
   it('still detects paths that appear after a URL', () => {
     const segments = splitPaths('https://example.com/x then internal/agent/titler.go')
     expect(segments.map((s) => s.kind)).toEqual(['url', 'text', 'path'])
+  })
+
+  it.each([
+    ['Windows', 'C:\\work\\src\\app.ts:12:4', 'C:\\work\\src\\app.ts'],
+    ['Windows slash', 'C:/work/src/app.ts:12', 'C:/work/src/app.ts'],
+    ['POSIX', '/opt/app/src/main.go:9', '/opt/app/src/main.go'],
+    ['Git Bash', '/c/Users/bilal/project/main.go:7:2', '/c/Users/bilal/project/main.go'],
+    ['relative', 'frontend/src/App.tsx:20:3', 'frontend/src/App.tsx'],
+  ])('detects %s path references with locations', (_label, shown, target) => {
+    expect(splitPaths(shown)).toEqual([{ text: shown, kind: 'path', target }])
+  })
+
+  it.each([
+    ['"C:\\Program Files\\Git\\bin\\bash.exe"', 'C:\\Program Files\\Git\\bin\\bash.exe'],
+    ['`/tmp/project files/app.ts:4`', '/tmp/project files/app.ts'],
+    ["'./folder name/data.json:8:2'", './folder name/data.json'],
+  ])('links a quoted path with spaces while preserving delimiters', (source, target) => {
+    const segments = splitPaths(source)
+    expect(segments.map((segment) => segment.text).join('')).toBe(source)
+    expect(segments.find((segment) => segment.kind === 'path')?.target).toBe(target)
+  })
+
+  it.each([
+    [
+      'https://example.com/search?q=a%20b&lang=tr#result',
+      'https://example.com/search?q=a%20b&lang=tr#result',
+    ],
+    ['https://example.com/wiki/Foo_(bar)', 'https://example.com/wiki/Foo_(bar)'],
+    ['(https://example.com/a).', 'https://example.com/a'],
+  ])('keeps URL query/hash and trims only prose punctuation: %s', (source, linked) => {
+    expect(splitPaths(source).find((segment) => segment.kind === 'url')?.text).toBe(linked)
+  })
+})
+
+describe('path normalization', () => {
+  it.each([
+    ['C:\\src\\app.ts:10:2', 'C:\\src\\app.ts'],
+    ['/src/app.ts:10', '/src/app.ts'],
+    ['C:\\src\\app.ts', 'C:\\src\\app.ts'],
+  ])('removes only a trailing source location from %s', (source, expected) => {
+    expect(pathTarget(source)).toBe(expected)
+  })
+
+  it('normalizes Windows Markdown destinations without touching URLs or prose', () => {
+    expect(
+      normalizeMarkdownPaths(
+        '[file](C:\\Program Files\\app.ts) ![img](C:\\tmp\\a.png) https://x.test/a\\b',
+      ),
+    ).toBe('[file](C:/Program Files/app.ts) ![img](C:/tmp/a.png) https://x.test/a\\b')
   })
 })
 

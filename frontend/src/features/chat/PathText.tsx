@@ -37,13 +37,13 @@ export function PathText({ text, onOpenFile }: Props) {
             tabIndex={0}
             onClick={(e) => {
               e.stopPropagation()
-              onOpenFile?.(seg.text)
+              onOpenFile?.(seg.target || seg.text)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
                 e.stopPropagation()
-                onOpenFile?.(seg.text)
+                onOpenFile?.(seg.target || seg.text)
               }
             }}
             className="cursor-pointer break-all font-mono text-[0.92em] text-[var(--color-accent)] underline decoration-dotted underline-offset-2 hover:opacity-80"
