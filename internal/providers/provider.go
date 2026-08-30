@@ -202,6 +202,11 @@ type Request struct {
 	// HTTP providers ignore it. See Response.SessionID for the (rotated) id to store
 	// for the next turn.
 	ResumeSessionID string
+	// CLIResumeScope identifies the stable, isolated conversation home a CLI
+	// provider may use across subprocesses. The API derives this opaque value from
+	// the TionHarness session, responding persona and frozen static prompt. Codex
+	// hashes it into a dedicated CODEX_HOME. Empty keeps turn-local behaviour.
+	CLIResumeScope string
 	// SysPromptFile, when true, tells a CLI provider (claude-cli) to hand the
 	// appended system prompt through a temp file (--append-system-prompt-file <path>)
 	// instead of inline (--append-system-prompt <text>, the default). File mode
@@ -266,6 +271,9 @@ type Usage struct {
 // Response.Trace so the agent layer can surface the steps in the UI without
 // driving the loop. Kept provider-local to avoid importing the agent package.
 type TraceStep struct {
+	ID      string
+	Ref     string
+	Running bool
 	Kind    string          // "text" | "thinking" | "tool"
 	Text    string          // text/thinking payload
 	Tool    string          // tool name
@@ -281,6 +289,22 @@ type TraceStep struct {
 	// multiple parallel tool_use blocks (1-based id, unique within the turn;
 	// 0 = lone call). Set by the claude-cli stream parser from message ids.
 	Batch int
+	// Collab metadata. Operation is the Codex collab sub-tool, Target contains
+	// receiver thread ids, Status is the CLI lifecycle status, DurationMs is the
+	// measured item latency, and Summary is safe for UI/debug (never the prompt).
+	Operation  string
+	Target     []string
+	Status     string
+	DurationMs int64
+	Summary    string
+	// Compaction provenance. Populated only for Kind "compaction".
+	Source        string
+	Provider      string
+	SessionAction string
+	FoldedMsgs    int
+	BeforeTokens  int
+	AfterTokens   int
+	Trigger       string
 }
 
 // Response is a completion result. When StopReason is StopToolUse, ToolCalls
@@ -429,6 +453,26 @@ type CLIProvider interface {
 	// Installed reports whether the CLI binary can be resolved. It says nothing
 	// about login state.
 	Installed() bool
+}
+
+// ScopedCLIResumer is implemented by a CLI provider that can keep one durable,
+// isolated conversation home per opaque resume scope. API orchestration uses it
+// to fail closed before sending a delta: a missing or changed home starts fresh.
+type ScopedCLIResumer interface {
+	ResumeScopeReady(scope string) bool
+	CanResumeScoped(scope, sessionID string) bool
+}
+
+// CLICompactionLifecycle advertises a documented, reliable native CLI
+// compaction event. False means callers must not invent one or inject an
+// undocumented /compact command; TionHarness restarts from summary + recent tail.
+type CLICompactionLifecycle interface {
+	NativeCompactionEvents() bool
+}
+
+func HasNativeCLICompactionEvents(p Provider) bool {
+	c, ok := p.(CLICompactionLifecycle)
+	return ok && c.NativeCompactionEvents()
 }
 
 // AuthProber is implemented by providers that can verify their credentials with

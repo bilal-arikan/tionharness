@@ -62,6 +62,27 @@ rozeti; açıldığında tetikleyici ve (varsa) eski insan-okur satırı görün
 Yapısal alanlar yoksa (bu türden önce yazılmış oturumlar) kart `text` alanına
 düşer — boş kart göstermez.
 
+Kart ayrıca katlamanın kaynağını ve CLI oturum sonucunu taşır: `source`
+(`tionharness` | `cli-native`), `provider` (`claude-cli` | `codex-cli`) ve
+`sessionAction` (`resume` | `native-compact` | `restart-summary`). Codex 0.148.0+
+`exec --json`, snake_case `context_compaction` item'ını started/completed çiftiyle
+taşır. App Server'ın camelCase `contextCompaction` item'ı ve
+`thread/compact/start` RPC'si ayrı transporttur. Claude Code 2.1.238+
+`--include-hook-events` ile `PreCompact` başlangıcını; `compact_boundary` ve
+`PostCompact` tamamlanma kanıtını taşır. Completion sinyalleri deduplicate edilir.
+Eksik/eski CLI sürümünde capability fail-closed kalır.
+
+TionHarness fold'u CLI'ya `/compact` enjekte etmez; sıcak CLI
+oturumunu bırakır ve aynı kartta `restart-summary` göstererek TionHarness özeti +
+son mesaj kuyruğuyla fresh CLI session başlatır.
+
+Manuel `/compact` başarı mesajı da aynı yapısal `compaction` adımını kendi
+`steps` alanında kalıcı taşır (`trigger=manual`, `source=tionharness`, CLI ise
+`sessionAction=restart-summary`). Gerçek fold sonrası hem DB'deki resume id/sınırı
+temizlenir hem Claude persistent-pool süreci düşürülür. Auto, wake ve side-chat
+fold yolları da persistent süreci provider çağrısından önce düşürür; özet eski
+warm transcriptin üstüne eklenmez.
+
 **Adımı yayan yollar.** Katlama nerede olursa olsun aynı kart çıkar:
 
 | Yol | Tetikleyici | Kaynak |
@@ -1134,3 +1155,24 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   beslemek gerekir, provider soyutlaması bunu korumaz (bkz. `toolloop.go`).
 - claude-cli tool kullanımı, kullanıcının yerel `~/.claude` izin ayarlarına tabidir
   (print modunda izin verilen araçlar çalışır).
+
+### CLI-native compaction kartı (2026-08-30)
+
+- Codex `context_compaction` ve Claude `PreCompact` başlangıcı aynı ID'li
+  `running` kart gösterir; running frame kalıcı mesaja veya inflight sidecar'a yazılmaz.
+- Codex `item.completed`, Claude `compact_boundary` veya `PostCompact` kanıtı
+  kalıcı `source=cli-native`, `sessionAction=native-compact` kart üretir.
+- Claude completion sinyali eksikse çalışan kart iki dakika sonra tombstone ile
+  kapanır; tamamlanmış compaction uydurulmaz.
+- Provider event'i token ölçümü vermiyorsa kart token rozeti göstermez.
+- Bu kart TionHarness rolling-summary kartından ayrıdır ve `SummaryMsgCount`
+  değerini değiştirmez.
+
+### Codex collab kartı (2026-08-30)
+
+- `collab_tool_call` kartı ham prompt yerine yapısal `operation`, alıcı thread
+  kimlikleri (`target`), `status`, ölçülen `durationMs` ve güvenli `summary` taşır.
+- Kart başlığı ve açılmış gövde işlem, hedef, durum ve süreyi gösterir. Eski
+  kayıtlarda alanlar yoksa işlem adı `collab_tool_call` olarak kalır.
+- Güvenli özet yalnız işlem + alıcılar + durumdan üretilir; delegasyon prompt'u
+  kullanıcı sunumuna veya debug günlüğüne yazılmaz.

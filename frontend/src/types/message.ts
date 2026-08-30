@@ -82,6 +82,12 @@ export interface TurnStep {
   // ONE provider response that carried multiple parallel tool calls share it, so
   // the UI clusters them. Absent/0 = lone call.
   batch?: number
+  // Structured Codex collab metadata. Optional for older persisted traces.
+  operation?: string
+  target?: string[]
+  status?: string
+  durationMs?: number
+  summary?: string
   // 'context_change' payload: the per-block added/removed diff of the frozen
   // static context (prompt-epoch drift). added/removed above hold rollup counts.
   areas?: ContextArea[]
@@ -98,6 +104,15 @@ export interface TurnStep {
   // recovery). Kept open as a string: an unknown value is shown verbatim rather
   // than dropped.
   trigger?: string
+  // Compaction provenance: "tionharness" (rolling-summary compaction) or
+  // "cli-native" (the provider CLI managed its own context). `provider` names
+  // the CLI transport ("claude-cli" | "codex-cli"), while `sessionAction`
+  // records how its native session continued ("resume" | "native-compact" |
+  // "restart-summary"). Kept open as strings so newer backend values remain
+  // visible instead of being silently dropped by the card.
+  source?: string
+  provider?: string
+  sessionAction?: string
   // Truncation markers set by the SERVER on the transcript READ path only: a
   // long tool payload is cut to a cap so opening a session does not ship
   // megabytes the chat never paints. The persisted trace — and the model's

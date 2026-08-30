@@ -3,6 +3,8 @@ package agent
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func TestParseTodos(t *testing.T) {
@@ -19,6 +21,54 @@ func TestParseTodos(t *testing.T) {
 	}
 	if got[1].Status != "in_progress" {
 		t.Fatalf("unexpected second status: %q", got[1].Status)
+	}
+}
+
+func TestTraceStepCompactionMetadataMapping(t *testing.T) {
+	step := traceStepToTurnStep(providers.TraceStep{
+		Kind:          "compaction",
+		Text:          "native compact",
+		Source:        "cli-native",
+		Provider:      "codex-cli",
+		SessionAction: "native-compact",
+		FoldedMsgs:    7,
+		BeforeTokens:  1000,
+		AfterTokens:   250,
+		Trigger:       "auto",
+	})
+	if step.Kind != StepCompaction || step.Source != "cli-native" || step.Provider != "codex-cli" || step.SessionAction != "native-compact" {
+		t.Fatalf("compaction provenance lost: %+v", step)
+	}
+	if step.FoldedMsgs != 7 || step.BeforeTokens != 1000 || step.AfterTokens != 250 || step.Trigger != "auto" {
+		t.Fatalf("compaction figures lost: %+v", step)
+	}
+}
+
+func TestTraceStepCollabMetadataMapping(t *testing.T) {
+	step := traceStepToTurnStep(providers.TraceStep{
+		Kind: "tool", Tool: "collab_tool_call", Operation: "spawn_agent",
+		Target: []string{"thread-a", "thread-b"}, Status: "completed",
+		DurationMs: 42, Summary: "spawn_agent · receivers: thread-a, thread-b · completed",
+	})
+	if step.Operation != "spawn_agent" || len(step.Target) != 2 || step.Status != "completed" || step.DurationMs != 42 {
+		t.Fatalf("collab metadata lost: %+v", step)
+	}
+	if step.Summary == "" {
+		t.Fatal("safe collab summary lost")
+	}
+}
+
+func TestCollabDebugEventUsesSafeMetadata(t *testing.T) {
+	event := collabDebugEvent("agent-1", providers.TraceStep{
+		Operation: "send_message", Summary: "send_message · receivers: thread-a · completed",
+		DurationMs: 75, IsError: false,
+	})
+	if event.Name != "send_message" || event.Detail != "send_message · receivers: thread-a · completed" || event.DurMs != 75 {
+		t.Fatalf("debug event = %+v", event)
+	}
+	fallback := collabDebugEvent("agent-1", providers.TraceStep{})
+	if fallback.Name != "collab_tool_call" || fallback.Detail != "collab_tool_call" {
+		t.Fatalf("fallback event = %+v", fallback)
 	}
 }
 

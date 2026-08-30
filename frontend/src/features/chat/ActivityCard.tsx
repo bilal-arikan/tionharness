@@ -79,6 +79,11 @@ function fmtBytes(n: number): string {
   return `${n} B`
 }
 
+function fmtDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} sn`
+}
+
 export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Props) {
   const [open, setOpen] = useState(false)
   const meta = toolMeta(step.tool || '', step.input)
@@ -96,6 +101,11 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
   // Render it formatted rather than as a raw <pre> block when the card is expanded.
   const isSkill = toolBase(step.tool || '') === 'use_skill' && !step.isError
   const progHint = programHint(step)
+  const isCollab = toolBase(step.tool || '') === 'collab_tool_call'
+  const collabOperation = step.operation || 'collab_tool_call'
+  const collabTarget = step.target?.join(', ') || ''
+  const collabSummary =
+    step.summary || [collabOperation, collabTarget, step.status].filter(Boolean).join(' · ')
 
   return (
     <div className="overflow-hidden rounded-md bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
@@ -105,10 +115,20 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
       >
         <meta.icon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         {progHint && <CommandProgramTag command={progHint} />}
-        <span className="shrink-0 font-medium text-[var(--color-text)]">{meta.label}</span>
-        {meta.summary && (
+        <span className="shrink-0 font-medium text-[var(--color-text)]">
+          {isCollab ? collabOperation : meta.label}
+        </span>
+        {(isCollab ? collabSummary : meta.summary) && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
-            <PathText text={meta.summary} onOpenFile={onOpenFile} />
+            <PathText text={isCollab ? collabSummary : meta.summary} onOpenFile={onOpenFile} />
+          </span>
+        )}
+        {isCollab && step.status && (
+          <span className="shrink-0 text-[var(--color-text-dim)]">{step.status}</span>
+        )}
+        {isCollab && step.durationMs != null && (
+          <span className="shrink-0 text-[var(--color-text-dim)]">
+            {fmtDuration(step.durationMs)}
           </span>
         )}
         {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
@@ -127,68 +147,81 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
 
       {open && (
         <div className="space-y-2 px-3 pb-2 text-xs">
-          {step.input != null && !isSkill && (
-            <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                Girdi
-              </div>
-              <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
-                <PathText
-                  text={
-                    typeof step.input === 'string'
-                      ? step.input
-                      : JSON.stringify(step.input, null, 2)
-                  }
-                  onOpenFile={onOpenFile}
-                />
-              </pre>
-            </div>
-          )}
-          {diffText ? (
-            <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                Değişiklik
-              </div>
-              <DiffView text={diffText} />
-            </div>
-          ) : isSkill && output.trim() ? (
-            <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                Skill
-              </div>
-              <div className="rounded bg-[var(--color-bg)] p-2">
-                <Markdown onOpenFile={onOpenFile}>{output}</Markdown>
-              </div>
+          {isCollab ? (
+            <div className="space-y-1 rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
+              <div>İşlem: {collabOperation}</div>
+              {collabTarget && <div>Hedef: {collabTarget}</div>}
+              {step.status && <div>Durum: {step.status}</div>}
+              {step.durationMs != null && <div>Süre: {fmtDuration(step.durationMs)}</div>}
             </div>
           ) : (
-            output && (
+            step.input != null &&
+            !isSkill && (
               <div>
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Çıktı
+                  Girdi
                 </div>
-                <pre
-                  className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
-                    step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
-                  }`}
-                >
+                <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
                   <PathText
-                    text={output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}
+                    text={
+                      typeof step.input === 'string'
+                        ? step.input
+                        : JSON.stringify(step.input, null, 2)
+                    }
                     onOpenFile={onOpenFile}
                   />
                 </pre>
-                {/* The server cut this payload before sending the transcript.
-                    The whole turn's full trace is one click away — the "tam iz"
-                    chip on the turn's tool toggle row (AssistantTurn). */}
-                {step.outputTruncated && (
-                  <div className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                    Sunucu bu çıktıyı kırptı
-                    {step.outputLen ? ` (tamamı ${fmtBytes(step.outputLen)})` : ''} — turun
-                    başındaki “tam iz” ile tamamını getirebilirsin.
-                  </div>
-                )}
               </div>
             )
           )}
+          {!isCollab &&
+            (diffText ? (
+              <div>
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Değişiklik
+                </div>
+                <DiffView text={diffText} />
+              </div>
+            ) : isSkill && output.trim() ? (
+              <div>
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Skill
+                </div>
+                <div className="rounded bg-[var(--color-bg)] p-2">
+                  <Markdown onOpenFile={onOpenFile}>{output}</Markdown>
+                </div>
+              </div>
+            ) : (
+              output && (
+                <div>
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                    Çıktı
+                  </div>
+                  <pre
+                    className={`overflow-x-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 ${
+                      step.isError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'
+                    }`}
+                  >
+                    <PathText
+                      text={
+                        output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output
+                      }
+                      onOpenFile={onOpenFile}
+                    />
+                  </pre>
+                  {/* The server cut this payload before sending the transcript.
+                    The whole turn's full trace is one click away — the "tam iz"
+                    chip on the turn's tool toggle row (AssistantTurn). */}
+                  {step.outputTruncated && (
+                    <div className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                      Sunucu bu çıktıyı kırptı
+                      {step.outputLen ? ` (tamamı ${fmtBytes(step.outputLen)})` : ''} — turun
+                      başındaki “tam iz” ile tamamını getirebilirsin.
+                    </div>
+                  )}
+                </div>
+              )
+            ))}
         </div>
       )}
     </div>

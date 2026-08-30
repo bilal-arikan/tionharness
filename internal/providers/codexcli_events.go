@@ -3,7 +3,6 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -313,12 +312,19 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 	case "todo_list":
 		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "todo_list", Output: summarizeTodoList(it.Items)})
 	case "collab_tool_call":
+		summary := summarizeCollab(it)
 		p.setStep(it, final, TraceStep{
-			Kind:    "tool",
-			Tool:    "collab_tool_call",
-			Output:  summarizeCollab(it),
-			IsError: it.Status == "failed",
+			Kind:      "tool",
+			Tool:      "collab_tool_call",
+			Output:    summary,
+			Operation: it.Tool,
+			Target:    append([]string(nil), it.ReceiverThreadIDs...),
+			Status:    it.Status,
+			Summary:   summary,
+			IsError:   it.Status == "failed",
 		})
+	case "context_compaction":
+		p.feedContextCompaction(evType, it)
 	case "error":
 		// A non-fatal item error (observed: "Model metadata not found"). Surface it
 		// in the trace so it is visible, but do NOT fail the turn — the turn can and
@@ -338,6 +344,30 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 			})
 		}
 	}
+}
+
+// feedContextCompaction handles codex exec's snake_case JSON wire contract.
+// The App Server camelCase item belongs to a different transport.
+func (p *codexStreamParser) feedContextCompaction(evType string, it *codexItem) {
+	step := TraceStep{
+		ID:            it.ID,
+		Kind:          "compaction",
+		Source:        "cli-native",
+		Provider:      "codex-cli",
+		SessionAction: "native-compact",
+		Trigger:       "auto",
+	}
+	if evType != "item.completed" {
+		if evType == "item.started" {
+			p.itemStart[it.ID] = time.Now()
+			step.Running = true
+			if p.onEvent != nil {
+				p.onEvent(step)
+			}
+		}
+		return
+	}
+	p.setStep(it, true, step)
 }
 
 // setStep creates or updates the trace step backing this item id, and emits it
@@ -361,6 +391,7 @@ func (p *codexStreamParser) setStep(it *codexItem, final bool, step TraceStep) {
 	}
 	if start, ok := p.itemStart[it.ID]; ok {
 		p.resp.Trace[idx].DurMs = time.Since(start).Milliseconds()
+		p.resp.Trace[idx].DurationMs = p.resp.Trace[idx].DurMs
 		delete(p.itemStart, it.ID)
 	}
 	p.emit(idx)
@@ -562,18 +593,18 @@ func summarizeTodoList(items []codexTodoItem) string {
 	return strings.Join(parts, "\n")
 }
 
-// summarizeCollab renders a collab_tool_call item: which sub-tool ran, against
-// how many receiver threads, and the prompt it carried.
+// summarizeCollab renders only structured lifecycle metadata. The prompt is
+// deliberately excluded because this string is used by both UI and debug logs.
 func summarizeCollab(it *codexItem) string {
 	parts := []string{}
 	if it.Tool != "" {
 		parts = append(parts, it.Tool)
 	}
-	if n := len(it.ReceiverThreadIDs); n > 0 {
-		parts = append(parts, strconv.Itoa(n)+" receiver(s)")
+	if len(it.ReceiverThreadIDs) > 0 {
+		parts = append(parts, "receivers: "+strings.Join(it.ReceiverThreadIDs, ", "))
 	}
-	if it.Prompt != "" {
-		parts = append(parts, it.Prompt)
+	if it.Status != "" {
+		parts = append(parts, it.Status)
 	}
 	return strings.Join(parts, " · ")
 }

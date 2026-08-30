@@ -656,6 +656,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
+					// A CLI resume target still owns the pre-fold history. Clear it before
+					// retrying so this request starts a fresh CLI session from the in-flight
+					// summary + recent tail and captures a new session/thread id.
+					req.ResumeSessionID = ""
 					ls.compacted = true
 					ls.lastContinue = d.reason
 					// Signal the autonomous caller that this turn hit the context
@@ -666,7 +670,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					cst := reactiveCompactionStep(fold)
+					cst := reactiveCompactionStep(fold, provider)
 					steps = append(steps, cst)
 					emit(cst)
 					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
@@ -742,13 +746,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, r.db, provider, agent, req.Messages, keepRecent)
 				if cerr == nil && ok {
 					req.Messages = folded
+					req.ResumeSessionID = ""
 					ls.compacted = true
 					ls.lastContinue = d.reason
 					markContextOverflow(ctx)
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					cst := reactiveCompactionStep(fold)
+					cst := reactiveCompactionStep(fold, provider)
 					steps = append(steps, cst)
 					emit(cst)
 					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
@@ -1263,7 +1268,20 @@ func fillCancelledResults(results []providers.ToolResult, calls []providers.Tool
 // own (latency-bearing) DebugTool events inside the loop, so this is CLI-only.
 func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []providers.TraceStep) {
 	for _, st := range trace {
+		if st.Kind == "compaction" && st.Source == "cli-native" {
+			r.emitDebug(ctx, db.DebugEvent{
+				Type:    db.DebugCompaction,
+				AgentID: agent.ID,
+				Name:    st.Source,
+				Detail:  st.Provider + ":" + st.SessionAction,
+			})
+			continue
+		}
 		if st.Kind != "tool" {
+			continue
+		}
+		if st.Tool == "collab_tool_call" {
+			r.emitDebug(ctx, collabDebugEvent(agent.ID, st))
 			continue
 		}
 		r.emitDebug(ctx, db.DebugEvent{
@@ -1276,6 +1294,32 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 			Error:    debugToolError(st.Output, st.IsError),
 			Args:     debugToolArgs(st.Input, st.IsError),
 		})
+	}
+}
+
+func collabDebugEvent(agentID string, st providers.TraceStep) db.DebugEvent {
+	operation := st.Operation
+	if operation == "" {
+		operation = "collab_tool_call"
+	}
+	detail := st.Summary
+	if detail == "" {
+		parts := []string{operation}
+		if len(st.Target) > 0 {
+			parts = append(parts, "receivers: "+strings.Join(st.Target, ", "))
+		}
+		if st.Status != "" {
+			parts = append(parts, st.Status)
+		}
+		detail = strings.Join(parts, " · ")
+	}
+	return db.DebugEvent{
+		Type:    db.DebugTool,
+		AgentID: agentID,
+		Name:    operation,
+		Detail:  detail,
+		DurMs:   st.DurationMs,
+		Err:     st.IsError,
 	}
 }
 

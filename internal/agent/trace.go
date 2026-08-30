@@ -183,6 +183,12 @@ type TurnStep struct {
 	// calls" cluster. 0 (omitted) = a lone call, no grouping. Set by the native
 	// tool loop and the claude-cli stream parser alike.
 	Batch int `json:"batch,omitempty"`
+	// Structured Codex collab metadata. Optional for persisted-step compatibility.
+	Operation  string   `json:"operation,omitempty"`
+	Target     []string `json:"target,omitempty"`
+	Status     string   `json:"status,omitempty"`
+	DurationMs int64    `json:"durationMs,omitempty"`
+	Summary    string   `json:"summary,omitempty"`
 	// Areas carries the per-block added/removed diff for a StepContextChange step
 	// (the prompt-epoch drift). Added/Removed above hold the rollup counts.
 	Areas []ContextArea `json:"areas,omitempty"`
@@ -196,6 +202,12 @@ type TurnStep struct {
 	BeforeTokens int    `json:"beforeTokens,omitempty"`
 	AfterTokens  int    `json:"afterTokens,omitempty"`
 	Trigger      string `json:"trigger,omitempty"`
+	// Source is "tionharness" or "cli-native"; Provider names the CLI transport;
+	// SessionAction records resume/native-compact/restart-summary. Open strings
+	// preserve future backend values instead of silently dropping them.
+	Source        string `json:"source,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	SessionAction string `json:"sessionAction,omitempty"`
 	// Optimizer records that an external token-optimizer (sqz / rtk) shrank this
 	// shell step's output before it re-entered the model's context, so the UI can
 	// show a chip instead of the rewrite being invisible. nil = untouched.
@@ -275,14 +287,29 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 		callName = t.Tool
 	}
 	st := TurnStep{
-		Kind:     StepKind(t.Kind),
-		Text:     t.Text,
-		Tool:     tool,
-		CallName: callName,
-		Input:    t.Input,
-		Output:   t.Output,
-		IsError:  t.IsError,
-		Batch:    t.Batch,
+		ID:            t.ID,
+		Ref:           t.Ref,
+		Running:       t.Running,
+		Kind:          StepKind(t.Kind),
+		Text:          t.Text,
+		Tool:          tool,
+		CallName:      callName,
+		Input:         t.Input,
+		Output:        t.Output,
+		IsError:       t.IsError,
+		Batch:         t.Batch,
+		Operation:     t.Operation,
+		Target:        append([]string(nil), t.Target...),
+		Status:        t.Status,
+		DurationMs:    t.DurationMs,
+		Summary:       t.Summary,
+		Source:        t.Source,
+		Provider:      t.Provider,
+		SessionAction: t.SessionAction,
+		FoldedMsgs:    t.FoldedMsgs,
+		BeforeTokens:  t.BeforeTokens,
+		AfterTokens:   t.AfterTokens,
+		Trigger:       t.Trigger,
 	}
 	if st.Kind == StepTool && !st.IsError && tool == "todo_write" {
 		if todos := todoStepItems(t.Input, t.Output); len(todos) > 0 {

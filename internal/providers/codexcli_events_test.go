@@ -16,18 +16,64 @@ func feedAll(p *codexStreamParser, lines ...string) {
 // The fixtures below are REAL lines captured from `codex exec --json`
 // (codex-cli 0.147.0); see the implementation contract §1.4. Keep them verbatim.
 const (
-	fxThreadStarted = `{"type":"thread.started","thread_id":"01a01457-0c11-71d0-b495-615d96b8b913"}`
-	fxTurnStarted   = `{"type":"turn.started"}`
-	fxAgentMessage  = `{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}`
-	fxMCPStarted    = `{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":null,"status":"in_progress"}}`
-	fxMCPCompleted  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":{"content":[{"type":"text","text":"SECRET-IS-BANANA-FOR-tionharness"}],"structured_content":null},"error":null,"status":"completed"}}`
-	fxMCPCancelled  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":{"message":"user cancelled MCP tool call"},"status":"failed"}}`
-	fxCmdStarted    = `{"type":"item.started","item":{"id":"item_6","type":"command_execution","command":"\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'echo hello-from-shell'","aggregated_output":"","exit_code":null,"status":"in_progress"}}`
-	fxCmdCompleted  = `{"type":"item.completed","item":{"id":"item_6","type":"command_execution","command":"...","aggregated_output":"hello-from-shell\r\n","exit_code":0,"status":"completed"}}`
-	fxTurnCompleted = `{"type":"turn.completed","usage":{"input_tokens":21060,"cached_input_tokens":14592,"cache_write_input_tokens":0,"output_tokens":52,"reasoning_output_tokens":33}}`
-	fxTurnFailed    = `{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, ..."}}`
-	fxError         = `{"type":"error","message":"Selected model is at capacity. Please try a different model."}`
+	fxThreadStarted  = `{"type":"thread.started","thread_id":"01a01457-0c11-71d0-b495-615d96b8b913"}`
+	fxTurnStarted    = `{"type":"turn.started"}`
+	fxAgentMessage   = `{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}`
+	fxMCPStarted     = `{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":null,"status":"in_progress"}}`
+	fxMCPCompleted   = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":{"content":[{"type":"text","text":"SECRET-IS-BANANA-FOR-tionharness"}],"structured_content":null},"error":null,"status":"completed"}}`
+	fxMCPCancelled   = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":{"message":"user cancelled MCP tool call"},"status":"failed"}}`
+	fxCmdStarted     = `{"type":"item.started","item":{"id":"item_6","type":"command_execution","command":"\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'echo hello-from-shell'","aggregated_output":"","exit_code":null,"status":"in_progress"}}`
+	fxCmdCompleted   = `{"type":"item.completed","item":{"id":"item_6","type":"command_execution","command":"...","aggregated_output":"hello-from-shell\r\n","exit_code":0,"status":"completed"}}`
+	fxTurnCompleted  = `{"type":"turn.completed","usage":{"input_tokens":21060,"cached_input_tokens":14592,"cache_write_input_tokens":0,"output_tokens":52,"reasoning_output_tokens":33}}`
+	fxTurnFailed     = `{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, ..."}}`
+	fxError          = `{"type":"error","message":"Selected model is at capacity. Please try a different model."}`
+	fxCompactStarted = `{"type":"item.started","item":{"id":"cmp_1","type":"context_compaction"}}`
+	fxCompactDone    = `{"type":"item.completed","item":{"id":"cmp_1","type":"context_compaction"}}`
 )
+
+func TestCodexParserNativeCompactionLifecycle(t *testing.T) {
+	var events []TraceStep
+	p := newCodexParser("", func(step TraceStep) { events = append(events, step) })
+	feedAll(p, fxTurnStarted, fxCompactStarted, fxCompactDone, fxCompactDone, fxAgentMessage, fxTurnCompleted)
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || !events[0].Running || events[1].Running {
+		t.Fatalf("events = %+v, want running then completed", events)
+	}
+	if events[0].ID != "cmp_1" || events[1].ID != "cmp_1" {
+		t.Fatalf("event IDs = %q/%q", events[0].ID, events[1].ID)
+	}
+	if len(resp.Trace) != 1 || resp.Trace[0].Kind != "compaction" || resp.Trace[0].Source != "cli-native" {
+		t.Fatalf("trace = %+v", resp.Trace)
+	}
+}
+
+func TestCodexParserCollabMetadataExcludesPrompt(t *testing.T) {
+	const secretPrompt = "TOP SECRET DELEGATION PROMPT"
+	started := `{"type":"item.started","item":{"id":"collab_1","type":"collab_tool_call","tool":"spawn_agent","receiver_thread_ids":["thread-a","thread-b"],"prompt":"` + secretPrompt + `","status":"in_progress"}}`
+	completed := `{"type":"item.completed","item":{"id":"collab_1","type":"collab_tool_call","tool":"spawn_agent","receiver_thread_ids":["thread-a","thread-b"],"prompt":"` + secretPrompt + `","status":"completed"}}`
+	p := newCodexParser("", nil)
+	feedAll(p, fxTurnStarted, started, completed, fxAgentMessage, fxTurnCompleted)
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Trace) != 1 {
+		t.Fatalf("trace = %+v", resp.Trace)
+	}
+	step := resp.Trace[0]
+	if step.Operation != "spawn_agent" || len(step.Target) != 2 || step.Status != "completed" {
+		t.Fatalf("collab metadata = %+v", step)
+	}
+	if step.Summary == "" || strings.Contains(step.Summary, secretPrompt) || strings.Contains(step.Output, secretPrompt) || strings.Contains(string(step.Input), secretPrompt) {
+		t.Fatalf("unsafe collab presentation: %+v", step)
+	}
+	if step.DurationMs != step.DurMs {
+		t.Fatalf("durationMs=%d durMs=%d", step.DurationMs, step.DurMs)
+	}
+}
 
 func TestCodexParserHappyTurn(t *testing.T) {
 	p := newCodexParser("gpt-5.5", nil)

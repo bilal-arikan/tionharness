@@ -239,6 +239,10 @@ yanıtın tüm olayları (llm_call/tool/error/recovery/compaction) o mesaja bağ
 - **claude-cli araçları:** CLI kendi tool-loop'unu sürdüğü için per-tool olaylar
   normalde yayılmaz; `Runtime.emitCLIToolDebug` stream-json trace'inden her araç
   için bir `DebugTool` olayı yayar (boyut + hata; gecikme yalnız native yolda).
+- **Codex collab araçları:** `Name` gerçek collab operation (eksikse
+  `collab_tool_call`), `Detail` yalnız operation + alıcılar + durumdan oluşan
+  güvenli özet, `DurMs` CLI item yaşam döngüsünde ölçülen süredir. Ham collab
+  prompt'u debug günlüğüne yazılmaz.
 - **UI:** her asistan mesajının sol üstünde küçük buton (`MessageDebugPanel`) →
   açılır panelde o mesajın token/maliyet/süre + araç kırılımı (lazy fetch).
 - **cliOverhead iyileştirme:** context-preview projeksiyonu artık lifetime
