@@ -870,15 +870,22 @@ func (d *DB) MarkSessionRead(ctx context.Context, sessionID string) error {
 // attachment uploads that belonged to it (so uploaded files don't outlive the
 // session that referenced them).
 func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
+	return d.deleteSession(ctx, sessionID, os.RemoveAll)
+}
+
+func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func(string) error) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.sessions[sessionID]; !ok {
 		return ErrNotFound
 	}
+	if err := removeSessionDirWithRetry(ctx, d.dir(dirSessions, sessionID), removeAll); err != nil {
+		return err
+	}
 	delete(d.sessions, sessionID)
 	delete(d.messages, sessionID)
 	d.deleteSessionFilesLocked(sessionID)
-	return os.RemoveAll(d.dir(dirSessions, sessionID))
+	return nil
 }
 
 // deleteSessionFilesLocked removes a session's artifacts when the session is

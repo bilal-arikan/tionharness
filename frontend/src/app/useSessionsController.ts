@@ -17,6 +17,7 @@ import { draftSessionIds, readSessionDraftState } from '@/shared/lib/sessionDraf
 import { shouldDiscardFreshSession } from './freshSessionCleanup'
 import { pickInitialSession } from './pickInitialSession'
 import { saveDefaultAgent } from './defaultAgentSave'
+import { deleteSessionAndRefresh } from './sessionDelete'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
@@ -482,7 +483,7 @@ export function useSessionsController({
     async (id: string) => {
       if (id === freshEmptyRef.current) freshEmptyRef.current = null
       try {
-        await api.deleteSession(id)
+        await deleteSessionAndRefresh(id, api.deleteSession, refreshSessions)
         setSessions((prev) => {
           const next = prev.filter((s) => s.id !== id)
           if (activeSessionId === id) {
@@ -495,7 +496,7 @@ export function useSessionsController({
         setError((e as Error).message)
       }
     },
-    [activeSessionId, setError],
+    [activeSessionId, refreshSessions, setError],
   )
 
   // Delete a single message from the open session (prune a mistaken/test one).
