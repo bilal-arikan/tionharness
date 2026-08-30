@@ -53,7 +53,9 @@ store/
 ├── knowledge/{id}.json              # embedding base64 olarak gömülü
 ├── mcp-servers/{id}.json
 ├── flows/{id}.json
-├── flow-runs/{id}.json
+├── flow-runs/{id}.json               # legacy uyumlu tam flow state checkpoint'i
+├── flow-run-state-deltas/{id}/       # node geçişleri; sürümlü, monoton delta sidecar'ları
+│   └── {sequence}.json               # checkpoint hash'i ile stale/bozuk journal doğrulaması
 ├── usage/{agentID}__{YYYY-MM-DD}.json
 ├── model-resolutions.json            # "<provider>|<istenen model>" → gerçekte sunulan model
 │                                     #   (claude-cli takma adları: "opus" → "claude-opus-5");

@@ -1,5 +1,23 @@
 package db
 
+import "encoding/json"
+
+const FlowRunStateDeltaVersion = 1
+
+// FlowRunStateDelta is one ordered mutation relative to the immutable legacy
+// FlowRun.State checkpoint. CheckpointID is the SHA-256 digest of that state.
+type FlowRunStateDelta struct {
+	Version       int                        `json:"version"`
+	CheckpointID  string                     `json:"checkpointId"`
+	Sequence      uint64                     `json:"sequence"`
+	Scalars       map[string]json.RawMessage `json:"scalars,omitempty"`
+	OutputsUpsert map[string]string          `json:"outputsUpsert,omitempty"`
+	OutputsDelete []string                   `json:"outputsDelete,omitempty"`
+	TraceAppend   []json.RawMessage          `json:"traceAppend,omitempty"`
+	ThreadAppend  []json.RawMessage          `json:"threadAppend,omitempty"`
+	Spawned       json.RawMessage            `json:"spawned,omitempty"`
+}
+
 // Flow run statuses.
 const (
 	FlowRunning = "running"
@@ -39,8 +57,8 @@ type Flow struct {
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
-// FlowRun is one execution instance of a flow. State is the restart-safe JSON
-// snapshot the engine persists after each node.
+// FlowRun is one execution instance of a flow. State is the legacy-compatible
+// restart checkpoint; DB readers materialize its ordered delta sidecar.
 type FlowRun struct {
 	ID     string `json:"id"`
 	FlowID string `json:"flowId"`
