@@ -321,15 +321,19 @@ export function SkillsPanel({ onError }: Props) {
 
   // Delete the selected skill (confirm first), then refresh + clear selection.
   // After restoring a shipped default the file on disk is a different document —
-  // frontmatter AND body. Clear the loaded detail and re-select it so the body,
-  // the visibility flags and the "edited" badge are all re-read rather than
-  // showing the pre-restore copy.
+  // frontmatter AND body. Re-read it so the body, visibility flags and edited
+  // badge all reflect the restored file while keeping the detail pane selected.
   const restoreDone = useCallback(() => {
     const slug = active?.slug ?? null
     setActive(null)
     reload()
-    if (slug) setActiveSlug(slug)
-  }, [active, reload, setActiveSlug])
+    if (slug) {
+      api
+        .getSkill(slug)
+        .then(setActive)
+        .catch((e) => onError((e as Error).message))
+    }
+  }, [active, reload, onError])
 
   const removeActive = useCallback(() => {
     if (!active) return
