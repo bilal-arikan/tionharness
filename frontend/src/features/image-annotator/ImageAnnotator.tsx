@@ -1,0 +1,287 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button, ModalOverlay } from '@/shared/components'
+import {
+  drawStrokes,
+  exportAnnotation,
+  type AnnotatorExport,
+  type DrawableSource,
+} from './imageAnnotatorExport'
+import {
+  IMAGE_ANNOTATOR_ERROR_MESSAGES,
+  type ImageAnnotatorErrorCode,
+} from './imageAnnotatorLimits'
+import {
+  appendPoint,
+  beginStroke,
+  clear,
+  createDrawingModel,
+  finalizeStroke,
+  redo,
+  snapshot,
+  snapshotsEqual,
+  undo,
+  type DrawingModel,
+  type StrokePoint,
+} from './imageAnnotatorModel'
+
+interface Props {
+  source: DrawableSource
+  initialStrokes?: DrawingModel['strokes']
+  onSave(result: AnnotatorExport & { revision: number }): Promise<void>
+  onClose(): void
+}
+
+const closeQuestion = 'Kaydedilmemiş çizimler var. Kaydetmeden çıkılsın mı?'
+
+export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }: Props) {
+  const [model, setModel] = useState(() => createDrawingModel(initialStrokes))
+  const modelRef = useRef(model)
+  const [baseline, setBaseline] = useState(() => snapshot(createDrawingModel(initialStrokes)))
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const frameRef = useRef<number | null>(null)
+  const pendingPointRef = useRef<StrokePoint | null>(null)
+  const activePointerRef = useRef<number | null>(null)
+  const dirty = useMemo(() => !snapshotsEqual(snapshot(model), baseline), [baseline, model])
+
+  const apply = useCallback((next: DrawingModel, warning?: ImageAnnotatorErrorCode) => {
+    modelRef.current = next
+    setModel(next)
+    if (warning) setError(IMAGE_ANNOTATOR_ERROR_MESSAGES[warning])
+  }, [])
+
+  const render = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1))
+    const width = Math.max(1, Math.round(rect.width * ratio))
+    const height = Math.max(1, Math.round(rect.height * ratio))
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width
+      canvas.height = height
+    }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      setError(IMAGE_ANNOTATOR_ERROR_MESSAGES.EXPORT_FAILED)
+      return
+    }
+    ctx.clearRect(0, 0, width, height)
+    ctx.save()
+    ctx.scale(width / source.width, height / source.height)
+    source.draw(ctx)
+    drawStrokes(ctx, model.active ? [...model.strokes, model.active] : model.strokes)
+    ctx.restore()
+  }, [model, source])
+
+  useEffect(() => {
+    render()
+  }, [render])
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const observer = new ResizeObserver(render)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [render])
+  useEffect(() => {
+    const handleDprChange = () => {
+      render()
+      watchDpr()
+    }
+    let mediaQuery: MediaQueryList | null = null
+    const watchDpr = () => {
+      mediaQuery?.removeEventListener('change', handleDprChange)
+      mediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+      mediaQuery.addEventListener('change', handleDprChange, { once: true })
+    }
+    watchDpr()
+    window.addEventListener('resize', render)
+    return () => {
+      mediaQuery?.removeEventListener('change', handleDprChange)
+      window.removeEventListener('resize', render)
+    }
+  }, [render])
+
+  const finish = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+    pendingPointRef.current = null
+    activePointerRef.current = null
+    const result = finalizeStroke(modelRef.current)
+    apply(result.model, result.warning)
+  }, [apply])
+
+  useEffect(() => {
+    const blur = () => finish()
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('blur', blur)
+      finish()
+    }
+  }, [finish])
+
+  const pointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): StrokePoint => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * source.width,
+      y: ((event.clientY - rect.top) / rect.height) * source.height,
+      pressure: event.pressure || 0.5,
+    }
+  }
+
+  const close = useCallback(() => {
+    if (!dirty || window.confirm(closeQuestion)) onClose()
+  }, [dirty, onClose])
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        close()
+        return
+      }
+      if (!(event.ctrlKey || event.metaKey)) return
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        apply(event.shiftKey ? redo(modelRef.current) : undo(modelRef.current))
+        return
+      }
+      if (event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        apply(redo(modelRef.current))
+      }
+    }
+    window.addEventListener('keydown', keydown)
+    return () => window.removeEventListener('keydown', keydown)
+  }, [apply, close])
+
+  const save = async () => {
+    if (savingRef.current || !dirty) return
+    savingRef.current = true
+    const savingSnapshot = snapshot(modelRef.current)
+    const savingRevision = modelRef.current.revision
+    setSaving(true)
+    setError(null)
+    try {
+      const exported = await exportAnnotation(source, savingSnapshot.strokes)
+      await onSave({ ...exported, revision: savingRevision })
+      setBaseline(savingSnapshot)
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : IMAGE_ANNOTATOR_ERROR_MESSAGES.EXPORT_FAILED,
+      )
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  return (
+    <ModalOverlay onClose={close} closeOnEscape={false} padding="p-3">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Görsel üzerine çiz"
+        className="flex h-[min(90vh,900px)] w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]"
+      >
+        <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-3">
+          <Button
+            aria-label="Geri al"
+            disabled={!model.undo.length || !!model.active}
+            onClick={() => apply(undo(modelRef.current))}
+          >
+            Geri al
+          </Button>
+          <Button
+            aria-label="Yinele"
+            disabled={!model.redo.length || !!model.active}
+            onClick={() => apply(redo(modelRef.current))}
+          >
+            Yinele
+          </Button>
+          <Button
+            aria-label="Çizimi temizle"
+            disabled={!model.strokes.length || !!model.active}
+            onClick={() => apply(clear(modelRef.current))}
+          >
+            Temizle
+          </Button>
+          <span className="flex-1" />
+          <Button aria-label="Kapat" onClick={close}>
+            Vazgeç
+          </Button>
+          <Button
+            aria-label="Görseli kaydet"
+            disabled={!dirty || saving}
+            onClick={() => void save()}
+          >
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </Button>
+        </header>
+        {error && (
+          <p role="alert" className="m-2 rounded bg-red-500/10 px-3 py-2 text-sm text-red-500">
+            {error}
+          </p>
+        )}
+        <div className="min-h-0 flex-1 bg-black/20 p-2">
+          <canvas
+            ref={canvasRef}
+            aria-label="Çizim alanı"
+            className="mx-auto block h-full max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            style={{ touchAction: 'none', aspectRatio: `${source.width} / ${source.height}` }}
+            onPointerDown={(event) => {
+              if (!event.isPrimary || event.button !== 0 || activePointerRef.current !== null)
+                return
+              try {
+                event.currentTarget.setPointerCapture(event.pointerId)
+              } catch {
+                setError('İşaretçi yakalanamadı. Çizimi yeniden deneyin.')
+                return
+              }
+              activePointerRef.current = event.pointerId
+              const result = beginStroke(
+                modelRef.current,
+                pointFromEvent(event),
+                '#ef4444',
+                Math.max(2, source.width / 300),
+              )
+              apply(result.model, result.warning)
+              if (!result.model.active) activePointerRef.current = null
+            }}
+            onPointerMove={(event) => {
+              if (
+                !event.isPrimary ||
+                activePointerRef.current !== event.pointerId ||
+                !modelRef.current.active
+              )
+                return
+              pendingPointRef.current = pointFromEvent(event)
+              if (frameRef.current !== null) return
+              frameRef.current = requestAnimationFrame(() => {
+                frameRef.current = null
+                const point = pendingPointRef.current
+                pendingPointRef.current = null
+                if (!point) return
+                const result = appendPoint(modelRef.current, point)
+                apply(result.model, result.warning)
+                if (!result.model.active) activePointerRef.current = null
+              })
+            }}
+            onPointerUp={(event) => {
+              if (activePointerRef.current === event.pointerId) finish()
+            }}
+            onPointerCancel={(event) => {
+              if (activePointerRef.current === event.pointerId) finish()
+            }}
+            onLostPointerCapture={(event) => {
+              if (activePointerRef.current === event.pointerId) finish()
+            }}
+          />
+        </div>
+      </section>
+    </ModalOverlay>
+  )
+}
