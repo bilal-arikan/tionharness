@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseRef, refToString, type ViewHandle, type ViewNeighborhoodResult } from '@/types'
-import { buildFocusGraph } from './explorerModel'
+import { buildFocusGraph, VISIBLE_RELATIONS_PER_SIDE } from './explorerModel'
 
 const handle = (kind: 'session' | 'agent' | 'category', id: string): ViewHandle => ({
   label: `${kind}-${id}`,
@@ -63,6 +63,8 @@ describe('buildFocusGraph', () => {
     expect(edges.map((edge) => `${edge.source}->${edge.target}`).sort()).toEqual(
       ['session:S1->session:S2', 'session:S2->session:S1'].sort(),
     )
+    expect(edges.every((edge) => edge.style?.strokeDasharray === '7 5')).toBe(true)
+    expect(edges.every((edge) => edge.label === 'iki yönlü')).toBe(true)
   })
 
   it('deduplicates a self-loop edge and never duplicates focus node', () => {
@@ -76,7 +78,39 @@ describe('buildFocusGraph', () => {
     expect(nodes).toHaveLength(1)
     expect(edges).toHaveLength(1)
     expect(edges[0]).toMatchObject({ source: 'session:SELF', target: 'session:SELF' })
+    expect(edges[0].label).toBe('cycle')
+    expect(edges[0].ariaLabel).toContain('cycle')
     expect(nodes[0].data.loading).toBe(true)
+  })
+
+  it('caps each canvas side deterministically and retains every remainder in overflow', () => {
+    const parents = Array.from({ length: 9 }, (_, index) => handle('agent', `P${index}`)).reverse()
+    const children = Array.from({ length: 10 }, (_, index) =>
+      handle('session', `C${index}`),
+    ).reverse()
+
+    const result = buildFocusGraph({
+      neighborhood: neighborhood({ parents, children }),
+      selectedKey: null,
+      search: '',
+      loading: false,
+    })
+
+    expect(
+      result.nodes.filter((node) => node.data.depth === 0 && !node.data.overflow),
+    ).toHaveLength(VISIBLE_RELATIONS_PER_SIDE)
+    expect(
+      result.nodes.filter((node) => node.data.depth === 2 && !node.data.overflow),
+    ).toHaveLength(VISIBLE_RELATIONS_PER_SIDE)
+    expect(result.overflow.parents.map((item) => item.ref.id)).toEqual(['P6', 'P7', 'P8'])
+    expect(result.overflow.children.map((item) => item.ref.id)).toEqual(['C6', 'C7', 'C8', 'C9'])
+    expect(result.nodes.find((node) => node.id === '__overflow:parents')?.data.label).toBe(
+      '+3 üst bağlantı',
+    )
+    expect(result.nodes.find((node) => node.id === '__overflow:children')?.data.label).toBe(
+      '+4 alt bağlantı',
+    )
+    expect(result.edges).toHaveLength(VISIBLE_RELATIONS_PER_SIDE * 2)
   })
 
   it('keeps an empty neighborhood as a real focus node', () => {

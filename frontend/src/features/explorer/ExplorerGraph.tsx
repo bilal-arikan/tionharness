@@ -9,7 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { ViewRef } from '@/types'
+import type { ViewHandle, ViewRef } from '@/types'
 import { ExplorerNode } from './ExplorerNode'
 import type { ExplorerRFNode } from './explorerModel'
 
@@ -18,10 +18,17 @@ interface Props {
   edges: Edge[]
   onNodeClick: (ref: ViewRef) => void
   onNodeDoubleClick: (ref: ViewRef) => void
+  onOverflowClick: (side: 'parents' | 'children', handles: ViewHandle[]) => void
 }
 
 // Positions come from the pure focus model; canvas owns only pan/zoom and input.
-export function ExplorerGraph({ nodes, edges, onNodeClick, onNodeDoubleClick }: Props) {
+export function ExplorerGraph({
+  nodes,
+  edges,
+  onNodeClick,
+  onNodeDoubleClick,
+  onOverflowClick,
+}: Props) {
   const nodeTypes = useMemo<NodeTypes>(() => ({ explorer: ExplorerNode }), [])
 
   return (
@@ -30,8 +37,15 @@ export function ExplorerGraph({ nodes, edges, onNodeClick, onNodeDoubleClick }: 
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodeClick={(_, n) => onNodeClick((n as ExplorerRFNode).data.ref)}
-        onNodeDoubleClick={(_, n) => onNodeDoubleClick((n as ExplorerRFNode).data.ref)}
+        onNodeClick={(_, n) => {
+          const data = (n as ExplorerRFNode).data
+          if (data.overflow) onOverflowClick(data.overflow.side, data.overflow.handles)
+          else onNodeClick(data.ref)
+        }}
+        onNodeDoubleClick={(_, n) => {
+          const data = (n as ExplorerRFNode).data
+          if (!data.overflow) onNodeDoubleClick(data.ref)
+        }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable

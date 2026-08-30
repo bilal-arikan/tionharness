@@ -1,0 +1,907 @@
+{
+  "version": "0.8.4",
+  "pages": [
+    {
+      "id": "page1",
+      "name": "Explore",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n1",
+          "name": "Explore — Focus graph",
+          "x": 0.0,
+          "y": 0.0,
+          "width": 1440.0,
+          "height": 900.0,
+          "layout": "vertical",
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#0B1020"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n2",
+              "name": "Header",
+              "width": "fill_container",
+              "height": 64.0,
+              "layout": "horizontal",
+              "gap": 18.0,
+              "padding": [
+                0.0,
+                24.0
+              ],
+              "alignItems": "center",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#10182B"
+                }
+              ],
+              "stroke": {
+                "thickness": 1.0,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#24314A"
+                  }
+                ]
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n3",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "⌁  Harita",
+                  "fontSize": 17.0,
+                  "fontWeight": 700,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#EAF0FF"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n4",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Odak çevresinde ara…",
+                  "fontSize": 12.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#7E8BA7"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n5",
+                  "width": "fill_container",
+                  "height": 1.0,
+                  "children": []
+                },
+                {
+                  "type": "text",
+                  "id": "n6",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Yenile",
+                  "fontSize": 12.0,
+                  "fontWeight": 600,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#9CB8FF"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n7",
+              "name": "Body",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n8",
+                  "name": "Focus canvas",
+                  "width": 1060.0,
+                  "height": "fill_container",
+                  "layout": "none",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#0B1020"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n9",
+                      "x": 80.0,
+                      "y": 36.0,
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "ÜST BAĞLANTILAR",
+                      "fontSize": 11.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#66738E"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n10",
+                      "x": 484.0,
+                      "y": 36.0,
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "ODAK",
+                      "fontSize": 11.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#66738E"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n11",
+                      "x": 790.0,
+                      "y": 36.0,
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "ALT BAĞLANTILAR",
+                      "fontSize": 11.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#66738E"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n12",
+                      "name": "Ana Workspace",
+                      "x": 64.0,
+                      "y": 194.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n13",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  Ana Workspace",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n14",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "workspace",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#6D8DFF"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n15",
+                      "name": "Planlama",
+                      "x": 64.0,
+                      "y": 302.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#F6B94A"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n16",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  Planlama",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n17",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "category",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F6B94A"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n18",
+                      "name": "+7 üst bağlantı",
+                      "x": 64.0,
+                      "y": 410.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n19",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  +7 üst bağlantı",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n20",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Tümünü listele",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9CB8FF"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n21",
+                      "name": "TSK487",
+                      "x": 404.0,
+                      "y": 280.0,
+                      "width": 252.0,
+                      "height": 94.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#18284B"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 2.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#7DA2FF"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n22",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◎  TSK487",
+                          "fontSize": 15.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n23",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "ODAK · task",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#6D8DFF"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n24",
+                      "name": "Explorer Graph",
+                      "x": 774.0,
+                      "y": 154.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n25",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  Explorer Graph",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n26",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "artifact",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#5DD6A8"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n27",
+                      "name": "Coder oturumu",
+                      "x": 774.0,
+                      "y": 262.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n28",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  Coder oturumu",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n29",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "session",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#A78BFA"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n30",
+                      "name": "TSK487",
+                      "x": 774.0,
+                      "y": 370.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n31",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  TSK487",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n32",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "cycle · iki yönlü",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F6B94A"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n33",
+                      "name": "+12 alt bağlantı",
+                      "x": 774.0,
+                      "y": 478.0,
+                      "width": 218.0,
+                      "height": 72.0,
+                      "layout": "vertical",
+                      "gap": 8.0,
+                      "padding": [
+                        12.0,
+                        14.0
+                      ],
+                      "cornerRadius": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#121B30"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2A3853"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n34",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "◇  +12 alt bağlantı",
+                          "fontSize": 13.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F1F5FF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n35",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Tümünü listele",
+                          "fontSize": 10.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9CB8FF"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "id": "n36",
+                      "x": 282.0,
+                      "y": 230.0,
+                      "x2": 122.0,
+                      "y2": 0.0,
+                      "stroke": {
+                        "thickness": 2.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#526887"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "id": "n37",
+                      "x": 282.0,
+                      "y": 338.0,
+                      "x2": 122.0,
+                      "y2": 0.0,
+                      "stroke": {
+                        "thickness": 2.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#526887"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "id": "n38",
+                      "x": 656.0,
+                      "y": 190.0,
+                      "x2": 118.0,
+                      "y2": 0.0,
+                      "stroke": {
+                        "thickness": 2.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#526887"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "id": "n39",
+                      "x": 656.0,
+                      "y": 298.0,
+                      "x2": 118.0,
+                      "y2": 0.0,
+                      "stroke": {
+                        "thickness": 2.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#526887"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "line",
+                      "id": "n40",
+                      "x": 656.0,
+                      "y": 406.0,
+                      "x2": 118.0,
+                      "y2": 0.0,
+                      "stroke": {
+                        "thickness": 2.0,
+                        "dashPattern": [
+                          7.0,
+                          6.0
+                        ],
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#F6B94A"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "n41",
+                      "x": 680.0,
+                      "y": 386.0,
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "↔ cycle",
+                      "fontSize": 10.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#F6B94A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n42",
+                  "name": "Existing detail panel",
+                  "width": 380.0,
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16.0,
+                  "padding": 24.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#10182B"
+                    }
+                  ],
+                  "stroke": {
+                    "thickness": 1.0,
+                    "fill": [
+                      {
+                        "type": "solid",
+                        "color": "#24314A"
+                      }
+                    ]
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n43",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Seçili öğe",
+                      "fontSize": 11.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#7E8BA7"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n44",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Planlama",
+                      "fontSize": 20.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#F2F5FF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n45",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "category:planning",
+                      "fontSize": 11.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#9CB8FF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n46",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Tek tık seçimi bu panelde gösterir.\nÇift tık yeni odağı ortalar.",
+                      "fontSize": 12.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#A9B4CA"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n47",
+                      "width": "fill_container",
+                      "height": 1.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#24314A"
+                        }
+                      ],
+                      "children": []
+                    },
+                    {
+                      "type": "text",
+                      "id": "n48",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Özet\n\nİlişkiler ve mevcut get_view içeriği\nburada korunur.",
+                      "fontSize": 13.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#D5DCEC"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "editorMeta": {
+    "activePageIndex": 0,
+    "preserveAuthoredGeometry": false
+  }
+}

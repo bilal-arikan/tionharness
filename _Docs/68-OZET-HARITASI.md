@@ -1,7 +1,8 @@
 # 68 — Özet Haritası (Workspace Explorer / semantic-zoom drill-down)
 
 > **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06) + **TSK66 genişletmesi** ✅ (2026-08-06:
-> single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları).
+> single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları) +
+> **TSK487 odak grafiği tasarımı** ✅ (2026-08-30).
 > Kalan opsiyonel: MCP resource tree + büyük-workspace performansı (sigma.js) — ihtiyaç
 > kanıtlanınca.
 > **Önkoşul okuma:** `_Docs/66-VIEW-KATMANI.md` (bu özelliğin motoru), `internal/view/*`,
@@ -120,6 +121,20 @@ derinlik/çocuk cap'i şart (§8.1).
   → alt resource'lar) → herhangi bir MCP istemcisi (Claude Code dahil) gezer.
 
 ## 7. Frontend (`features/explorer`)
+
+TSK487 ile ekran tek-hop odak grafiğine geçti: parent solda, focus ortada, child
+sağda deterministik üç kolondur. Tek tık yalnız seçer ve mevcut `ViewPanel` detayını
+günceller; çift tık odağı değiştirir. Odak kartı accent yüzey/ring ile, seçili kart
+warning ring ile ayrılır. Cycle, self-loop ve iki yönlü ilişkiler kesik kenar yanında
+metin rozeti taşır; anlam yalnız renge bağlı değildir.
+
+Canvas görünürlük eşiği yön başına `VISIBLE_RELATIONS_PER_SIDE = 6` olarak sabittir.
+Bu bir API veya veri sınırı değildir: model tam, sıralı remainder listesini korur;
+parent ve child tarafında ayrı `+N` sentetik düğüm üretir. Düğüm tüm kalan handle'ları
+scroll edilebilir drawer içinde açar; listedeki tek tık seçer, çift tık odağı değiştirir.
+Self-loop yeni bir düğüm üretmez. Tasarım kaynağı `_Docs/design/explore-focus-graph.js`,
+Forge belgesi `_Docs/design/explore-focus-graph.op`, görsel kanıt
+`_Docs/design/explore-focus-graph.png` altındadır.
 
 - **Kütüphane kararı:** yeni ağır bağımlılık YOK. **React Flow** (Akış builder'da zaten
   kurulu — `@xyflow/react`) yeniden kullanılır; otomatik hiyerarşik yerleşim gerekirse

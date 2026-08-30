@@ -9,11 +9,17 @@ import { ExplorerView } from './ExplorerView'
 const mocks = vi.hoisted(() => ({
   graphState: {} as Record<string, unknown>,
   refreshFocused: vi.fn(),
+  graphProps: {} as Record<string, unknown>,
 }))
 
 vi.mock('@/shared/hooks/useRefreshTrigger', () => ({ useRefreshTrigger: () => 0 }))
 vi.mock('@/features/view/ViewPanel', () => ({ ViewPanel: () => <div>detail panel</div> }))
-vi.mock('./ExplorerGraph', () => ({ ExplorerGraph: () => <div>graph canvas</div> }))
+vi.mock('./ExplorerGraph', () => ({
+  ExplorerGraph: (props: Record<string, unknown>) => {
+    mocks.graphProps = props
+    return <div>graph canvas</div>
+  },
+}))
 vi.mock('./useExplorerGraph', () => ({ useExplorerGraph: () => mocks.graphState }))
 
 const rootRef: ViewRef = { kind: 'workspace', id: 'root' }
@@ -84,5 +90,28 @@ describe('ExplorerView focus request status', () => {
     act(() => retry?.click())
 
     expect(mocks.refreshFocused).toHaveBeenCalledOnce()
+  })
+
+  it('opens every overflow handle in a selectable list', () => {
+    const container = renderView()
+    const handles = [
+      { label: 'Agent A', ref: { kind: 'agent' as const, id: 'A' } },
+      { label: 'Agent B', ref: { kind: 'agent' as const, id: 'B' } },
+    ]
+
+    act(() => {
+      ;(
+        mocks.graphProps.onOverflowClick as (
+          side: 'parents' | 'children',
+          items: typeof handles,
+        ) => void
+      )('parents', handles)
+    })
+
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Kalan üst bağlantılar',
+    )
+    expect(container.textContent).toContain('Agent A')
+    expect(container.textContent).toContain('Agent B')
   })
 })

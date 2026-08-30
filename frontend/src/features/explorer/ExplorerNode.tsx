@@ -64,16 +64,35 @@ export function ExplorerNode({ data }: NodeProps<ExplorerRFNode>) {
   const dense = zoom < 0.65
   const Icon = KIND_ICON[data.ref.kind] ?? Boxes
 
-  const border = data.selected ? 'var(--color-accent)' : 'var(--color-border)'
-  const ring = data.selected ? 'ring-2 ring-[var(--color-accent-soft)]' : ''
+  const border = data.selected
+    ? 'var(--color-warning)'
+    : data.focus
+      ? 'var(--color-accent)'
+      : 'var(--color-border)'
+  const ring = data.selected
+    ? 'ring-2 ring-[var(--color-warning)]'
+    : data.focus
+      ? 'ring-2 ring-[var(--color-accent-soft)]'
+      : ''
+  const surface = data.focus
+    ? 'bg-[var(--color-accent-soft)]'
+    : data.overflow
+      ? 'bg-[var(--color-surface-2)]'
+      : 'bg-[var(--color-surface)]'
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-lg border bg-[var(--color-surface)] px-2.5 py-1.5 text-xs shadow-[var(--shadow-sm)] transition ${ring}`}
+      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs shadow-[var(--shadow-sm)] transition ${surface} ${ring}`}
       // Dimmed nodes fade to background (focus+context) but stay clickable — never
       // hidden, so the map's shape is preserved.
-      style={{ borderColor: border, maxWidth: 230, opacity: data.dimmed ? 0.35 : 1 }}
+      style={{
+        borderColor: border,
+        width: data.focus ? 260 : 230,
+        minHeight: data.focus ? 72 : 54,
+        opacity: data.dimmed ? 0.35 : 1,
+      }}
       title={data.label}
+      aria-label={`${data.focus ? 'Odak: ' : data.selected ? 'Seçili: ' : ''}${data.label}${data.overflow ? ', kalan ilişkileri listele' : ''}`}
     >
       <Handle
         type="target"
@@ -82,18 +101,24 @@ export function ExplorerNode({ data }: NodeProps<ExplorerRFNode>) {
       />
 
       <Icon
-        size={15}
+        size={data.focus ? 19 : 15}
         className="shrink-0 text-[var(--color-accent)]"
         strokeWidth={2}
         style={KIND_COLOR[data.ref.kind] ? { color: KIND_COLOR[data.ref.kind] } : undefined}
       />
-      <span className={`truncate ${data.selected ? 'font-medium' : ''}`}>{data.label}</span>
+      <span
+        className={`truncate ${data.focus ? 'text-sm font-bold' : data.selected ? 'font-semibold' : ''}`}
+      >
+        {data.label}
+      </span>
 
       {!dense && (
         <span className="ml-auto flex shrink-0 items-center gap-1 text-[var(--color-text-dim)]">
-          {data.childCount != null && data.childCount > 0 && (
+          {data.overflow ? (
+            <span className="font-semibold text-[var(--color-accent)]">Tümünü gör</span>
+          ) : data.childCount != null && data.childCount > 0 ? (
             <span className="tabular-nums">{data.childCount}</span>
-          )}
+          ) : null}
           {data.loading ? (
             <Loader2 size={13} className="animate-spin" />
           ) : (

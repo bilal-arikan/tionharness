@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Map as MapIcon, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  Map as MapIcon,
+  MessageSquare,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import { refToString } from '@/types'
+import { refToString, type ViewHandle } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { ExplorerGraph } from './ExplorerGraph'
 import { useExplorerGraph } from './useExplorerGraph'
@@ -24,6 +32,10 @@ interface Props {
 // relationship graph of running agent instances, this is a state drill-down.
 export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }: Props) {
   const [search, setSearch] = useState('')
+  const [overflow, setOverflow] = useState<{
+    side: 'parents' | 'children'
+    handles: ViewHandle[]
+  } | null>(null)
   const { nodes, edges, select, focus, selectedRef, focusLoading, focusError, refreshFocused } =
     useExplorerGraph({ search, onError, initialFocus: focusNode, onFocus: onFocusNode })
 
@@ -77,11 +89,17 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
 
       <div className="flex min-h-0 flex-1">
         <div className="relative min-h-0 flex-1 bg-[var(--color-bg)]">
+          <div className="pointer-events-none absolute inset-x-8 top-4 z-10 grid grid-cols-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
+            <span>Üst bağlantılar</span>
+            <span className="text-center text-[var(--color-accent)]">Odak</span>
+            <span className="text-right">Alt bağlantılar</span>
+          </div>
           <ExplorerGraph
             nodes={nodes}
             edges={edges}
             onNodeClick={select}
             onNodeDoubleClick={focus}
+            onOverflowClick={(side, handles) => setOverflow({ side, handles })}
           />
           {focusLoading && (
             <div
@@ -104,6 +122,59 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
                 Tekrar dene
               </button>
             </div>
+          )}
+          {overflow && (
+            <section
+              role="dialog"
+              aria-modal="false"
+              aria-label={`${overflow.side === 'parents' ? 'Üst' : 'Alt'} taşan bağlantılar`}
+              className="absolute inset-y-4 right-4 z-20 flex w-[340px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+            >
+              <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+                {overflow.side === 'parents' ? (
+                  <ArrowUpToLine size={15} className="text-[var(--color-accent)]" />
+                ) : (
+                  <ArrowDownToLine size={15} className="text-[var(--color-accent)]" />
+                )}
+                <div>
+                  <h2 className="text-sm font-semibold">
+                    {overflow.side === 'parents'
+                      ? 'Kalan üst bağlantılar'
+                      : 'Kalan alt bağlantılar'}
+                  </h2>
+                  <p className="text-[11px] text-[var(--color-text-dim)]">
+                    {overflow.handles.length} ilişki · tek tık seçer, çift tık odaklar
+                  </p>
+                </div>
+                <button
+                  onClick={() => setOverflow(null)}
+                  aria-label="Bağlantı listesini kapat"
+                  className="ml-auto rounded-md p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  <X size={15} />
+                </button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                {overflow.handles.map((handle) => (
+                  <button
+                    key={refToString(handle.ref)}
+                    onClick={() => select(handle.ref)}
+                    onDoubleClick={() => {
+                      focus(handle.ref)
+                      setOverflow(null)
+                    }}
+                    className="mb-1 flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left hover:border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                      {handle.label || refToString(handle.ref)}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
+                      {handle.ref.kind}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
         </div>
 
