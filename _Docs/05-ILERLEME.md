@@ -1,6 +1,14 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-29**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-30**
+
+## Worktree git hata çıktısı ve log buffer sınırları (2026-08-30) ✅
+
+Worktree git komutlarının sınırsız `CombinedOutput` hata zincirine, DB'deki
+`WorktreeLastError` alanına ve loglara taşınması engellendi. Git hata çıktısı 8 KiB
+bütçede anlamlı başlangıç + mümkünse son satırı korur; kesilen bayt sayısını yazar.
+Ek savunma olarak log ring buffer message ve attr string değerlerini 16 KiB ile sınırlar.
+CRLF uyarı seli, kalıcı lifecycle hatası ve büyük log alanları regresyon testleriyle kapsandı.
 
 ## Model etiketlerinden "Varsayılan" kalktı (2026-08-29) ✅
 
@@ -228,8 +236,8 @@ aynı boş uyarıyı tekrarladı.
 halka tampon. Doluysa en eskiyi atar, kapasiteyi aşan tek yazımda **sonu** saklar
 (hata mesajı oradadır) ve her zaman tam uzunluğu "yazıldı" olarak raporlar — kısa
 write bildirmek `os/exec`'in kopyalayıcısını durdurup tam da kaçınılan bloklamayı
-geri getirirdi. Handshake başarısız olursa son 3 anlamlı satır hataya iliştirilir
-(`... (server stderr: ...)`), banner/allocator gürültüsü elenir. Close önce çağrılır
+geri getirirdi. Handshake başarısız olursa tampondaki eksiksiz stderr hataya iliştirilir
+(`... (server stderr: ...)`). Close önce çağrılır
 ki ölmekte olan sunucunun son satırı tampona yetişsin. Testler
 `stderrtail_test.go`; düzeltme kaldırılınca regresyon testi tam olarak eski
 `mcp initialize: mcp read: EOF` metniyle kırılıyor (doğrulandı).
@@ -239,6 +247,22 @@ Tail okuması `Close()`'un 2 sn'lik bekleme tavanına bağlıydı ve yüklü mak
 sınırlı ve deterministik hale getirildi. `os/exec` stderr'i kendi goroutine'inde
 kopyalar ve bunun bittiğini yalnız `Wait` döndüğünde garanti eder; bu bekleme
 yalnızca hata yolunda çalışır.
+
+## stdio package-runner başlangıçları koordine ediliyor (2026-08-30) ✅
+
+`bunx`, `npx` ve `npm exec` aynı npm/bun paket önbelleğine eşzamanlı yazarken Windows'ta
+`EBUSY`, `failed copying files from cache` ve `could not determine executable to run`
+hataları üretebiliyordu. `internal/mcp/package_runner.go`, sürüm/tag ve harf farkını
+ayıklayan normalize paket kimliğiyle yalnız aynı paketin **dial + initialize** penceresini
+tekilleştiriyor. Farklı paketler paralel kalıyor; kilit canlı MCP sürecinin ömrü boyunca
+tutulmuyor. Başlangıç hatası en fazla bir kez yeniden deneniyor; bilinen geçici desenlerde
+context-aware kısa backoff/jitter uygulanıyor, `context.Canceled` hiç retry edilmiyor.
+Kalıcı hata son denemenin sınırlı stderr tamponunu eksiksiz koruyor.
+
+Playwright'ın `(session, agent)` scope'u, oturum scratchpad `cwd`'si ve `--output-dir`
+izolasyonu değişmedi. Testler aynı paketin farklı scope kataloglarında azami launcher
+eşzamanlılığını 1'e sabitliyor; farklı paket paralelliğini, transient başarıyı, kalıcı
+hata retry sınırını ve canceled yolunu doğruluyor (`package_runner_test.go`).
 
 ## MCP katalog arızası WARN'da boğulmuyor (2026-08-27) ✅
 
@@ -9919,3 +9943,17 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   `#/w/{workspace}/workspace/files` bağlantıları üst seviye `prompts` görünümüne yönlenir.
 - `focus_view` sözleşmesi canlı üst seviye görünümle eşitlendi: `prompts` eklendi, bağımsız
   `logs` kaldırıldı.
+
+## TSK489 — Kart worktree base ref ve dirty koruması (2026-08-30)
+
+- Koşulsuz `main` fallback kaldırıldı. Dolu `worktreeBaseRef`,
+  `git rev-parse --verify <ref>^{commit}` ile doğrulanır; boş ayar gerçek HEAD dalını
+  `git symbolic-ref --quiet --short HEAD` ile çözer. Detached/unborn HEAD açık hatadır;
+  `main`/`master` tahmini yoktur.
+- Çözülen ref karta `Task.WorktreeBaseRef` olarak yazılır; provision, merge ve discard
+  aynı ref'i kullanır.
+- Merge öncesi base dirty kapısı `git status --porcelain` ile staged, unstaged ve
+  untracked değişikliklerin tümünü reddeder. Dirty durumda merge/worktree remove/branch
+  delete, otomatik stash/reset veya force cleanup yapılmaz; görev worktree'si ve dalı korunur.
+- Workspace worktree ayarları açılışta snapshot edilir. `worktreeBaseRef` değişikliği
+  mevcut workspace yeniden açıldıktan sonra yeni yaşam döngüsünde geçerli olur.

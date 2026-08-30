@@ -108,6 +108,9 @@ slog.SetDefault(logger)
 - **Seviye eşiği:** `slog.LevelInfo` → `Debug` kayıtlar varsayılan olarak yazılmaz.
 - **Ring buffer:** `internal/logbuf/logbuf.go`. `max` (2000) aşılınca en eski
   kayıtlar düşürülür (FIFO). Her kayıt artan bir `Seq` alır (UI'da React key).
+- **Kayıt boyutu savunması:** ring buffer'a alınan message ve her attr string
+  değeri 16 KiB ile sınırlıdır; kesilen değer `… [N bytes omitted]` belirteci taşır.
+  Kalıcı inner handler özgün slog kaydını almaya devam eder.
 - **Bellek-içi:** sunucu yeniden başlayınca buffer **sıfırlanır**. Kalıcı geçmiş
   stdout'ta ve disk log dosyasındadır (`config.LogFilePath()`, data dizini altında
   `logs/`; `internal/app/app.go` `io.MultiWriter` ile append modda yazar, yol

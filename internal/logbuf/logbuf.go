@@ -6,10 +6,14 @@ package logbuf
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 )
+
+const capturedStringLimit = 16 * 1024
 
 // Entry is one captured log record in a UI-friendly shape. Component, Session,
 // Agent and Workspace are first-class fields (promoted from same-named slog
@@ -109,17 +113,17 @@ func (h *handler) Enabled(ctx context.Context, level slog.Level) bool {
 func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	attrs := make(map[string]string)
 	for _, a := range h.attrs {
-		attrs[h.key(a.Key)] = a.Value.String()
+		attrs[h.key(a.Key)] = truncateCapturedString(a.Value.String())
 	}
 	r.Attrs(func(a slog.Attr) bool {
-		attrs[h.key(a.Key)] = a.Value.String()
+		attrs[h.key(a.Key)] = truncateCapturedString(a.Value.String())
 		return true
 	})
 	e := Entry{
 		Seq:     h.buf.seq.Add(1),
 		Time:    r.Time.UnixMilli(),
 		Level:   r.Level.String(),
-		Message: r.Message,
+		Message: truncateCapturedString(r.Message),
 	}
 	// Promote well-known source attrs to first-class fields so the API/UI can
 	// filter by them directly. Promoted keys are removed from the generic map.
@@ -138,6 +142,25 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	}
 	h.buf.add(e)
 	return h.inner.Handle(ctx, r)
+}
+
+func truncateCapturedString(s string) string {
+	if len(s) <= capturedStringLimit {
+		return s
+	}
+	marker := fmt.Sprintf("… [%d bytes omitted]", len(s))
+	limit := capturedStringLimit - len(marker)
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	omitted := len(s) - limit
+	marker = fmt.Sprintf("… [%d bytes omitted]", omitted)
+	limit = capturedStringLimit - len(marker)
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	omitted = len(s) - limit
+	return s[:limit] + fmt.Sprintf("… [%d bytes omitted]", omitted)
 }
 
 func (h *handler) key(k string) string {

@@ -190,7 +190,7 @@ func DialStdio(ctx context.Context, command string, args, env []string, dir stri
 		// can be missed on a loaded machine.
 		_ = c.Close()
 		tail.waitNonEmpty(2 * time.Second)
-		if msg := tail.lastLines(3); msg != "" {
+		if msg := tail.Tail(); msg != "" {
 			return nil, fmt.Errorf("%w (server stderr: %s)", err, msg)
 		}
 		return nil, err

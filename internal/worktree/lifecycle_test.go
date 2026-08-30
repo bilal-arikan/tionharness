@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -34,7 +35,7 @@ func TestHappyPathWithFakeRunner(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{
 		{},              // worktree add
 		{out: "main\n"}, // current branch
-		{},              // base dirty check
+		{},              // base status
 		{},              // merge
 		{},              // worktree remove
 		{},              // branch delete
@@ -65,6 +66,51 @@ func TestMergeConflictPreservesWorktree(t *testing.T) {
 	}
 }
 
+func TestResolveBaseRef(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured string
+		results    []runnerResult
+		want       string
+		wantError  string
+	}{
+		{name: "develop HEAD", results: []runnerResult{{out: "develop\n"}, {}}, want: "develop"},
+		{name: "explicit remote ref", configured: "origin/release", results: []runnerResult{{out: "abc123\n"}}, want: "origin/release"},
+		{name: "invalid explicit ref", configured: "missing", results: []runnerResult{{err: errors.New("exit 128")}}, wantError: "invalid worktree base ref"},
+		{name: "detached HEAD", results: []runnerResult{{err: errors.New("exit 1")}}, wantError: "HEAD is detached"},
+		{name: "unborn HEAD", results: []runnerResult{{out: "develop\n"}, {err: errors.New("exit 128")}}, wantError: "is unborn"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &fakeRunner{results: tt.results}
+			got, err := (Git{RepoRoot: "repo", Runner: runner}).ResolveBaseRef(context.Background(), tt.configured)
+			if tt.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("error = %v, want containing %q", err, tt.wantError)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Fatalf("ResolveBaseRef() = %q, %v; want %q, nil", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeDirtyBasePreservesWorktreeAndBranch(t *testing.T) {
+	for _, status := range []string{"M  staged.go\n", " M unstaged.go\n", "?? untracked.go\n"} {
+		runner := &fakeRunner{results: []runnerResult{{out: "develop\n"}, {out: status}}}
+		git := Git{RepoRoot: "repo", Runner: runner}
+		err := git.Merge(context.Background(), "task/tsk1", "trees/tsk1", "develop")
+		if !errors.Is(err, ErrDirty) {
+			t.Fatalf("status %q: error = %v, want ErrDirty", status, err)
+		}
+		if got := len(runner.calls); got != 2 {
+			t.Fatalf("status %q triggered merge/remove/delete: %v", status, runner.calls)
+		}
+	}
+}
+
 func TestDirtyWorktreeRefusesDiscard(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{out: " M important.go\n"}}}
 	git := Git{RepoRoot: "repo", Runner: runner}
@@ -74,6 +120,37 @@ func TestDirtyWorktreeRefusesDiscard(t *testing.T) {
 	}
 	if got := len(runner.calls); got != 1 {
 		t.Fatalf("dirty discard performed cleanup; calls = %v", runner.calls)
+	}
+}
+
+func TestGitFailureOutputIsBoundedAndRecorded(t *testing.T) {
+	warnings := strings.Repeat("warning: a very noisy CRLF conversion warning\r\n", 500)
+	warnings += "fatal: final diagnostic"
+	runner := &fakeRunner{results: []runnerResult{
+		{out: "abc123\n"},
+		{out: warnings, err: errors.New("exit status 128")},
+	}}
+	git := Git{RepoRoot: "repo", Runner: runner}
+	store := &memoryStore{task: db.Task{ID: "TSK490"}}
+	lifecycle := &Lifecycle{Store: store, Git: git, BaseRef: "main", WorktreeRoot: "trees"}
+	err := lifecycle.Handle(context.Background(), db.BoardChangeEvent{
+		TaskID: "TSK490", Op: db.BoardOpMove, ToState: db.BoardTodo,
+	})
+	if err == nil {
+		t.Fatal("expected provision error")
+	}
+	for name, text := range map[string]string{"error": err.Error(), "last error": store.task.WorktreeLastError} {
+		if len(text) > gitErrorOutputLimit+256 {
+			t.Fatalf("%s length = %d, want bounded near %d", name, len(text), gitErrorOutputLimit)
+		}
+		if !utf8.ValidString(text) {
+			t.Errorf("%s contains invalid UTF-8", name)
+		}
+		for _, want := range []string{"git worktree add", "warning: a very noisy", "bytes omitted", "fatal: final diagnostic"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing %q: %.200q", name, want, text)
+			}
+		}
 	}
 }
 
@@ -90,13 +167,26 @@ func (s *memoryStore) SetTaskWorktree(_ context.Context, _ string, branch, path,
 }
 
 type fakeOperations struct {
-	provisions int
-	mergeErr   error
-	discardErr error
+	provisions       int
+	resolved         string
+	resolveErr       error
+	provisionBaseRef string
+	mergeErr         error
+	discardErr       error
 }
 
-func (f *fakeOperations) Provision(context.Context, string, string, string) error {
+func (f *fakeOperations) ResolveBaseRef(_ context.Context, configured string) (string, error) {
+	if f.resolveErr != nil {
+		return "", f.resolveErr
+	}
+	if f.resolved != "" {
+		return f.resolved, nil
+	}
+	return configured, nil
+}
+func (f *fakeOperations) Provision(_ context.Context, _, _, baseRef string) error {
 	f.provisions++
+	f.provisionBaseRef = baseRef
 	return nil
 }
 func (f *fakeOperations) Merge(context.Context, string, string, string) error { return f.mergeErr }
@@ -117,6 +207,19 @@ func TestDoubleDeliveryIsIdempotent(t *testing.T) {
 	}
 	if ops.provisions != 1 {
 		t.Fatalf("provision calls = %d, want 1", ops.provisions)
+	}
+}
+
+func TestLifecycleStoresResolvedBaseRef(t *testing.T) {
+	store := &memoryStore{task: db.Task{ID: "TSK1"}}
+	ops := &fakeOperations{resolved: "develop"}
+	lifecycle := &Lifecycle{Store: store, Git: ops, WorktreeRoot: "trees"}
+	event := db.BoardChangeEvent{TaskID: "TSK1", Op: db.BoardOpMove, ToState: db.BoardTodo}
+	if err := lifecycle.Handle(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	if store.task.WorktreeBaseRef != "develop" || ops.provisionBaseRef != "develop" {
+		t.Fatalf("resolved base ref not persisted/reused: task=%q provision=%q", store.task.WorktreeBaseRef, ops.provisionBaseRef)
 	}
 }
 

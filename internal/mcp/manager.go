@@ -47,6 +47,9 @@ type ServerConfig struct {
 	// It is caller identity, not a dial parameter, so it is excluded from the
 	// connection fingerprint (see configFingerprint).
 	ScopeKey string
+	// stdioDial is a test seam for package-runner startup coordination. Production
+	// callers leave it nil and use DialStdio.
+	stdioDial stdioDialFunc
 }
 
 // envSlice renders Env as KEY=VALUE entries for exec.
@@ -68,7 +71,13 @@ func (c ServerConfig) dial(ctx context.Context) (Client, error) {
 		if c.Command == "" {
 			return nil, fmt.Errorf("mcp %q: stdio transport requires a command", c.Name)
 		}
-		return DialStdio(ctx, c.Command, c.Args, c.envSlice(), c.Dir)
+		dial := c.stdioDial
+		if dial == nil {
+			dial = func(ctx context.Context, command string, args, env []string, dir string) (Client, error) {
+				return DialStdio(ctx, command, args, env, dir)
+			}
+		}
+		return dialPackageRunner(ctx, c.Command, c.Args, c.envSlice(), c.Dir, dial)
 	case MCPTransportHTTP:
 		if c.URL == "" {
 			return nil, fmt.Errorf("mcp %q: http transport requires a url", c.Name)

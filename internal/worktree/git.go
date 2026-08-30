@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
 )
+
+const gitErrorOutputLimit = 8 * 1024
 
 var (
 	ErrConflict = errors.New("git merge conflict")
@@ -41,9 +44,76 @@ func (g Git) run(ctx context.Context, args ...string) (string, error) {
 	}
 	out, err := g.Runner.Run(ctx, g.RepoRoot, "git", append([]string{"-C", g.RepoRoot}, args...)...)
 	if err != nil {
-		return out, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(out))
+		return out, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, truncateGitErrorOutput(out))
 	}
 	return out, nil
+}
+
+func truncateGitErrorOutput(out string) string {
+	out = strings.TrimSpace(out)
+	if len(out) <= gitErrorOutputLimit {
+		return out
+	}
+	lastLineStart := strings.LastIndexByte(out, '\n') + 1
+	tail := ""
+	if lastLineStart > 0 && len(out)-lastLineStart < gitErrorOutputLimit/4 {
+		tail = strings.TrimSpace(out[lastLineStart:])
+	}
+	marker := fmt.Sprintf("\n… [%d bytes omitted]", len(out))
+	headBudget := gitErrorOutputLimit - len(marker)
+	if tail != "" {
+		headBudget -= len(tail) + 1
+	}
+	head := validUTF8Prefix(out, headBudget)
+	omitted := len(out) - len(head) - len(tail)
+	marker = fmt.Sprintf("\n… [%d bytes omitted]", omitted)
+	headBudget = gitErrorOutputLimit - len(marker)
+	if tail != "" {
+		headBudget -= len(tail) + 1
+	}
+	head = validUTF8Prefix(out, headBudget)
+	omitted = len(out) - len(head) - len(tail)
+	marker = fmt.Sprintf("\n… [%d bytes omitted]", omitted)
+	if tail != "" {
+		return head + marker + "\n" + tail
+	}
+	return head + marker
+}
+
+func validUTF8Prefix(s string, limit int) string {
+	if limit >= len(s) {
+		return s
+	}
+	if limit <= 0 {
+		return ""
+	}
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
+}
+
+// ResolveBaseRef validates an explicit ref or resolves the repository's current
+// branch. It never guesses a conventional branch name.
+func (g Git) ResolveBaseRef(ctx context.Context, configured string) (string, error) {
+	if configured != "" {
+		if _, err := g.run(ctx, "rev-parse", "--verify", configured+"^{commit}"); err != nil {
+			return "", fmt.Errorf("invalid worktree base ref %q: %w", configured, err)
+		}
+		return configured, nil
+	}
+	resolved, err := g.run(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve worktree base ref: HEAD is detached: %w", err)
+	}
+	ref := strings.TrimSpace(resolved)
+	if ref == "" {
+		return "", errors.New("cannot resolve worktree base ref: HEAD has no branch")
+	}
+	if _, err := g.run(ctx, "rev-parse", "--verify", ref+"^{commit}"); err != nil {
+		return "", fmt.Errorf("cannot resolve worktree base ref: HEAD branch %q is unborn: %w", ref, err)
+	}
+	return ref, nil
 }
 
 func (g Git) Provision(ctx context.Context, branch, path, baseRef string) error {
@@ -61,8 +131,12 @@ func (g Git) Merge(ctx context.Context, branch, path, baseRef string) error {
 	if strings.TrimSpace(head) != baseRef {
 		return fmt.Errorf("base checkout is %q, want %q", strings.TrimSpace(head), baseRef)
 	}
-	if _, err := g.run(ctx, "diff", "--quiet"); err != nil {
-		return fmt.Errorf("base worktree is dirty: %w", err)
+	status, err := g.run(ctx, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(status) != "" {
+		return fmt.Errorf("%w: base worktree has staged, unstaged, or untracked changes", ErrDirty)
 	}
 	if _, err := g.run(ctx, "merge", "--no-ff", branch); err != nil {
 		unmerged, inspectErr := g.run(ctx, "diff", "--name-only", "--diff-filter=U")

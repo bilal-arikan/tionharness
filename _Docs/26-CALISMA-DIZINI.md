@@ -123,6 +123,10 @@ ile dosya sistemi kapsamı). Bu ayrı bir karttır ve v0.1.0 sonrasına bırakı
 > yapar. Dirty veya base'e ulaşmamış commit varsa silmez; merge çatışmasında worktree'yi
 > korur. Base ref ve worktree kökü workspace ayarlarıdır. Aşağıdaki **geliştirici**
 > worktree scripti bundan ayrıdır ve durmaktadır.
+> `worktreeBaseRef` boşsa açık workspace'in gerçek HEAD dalı kullanılır; detached veya
+> unborn HEAD açık hatadır, `main`/`master` tahmini yapılmaz. Ayar workspace açılırken
+> yaşam döngüsüne snapshot edildiğinden değişiklik mevcut workspace yeniden açıldıktan
+> sonra yeni kart worktree'lerine uygulanır.
 
 ### Geliştirici worktree'leri (`scripts\worktree.ps1`) — ajan izolasyonundan AYRI
 

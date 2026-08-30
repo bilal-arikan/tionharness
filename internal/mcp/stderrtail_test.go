@@ -28,6 +28,9 @@ func TestDialStdioSurfacesServerStderr(t *testing.T) {
 	if !strings.Contains(err.Error(), "could not accept this client") {
 		t.Fatalf("server stderr not surfaced in dial error: %v", err)
 	}
+	if !strings.Contains(err.Error(), "banner noise nobody needs") {
+		t.Fatalf("complete retained stderr not surfaced in dial error: %v", err)
+	}
 }
 
 // TestStderrTailIsBoundedAndNonBlocking guards the two properties that let us keep

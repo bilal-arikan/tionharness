@@ -18,6 +18,7 @@ type TaskStore interface {
 }
 
 type Operations interface {
+	ResolveBaseRef(context.Context, string) (string, error)
 	Provision(context.Context, string, string, string) error
 	Merge(context.Context, string, string, string) error
 	Discard(context.Context, string, string, string) error
@@ -83,9 +84,10 @@ func (l *Lifecycle) Handle(ctx context.Context, ev db.BoardChangeEvent) error {
 }
 
 func (l *Lifecycle) provision(ctx context.Context, task db.Task) error {
-	baseRef := l.BaseRef
-	if baseRef == "" {
-		baseRef = "main"
+	baseRef, err := l.Git.ResolveBaseRef(ctx, l.BaseRef)
+	if err != nil {
+		persistErr := l.Store.SetTaskWorktree(ctx, task.ID, "", "", "", db.WorktreeNone, err.Error())
+		return errors.Join(err, persistErr)
 	}
 	branch := "task/" + branchPart(task.ID)
 	path := filepath.Join(l.WorktreeRoot, branchPart(task.ID))
