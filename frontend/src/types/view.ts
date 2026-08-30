@@ -72,6 +72,14 @@ export interface ViewChildrenResult {
   children: ViewHandle[]
 }
 
+export interface ViewNeighborhoodResult {
+  focus: ViewHandle
+  parents: ViewHandle[]
+  children: ViewHandle[]
+  hiddenParentCount: number
+  hiddenChildCount: number
+}
+
 // refToString spells a ref the way handles and the get_view tool do.
 export function refToString(ref: ViewRef): string {
   return `${ref.kind}:${ref.id}${ref.sub ? `#${ref.sub}` : ''}`

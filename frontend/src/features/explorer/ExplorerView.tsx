@@ -17,28 +17,20 @@ interface Props {
   onFocusNode?: (refString: string) => void
 }
 
-// ExplorerView is the "Harita" screen: a semantic-zoom drill-down over the View
-// layer. Click the root, then a category, then a member, expanding one layer at a
-// time; the selected node's full projection shows in the side panel — the exact
-// bytes an agent would receive (verifiability comes free).
+// ExplorerView is the "Harita" screen: a one-hop focus graph over the View layer.
+// A click selects for the side panel; a double click moves focus.
 //
 // This is deliberately SEPARATE from the Network screen: the network is a
 // relationship graph of running agent instances, this is a state drill-down.
 export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }: Props) {
   const [search, setSearch] = useState('')
-  const { nodes, edges, toggle, selectedRef, refreshExpanded } = useExplorerGraph({
-    search,
-    onError,
-    initialSelected: focusNode,
-    onSelect: onFocusNode,
-  })
+  const { nodes, edges, select, focus, selectedRef, focusLoading, focusError, refreshFocused } =
+    useExplorerGraph({ search, onError, initialFocus: focusNode, onFocus: onFocusNode })
 
-  // Live update: App's central SSE handler bumps the 'explorer' signal on the same
-  // lifecycle events as the network. Only OPEN branches are refreshed (not the whole
-  // map), so a busy workspace stays cheap.
+  // Live update refreshes only the current focus neighborhood.
   const tick = useRefreshTrigger('explorer')
   useEffect(() => {
-    refreshExpanded()
+    refreshFocused()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
 
@@ -73,8 +65,8 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
 
         <div className="ml-auto flex items-center gap-2 text-xs">
           <button
-            onClick={refreshExpanded}
-            title="Açık dalları yenile"
+            onClick={refreshFocused}
+            title="Odak çevresini yenile"
             className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           >
             <RefreshCw size={13} />
@@ -85,7 +77,34 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
 
       <div className="flex min-h-0 flex-1">
         <div className="relative min-h-0 flex-1 bg-[var(--color-bg)]">
-          <ExplorerGraph nodes={nodes} edges={edges} onNodeClick={toggle} />
+          <ExplorerGraph
+            nodes={nodes}
+            edges={edges}
+            onNodeClick={select}
+            onNodeDoubleClick={focus}
+          />
+          {focusLoading && (
+            <div
+              role="status"
+              className="absolute inset-x-0 top-3 mx-auto w-fit rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-dim)] shadow-lg"
+            >
+              Odak çevresi yükleniyor…
+            </div>
+          )}
+          {!focusLoading && focusError && (
+            <div
+              role="alert"
+              className="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-danger)] bg-[var(--color-surface)] px-3 py-2 text-xs shadow-lg"
+            >
+              <span>Odak çevresi yüklenemedi: {focusError}</span>
+              <button
+                onClick={refreshFocused}
+                className="rounded border border-[var(--color-border)] px-2 py-1 font-medium hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                Tekrar dene
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Side panel: the selected node's full projection — the same DSL an agent

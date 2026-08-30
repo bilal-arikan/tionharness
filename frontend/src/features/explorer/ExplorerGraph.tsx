@@ -16,15 +16,12 @@ import type { ExplorerRFNode } from './explorerModel'
 interface Props {
   nodes: ExplorerRFNode[]
   edges: Edge[]
-  // A node click both selects it (side panel summary) and drills one layer in /
-  // collapses it — the map's single interaction.
   onNodeClick: (ref: ViewRef) => void
+  onNodeDoubleClick: (ref: ViewRef) => void
 }
 
-// ExplorerGraph is the React Flow canvas for the drill-down map. Nodes are not
-// draggable/connectable — position is derived from the expansion, not authored —
-// so the canvas is pan/zoom + click only.
-export function ExplorerGraph({ nodes, edges, onNodeClick }: Props) {
+// Positions come from the pure focus model; canvas owns only pan/zoom and input.
+export function ExplorerGraph({ nodes, edges, onNodeClick, onNodeDoubleClick }: Props) {
   const nodeTypes = useMemo<NodeTypes>(() => ({ explorer: ExplorerNode }), [])
 
   return (
@@ -34,6 +31,7 @@ export function ExplorerGraph({ nodes, edges, onNodeClick }: Props) {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, n) => onNodeClick((n as ExplorerRFNode).data.ref)}
+        onNodeDoubleClick={(_, n) => onNodeDoubleClick((n as ExplorerRFNode).data.ref)}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
