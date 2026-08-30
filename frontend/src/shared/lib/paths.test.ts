@@ -113,6 +113,13 @@ describe('splitPaths', () => {
     expect(splitPaths(shown)).toEqual([{ text: shown, kind: 'path', target }])
   })
 
+  it('keeps an unquoted Windows path with spaces and a location in one segment', () => {
+    const shown = 'C:\\Users\\user\\Desktop\\My Project\\file.ts:12:4'
+    expect(splitPaths(shown)).toEqual([
+      { text: shown, kind: 'path', target: 'C:\\Users\\user\\Desktop\\My Project\\file.ts' },
+    ])
+  })
+
   it.each([
     ['"C:\\Program Files\\Git\\bin\\bash.exe"', 'C:\\Program Files\\Git\\bin\\bash.exe'],
     ['`/tmp/project files/app.ts:4`', '/tmp/project files/app.ts'],

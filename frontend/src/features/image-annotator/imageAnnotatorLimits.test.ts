@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   ImageAnnotatorError,
   MAX_SOURCE_BYTES,
+  MAX_SOURCE_DIMENSION,
+  MAX_SOURCE_PIXELS,
   validateImageSource,
   validateImageHeader,
   validateSourceLimits,
@@ -17,6 +20,19 @@ const codeOf = (run: () => void) => {
 }
 
 describe('image source limits', () => {
+  it('keeps frontend and artifact-source backend limits in parity', () => {
+    const backend = readFileSync('../internal/api/artifacts.go', 'utf8')
+    const goNumber = (value: number) => value.toLocaleString('en-US').replaceAll(',', '_')
+    expect(backend).toMatch(
+      new RegExp(`maxArtifactImageSourceBytes\\s+int64\\s*=\\s*${goNumber(MAX_SOURCE_BYTES)}`),
+    )
+    expect(backend).toMatch(
+      new RegExp(`maxArtifactImageDimension\\s*=\\s*${goNumber(MAX_SOURCE_DIMENSION)}`),
+    )
+    expect(backend).toMatch(
+      new RegExp(`maxArtifactImagePixels\\s*=\\s*${goNumber(MAX_SOURCE_PIXELS)}`),
+    )
+  })
   it.each([MAX_SOURCE_BYTES - 1, MAX_SOURCE_BYTES])('accepts byte count %i', (size) =>
     expect(() => validateSourceLimits(size, 1, 1)).not.toThrow(),
   )

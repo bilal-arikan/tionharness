@@ -32,6 +32,20 @@ interface Props {
   onAnswer: (text: string) => void
 }
 
+const neutralOptionClass =
+  'border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]'
+
+function askOptionClass(option: string) {
+  switch (option.trim()) {
+    case 'Onayla':
+      return 'border-[color-mix(in_srgb,var(--color-success)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] hover:border-[var(--color-success)] hover:bg-[color-mix(in_srgb,var(--color-success)_18%,transparent)]'
+    case 'İptal':
+      return 'border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)] hover:border-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_18%,transparent)]'
+    default:
+      return neutralOptionClass
+  }
+}
+
 // AskPrompt renders the agent's clarifying question while the turn is paused on
 // the ask_user tool: the question, optional one-click suggested answers, and a
 // free-text field. Submitting any of them delivers the answer and unblocks the
@@ -67,7 +81,7 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
               <button
                 key={i}
                 onClick={() => submit(opt)}
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+                className={`rounded-full border px-3 py-1 text-xs ${askOptionClass(opt)}`}
               >
                 {opt}
               </button>
@@ -152,10 +166,8 @@ function MultiAskPrompt({
                       key={oi}
                       type="button"
                       onClick={() => setAt(i, opt)}
-                      className={`rounded-full border px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] ${
-                        answers[i] === opt
-                          ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]'
-                          : 'border-[var(--color-border)] bg-[var(--color-bg)]'
+                      className={`rounded-full border px-3 py-1 text-xs ${askOptionClass(opt)} ${
+                        answers[i] === opt ? 'ring-1 ring-[var(--color-accent)]' : ''
                       }`}
                     >
                       {opt}

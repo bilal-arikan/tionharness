@@ -112,7 +112,9 @@ function remarkPathLinks() {
             : {
                 type: 'link',
                 url:
-                  segment.kind === 'url' ? urlHref(segment.text) : segment.target || segment.text,
+                  segment.kind === 'url'
+                    ? urlHref(segment.text)
+                    : (segment.target || segment.text).replace(/\\/g, '/'),
                 children: [{ type: 'text', value: segment.text }],
               },
         )

@@ -15,6 +15,11 @@ const PATH_SRC =
 // prose. Keep the quote/backtick outside the clickable segment.
 const QUOTED_PATH_SRC = /(["'`])((?:[A-Za-z]:[\\/]|\.{0,2}\/|\/)[^\r\n"'`]+)\1/.source
 
+// A source location provides an unambiguous end marker for an unquoted Windows
+// path with spaces. Match this before PATH_SRC so the generic Windows branch
+// cannot stop at the first space and leave only file.ts:line:column linked.
+const WINDOWS_SPACED_LOCATION_SRC = /[A-Za-z]:[\\/][^\r\n"'`<>]*?\.\w+:\d+(?::\d+)?/.source
+
 // An absolute http(s) URL, or a scheme-less "www.host/..." one. Must be tried
 // BEFORE PATH_SRC: the path pattern's "(?:\.{0,2}\/)" branch happily matches the
 // "//host/path" tail of a URL, which is what used to turn a WebSearch/WebFetch
@@ -22,7 +27,10 @@ const QUOTED_PATH_SRC = /(["'`])((?:[A-Za-z]:[\\/]|\.{0,2}\/|\/)[^\r\n"'`]+)\1/.
 const URL_SRC = /(?:https?:\/\/|www\.)[^\s"'`<>]+/.source
 
 const URL_ONLY_RE = new RegExp(`^${URL_SRC}$`, 'i')
-const LINK_RE = new RegExp(`${URL_SRC}|${QUOTED_PATH_SRC}|${PATH_SRC}`, 'gi')
+const LINK_RE = new RegExp(
+  `${URL_SRC}|${QUOTED_PATH_SRC}|${WINDOWS_SPACED_LOCATION_SRC}|${PATH_SRC}`,
+  'gi',
+)
 
 // Sentence punctuation that follows a URL in prose far more often than it is
 // part of it — "see https://x.dev/a." must not link the trailing dot. Closing

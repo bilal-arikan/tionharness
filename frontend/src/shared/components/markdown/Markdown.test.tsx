@@ -27,6 +27,13 @@ afterEach(() => {
 })
 
 describe('Markdown links', () => {
+  it('links an unquoted Windows path with spaces and a source location', () => {
+    const source = 'C:\\Users\\user\\Desktop\\My Project\\file.ts:12:4'
+    const container = renderMarkdown(source)
+
+    expect(container.querySelector('button')?.textContent).toBe(source)
+  })
+
   it('renders unsafe URL links as plain text', () => {
     const container = renderMarkdown('[unsafe](javascript:alert(1))')
 
