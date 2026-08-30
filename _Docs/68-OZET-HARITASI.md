@@ -2,7 +2,8 @@
 
 > **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06) + **TSK66 genişletmesi** ✅ (2026-08-06:
 > single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları) +
-> **TSK487 odak grafiği tasarımı** ✅ (2026-08-30).
+> **TSK487 odak grafiği tasarımı** ✅ + **TSK492 klavye, responsive ve erişilebilirlik** ✅
+> (2026-08-30).
 > Kalan opsiyonel: MCP resource tree + büyük-workspace performansı (sigma.js) — ihtiyaç
 > kanıtlanınca.
 > **Önkoşul okuma:** `_Docs/66-VIEW-KATMANI.md` (bu özelliğin motoru), `internal/view/*`,
@@ -128,6 +129,22 @@ sağda deterministik üç kolondur. Tek tık yalnız seçer ve mevcut `ViewPanel
 günceller; çift tık odağı değiştirir. Odak kartı accent yüzey/ring ile, seçili kart
 warning ring ile ayrılır. Cycle, self-loop ve iki yönlü ilişkiler kesik kenar yanında
 metin rozeti taşır; anlam yalnız renge bağlı değildir.
+
+TSK492 erişilebilirlik sözleşmesi:
+
+- React Flow düğümleri klavye odağı alır. Yukarı/aşağı aynı parent/focus/child
+  katmanında, sol/sağ komşu katmandaki en yakın satıra gider. `Enter`/`Space` tek-tık
+  sözleşmesi gibi seçer; `Shift+Enter` çift-tık sözleşmesi gibi graf odağını değiştirir.
+- Graf odağı değişince düğüm adı ve alt bağlantı sayısı `aria-live` ile bildirilir.
+  Odak/seçim kart üstünde metin rozeti ve `aria-label` ile de aktarılır; renk tek sinyal
+  değildir. Döngü/self-loop/iki yönlü kesik kenarlar Türkçe görünür etiket ve açıklayıcı
+  edge `ariaLabel` taşır.
+- `+N` listesi modal drawer semantiği, ilk odak, `Escape`, Tab odağı çevrimi ve
+  tetikleyiciye odak dönüşü sağlar. Dar ekranda seçili düğümün mevcut `ViewPanel` detayı
+  aynı davranışlı drawer olur; kalıcı sağ panel graf alanını daraltmaz. MiniMap dar
+  ekranda gizlenir.
+- Global `prefers-reduced-motion: reduce` kuralı kart/drawer geçişlerini ve spinner
+  animasyonlarını yaklaşık anlık hâle getirir.
 
 Canvas görünürlük eşiği yön başına `VISIBLE_RELATIONS_PER_SIDE = 6` olarak sabittir.
 Bu bir API veya veri sınırı değildir: model tam, sıralı remainder listesini korur;

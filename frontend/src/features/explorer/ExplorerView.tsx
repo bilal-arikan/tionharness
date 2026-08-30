@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
@@ -36,6 +36,14 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     side: 'parents' | 'children'
     handles: ViewHandle[]
   } | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const overflowCloseRef = useRef<HTMLButtonElement>(null)
+  const detailCloseRef = useRef<HTMLButtonElement>(null)
+  const overflowDialogRef = useRef<HTMLElement>(null)
+  const detailDialogRef = useRef<HTMLElement>(null)
+  const overflowTriggerRef = useRef<HTMLElement | null>(null)
+  const detailTriggerRef = useRef<HTMLElement | null>(null)
+  const detailOpenTimerRef = useRef<number | null>(null)
   const {
     nodes,
     edges,
@@ -56,6 +64,46 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
             refToString(node.data.ref).toLowerCase().includes(search.trim().toLowerCase())),
       )
     : []
+  const focusedNode = nodes.find((node) => node.data.focus)
+  const focusAnnouncement = focusedNode
+    ? `Harita odağı ${focusedNode.data.label}. ${focusedNode.data.childCount ?? 0} alt bağlantı.`
+    : ''
+
+  const isNarrowScreen = () =>
+    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
+
+  const selectNode = (ref: Parameters<typeof select>[0]) => {
+    select(ref)
+    if (isNarrowScreen()) {
+      detailTriggerRef.current = document.activeElement as HTMLElement | null
+      if (detailOpenTimerRef.current !== null) window.clearTimeout(detailOpenTimerRef.current)
+      // Preserve the single-click select / double-click focus contract: defer the
+      // drawer until the browser's double-click window has had time to complete.
+      detailOpenTimerRef.current = window.setTimeout(() => {
+        setDetailOpen(true)
+        detailOpenTimerRef.current = null
+      }, 250)
+    }
+  }
+
+  const applyFocus = (ref: Parameters<typeof focus>[0]) => {
+    if (detailOpenTimerRef.current !== null) {
+      window.clearTimeout(detailOpenTimerRef.current)
+      detailOpenTimerRef.current = null
+    }
+    setDetailOpen(false)
+    focus(ref)
+  }
+
+  const closeOverflow = () => {
+    setOverflow(null)
+    window.setTimeout(() => overflowTriggerRef.current?.focus())
+  }
+
+  const closeDetail = () => {
+    setDetailOpen(false)
+    window.setTimeout(() => detailTriggerRef.current?.focus())
+  }
 
   // Live update refreshes only the current focus neighborhood.
   const tick = useRefreshTrigger('explorer')
@@ -63,6 +111,49 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     refreshFocused()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
+
+  useEffect(() => {
+    if (overflow) overflowCloseRef.current?.focus()
+  }, [overflow])
+
+  useEffect(() => {
+    if (detailOpen) detailCloseRef.current?.focus()
+  }, [detailOpen])
+
+  useEffect(
+    () => () => {
+      if (detailOpenTimerRef.current !== null) window.clearTimeout(detailOpenTimerRef.current)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!overflow && !detailOpen) return
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (overflow) closeOverflow()
+        else closeDetail()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = overflow ? overflowDialogRef.current : detailDialogRef.current
+      const focusable = dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  })
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -102,8 +193,8 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
                   key={node.id}
                   role="option"
                   aria-selected={node.data.selected}
-                  onClick={() => select(node.data.ref)}
-                  onDoubleClick={() => focus(node.data.ref)}
+                  onClick={() => selectNode(node.data.ref)}
+                  onDoubleClick={() => applyFocus(node.data.ref)}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
                 >
                   <span className="min-w-0 flex-1 truncate">{node.data.label}</span>
@@ -118,6 +209,17 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
 
         <div className="ml-auto flex items-center gap-2 text-xs">
           <button
+            onClick={(event) => {
+              detailTriggerRef.current = event.currentTarget
+              setDetailOpen(true)
+            }}
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] lg:hidden"
+            aria-haspopup="dialog"
+          >
+            <MessageSquare size={13} />
+            Detay
+          </button>
+          <button
             onClick={refreshFocused}
             title="Odak çevresini yenile"
             className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
@@ -129,7 +231,14 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-h-0 flex-1 bg-[var(--color-bg)]">
+        <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--color-bg)]">
+          <p className="sr-only" aria-live="polite" aria-atomic="true">
+            {focusAnnouncement}
+          </p>
+          <p id="explorer-keyboard-help" className="sr-only">
+            Ok tuşları katmanlar arasında gezinir. Enter veya Boşluk seçer. Shift+Enter odağı
+            değiştirir.
+          </p>
           <div className="pointer-events-none absolute inset-x-8 top-4 z-10 grid grid-cols-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
             <span>Üst bağlantılar</span>
             <span className="text-center text-[var(--color-accent)]">Odak</span>
@@ -138,9 +247,12 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
           <ExplorerGraph
             nodes={nodes}
             edges={edges}
-            onNodeClick={select}
-            onNodeDoubleClick={focus}
-            onOverflowClick={(side, handles) => setOverflow({ side, handles })}
+            onNodeClick={selectNode}
+            onNodeDoubleClick={applyFocus}
+            onOverflowClick={(side, handles) => {
+              overflowTriggerRef.current = document.activeElement as HTMLElement | null
+              setOverflow({ side, handles })
+            }}
           />
           {focusLoading && (
             <div
@@ -174,10 +286,12 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
           )}
           {overflow && (
             <section
+              ref={overflowDialogRef}
               role="dialog"
-              aria-modal="false"
+              aria-modal="true"
               aria-label={`${overflow.side === 'parents' ? 'Üst' : 'Alt'} taşan bağlantılar`}
-              className="absolute inset-y-4 right-4 z-20 flex w-[340px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+              aria-describedby="overflow-help"
+              className="absolute inset-y-4 right-4 z-20 flex w-[340px] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl max-md:fixed max-md:inset-x-2 max-md:bottom-2 max-md:top-auto max-md:max-h-[75vh] max-md:w-auto"
             >
               <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
                 {overflow.side === 'parents' ? (
@@ -191,12 +305,13 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
                       ? 'Kalan üst bağlantılar'
                       : 'Kalan alt bağlantılar'}
                   </h2>
-                  <p className="text-[11px] text-[var(--color-text-dim)]">
+                  <p id="overflow-help" className="text-[11px] text-[var(--color-text-dim)]">
                     {overflow.handles.length} ilişki · tek tık seçer, çift tık odaklar
                   </p>
                 </div>
                 <button
-                  onClick={() => setOverflow(null)}
+                  ref={overflowCloseRef}
+                  onClick={closeOverflow}
                   aria-label="Bağlantı listesini kapat"
                   className="ml-auto rounded-md p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                 >
@@ -209,8 +324,8 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
                     key={refToString(handle.ref)}
                     onClick={() => select(handle.ref)}
                     onDoubleClick={() => {
-                      focus(handle.ref)
-                      setOverflow(null)
+                      applyFocus(handle.ref)
+                      closeOverflow()
                     }}
                     className="mb-1 flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left hover:border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
                   >
@@ -254,6 +369,51 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
             />
           </div>
         </aside>
+
+        {detailOpen && (
+          <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onMouseDown={closeDetail}>
+            <section
+              ref={detailDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Seçili düğüm detayı"
+              className="absolute inset-x-2 bottom-2 top-[10vh] flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
+                <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                  Seçili düğüm detayı
+                </h2>
+                <button
+                  ref={detailCloseRef}
+                  onClick={closeDetail}
+                  aria-label="Düğüm detayını kapat"
+                  className="rounded-md p-1 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+                >
+                  <X size={16} />
+                </button>
+              </header>
+              {selectedRef.kind === 'session' && onOpenSession && (
+                <button
+                  onClick={() => onOpenSession(selectedRef.id)}
+                  className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                >
+                  <MessageSquare size={13} />
+                  Sohbeti aç · {selectedRef.id}
+                </button>
+              )}
+              <div className="flex min-h-0 flex-1 flex-col">
+                <ViewPanel
+                  key={`drawer:${refToString(selectedRef)}`}
+                  target={selectedRef}
+                  embedded
+                  hideHandles
+                  fillHeight
+                />
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   )

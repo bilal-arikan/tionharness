@@ -22,6 +22,45 @@ export interface ExpNodeData {
 
 export type ExplorerRFNode = Node<ExpNodeData, 'explorer'>
 
+export type ExplorerNavigationKey = 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'
+
+// Arrow navigation follows the visual three-column hierarchy. Vertical arrows
+// stay in a layer; horizontal arrows pick the nearest row in the adjacent layer.
+export function nextExplorerNodeId(
+  nodes: ExplorerRFNode[],
+  currentId: string,
+  key: ExplorerNavigationKey,
+): string | null {
+  const current = nodes.find((node) => node.id === currentId)
+  if (!current) return null
+
+  const vertical = key === 'ArrowUp' || key === 'ArrowDown'
+  const candidates = nodes.filter((node) =>
+    vertical
+      ? node.data.depth === current.data.depth && node.id !== currentId
+      : node.data.depth === current.data.depth + (key === 'ArrowLeft' ? -1 : 1),
+  )
+  if (vertical) {
+    const direction = key === 'ArrowUp' ? -1 : 1
+    return (
+      candidates
+        .filter((node) => Math.sign(node.position.y - current.position.y) === direction)
+        .sort(
+          (a, b) =>
+            Math.abs(a.position.y - current.position.y) -
+              Math.abs(b.position.y - current.position.y) || a.id.localeCompare(b.id),
+        )[0]?.id ?? null
+    )
+  }
+  return (
+    candidates.sort(
+      (a, b) =>
+        Math.abs(a.position.y - current.position.y) - Math.abs(b.position.y - current.position.y) ||
+        a.id.localeCompare(b.id),
+    )[0]?.id ?? null
+  )
+}
+
 export const ROOT_REF: ViewRef = { kind: 'workspace', id: 'workspace' }
 export const ROOT_KEY = refToString(ROOT_REF)
 
@@ -80,6 +119,8 @@ export function buildFocusGraph({ neighborhood, selectedKey, search, loading }: 
     return {
       id: key,
       type: 'explorer',
+      ariaRole: 'button',
+      ariaLabel: `${label}. ${key === focusKey ? 'Odak düğümü. ' : ''}${key === selectedKey ? 'Seçili düğüm. ' : ''}Enter veya Boşluk seçer, Shift+Enter odaklar.`,
       position: { x: depth * COL_W, y: row * ROW_H },
       data: {
         ref: handle.ref,
@@ -107,6 +148,8 @@ export function buildFocusGraph({ neighborhood, selectedKey, search, loading }: 
     return {
       id: `__overflow:${side}`,
       type: 'explorer',
+      ariaRole: 'button',
+      ariaLabel: `${label}. Enter veya Boşluk kalan ilişkileri açar.`,
       position: { x: depth * COL_W, y: row * ROW_H },
       data: {
         ref: neighborhood.focus.ref,
@@ -164,11 +207,11 @@ export function buildFocusGraph({ neighborhood, selectedKey, search, loading }: 
         source,
         target,
         markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-        label: cyclic ? (source === target ? 'cycle' : 'iki yönlü') : undefined,
+        label: cyclic ? (source === target ? 'kendi üzerine döngü' : 'iki yönlü') : undefined,
         ariaLabel: cyclic
           ? source === target
-            ? `${source} kendi üzerine cycle ilişkisi`
-            : `${source} ile ${target} arasında iki yönlü ilişki`
+            ? `${source} kendi üzerine döngü ilişkisi; kesik çizgi döngüyü belirtir`
+            : `${source} ile ${target} arasında iki yönlü ilişki; kesik çizgi döngüyü belirtir`
           : `${source} öğesinden ${target} öğesine ilişki`,
         labelStyle: { fill: 'var(--color-warning)', fontSize: 10, fontWeight: 700 },
         labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.94 },

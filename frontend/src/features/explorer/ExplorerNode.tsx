@@ -112,6 +112,19 @@ export function ExplorerNode({ data }: NodeProps<ExplorerRFNode>) {
         {data.label}
       </span>
 
+      {!dense && (data.focus || data.selected) && (
+        <span className="flex shrink-0 gap-1 text-[9px] font-bold uppercase tracking-wide">
+          {data.focus && (
+            <span className="rounded bg-[var(--color-accent)] px-1.5 py-0.5 text-white">Odak</span>
+          )}
+          {data.selected && (
+            <span className="rounded border border-[var(--color-warning)] px-1.5 py-0.5">
+              Seçili
+            </span>
+          )}
+        </span>
+      )}
+
       {!dense && (
         <span className="ml-auto flex shrink-0 items-center gap-1 text-[var(--color-text-dim)]">
           {data.overflow ? (

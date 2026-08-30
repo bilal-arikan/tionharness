@@ -58,11 +58,25 @@ beforeEach(() => {
     fallbackToRoot: vi.fn(),
     refreshFocused: mocks.refreshFocused,
   }
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  )
 })
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())
   document.body.replaceChildren()
+  vi.unstubAllGlobals()
 })
 
 describe('ExplorerView focus request status', () => {
@@ -163,5 +177,49 @@ describe('ExplorerView focus request status', () => {
     )
     expect(container.textContent).toContain('Agent A')
     expect(container.textContent).toContain('Agent B')
+  })
+
+  it('announces focus changes with node name and child count', () => {
+    mocks.graphState.nodes = [
+      {
+        id: 'agent:A',
+        data: { ref: { kind: 'agent', id: 'A' }, label: 'Ajan A', focus: true, childCount: 3 },
+      },
+    ]
+
+    const container = renderView()
+
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Harita odağı Ajan A. 3 alt bağlantı.',
+    )
+  })
+
+  it('uses a detail drawer at the narrow breakpoint and returns focus on Escape', () => {
+    vi.mocked(window.matchMedia).mockReturnValue({
+      matches: true,
+      media: '(max-width: 1023px)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })
+    vi.useFakeTimers()
+    const container = renderView()
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+
+    act(() => (mocks.graphProps.onNodeClick as (ref: ViewRef) => void)(rootRef))
+    act(() => vi.advanceTimersByTime(250))
+    expect(container.querySelector('[aria-label="Seçili düğüm detayı"]')).not.toBeNull()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Düğüm detayını kapat')
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    act(() => vi.runAllTimers())
+    expect(container.querySelector('[aria-label="Seçili düğüm detayı"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    vi.useRealTimers()
   })
 })

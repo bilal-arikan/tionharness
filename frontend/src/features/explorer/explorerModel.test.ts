@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseRef, refToString, type ViewHandle, type ViewNeighborhoodResult } from '@/types'
-import { buildFocusGraph, VISIBLE_RELATIONS_PER_SIDE } from './explorerModel'
+import { buildFocusGraph, nextExplorerNodeId, VISIBLE_RELATIONS_PER_SIDE } from './explorerModel'
 
 const handle = (kind: 'session' | 'agent' | 'category', id: string): ViewHandle => ({
   label: `${kind}-${id}`,
@@ -78,8 +78,8 @@ describe('buildFocusGraph', () => {
     expect(nodes).toHaveLength(1)
     expect(edges).toHaveLength(1)
     expect(edges[0]).toMatchObject({ source: 'session:SELF', target: 'session:SELF' })
-    expect(edges[0].label).toBe('cycle')
-    expect(edges[0].ariaLabel).toContain('cycle')
+    expect(edges[0].label).toBe('kendi üzerine döngü')
+    expect(edges[0].ariaLabel).toContain('kesik çizgi')
     expect(nodes[0].data.loading).toBe(true)
   })
 
@@ -134,6 +134,30 @@ describe('buildFocusGraph', () => {
     })
     expect(nodes.find((node) => node.id === 'session:S2')?.data.dimmed).toBe(false)
     expect(nodes.find((node) => node.id === 'session:S1')?.data.dimmed).toBe(true)
+  })
+})
+
+describe('nextExplorerNodeId', () => {
+  const nodes = buildFocusGraph({
+    neighborhood: neighborhood({
+      parents: [handle('agent', 'P1'), handle('agent', 'P2')],
+      children: [handle('session', 'C1'), handle('session', 'C2')],
+    }),
+    selectedKey: null,
+    search: '',
+    loading: false,
+  }).nodes
+
+  it('moves vertically inside the current relationship layer', () => {
+    expect(nextExplorerNodeId(nodes, 'agent:P1', 'ArrowDown')).toBe('agent:P2')
+    expect(nextExplorerNodeId(nodes, 'agent:P2', 'ArrowUp')).toBe('agent:P1')
+    expect(nextExplorerNodeId(nodes, 'agent:P1', 'ArrowUp')).toBeNull()
+  })
+
+  it('moves horizontally to the nearest node in the adjacent layer', () => {
+    expect(nextExplorerNodeId(nodes, 'agent:P2', 'ArrowRight')).toBe('session:S1')
+    expect(nextExplorerNodeId(nodes, 'session:S1', 'ArrowRight')).toBe('session:C2')
+    expect(nextExplorerNodeId(nodes, 'session:C2', 'ArrowLeft')).toBe('session:S1')
   })
 })
 

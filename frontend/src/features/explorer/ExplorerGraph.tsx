@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type KeyboardEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -11,7 +11,11 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { ViewHandle, ViewRef } from '@/types'
 import { ExplorerNode } from './ExplorerNode'
-import type { ExplorerRFNode } from './explorerModel'
+import {
+  nextExplorerNodeId,
+  type ExplorerNavigationKey,
+  type ExplorerRFNode,
+} from './explorerModel'
 
 interface Props {
   nodes: ExplorerRFNode[]
@@ -31,33 +35,75 @@ export function ExplorerGraph({
 }: Props) {
   const nodeTypes = useMemo<NodeTypes>(() => ({ explorer: ExplorerNode }), [])
 
+  const activateNode = (node: ExplorerRFNode, focusNode: boolean) => {
+    if (node.data.overflow) {
+      onOverflowClick(node.data.overflow.side, node.data.overflow.handles)
+    } else if (focusNode) {
+      onNodeDoubleClick(node.data.ref)
+    } else {
+      onNodeClick(node.data.ref)
+    }
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const element = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
+    const id = element?.dataset.id
+    if (!id) return
+    const node = nodes.find((candidate) => candidate.id === id)
+    if (!node) return
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      activateNode(node, event.key === 'Enter' && event.shiftKey)
+      return
+    }
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+    const nextId = nextExplorerNodeId(nodes, id, event.key as ExplorerNavigationKey)
+    if (!nextId) return
+    event.preventDefault()
+    event.stopPropagation()
+    ;[...document.querySelectorAll<HTMLElement>('.react-flow__node')]
+      .find((candidate) => candidate.dataset.id === nextId)
+      ?.focus()
+  }
+
   return (
     <ReactFlowProvider>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodeClick={(_, n) => {
-          const data = (n as ExplorerRFNode).data
-          if (data.overflow) onOverflowClick(data.overflow.side, data.overflow.handles)
-          else onNodeClick(data.ref)
-        }}
-        onNodeDoubleClick={(_, n) => {
-          const data = (n as ExplorerRFNode).data
-          if (!data.overflow) onNodeDoubleClick(data.ref)
-        }}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable
-        fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
-        minZoom={0.2}
-        proOptions={{ hideAttribution: true }}
+      <div
+        className="h-full w-full"
+        role="region"
+        aria-label="Odak ilişkileri grafiği"
+        aria-describedby="explorer-keyboard-help"
+        onKeyDown={handleKeyDown}
       >
-        <Background gap={18} color="var(--color-border)" />
-        <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="!bg-[var(--color-surface-2)]" />
-      </ReactFlow>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodeClick={(_, n) => {
+            const data = (n as ExplorerRFNode).data
+            if (data.overflow) onOverflowClick(data.overflow.side, data.overflow.handles)
+            else onNodeClick(data.ref)
+          }}
+          onNodeDoubleClick={(_, n) => {
+            const data = (n as ExplorerRFNode).data
+            if (!data.overflow) onNodeDoubleClick(data.ref)
+          }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
+          nodesFocusable
+          edgesFocusable
+          fitView
+          fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+          minZoom={0.2}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={18} color="var(--color-border)" />
+          <Controls showInteractive={false} />
+          <MiniMap pannable zoomable className="!bg-[var(--color-surface-2)] max-md:hidden" />
+        </ReactFlow>
+      </div>
     </ReactFlowProvider>
   )
 }
