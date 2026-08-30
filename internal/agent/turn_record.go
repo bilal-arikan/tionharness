@@ -22,6 +22,10 @@ func (r *Runtime) recordChildAssistantMessage(ctx context.Context, sessionID, ag
 		return fmt.Errorf("persist child transcript: %w", err)
 	}
 	if err := r.db.SetSessionRunState(ctx, sessionID, terminalState, time.Now().Unix()); err != nil {
+		stateErr := r.db.SetSessionRunState(ctx, sessionID, turnStatusFailed, time.Now().Unix())
+		if stateErr != nil {
+			return fmt.Errorf("persist child %s run state: %w (persist failed run state: %v)", terminalState, err, stateErr)
+		}
 		return fmt.Errorf("persist child %s run state: %w", terminalState, err)
 	}
 	return nil

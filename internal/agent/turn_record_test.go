@@ -147,3 +147,114 @@ func TestRecordChildAssistantMessagePersistenceFailureMarksFailed(t *testing.T) 
 		t.Fatalf("run state = %q after transcript failure, want %q", got.RunState, turnStatusFailed)
 	}
 }
+
+func TestRecordChildAssistantMessageRunStateFailureDoesNotRemainRunning(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	a := newFlowAgent(t, rt, "worker")
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Kind: "subagent", RunState: "running"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	headerPath := filepath.Join(rt.db.Root(), "sessions", sess.ID, "session.json")
+	if err := os.Remove(headerPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(headerPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	err = rt.recordChildAssistantMessage(ctx, sess.ID, a.ID, "done", nil, nil, 4, turnStatusCompleted)
+	if err == nil || !strings.Contains(err.Error(), "persist child completed run state") || !strings.Contains(err.Error(), "persist failed run state") {
+		t.Fatalf("combined terminal-state error = %v", err)
+	}
+	got, _ := rt.db.GetSession(ctx, sess.ID)
+	if got.RunState == "running" {
+		t.Fatal("child remained running after terminal-state persistence failure")
+	}
+}
+
+func TestInitializeChildSessionCommitsOpeningMessageBeforeRunning(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	parent, err := rt.db.CreateSession(ctx, db.Session{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := rt.db.CreateChildSession(ctx, db.Session{
+		Kind: "subagent", ParentSessionID: parent.ID, ExecutionType: db.ExecutionSubagent,
+		Category: db.CategorySubagent, ContextMode: db.ContextIsolated,
+		Visibility: db.VisibilityInternal, TargetProfile: "coder",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child.RunState != "" {
+		t.Fatalf("new child state = %q before transcript initialization, want empty", child.RunState)
+	}
+
+	err = rt.initializeChildSession(ctx, child.ID, func() error {
+		_, addErr := rt.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: "task"})
+		return addErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := rt.db.GetSession(ctx, child.ID)
+	if got.RunState != "running" || got.MessageCount != 1 {
+		t.Fatalf("initialized child = state %q, messages %d; want running, 1", got.RunState, got.MessageCount)
+	}
+}
+
+func TestInitializeChildSessionOpeningMessageFailureMarksFailed(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	parent, _ := rt.db.CreateSession(ctx, db.Session{})
+	child, err := rt.db.CreateChildSession(ctx, db.Session{
+		Kind: "subagent", ParentSessionID: parent.ID, ExecutionType: db.ExecutionSubagent,
+		Category: db.CategorySubagent, ContextMode: db.ContextIsolated,
+		Visibility: db.VisibilityInternal, TargetProfile: "coder",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = rt.initializeChildSession(ctx, child.ID, func() error { return errors.New("opening write failed") })
+	if err == nil || !strings.Contains(err.Error(), "persist opening user message") {
+		t.Fatalf("initialization error = %v", err)
+	}
+	got, _ := rt.db.GetSession(ctx, child.ID)
+	if got.RunState != turnStatusFailed {
+		t.Fatalf("child state = %q after opening-message failure, want failed", got.RunState)
+	}
+}
+
+func TestInitializeChildSessionRunStateFailureIsReportedAndNotRunning(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	parent, _ := rt.db.CreateSession(ctx, db.Session{})
+	child, err := rt.db.CreateChildSession(ctx, db.Session{
+		Kind: "subagent", ParentSessionID: parent.ID, ExecutionType: db.ExecutionSubagent,
+		Category: db.CategorySubagent, ContextMode: db.ContextIsolated,
+		Visibility: db.VisibilityInternal, TargetProfile: "coder",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	headerPath := filepath.Join(rt.db.Root(), "sessions", child.ID, "session.json")
+	if err := os.Remove(headerPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(headerPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	err = rt.initializeChildSession(ctx, child.ID, func() error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "persist running state") || !strings.Contains(err.Error(), "persist failed run state") {
+		t.Fatalf("combined run-state error = %v", err)
+	}
+	got, _ := rt.db.GetSession(ctx, child.ID)
+	if got.RunState == "running" {
+		t.Fatal("child remained running after run-state persistence failure")
+	}
+}

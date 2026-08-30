@@ -57,7 +57,9 @@ fields with the compiled defaults.
 - `run_subagent` — launch an isolated worker (a built-in profile or an existing
   agent) and get back only the final result, so the sub-task's tool output never
   floods the current context. Supports sync (wait for reply, default) and async
-  (detached background run). Multiple calls in one turn run in parallel.
+  (detached background run). Persistent execution sessions become `running` only
+  after their opening task is durable; initialization failures are terminal and
+  remain inspectable in the Activity feed. Multiple calls in one turn run in parallel.
   For sharper delegation, also pass `objective`, `output_format` and `boundaries`
   (all optional) — they are injected as a "Task contract" into the subagent's
   system prompt so it has a clear goal, a required reply shape and explicit scope

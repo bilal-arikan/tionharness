@@ -281,7 +281,16 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	// real conversation in the activity feed — and bridge it to the hub so a window
 	// watching the spawned session renders the prompt live, in order before the reply
 	// (_Docs/58), not only on reload.
-	if _, err := r.recordInjectedUserNote(ctx, session.ID, "", prompt); err != nil {
+	addOpeningMessage := func() error {
+		_, err := r.recordInjectedUserNote(ctx, session.ID, "", prompt)
+		return err
+	}
+	if opts.ChildSession != nil {
+		err = r.initializeChildSession(ctx, session.ID, addOpeningMessage)
+	} else {
+		err = addOpeningMessage()
+	}
+	if err != nil {
 		r.releaseSpawnSlot()
 		return SpawnResult{}, err
 	}

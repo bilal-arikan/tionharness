@@ -369,6 +369,16 @@ Ham hata metni ile tool input/output detail API'ye kopyalanmaz; internal child
 transcript görünürlüğü böylece genişlemez. Legacy session alanları ve handoff parent
 bağlantısı korunur.
 
+Child oluşturma ile çalıştırma başlangıcı arasında yarım kalmış `running` satırı
+bırakılmaz. Sync ve async yollar aynı başlangıç kapısını kullanır: önce açılış user
+mesajı kalıcılaşır, sonra `runState="running"` yazılır. İki yazımdan biri başarısızsa
+provider çağrısı/goroutine başlamaz, child `failed` yapılır ve asıl hata ile olası
+terminal-state yazım hatası birlikte çağırana ve loga taşınır. Böylece disk hatası,
+iptal veya spawn başlangıç hatası Activity görünümünde sonsuza dek çalışan child
+üretmez; terminal sonuç yazımı başarısız olduğunda da `failed` yazımı denenir ve
+iki hata birlikte raporlanır. Depolama bütünüyle yazılamıyorsa son kalıcı durum
+değiştirilemez, fakat hata sessiz kalmaz.
+
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)

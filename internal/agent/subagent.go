@@ -302,10 +302,12 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		return tools.RunAgentResult{}, err
 	}
 	childCtx = WithSessionID(childCtx, child.ID)
-	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: strings.TrimSpace(spec.Task)}); err != nil {
+	if err := r.initializeChildSession(ctx, child.ID, func() error {
+		_, err := r.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: strings.TrimSpace(spec.Task)})
+		return err
+	}); err != nil {
 		return tools.RunAgentResult{}, err
 	}
-	_ = r.db.SetSessionRunState(ctx, child.ID, "running", time.Now().Unix())
 
 	// Build the request: a clean isolated context (default) or the caller's
 	// conversation (inherited). Isolation is the whole point — the subagent works
@@ -399,13 +401,37 @@ func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec t
 	if contextMode == "" {
 		contextMode = db.ContextIsolated
 	}
-	s := db.Session{Kind: "subagent", ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal, RunState: "running"}
+	s := db.Session{Kind: "subagent", ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal}
 	if ephemeral {
 		s.TargetProfile = strings.TrimSpace(spec.Target)
 	} else {
 		s.TargetAgentID = agent.ID
 	}
 	return s
+}
+
+// initializeChildSession commits the opening user turn before exposing the child
+// as running. A failure after CreateChildSession must leave a terminal, inspectable
+// row instead of an internal session that looks live forever.
+func (r *Runtime) initializeChildSession(ctx context.Context, sessionID string, addOpeningMessage func() error) error {
+	if err := addOpeningMessage(); err != nil {
+		return r.failChildInitialization(ctx, sessionID, "persist opening user message", err)
+	}
+	if err := r.db.SetSessionRunState(ctx, sessionID, "running", time.Now().Unix()); err != nil {
+		return r.failChildInitialization(ctx, sessionID, "persist running state", err)
+	}
+	return nil
+}
+
+func (r *Runtime) failChildInitialization(ctx context.Context, sessionID, operation string, cause error) error {
+	stateErr := r.db.SetSessionRunState(ctx, sessionID, turnStatusFailed, time.Now().Unix())
+	if stateErr != nil {
+		err := fmt.Errorf("initialize child session: %s: %w (persist failed run state: %v)", operation, cause, stateErr)
+		r.logger.Error("subagent child initialization failed", "session", sessionID, "operation", operation, "error", cause, "stateError", stateErr)
+		return err
+	}
+	r.logger.Error("subagent child initialization failed", "session", sessionID, "operation", operation, "error", cause)
+	return fmt.Errorf("initialize child session: %s: %w", operation, cause)
 }
 
 // childTranscriptSteps keeps execution trace shape while dropping raw tool
