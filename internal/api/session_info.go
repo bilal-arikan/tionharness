@@ -261,11 +261,20 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// history-annotation note is prepended), so resolve it the way the real turn
 	// does; only the flag is used here, the labelled copy is the turn's business.
 	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, session.AgentID, history)
+	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
 	extra := s.systemFillers(ctx, wsp, session, history, multiAgent)
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
-	resp.Fillers = append(buildFillers(session.Summary, pending), extra...)
+	messageFillers, err := buildFillers(session.Summary, pending, agentRow.Provider == "codex-cli")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Fillers = append(messageFillers, extra...)
 	sort.SliceStable(resp.Fillers, func(i, j int) bool { return resp.Fillers[i].Tokens > resp.Fillers[j].Tokens })
 
 	// Derive the "used" total from the SAME buckets the bar renders, so the header
@@ -288,9 +297,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// agree. Unknown agent → fall back to the raw floor.
 	cur := s.settings.Get()
 	resp.ContextWindow = cur.MaxContextTokens
-	if ag, aerr := wsp.DB.GetAgent(ctx, session.AgentID); aerr == nil {
-		resp.ContextWindow = conversation.EffectiveBudget(ag.Provider, ag.Model, cur.MaxContextTokens, cur.ContextBudgetFraction, cur.ContextBudgetCeil)
-	}
+	resp.ContextWindow = conversation.EffectiveBudget(agentRow.Provider, agentRow.Model, cur.MaxContextTokens, cur.ContextBudgetFraction, cur.ContextBudgetCeil)
 
 	// Participating agents: distinct agent per assistant turn (falling back to the
 	// session's default agent), with the default agent always present.
@@ -419,9 +426,12 @@ func dirSize(dir string) (int64, int) {
 }
 
 // buildFillers turns the live context window into labelled, token-weighted buckets.
-func buildFillers(summary string, pending []db.Message) []contextFiller {
+func buildFillers(summary string, pending []db.Message, retainSteps bool) ([]contextFiller, error) {
 	byRole := map[string]*contextFiller{}
 	order := []string{}
+	var trace contextFiller
+	trace.Label = "Tur içi araç bağlamı"
+	trace.Role = "tool-history"
 	for _, m := range pending {
 		role := fillerRoleFor(m)
 		f := byRole[role]
@@ -435,6 +445,14 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 		// otherwise the usage bar's segments under-fill by 4×msgCount.
 		f.Tokens += conversation.EstimateText(m.Text) + conversation.MsgOverhead
 		f.Count++
+		if retainSteps && m.Role == providers.RoleAssistant {
+			tokens, count, err := conversation.EstimatePersistedSteps(m.Steps)
+			if err != nil {
+				return nil, err
+			}
+			trace.Tokens += tokens
+			trace.Count += count
+		}
 	}
 
 	fillers := make([]contextFiller, 0, len(order)+1)
@@ -449,8 +467,11 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 	for _, role := range order {
 		fillers = append(fillers, *byRole[role])
 	}
+	if trace.Tokens > 0 {
+		fillers = append(fillers, trace)
+	}
 	sort.SliceStable(fillers, func(i, j int) bool { return fillers[i].Tokens > fillers[j].Tokens })
-	return fillers
+	return fillers, nil
 }
 
 // systemFillers estimates the context that is sent on every turn but never
@@ -468,9 +489,10 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 // is a read-only panel; the live prefix is what the next adopt point ships anyway.
 // history is the session's stored turns: needed for the recent-tool-activity
 // recap, which is rendered from the turns' Steps traces and shipped on the
-// volatile side by composeTurnRequest. The full Steps trace is NOT sent (see
-// conversation.toProviderMessages, which maps a turn to its Text only), so only
-// this bounded recap is counted — not the raw trace.
+// volatile side by composeTurnRequest. Native request history maps a stored turn
+// to Text only. Codex CLI resume is the exception: its durable provider thread
+// retains the turn's internal tool calls/results, which buildFillers accounts for
+// separately from this bounded recap.
 func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) []contextFiller {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {

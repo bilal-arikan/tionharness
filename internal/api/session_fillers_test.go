@@ -18,7 +18,11 @@ func TestBuildFillersSplitsUserBucketByOrigin(t *testing.T) {
 	}
 
 	got := map[string]contextFiller{}
-	for _, f := range buildFillers("", pending) {
+	fillers, err := buildFillers("", pending, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fillers {
 		if _, dup := got[f.Role]; dup {
 			// The frontend keys its legend/bar segments on Role — a duplicate
 			// would collapse two buckets into one React key.

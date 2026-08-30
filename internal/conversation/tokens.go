@@ -1,6 +1,9 @@
 package conversation
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
@@ -70,6 +73,61 @@ func EstimateTokens(summary string, msgs []db.Message) int {
 	total := estimateText(summary)
 	for _, m := range msgs {
 		total += estimateText(m.Text) + msgOverhead
+	}
+	return total
+}
+
+// EstimatePersistedSteps approximates the part of a CLI-backed turn that remains
+// in the provider's durable thread: intermediate text/reasoning plus tool calls
+// and their results. It deliberately estimates semantic payload fields instead
+// of the storage JSON envelope, which the provider never receives.
+func EstimatePersistedSteps(raw string) (tokens, count int, err error) {
+	if raw == "" || raw == "[]" {
+		return 0, 0, nil
+	}
+	var steps []persistedStepEstimate
+	if err := json.Unmarshal([]byte(raw), &steps); err != nil {
+		return 0, 0, fmt.Errorf("estimate persisted steps: %w", err)
+	}
+	return estimatePersistedSteps(steps), countPersistedEstimateSteps(steps), nil
+}
+
+type persistedStepEstimate struct {
+	Kind     string                  `json:"kind"`
+	Text     string                  `json:"text"`
+	Tool     string                  `json:"tool"`
+	CallName string                  `json:"callName"`
+	Input    json.RawMessage         `json:"input"`
+	Output   string                  `json:"output"`
+	Patch    string                  `json:"patch"`
+	SubSteps []persistedStepEstimate `json:"subSteps"`
+}
+
+func estimatePersistedSteps(steps []persistedStepEstimate) int {
+	total := 0
+	for _, step := range steps {
+		switch step.Kind {
+		case "text", "thinking", "steer", "recovery", "error", "hook":
+			total += estimateText(step.Text) + msgOverhead
+		case "tool", "todo":
+			name := step.CallName
+			if name == "" {
+				name = step.Tool
+			}
+			total += estimateText(name) + estimateText(string(step.Input)) + msgOverhead
+			total += estimateText(step.Output) + msgOverhead
+		case "diff":
+			total += estimateText(step.Patch) + msgOverhead
+		}
+		total += estimatePersistedSteps(step.SubSteps)
+	}
+	return total
+}
+
+func countPersistedEstimateSteps(steps []persistedStepEstimate) int {
+	total := len(steps)
+	for _, step := range steps {
+		total += countPersistedEstimateSteps(step.SubSteps)
 	}
 	return total
 }
