@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 type Tab = 'general' | 'appearance' | 'project' | 'logs' | 'export' | 'recommendations'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const WORKSPACE_TAB_KEYS: Tab[] = [
   'general',
   'appearance',

@@ -52,7 +52,9 @@ export const agentApi = {
         error instanceof Error &&
         error.message === 'system agent cannot be deleted; disable it instead'
       ) {
-        throw new Error('Sistem ajanı silinemez. Bunun yerine ajanı devre dışı bırakın.')
+        throw new Error('Sistem ajanı silinemez. Bunun yerine ajanı devre dışı bırakın.', {
+          cause: error,
+        })
       }
       throw error
     }

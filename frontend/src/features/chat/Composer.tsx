@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircleQuestion, Paperclip, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
@@ -17,6 +17,14 @@ import { ToolAccessPanel } from './composer/ToolAccessPanel'
 import { SendActions } from './composer/SendActions'
 import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
 import { useSessionDraft } from './useSessionDraft'
+import { ImageAnnotator } from '@/features/image-annotator/ImageAnnotator'
+import type { AnnotatorExport } from '@/features/image-annotator/imageAnnotatorExport'
+import {
+  annotatedPasteFile,
+  comparePasteOrder,
+  validateClipboardImage,
+  type ValidatedClipboardImage,
+} from '@/shared/lib/clipboard'
 
 // Cap how much of a referenced artifact is inlined into the turn (the artifact
 // itself stays addressable; very large ones are truncated with a note).
@@ -32,6 +40,15 @@ interface PendingAttachment {
   error?: string
   attachment?: Attachment // populated when the upload succeeds
 }
+
+interface PasteChoice {
+  key: string
+  operationId: number
+  index: number
+  image: ValidatedClipboardImage | null
+}
+
+type ResolvedPasteChoice = PasteChoice & { image: ValidatedClipboardImage }
 
 interface Props {
   disabled: boolean
@@ -116,6 +133,9 @@ export function Composer({
   const [trigger, setTrigger] = useState<Trigger>(null)
   const [sel, setSel] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
+  const [pasteChoices, setPasteChoices] = useState<PasteChoice[]>([])
+  const [editingPaste, setEditingPaste] = useState<ResolvedPasteChoice | null>(null)
+  const [pasteErrors, setPasteErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   // A submit is in flight (the enqueue round-trip). The input is locked until it
   // settles so the same draft cannot be submitted twice; on failure the text is
@@ -150,6 +170,52 @@ export function Composer({
   const textRef = useRef(text)
   // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
   const seq = useRef(0)
+  const pasteOperationSeq = useRef(0)
+  const mountGeneration = useRef(0)
+  const canceledPasteKeys = useRef(new Set<string>())
+  const pasteChoicesRef = useRef(pasteChoices)
+  const editingPasteRef = useRef(editingPaste)
+  const pendingRef = useRef(pending)
+  const revokedPreviewURLs = useRef(new Set<string>())
+  const revokePreview = useCallback((url?: string) => {
+    if (!url || revokedPreviewURLs.current.has(url)) return
+    revokedPreviewURLs.current.add(url)
+    URL.revokeObjectURL(url)
+  }, [])
+
+  useEffect(() => {
+    pasteChoicesRef.current = pasteChoices
+    editingPasteRef.current = editingPaste
+    pendingRef.current = pending
+  }, [editingPaste, pasteChoices, pending])
+
+  useEffect(() => {
+    const generation = ++mountGeneration.current
+    setPasteChoices((current) => {
+      current.forEach((choice) => choice.image?.dispose())
+      return []
+    })
+    setEditingPaste((current) => {
+      current?.image.dispose()
+      return null
+    })
+    setPending((current) => {
+      current.forEach((item) => revokePreview(item.previewURL))
+      return []
+    })
+    return () => {
+      mountGeneration.current = generation + 1
+    }
+  }, [revokePreview, sessionId])
+
+  useEffect(
+    () => () => {
+      pasteChoicesRef.current.forEach((choice) => choice.image?.dispose())
+      editingPasteRef.current?.image.dispose()
+      pendingRef.current.forEach((item) => revokePreview(item.previewURL))
+    },
+    [revokePreview],
+  )
 
   // The "Oto" (default '') option resolves to the selected agent's own setting.
   // Surface that resolved value on the option label, e.g. "Oto(Yüksek)" /
@@ -219,33 +285,46 @@ export function Composer({
 
   // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
   // files get a local object-URL preview shown immediately. Requires a session.
+  const stageFile = async (file: File, propagateError = false) => {
+    if (!sessionId) return
+    const generation = mountGeneration.current
+    const uploadSessionId = sessionId
+    const localId = `att-${seq.current++}`
+    const isImage = file.type.startsWith('image/')
+    const previewURL = isImage ? URL.createObjectURL(file) : undefined
+    setPending((p) => [...p, { localId, name: file.name, previewURL, uploading: true }])
+    try {
+      const attachment = await api.uploadFile(uploadSessionId, file)
+      if (mountGeneration.current !== generation) {
+        revokePreview(previewURL)
+        return
+      }
+      setPending((p) =>
+        p.map((x) => (x.localId === localId ? { ...x, uploading: false, attachment } : x)),
+      )
+    } catch (error) {
+      if (mountGeneration.current !== generation) {
+        revokePreview(previewURL)
+        if (propagateError) throw error
+        return
+      }
+      setPending((p) =>
+        p.map((x) =>
+          x.localId === localId ? { ...x, uploading: false, error: (error as Error).message } : x,
+        ),
+      )
+      if (propagateError) throw error
+    }
+  }
+
   const uploadFiles = (files: File[]) => {
     if (!sessionId || files.length === 0) return
-    for (const file of files) {
-      const localId = `att-${seq.current++}`
-      const isImage = file.type.startsWith('image/')
-      const previewURL = isImage ? URL.createObjectURL(file) : undefined
-      setPending((p) => [...p, { localId, name: file.name, previewURL, uploading: true }])
-      api
-        .uploadFile(sessionId, file)
-        .then((attachment) => {
-          setPending((p) =>
-            p.map((x) => (x.localId === localId ? { ...x, uploading: false, attachment } : x)),
-          )
-        })
-        .catch((e: unknown) => {
-          setPending((p) =>
-            p.map((x) =>
-              x.localId === localId ? { ...x, uploading: false, error: (e as Error).message } : x,
-            ),
-          )
-        })
-    }
+    for (const file of files) void stageFile(file)
   }
 
   const removePending = (localId: string) => {
     const hit = pending.find((x) => x.localId === localId)
-    if (hit?.previewURL) URL.revokeObjectURL(hit.previewURL)
+    revokePreview(hit?.previewURL)
     // Delete the already-uploaded file so a cancelled attachment is not orphaned
     // on disk (best-effort; the file only exists once its upload resolved).
     if (hit?.attachment?.relPath) api.deleteFile(hit.attachment.relPath).catch(() => {})
@@ -285,9 +364,56 @@ export function Composer({
   const onPaste = (e: React.ClipboardEvent) => {
     if (!sessionId) return
     const files = Array.from(e.clipboardData.files ?? [])
-    if (files.length > 0) {
+    const images = files.filter((file) => file.type.startsWith('image/') || file.type === '')
+    const otherFiles = files.filter((file) => !images.includes(file))
+    if (images.length > 0) {
       e.preventDefault()
-      uploadFiles(files)
+      if (otherFiles.length > 0) uploadFiles(otherFiles)
+      const operationId = pasteOperationSeq.current++
+      const generation = mountGeneration.current
+      setPasteChoices((current) =>
+        [
+          ...current,
+          ...images.map((_, index) => ({
+            key: `${operationId}-${index}`,
+            operationId,
+            index,
+            image: null,
+          })),
+        ].sort(comparePasteOrder),
+      )
+      images.forEach((file, index) => {
+        void validateClipboardImage(file)
+          .then((image) => {
+            const key = `${operationId}-${index}`
+            if (mountGeneration.current !== generation || canceledPasteKeys.current.has(key)) {
+              image.dispose()
+              return
+            }
+            setPasteChoices((current) =>
+              current.map((choice) =>
+                choice.operationId === operationId && choice.index === index
+                  ? { ...choice, image }
+                  : choice,
+              ),
+            )
+          })
+          .catch((error: unknown) => {
+            if (mountGeneration.current !== generation) return
+            const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
+            setPasteErrors((current) => [...current, message])
+            setPasteChoices((current) =>
+              current.filter(
+                (choice) => choice.operationId !== operationId || choice.index !== index,
+              ),
+            )
+          })
+      })
+      return
+    }
+    if (otherFiles.length > 0) {
+      e.preventDefault()
+      uploadFiles(otherFiles)
       return
     }
     const txt = e.clipboardData.getData('text')
@@ -295,6 +421,32 @@ export function Composer({
       e.preventDefault()
       const file = new File([txt], 'pasted-text.txt', { type: 'text/plain' })
       uploadFiles([file])
+    }
+  }
+
+  const removePasteChoice = (choice: PasteChoice, dispose = true) => {
+    canceledPasteKeys.current.add(choice.key)
+    setPasteChoices((current) => current.filter((item) => item.key !== choice.key))
+    if (dispose) choice.image?.dispose()
+  }
+
+  const uploadAnnotatedPaste = async (result: AnnotatorExport) => {
+    const choice = editingPaste
+    if (!choice) return
+    await stageFile(annotatedPasteFile(choice.image.file, result), true)
+    setEditingPaste(null)
+    choice.image.dispose()
+  }
+
+  const uploadDirectPaste = async (choice: ResolvedPasteChoice) => {
+    removePasteChoice(choice, false)
+    try {
+      await stageFile(choice.image.file, true)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Görsel yüklenemedi.'
+      setPasteErrors((current) => [...current, message])
+    } finally {
+      choice.image.dispose()
     }
   }
 
@@ -385,7 +537,7 @@ export function Composer({
   const active = streaming || waiting
 
   const clearComposer = () => {
-    pending.forEach((p) => p.previewURL && URL.revokeObjectURL(p.previewURL))
+    pending.forEach((p) => revokePreview(p.previewURL))
     setText('')
     setPending([])
     closeMenu()
@@ -516,209 +668,285 @@ export function Composer({
   }
 
   return (
-    <div
-      className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-1 pt-3 pb-1.5 transition-shadow md:px-6 md:pt-4 md:pb-2 ${
-        dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
-      }`}
-      onDragOver={(e) => {
-        if (!sessionId) return
-        e.preventDefault()
-        setDragOver(true)
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        if (!sessionId) return
-        e.preventDefault()
-        setDragOver(false)
-        uploadFiles(Array.from(e.dataTransfer.files ?? []))
-      }}
-    >
-      {trigger && items.length > 0 && (
-        <AutocompleteMenu
-          mode={trigger.mode}
-          items={items}
-          sel={sel}
-          onHover={setSel}
-          onChoose={choose}
-        />
-      )}
-
-      {/* Btw side chat. Rendered only with a session + agent (both are required to
-          answer), and stays open across a streaming turn on purpose. */}
-      {btwOpen && sessionId && agentId && (
-        <BtwPanel sessionId={sessionId} agentId={agentId} onClose={() => setBtwOpen(false)} />
-      )}
-
-      {/* Tool inspector. Needs a target agent (tool access is per-agent); no
-          session required, so it also answers "what could this agent do?". */}
-      {toolsOpen && agentId && (
-        <ToolAccessPanel key={agentId} agentId={agentId} onClose={() => setToolsOpen(false)} />
-      )}
-
-      {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
-      {pending.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2.5">
-          {pending.map((p) => (
-            <AttachmentChip
-              key={p.localId}
-              attachment={
-                p.attachment ?? { id: p.localId, name: p.name, mime: '', kind: 'file', size: 0 }
-              }
-              previewURL={p.previewURL}
-              uploading={p.attachment ? undefined : p.uploading}
-              onRemove={() => removePending(p.localId)}
-            />
+    <>
+      {pasteErrors.length > 0 && (
+        <div className="fixed right-4 bottom-4 z-[70] max-w-sm space-y-2" aria-live="assertive">
+          {pasteErrors.map((message, index) => (
+            <div
+              key={`${message}-${index}`}
+              role="alert"
+              className="rounded border border-red-500/40 bg-[var(--color-surface)] p-3 text-sm text-red-500"
+            >
+              {message}
+              <button
+                type="button"
+                aria-label="Hatayı kapat"
+                className="ml-3 underline"
+                onClick={() =>
+                  setPasteErrors((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                }
+              >
+                Kapat
+              </button>
+            </div>
           ))}
         </div>
       )}
+      {pasteChoices.length > 0 && !editingPaste && (
+        <div
+          role="dialog"
+          aria-label="Yapıştırılan görsel seçimi"
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"
+        >
+          <section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+            <h2 className="font-semibold">Görsel nasıl eklensin?</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-dim)]">
+              {pasteChoices[0].image?.file.name || 'Görsel doğrulanıyor…'}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => removePasteChoice(pasteChoices[0])}>
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={!pasteChoices[0].image}
+                onClick={() => {
+                  const choice = pasteChoices[0] as ResolvedPasteChoice
+                  void uploadDirectPaste(choice)
+                }}
+              >
+                Doğrudan ekle
+              </button>
+              <button
+                type="button"
+                disabled={!pasteChoices[0].image}
+                onClick={() => {
+                  const choice = pasteChoices[0] as ResolvedPasteChoice
+                  removePasteChoice(choice, false)
+                  setEditingPaste(choice)
+                }}
+              >
+                Üzerine çiz
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {editingPaste && (
+        <ImageAnnotator
+          source={editingPaste.image.source}
+          onSave={uploadAnnotatedPaste}
+          onClose={() => {
+            const choice = editingPaste
+            setEditingPaste(null)
+            choice.image.dispose()
+          }}
+        />
+      )}
+      <div
+        className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-1 pt-3 pb-1.5 transition-shadow md:px-6 md:pt-4 md:pb-2 ${
+          dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
+        }`}
+        onDragOver={(e) => {
+          if (!sessionId) return
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          if (!sessionId) return
+          e.preventDefault()
+          setDragOver(false)
+          uploadFiles(Array.from(e.dataTransfer.files ?? []))
+        }}
+      >
+        {trigger && items.length > 0 && (
+          <AutocompleteMenu
+            mode={trigger.mode}
+            items={items}
+            sel={sel}
+            onHover={setSel}
+            onChoose={choose}
+          />
+        )}
 
-      {/* Input card: the textarea grows (up to ~3 lines) on its own full-width row;
+        {/* Btw side chat. Rendered only with a session + agent (both are required to
+          answer), and stays open across a streaming turn on purpose. */}
+        {btwOpen && sessionId && agentId && (
+          <BtwPanel sessionId={sessionId} agentId={agentId} onClose={() => setBtwOpen(false)} />
+        )}
+
+        {/* Tool inspector. Needs a target agent (tool access is per-agent); no
+          session required, so it also answers "what could this agent do?". */}
+        {toolsOpen && agentId && (
+          <ToolAccessPanel key={agentId} agentId={agentId} onClose={() => setToolsOpen(false)} />
+        )}
+
+        {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2.5">
+            {pending.map((p) => (
+              <AttachmentChip
+                key={p.localId}
+                attachment={
+                  p.attachment ?? { id: p.localId, name: p.name, mime: '', kind: 'file', size: 0 }
+                }
+                previewURL={p.previewURL}
+                uploading={p.attachment ? undefined : p.uploading}
+                onRemove={() => removePending(p.localId)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Input card: the textarea grows (up to ~3 lines) on its own full-width row;
           the controls live on a fixed toolbar row beneath it, so they never stretch
           or shift as the text area expands. The card carries the border/focus ring. */}
-      <div
-        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg transition-colors focus-within:ring-1 focus-within:ring-inset focus-within:ring-[var(--color-accent)] ${
-          active
-            ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
-            : 'border-[var(--color-border)]'
-        }`}
-      >
-        <textarea
-          ref={taRef}
-          value={text}
-          onChange={onChange}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          disabled={sending}
-          data-testid="composer-input"
-          aria-label="Mesaj yaz"
-          rows={1}
-          placeholder={
-            waiting
-              ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
-              : 'Mesaj yaz — @ ajan adı, # artifact, / komut'
-          }
-          className="max-h-[12rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
-        />
+        <div
+          className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg transition-colors focus-within:ring-1 focus-within:ring-inset focus-within:ring-[var(--color-accent)] ${
+            active
+              ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
+              : 'border-[var(--color-border)]'
+          }`}
+        >
+          <textarea
+            ref={taRef}
+            value={text}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            disabled={sending}
+            data-testid="composer-input"
+            aria-label="Mesaj yaz"
+            rows={1}
+            placeholder={
+              waiting
+                ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
+                : 'Mesaj yaz — @ ajan adı, # artifact, / komut'
+            }
+            className="max-h-[12rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
+          />
 
-        {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;
+          {/* Toolbar row: left = target agent + per-turn pickers + workdir + attach;
             right = send/streaming actions. Wraps on narrow (mobile) widths so the
             send cluster drops to its own line instead of overflowing the viewport. */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <AgentSelect
-            agents={agents}
-            value={agentId}
-            onChange={onAgentChange}
-            disabled={!sessionId}
-          />
-          {/* Narrow-screen toggle: reveals/hides the per-turn pickers below. Hidden
+          <div className="flex flex-wrap items-center gap-1.5">
+            <AgentSelect
+              agents={agents}
+              value={agentId}
+              onChange={onAgentChange}
+              disabled={!sessionId}
+            />
+            {/* Narrow-screen toggle: reveals/hides the per-turn pickers below. Hidden
               from `md:` up, where the pickers are always shown. */}
-          <button
-            type="button"
-            onClick={toggleControls}
-            title="Tur ayarları (düşünme · izin · çalışma dizini · araçlar)"
-            aria-label="Tur ayarlarını göster/gizle"
-            aria-expanded={showControls}
-            data-testid="composer-controls-toggle"
-            className={`${BTN_ICON} md:hidden ${showControls ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-          >
-            <SlidersHorizontal size={18} />
-          </button>
-          {/* Per-turn pickers. `contents` keeps them as direct flex children (so the
+            <button
+              type="button"
+              onClick={toggleControls}
+              title="Tur ayarları (düşünme · izin · çalışma dizini · araçlar)"
+              aria-label="Tur ayarlarını göster/gizle"
+              aria-expanded={showControls}
+              data-testid="composer-controls-toggle"
+              className={`${BTN_ICON} md:hidden ${showControls ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+            {/* Per-turn pickers. `contents` keeps them as direct flex children (so the
               toolbar gap is unaffected); collapsed on narrow widths unless toggled,
               always shown from `md:` up. */}
-          <div className={`${showControls ? 'contents' : 'hidden'} md:contents`}>
-            <ComposerPicker
-              value={thinkingLevel}
-              onChange={onThinkingLevelChange}
-              options={thinkingOptions}
-              header="Düşünme seviyesi"
-              title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
-            />
-            <ComposerPicker
-              value={permissionMode}
-              onChange={onPermissionModeChange}
-              options={permissionOptions}
-              header="İzin modu (Shift+Tab)"
-              title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
-              menuWidthClass="w-60"
-              iconOnly
-            />
-            <WorkDirBadge sessionId={sessionId} />
-            {/* Tool inspector: what this agent can use right now (active vs
+            <div className={`${showControls ? 'contents' : 'hidden'} md:contents`}>
+              <ComposerPicker
+                value={thinkingLevel}
+                onChange={onThinkingLevelChange}
+                options={thinkingOptions}
+                header="Düşünme seviyesi"
+                title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
+              />
+              <ComposerPicker
+                value={permissionMode}
+                onChange={onPermissionModeChange}
+                options={permissionOptions}
+                header="İzin modu (Shift+Tab)"
+                title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
+                menuWidthClass="w-60"
+                iconOnly
+              />
+              <WorkDirBadge sessionId={sessionId} />
+              {/* Tool inspector: what this agent can use right now (active vs
                 on-demand) and what the MCP gateway has open. Read-only, so it is
                 never disabled by a streaming turn — only by having no agent to
                 inspect. Folded into this group so the narrow-width toolbar hides
                 it with the rest of the per-turn controls; collapsing the group
                 also closes an open panel, since the ⚙ toggle is not tagged
                 data-tool-access-toggle and so counts as an outside click. */}
+              <button
+                type="button"
+                onClick={() => setToolsOpen((o) => !o)}
+                disabled={!agentId}
+                title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
+                aria-label="Araç bilgisi"
+                aria-expanded={toolsOpen}
+                data-testid="composer-tools"
+                data-tool-access-toggle=""
+                className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+              >
+                <Wrench size={18} />
+              </button>
+            </div>
+            {/* Attach button + hidden multi-file input. */}
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
             <button
               type="button"
-              onClick={() => setToolsOpen((o) => !o)}
-              disabled={!agentId}
-              title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
-              aria-label="Araç bilgisi"
-              aria-expanded={toolsOpen}
-              data-testid="composer-tools"
-              data-tool-access-toggle=""
-              className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+              onClick={() => fileRef.current?.click()}
+              disabled={!sessionId}
+              title="Dosya ekle"
+              aria-label="Dosya ekle"
+              data-testid="composer-attach"
+              className={BTN_ICON}
             >
-              <Wrench size={18} />
+              <Paperclip size={18} />
             </button>
-          </div>
-          {/* Attach button + hidden multi-file input. */}
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={!sessionId}
-            title="Dosya ekle"
-            aria-label="Dosya ekle"
-            data-testid="composer-attach"
-            className={BTN_ICON}
-          >
-            <Paperclip size={18} />
-          </button>
 
-          {/* Btw: a side question answered from the conversation's context but never
+            {/* Btw: a side question answered from the conversation's context but never
               written into it. Enabled even while a turn is streaming — asking one is
               exactly what this button is for. Needs a session + a target agent. */}
-          <button
-            type="button"
-            onClick={() => setBtwOpen((o) => !o)}
-            disabled={!sessionId || !agentId}
-            title="Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)"
-            aria-label="Btw yan soru"
-            aria-expanded={btwOpen}
-            data-testid="composer-btw"
-            className={`${BTN_ICON} ${btwOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-          >
-            <MessageCircleQuestion size={18} />
-          </button>
+            <button
+              type="button"
+              onClick={() => setBtwOpen((o) => !o)}
+              disabled={!sessionId || !agentId}
+              title="Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)"
+              aria-label="Btw yan soru"
+              aria-expanded={btwOpen}
+              data-testid="composer-btw"
+              className={`${BTN_ICON} ${btwOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+            >
+              <MessageCircleQuestion size={18} />
+            </button>
 
-          {/* Voice dictation: language picker + mic toggle. Speaking appends
+            {/* Voice dictation: language picker + mic toggle. Speaking appends
               recognized text to the draft. Renders nothing when the browser lacks
               Web Speech recognition. Needs a session (nothing to dictate into). */}
-          <MicButton disabled={!sessionId} onTranscript={appendTranscript} />
+            <MicButton disabled={!sessionId} onTranscript={appendTranscript} />
 
-          {/* Spacer pushes the send cluster to the right edge. */}
-          <div className="flex-1" />
+            {/* Spacer pushes the send cluster to the right edge. */}
+            <div className="flex-1" />
 
-          <SendActions
-            streaming={streaming}
-            waiting={waiting}
-            hasText={hasText}
-            hasContent={hasContent}
-            anyUploading={anyUploading}
-            disabled={disabled || sending || !agentId}
-            onSend={() => void send()}
-            onStop={onStop}
-            onCancelWait={onCancelWait}
-            onQueue={() => void actWithAttachments(onQueue)}
-            onInterrupt={() => void actWithAttachments(onInterrupt)}
-            onSteer={() => void act(onSteer)}
-          />
+            <SendActions
+              streaming={streaming}
+              waiting={waiting}
+              hasText={hasText}
+              hasContent={hasContent}
+              anyUploading={anyUploading}
+              disabled={disabled || sending || !agentId}
+              onSend={() => void send()}
+              onStop={onStop}
+              onCancelWait={onCancelWait}
+              onQueue={() => void actWithAttachments(onQueue)}
+              onInterrupt={() => void actWithAttachments(onInterrupt)}
+              onSteer={() => void act(onSteer)}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

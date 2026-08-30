@@ -12,6 +12,7 @@ const terminalLabel: Record<string, string> = {
   running: 'Çalışıyor',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDurationMs(ms: number): string {
   if (ms <= 0) return '—'
   if (ms < 1000) return `${ms} ms`

@@ -1,3 +1,14 @@
+import type {
+  AnnotatorExport,
+  DrawableSource,
+} from '@/features/image-annotator/imageAnnotatorExport'
+import {
+  ImageAnnotatorError,
+  MAX_SOURCE_BYTES,
+  validateImageHeader,
+  validateSourceLimits,
+} from '@/features/image-annotator/imageAnnotatorLimits'
+
 // copyText writes `text` to the clipboard, working in BOTH secure and insecure
 // contexts. The async Clipboard API (navigator.clipboard) is only exposed on
 // secure origins (HTTPS or localhost); when the app is served over a plain-HTTP
@@ -61,4 +72,83 @@ export async function copyToClipboard(
   const ok = await copyText(text)
   if (!ok) window.prompt(promptLabel, text)
   return ok
+}
+
+export interface ValidatedClipboardImage {
+  file: File
+  source: DrawableSource
+  dispose(): void
+}
+
+export function comparePasteOrder(
+  a: { operationId: number; index: number },
+  b: { operationId: number; index: number },
+) {
+  return a.operationId - b.operationId || a.index - b.index
+}
+
+export function annotatedPasteFile(original: File, result: AnnotatorExport): File {
+  const extension = result.mime === 'image/webp' ? 'webp' : 'png'
+  const base = original.name.replace(/\.[^.]+$/, '') || 'pasted-image'
+  return new File([result.blob], `${base}-annotated.${extension}`, { type: result.mime })
+}
+
+async function readFileWithinLimit(file: File): Promise<Uint8Array> {
+  if (file.size > MAX_SOURCE_BYTES) throw new ImageAnnotatorError('IMAGE_TOO_LARGE_BYTES')
+  const reader = file.stream().getReader()
+  const chunks: Uint8Array[] = []
+  let length = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (length + value.byteLength > MAX_SOURCE_BYTES) {
+        await reader.cancel()
+        throw new ImageAnnotatorError('IMAGE_TOO_LARGE_BYTES')
+      }
+      chunks.push(value)
+      length += value.byteLength
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(length)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
+export async function validateClipboardImage(file: File): Promise<ValidatedClipboardImage> {
+  const bytes = await readFileWithinLimit(file)
+  validateImageHeader(file.type, bytes)
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(new Blob([bytes.slice().buffer], { type: file.type }))
+  } catch {
+    throw new ImageAnnotatorError('IMAGE_DECODE_FAILED')
+  }
+  try {
+    validateSourceLimits(bytes.byteLength, bitmap.width, bitmap.height)
+  } catch (error) {
+    bitmap.close()
+    throw error
+  }
+  let disposed = false
+  return {
+    file,
+    source: {
+      width: bitmap.width,
+      height: bitmap.height,
+      opaque: file.type === 'image/jpeg',
+      draw: (ctx) => ctx.drawImage(bitmap, 0, 0),
+    },
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      bitmap.close()
+    },
+  }
 }
