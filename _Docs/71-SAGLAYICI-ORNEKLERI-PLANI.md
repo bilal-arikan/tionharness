@@ -236,7 +236,7 @@ invaryantını doğrulayan test yazılacak (agent yazım yolu → alan senkronu)
 
 | Dosya:satır | Bugün | Sonra |
 |-------------|-------|-------|
-| `internal/agent/runtime.go:741` | `provider == "" \|\| provider == "claude-cli"` (skill aracı adı: MCP namespace'li mi?) | `Transport == "cli"` |
+| `internal/agent/runtime_skills.go` → `isCLIProviderKind` | `provider == "" \|\| provider == "claude-cli"` (skill aracı adı: MCP namespace'li mi?) | `Transport == "cli"` |
 | `internal/agent/toolsetup.go:811` | aynı kontrol (lazy tool kataloğu CLI formunda mı?) | `Transport == "cli"` |
 | `internal/api/chat_control.go:133` | `provider != "claude-cli"` | kind/transport |
 | `internal/api/session_context.go:475` | `provider != "claude-cli"` | kind/transport |

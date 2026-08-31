@@ -248,7 +248,7 @@ workspace claude-home'unda seed'lenmiş credential ile turlar arasında aralıkl
 - `internal/agent/promptepoch.go` (+`_test.go`) — çekirdek
 - `internal/db/promptepoch.go` — sidecar; `internal/db/debug_journal.go` — `DebugEpoch`
 - `internal/api/chat_turn.go` — `buildStaticPrefix` + epoch + stale notu
-- `internal/agent/runtime.go` — gate + `autonomousSystemPrompt`/`autonomousDynamicSuffix`
+- `internal/agent/runtime.go` — gate · `runtime_prompt.go` — `autonomousSystemPrompt`/`autonomousDynamicSuffix`
 - `internal/agent/toolloop.go` — `shipFor` (frozen + aktivasyon merge)
 - `internal/agent/sessionsink.go` + `internal/tools/sessionsink.go` + `builtin_sessionupdate.go` — `refresh_context`
 - `internal/api/summary.go` — `/refresh-context`; `internal/api/workspace_settings.go` — DTO

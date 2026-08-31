@@ -341,7 +341,7 @@ hafızası yoktur. Anthropic'in uzun-koşu-ajanı "harness" disiplinini uygulama
 turlara bir **açılış (boot) sırası** dayatılır: yönelim → hatırlama → **tek** görev seç →
 **temel testi (smoke/e2e) doğrula** → işi yap → döngüyü kapat (git commit + append-only not).
 
-- **Enjeksiyon:** `agent/runtime.go autonomousSystemPrompt` her otonom turun sistem-promptuna
+- **Enjeksiyon:** `agent/runtime_prompt.go autonomousSystemPrompt` her otonom turun sistem-promptuna
   kısa bir `autonomousBootReminder` (skill'e yönlendiren pointer) ekler. Tek nokta dört otonom
   yolu da kapsar (`executor.go` + `subagent.go` ortak kurucu); interaktif sohbet etkilenmez.
 - **Tam reçete:** `tionharness-autonomous-ops` becerisi **§10**. Ajan ihtiyaç duyarsa

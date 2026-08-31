@@ -520,7 +520,7 @@ sonra gelir (cache prefix'i aynı kalsın diye):
 
 - sohbet: `internal/api/chat_turn.go` → `Runtime.LazyToolsCatalogBlock`
 - otonom (scheduler / flow / `run_subagent` / `spawn_worker`):
-  `internal/agent/runtime.go` → `autonomousSystemPrompt`
+  `internal/agent/runtime_prompt.go` → `autonomousSystemPrompt`
 
 Otonom yolda blok eksikken model deferred bir aracı şema yüklemeden çağırıp
 `InputValidationError` alıyordu.

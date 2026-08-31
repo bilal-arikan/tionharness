@@ -240,7 +240,7 @@ seviyesinde her view'da mount olduğu için workspace ekranında da görünür.
 
 - `internal/agent/capabilities.go` (yeni: Capability + codebase-memory + `sessionCwd`
   + `codebaseMemoryCmd` + `EnsureCodebaseIndexed`) · `capabilities_test.go` (yeni)
-- `internal/agent/runtime.go` (`cbmIndexed` alanı + headless enjeksiyon, `autonomousSystemPrompt(ctx,a)`)
+- `internal/agent/runtime.go` (`cbmIndexed` alanı) · `runtime_prompt.go` (headless enjeksiyon, `autonomousSystemPrompt(ctx,a)`)
 - `internal/agent/executor.go` · `subagent.go` (ctx'li çağrı)
 - `internal/agent/toolsetup.go` (tool kaydı + MCP şema kapısı)
 - `internal/agent/climcp.go` (claude-cli `--mcp-config`) ·

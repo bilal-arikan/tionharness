@@ -49,7 +49,7 @@ tek asistan mesajını 1,88 MB'a çıkardı.
 
 Kesme her zaman **görünürdür** (`…[line truncated at 4KB]`, `[output truncated at 64KB]`) ve
 UTF-8 rune sınırını bölmez. Bağlandığı noktalar: `codexcli_events.go` → `setStep` (her adım tek
-bir noktadan geçer), `claudecli.go` → `tool_result` atama.
+bir noktadan geçer), `claudecli_stream.go` → `tool_result` atama.
 
 ## Bridged shell için in-process `sqz` (2026-07-25)
 

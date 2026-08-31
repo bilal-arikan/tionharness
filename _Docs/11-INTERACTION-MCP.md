@@ -274,7 +274,7 @@ olduğu için liste artık çoğu turda boştur, ama kapatan bir ajanda yol yine
 `ClaudeCLI.mcpArgs` `--settings`/`--disallowedTools` bayraklarını `--mcp-config`
 olmadan da yazar (`--strict-mcp-config` yalnız config dosyasıyla birlikte gider).
 
-**Native arama adımı görünür.** `claudecli.go` stream-json parser'ı artık
+**Native arama adımı görünür.** `claudecli_stream.go` stream-json parser'ı artık
 `server_tool_use` / `web_search_tool_result` / `web_fetch_tool_result` bloklarını
 `anthropic.go` ile aynı şekilde trace adımına çevirir; tanımadığı blok tipleri de
 tur başına bir kez `[claude-cli] unhandled content block skipped: <tip>` notu
