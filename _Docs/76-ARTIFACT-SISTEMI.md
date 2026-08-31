@@ -107,6 +107,28 @@ göstermeden özgün haliyle doğrudan composer ekine yüklenir. Ek küçük gö
 seçiciden eklenen görsellerin otomatik çizim akışı değişmez; ilk kayıt sonrasında
 aynı **Görseli düzenle** eylemi ve güvenli upload değiştirme davranışı kullanılabilir.
 
+## Artifacts ekranında yerinde düzenleme (override)
+
+Artifacts ekranındaki detay başlığında, yalnız `kind === 'image'` ve `sourcePath`
+dolu olan artifact'larda **Görseli düzenle** düğmesi görünür
+(`ImageArtifactEditButton.tsx`). Önizleme modalındaki **Üzerine çiz** akışından
+farkı: türev artifact üretmez, **aynı artifact'ı override eder**.
+
+- Kaynak yükleme ve doğrulama ortak `useImageArtifactSource` hook'undadır; bitmap
+  sahipliği (kapatma, generation ile geç sonuç iptali) hook'a aittir.
+- **Kaydet**: export edilen dosya `POST /api/uploads` ile staging'e yazılır,
+  ardından `PUT /api/artifacts/{id}` gövdesinde yalnız `sourcePath` gönderilir.
+  Backend (`UpdateArtifactSource`) artifact'ı yeni dosyaya yönlendirir ve eski
+  dosyayı — yeni yoldan farklıysa — siler.
+- `PUT` başarısız olursa staging dosyası silinir; temizlik de başarısız olursa iki
+  hata `AggregateError` ile birleştirilip editörde gösterilir. Hata sessizce
+  yutulmaz.
+- Yükleme yolu her seferinde benzersiz bir id öneki taşıdığından (`artifacts/<session>/<id>-<ad>`)
+  görselin URL'i değişir; ayrıca cache-buster gerekmez.
+- Yeni metinler `artifactAnnotation.edit`, `artifactAnnotation.editTitle`,
+  `artifactAnnotation.updated` ve `artifactAnnotation.overwriteAndCleanupError`
+  anahtarlarındadır (en + tr).
+
 Canlı kabul testi için çalışan uygulamada image artifact önizlemesi açılır; çizim
 eklenir; kaydetme sonrası yeni artifact kimliği, `derivedFromArtifactId`, parent
 session ve özgün artifact'ın değişmediği API üzerinden kontrol edilir. Ardından

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import {
   FileText,
@@ -24,6 +25,7 @@ import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_ARTIFACTS } from '@/app/eventToRefreshSignals'
 import type { Agent, Artifact, ArtifactKind } from '@/types'
 import { ArtifactView } from './ArtifactView'
+import { ImageArtifactEditButton } from './ImageArtifactEditButton'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime } from '@/shared/lib/time'
@@ -101,6 +103,7 @@ interface Draft {
 // the left and a viewer/editor on the right with copy, manual editing (overwrites
 // in place) and delete. Artifacts are not versioned.
 export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: Props) {
+  const { t } = useTranslation('common')
   const artifactsTick = useRefreshTrigger(SIGNAL_ARTIFACTS)
   const [list, setList] = useState<Artifact[]>([])
   // Selection persists across screen switches within the session (resets on app
@@ -434,6 +437,18 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       group: active.group ?? '',
     })
   }, [active])
+
+  // An annotated image was written back over the SAME artifact (new source file,
+  // same id). Swap the persisted row into the viewer and the list so the new
+  // sourcePath — and therefore the image URL — is picked up immediately.
+  const onImageUpdated = useCallback(
+    (updated: Artifact) => {
+      setActive(updated)
+      setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+      toast.success(t('artifactAnnotation.updated'))
+    },
+    [t],
+  )
 
   // Save the draft: send only changed fields (a content change overwrites in
   // place). The `group` field is not part of the content/meta patch — the
@@ -892,6 +907,14 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     and destructive actions. */}
                 {!draft && (
                   <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {/* Image artifacts additionally get the annotator, which
+                        overwrites this same artifact's source file in place. */}
+                    <ImageArtifactEditButton
+                      artifact={active}
+                      onUpdated={onImageUpdated}
+                      onError={onError}
+                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
+                    />
                     <button
                       data-testid="artifact-detail-edit"
                       onClick={startEdit}
