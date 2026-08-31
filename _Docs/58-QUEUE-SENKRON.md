@@ -600,6 +600,28 @@ sessizce yutulmaz. Persist edilen `/kind` user mesajı da her hâlükârda
 denendiğinin kaydı olarak kalır. Regresyon testi:
 `internal/api/summary_failure_test.go`.
 
+### Tur slotu alınamayınca artık boş 200 dönmüyor (2026-08-31)
+
+`handleSessionSummary` ve `handleSessionHandoff`, `ClaimSessionCommandTurn`
+başarısız olduğunda **hiçbir şey yazmadan** `return` ediyordu; `net/http` bu
+durumda gövdesiz bir `200 OK` gönderir. Frontend'in `req()` sarmalayıcısı yanıtı
+başarılı sayıp gövdeyi ayrıştırmaya çalıştığı için hata mesajı yerine ayrıştırma
+hatası çıkıyor, "çalışıyor" balonu gerekçesiz asılı kalıyordu; sunucu tarafında da
+reddin hiçbir kaydı yoktu.
+
+Ortak yardımcı `writeTurnClaimError` (`internal/api/summary.go`) iki durumu ayırır
+ve her ikisini de `logger.Warn` ile kaydeder:
+
+- **İstemci koptu** (`ctx.Err() != nil` — kuyruk zaman aşımı uygulamaz, tek hata
+  kaynağı istek bağlamının iptalidir): `499 Client Closed Request`.
+- **Diğer her claim hatası:** `409 Conflict`, gövdede oturumun meşgul olduğu ve
+  hangi komutun çalıştırılamadığı.
+
+İki durumda da `{error: …}` gövdesi döner, yani frontend `errorFromResponse`
+üzerinden anlamlı mesajı gösterir; komut mesajı slot alınmadan **önce** persist
+edilmediği için reddedilen komut hiçbir kalıcı iz bırakmaz. Regresyon testi:
+`internal/api/summary_turnslot_test.go`.
+
 **`/handoff` de aynı desende (2026-08-04):** `handleSessionHandoff` komutu ESKİ
 oturumun hub'ında olaylaştırır — user mesajı + "⏳ context reset" ghost'u işten
 **önce** yayınlanır → mid-op yenileme in-flight tail'i replay eder. Başarıda

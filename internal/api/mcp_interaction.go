@@ -823,10 +823,22 @@ func (b *interactionBackend) toolCallError(token, name string, run *chatRun) str
 	}
 
 	if known[bare] {
-		if allow := run.toolAllowedFor(); allow != nil && !allow(bare) {
+		// Every run-scoped lookup below sits behind the same nil check as the ones
+		// above: this function is reachable with no registered run (a call that
+		// arrives before/after the turn owning it), and both accessors take the run's
+		// mutex, so a nil receiver panics inside the MCP request goroutine rather than
+		// yielding a zero value. Without a run there is no per-agent policy and no
+		// recorded provider, which is exactly the unrestricted case.
+		provider := ""
+		var allow func(string) bool
+		if run != nil {
+			allow = run.toolAllowedFor()
+			provider = run.providerOf()
+		}
+		if allow != nil && !allow(bare) {
 			return fmt.Sprintf("Tool %s exists but is blocked by the current workspace or agent policy; it cannot be activated in this context.", callableToolName(bare, visOf))
 		}
-		if cliTier(bare, visOf) != "core" && !fullTierProvider(run.providerOf()) && !b.isActivated(token, bare) {
+		if cliTier(bare, visOf) != "core" && !fullTierProvider(provider) && !b.isActivated(token, bare) {
 			callable := extendedNSPrefix + bare
 			return fmt.Sprintf("Tool %s exists in the on-demand catalog but is not activated. Activate it with activate_tools({\"tools\":[%q]}). It will become visible on the next turn, not the current turn.", callable, callable)
 		}

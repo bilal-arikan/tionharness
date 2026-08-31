@@ -93,6 +93,7 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// cleanly, before any side effect.
 	releaseTurn, err := wsp.Runtime.ClaimSessionCommandTurn(ctx, session.ID, "/"+kind)
 	if err != nil {
+		s.writeTurnClaimError(ctx, w, session.ID, "/"+kind, err)
 		return
 	}
 	defer releaseTurn()
@@ -161,6 +162,30 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// still refresh their last-message metadata via the global bus.
 	emitSessionChange(wsp, session.ID, "summary")
 	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
+}
+
+// statusClientClosedRequest is nginx's 499: the client went away before the
+// server could answer. Not in net/http, but the honest code for a slash command
+// whose request context was cancelled while it waited for the session's slot.
+const statusClientClosedRequest = 499
+
+// writeTurnClaimError answers a slash command whose turn-slot claim failed.
+// Returning without writing anything (what these handlers used to do) makes
+// net/http send a bare 200 with an empty body: the frontend's fetch wrapper then
+// fails parsing the response and the live "working" bubble never clears with a
+// reason. The refusal is also logged — it was previously invisible on the server.
+func (s *Server) writeTurnClaimError(ctx context.Context, w http.ResponseWriter, sessionID, label string, cause error) {
+	if ctx.Err() != nil {
+		// Client gone (navigated away, aborted): nobody reads the body, but the
+		// status must still be an error so intermediaries do not cache a fake 200.
+		s.logger.Warn("slash command abandoned while waiting for the session turn slot",
+			"session", sessionID, "command", label, "error", cause)
+		writeError(w, statusClientClosedRequest, label+" iptal edildi: "+cause.Error())
+		return
+	}
+	s.logger.Warn("slash command could not claim the session turn slot",
+		"session", sessionID, "command", label, "error", cause)
+	writeError(w, http.StatusConflict, "oturum meşgul, "+label+" çalıştırılamadı: "+cause.Error())
 }
 
 // recordSummaryFailure leaves a DURABLE record of a failed slash command. The
@@ -308,6 +333,7 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	// one). A client disconnect while waiting bails before any side effect.
 	releaseTurn, err := wsp.Runtime.ClaimSessionCommandTurn(ctx, session.ID, "/handoff")
 	if err != nil {
+		s.writeTurnClaimError(ctx, w, session.ID, "/handoff", err)
 		return
 	}
 	defer releaseTurn()
