@@ -45,7 +45,7 @@ func (ListSessionsTool) Def() providers.ToolDef {
   "type": "object",
   "properties": {
     "state": { "type": "string", "enum": ["active", "all"], "description": "Which sessions to list (default: active)." },
-    "kind": { "type": "string", "enum": ["chat", "inbox", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
+    "kind": { "type": "string", "enum": ["chat", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
     "limit": { "type": "integer", "description": "Max sessions per page (default 20, max 100). Use with offset to page through all of them." },
     "offset": { "type": "integer", "description": "How many matching sessions to skip before this page (default 0). Pass the offset from a previous reply to get the next page." }
