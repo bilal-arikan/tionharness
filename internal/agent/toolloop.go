@@ -686,7 +686,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					cst := reactiveCompactionStep(fold)
+					cst := reactiveCompactionStep(fold, provider)
 					steps = append(steps, cst)
 					emit(cst)
 					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
@@ -769,7 +769,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					rec := TurnStep{Kind: StepRecovery, Reason: string(d.reason), Text: recoveryText(d.reason)}
 					steps = append(steps, rec)
 					emit(rec)
-					cst := reactiveCompactionStep(fold)
+					cst := reactiveCompactionStep(fold, provider)
 					steps = append(steps, cst)
 					emit(cst)
 					r.emitDebug(ctx, reactiveCompactionEvent(agent.ID, string(d.reason), fold))
