@@ -7,6 +7,7 @@ import {
   WORKFLOW_HELP,
 } from '@/shared/components/CoordinatorWorkflowPicker'
 import { Workflow } from 'lucide-react'
+import { NumberField } from '@/features/settings/primitives'
 import { chromeFor, nodeHeaderForeground } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
 
@@ -182,34 +183,22 @@ export function NodeInspector({
               groupName={`node-wf-${node.id}`}
             />
           </div>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              En çok koordinatör turu (0 = reçetenin kendi sınırı, yoksa workspace varsayılanı)
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={node.maxTurns ?? 0}
-              onChange={(e) =>
-                onPatch({ maxTurns: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-              }
-              className={input}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Zaman aşımı (saniye, 0 = 30 dk varsayılan)
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={node.timeoutSec ?? 0}
-              onChange={(e) =>
-                onPatch({ timeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-              }
-              className={input}
-            />
-          </label>
+          <NumberField
+            label="En çok koordinatör turu"
+            hint="0 = reçetenin kendi sınırı, yoksa workspace varsayılanı"
+            min={0}
+            step={1}
+            value={node.maxTurns ?? 0}
+            onChange={(v) => onPatch({ maxTurns: Math.round(v) })}
+          />
+          <NumberField
+            label="Zaman aşımı (saniye)"
+            hint="0 = 30 dk varsayılan"
+            min={0}
+            step={1}
+            value={node.timeoutSec ?? 0}
+            onChange={(v) => onPatch({ timeoutSec: Math.round(v) })}
+          />
           <p className="text-[11px] text-[var(--color-text-dim)]">
             Ajan kendi koordinatör oturumunda çalışır ve{' '}
             <b>kaç worker açacağına anlık karar verir</b>. Düğüm, tüm workerlar bitip koordinatör
@@ -406,20 +395,14 @@ export function NodeInspector({
               ))}
             </select>
           </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              Zaman aşımı (saniye, 0 = süresiz)
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={node.joinTimeoutSec ?? 0}
-              onChange={(e) =>
-                onPatch({ joinTimeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-              }
-              className={input}
-            />
-          </label>
+          <NumberField
+            label="Zaman aşımı (saniye)"
+            hint="0 = süresiz"
+            min={0}
+            step={1}
+            value={node.joinTimeoutSec ?? 0}
+            onChange={(v) => onPatch({ joinTimeoutSec: Math.round(v) })}
+          />
           <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
             <input
               type="checkbox"
@@ -435,22 +418,15 @@ export function NodeInspector({
       )}
 
       {node.type === 'delay' && (
-        <label className="block">
-          <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Bekleme (saniye)</span>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={(node.delayMs ?? 0) / 1000}
-            onChange={(e) =>
-              onPatch({ delayMs: Math.max(0, Math.round((Number(e.target.value) || 0) * 1000)) })
-            }
-            className={input}
-          />
-          <span className="mt-1 block text-[11px] text-[var(--color-text-dim)]">
-            Bekledikten sonra sonraki node'a geçer (en çok 5 dk).
-          </span>
-        </label>
+        <NumberField
+          label="Bekleme (saniye)"
+          hint="Bekledikten sonra sonraki node'a geçer (en çok 5 dk)."
+          min={0}
+          max={300}
+          step={0.5}
+          value={(node.delayMs ?? 0) / 1000}
+          onChange={(v) => onPatch({ delayMs: Math.round(v * 1000) })}
+        />
       )}
 
       {node.type === 'transform' && (
@@ -479,24 +455,14 @@ export function NodeInspector({
             Gövdeyi (alttaki <b>gövde</b> tutamağı) yinele; bitince <b>çıkış</b> tutamağındaki
             node'a geç. Gövde node'ları <code>{'{{iteration}}'}</code> (0-tabanlı) kullanabilir.
           </p>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
-              En çok iterasyon
-            </span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={node.maxIters ?? 0}
-              onChange={(e) =>
-                onPatch({ maxIters: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-              }
-              className={input}
-            />
-            <span className="mt-1 block text-[11px] text-[var(--color-text-dim)]">
-              0 = yalnız "çıkış koşulu"na göre biter (biri gerekli).
-            </span>
-          </label>
+          <NumberField
+            label="En çok iterasyon"
+            hint={'0 = yalnız "çıkış koşulu"na göre biter (biri gerekli).'}
+            min={0}
+            step={1}
+            value={node.maxIters ?? 0}
+            onChange={(v) => onPatch({ maxIters: Math.round(v) })}
+          />
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
               Çıkış koşulu (eşleşince biter)

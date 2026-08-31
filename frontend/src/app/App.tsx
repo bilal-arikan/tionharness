@@ -726,9 +726,10 @@ export default function App() {
             }}
           />
         )}
-        {view === 'network' && (
+        {view === 'network' && activeWorkspaceId !== null && (
           <Suspense fallback={<LoadingState label="Ağ yükleniyor…" className="flex-1" />}>
             <NetworkPanel
+              workspaceId={activeWorkspaceId}
               onError={setError}
               onOpenSession={(sid) => {
                 setView('chat')

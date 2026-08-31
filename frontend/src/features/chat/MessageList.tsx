@@ -48,6 +48,7 @@ interface Props {
   onHighlightConsumed?: () => void
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
+  onSelectSession?: (id: string) => void
   // Delete a single message (prune a mistaken/test one). Shown on row hover.
   onDeleteMessage?: (id: string) => void
   // Rewind the conversation to a user message (remove it + everything after).
@@ -113,6 +114,7 @@ export function MessageList({
   onHighlightConsumed,
   onOpenFile: onOpenFileProp,
   onOpenArtifact: onOpenArtifactProp,
+  onSelectSession: onSelectSessionProp,
   onDeleteMessage: onDeleteMessageProp,
   onRewind: onRewindProp,
   onRetry: onRetryProp,
@@ -126,6 +128,7 @@ export function MessageList({
   // on every streaming delta and the memo would buy nothing.
   const onOpenFile = useStableCallback(onOpenFileProp)
   const onOpenArtifact = useStableCallback(onOpenArtifactProp)
+  const onSelectSession = useStableCallback(onSelectSessionProp)
   const onDeleteMessage = useStableCallback(onDeleteMessageProp)
   const onRewind = useStableCallback(onRewindProp)
   const onRetry = useStableCallback(onRetryProp)
@@ -225,12 +228,39 @@ export function MessageList({
     setActivePinnedIndex((prev) => (prev === active ? prev : active))
   }
 
+  // Pending rAF handle for the scroll-driven pinned-header measurement.
+  const pinnedFrameRef = useRef<number | null>(null)
+
+  // updateActivePinned reads the rect of EVERY user row, which forces a layout.
+  // A single flick of the wheel fires scroll dozens of times per second, so doing
+  // that measurement per event is the transcript's worst layout thrash. Coalesce
+  // to at most one measurement per animation frame: the result is identical (the
+  // last event in a frame is the one whose geometry the user sees painted), the
+  // pinned header just stops being recomputed for positions that never paint.
+  function schedulePinnedUpdate() {
+    if (pinnedFrameRef.current !== null) return
+    pinnedFrameRef.current = requestAnimationFrame(() => {
+      pinnedFrameRef.current = null
+      const el = scrollRef.current
+      if (el) updateActivePinned(el)
+    })
+  }
+
+  useEffect(
+    () => () => {
+      if (pinnedFrameRef.current !== null) cancelAnimationFrame(pinnedFrameRef.current)
+    },
+    [],
+  )
+
   function onScroll() {
     const el = scrollRef.current
     if (!el) return
+    // The pin distance stays synchronous: the layout effect below reads
+    // pinnedRef on the very next commit, so it must reflect the latest scroll.
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     pinnedRef.current = distance < 80
-    updateActivePinned(el)
+    schedulePinnedUpdate()
   }
 
   // Bring a message's row back into view just BELOW the container's top edge.
@@ -441,6 +471,7 @@ export function MessageList({
                 <TaskNotificationNote
                   message={m}
                   agent={agentById(parseTaskNotification(m.text)?.agentId)}
+                  onSelectSession={onSelectSession}
                   onOpenFile={onOpenFile}
                   onDelete={onDeleteMessage}
                 />

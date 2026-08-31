@@ -29,11 +29,13 @@ function fmtDuration(ms: string): string {
 export function TaskNotificationNote({
   message,
   agent,
+  onSelectSession,
   onOpenFile,
   onDelete,
 }: {
   message: Message
   agent?: AgentLike
+  onSelectSession?: (id: string) => void
   onOpenFile?: (path: string) => void
   onDelete?: (id: string) => void
 }) {
@@ -57,49 +59,70 @@ export function TaskNotificationNote({
   return (
     <div className="group flex flex-col items-center gap-1" data-testid="task-notification">
       <div className="w-full max-w-[85%] rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_30%,var(--color-border))] bg-[var(--color-accent-soft)] text-xs">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left"
-        >
-          <ChevronRight
-            size={13}
-            className={`shrink-0 text-[var(--color-text-dim)] transition-transform ${open ? 'rotate-90' : ''}`}
-          />
+        <div className="flex w-full items-center gap-2 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-label={open ? 'Worker sonucunu daralt' : 'Worker sonucunu genişlet'}
+            className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+          >
+            <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+          </button>
           {identity ? (
-            <AgentIdentity
-              agent={identity}
-              size="sm"
-              showId={Boolean(identity.id)}
-              subtitle={identity.provider ? 'model' : identity.model || 'none'}
-              className="min-w-0 flex-1"
-            />
+            p?.taskId && onSelectSession ? (
+              <button
+                type="button"
+                onClick={() => onSelectSession(p.taskId)}
+                aria-label={`${identity.name} worker oturumunu aç`}
+                className="inline-flex min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-left text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
+              >
+                <AgentIdentity
+                  agent={identity}
+                  size="sm"
+                  showId={Boolean(identity.id)}
+                  subtitle={identity.provider ? 'model' : identity.model || 'none'}
+                />
+              </button>
+            ) : (
+              <AgentIdentity
+                agent={identity}
+                size="sm"
+                showId={Boolean(identity.id)}
+                subtitle={identity.provider ? 'model' : identity.model || 'none'}
+                className="min-w-0 flex-1"
+              />
+            )
           ) : (
             <span className="min-w-0 flex-1 truncate font-medium text-[var(--color-accent)]">
               Worker bildirimi
             </span>
           )}
           {p && status && (
-            <span className={`flex shrink-0 items-center gap-1 font-medium ${status.cls}`}>
-              <status.Icon size={13} /> {status.label}
-            </span>
+            <div
+              className="flex shrink-0 flex-col items-end gap-0.5"
+              data-testid="task-status-meta"
+            >
+              <span className={`flex items-center gap-1 font-medium ${status.cls}`}>
+                <status.Icon size={13} /> {status.label}
+              </span>
+              {(p.toolUses || duration) && (
+                <span className="flex items-center justify-end gap-3 text-[10px] text-[var(--color-text-dim)]">
+                  {p.toolUses && (
+                    <span className="flex items-center gap-1">
+                      <Wrench size={10} /> {p.toolUses} araç
+                    </span>
+                  )}
+                  {duration && (
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} /> {duration}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
           )}
-        </button>
-        {p && (p.toolUses || duration) && (
-          <div className="flex items-center gap-3 px-3 pb-1 pl-9 text-[10px] text-[var(--color-text-dim)]">
-            {p.toolUses && (
-              <span className="flex items-center gap-1">
-                <Wrench size={10} /> {p.toolUses} araç
-              </span>
-            )}
-            {duration && (
-              <span className="flex items-center gap-1">
-                <Clock size={10} /> {duration}
-              </span>
-            )}
-          </div>
-        )}
+        </div>
         {open && (
           <div className="max-h-80 space-y-2 overflow-y-auto border-t border-[color-mix(in_srgb,var(--color-accent)_20%,var(--color-border))] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text)]">
             <Markdown>{body}</Markdown>

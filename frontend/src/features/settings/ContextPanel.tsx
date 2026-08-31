@@ -1,5 +1,5 @@
 import { Layers, LifeBuoy, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
-import { Field, Segmented, Toggle, inputCls } from './primitives'
+import { NumberField, Segmented, Toggle } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -74,48 +74,36 @@ export function ContextPanel({ draft, set }: PanelProps) {
     <>
       <SubHead icon={Layers}>Bağlam penceresi</SubHead>
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Maks. bağlam token — TABAN"
           hint="Bütçenin ALT sınırı: bütçeyi yalnızca YÜKSELTİR, asla düşürmez. Türetilen değer (pencere × oran, tavana kırpılı) bunun üstündeyse etkisizdir. Pencereyi KÜÇÜLTMEK için bunu değil, aşağıdaki 'Bütçe tavanı'nı düşür."
-        >
-          <input
-            type="number"
-            value={draft.maxContextTokens}
-            onChange={(e) => set('maxContextTokens', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Korunan son mesaj" hint="Her zaman aynen gönderilir.">
-          <input
-            type="number"
-            value={draft.keepRecentMsgs}
-            onChange={(e) => set('keepRecentMsgs', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          value={draft.maxContextTokens}
+          onChange={(v) => set('maxContextTokens', v)}
+        />
+        <NumberField
+          label="Korunan son mesaj"
+          hint="Her zaman aynen gönderilir."
+          min={0}
+          value={draft.keepRecentMsgs}
+          onChange={(v) => set('keepRecentMsgs', v)}
+        />
+        <NumberField
           label="Bütçe tavanı (token) — ÜST SINIR"
           hint="Bütçenin ÜST sınırı ve pencereyi KÜÇÜLTMEK için değiştireceğin ayar BUDUR. Varsayılan 262144 (256K) — ham pencereyi gradyanın yüksek-hassasiyet bölgesinde tutar (context-rot). Düşürürsen etkin bütçe buraya kırpılır; yükseltmek daha çok ham geçmiş tutar ama recall hassasiyetiyle takas eder."
-        >
-          <input
-            type="number"
-            value={draft.contextBudgetCeil}
-            onChange={(e) => set('contextBudgetCeil', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          value={draft.contextBudgetCeil}
+          onChange={(v) => set('contextBudgetCeil', v)}
+        />
+        <NumberField
           label="Pencere oranı"
           hint="Transkripte ayrılan pay (0–1). 0 = otomatik (model-ailesine göre adaptif, önerilen). Pozitif değer sabit pay sabitler (ör. 0.45 → 1M model 450K, tavana kırpılır)."
-        >
-          <input
-            type="number"
-            step="0.05"
-            value={draft.contextBudgetFraction}
-            onChange={(e) => set('contextBudgetFraction', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={0}
+          max={1}
+          step={0.05}
+          value={draft.contextBudgetFraction}
+          onChange={(v) => set('contextBudgetFraction', v)}
+        />
       </div>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
         Etkin bütçe = clamp(pencere × oran, <span className="font-medium">taban</span>,{' '}
@@ -215,19 +203,14 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.anthropicRefusalFallback}
         onChange={(v) => set('anthropicRefusalFallback', v)}
       />
-      <Field
+      <NumberField
         label="Otonom görev bütçesi (token)"
         hint="0 = kapalı. Pozitifken her OTONOM tura API-native task_budget bildirilir: model tüm araç döngüsü için geri sayımı görür ve kendini ona göre ayarlar (kesilmek yerine düzgün toparlar). API minimumu 20000'dir — altı otomatik yükseltilir. Yalnız adaptive-sınıf anthropic modeller (Opus 4.7/4.8, Sonnet 5, Fable 5)."
-      >
-        <input
-          type="number"
-          min={0}
-          step={1000}
-          value={draft.autonomousTaskBudgetTokens}
-          onChange={(e) => set('autonomousTaskBudgetTokens', Number(e.target.value))}
-          className={inputCls}
-        />
-      </Field>
+        min={0}
+        step={1000}
+        value={draft.autonomousTaskBudgetTokens}
+        onChange={(v) => set('autonomousTaskBudgetTokens', v)}
+      />
 
       <SubHead icon={RotateCcw}>Context reset (handoff)</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
@@ -245,19 +228,14 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.handoffAuto}
         onChange={(v) => set('handoffAuto', v)}
       />
-      <Field
+      <NumberField
         label="Maks. reset zinciri"
         hint="Art arda kaç context reset'e izin verilir; aşılınca normal sıkıştırmaya düşer (sonsuz zincir freni)."
-      >
-        <input
-          type="number"
-          min={1}
-          max={100}
-          className={inputCls}
-          value={draft.handoffMaxChain || 20}
-          onChange={(e) => set('handoffMaxChain', Number(e.target.value))}
-        />
-      </Field>
+        min={1}
+        max={100}
+        value={draft.handoffMaxChain || 20}
+        onChange={(v) => set('handoffMaxChain', v)}
+      />
       <Toggle
         label="Handoff'u dosyaya da yaz"
         hint="Artifact'ın yanı sıra çalışma dizinine <workdir>/.tionharness/handoff.md olarak yazar (disk üstü progress dosyası deseni)."
@@ -314,18 +292,13 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.debugJournalEnabled}
         onChange={(v) => set('debugJournalEnabled', v)}
       />
-      <Field
+      <NumberField
         label="Olay limiti"
         hint="Oturum başına saklanan en yeni debug olayı sayısı; aşıldığında en eskiler budanır (0 = varsayılan 5000)."
-      >
-        <input
-          type="number"
-          min={0}
-          value={draft.debugJournalCap}
-          onChange={(e) => set('debugJournalCap', Number(e.target.value))}
-          className="w-28 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)]"
-        />
-      </Field>
+        min={0}
+        value={draft.debugJournalCap}
+        onChange={(v) => set('debugJournalCap', v)}
+      />
 
       <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
@@ -343,52 +316,36 @@ export function ContextPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('reactiveCompact', v)}
       />
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Maks. token resume denemesi"
           hint="Çıktı limiti aşılınca tur kaç kez sürdürülür (0 = kapalı; kısmi cevap olduğu gibi gösterilir)."
-        >
-          <input
-            type="number"
-            value={draft.maxTokenRetries}
-            onChange={(e) => set('maxTokenRetries', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          value={draft.maxTokenRetries}
+          onChange={(v) => set('maxTokenRetries', v)}
+        />
+        <NumberField
           label="Sıkıştırmada korunan mesaj"
-          hint="Reaktif sıkıştırmada aynen tutulan en yeni mesaj sayısı (≥2)."
-        >
-          <input
-            type="number"
-            value={draft.reactiveKeepRecent}
-            onChange={(e) => set('reactiveKeepRecent', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          hint="Reaktif sıkıştırmada aynen tutulan en yeni mesaj sayısı (2–50; backend bu aralığa kırpar)."
+          min={2}
+          max={50}
+          value={draft.reactiveKeepRecent}
+          onChange={(v) => set('reactiveKeepRecent', v)}
+        />
+        <NumberField
           label="Çıktı token tavanı"
           hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax 32K, haiku 16K, deepseek/gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."
-        >
-          <input
-            type="number"
-            value={draft.maxOutputTokens}
-            onChange={(e) => set('maxOutputTokens', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          value={draft.maxOutputTokens}
+          onChange={(v) => set('maxOutputTokens', v)}
+        />
+        <NumberField
           label="Sağlayıcı retry bütçesi"
           hint="Geçici sağlayıcı hatasında (429 / 5xx / zaman aşımı) tur içinde kaç kez jitter'lı backoff'la yeniden denenir (0 = kapalı, maks 5). Kalıcı hatalar (auth/kota) asla yeniden denenmez."
-        >
-          <input
-            type="number"
-            min={0}
-            max={5}
-            value={draft.maxProviderRetries}
-            onChange={(e) => set('maxProviderRetries', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={0}
+          max={5}
+          value={draft.maxProviderRetries}
+          onChange={(v) => set('maxProviderRetries', v)}
+        />
       </div>
 
       {/* Self-healing (döngü koruması & ders çıkarma) moved to İçgörü ▸ Dersler. */}

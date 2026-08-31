@@ -15,6 +15,7 @@ sohbet ekranı gibi.
 ## Backend
 
 ### Aktivite izi (TurnStep)
+
 - `internal/agent/trace.go` — `TurnStep` tipi: `kind` ∈ `text | thinking | tool`,
   ayrıca `tool`, `input`, `output`, `isError` alanları.
 - `internal/agent/toolloop.go` — `CompleteWithToolsTraced` eklendi: native agentic
@@ -33,11 +34,11 @@ sohbet ekranı gibi.
 Adım türlerinin tek kaynağı `frontend/src/shared/stepKinds.ts`'tir (Ayarlar →
 **Adım Türleri** ekranını besler). `context_change` adımının diff işaretleri:
 
-| İşaret | Anlamı |
-|--------|--------|
-| `+` | Snapshot'ta olmayan, canlı bağlamda olan blok (ya da yeni araç) |
-| `-` | Snapshot'ta olup canlı bağlamdan düşen blok (ya da kalkan araç) |
-| `~` | İki tarafta da olan ama **düzenlenmiş** blok; gövdesi unified diff'tir (` ` değişmeyen, `-` silinen, `+` eklenen satır, atlanan aralıklar `…`) |
+| İşaret | Anlamı                                                                                                                                         |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `+`    | Snapshot'ta olmayan, canlı bağlamda olan blok (ya da yeni araç)                                                                                |
+| `-`    | Snapshot'ta olup canlı bağlamdan düşen blok (ya da kalkan araç)                                                                                |
+| `~`    | İki tarafta da olan ama **düzenlenmiş** blok; gövdesi unified diff'tir (` ` değişmeyen, `-` silinen, `+` eklenen satır, atlanan aralıklar `…`) |
 
 Başlıktaki `+N -M` sayaçları da satır düzeyindedir: `+`/`-` blok tek birim sayar,
 `~` blok kendi diff'indeki gerçek eklenen/silinen **satır** sayısını ekler — yani
@@ -94,14 +95,14 @@ warm transcriptin üstüne eklenmez.
 
 **Adımı yayan yollar.** Katlama nerede olursa olsun aynı kart çıkar:
 
-| Yol | Tetikleyici | Kaynak |
-|-----|-------------|--------|
-| İnteraktif tur | `auto` | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go` |
-| Otonom tur (wake/spawn/worker) | `auto` | aynı yardımcı — `wake_turn.go` |
-| `/compact` komutu | `manual` | Claude slash-control veya Codex `thread/compact/start` |
-| `/compact-custom` komutu | `manual` | `Manager.ForceCompact` dönüşü |
-| Tur içi taşma kurtarması | `reactive` | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
-| Yan sohbet (`btw`) | `auto` | `chat_btw.go`; `Prepare`'in paylaşılan katlaması |
+| Yol                            | Tetikleyici | Kaynak                                                                |
+| ------------------------------ | ----------- | --------------------------------------------------------------------- |
+| İnteraktif tur                 | `auto`      | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go`                |
+| Otonom tur (wake/spawn/worker) | `auto`      | aynı yardımcı — `wake_turn.go`                                        |
+| `/compact` komutu              | `manual`    | Claude slash-control veya Codex `thread/compact/start`                |
+| `/compact-custom` komutu       | `manual`    | `Manager.ForceCompact` dönüşü                                         |
+| Tur içi taşma kurtarması       | `reactive`  | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
+| Yan sohbet (`btw`)             | `auto`      | `chat_btw.go`; `Prepare`'in paylaşılan katlaması                      |
 
 `reactive` yol `conversation.CompactInFlightMessages`'ın döndürdüğü
 `ReactiveFold`'u kullanır: tur içi mesaj dilimi katlandığından oturum özeti
@@ -149,12 +150,13 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   balonunda **"Bu yanıt yarıda kesildi (sunucu yeniden başladı)"** banner'ı
   (`MessageList.tsx`). Mekanizma + external-agent karşılaştırması: `_Docs/08-DEPOLAMA.md`.
 - **Tur-ortası reload/navigasyon kurtarma (istemci tarafı, crash'ten AYRI):**
+
   > ⚠️ **Kısmen süperseded (2026-07-11).** Aşağıdaki "sahip / sahip-olmayan pencere"
   > ikiliği **event-sourcing cutover'ıyla kaldırıldı**: her pencere artık
   > `GET /api/sessions/{id}/stream` (per-session `SessionHub`: seq + ring + cursor'lı
   > replay, `internal/sessionhub/hub.go`) üzerinden aynı şekilde render eder.
   > Güncel model: **[58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md)**. Buradaki inflight
-  > sidecar/ghost-balon mekanizması kodda hâlâ vardır ama artık *crash kurtarma* rolündedir,
+  > sidecar/ghost-balon mekanizması kodda hâlâ vardır ama artık _crash kurtarma_ rolündedir,
   > pencere-sahipliği ayrımı için değil. Aşağısı tarihsel bağlam olarak korunmuştur.
 
   Tur
@@ -183,13 +185,18 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
     temizlenir → poll durur, transkript reload otoriter mesajı koyar.
 
 ### Yüzen composer + son mesaj görünürlüğü
+
 - **Overlay yerleşim:** chat view'i `relative` sarmalayıcı; bottom-stack
   (ask/todo/pending/wake banner + `Composer`) `absolute inset-x-0 bottom-0 z-20`
   ile transkriptin **üstüne yüzer** (`pointer-events-none` + `[&>*]:pointer-events-auto`
   → şeffaf boşluklar scroll'a geçer). Mesaj balonları alttan composer'ın arkasına kayar.
+- **Worker parent zinciri:** yazılabilir worker oturumlarında `CoordinatorBreadcrumb`,
+  composer'ın hemen üstünde kompakt yüzen kart olarak kökten doğrudan parent'a kadar
+  koordinatör zincirini gösterir; çipler ilgili parent oturumunu açar. Sıradan sohbetler
+  ve root koordinatörler etkilenmez. Salt-okunur worker görünümü aynı kartı paylaşır.
 - **Gradient + opak input:** composer sarmalayıcısı tema-uyumlu
   `bg-gradient-to-t from-[var(--color-bg)]
-  via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent`; iç input
+via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent`; iç input
   kartı `bg-[var(--color-surface)]` (opak) + `shadow-lg`. Şeffaf üst kısım balonların
   görünüp arka plana karışmasını sağlar (açık/koyu temada tutarlı).
 - **`bottomInset` (bug fix):** overlay yüksekliği `ResizeObserver` ile ölçülüp
@@ -198,6 +205,7 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   görünmüyor" belirtisini giderir (mesaj artık input'un arkasında saklanmaz).
 
 ### Inline görsel sunucu
+
 - `internal/api/files.go` — `GET /api/files?path=<yol>`: sohbet içeriğinde
   referans verilen yerel görselleri inline göstermek için salt-okunur akış.
   Yalnızca görsel uzantıları allowlist'te (png/jpg/gif/webp/svg/bmp/ico/avif).
@@ -239,9 +247,11 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   portal üzerinden korunur.
 
 ### Adım-adım akış (SSE streaming)
+
 Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil).
 
 İki streaming yolu vardır:
+
 1. **claude-cli (trace tabanlı):** `providers.Request.OnEvent func(TraceStep)` —
    `claudecli.go` stream-json'u **satır satır** (`bufio`) okuyup olayları anında
    yayınlar: thinking hemen, ara metin flush'ta, tool adımı sonucu gelince.
@@ -256,6 +266,7 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
    bir sağlayıcı `Streamer` ise akışı tercih eder ve her parçayı geçici bir
    `StepDelta` (kind `"delta"`) olarak yayınlar. Delta'lar **kalıcı değildir**
    (yalnız canlı UI); tam metin tur sonunda mesaja yazılır.
+
 - `agent/toolloop.go` `CompleteWithToolsStream(... onStep)` — claude-cli yolunda
   `OnEvent`'i `onStep`'e köprüler; native loop her adımı kendisi yayınlar;
   araçsız streaming yolu `recordedStream` ile `StepDelta`'ları yayınlar.
@@ -273,6 +284,7 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
 Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 
 ### Markdown katmanı (`components/markdown/`)
+
 - `Markdown.tsx` — GFM markdown: başlık, liste, tablo, görev listesi, satır-içi
   kod. Özel render'lar: kod blokları (`CodeBlock`), linkler (yerel yol → tıklanır
   `onOpenFile`, http → yeni sekme), görseller (yerel yol → `/api/files`).
@@ -286,7 +298,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - `CodeBlock.tsx` — dil etiketi + kopyala düğmesi + `highlight.js` vurgusu;
   `diff` blokları `DiffView`'e, `mermaid` blokları `MermaidDiagram`'a, `gallery`/
   `image-preview` `Gallery`'ye, `html-preview` `HtmlPreview`'e gider.
-- `HtmlPreview.tsx` — ```` ```html-preview ```` bloğunu **izole sandbox iframe**'de
+- `HtmlPreview.tsx` — ` ```html-preview ` bloğunu **izole sandbox iframe**'de
   inline render eder (2026-07-06, _Docs/53). Gövde JSON `{"src":"<abs>.html","title"}`
   ya da çoklu-sekme `{"items":[{"src","label"}]}`. Dosya **metin olarak** `fileTextURL`
   (`/api/files?...&as=text`) ile çekilir → `<iframe srcDoc sandbox="allow-scripts">`
@@ -295,7 +307,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   ile servis eder; asla `text/html` değil. Kaynak: `render_template` aracı çıktısı.
 - `DiffView.tsx` — unified diff'i satır bazlı +/- renkli ve `+N / −M` istatistik
   başlığıyla çizer (`lib/diff.ts` ayrıştırır).
-- `MermaidDiagram.tsx` — ```` ```mermaid ```` blokunu **tema-duyarlı SVG**'ye
+- `MermaidDiagram.tsx` — ` ```mermaid ` blokunu **tema-duyarlı SVG**'ye
   çevirir. `mermaid@^11` **dinamik `import()`** ile lazy yüklenir; chunk bölmesini
   bundler'ın kendisi yapar (elle `manualChunks` grubu **verilmez** — verildiğinde
   paylaşılan preload helper'ı o dev chunk'ın içine düşüp mermaid'i entry'nin statik
@@ -306,7 +318,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   yeniden çizer. **Akış-dayanıklı:** 120ms debounce + hatada ham kaynağa düşer →
   yarım kalan diyagram patlatmaz. Toolbar: Source/Diagram, Expand (tam-ekran), Copy.
   `securityLevel: 'strict'`.
-- `Gallery.tsx` — ```` ```gallery ```` (alias `image-preview`/`images`) bloğunu
+- `Gallery.tsx` — ` ```gallery ` (alias `image-preview`/`images`) bloğunu
   **thumbnail grid + Lightbox** olarak çizer (the external agent project tarzı, 2026-06-26). Gövde
   JSON `{"title","images":[{"src","alt"}]}` ya da düz satır/virgül-ayrık yol listesi;
   yerel yollar `mediaUrl` (`/api/files`) ile çözülür. Thumbnail'a tık → Lightbox o
@@ -371,6 +383,7 @@ kırpıldı:
    affordance'a karar veriyor.
 
 ### Sohbet bileşenleri (`components/chat/`)
+
 - `TurnSteps.tsx` — bir turun iz listesini sırayla çizer; `parseSteps` JSON'u
   güvenli çözer, `stepTruncated` sunucunun kırptığı adımı bildirir.
 - `ThinkingBlock.tsx` — model akıl yürütmesi: tool ActivityCard ile **aynı tek-satır
@@ -489,27 +502,27 @@ kırpıldı:
   (`TodoPanel`, `PendingTray`, `WorkerWaitBanner`, `WakeWaitBanner`, `AskPrompt`,
   `PermissionPrompt`, `PlanPrompt`) geometriyi **tek sarmalayıcıdan** alır:
   `ComposerCard.tsx` — şeffaf kapsayıcı (`-mb-2 px-3 pt-2 md:px-6`) + `rounded-2xl
-  rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde yüzer ve
+rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde yüzer ve
   composer balonuna yaslanır. Çağıran yalnız `tone` (renk) + `className` (kendi iç
   boşluğu/düzeni) verir. Ayırt edici olan **arka plan tonu** (hepsi `--color-surface`
   üzerine `color-mix`, tema-nötr; sınıf metinleri Tailwind tarayıcısı görsün diye
   `TONE` haritasında tam literal):
 
-  | Panel | `tone` | Ton |
-  |---|---|---|
-  | `TodoPanel` | `plain` | düz `--color-surface` |
-  | `PendingTray` | `muted` | `--color-text-dim` %10 |
-  | `WorkerWaitBanner` | `worker` | `--color-accent-soft` |
-  | `AskPrompt` | `ask` | `--color-accent` %8 |
-  | `WakeWaitBanner` | `wake` | `--color-warning` %12 (ikon/başlık da warning) |
-  | `PermissionPrompt` | `permission` | `--color-warning` %18 (onay kapısı daha acil okunsun) |
-  | `PlanPrompt` | `plan` | `--color-success` %10 | Veri `useRunningWorkers.ts`
-  (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
-  tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
-  (coordinatorId anahtarlı pub/sub; iç içe ağaçta event ayrıca
-  `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa
-  `api.subscribeReconnect` → `onReconnect` resync eder (kopma sırasındaki event'ler
-  kalıcı kayıptır). Detay `_Docs/47`.
+  | Panel                                                                             | `tone`       | Ton                                                   |
+  | --------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------- |
+  | `TodoPanel`                                                                       | `plain`      | düz `--color-surface`                                 |
+  | `PendingTray`                                                                     | `muted`      | `--color-text-dim` %10                                |
+  | `WorkerWaitBanner`                                                                | `worker`     | `--color-accent-soft`                                 |
+  | `AskPrompt`                                                                       | `ask`        | `--color-accent` %8                                   |
+  | `WakeWaitBanner`                                                                  | `wake`       | `--color-warning` %12 (ikon/başlık da warning)        |
+  | `PermissionPrompt`                                                                | `permission` | `--color-warning` %18 (onay kapısı daha acil okunsun) |
+  | `PlanPrompt`                                                                      | `plan`       | `--color-success` %10                                 | Veri `useRunningWorkers.ts` |
+  | (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**, |
+  | tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`     |
+  | (coordinatorId anahtarlı pub/sub; iç içe ağaçta event ayrıca                      |
+  | `rootCoordinatorId` taşır ve kök anahtarına da fanlanır) → hook. Feed koparsa     |
+  | `api.subscribeReconnect` → `onReconnect` resync eder (kopma sırasındaki event'ler |
+  | kalıcı kayıptır). Detay `_Docs/47`.                                               |
 
 - **Todo tamamlanma/kapatma (2026-08-29):** `latestTodos` en yeni `todo_write`
   listesini, tamamlandıktan sonra kullanıcı yeni mesaj gönderse de korur. Bitmemiş
@@ -524,7 +537,9 @@ kırpıldı:
   `TodoPanel` içindir; transkriptteki inline `TodoCard` değişmez.
 
 ### Modüler yapı (büyük dosyaların bölünmesi)
+
 İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.
+
 - `MessageList.tsx` artık yalnız **orkestratör**: scroll-pinleme + tool-izi katlama
   durumu. **Pinlenen soru başlığı = ayrı overlay (2026-07-02 fix):** üstten geçen
   son kullanıcı sorusu artık **flow-içi sticky satır değil**, scroll alanının
@@ -594,9 +609,9 @@ kırpıldı:
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
   - **Araç müfettişi (`ToolAccessPanel.tsx` + `ToolAccessList.tsx` +
     `toolAccessGroups.ts`):** toolbar'daki 🔧 butonu seçili ajanın **şu an**
-    kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: *Bağlamda*
-    (şeması her tur gönderilen eager set), *Talep üzerine* (katalogda isim/özet
-    duran, `tool_search`/`activate_tools` ile açılabilen lazy set) ve *MCP*
+    kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: _Bağlamda_
+    (şeması her tur gönderilen eager set), _Talep üzerine_ (katalogda isim/özet
+    duran, `tool_search`/`activate_tools` ile açılabilen lazy set) ve _MCP_
     (tanımlı sunucular: etkin mi, transport/kapsam, canlı bağlantı sayısı, o
     sunucudan gelen aktif/hazır araç adedi). İki araç sekmesi de tek düz,
     alfabetik listedir — built-in ve MCP araçları ayrı gruplara bölünmez, kaynak
@@ -652,11 +667,11 @@ kırpıldı:
   atlanır). Dil `ttsLang()` → açık TTS seçimi, yoksa composer ses dili (`stt.lang`),
   yoksa motor varsayılanı. **Ayarlar ▸ Ses** (yeni özel alt-sayfa `SoundPanel` —
   ses efektleri + STT + TTS bir arada; NotificationsPanel'den ayrıldı)
-  + `TtsSettings.tsx`): "Yanıtları sesli oku" toggle'ı (cihaz-yerel, varsayılan kapalı)
-  + **ses seçimi** (`speechSynthesis.getVoices()`, `voiceschanged` ile tazelenir,
-  voiceURI'ye göre) + **hız** (0.5–2×) + **ton** (0–2) slider'ları + "Sesi dene" butonu.
-  Tüm bu tercihler hem otomatik okuma hem balon 🔊 butonunu etkiler; `speak` rate/pitch/
-  seçili sesi uygular (`resolveVoice`: voiceURI › dile göre eşleşen ses).
+  - `TtsSettings.tsx`): "Yanıtları sesli oku" toggle'ı (cihaz-yerel, varsayılan kapalı)
+  - **ses seçimi** (`speechSynthesis.getVoices()`, `voiceschanged` ile tazelenir,
+    voiceURI'ye göre) + **hız** (0.5–2×) + **ton** (0–2) slider'ları + "Sesi dene" butonu.
+    Tüm bu tercihler hem otomatik okuma hem balon 🔊 butonunu etkiler; `speak` rate/pitch/
+    seçili sesi uygular (`resolveVoice`: voiceURI › dile göre eşleşen ses).
 - **Uzun metin okuma (tarayıcı motoru):** Chrome/Edge `speechSynthesis` uzun
   utterance'ı ~15sn/birkaç yüz karakterde cümle ortasında keser + sekme blur'unda
   stall eder. `speak` metni **cümlelere bölüp** (`splitForSpeech`, ≤180 char) zincirleme
@@ -674,25 +689,25 @@ kırpıldı:
   **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
   cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONHARNESS_PIPER` env
   › `Progs\piper` layout › PATH; `voices/*.onnx` tarar; `os/exec`+60s timeout, `--model`
-  + stdin metin → WAV). **Kurulum şekli değişti (2026-08-20):** upstream
-  (`OHF-Voice/piper1-gpl`) Windows'a standalone arşiv yayınlamayı bıraktı, yerine
-  Python wheel veriyor → kurulum artık `Progs\piper\.venv` ve aranan ilk aday
-  `.venv\Scripts\piper.exe` (eski standalone layout listede kaldı, bozulmaz).
-  CLI sözleşmesi **aynı**: piper1-gpl `--model`/`--output_file` alt-çizgili
-  yazımları takma ad olarak koruyor, bu yüzden `Synthesize` sürüme göre
-  dallanmıyor. Ses modelleri venv dışında (`Progs\piper\voices`) durduğu için
-  `voiceDirs` iki seviye yukarıyı da tarar + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
-  → `audio/wav`). Frontend `api/tts.ts` + `shared/lib/tts.ts` motor katmanı: `resolveEngine`
-  (`auto`/`browser`/`server`; auto Piper varsa onu), server yolunda `/api/tts` → paylaşımlı
-  `<audio>`; hata/yoksa **browser speechSynthesis'e düşer**. **Mobil autoplay:** ilk
-  jestte sessiz-WAV ile `initTtsUnlock`, boot'ta `initServerTts` (App.tsx). Ayarlar'da
-  motor seçici (Segmented) + sunucu ses listesi (`TtsSettings`). Piper yoksa hiçbir şey
-  değişmez. **Kurulum-bağımsız** (tek-binary'e gömülü değil).
+  - stdin metin → WAV). **Kurulum şekli değişti (2026-08-20):** upstream
+    (`OHF-Voice/piper1-gpl`) Windows'a standalone arşiv yayınlamayı bıraktı, yerine
+    Python wheel veriyor → kurulum artık `Progs\piper\.venv` ve aranan ilk aday
+    `.venv\Scripts\piper.exe` (eski standalone layout listede kaldı, bozulmaz).
+    CLI sözleşmesi **aynı**: piper1-gpl `--model`/`--output_file` alt-çizgili
+    yazımları takma ad olarak koruyor, bu yüzden `Synthesize` sürüme göre
+    dallanmıyor. Ses modelleri venv dışında (`Progs\piper\voices`) durduğu için
+    `voiceDirs` iki seviye yukarıyı da tarar + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
+    → `audio/wav`). Frontend `api/tts.ts` + `shared/lib/tts.ts` motor katmanı: `resolveEngine`
+    (`auto`/`browser`/`server`; auto Piper varsa onu), server yolunda `/api/tts` → paylaşımlı
+    `<audio>`; hata/yoksa **browser speechSynthesis'e düşer**. **Mobil autoplay:** ilk
+    jestte sessiz-WAV ile `initTtsUnlock`, boot'ta `initServerTts` (App.tsx). Ayarlar'da
+    motor seçici (Segmented) + sunucu ses listesi (`TtsSettings`). Piper yoksa hiçbir şey
+    değişmez. **Kurulum-bağımsız** (tek-binary'e gömülü değil).
 - **Sunucu STT motoru (whisper.cpp, harici CLI):** tarayıcı Web Speech yerine sunucuda
   transkripsiyon — offline, Türkçe, WebView2/thin client'ta da çalışır. Backend
   `internal/stt` (whisper-cli + **ffmpeg** tespiti: env › `Progs\whisper` layout › PATH;
   `models/ggml-*.bin` tarar; `Transcribe`: ffmpeg ile ses→16kHz mono WAV → `whisper-cli
-  -otxt` → metin; 120s timeout) + `internal/api/stt.go` (`GET /api/stt/status`,
+-otxt` → metin; 120s timeout) + `internal/api/stt.go` (`GET /api/stt/status`,
   `POST /api/stt?lang=&model=` raw audio → `{text}`). Frontend `api/stt.ts` +
   `shared/lib/stt.ts` (`resolveSttEngine` auto/browser/server) + `useServerStt.ts`
   (`MediaRecorder` → kayıt → stop'ta yükle → transcribe; ara sonuç YOK, "yazıya
@@ -721,12 +736,14 @@ kırpıldı:
   WorkspaceSwitcher, SessionsSidebar, EmojiPicker) tekrar yerine kullanıldı.
 
 ### Yardımcılar (`lib/`)
+
 - `tools.ts` — tool adı → ikon/etiket/özet/`isDiff` meta verisi (MCP namespace'i
   `server · tool` olarak ayrıştırılır).
 - `paths.ts` — dosya yolu tespiti, görsel `mediaUrl`, yol kısaltma.
 - `diff.ts` — unified diff ayrıştırma + +/- istatistik.
 
 ### Entegrasyon
+
 - `MessageList.tsx` — kullanıcı balonu sağda; asistan turu: `ThinkingBlock`
   (varsa reasoning) → `TurnSteps` → markdown cevap.
 - `App.tsx` — `onOpenFile`: görseli yeni sekmede açar (`/api/files`), diğer
@@ -734,6 +751,7 @@ kırpıldı:
 - `index.css` — `.sg-markdown` tipografisi + `github-dark` highlight teması.
 
 ### Composer — ajan seçici / `@` referans / `#` artifact / `/` komut menüleri
+
 - **Ajan seçimi (`composer/AgentSelect.tsx`):** mesajın gönderileceği ajan **her zaman**
   dropdown'dan seçilir (zorunlu) — **`@` ile yönlendirme YOK**. Textarea'nın solunda
   avatar+ad gösteren, yukarı açılan seçici. Seçim oturuma kalıcı yazılır
@@ -770,9 +788,11 @@ kırpıldı:
   ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
 ### Session-bazlı sohbet (varsayılan ajan + çok-katılımcılı thread)
+
 > Bir oturum **çok-katılımcılı** olabilir (aşağıdaki "Generic participant modeli"):
 > `AgentID` varsayılan yanıtlayıcıdır, dropdown'dan başka bir ajan seçmek turu ona
 > yönlendirir ve o ajanı thread'e katar. "Her seferinde tek ajan" akışı budur.
+
 - Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
   kovalarına** gruplar (Bugün/Dün/Geçen hafta/Geçen ay/Daha eski; ajan altında gruplama
   yok), `updatedAt` desc; her oturum **tek bir ajana bağlıdır** (`Session.AgentID`) ve
@@ -781,9 +801,9 @@ kırpıldı:
   `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
 - **Ajan seçimi dropdown ile (zorunlu):** composer'daki `AgentSelect` oturumun ajanını
   gösterir; değiştirince `PUT /api/sessions/{id}/agent` ile kalıcı olur ve `activeAgentId`
-  + sessions listesi güncellenir. `sendMessage` her zaman **oturumun ajanını** tek
-  elemanlı `agentIds=[sessAgent]` olarak gönderir. `POST /api/chat/stream` `agentIds` alır.
-  - **`@` = isim referansı, yönlendirme DEĞİL.** Composer `@` menüsü metne `@Ad`
+  - sessions listesi güncellenir. `sendMessage` her zaman **oturumun ajanını** tek
+    elemanlı `agentIds=[sessAgent]` olarak gönderir. `POST /api/chat/stream` `agentIds` alır.
+  * **`@` = isim referansı, yönlendirme DEĞİL.** Composer `@` menüsü metne `@Ad`
     ekler ve `UserBubble` çip olarak vurgular; `useChatStream` bunu **parse etmez** —
     mesaj yine yalnız oturumun ajanına gider (`agentIds=[sessAgent]`). `@Ad` düz
     metindir; alıcı ajan `chat_turn.go` sistem-prompt notuyla onu "başka ajana isim
@@ -812,24 +832,24 @@ kırpıldı:
 - **Generic participant modeli (2026-07-06):** Oturum artık **çok-katılımcılı bir
   thread** olarak modellenir: örtük **`user`** (insan, en üst yetkili principal) +
   bir veya daha fazla ajan. Her mesaj `Message.AuthorKind` (`user`|`agent`|`system`)
-  + `AuthorID` (ajan id / `user`) + `RecipientID` (ajan id / `*` broadcast / boş =
-  thread geneli) taşır (`db/models.go`). Alanlar her yazımda `NormalizeParticipants`
-  ile Role+legacy `AgentID`'den türetilir (assistant→author=AgentID, user→
-  author=`user` & recipient=AgentID) → **eski `session.jsonl` migrationsuz** okunur.
-  `Session.Participants` roster'ı, bir ajan yazdıkça/adres alındıkça büyür; append
-  hot-path header'ı tazelemediği için **reload'da mesaj satırlarından yeniden
-  hesaplanır** (MessageCount gibi self-healing; `user` ve `*` roster'a yazılmaz).
-  `AgentID` **varsayılan yanıtlayıcı** olarak kalır; `Participants` composer'ın
-  yönlendirebileceği tam kümedir (`SessionParticipants` legacy boş roster'da
-  `[AgentID]`'e düşer). `labelMultiAgentHistory` artık bu alanlardan çalışır:
-  `"[Author → Recipient]: …"` (yön yoksa oksuz, broadcast `→ all`), yanıtlayanın
-  kendi turu `(you)`. Sistem notu (`multiAgentHistoryNote`) **yetki sırasını** da
-  belirtir: `User` insan principal'dir, çelişkide ajan yerine User izlenir. Not:
-  provider rol üçlüsü (`system`/`user`/`assistant`) sabit olduğundan katılımcılar
-  **rol-flip edilmez**, yalnız metin etiketlenir → 1:1 için prompt-cache korunur.
-  Frontend: `Session.participants` tipe eklendi; her balon yazarını zaten
-  `m.agentId`'den çizer (`MessageList`). Testler: `db/participants_test.go`,
-  `chat_authors_test.go` (directed/broadcast).
+  - `AuthorID` (ajan id / `user`) + `RecipientID` (ajan id / `*` broadcast / boş =
+    thread geneli) taşır (`db/models.go`). Alanlar her yazımda `NormalizeParticipants`
+    ile Role+legacy `AgentID`'den türetilir (assistant→author=AgentID, user→
+    author=`user` & recipient=AgentID) → **eski `session.jsonl` migrationsuz** okunur.
+    `Session.Participants` roster'ı, bir ajan yazdıkça/adres alındıkça büyür; append
+    hot-path header'ı tazelemediği için **reload'da mesaj satırlarından yeniden
+    hesaplanır** (MessageCount gibi self-healing; `user` ve `*` roster'a yazılmaz).
+    `AgentID` **varsayılan yanıtlayıcı** olarak kalır; `Participants` composer'ın
+    yönlendirebileceği tam kümedir (`SessionParticipants` legacy boş roster'da
+    `[AgentID]`'e düşer). `labelMultiAgentHistory` artık bu alanlardan çalışır:
+    `"[Author → Recipient]: …"` (yön yoksa oksuz, broadcast `→ all`), yanıtlayanın
+    kendi turu `(you)`. Sistem notu (`multiAgentHistoryNote`) **yetki sırasını** da
+    belirtir: `User` insan principal'dir, çelişkide ajan yerine User izlenir. Not:
+    provider rol üçlüsü (`system`/`user`/`assistant`) sabit olduğundan katılımcılar
+    **rol-flip edilmez**, yalnız metin etiketlenir → 1:1 için prompt-cache korunur.
+    Frontend: `Session.participants` tipe eklendi; her balon yazarını zaten
+    `m.agentId`'den çizer (`MessageList`). Testler: `db/participants_test.go`,
+    `chat_authors_test.go` (directed/broadcast).
 - **RecipientID yön rozeti (frontend, 2026-07-06):** `Message` tipine `authorKind`/
   `authorId`/`recipientId` eklendi. `DirectionBadge.tsx` bir turun `recipientId`'sinden
   **"→ &lt;ad&gt;"** ipucu çizer (broadcast `*` → "herkes"; boş = thread geneli, rozet yok).
@@ -862,14 +882,14 @@ kırpıldı:
   `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
   oturumda **bir sonraki turda alacağı tam isteği** gösterir: composed sistem promptu +
   dinamik suffix + **modele gidecek mesaj dizisi** (yazar etiketleri + araç özeti folded)
-  + şema araç kataloğu, her biri ~token tahminiyle. Opsiyonel örnek "sıradaki mesaj"
-  bekleyen kullanıcı turu olarak eklenir. **Yan etkisiz:** `Prepare`'i atlar (compaction/
-  özet persist YOK, provider çağrısı YOK) — `Prepared` elle kurulur (`api/session_context.go`).
-  **Per-mesaj yazar rozeti (2026-06-23):** her mesaj satırı rolün yanında **hangi ajana
-  ait** olduğunu gösterir — asistan turu yazan ajan adı (kendisi ise `(siz)`), kullanıcı
-  turu yönlendirildiği ajan (`→ Ad`). Tek-ajan oturumunda da görünür (metinde `[Ad]:`
-  prefix'i yokken bile). `previewMessage.author/self` alanları, modele giden user/assistant
-  turlarıyla 1:1 hizalı kurulur (`composeTurnRequest` `prep.Messages`'i değiştirmez).
+  - şema araç kataloğu, her biri ~token tahminiyle. Opsiyonel örnek "sıradaki mesaj"
+    bekleyen kullanıcı turu olarak eklenir. **Yan etkisiz:** `Prepare`'i atlar (compaction/
+    özet persist YOK, provider çağrısı YOK) — `Prepared` elle kurulur (`api/session_context.go`).
+    **Per-mesaj yazar rozeti (2026-06-23):** her mesaj satırı rolün yanında **hangi ajana
+    ait** olduğunu gösterir — asistan turu yazan ajan adı (kendisi ise `(siz)`), kullanıcı
+    turu yönlendirildiği ajan (`→ Ad`). Tek-ajan oturumunda da görünür (metinde `[Ad]:`
+    prefix'i yokken bile). `previewMessage.author/self` alanları, modele giden user/assistant
+    turlarıyla 1:1 hizalı kurulur (`composeTurnRequest` `prep.Messages`'i değiştirmez).
 - **Arka-plan süreç kontrolü (SessionDetailPanel, 2026-07-06):** Oturum bilgisi paneli,
   o oturum için **uçuştaki turu** (background provider/claude-cli süreci) ve varsa
   **sıcak persistent-pool sürecini** gösterir + kontrol ettirir. Kaynak `GET /info` yeni
@@ -911,7 +931,7 @@ kırpıldı:
   görünür ve bir sonraki geliştiriciyi (ve bu bug'da olduğu gibi UI'ı) yanıltır.
 - **Başlık kontrolleri hep görünür (2026-07-23):** `SessionTitleBlock`'taki **AI ile
   başlık üret** (✨) ve **Başlığı düzenle** (✏️) butonları `opacity-0
-  group-hover:opacity-100` hayaletiydi → satırın üzerine gelmeyen kullanıcı bu iki
+group-hover:opacity-100` hayaletiydi → satırın üzerine gelmeyen kullanıcı bu iki
   özelliğin varlığını göremiyordu. Hover kapısı kaldırıldı (artık `opacity: 1`), sarmalayıcı
   `group` sınıfı ölü kaldığı için silindi, `aria-label`'lar eklendi. Devre dışı
   durum (`messageCount === 0` / üretim sürerken) `disabled:opacity-30` ile korunuyor.
@@ -1000,6 +1020,7 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
   aynı metin yeniden gönderilir. Akış sürerken (`isLastLive`) buton gösterilmez.
 
 ### Yerleşim
+
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
 - `Sidebar` (Ajanlar + Oturumlar) **sürüklenerek yeniden boyutlandırılır**: sağ kenardaki
   tutamak (200–560px), genişlik `localStorage` (`tionharness.sidebarWidth`).
@@ -1035,7 +1056,7 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
   - **Görünürlük düzeltmesi (asıl kazanım):** butonlar eskiden
     `opacity-0 group-hover:opacity-100` hayaletiydi → fark edilmiyorlardı. Artık
     **durağan hâlde görünür** çipler (kenarlıklı, hover'da renk alan).
-  - **Konum geçmişi:** kısa süre balonun *içine* alındı (meta sol alt / butonlar sağ alt),
+  - **Konum geçmişi:** kısa süre balonun _içine_ alındı (meta sol alt / butonlar sağ alt),
     sonra tekrar **dışarı** çıkarıldı; nihai hâl budur. Balon dışı zemin nötr olduğu için
     yüzeye göre değişen **`accent` tonu tamamen kaldırıldı** — `MessageTime`,
     `DirectionBadge`, `DeleteButton`, `RewindButton` artık `tone` prop'u almıyor ve
@@ -1121,14 +1142,14 @@ Cache kırılımı artık yalnız Debug kartında değil, **sohbetin kendisinde*
 Beş yüzey, kasıtlı olarak farklı sorulara cevap verir — hiçbiri diğerini tekrar etmez.
 Tespit/atıf katmanı değişmedi (`internal/agent/cachebreak.go`, `_Docs\50` P4).
 
-| Yüzey | Soru | Kaynak |
-|---|---|---|
-| `CacheWarmthStrip` (composer üstü) | "Şimdi göndersem ucuz mu?" | son mesajın `createdAt` + 1sn tick; ek istek yok |
-| `ColdCacheDivider` (transkript ayracı) | "Bu turu ne pahalılaştırdı?" | iki mesaj arası boşluk > `CACHE_TTL_SEC` |
-| `CacheWarmthDot` (tur altbilgisi 🔥/❄) | "Hangi turlar soğuk koştu?" | `Message.usage.cacheRead/cacheWrite` |
-| `CacheBreakCard` (`cache_break` adımı) | "Neden kırıldı, ne yapmalıyım?" | backend atıflı `cache_break` olayı |
-| `MessageDebugPanel` cache bölümü | "Sebep + kaçınılabilir fazla ödeme?" | `TurnDebug.cacheBreak*`/`coolingWaste*` |
-| `CLIColdStartDivider` (transkript ayracı) | "CLI sohbeti nerede baştan başladı?" | `Message.cliColdStart` (backend atıflı) |
+| Yüzey                                     | Soru                                 | Kaynak                                           |
+| ----------------------------------------- | ------------------------------------ | ------------------------------------------------ |
+| `CacheWarmthStrip` (composer üstü)        | "Şimdi göndersem ucuz mu?"           | son mesajın `createdAt` + 1sn tick; ek istek yok |
+| `ColdCacheDivider` (transkript ayracı)    | "Bu turu ne pahalılaştırdı?"         | iki mesaj arası boşluk > `CACHE_TTL_SEC`         |
+| `CacheWarmthDot` (tur altbilgisi 🔥/❄)    | "Hangi turlar soğuk koştu?"          | `Message.usage.cacheRead/cacheWrite`             |
+| `CacheBreakCard` (`cache_break` adımı)    | "Neden kırıldı, ne yapmalıyım?"      | backend atıflı `cache_break` olayı               |
+| `MessageDebugPanel` cache bölümü          | "Sebep + kaçınılabilir fazla ödeme?" | `TurnDebug.cacheBreak*`/`coolingWaste*`          |
+| `CLIColdStartDivider` (transkript ayracı) | "CLI sohbeti nerede baştan başladı?" | `Message.cliColdStart` (backend atıflı)          |
 
 Kritik ayrımlar:
 
@@ -1137,7 +1158,7 @@ Kritik ayrımlar:
   kart basmak kullanıcıyı karta kör ederdi.
 - **Kart canlı SSE ile yayılmaz**, yalnız kalıcı ize **başa** eklenir
   (`api.consumeCacheBreakLead`, `chat_stream.go`). Kırılım turun başında ödenir ama ancak
-  provider yanıtından *bilinebilir*; geç yayınlamak kartı akışın altına çizip reload'da yukarı
+  provider yanıtından _bilinebilir_; geç yayınlamak kartı akışın altına çizip reload'da yukarı
   zıplatırdı. Non-stream `/api/chat` yolunda kart yoktur (`context_change` ile aynı kapsam).
 - **Kanıt yoksa iddia yok:** 🔥/❄ noktası ve "soğuk tur" sayacı yalnız `cacheRead>0` ya da
   `cacheWrite>0` varken konuşur. OpenRouter soğuk öneki düz `input` olarak faturalar (write
@@ -1247,7 +1268,7 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
 - Ajan: `StepTest` (claude-cli, anahtarsız). Mesaj: "Bash aracıyla `echo hello-from-tionharness`
   çalıştır, sonra çıktıyı tek cümlede söyle."
 - Yanıt `steps`: `[{kind:text,"Komutu çalıştırıyorum."}, {kind:tool, tool:"Bash",
-  input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposuna kalıcı yazıldı.
+input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposuna kalıcı yazıldı.
 - Chrome DOM: ara metin → **▶️ Bash** tool kartı (açınca GIRDI/ÇIKTI: `hello-from-tionharness`)
   → markdown cevap. **API anahtarı kullanılmadı.**
 
@@ -1345,10 +1366,18 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   - **Native non-streaming** (`anthropic.Complete`): `thinking` content-block'u `Response.Trace`'e
     bir `thinking` adımı olarak parse edilir (otonom turlar dâhil).
   - **claude-cli**: CLI stream-json `thinking` bloğunu zaten yayınlar.
-  Not: native **tool** döngüsünde thinking kapalı tutulur — imzalı thinking bloklarını geri
-  beslemek gerekir, provider soyutlaması bunu korumaz (bkz. `toolloop.go`).
+    Not: native **tool** döngüsünde thinking kapalı tutulur — imzalı thinking bloklarını geri
+    beslemek gerekir, provider soyutlaması bunu korumaz (bkz. `toolloop.go`).
 - claude-cli tool kullanımı, kullanıcının yerel `~/.claude` izin ayarlarına tabidir
   (print modunda izin verilen araçlar çalışır).
+
+### Worker sonuç kartı oturum bağlantısı (2026-08-31)
+
+`worker-note` kaynaklı `<task-notification>` kartında ajan kimliği, bildirimdeki
+`task-id` doluysa ilgili worker oturumunu açar. Kimlik tıklaması sonuç gövdesini
+açıp kapatmaz; bunun için ayrı, erişilebilir chevron kontrolü kullanılır. Eski,
+`task-id` içermeyen bildirimlerde kimlik düz metin kalır. Araç sayısı ve süre,
+sağdaki durum etiketinin hemen altında sağ hizalı gösterilir.
 
 ### CLI-native compaction kartı (2026-08-30)
 

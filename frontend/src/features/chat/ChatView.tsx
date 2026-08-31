@@ -32,6 +32,7 @@ import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb
 import {
   isCoordinatorSession,
   isInCoordinatorTree,
+  isWorkerSession,
   type CoordinationFields,
 } from '@/shared/lib/coordination'
 
@@ -257,6 +258,7 @@ export function ChatView({
           onHighlightConsumed={onHighlightConsumed}
           onOpenFile={onOpenFile}
           onOpenArtifact={onOpenArtifact}
+          onSelectSession={onSelectSession}
           onDeleteMessage={onDeleteMessage}
           onRewind={rewind}
           onRetry={onRetry}
@@ -360,6 +362,16 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
         >
+          {/* A worker's parent chain belongs next to its input: it explains where
+              replies are reported and gives a one-click route back to the parent.
+              Root coordinators and ordinary chats stay unchanged. */}
+          {isWorkerSession(sessionCoordination) && (
+            <CoordinatorBreadcrumb
+              sessionId={activeSessionId}
+              onSelectSession={onSelectSession}
+              floating
+            />
+          )}
           {/* Prompt-cache warmth: the one cache surface that can still change the
               outcome — it counts down the warm window BEFORE the next turn is sent.
               Sits at the TOP of the bottom stack so it stays visible above any
