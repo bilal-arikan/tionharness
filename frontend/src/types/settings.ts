@@ -6,6 +6,10 @@ import type { Locale } from '@/i18n/locales'
 // reports whether one is stored.
 export type Theme = 'dark' | 'light' | 'system'
 
+// What happens when automatic context compaction fires — mirrors
+// settings.AutoCompactMode (internal/settings/settings.go).
+export type AutoCompactMode = 'rolling' | 'native' | 'auto'
+
 export interface AppSettings {
   theme: Theme
   accent: string
@@ -58,6 +62,7 @@ export interface AppSettings {
   keepRecentMsgs: number
   contextBudgetCeil: number
   contextBudgetFraction: number
+  autoCompactMode: AutoCompactMode
 
   // Context reset / handoff (Anthropic "harness design").
   handoffAuto: boolean // auto-reset an autonomous turn that hit the context limit into a fresh session

@@ -149,6 +149,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.ContextBudgetFraction != nil {
 		next.ContextBudgetFraction = *p.ContextBudgetFraction
 	}
+	applyString(&next.AutoCompactMode, p.AutoCompactMode)
 	if p.HandoffAuto != nil {
 		next.HandoffAuto = *p.HandoffAuto
 	}
@@ -342,6 +343,13 @@ func normalize(v Settings) Settings {
 	}
 	if v.ContextBudgetFraction > 1 {
 		v.ContextBudgetFraction = 1
+	}
+	// Auto-compaction strategy; an unknown value (incl. empty, i.e. a settings.json
+	// written before this field existed) falls back to today's rolling fold.
+	switch v.AutoCompactMode {
+	case AutoCompactRolling, AutoCompactNative, AutoCompactAuto:
+	default:
+		v.AutoCompactMode = AutoCompactRolling
 	}
 	// Handoff chain depth cap: 0 selects the default; otherwise clamp to [1,100].
 	if v.HandoffMaxChain != 0 {

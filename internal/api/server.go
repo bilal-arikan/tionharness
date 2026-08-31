@@ -272,6 +272,7 @@ func (s *Server) applySettings() {
 	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
+	s.convo.SetAutoCompactMode(cur.AutoCompactMode)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)

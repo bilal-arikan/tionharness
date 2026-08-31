@@ -104,6 +104,7 @@ var settingsPatchGoldenFields = []string{
 	"userName", "userTimezone", "userCity", "userCountry", "userNotes",
 	"maxContextTokens", "keepRecentMsgs",
 	"contextBudgetCeil", "contextBudgetFraction",
+	"autoCompactMode",
 	"handoffAuto", "handoffMaxChain", "handoffWriteFile",
 	"progressPersist", "progressResume",
 	"autonomousAutoContinue", "autonomousAutoContinueMax",

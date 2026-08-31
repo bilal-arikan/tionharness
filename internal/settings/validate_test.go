@@ -15,6 +15,9 @@ func TestValidateRejectsBadEnums(t *testing.T) {
 		{"bad language", Patch{Language: strptr("de")}, false},
 		{"bad permission", Patch{DefaultPermissionMode: strptr("yolo")}, false},
 		{"empty permission ok", Patch{DefaultPermissionMode: strptr("")}, true},
+		{"good auto-compact mode", Patch{AutoCompactMode: strptr("native")}, true},
+		{"bad auto-compact mode", Patch{AutoCompactMode: strptr("aggressive")}, false},
+		{"empty auto-compact mode ok", Patch{AutoCompactMode: strptr("")}, true},
 		{"bad accent", Patch{Accent: strptr("purple")}, false},
 		{"good accent", Patch{Accent: strptr("#8b5cf6")}, true},
 		{"empty patch", Patch{}, true},
@@ -45,7 +48,7 @@ func TestApplyRejectsInvalidPatch(t *testing.T) {
 // TestNormalizeCoercesBadFile verifies a hand-edited bad value is coerced (not a
 // crash) on load — accent and permission mode fall back to safe defaults.
 func TestNormalizeCoercesBadValues(t *testing.T) {
-	v := normalize(Settings{Accent: "not-a-color", DefaultPermissionMode: "bogus", Language: "xx"})
+	v := normalize(Settings{Accent: "not-a-color", DefaultPermissionMode: "bogus", Language: "xx", AutoCompactMode: "bogus"})
 	if v.Accent != "#8b5cf6" {
 		t.Errorf("accent not coerced: %q", v.Accent)
 	}
@@ -54,6 +57,9 @@ func TestNormalizeCoercesBadValues(t *testing.T) {
 	}
 	if v.Language != "tr" {
 		t.Errorf("language not coerced: %q", v.Language)
+	}
+	if v.AutoCompactMode != AutoCompactRolling {
+		t.Errorf("auto-compact mode not coerced: %q", v.AutoCompactMode)
 	}
 }
 

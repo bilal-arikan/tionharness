@@ -1,5 +1,5 @@
 import { Layers, LifeBuoy, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
-import { Field, Toggle, inputCls } from './primitives'
+import { Field, Segmented, Toggle, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -144,6 +144,29 @@ export function ContextPanel({ draft, set }: PanelProps) {
           </div>
         ))}
       </div>
+
+      <Segmented
+        label="Otomatik sıkıştırma modu"
+        value={draft.autoCompactMode}
+        onChange={(v) => set('autoCompactMode', v)}
+        options={[
+          {
+            value: 'rolling',
+            label: 'Rolling (TionHarness)',
+            hint: "Varsayılan ve bugünkü davranış: bütçe aşıldığında en eski turlar TionHarness'in kendi rolling özetine katlanır; transkriptin geri kalanı aynen gider. Sıkıştırma tamamen TionHarness'in kontrolündedir.",
+          },
+          {
+            value: 'native',
+            label: 'Native (CLI)',
+            hint: "Sıkıştırmayı CLI sağlayıcısının kendi native compaction'ına bırakır. BEDELİ: native compaction warm CLI oturumunu düşürür — sonraki tur cold start olur (prompt cache soğur, o tur pahalanır).",
+          },
+          {
+            value: 'auto',
+            label: 'Otomatik',
+            hint: 'Sağlayıcı native compaction destekliyorsa ve canlı bir warm CLI oturumu varsa native, aksi halde rolling seçilir.',
+          },
+        ]}
+      />
 
       <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">

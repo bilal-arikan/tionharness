@@ -44,6 +44,13 @@ const (
 	ThemeSystem = "system"
 )
 
+// AutoCompactMode options — see Settings.AutoCompactMode.
+const (
+	AutoCompactRolling = "rolling"
+	AutoCompactNative  = "native"
+	AutoCompactAuto    = "auto"
+)
+
 // CustomProvider is a user-added OpenAI- or Anthropic-compatible endpoint. Its
 // ID is used as a provider identifier (Agent.Provider) and must not collide
 // with a built-in. KeyEnc is AES-GCM and never serialized to the API.
@@ -195,6 +202,13 @@ type Settings struct {
 	// first silent compaction (trades recall precision for raw history, _Docs/17 §12).
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
+
+	// AutoCompactMode picks WHAT happens when automatic context compaction fires:
+	// "rolling" = TionHarness' own rolling-summary fold (today's behaviour),
+	// "native"  = the CLI provider's own native compaction,
+	// "auto"    = native when the provider supports it and a warm CLI session is
+	//             live, rolling otherwise.
+	AutoCompactMode string `json:"autoCompactMode"`
 
 	// Context reset / handoff (Anthropic "harness design"). When HandoffAuto is on,
 	// an autonomous turn that hits the context limit writes a handoff artifact and
@@ -431,6 +445,8 @@ func Default() Settings {
 		// (memory / conversation_search / core blocks), not from a huge raw window.
 		ContextBudgetCeil:     262144,
 		ContextBudgetFraction: 0,
+		// Rolling keeps the pre-existing fold on upgrade; native/auto are opt-in.
+		AutoCompactMode: AutoCompactRolling,
 
 		// Context reset / handoff: off by default; the manual /handoff command and the
 		// handoff_session tool work regardless. Defaults match agent.DefaultHandoff*.
@@ -614,6 +630,8 @@ type DTO struct {
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
 
+	AutoCompactMode string `json:"autoCompactMode"`
+
 	HandoffAuto      bool `json:"handoffAuto"`
 	HandoffMaxChain  int  `json:"handoffMaxChain"`
 	HandoffWriteFile bool `json:"handoffWriteFile"`
@@ -741,6 +759,8 @@ func (s Settings) ToDTO() DTO {
 		ContextBudgetCeil:     s.ContextBudgetCeil,
 		ContextBudgetFraction: s.ContextBudgetFraction,
 
+		AutoCompactMode: s.AutoCompactMode,
+
 		HandoffAuto:      s.HandoffAuto,
 		HandoffMaxChain:  s.HandoffMaxChain,
 		HandoffWriteFile: s.HandoffWriteFile,
@@ -861,6 +881,8 @@ type Patch struct {
 
 	ContextBudgetCeil     *int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction *float64 `json:"contextBudgetFraction"`
+
+	AutoCompactMode *string `json:"autoCompactMode"`
 
 	HandoffAuto      *bool `json:"handoffAuto"`
 	HandoffMaxChain  *int  `json:"handoffMaxChain"`

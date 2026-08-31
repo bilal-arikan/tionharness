@@ -104,6 +104,7 @@ instances with different keys).
 ### Context
 - `maxContextTokens` (min 500, default 12000), `keepRecentMsgs` (min 1, default 8).
 - `contextBudgetCeil` (8000–2000000, default 262144 ≈ 256K) — hard cap on the model-aware transcript budget; the operative number for 1M-window models. Lowered from 512K to keep the live window in the context-rot gradient's high-precision zone; raise to keep more history verbatim (trades recall precision for raw history). `contextBudgetFraction` (0–1, default **0 = auto**) — share of the model's context window spendable on transcript. **0 selects a per-family adaptive share** (Opus/Sonnet 0.45, Haiku 0.40, MiniMax/DeepSeek/Gemini 0.35); a positive value pins a fixed manual share. Effective budget = clamp(window × fraction, maxContextTokens, ceil). Rationale: see `_Docs/17` §12.
+- `autoCompactMode` (`rolling` | `native` | `auto`, default `rolling`) — what happens when automatic compaction fires. `rolling` = TionHarness' own rolling-summary fold (pre-existing behaviour, unchanged on upgrade). `native` = the CLI provider's own native compaction; it drops the warm CLI session, so the next turn is a cold start. `auto` = native when the provider supports it and a warm CLI session is live, rolling otherwise. An unknown value in a hand-edited `settings.json` is coerced back to `rolling`.
 
 ### Turn recovery
 - `reactiveCompact` (default true) — fold history + retry on context overflow.

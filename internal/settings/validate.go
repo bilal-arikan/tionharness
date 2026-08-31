@@ -46,6 +46,13 @@ func Validate(p Patch) error {
 			return fmt.Errorf("defaultPermissionMode must be one of: read-only, ask, auto (got %q)", *p.DefaultPermissionMode)
 		}
 	}
+	if p.AutoCompactMode != nil {
+		switch *p.AutoCompactMode {
+		case "", AutoCompactRolling, AutoCompactNative, AutoCompactAuto:
+		default:
+			return fmt.Errorf("autoCompactMode must be one of: rolling, native, auto (got %q)", *p.AutoCompactMode)
+		}
+	}
 	if p.Accent != nil && *p.Accent != "" && !isHexColor(*p.Accent) {
 		return fmt.Errorf("accent must be a hex color like #8b5cf6 (got %q)", *p.Accent)
 	}

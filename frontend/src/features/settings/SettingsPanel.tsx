@@ -186,6 +186,7 @@ export function SettingsPanel({
       keepRecentMsgs: draft.keepRecentMsgs,
       contextBudgetCeil: draft.contextBudgetCeil,
       contextBudgetFraction: draft.contextBudgetFraction,
+      autoCompactMode: draft.autoCompactMode,
       reactiveCompact: draft.reactiveCompact,
       maxTokenRetries: draft.maxTokenRetries,
       reactiveKeepRecent: draft.reactiveKeepRecent,

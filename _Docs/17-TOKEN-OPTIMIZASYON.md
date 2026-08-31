@@ -970,6 +970,13 @@ artık fraction 0'ı (auto) saklar (eskiden yok sayardı). Eski `settings.json`'
 her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere isteyen kullanıcı Ayarlar'dan
 `ContextBudgetCeil`/`ContextBudgetFraction`'ı yükseltebilir; varsayılan artık **rot-bilinçli**.
 
+**`autoCompactMode` ayarı (2026-08-31).** Otomatik sıkıştırma tetiklendiğinde *ne* yapılacağı artık
+Ayarlar ▸ Bağlam'dan seçilir: `rolling` (varsayılan — yukarıda anlatılan TionHarness fold'u, yükseltmede
+davranış değişmez), `native` (CLI sağlayıcısının kendi compaction'ı — **bedeli:** warm CLI oturumunu
+düşürür, sonraki tur cold start olur) veya `auto` (sağlayıcı destekliyor + warm oturum canlıysa native,
+aksi halde rolling). Bu faz yalnız ayar boru hattını kurar; modu okuyup davranışı dallandıran hibrit
+kapı ayrı bir fazda gelir — şu an her üç değer de rolling gibi davranır.
+
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
