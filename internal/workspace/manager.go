@@ -41,6 +41,25 @@ type Meta struct {
 	CreatedBy string `json:"createdBy,omitempty"`
 }
 
+// DegradedWorkspace is a registered workspace that could not be opened. It keeps
+// the registry metadata (so persist() writes the entry back) plus the reason the
+// open failed, which is the only thing that lets the user tell a broken workspace
+// from a healthy one without reading the server log.
+type DegradedWorkspace struct {
+	Meta
+	// Reason is the open error's message, rendered at the time it happened.
+	Reason string
+}
+
+// ListEntry is one row of the registry as the UI sees it: a workspace's metadata
+// plus whether it is live or degraded. Degraded rows carry no live handles, so a
+// consumer must not expect Get(entry.ID) to succeed for them.
+type ListEntry struct {
+	Meta
+	Degraded bool
+	Reason   string
+}
+
 // Workspace bundles a workspace's live database, runtime and scheduler.
 type Workspace struct {
 	Meta
@@ -73,6 +92,14 @@ type Manager struct {
 	mu         sync.RWMutex
 	workspaces map[string]*Workspace
 	order      []string // creation order (first = default)
+
+	// degraded holds every workspace that is REGISTERED but could not be opened (a
+	// corrupt store file, a missing/unreadable data directory). It is not live — it
+	// has no DB or runtime — but persist() writes it back to workspaces.json all
+	// the same. Dropping it would mean the next Create/Delete rewrites the registry
+	// without it and the workspace disappears from the app forever even though all
+	// of its data is still on disk. Guarded by mu.
+	degraded []DegradedWorkspace
 
 	// wsCounter is the monotonic sequence behind human-readable workspace ids
 	// ("WS1", "WS2"), persisted to ws-counter.json so a number is never reused
@@ -254,7 +281,10 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 
 	for _, meta := range metas {
 		if err := m.open(meta); err != nil {
-			logger.Warn("failed to open workspace", "id", meta.ID, "error", err)
+			// Keep the registry entry (see Manager.degraded): an open failure is a
+			// reason to report a workspace as broken, never a reason to delete it.
+			logger.Error("failed to open workspace; keeping its registry entry", "id", meta.ID, "path", meta.Path, "error", err)
+			m.markDegraded(meta, err)
 			continue
 		}
 	}
@@ -505,13 +535,19 @@ func (m *Manager) open(meta Meta) error {
 	m.mu.Lock()
 	m.workspaces[meta.ID] = ws
 	m.order = append(m.order, meta.ID)
+	// It opened, so it is no longer degraded (a reopen after a repair, or a
+	// restore from archive).
+	m.degraded = removeDegraded(m.degraded, meta.ID)
 	m.mu.Unlock()
 
 	m.logger.Info("workspace opened", "id", meta.ID, "name", meta.Name)
 	return nil
 }
 
-// List returns workspace metadata in creation order.
+// List returns LIVE workspace metadata in creation order. Degraded workspaces are
+// deliberately absent: every caller of this pairs a Meta with Get(meta.ID) or a
+// runtime handle, which a degraded entry does not have. Use ListWithDegraded for
+// the registry as the user should see it.
 func (m *Manager) List() []Meta {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -519,6 +555,24 @@ func (m *Manager) List() []Meta {
 	for _, id := range m.order {
 		out = append(out, m.workspaces[id].Meta)
 	}
+	return out
+}
+
+// ListWithDegraded returns the whole registry in creation order — live workspaces
+// and the ones that failed to open, each flagged. Without this the user has no
+// way to see a broken workspace at all (it is still in workspaces.json but has no
+// live handle), so it could neither be repaired nor deleted from the UI.
+func (m *Manager) ListWithDegraded() []ListEntry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]ListEntry, 0, len(m.order)+len(m.degraded))
+	for _, id := range m.order {
+		out = append(out, ListEntry{Meta: m.workspaces[id].Meta})
+	}
+	for _, d := range m.degraded {
+		out = append(out, ListEntry{Meta: d.Meta, Degraded: true, Reason: d.Reason})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
 	return out
 }
 
@@ -681,7 +735,7 @@ func (m *Manager) Delete(id string) error {
 	ws, ok := m.workspaces[id]
 	if !ok {
 		m.mu.Unlock()
-		return errors.New("workspace not found")
+		return m.deleteDegraded(id)
 	}
 	delete(m.workspaces, id)
 	m.order = removeString(m.order, id)
@@ -697,6 +751,53 @@ func (m *Manager) Delete(id string) error {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
 	}
 	return m.persist()
+}
+
+// deleteDegraded removes a registered-but-unopenable workspace. Without it a
+// degraded entry is undeletable: it is absent from m.workspaces, so Delete used to
+// answer "workspace not found" and the broken record stayed in workspaces.json
+// forever. The registry entry is dropped and persisted FIRST — that is the part
+// the user asked for and the part that must survive — then the data directory is
+// removed with the same semantics as the live path (delete, not archive). Unlike
+// the live path the removal error is returned rather than logged: a degraded
+// workspace is degraded precisely because its directory is suspect, so "deleted"
+// must not be reported when its files are still there.
+//
+// A failed persist() must leave NOTHING changed: the entry is still in
+// workspaces.json, so it is put back into m.degraded at its original position.
+// Dropping it from memory only would let the next successful persist (a Create,
+// say) erase a registry entry the user never managed to delete.
+func (m *Manager) deleteDegraded(id string) error {
+	m.mu.Lock()
+	var entry DegradedWorkspace
+	idx := -1
+	for i, d := range m.degraded {
+		if d.ID == id {
+			entry, idx = d, i
+			break
+		}
+	}
+	if idx < 0 {
+		m.mu.Unlock()
+		return errors.New("workspace not found")
+	}
+	m.degraded = removeDegraded(m.degraded, id)
+	m.mu.Unlock()
+
+	if err := m.persist(); err != nil {
+		m.mu.Lock()
+		m.degraded = insertDegraded(m.degraded, idx, entry)
+		m.mu.Unlock()
+		return err
+	}
+	dir := entry.Path
+	if dir == "" {
+		dir = filepath.Join(m.rootDir, "workspaces", entry.ID)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("remove degraded workspace dir %s: %w", dir, err)
+	}
+	return nil
 }
 
 // RestoreFromArchive replaces a workspace's on-disk content with the contents of
@@ -771,6 +872,9 @@ func (m *Manager) RestoreFromArchive(id, archivePath string, extract func(src, d
 	}
 
 	if err := m.open(meta); err != nil {
+		// The content was swapped in but the workspace will not open: keep its
+		// registry entry so a later fix can still reach it.
+		m.markDegraded(meta, err)
 		return fmt.Errorf("reopen workspace after restore: %w", err)
 	}
 	m.logger.Info("workspace restored from archive", "id", id, "archive", filepath.Base(archivePath))
@@ -783,7 +887,50 @@ func (m *Manager) RestoreFromArchive(id, archivePath string, extract func(src, d
 func (m *Manager) reopenOrLog(meta Meta) {
 	if err := m.open(meta); err != nil {
 		m.logger.Error("failed to reopen workspace after restore rollback", "id", meta.ID, "error", err)
+		m.markDegraded(meta, err)
 	}
+}
+
+// markDegraded records a registered-but-unopenable workspace so persist() keeps
+// its entry in workspaces.json and ListWithDegraded can surface it. cause is the
+// open failure and must not be nil — it is the only explanation the user gets.
+// Re-marking an already degraded workspace refreshes the reason.
+func (m *Manager) markDegraded(meta Meta, cause error) {
+	reason := ""
+	if cause != nil {
+		reason = cause.Error()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, d := range m.degraded {
+		if d.ID == meta.ID {
+			m.degraded[i] = DegradedWorkspace{Meta: meta, Reason: reason}
+			return
+		}
+	}
+	m.degraded = append(m.degraded, DegradedWorkspace{Meta: meta, Reason: reason})
+}
+
+// insertDegraded puts an entry back at index idx, preserving the rest of the
+// order (used to roll back a removal whose persist failed).
+func insertDegraded(list []DegradedWorkspace, idx int, entry DegradedWorkspace) []DegradedWorkspace {
+	if idx > len(list) {
+		idx = len(list)
+	}
+	list = append(list, DegradedWorkspace{})
+	copy(list[idx+1:], list[idx:])
+	list[idx] = entry
+	return list
+}
+
+func removeDegraded(list []DegradedWorkspace, id string) []DegradedWorkspace {
+	out := list[:0]
+	for _, d := range list {
+		if d.ID != id {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // Close stops every workspace's runtime and closes its database.
@@ -806,29 +953,86 @@ func (m *Manager) metaPath() string {
 	return filepath.Join(m.rootDir, "workspaces.json")
 }
 
+// loadMetas reads the workspace registry. ONLY a missing file is an empty
+// registry; an unreadable or unparseable one is an error that must abort the
+// boot. Treating a corrupt workspaces.json as "no workspaces" would let the
+// first persist() overwrite it with an empty list and erase every workspace the
+// user has.
 func (m *Manager) loadMetas() ([]Meta, error) {
 	data, err := os.ReadFile(m.metaPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read workspace registry %s: %w", m.metaPath(), err)
 	}
 	var metas []Meta
 	if err := json.Unmarshal(data, &metas); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("workspace registry %s is corrupt: %w", m.metaPath(), err)
 	}
 	sort.SliceStable(metas, func(i, j int) bool { return metas[i].CreatedAt < metas[j].CreatedAt })
 	return metas, nil
 }
 
+// registryMetas is everything workspaces.json must contain: the live workspaces
+// plus the degraded ones, in creation order.
+func (m *Manager) registryMetas() []Meta {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Meta, 0, len(m.order)+len(m.degraded))
+	for _, id := range m.order {
+		out = append(out, m.workspaces[id].Meta)
+	}
+	for _, d := range m.degraded {
+		out = append(out, d.Meta)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	return out
+}
+
+// persist writes the workspace registry atomically (temp file + rename). This
+// file is the only pointer to every workspace's data directory: a half-written
+// workspaces.json left by a crash mid-write is unrecoverable, so it is never
+// written in place.
 func (m *Manager) persist() error {
-	metas := m.List()
-	data, err := json.MarshalIndent(metas, "", "  ")
+	data, err := json.MarshalIndent(m.registryMetas(), "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.metaPath(), data, 0o644)
+	path := m.metaPath()
+	tmp := path + ".tmp"
+	// Every failure path removes the temp file: leaving one behind next to the
+	// registry is silent garbage that the next boot has no owner for. The removal
+	// itself is best-effort — the write/rename error is the one worth reporting.
+	if err := writeSynced(tmp, data, 0o644); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// writeSynced writes data to path and fsyncs it before returning. os.WriteFile
+// would be shorter but leaves the bytes in the page cache: renaming an unflushed
+// temp file over the registry survives a power cut as a ZERO-BYTE workspaces.json,
+// which is the exact loss the temp-file+rename dance exists to prevent.
+func writeSynced(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func removeString(s []string, v string) []string {

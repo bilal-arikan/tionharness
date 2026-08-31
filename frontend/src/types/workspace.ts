@@ -57,6 +57,11 @@ export interface Workspace {
   createdAt: number
   icon?: string
   color?: string
+  // Registered but unopenable: the backend keeps the registry entry instead of
+  // dropping it, and reports WHY. Both fields are omitempty on the wire, so a
+  // healthy workspace carries neither.
+  degraded?: boolean
+  degradedReason?: string
 }
 
 // A workspace template (agents + flow blueprint) offered in the create dialog.

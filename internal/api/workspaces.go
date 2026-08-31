@@ -19,13 +19,21 @@ type workspaceListItem struct {
 	CreatedAt int64  `json:"createdAt"`
 	Icon      string `json:"icon"`
 	Color     string `json:"color"`
+	// Degraded marks a workspace that is registered but could not be opened; it has
+	// no live handles, so the client must not switch into it — only rename/delete or
+	// repair it on disk. DegradedReason carries the open failure.
+	Degraded       bool   `json:"degraded,omitempty"`
+	DegradedReason string `json:"degradedReason,omitempty"`
 }
 
 func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
-	metas := s.workspaces.List()
-	out := make([]workspaceListItem, 0, len(metas))
-	for _, m := range metas {
-		item := workspaceListItem{ID: m.ID, Name: m.Name, CreatedAt: m.CreatedAt}
+	entries := s.workspaces.ListWithDegraded()
+	out := make([]workspaceListItem, 0, len(entries))
+	for _, m := range entries {
+		item := workspaceListItem{
+			ID: m.ID, Name: m.Name, CreatedAt: m.CreatedAt,
+			Degraded: m.Degraded, DegradedReason: m.Reason,
+		}
 		if ws, err := s.workspaces.Get(m.ID); err == nil {
 			cfg := ws.Settings()
 			item.Icon = cfg.Icon

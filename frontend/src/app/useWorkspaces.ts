@@ -121,7 +121,16 @@ export function useWorkspaces(setError: (msg: string) => void) {
         // route machinery, so explicit links still override the favorite.
         const fav = readFavorite()
         const favValid = fav && list.some((w) => w.id === fav) ? fav : null
-        const chosen = (!saved && favValid) || valid?.id || favValid || list[0]?.id || null
+        // Last-resort fallback (no saved pointer, no favorite): take the first
+        // OPENABLE workspace. The list is in creation order, so the oldest entry
+        // leads it — and if that one is degraded, picking it lands a fresh browser
+        // on a workspace whose every request fails. A saved or starred pointer is
+        // an explicit user choice and is NOT overridden, degraded or not. With
+        // nothing healthy at all we keep the old behaviour (first entry) so the
+        // switcher still has a selection to show.
+        const firstHealthy = list.find((w) => !w.degraded)?.id
+        const chosen =
+          (!saved && favValid) || valid?.id || favValid || firstHealthy || list[0]?.id || null
         if (chosen) {
           setActiveWorkspace(chosen)
           setActiveWorkspaceId(chosen)

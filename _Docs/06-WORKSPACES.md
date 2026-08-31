@@ -222,6 +222,34 @@ mesaj onboarding ekranında satır-içi gösterilir (`data-testid="onboarding-er
 4. Handler'lar `ws(r).DB` ve `ws(r).Runtime` ile yalnızca o workspace'in verisine erişir.
 5. Frontend aktif workspace id'sini **URL hash'inde** (`#/w/{id}/{view}`) kaynak-doğru olarak tutar; `localStorage` yalnızca hash'siz açılışta tohum (fallback) olarak okunur. Switcher'dan geçince tüm liste (ajan/oturum/mesaj) sıfırlanıp yeniden yüklenir.
 
+### Açılamayan (degraded) workspace
+
+Kayıtlı ama açılamayan bir workspace (bozuk `store/`, okunamayan dizin) **kayıt
+defterinden silinmez**: `Manager.degraded` listesinde açılış hatasıyla birlikte
+tutulur ve `persist()` onu `workspaces.json`'a geri yazar — aksi hâlde ilk
+`Create`/`Delete` çağrısı, verisi diskte duran workspace'in tek işaretçisini
+silerdi.
+
+- `List()` yalnızca **canlı** workspace'leri döner (her çağıranı Meta'yı canlı bir
+  handle ile eşler). Kullanıcıya gösterilen liste `ListWithDegraded()`'dan gelir:
+  her satır `Degraded` bayrağı ve `Reason` (açılış hatası) taşır; API bunları
+  `degraded` / `degradedReason` alanlarıyla yayınlar.
+- `Delete(id)` degraded kayıtları da hedefler: kaydı defterden düşürür,
+  `persist()` eder, sonra veri dizinini siler. Dizin silinemezse hata **yutulmaz**,
+  çağırana döner (canlı yolda bu yalnızca loglanır) — dosyalar dururken "silindi"
+  denmemesi için.
+- `persist()` başarısız olursa silme **tümüyle geri alınır**: kayıt `m.degraded`
+  içine eski sırasında geri konur ve veri dizinine dokunulmaz. Aksi hâlde kayıt
+  `workspaces.json`'da kalır ama bellekten düşerdi; sonraki başarılı bir
+  `persist()` (ör. bir `Create`) onu kullanıcı istemeden silerdi.
+- Frontend'de otomatik seçim (kayıtlı işaretçi ve favori yokken) yalnız
+  **degraded olmayan** workspace'ler arasından yapılır — liste oluşturma
+  sırasında geldiğinden en eski kayıt bozuksa temiz bir tarayıcı doğrudan çıkmaza
+  düşerdi (`frontend/src/app/useWorkspaces.ts`). Kullanıcının açıkça seçtiği veya
+  yıldızladığı işaretçi degraded olsa bile ezilmez. Switcher listesinde bozuk
+  satır kırmızı **"bozuk"** rozetiyle ve tooltip olarak `degradedReason` ile
+  gösterilir.
+
 ## Çoklu Pencere / Derin Bağlantı (Deep-Link)
 
 Tüm navigasyon durumu URL hash'inde adreslenir → **her workspace ayrı bir tarayıcı

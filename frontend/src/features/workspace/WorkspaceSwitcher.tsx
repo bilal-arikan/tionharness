@@ -194,7 +194,18 @@ export function WorkspaceSwitcher({
                     "çalışıyor") takes precedence over the settled unread state
                     ("tamamlandı" — an unseen completion in a non-active
                     workspace, from the SSE badge). */}
-                {busyIds?.has(w.id) ? (
+                {/* A degraded workspace could not be opened at all, so it can be
+                    neither busy nor unread — the badge replaces both and carries
+                    the backend's reason as its tooltip. */}
+                {w.degraded ? (
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-danger)]"
+                    title={w.degradedReason || 'Workspace açılamadı'}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-[var(--color-danger)]" />
+                    bozuk
+                  </span>
+                ) : busyIds?.has(w.id) ? (
                   <span
                     className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-success)]"
                     title="İşlem sürüyor"
