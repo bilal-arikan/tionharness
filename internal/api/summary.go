@@ -23,13 +23,30 @@ type summaryResult struct {
 	Body     string
 	Fold     conversation.Compaction
 	Provider providers.Provider
+	Steps    []agent.TurnStep
 }
 
 func (r summaryResult) stepsJSON() string {
+	if len(r.Steps) > 0 {
+		return string(mustJSON(r.Steps))
+	}
 	if r.Fold.FoldedMsgs == 0 {
 		return "[]"
 	}
 	return string(mustJSON([]agent.TurnStep{compactionLeadStep(r.Fold, r.Provider)}))
+}
+
+func nativeCompactionStep(trace providers.TraceStep) agent.TurnStep {
+	trigger := trace.Trigger
+	if trigger == "" && trace.Kind == "compaction" {
+		trigger = conversation.TriggerManual
+	}
+	return agent.TurnStep{
+		ID: trace.ID, Ref: trace.Ref, Running: trace.Running,
+		Kind: agent.StepKind(trace.Kind), Trigger: trigger, Source: trace.Source,
+		Provider: trace.Provider, SessionAction: trace.SessionAction,
+		FoldedMsgs: trace.FoldedMsgs, BeforeTokens: trace.BeforeTokens, AfterTokens: trace.AfterTokens,
+	}
 }
 
 // summaryHeaders gives each summary kind a self-explanatory chat header so the
@@ -84,7 +101,7 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// appended, so the fold boundary is computed over the real conversation — the
 	// command bubble and its report are the freshest tail and must never be folded.
 	var compactHistory []db.Message
-	if kind == "compact" {
+	if kind == "compact" || kind == "compact-custom" {
 		compactHistory, err = wsp.DB.ListMessages(ctx, session.ID)
 		if writeDBError(w, err, "session not found") {
 			return
@@ -215,7 +232,9 @@ func summaryFailureText(kind string, cause error) string {
 func summaryHeader(kind string) (header string, known bool) {
 	switch kind {
 	case "compact":
-		return "🗜 **Sohbet sıkıştırma**", true
+		return "🗜 **CLI-native sohbet sıkıştırma**", true
+	case "compact-custom":
+		return "🗜 **TionHarness sohbet sıkıştırma**", true
 	case "refresh-context":
 		return "🔄 **Bağlam yenileme**", true
 	default:
@@ -228,7 +247,7 @@ func summaryHeader(kind string) (header string, known bool) {
 // slash command runs (mirrors the frontend's per-kind busy labels).
 func summaryBusyLabel(kind string) string {
 	switch kind {
-	case "compact":
+	case "compact", "compact-custom":
 		return "⏳ Sohbet sıkıştırılıyor…"
 	case "refresh-context":
 		return "⏳ Bağlam snapshot'ı yenileniyor…"
@@ -238,12 +257,15 @@ func summaryBusyLabel(kind string) string {
 }
 
 // runSummaryKind executes one slash command and returns its assistant-message
-// body. compact folds older history into the rolling summary; refresh-context
+// body. compact triggers the CLI-native control plane; compact-custom folds
+// older history into TionHarness's rolling summary; refresh-context
 // drops the frozen prompt snapshot; the rest go through the model-summary path.
 func (s *Server) runSummaryKind(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, compactHistory []db.Message) (summaryResult, error) {
 	switch kind {
 	case "compact":
-		return s.compactSession(ctx, wsp, session, compactHistory)
+		return s.nativeCompactSession(ctx, wsp, session, compactHistory)
+	case "compact-custom":
+		return s.customCompactSession(ctx, wsp, session, compactHistory)
 	case "refresh-context":
 		// Prompt-epoch explicit adopt: drop the session's frozen prompt snapshot so
 		// the next turn recomposes tools + static system from live state (a chosen
@@ -374,10 +396,76 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// compactSession forces a conversation compaction now: it folds older history
+// nativeCompactSession invokes the active CLI provider's own compaction control
+// plane. It never falls back to the TionHarness rolling summary: /compact-custom
+// is the explicit command for that separate operation.
+func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (summaryResult, error) {
+	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
+	if err != nil {
+		return summaryResult{}, err
+	}
+	provider, err := s.providers.Get(agentRow.ProviderRef())
+	if err != nil {
+		return summaryResult{}, err
+	}
+	if err := wsp.Runtime.PinCLIHome(provider); err != nil {
+		return summaryResult{}, err
+	}
+	native, ok := provider.(providers.CLINativeManualCompactor)
+	if !ok {
+		return summaryResult{}, fmt.Errorf("provider %s does not support native manual compaction; use /compact-custom", provider.Name())
+	}
+	if !providers.HasNativeCLICompactionEvents(provider) {
+		return summaryResult{}, fmt.Errorf("installed %s version does not support native compaction lifecycle events", provider.Name())
+	}
+	if session.CLISessionID == "" {
+		return summaryResult{}, errors.New("native compaction requires an existing resumable CLI session; run a normal turn first or use /compact-custom")
+	}
+	if _, err := wsp.Runtime.DropWarmCLISessionChecked(session.ID); err != nil {
+		return summaryResult{}, fmt.Errorf("stop warm CLI session before native compaction: %w", err)
+	}
+	resp, err := native.CompactNative(ctx, session.CLISessionID, providers.Request{
+		Model: agentRow.Model, PermissionMode: agentRow.PermissionMode,
+		WorkDir: wsp.SandboxRoot(), CLIResumeScope: session.ID,
+		OnEvent: func(trace providers.TraceStep) {
+			step := nativeCompactionStep(trace)
+			wsp.Runtime.EmitSessionStep(session.ID, step)
+			if step.Kind == agent.StepTombstone {
+				s.publishHub(wsp.ID, session.ID, sessionhub.KindTombstone, step, true)
+				return
+			}
+			s.publishHub(wsp.ID, session.ID, sessionhub.KindStep, step, false)
+		},
+	})
+	if err != nil {
+		return summaryResult{}, err
+	}
+	var steps []agent.TurnStep
+	for _, trace := range resp.Trace {
+		if trace.Kind == "compaction" && trace.Source == "cli-native" && !trace.Running {
+			steps = append(steps, nativeCompactionStep(trace))
+		}
+	}
+	if len(steps) != 1 {
+		return summaryResult{}, fmt.Errorf("%s native compaction produced %d completed lifecycle events, want 1", provider.Name(), len(steps))
+	}
+	resumeID := resp.SessionID
+	if resumeID == "" {
+		resumeID = session.CLISessionID
+	}
+	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, len(history)+2); err != nil {
+		return summaryResult{}, fmt.Errorf("persist CLI resume after native compaction: %w", err)
+	}
+	return summaryResult{
+		Body:  fmt.Sprintf("%s yerel oturumu sıkıştırıldı; TionHarness rolling summary sınırı değiştirilmedi.", provider.Name()),
+		Steps: steps,
+	}, nil
+}
+
+// customCompactSession forces a TionHarness conversation compaction now: it folds older history
 // into the rolling summary (via the conversation Manager) and returns a short
 // human-readable report for the chat.
-func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (summaryResult, error) {
+func (s *Server) customCompactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (summaryResult, error) {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return summaryResult{}, err

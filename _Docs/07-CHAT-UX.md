@@ -67,18 +67,26 @@ Kart ayrıca katlamanın kaynağını ve CLI oturum sonucunu taşır: `source`
 `sessionAction` (`resume` | `native-compact` | `restart-summary`). Codex 0.148.0+
 `exec --json`, snake_case `context_compaction` item'ını started/completed çiftiyle
 taşır. App Server'ın camelCase `contextCompaction` item'ı ve
-`thread/compact/start` RPC'si ayrı transporttur. Claude Code 2.1.238+
+`thread/compact/start` RPC'si `/compact` tarafından doğrudan kullanılan native
+transporttur. Claude Code 2.1.238+
 `--include-hook-events` ile `PreCompact` başlangıcını; `compact_boundary` ve
 `PostCompact` tamamlanma kanıtını taşır. Completion sinyalleri deduplicate edilir.
 Eksik/eski CLI sürümünde capability fail-closed kalır.
 
-TionHarness fold'u CLI'ya `/compact` enjekte etmez; sıcak CLI
-oturumunu bırakır ve aynı kartta `restart-summary` göstererek TionHarness özeti +
-son mesaj kuyruğuyla fresh CLI session başlatır.
+Komut sözleşmesi ikiye ayrılır:
 
-Manuel `/compact` başarı mesajı da aynı yapısal `compaction` adımını kendi
-`steps` alanında kalıcı taşır (`trigger=manual`, `source=tionharness`, CLI ise
-`sessionAction=restart-summary`). Gerçek fold sonrası hem DB'deki resume id/sınırı
+- `/compact`, yalnız mevcut resumable `claude-cli` veya `codex-cli` oturumunun
+  native compaction kontrolünü çağırır. Claude'da tek başına `/compact` girdisi,
+  Codex'te App Server `thread/compact/start` RPC'si kullanılır. Native oturum veya
+  desteklenen CLI sürümü yoksa açık hata döner; rolling-summary fallback yapılmaz.
+- `/compact-custom`, önceki TionHarness davranışıdır: eski mesajları rolling
+  summary'ye katlar, CLI resume durumunu temizler ve sonraki turu özet + son mesaj
+  kuyruğuyla fresh CLI session olarak başlatır.
+
+Her iki manuel komutun başarı mesajı aynı yapısal `compaction` adımını kendi
+`steps` alanında kalıcı taşır. `/compact`: `trigger=manual`, `source=cli-native`,
+`sessionAction=native-compact`; `/compact-custom`: `source=tionharness`, CLI ise
+`sessionAction=restart-summary`. Custom fold sonrası hem DB'deki resume id/sınırı
 temizlenir hem Claude persistent-pool süreci düşürülür. Auto, wake ve side-chat
 fold yolları da persistent süreci provider çağrısından önce düşürür; özet eski
 warm transcriptin üstüne eklenmez.
@@ -89,7 +97,8 @@ warm transcriptin üstüne eklenmez.
 |-----|-------------|--------|
 | İnteraktif tur | `auto` | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go` |
 | Otonom tur (wake/spawn/worker) | `auto` | aynı yardımcı — `wake_turn.go` |
-| `/compact` komutu | `manual` | `Manager.ForceCompact` dönüşü |
+| `/compact` komutu | `manual` | Claude slash-control veya Codex `thread/compact/start` |
+| `/compact-custom` komutu | `manual` | `Manager.ForceCompact` dönüşü |
 | Tur içi taşma kurtarması | `reactive` | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
 | Yan sohbet (`btw`) | `auto` | `chat_btw.go`; `Prepare`'in paylaşılan katlaması |
 

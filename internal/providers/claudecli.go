@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -154,6 +155,7 @@ func (c *ClaudeCLI) NativeCompactionEvents() bool {
 }
 
 var _ CLICompactionLifecycle = (*ClaudeCLI)(nil)
+var _ CLINativeManualCompactor = (*ClaudeCLI)(nil)
 
 // permissionModeArgs maps TionHarness's permission mode onto the claude CLI's
 // permission flags. In headless (-p) mode the default mode cannot prompt for
@@ -475,6 +477,37 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 		}
 	}
 	return nil, lastErr
+}
+
+// CompactNative sends Claude Code's built-in /compact command as the complete
+// print-mode input. Surrounding it with a normal rendered prompt would turn the
+// slash command into model-visible text instead of a native control command.
+func (c *ClaudeCLI) CompactNative(ctx context.Context, resumeSessionID string, req Request) (*Response, error) {
+	if strings.TrimSpace(resumeSessionID) == "" {
+		return nil, errors.New("claude native compaction requires a resume session id")
+	}
+	if !c.NativeCompactionEvents() {
+		return nil, errors.New("installed claude CLI does not support native compaction lifecycle events")
+	}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--resume", resumeSessionID}
+	args = append(args, c.permissionArgs(req)...)
+	resp, _, err := c.runAttempt(ctx, args, "/compact", req.Model, req)
+	if err != nil {
+		return nil, err
+	}
+	if hasCompletedNativeCompaction(resp) {
+		return resp, nil
+	}
+	return nil, errors.New("claude native compaction completed without a success lifecycle event")
+}
+
+func hasCompletedNativeCompaction(resp *Response) bool {
+	for _, step := range resp.Trace {
+		if step.Kind == "compaction" && step.Source == "cli-native" && !step.Running {
+			return true
+		}
+	}
+	return false
 }
 
 // ProbeAuth runs a minimal, tool-free `claude -p` against this provider's config

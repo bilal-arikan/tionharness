@@ -470,6 +470,13 @@ type CLICompactionLifecycle interface {
 	NativeCompactionEvents() bool
 }
 
+// CLINativeManualCompactor triggers the CLI's own compaction control plane for
+// an already persisted native session. Implementations must not route the
+// operation through an ordinary model prompt.
+type CLINativeManualCompactor interface {
+	CompactNative(ctx context.Context, resumeSessionID string, req Request) (*Response, error)
+}
+
 func HasNativeCLICompactionEvents(p Provider) bool {
 	c, ok := p.(CLICompactionLifecycle)
 	return ok && c.NativeCompactionEvents()

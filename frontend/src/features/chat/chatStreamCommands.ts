@@ -112,8 +112,14 @@ export function buildChatCommands({
     {
       name: 'compact',
       icon: '🗜',
-      description: 'Sohbeti şimdi özete sıkıştır',
+      description: "Claude/Codex CLI'nın native bağlam sıkıştırmasını çalıştır",
       run: () => summarize('compact'),
+    },
+    {
+      name: 'compact-custom',
+      icon: '🗜',
+      description: "Eski mesajları TionHarness rolling summary'sine katla",
+      run: () => summarize('compact-custom'),
     },
     {
       name: 'refresh-context',
