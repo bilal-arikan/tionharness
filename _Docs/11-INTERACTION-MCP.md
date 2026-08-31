@@ -335,18 +335,41 @@ modu yalnız prompt'a düşer.
 
 **Oturum kapsamlı köprü araçlarında session id damgası (2026-08-31):** Köprü dispatch'i
 Interaction sunucusunun ham HTTP istek ctx'i üzerinde koşar; bu ctx'te **session id yoktur**.
-`run_subagent` gibi oturum kapsamlı araçlar runner'a geçmeden önce `run.sessionID`'yi ctx'e
-damgalamalıdır (`tools.WithCurrentSession` + `agent.WithSessionID`). Aksi halde subagent
+`run_subagent` gibi oturum kapsamlı araçlar runner'a geçmeden önce `run.sessionID`'yi ctx'te
+görmelidir (`tools.WithCurrentSession` + `agent.WithSessionID`). Aksi halde subagent
 persistence `subagent persistence requires a parent session` ile düşer — native araç döngüsü
 etkilenmediğinden hata yalnız claude-cli / codex-cli oturumlarında görünür. Oturumun kalıcı
 kaydı yoksa sessizce yutmak yerine açık `IsError` döndür.
 
-Aynı damga köprülü **`Bash`/`PowerShell`** (`callShell`) için de zorunludur: shell runner
+**Damga tek noktada (2026-08-31, merkezîleştirme):** damgayı her araç kendi içinde basmaz;
+`Call()` `beginCall`'dan hemen sonra `stampRunSession(callCtx, run)` ile **bir kez** basar
+(`internal/api/mcp_interaction.go`). Böylece sink tablosu, ask/confirm/permission/wake/spawn,
+shell, `run_subagent` ve bridge default dalı damgalı ctx alır; yeni bir köprü aracı damgayı
+yapısal olarak unutamaz. `stampRunSession`, `run.sessionID` boşken **no-op**'tur: boş durumun
+ne anlama geldiği hâlâ aracın kendi kararıdır (`callRunSubagent` reddeder, `callShell` uyarır).
+`Runtime.BridgeTools`'un kendi damgası (`internal/agent/runtime.go`) paket sınırının diğer
+tarafında olduğu için kalır; aynı değeri yazdığından çift damga idempotenttir.
+
+`callViaSink` damgayı `attach`'ten **sonra yeniden basar**: artifact/notify/focus_view/
+todo_write attach closure'ları bilinçli olarak taze bir `context.Background()`'a geçer
+(fire-and-forget — kullanıcı "Durdur" dediğinde yarım kalan yazım iptal edilmesin), bu da
+`Call()`'ın bastığı damgayı düşürürdü. Yeniden basma sayesinde kopukluk yalnız iptal
+edilebilirliği kapsar, kimliği değil.
+
+Aynı damga köprülü **`Bash`/`PowerShell`** (`callShell`) için de kritiktir: shell runner
 komutun çalışma dizinini ctx'teki session id'den çözer (`Runtime.effectiveWorkDir` →
 `Runtime.SessionWorkdir`), damgasız çağrı oturumun `WorkingDir`'i yerine **sessizce**
 workspace varsayılan dizininde koşardı. Shell, kalıcı kaydı olmayan bir run'da da meşru
 olduğundan burada `IsError` yerine uyarı loglanır ve çağrı sürer; `SessionWorkdir`
 fallback'leri de (oturum okunamadı / dizin yok / dizin değil) artık `Warn` ile loglanır.
+
+**Oturumsuz autonomous tur (2026-08-31):** `autonomousInteraction` boş `sessionID` ile
+çağrıldığında (doğrulanmış vaka: flow agent-node turları — `internal/agent/flow.go` ctx'e
+`WithSessionID` basmıyor) grants, artifact/notify/nav/session/todo sink'leri ve
+`schedule_wake` kurulmaz; `use_skill`/`skill_search`/shell/spawn/`run_subagent` ise kurulur
+(oturumsuz da meşru yetenekler). Bu dejenerasyon eskiden **tek log satırı bile üretmiyordu**;
+artık kurulum anında bir kez `Warn`'lanır (`Server.logWarn`, nil-logger toleranslı) ve oturum
+gerektiren her araç çağrı anında kendi açık `IsError` metnini döndürür.
 
 **`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
 _(Not: `core_memory_*` araçları 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI;

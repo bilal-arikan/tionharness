@@ -746,6 +746,12 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 	if !ok {
 		return interaction.CallResult{Text: st.missing, IsError: true}, nil
 	}
+	// attach may deliberately swap in a fresh background ctx (artifact/notify/
+	// focus_view/todo_write are fire-and-forget and must survive turn cancellation),
+	// which drops the session stamp Call() put on ctx. Re-apply it on whatever ctx
+	// attach chose, so the detachment costs cancellation only — not identity.
+	// Idempotent for sessionAttach, which keeps the call ctx.
+	cctx = stampRunSession(cctx, run)
 	text, err := st.newTool().Call(cctx, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
@@ -890,6 +896,21 @@ func toolNameDistance(a, b string) int {
 	return previous[len(b)]
 }
 
+// stampRunSession puts the run's session id on ctx under BOTH keys the bridged
+// handlers need: tools.WithCurrentSession (session-scoped built-ins) and
+// agent.WithSessionID (runtime paths: effectiveWorkDir, subagent parenting,
+// coordination). The Interaction HTTP server's request ctx carries neither, so
+// every bridged tool used to stamp it itself — three copies that a new tool could
+// silently forget. No-op on a run with no persisted session: what the empty case
+// means stays each tool's own decision (callRunSubagent rejects, callShell warns).
+func stampRunSession(ctx context.Context, run *chatRun) context.Context {
+	if run == nil || run.sessionID == "" {
+		return ctx
+	}
+	ctx = tools.WithCurrentSession(ctx, run.sessionID)
+	return agent.WithSessionID(ctx, run.sessionID)
+}
+
 // Call implements interaction.Backend.
 func (b *interactionBackend) Call(ctx context.Context, token, name string, args json.RawMessage) (interaction.CallResult, error) {
 	run, callCtx, endCall, err := b.runs.beginCall(ctx, token)
@@ -897,7 +918,9 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return interaction.CallResult{}, err
 	}
 	defer endCall()
-	ctx = callCtx
+	// Single stamping point for every bridged tool: beginCall only makes the ctx
+	// cancellable, so without this the session id is missing on every branch below.
+	ctx = stampRunSession(callCtx, run)
 	bare := bareToolName(name)
 	if text := b.toolCallError(token, name, run); text != "" {
 		return interaction.CallResult{Text: text, IsError: true}, nil

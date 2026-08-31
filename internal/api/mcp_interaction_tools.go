@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -385,17 +384,13 @@ func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, toolNa
 		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
 	}
 	// The runner resolves the command's working directory from the session id on
-	// the context (Runtime.effectiveWorkDir); the Interaction server's request ctx
-	// carries none, so an unstamped call silently ran in the workspace default dir
-	// instead of the session's WorkingDir. Stamp it, exactly like callRunSubagent.
-	// Unlike a subagent, a shell call is still legitimate on a run with no
-	// persisted session — but the fallback directory must not be silent.
+	// the context (Runtime.effectiveWorkDir), which Call() stamps centrally
+	// (stampRunSession). Unlike a subagent, a shell call is still legitimate on a
+	// run with no persisted session — it falls back to the workspace default dir —
+	// but that fallback must not be silent.
 	if run.sessionID == "" {
 		b.logWarn("bridged shell call has no session id; command runs in the workspace default dir",
 			"tool", toolName, "workspace", run.workspaceID)
-	} else {
-		ctx = tools.WithCurrentSession(ctx, run.sessionID)
-		ctx = agent.WithSessionID(ctx, run.sessionID)
 	}
 	out, err := runFn(ctx, toolName, args)
 	if err != nil {
@@ -421,16 +416,14 @@ func (b *interactionBackend) callRunSubagent(ctx context.Context, run *chatRun, 
 	if runFn == nil {
 		return interaction.CallResult{Text: "run_subagent is not available for this turn (delegation disabled)", IsError: true}, nil
 	}
-	// The runner executes on the Interaction server's request ctx, which carries no
-	// session id — but a subagent is persisted as a CHILD of the calling session, so
-	// without it every bridged call died with "subagent persistence requires a parent
-	// session". Stamp the run's session id, exactly like the bridged built-in path
-	// (Runtime.BridgeTools) does for session-scoped tools.
+	// A subagent is persisted as a CHILD of the calling session; the id itself is
+	// stamped centrally in Call() (stampRunSession). Reject the empty case HERE,
+	// at the call boundary: letting it through only reaches runAgent's
+	// "subagent persistence requires a parent session", which fires after the
+	// delegation depth/budget guards and names neither the turn nor a fix.
 	if run.sessionID == "" {
 		return interaction.CallResult{Text: "run_subagent needs a persisted session to attach the subagent to; this turn has none", IsError: true}, nil
 	}
-	ctx = tools.WithCurrentSession(ctx, run.sessionID)
-	ctx = agent.WithSessionID(ctx, run.sessionID)
 	out, err := runFn(ctx, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil

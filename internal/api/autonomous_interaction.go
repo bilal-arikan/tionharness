@@ -50,6 +50,18 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// boundary DOES exist and can carry it — was reported "unsupported".
 		run.setSteerable(steerableForTurn(ag.Provider, ag.PermissionMode))
 
+		// A turn with no session id is a degraded turn: every session-scoped sink
+		// below is skipped, so artifacts/notify/focus_view/update_session/
+		// schedule_wake/run_subagent answer with their own explicit "not available
+		// for this turn" error, todo_write publishes without persisting, and
+		// shell/spawn fall back to the workspace default dir. That degradation used
+		// to be completely silent on the operator side — one warning here names it
+		// once, at setup, instead of leaving it to be inferred from a missing file.
+		if sessionID == "" {
+			s.logWarn("autonomous interaction has no session id; session-scoped tools are unavailable and shell/spawn inherit the workspace default dir",
+				"agent", ag.ID, "workspace", rt.WorkspaceID())
+		}
+
 		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact
 		// / update_artifact work on autonomous CLI turns too (otherwise the bridge
 		// reports "artifacts are not available for this turn"). Mirrors the chat path's
@@ -155,5 +167,13 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		s.runs.bindActive(tok, run)
 		ctx = tools.WithInteractionEndpoint(ctx, url, tok, coreNames, extNames)
 		return ctx, func() { cancel(); s.runs.unregister(runID) }
+	}
+}
+
+// logWarn logs at warn level, tolerating the nil logger a bare test Server has
+// (sibling of logError).
+func (s *Server) logWarn(msg string, args ...any) {
+	if s.logger != nil {
+		s.logger.Warn(msg, args...)
 	}
 }
