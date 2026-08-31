@@ -88,8 +88,8 @@ func TestActivityHeartbeatKeepsAlive(t *testing.T) {
 }
 
 // TestActivityHeartbeatNoopWithoutWatchdog verifies the heartbeat is a nil-safe
-// no-op on a ctx that carries no watchdog (an interactive turn, or the idle-disabled
-// path), so the hot chat path pays nothing and stop() never blocks or panics.
+// no-op on a ctx that carries no watchdog (the bare WithActivityTimeout, or the
+// idle-disabled path), so such a turn pays nothing and stop() never blocks or panics.
 func TestActivityHeartbeatNoopWithoutWatchdog(t *testing.T) {
 	startActivityHeartbeat(context.Background())() // no watchdog at all
 	ctx, cancel := withActivityTimeout(context.Background(), time.Second, 0)

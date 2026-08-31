@@ -328,7 +328,7 @@ type Settings struct {
 	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`        // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
-	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled)
+	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 3); reclaims a turn whose provider stream stalled
 	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
 	// codex subprocess that has started streaming and then emits NOTHING for this
 	// long is killed (whole process tree) and reported as a wedge instead of an
@@ -527,7 +527,7 @@ func Default() Settings {
 		SpawnTimeoutMin:        20,
 		SpawnIdleTimeoutMin:    5,
 		ChatTurnTimeoutMin:     120,
-		ChatTurnIdleTimeoutMin: 20,
+		ChatTurnIdleTimeoutMin: 3,
 		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
 		// that prints nothing while it works), yet comfortably under the 3-minute
 		// chat/turn idle watchdogs — so a wedged codex subprocess is diagnosed and

@@ -285,7 +285,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// WithSources is what keeps the agent's projections identical to the ones the
 	// Explorer map renders: without it the skill / insight / logs nodes would
 	// report their source as unavailable to the agent while the UI showed them.
-	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs, DefaultAgentID: r.DefaultAgentID()}
+	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs}
 	builtins = append(builtins, tools.NewGetViewTool(r.db).WithSources(r.wsName, viewSources))
 
 	// expand: the structural drill-down companion to get_view (_Docs/68). Lists a
