@@ -126,6 +126,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"identity":{"type":"string","description":"Short identity/role description"},
 				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). If omitted, inherits the creating agent's provider (together with its model), falling back to claude-cli."},
 				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
+				"thinkingLevel":{"type":"string","enum":["off","low","medium","high","xhigh","max"],"description":"Extended-reasoning tier. Must be supported by the chosen model. Omit to get the tier the provider historically behaved as: high for the CLI providers, off for everything else."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
 				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionHarness skill set; unknown slugs are skipped."},
@@ -145,14 +146,17 @@ func (CreateAgentTool) Def() providers.ToolDef {
 
 func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name     string   `json:"name"`
-		Soul     string   `json:"soul"`
-		Identity string   `json:"identity"`
-		Provider string   `json:"provider"`
-		Model    string   `json:"model"`
-		Avatar   string   `json:"avatar"`
-		Color    string   `json:"color"`
-		Skills   []string `json:"skills"`
+		Name     string `json:"name"`
+		Soul     string `json:"soul"`
+		Identity string `json:"identity"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		// ThinkingLevel is optional on the wire but never stored empty — see the
+		// resolution below.
+		ThinkingLevel string   `json:"thinkingLevel"`
+		Avatar        string   `json:"avatar"`
+		Color         string   `json:"color"`
+		Skills        []string `json:"skills"`
 		// CoordinatorPrompt is injected only while the agent coordinates.
 		CoordinatorPrompt string `json:"coordinatorPrompt"`
 	}
@@ -210,6 +214,20 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	in.Provider = providerKind
 
+	// The empty string is not a storable ThinkingLevel (db.Agent.ThinkingLevel).
+	// A caller-supplied tier is validated against the resolved model, exactly as
+	// the HTTP create path does, so a bad value fails loudly here instead of at
+	// the first turn. An omitted tier is resolved with the same rule the boot
+	// migration uses (db.LegacyThinkingLevelFor: high on the CLI providers, off
+	// elsewhere) — named at this call site rather than left to db.CreateAgent's
+	// safety net, so the created agent's tier is readable from this code.
+	in.ThinkingLevel = strings.TrimSpace(in.ThinkingLevel)
+	if in.ThinkingLevel == "" {
+		in.ThinkingLevel = db.LegacyThinkingLevelFor(providerKind)
+	} else if err := providers.ValidateThinkingLevel(in.Model, in.ThinkingLevel); err != nil {
+		return "", err
+	}
+
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
 	// default TionHarness set. Unknown caller slugs are dropped and reported.
 	skills, skipped := t.resolveSkills(in.Skills)
@@ -221,6 +239,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Provider:           in.Provider,
 		ProviderInstanceID: providerInstanceID,
 		Model:              in.Model,
+		ThinkingLevel:      in.ThinkingLevel,
 		Avatar:             in.Avatar,
 		Color:              in.Color,
 		Skills:             skills,

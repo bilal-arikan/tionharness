@@ -1287,6 +1287,20 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   (`internal/providers/thinking.go`). Kapı üç yerde: `agents.go` create/update → 400,
   `chat_stream.go` tur-bazlı override (boş = "override yok" olarak kalır, dolu değer doğrulanır),
   ve `db.CreateAgent` — API dışı yollar (pack install, template, `create_agent` aracı) için.
+  **API dışı yollar seviyeyi açıkça taşır (2026-08-31):** `db.CreateAgent`'taki emniyet ağı
+  **son savunma** olarak kalır ama artık ona düşülmez. `internal/api/agent_thinking.go`'daki
+  `explicitThinkingLevel(level, providerKind)` yardımcısı üç çağrı yerinde kullanılır —
+  pack install (`market_install.go`), workspace-template seeding (`templates.go`) ve
+  template publish (`market_publish.go`) — böylece bir pack/şablonun hangi seviyeyle
+  kurulduğu çağrı yerinden okunur ve **boş seviyeli şablon yayınlanmaz**. Kural
+  `db.LegacyThinkingLevelFor`'un aynısıdır (yeniden yazılmaz, çağrılır); iki katmanın
+  ayrışmadığını `TestExplicitThinkingLevelMatchesStoreFallback` doğrular.
+  `create_agent` self-management aracı ise opsiyonel bir `thinkingLevel` parametresi
+  kabul eder: verilirse `providers.ValidateThinkingLevel(model, level)` ile doğrulanır
+  (geçersiz değer hata döner, sessizce yutulmaz), verilmezse aynı legacy kuralla açıkça
+  çözülür (`internal/tools/builtin_agentmgmt.go`). Test:
+  `TestExplicitThinkingLevel`, `TestCreateAgentToolCarriesThinkingLevel`,
+  `TestCreateAgentToolRejectsUnknownThinkingLevel`.
   **Model-only patch de doğrulanır (2026-08-31):** `handleUpdateAgent` kapısı artık
   `req.ThinkingLevel != nil || req.Model != nil` ile açılır ve etkin çifti (patch'te
   olanı, yoksa depodaki değeri) doğrular. Yalnız model değiştiren bir patch de ajanın
@@ -1299,10 +1313,19 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   eski davranışı **birebir korur** — `claude-cli`/`codex-cli`/boş provider → `high`,
   diğerleri → `off`. Idempotent (ikinci koşu 0 satır). Frontend "Kapalı" pill'inin değeri
   `''` → `'off'` oldu; `createAgent` alanı zorunlu gönderir.
-  *Bilinen yan etki:* always-on sınıfı (fable/mythos) `ThinkingTiersFor`'da `off` içermez,
-  migration ise native sağlayıcıyı `off` yapar — böyle bir legacy ajan **ayar formundan
-  yeniden kaydedilirken** bir tiyer seçmek zorunda kalır (400). Çalışma zamanı etkilenmez;
-  saklı seviye tur başında yeniden doğrulanmaz.
+  **Sunulan tiyer ≠ saklanabilir tiyer (TSK604, 2026-08-31):** always-on sınıfı
+  (fable/mythos) `ThinkingTiersFor`'da `off` içermez, migration ise native sağlayıcıyı
+  `off` yapar (`LegacyThinkingLevelFor` provider'a bakar, modele değil) — böyle bir
+  legacy ajan ayar formundan yeniden kaydedilirken 400 alıyordu. Çözüm iki kaygıyı
+  ayırır: `ThinkingTiersFor(model)` = **UI'ın sunduğu** set (always-on'da `off` hâlâ
+  pasif — kullanıcıya "düşünmeyi kapatabilirsin" denmez), `StorableThinkingLevels(model)`
+  = **yasal saklı** set ve always-on'da `off`'u içerir. Sebep: o sınıfta `off` zaten
+  "thinking alanını atla" demektir (istenen wire biçimi), yani zararsız ve temsil
+  edilebilir bir durum. `ValidateThinkingLevel` artık saklanabilir sete bakar.
+  Migration bilinçli olarak model-aware yapılmadı: her açık tiyer `output_config.effort`
+  gönderir, bu çalışma zamanı davranışını değiştirirdi. Form saklı seviyeyi zaten
+  seçili+aktif render eder (`o.value === thinkingLevel || tiers.includes(o.value)`),
+  bu yüzden frontend değişmedi. Test: `TestStorableThinkingLevelsKeepsPickerSetIntact`.
   - **Native streaming** (`anthropic.Stream`): SSE `content_block_delta` artık `text_delta`
     **ve** `thinking_delta`'yı ayrıştırır. Tipli `providers.StreamDelta{Kind: text|thinking}`
     ile yayılır → `recordedStream` thinking parçalarını sabit `liveThinkingID` ile canlı

@@ -192,15 +192,18 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			continue
 		}
 		created, err := wsNew.DB.CreateAgent(ctx, db.Agent{
-			Name:                ta.Name,
-			Soul:                ta.Soul,
-			Identity:            ta.Identity,
-			Avatar:              ta.Avatar,
-			Color:               ta.Color,
-			Provider:            providerKind,
-			ProviderInstanceID:  providerInstanceID,
-			Model:               am,
-			ThinkingLevel:       ta.ThinkingLevel,
+			Name:               ta.Name,
+			Soul:               ta.Soul,
+			Identity:           ta.Identity,
+			Avatar:             ta.Avatar,
+			Color:              ta.Color,
+			Provider:           providerKind,
+			ProviderInstanceID: providerInstanceID,
+			Model:              am,
+			// Same as pack install: a template agent predating thinkingLevel
+			// carries none, so the seeder names the tier explicitly instead of
+			// leaving it to db.CreateAgent.
+			ThinkingLevel:       explicitThinkingLevel(ta.ThinkingLevel, providerKind),
 			NativeWebSearch:     ta.NativeWebSearch,
 			PermissionMode:      ta.PermissionMode,
 			MCPEnabled:          mcpEnabled,

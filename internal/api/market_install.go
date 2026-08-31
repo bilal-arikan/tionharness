@@ -282,14 +282,17 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		Provider:           providerKind,
 		ProviderInstanceID: providerInstanceID,
 		Model:              ap.Model,
-		ThinkingLevel:      ap.ThinkingLevel,
-		NativeWebSearch:    ap.NativeWebSearch,
-		PermissionMode:     ap.PermissionMode,
-		Avatar:             ap.Avatar,
-		Color:              ap.Color,
-		MCPEnabled:         mcpEnabled,
-		AllowedTools:       ap.AllowedTools,
-		Skills:             known,
+		// A pack authored before thinkingLevel existed carries none; resolve it
+		// here (explicitThinkingLevel) so the installed agent's tier is decided
+		// by the install path, not silently by db.CreateAgent's fallback.
+		ThinkingLevel:   explicitThinkingLevel(ap.ThinkingLevel, providerKind),
+		NativeWebSearch: ap.NativeWebSearch,
+		PermissionMode:  ap.PermissionMode,
+		Avatar:          ap.Avatar,
+		Color:           ap.Color,
+		MCPEnabled:      mcpEnabled,
+		AllowedTools:    ap.AllowedTools,
+		Skills:          known,
 		// A published coordinator installs as a coordinator. The recipe slug is only
 		// kept when it resolves here — an agent pack carries no skills of its own, so
 		// a recipe it references may simply not exist in this workspace.

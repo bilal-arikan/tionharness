@@ -35,12 +35,29 @@ func IsValidThinkingLevel(level string) bool {
 	return false
 }
 
+// StorableThinkingLevels returns the tiers that may legally be STORED for a
+// model, which is not the same question as ThinkingTiersFor (what the picker
+// offers as an effective choice). The two differ on the always-on class: there
+// "off" does not disable anything — it means "omit the thinking field", which is
+// exactly what the always-on wire format requires — so it is a harmless, fully
+// representable stored state even though the picker keeps it greyed out to avoid
+// promising the user that reasoning can be turned off. Legacy rows migrated from
+// a native provider carry "off" (db.LegacyThinkingLevelFor is provider-based, not
+// model-based), and rejecting it would make those agents unsaveable.
+func StorableThinkingLevels(model string) []string {
+	tiers := ThinkingTiersFor(model)
+	if ThinkingClass(model) != "always-on" {
+		return tiers
+	}
+	return append([]string{"off"}, tiers...)
+}
+
 // ValidateThinkingLevel checks a requested reasoning level twice: that the token
-// itself is known, and that it is meaningful on the given model per
-// ThinkingTiersFor. A tier outside the model's set would be a silent no-op (or,
-// on the always-on class, a dropped field), so it is reported as an error rather
-// than accepted and ignored. Bare family aliases and an empty model id land in
-// the "alias" class, which offers the full ramp — nothing is rejected there.
+// itself is known, and that it is a legal stored value on the given model per
+// StorableThinkingLevels. A tier outside that set would be a silent no-op, so it
+// is reported as an error rather than accepted and ignored. Bare family aliases
+// and an empty model id land in the "alias" class, which offers the full ramp —
+// nothing is rejected there.
 func ValidateThinkingLevel(model, level string) error {
 	if level == "" {
 		return fmt.Errorf("thinkingLevel is required (one of: %s)", strings.Join(validThinkingLevels, ", "))
@@ -48,7 +65,7 @@ func ValidateThinkingLevel(model, level string) error {
 	if !IsValidThinkingLevel(level) {
 		return fmt.Errorf("unknown thinkingLevel %q (one of: %s)", level, strings.Join(validThinkingLevels, ", "))
 	}
-	tiers := ThinkingTiersFor(model)
+	tiers := StorableThinkingLevels(model)
 	for _, t := range tiers {
 		if t == level {
 			return nil

@@ -179,7 +179,10 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		wp.Agents = append(wp.Agents, market.WorkspaceTemplateAgent{
 			Key: key, Name: a.Name, Soul: a.Soul, Identity: a.Identity,
 			Provider: a.Provider, Model: a.Model,
-			ThinkingLevel: a.ThinkingLevel, PermissionMode: a.PermissionMode,
+			// An agent row that predates the boot backfill can still hold an empty
+			// level; publish the resolved tier so the template never ships a blank
+			// field that the importer would have to guess at.
+			ThinkingLevel: explicitThinkingLevel(a.ThinkingLevel, a.Provider), PermissionMode: a.PermissionMode,
 			NativeWebSearch: a.NativeWebSearch,
 			Avatar:          a.Avatar, Color: a.Color,
 			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,

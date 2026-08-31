@@ -34,7 +34,11 @@ func TestValidateThinkingLevel(t *testing.T) {
 		{"legacy model still takes high", "claude-opus-4-6", "high", false},
 		{"non-thinking model takes off only", "deepseek-v4-flash", "off", false},
 		{"non-thinking model rejects high", "deepseek-v4-flash", "high", true},
-		{"always-on model rejects off", "claude-fable-5", "off", true},
+		// "off" on the always-on class means "omit the thinking field", which is
+		// what that wire format wants anyway, so it is a legal stored value even
+		// though ThinkingTiersFor keeps it out of the offered picker set.
+		{"always-on model stores off", "claude-fable-5", "off", false},
+		{"always-on model still rejects an unknown token", "claude-fable-5", "extreme", true},
 		{"always-on model takes a tier", "claude-fable-5", "medium", false},
 		{"bare alias accepts anything valid", "opus", "max", false},
 		{"empty model id is an alias too", "", "xhigh", false},
@@ -61,5 +65,26 @@ func TestValidateThinkingLevelErrorNamesTheAlternatives(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "supported: off") {
 		t.Fatalf("error should list the supported tiers, got: %s", got)
+	}
+}
+
+// TestStorableThinkingLevelsKeepsPickerSetIntact: widening what may be STORED
+// must not widen what the picker offers — the always-on class still must not
+// advertise "off" as a way to stop the model reasoning.
+func TestStorableThinkingLevelsKeepsPickerSetIntact(t *testing.T) {
+	for _, tier := range ThinkingTiersFor("claude-fable-5") {
+		if tier == "off" {
+			t.Fatal(`ThinkingTiersFor("claude-fable-5") must not offer "off"`)
+		}
+	}
+	if got := StorableThinkingLevels("claude-fable-5"); got[0] != "off" {
+		t.Fatalf(`StorableThinkingLevels("claude-fable-5") should start with "off", got %v`, got)
+	}
+	// Every other class stores exactly what it offers.
+	for _, model := range []string{"claude-opus-4-8", "claude-opus-4-6", "deepseek-v4-flash", "opus", ""} {
+		offered, storable := ThinkingTiersFor(model), StorableThinkingLevels(model)
+		if strings.Join(offered, ",") != strings.Join(storable, ",") {
+			t.Fatalf("model %q: offered %v != storable %v", model, offered, storable)
+		}
 	}
 }
