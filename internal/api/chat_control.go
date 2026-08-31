@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -41,6 +42,15 @@ type chatRun struct {
 	// can show how long the background process has been running. Set once at
 	// register (read-only after) so no lock is needed to read it.
 	startedAt time.Time
+
+	// Delete-only Interaction MCP lifecycle gate. Calls may outlive provider
+	// finalization, so deletion closes this gate and drains admitted calls.
+	callMu         sync.Mutex
+	closing        bool
+	activeCalls    int
+	callsDrained   chan struct{}
+	teardownCtx    context.Context
+	teardownCancel context.CancelFunc
 
 	// pendingSteer holds a mid-turn steer message for a claude-cli run. Native
 	// providers drain the steer CHANNEL between tool-loop iterations (drainSteer);
@@ -506,13 +516,16 @@ type chatRuns struct {
 	// resolve a stable (reused) token to the single in-flight turn. Only one turn per
 	// (session,agent) runs at a time (turns serialise), so this is unambiguous.
 	active map[string]*chatRun
+	// Unregistered runs remain reachable while admitted bridge calls drain.
+	draining map[*chatRun]struct{}
 }
 
 func newChatRuns() *chatRuns {
 	return &chatRuns{
-		runs:    make(map[string]*chatRun),
-		secrets: make(map[string]string),
-		active:  make(map[string]*chatRun),
+		runs:     make(map[string]*chatRun),
+		secrets:  make(map[string]string),
+		active:   make(map[string]*chatRun),
+		draining: make(map[*chatRun]struct{}),
 	}
 }
 
@@ -549,14 +562,17 @@ func (c *chatRuns) bindActive(token string, run *chatRun) {
 // workspaceID scopes it so activeSessionIDs can report per-workspace (empty ""
 // means unscoped — only test/legacy callers pass that).
 func (c *chatRuns) register(id, sessionID, workspaceID string, cancel context.CancelFunc) *chatRun {
+	teardownCtx, teardownCancel := context.WithCancel(context.Background())
 	run := &chatRun{
-		cancel:      cancel,
-		steer:       make(chan string, 16),
-		done:        make(chan struct{}),
-		token:       uuid.NewString(),
-		sessionID:   sessionID,
-		workspaceID: workspaceID,
-		startedAt:   time.Now(),
+		cancel:         cancel,
+		steer:          make(chan string, 16),
+		done:           make(chan struct{}),
+		token:          uuid.NewString(),
+		sessionID:      sessionID,
+		workspaceID:    workspaceID,
+		startedAt:      time.Now(),
+		teardownCtx:    teardownCtx,
+		teardownCancel: teardownCancel,
 	}
 	c.mu.Lock()
 	c.runs[id] = run
@@ -662,10 +678,147 @@ func (c *chatRuns) unregister(id string) {
 				delete(c.active, tok)
 			}
 		}
+		run.callMu.Lock()
+		if run.activeCalls > 0 {
+			c.draining[run] = struct{}{}
+		} else {
+			// No admitted call is left to cancel, so the teardown context has no
+			// further use. Releasing it here matters because it is rooted in
+			// context.Background(): without this the cancel func of every ordinary
+			// (never-deleted) turn stays reachable for the process lifetime.
+			run.releaseTeardownLocked()
+		}
+		run.callMu.Unlock()
 	}
 	c.mu.Unlock()
 	if run != nil {
 		close(run.done)
+	}
+}
+
+// releaseTeardownLocked cancels the run's teardown context once no admitted call
+// can still observe it. Idempotent; callers hold run.callMu.
+func (run *chatRun) releaseTeardownLocked() {
+	if run.teardownCancel == nil {
+		return
+	}
+	run.teardownCancel()
+	run.teardownCancel = nil
+}
+
+// beginCall resolves and admits a call while holding registry then lifecycle
+// locks, matching unregister/endCall and preventing Add/Wait-style races.
+func (c *chatRuns) beginCall(ctx context.Context, token string) (*chatRun, context.Context, func(), error) {
+	c.mu.Lock()
+	run := c.byTokenLocked(token)
+	if run == nil {
+		c.mu.Unlock()
+		return nil, nil, nil, fmt.Errorf("no live turn for token")
+	}
+	run.callMu.Lock()
+	if run.closing {
+		run.callMu.Unlock()
+		c.mu.Unlock()
+		return nil, nil, nil, fmt.Errorf("session closing")
+	}
+	run.activeCalls++
+	teardownCtx := run.teardownCtx
+	run.callMu.Unlock()
+	c.mu.Unlock()
+
+	callCtx, cancel := context.WithCancel(ctx)
+	stopTeardown := context.AfterFunc(teardownCtx, cancel)
+	var once sync.Once
+	end := func() {
+		once.Do(func() {
+			stopTeardown()
+			cancel()
+			c.endCall(run)
+		})
+	}
+	return run, callCtx, end, nil
+}
+
+func (c *chatRuns) endCall(run *chatRun) {
+	c.mu.Lock()
+	run.callMu.Lock()
+	run.activeCalls--
+	if run.activeCalls < 0 {
+		panic("chatRun active call count became negative")
+	}
+	if run.activeCalls == 0 {
+		if run.callsDrained != nil {
+			close(run.callsDrained)
+			run.callsDrained = nil
+		}
+		// Only a run already dropped from c.runs is in c.draining, so its last call
+		// ending means nothing can admit another one: release the teardown context.
+		if _, wasDraining := c.draining[run]; wasDraining {
+			run.releaseTeardownLocked()
+		}
+		delete(c.draining, run)
+	}
+	run.callMu.Unlock()
+	c.mu.Unlock()
+}
+
+func (c *chatRuns) closeSessionCalls(wsID, sessionID string) []*chatRun {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	seen := map[*chatRun]bool{}
+	var out []*chatRun
+	add := func(run *chatRun) {
+		if run == nil || seen[run] || run.workspaceID != wsID || run.sessionID != sessionID {
+			return
+		}
+		seen[run] = true
+		run.callMu.Lock()
+		run.closing = true
+		run.callMu.Unlock()
+		out = append(out, run)
+	}
+	for _, run := range c.runs {
+		add(run)
+	}
+	for run := range c.draining {
+		add(run)
+	}
+	return out
+}
+
+func (c *chatRuns) cancelSessionCalls(runs []*chatRun) []<-chan struct{} {
+	waits := make([]<-chan struct{}, 0, len(runs))
+	for _, run := range runs {
+		run.callMu.Lock()
+		// nil once released: the run already finished with no call outstanding, so
+		// there is nothing left to cancel and no call can be admitted (closing).
+		if run.teardownCancel != nil {
+			run.teardownCancel()
+		}
+		if run.activeCalls > 0 {
+			if run.callsDrained == nil {
+				run.callsDrained = make(chan struct{})
+			}
+			waits = append(waits, run.callsDrained)
+		}
+		run.callMu.Unlock()
+	}
+	return waits
+}
+
+func (c *chatRuns) reopenSessionCalls(runs []*chatRun) {
+	for _, run := range runs {
+		run.callMu.Lock()
+		if run.closing {
+			// Rearm only a run that is still registered (teardownCancel non-nil means
+			// it was never released). A released run has already finished and left the
+			// registry, so it can admit no further calls and needs no live context.
+			if run.teardownCancel != nil && run.teardownCtx.Err() != nil {
+				run.teardownCtx, run.teardownCancel = context.WithCancel(context.Background())
+			}
+			run.closing = false
+		}
+		run.callMu.Unlock()
 	}
 }
 
@@ -686,6 +839,10 @@ func (c *chatRuns) byToken(token string) *chatRun {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.byTokenLocked(token)
+}
+
+func (c *chatRuns) byTokenLocked(token string) *chatRun {
 	if run := c.active[token]; run != nil {
 		return run
 	}

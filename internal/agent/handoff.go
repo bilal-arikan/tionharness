@@ -129,7 +129,12 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("write handoff artifact: %w", err)
 	}
-	_ = r.db.SetSessionHandoffArtifact(ctx, session.ID, ref.ID)
+	// The binding is what makes the artifact discoverable as THE handoff of this
+	// session (UI lookup + continuation recovery). Losing it silently would leave a
+	// handoff that exists but cannot be found, so a failure fails the reset.
+	if err := r.db.SetSessionHandoffArtifact(ctx, session.ID, ref.ID); err != nil {
+		return HandoffResult{}, fmt.Errorf("bind handoff artifact %s to session %s: %w", ref.ID, session.ID, err)
+	}
 
 	// Optionally also write the handoff to a file on disk, mirroring the Anthropic
 	// "progress file the next session reads" pattern. Best-effort: a file error
