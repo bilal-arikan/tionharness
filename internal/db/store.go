@@ -401,7 +401,7 @@ func (d *DB) writeSessionHeaderLocked(s Session) error {
 
 // writeSessionMessagesLocked rewrites the whole transcript file. O(messages) —
 // reserved for callers that changed message CONTENT (edit, delete, rewind).
-// Adding a message must go through appendMessageLocked, which stays O(1).
+// Adding a message must go through appendMessageLine, which stays O(1).
 func (d *DB) writeSessionMessagesLocked(sessionID string) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

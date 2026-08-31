@@ -235,11 +235,14 @@ func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string)
 }
 
 // sessionHandleList orders sessions most-recently-active first and renders each
-// as a session handle.
+// as a session handle. The input is copied before sorting: the caller's slice may
+// be the structural cache's memoised session snapshot, which every other node in
+// the same walk still reads.
 func sessionHandleList(sessions []db.Session) []Handle {
-	sort.Slice(sessions, func(i, j int) bool { return sessions[i].UpdatedAt > sessions[j].UpdatedAt })
-	hs := make([]Handle, 0, len(sessions))
-	for _, s := range sessions {
+	sorted := append([]db.Session(nil), sessions...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	hs := make([]Handle, 0, len(sorted))
+	for _, s := range sorted {
 		hs = append(hs, Handle{
 			Label: "session:" + s.ID + " " + clip(orDash(s.Title), 40),
 			Ref:   Ref{Kind: KindSession, ID: s.ID},

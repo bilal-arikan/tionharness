@@ -15,9 +15,16 @@ import "sync"
 // antivirus filter driver makes that write far from free.
 //
 // LOCK ORDER, mandatory: transcript lock FIRST, d.mu SECOND. Nothing may acquire a
-// transcript lock while holding d.mu — that inversion deadlocks against every
-// transcript writer. In practice the transcript lock is only ever taken at the top
-// of an exported method, before d.mu is touched at all.
+// PER-SESSION transcript mutex (the *sync.Mutex handed out by transcriptLock) while
+// holding d.mu — that inversion deadlocks against every transcript writer. In
+// practice that mutex is only ever taken at the top of an exported method, before
+// d.mu is touched at all.
+//
+// transcriptMusMu, the mutex guarding the id→mutex MAP, is a separate and weaker
+// thing: it is a leaf lock. transcriptLock and dropTranscriptLock take it, do a map
+// operation, and release it via defer before returning; neither acquires d.mu (nor
+// any per-session transcript mutex) underneath it. Taking transcriptMusMu while
+// holding d.mu is therefore safe, and deleteSession does exactly that.
 //
 // Boot is exempt: load() runs single-threaded before the DB is published, so
 // recoverInflight and the layout migrations write transcripts directly.
@@ -44,6 +51,15 @@ func (d *DB) transcriptLock(sessionID string) *sync.Mutex {
 // valid one; it will simply find the session gone and return ErrNotFound. Session
 // ids are never reused, so no later session can be handed a different mutex for
 // the same id while an old holder is still running.
+//
+// There is no refcount, and the reason it is still safe is positional: the only
+// caller is deleteSession, which calls this inside the SAME d.mu critical section
+// that removed the session from d.sessions, and only AFTER that delete. A caller
+// arriving afterwards gets a fresh, different mutex from transcriptLock — but its
+// existence check under d.mu (AddMessage) no longer finds the session, so it
+// returns ErrNotFound and never writes. Moving this call outside that d.mu region
+// silently breaks the invariant: a writer could then acquire the old mutex, still
+// see the session in d.sessions, and append to a transcript being deleted.
 func (d *DB) dropTranscriptLock(sessionID string) {
 	d.transcriptMusMu.Lock()
 	defer d.transcriptMusMu.Unlock()

@@ -113,8 +113,13 @@ func TestAgentSessionChildrenMatchesStoreFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store filter: %v", err)
 	}
-	// The equivalence below is only meaningful if the fixture reaches the pin and
-	// tie-break branches of the comparator, so assert on the store order directly.
+	// These two guards keep the FIXTURE honest — they assert that countingStore's
+	// comparator still reaches its pin and tie-break branches, so the fake keeps
+	// mirroring db.DB.ListSessions. Only the tie-break carries into the equivalence
+	// below: both sides feed sessionHandleList, which re-sorts on UpdatedAt alone,
+	// so two sessions sharing an UpdatedAt must arrive in the same relative order on
+	// both paths. The pin does NOT survive that re-sort — this test says nothing
+	// about pinned sessions being ordered first in the projected handles.
 	if filtered[0].ID != "P1" {
 		t.Fatalf("fixture no longer exercises the pin branch: first session = %q", filtered[0].ID)
 	}
