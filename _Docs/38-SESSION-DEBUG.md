@@ -290,6 +290,109 @@ ana masaüstü-bildirim toggle'ı. Dedup **per (session, code)** in-memory
 (`Runtime.anomalyNotified`) → kalıcı anomali süreç başına bir kez bildirir, her
 tur değil. Test: `agent/anomaly_notify_test.go`.
 
+## Compaction raporu vs bağlam ölçeri neden farklı sayı gösterir (2026-08-31)
+
+Debug günlüğündeki `compaction` olayı (`X→Y token`) ile "Oturum bilgisi"
+panelindeki bağlam ölçeri **aynı sayıyı göstermez ve göstermesi de beklenmez**.
+İkisi farklı anları ve farklı bileşen kümelerini ölçer.
+
+**Kapı nerede.** Rolling fold `internal/conversation/manager.go` içindeki
+`(*Manager).Prepare` kapısında tetiklenir. Koşul:
+
+```go
+if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
+```
+
+**İki terim, iki farklı içerik.**
+
+| Terim | Ne sayar | Nerede |
+|---|---|---|
+| `EstimateTokens(summary, pending)` | yalnız özet metni + `Message.Text` + mesaj başına sabit çerçeve (`msgOverhead`) | `internal/conversation/tokens.go` |
+| `overhead` | mesaj olmayan, her tur gönderilen sabit yük | `(*Server).contextOverheadTokens`, `internal/api/session_info.go` |
+
+`EstimateTokens` **`Steps`'i saymaz**. Bu yüzden büyük rakamların çoğu "sohbet
+metni" değil, `overhead` içindeki trace payıdır. `overhead` bileşenleri: statik
+system prefix, skill kataloğu, talep-üzerine (lazy) araç kataloğu, gönderilen
+(eager) araç şemaları, son araç etkinliği özeti (recent tool recap), artifact
+bloğu ve **warm CLI thread'in hâlâ tuttuğu persisted `Steps` trace'i**
+(`EstimatePersistedStepTokens(history[stepBase:])`).
+
+**`stepBase` nedir.** `warmCLIStepBaseline` (`internal/api/cli_compaction.go`)
+hesaplar: `max(SummaryMsgCount, CLICompactMsgCount)` — yani TionHarness'in kendi
+özet sınırı ile CLI'ın kendi compaction sınırının **geç olanı**. Warm thread hiç
+yoksa `-1` (soğuk tur trace tutmaz, hiçbir şey sayılmaz); sınır transkriptin
+sonunu aşarsa `0` (muhafazakâr: tüm pending pencere sayılır). Bu değer
+`conversation.WithContextOverheadStepBase` ile ctx'e damgalanır; çağrı yerleri
+`chat_stream.go`, `chat_btw.go`, `wake_turn.go`.
+
+**Tarihsel hata (düzeltildi).** Fold sonrası `AfterTokens`, fold **öncesi**
+ölçülmüş `overhead` ile hesaplanıyordu. Katlanan mesajlar böylece iki kez
+sayılıyordu: bir kez yeni özet metni olarak, bir kez de artık modele hiç
+gönderilmeyen ölü trace olarak. Somut vaka: journal `75989→67182` derken bağlam
+ölçeri ~30k gösteriyordu.
+
+**Düzeltme.** `foldedStepOverhead` (`manager.go`) overhead'in
+`history[stepBase:newCount]` aralığına düşen step terimini hesaplar ve
+`AfterTokens` bu **düşülmüş** overhead ile raporlanır. `BeforeTokens` ise düşüm
+**öncesi** overhead ile (`overheadBefore`) raporlanır — böylece her iki taraf da
+kendi anındaki gerçek yükü gösterir; ikisini de düşülmüş değerle raporlamak tam
+olarak fold'un kaldırdığı payı gizler ve "X→Y" oranını olduğundan küçük
+gösterirdi. `Pressure` ise bilinçli olarak **düşülmüş** (fold sonrası) overhead'i
+kullanır: basınç, bu tur sıkıştırmadan sonra bütçenin ne kadar dolu olduğudur.
+
+**Kalan gerçek fark.** Düzeltmeden sonra bile iki sayı çakışmaz:
+
+- Compaction journal satırı **geçmişin** tahminidir: fold anında ölçülmüş
+  before/after.
+- Bağlam ölçeri **o anda** modele gidecek yükü ölçer.
+
+Farklı zamanlarda ve farklı bileşen kümesiyle hesaplanırlar. Okuma kuralı: aynı
+sayıyı bekleme, hangisinin neyi ölçtüğüne bak.
+
+> **Not.** `ForceCompact` (manuel `/compact`) ve `internal/conversation/reactive.go`
+> (bağlam-taşması kurtarma) `overhead`'i **hiç** katmaz. İki tarafa da katmadıkları
+> için kendi içlerinde oran tutarlıdır, ama mutlak sayıları `Prepare` yolundan
+> gelen satırlarla karşılaştırılamaz.
+
+## `autoCompactMode` — otomatik sıkıştırma modu (2026-08-31)
+
+Otomatik sıkıştırma tetiklendiğinde **ne** yapılacağını seçen ayar:
+`autoCompactMode`, değerler `rolling` | `native` | `auto`, varsayılan `rolling`
+(`internal/settings/settings.go`; `store.go` bilinmeyen değeri `rolling`'e
+normalize eder, `validate.go` açık geçersiz değeri 400 ile reddeder). Yayılım:
+`(*Server).applySettings` → `Manager.SetAutoCompactMode`
+(`internal/conversation/autocompact.go`).
+
+| Mod | Davranış | Bedeli |
+|---|---|---|
+| `rolling` (varsayılan) | TionHarness kendi rolling özetini üretir — bugünkü davranış | Yok; transkript küçülür |
+| `native` | Sağlayıcının kendi CLI compaction'ı tetiklenir (`runNativeCompact(..., nativeCompactAuto)`, `internal/api/summary.go`) | Warm CLI oturumu düşer, sonraki tur cold start (tam history yeniden gider) |
+| `auto` | Yetenek varsa native, yoksa rolling | Native'in bedeli + fallback |
+
+Native yolun önkoşulları sağlanmazsa (sağlayıcı desteklemiyor, CLI sürümü
+compaction lifecycle olaylarını bilmiyor, resume edilebilir bir oturum yok, çağrı
+başarısız) `errNativeCompactUnavailable` sentinel'i döner ve kapı doğrudan
+rolling fold'a düşer. Varsayılanın native olmamasının sebebi bu tablodaki
+"bedeli" sütunudur: warm oturumu düşürmek bir sonraki turu tamamen soğuk yapar.
+
+**Anti-loop.** Native compaction CLI'ın penceresini küçültür ama TionHarness'in
+kendi `pending` transcript'ini küçültmez — yani `EstimateTokens` aynı kalır ve
+kapı bir sonraki turda yine aşımı görür. `Manager.claimNativeAttempt`
+(`internal/conversation/nativecompact.go`) bu yüzden oturum kimliği başına son
+denemenin `len(history)` değerini tutar: transkripte yeni mesaj eklenmediyse
+(veya kısaldıysa) ikinci native denemesi yapılmaz, o tur doğrudan rolling fold'a
+düşer. Rolling fold metni gerçekten kısalttığı için sistem yakınsar.
+
+**`NativeCompacted` neden `Compacted`'ten ayrı.** Çağıranlar `Prepared.Compacted`
+görünce `DropWarmCLISession` + cold resume yapar. Native compaction sonrası bu,
+CLI'ın az önce kurduğu pencereyi çöpe atmak olurdu — bu yüzden native sonuç
+ayrı bir bayrakla (`Prepared.NativeCompacted`) ve `Compaction.Mode` = `native`
+ile raporlanır.
+
+**Debug journal.** Native otomatik sıkıştırma `recordNativeCompactionDebug` ile
+`Name: "auto-native"` adıyla, fold rakamları olmadan (hiçbir mesaj transkriptten
+çıkmadı) journal'a düşer; Debug modalı ikisini tek seride listeler.
+
 ## Sırada (Faz 4+ fikirler)
 
 - Anomali eşiklerinin ayarlanabilir olması (settings).

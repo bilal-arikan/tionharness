@@ -990,6 +990,9 @@ native deneme **history uzunluğu başına yalnız bir kez** yapılır (`Manager
 `nativecompact.go`): aynı (veya kısalmış) transcript'le ikinci `Prepare` doğrudan rolling fold'a düşer,
 sistem yakınsar. Testler: `internal/conversation/nativecompact_test.go`.
 
+Mod tablosunun tamamı ve compaction journal satırının neden bağlam ölçeriyle aynı sayıyı
+göstermediği `38-SESSION-DEBUG.md`'de anlatılır.
+
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
