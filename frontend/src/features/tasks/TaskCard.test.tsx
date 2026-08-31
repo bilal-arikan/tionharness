@@ -83,12 +83,14 @@ describe('TaskCard task id', () => {
 
     expect(id).toBeDefined()
     expect(card?.className).toContain('relative')
-    expect(card?.className).toContain('pt-7')
+    expect(card?.className).toContain('p-2')
+    expect(card?.className).not.toMatch(/(?:^|\s)pt-/)
     expect(id?.className).toContain('absolute')
     expect(id?.className).toContain('right-2')
     expect(id?.className).toContain('top-2')
     expect(id?.className).toContain('text-[var(--color-text-dim)]')
     expect(id?.className).toContain('opacity-70')
+    expect(id?.nextElementSibling?.className).toContain('pr-12')
     expect(card?.getAttribute('aria-label')).toContain('görev kimliği TSK548')
   })
 

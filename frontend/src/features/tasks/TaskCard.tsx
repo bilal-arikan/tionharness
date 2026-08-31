@@ -141,7 +141,7 @@ function TaskCardImpl({
         e.stopPropagation()
         onFileDrop(t, files)
       }}
-      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 pt-7 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${taskCardShadowClass(recentlyChanged, pending)} ${
+      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${taskCardShadowClass(recentlyChanged, pending)} ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
       } ${
         pending
@@ -190,7 +190,7 @@ function TaskCardImpl({
           />
         </div>
       )}
-      <div className="font-medium">{t.title}</div>
+      <div className={`${pending ? '' : 'pr-12'} font-medium`}>{t.title}</div>
       {pending ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>
       ) : (
