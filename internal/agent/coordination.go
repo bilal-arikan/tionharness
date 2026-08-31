@@ -150,8 +150,12 @@ type workerCtl struct {
 	mu        sync.Mutex         // guards cancelFn (re-pointed each idle-resume attempt)
 	cancelFn  context.CancelFunc // the turn attempt currently in flight
 	stopped   atomic.Bool
+	teardown  atomic.Bool // reversible delete preparation; drain preserves queued work
 	startedAt time.Time
+	done      chan struct{}
 }
+
+var errWorkerNotRunning = errors.New("worker is not running")
 
 // setCancel installs the cancel of the turn attempt now running. The idle-resume
 // loop calls it once per attempt so a coordinator stop_worker always aborts the
@@ -488,6 +492,9 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	// and the turn itself runs detached, so this serializes bookkeeping, not work.
 	unlockTree := lockCoordinatorTree(rootID)
 	defer unlockTree()
+	if r.spawnBlockedByTreeTeardown(ctx, rootID, coordSessionID) {
+		return SpawnResult{}, fmt.Errorf("coordinator branch %s is being torn down; cannot spawn a new worker", coordSessionID)
+	}
 	// Fold in the target agent's own coordinator DEFAULT (Agent.CoordinatorMode).
 	// The agent default can only ADD the capability, never remove one the caller
 	// explicitly asked for — so a team whose CTO is configured as a coordinator
@@ -898,14 +905,18 @@ func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, worker
 	slot.ackedIdle = false
 	slot.idleFolded = false
 	slot.mu.Unlock()
+	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	r.workerCancels.Store(workerSessionID, ctl)
 	if r.workerRunFn != nil {
 		// Test seam: the caller counts the slots, so mirror the real path's release.
 		defer r.releaseSpawnSlot()
 		defer slot.workers.Add(-1)
+		defer r.workerCancels.CompareAndDelete(workerSessionID, ctl)
+		defer close(ctl.done)
 		r.workerRunFn(agent, workerSessionID, message, coordSessionID)
 		return nil
 	}
-	go r.runWorker(agent, workerSessionID, message, coordSessionID)
+	go r.runWorkerRegistered(agent, workerSessionID, message, coordSessionID, ctl)
 	return nil
 }
 
@@ -938,16 +949,27 @@ func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
 // SendToWorker enqueues under) so an enqueue that raced the turn end is either
 // fully visible here or already took the idle path. Runs on context.Background:
 // the worker turn's ctx is cancelled by now.
-func (r *Runtime) drainWorkerQueue(agent db.Agent, workerSessionID, coordSessionID string) {
+func (r *Runtime) drainWorkerQueue(agent db.Agent, workerSessionID, coordSessionID string, ctl *workerCtl) {
 	r.workerQueueMu.Lock()
+	defer r.workerQueueMu.Unlock()
 	messages, ok := r.workerQueue[workerSessionID]
-	if ok {
-		delete(r.workerQueue, workerSessionID)
-	}
-	r.workerQueueMu.Unlock()
 	if !ok {
 		return
 	}
+	// stop_worker is terminal for this run. Drop queued follow-ups while teardown
+	// owns the session; launching one with context.Background would create a fresh
+	// writer after StopWorker had already confirmed the old goroutine stopped.
+	if ctl != nil && ctl.stopped.Load() {
+		delete(r.workerQueue, workerSessionID)
+		return
+	}
+	if ctl != nil && ctl.teardown.Load() {
+		return
+	}
+	if r.workerDrainBeforeDispatch != nil {
+		r.workerDrainBeforeDispatch()
+	}
+	delete(r.workerQueue, workerSessionID)
 	message := strings.Join(messages, "\n\n---\n\n")
 	ctx := context.Background()
 	depth := 0
@@ -993,21 +1015,40 @@ func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionI
 		subtreeRunning = r.activeSubtreeWorkers(ctx, workerSessionID)
 		r.stopSubtree(ctx, workerSessionID, "stop_worker on their sub-coordinator")
 	}
+	_, wasRunning := r.workerCancels.Load(workerSessionID)
+	r.workerQueueMu.Lock()
 	v, ok := r.workerCancels.Load(workerSessionID)
 	if !ok {
+		r.workerQueueMu.Unlock()
+		if wasRunning {
+			return nil
+		}
 		if subtreeRunning > 0 {
 			// The sub-coordinator itself was between turns; its branch is what was
 			// actually running and we just cancelled it. Report that truthfully
 			// instead of the misleading "already finished?".
 			return nil
 		}
-		return fmt.Errorf("worker %s is not running (already finished?)", workerSessionID)
+		return fmt.Errorf("worker %s is not running (already finished?): %w", workerSessionID, errWorkerNotRunning)
 	}
 	ctl := v.(*workerCtl)
 	ctl.stopped.Store(true)
 	ctl.cancel()
-	return nil
+	r.workerQueueMu.Unlock()
+	if ctl.done == nil {
+		return nil
+	}
+	select {
+	case <-ctl.done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("worker %s did not stop: %w", workerSessionID, ctx.Err())
+	}
 }
+
+// Reversible worker teardown for session deletion (StopWorkerForTeardown /
+// FinishWorkerTeardown and the tree-teardown spawn gate) lives in
+// coordination_teardown.go.
 
 // WorkerInfo is a coordinator-facing snapshot of one worker session.
 type WorkerInfo struct {
@@ -1141,6 +1182,18 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 // It mirrors runSpawn but is coordinator-aware and notifies on EVERY outcome
 // (completed / failed / killed), unlike a plain spawn.
 func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessionID string) {
+	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	r.workerCancels.Store(workerSessionID, ctl)
+	r.runWorkerRegistered(agent, workerSessionID, prompt, coordSessionID, ctl)
+}
+
+func (r *Runtime) runWorkerRegistered(agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
+	defer r.workerCancels.CompareAndDelete(workerSessionID, ctl)
+	defer close(ctl.done)
+	r.runWorkerWithCtl(agent, workerSessionID, prompt, coordSessionID, ctl)
+}
+
+func (r *Runtime) runWorkerWithCtl(agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
 	// Registered first so the global lifecycle slot is released last. Test/runtime
 	// shutdown uses spawnActive as the definitive drain barrier; dropping it before
 	// queue finalization lets cleanup race the goroutine's final store access.
@@ -1148,7 +1201,7 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// Drain after every per-turn slot/cancel/tracking cleanup but before releasing
 	// the global lifecycle slot. A parked follow-up can then start from an idle
 	// worker while shutdown still sees this goroutine as active. No-op when empty.
-	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID)
+	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID, ctl)
 	// Released exactly once, and BEFORE the terminal notification rather than in a
 	// defer: NotifyCoordinator decides whether this is the last worker (and may fold
 	// the all-idle note into its message) by reading this counter, so a worker that
@@ -1161,10 +1214,6 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
 	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
-	ctl := &workerCtl{startedAt: time.Now()}
-	r.workerCancels.Store(workerSessionID, ctl)
-	defer r.workerCancels.Delete(workerSessionID)
-
 	// Serialize this worker turn on the WORKER session's own turn slot (keyed by
 	// workerSessionID, distinct from the coordinator slot whose workers counter is
 	// decremented above) so it never overlaps another turn on the same worker

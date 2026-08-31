@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -169,11 +168,19 @@ type Runtime struct {
 	// turn end.
 	workerQueueMu sync.Mutex
 	workerQueue   map[string][]string // worker session id -> queued follow-up messages
+	// treeTeardowns keeps a coordinator branch closed to new spawn_worker calls
+	// from delete preparation until its durable DB delete commits or rolls back.
+	treeTeardownMu    sync.Mutex
+	treeTeardowns     map[string]map[string]bool // tree root -> branch roots being torn down
+	teardownTreeRoots map[string]string          // prepared session -> tree root
 
 	// workerRunFn, when non-nil, replaces the `go r.runWorker(...)` launch in
 	// dispatchWorkerTurn — a test seam so the queue's accept/refuse/deliver logic
 	// can be exercised without a live provider. Nil in production.
 	workerRunFn func(agent db.Agent, workerSessionID, prompt, coordSessionID string)
+	// workerDrainBeforeDispatch is a deterministic test barrier inside the queue
+	// decision critical section. Nil in production.
+	workerDrainBeforeDispatch func()
 
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the
@@ -546,6 +553,18 @@ func (r *Runtime) CloseMCP() {
 	}
 }
 
+// CloseSessionMCP terminates the MCP connections scoped to one session and
+// reports how many closed. Session deletion calls this: a scoped stdio server is
+// a subprocess rooted at the session's scratchpad (applyMCPScratchpadRoot), and
+// Windows will not remove a directory that is a live process's cwd — so without
+// this the delete fails on the still-running server.
+func (r *Runtime) CloseSessionMCP(sessionID string) int {
+	if r.mcpPool == nil {
+		return 0
+	}
+	return r.mcpPool.CloseSession(sessionID)
+}
+
 // HasWarmCLISession reports whether the session has a warm (persistent-pool)
 // claude-cli process kept alive between turns. Nil-safe (pool may be unset).
 func (r *Runtime) HasWarmCLISession(sessionID string) bool {
@@ -771,85 +790,6 @@ func workspaceLedgerDir(workDir string) string {
 	return filepath.Dir(workDir)
 }
 
-// SkillsCatalogBlockForAgent renders the Available Skills system-prompt section
-// an agent sees: its assigned skills (in the agent's chosen order) plus every
-// shared (on-demand) skill. Returns "" when neither exists. Skills are a shared
-// library; agents pick from it — they never own skills.
-func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
-	if r.skills == nil {
-		return ""
-	}
-	// Name the use_skill tool exactly as THIS agent will see it. A claude-cli agent
-	// reaches TionHarness's built-ins through the Interaction MCP bridge, where they are
-	// namespaced (mcp__tionharness_interaction__use_skill). Advertising the bare name to
-	// it makes the model emit an unqualified `use_skill` call the CLI rejects with
-	// "No such tool available: use_skill" on the first turn (it recovers on retry by
-	// finding the namespaced tool, but the wasted round-trip + error is avoidable).
-	return r.skills.CatalogBlockForAgentTool(agent.Skills, skillToolNameFor(agent.Provider))
-}
-
-// skillToolNameFor returns the identifier the use_skill tool carries for an agent
-// on the given provider: native (API) providers register the bare name, while a
-// CLI provider reaches it namespaced through the Interaction MCP bridge. The
-// empty provider is the keyless claude-cli default. Custom providers are only
-// ever OpenAI/Anthropic-compatible (native), so they take the bare name.
-func skillToolNameFor(provider string) string {
-	if isCLIProviderKind(provider) {
-		return interactionToolPrefix + skills.DefaultSkillTool
-	}
-	return skills.DefaultSkillTool
-}
-
-// isCLIProviderKind reports whether provider (a KIND id — Agent.Provider,
-// always a kind, never a provider instance id, _Docs/71 §2.5) drives a
-// locally-installed CLI through the Interaction MCP bridge (claude-cli,
-// codex-cli) rather than a native API call — both dialects namespace bridged
-// tool names the same way, so every call site that branches on "is this a CLI
-// turn" shares this one check. Driven by Manifest.Transport (_Docs/71 §4.2)
-// rather than a hard-coded id list, so a future CLI-transport kind is covered
-// automatically. The empty provider is the keyless claude-cli default.
-func isCLIProviderKind(provider string) bool {
-	if provider == "" {
-		provider = "claude-cli"
-	}
-	return providers.TransportOf(provider) == providers.TransportCLI
-}
-
-// LoadSkillForAgent returns a skill's full body for the CLI path (the Interaction
-// MCP use_skill bridge), enforcing the SAME per-agent allowlist as the native
-// use_skill built-in. It mirrors the agentSkillLib the native tool loop builds,
-// so both provider paths advertise an identical contract over one skill store.
-func (r *Runtime) LoadSkillForAgent(agent db.Agent, slug string) (string, error) {
-	if r.skills == nil {
-		return "", fmt.Errorf("skills are not available")
-	}
-	allow := r.skills.AllowedFor(agent.Skills)
-	return agentSkillLib{store: r.skills, allow: allow}.Body(slug)
-}
-
-// SearchSkillsForAgent powers the CLI-path skill_search bridge: it searches the
-// library but returns only skills the agent may load (assigned + shared), so a
-// claude-cli agent can discover on-demand/conditional skills the same way native
-// agents do via the skill_search tool. (SK-2)
-func (r *Runtime) SearchSkillsForAgent(agent db.Agent, query string, limit int) []tools.SkillHit {
-	if r.skills == nil {
-		return nil
-	}
-	allow := r.skills.AllowedFor(agent.Skills)
-	return agentSkillLib{store: r.skills, allow: allow}.SearchSkills(query, limit)
-}
-
-// SkillAllowedToolsForAgent returns the allowed-tools the named skill declares,
-// for the CLI-path use_skill bridge to auto-grant — SK-3 parity with the native
-// use_skill tool.
-func (r *Runtime) SkillAllowedToolsForAgent(agent db.Agent, slug string) []string {
-	if r.skills == nil {
-		return nil
-	}
-	allow := r.skills.AllowedFor(agent.Skills)
-	return agentSkillLib{store: r.skills, allow: allow}.AllowedTools(slug)
-}
-
 // BridgeTools builds the per-agent tool registry and returns the bridgeable
 // (lazy built-in = self-management) tool schemas plus a dispatcher, for the CLI
 // path's Interaction MCP bridge (CLI-3). claude-cli has no native activate_tools
@@ -947,153 +887,6 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 		return res.Content, nil
 	}
 	return defs, call
-}
-
-// agentSkillLib restricts the use_skill tool to an agent's selected slugs, so an
-// agent cannot load a skill it has not been given.
-type agentSkillLib struct {
-	store *skills.Store
-	allow map[string]bool
-}
-
-func (l agentSkillLib) Body(slug string) (string, error) {
-	if !l.allow[slug] {
-		return "", fmt.Errorf("skill %q is not enabled for this agent", slug)
-	}
-	return l.store.UseSkillBody(slug, l.allow)
-}
-
-// AllowedTools returns the tool-permission patterns the named skill declares,
-// restricted to skills this agent may load. Powers SK-3 (loading a skill
-// auto-grants its tools for the session).
-func (l agentSkillLib) AllowedTools(slug string) []string {
-	if !l.allow[slug] {
-		return nil
-	}
-	sk, ok := l.store.Get(slug)
-	if !ok {
-		return nil
-	}
-	return sk.AlwaysAllow
-}
-
-// SearchSkills powers the skill_search tool: it searches the full library but
-// returns only skills this agent may load (assigned + shared), so discovery never
-// reveals a skill the agent could not then use. (SK-2)
-func (l agentSkillLib) SearchSkills(query string, limit int) []tools.SkillHit {
-	out := []tools.SkillHit{}
-	for _, sk := range l.store.Search(query, 0) {
-		if !l.allow[sk.Slug] {
-			continue
-		}
-		out = append(out, tools.SkillHit{Slug: sk.Slug, Description: sk.Description, WhenToUse: sk.WhenToUse})
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out
-}
-
-// agentSkillWriter adapts *skills.Store to the tools.SkillWriter interface so the
-// create_skill / delete_skill self-management tools can author workspace skills
-// without the tools package importing the skills package. db (optional) lets
-// DeleteSkill strip the removed slug from every agent's skill selection.
-type agentSkillWriter struct {
-	store *skills.Store
-	db    *db.DB
-}
-
-// ValidateSkill adapts skills.Store.ValidateSkill onto the tools-layer view so the
-// skill_validate tool stays decoupled from the skills package.
-func (w agentSkillWriter) ValidateSkill(slug string) tools.SkillValidation {
-	r := w.store.ValidateSkill(slug)
-	return tools.SkillValidation{
-		Found:    r.Found,
-		Tier:     r.Tier,
-		Path:     r.Path,
-		Valid:    r.Valid,
-		Errors:   r.Errors,
-		Warnings: r.Warnings,
-	}
-}
-
-func (w agentSkillWriter) CreateSkill(slug, name, description, whenToUse, group, body string, shared bool) error {
-	_, err := w.store.Create(slug, skills.SkillInput{
-		Name:        name,
-		Description: description,
-		WhenToUse:   whenToUse,
-		Group:       group,
-		Body:        body,
-		Shared:      shared,
-	})
-	return err
-}
-
-// ImportSkill imports a Claude Code skill (local dir or github URL) into the
-// workspace tier and maps the skills.ImportResult onto the tools view. (SK-IMP)
-func (w agentSkillWriter) ImportSkill(source, location, slug string, shared bool) (tools.SkillImportResult, error) {
-	_, res, err := w.store.ImportFromSource(source, location, slug, shared)
-	if err != nil {
-		return tools.SkillImportResult{}, err
-	}
-	return tools.SkillImportResult{Slug: res.Slug, Warnings: res.Warnings, Files: res.Files}, nil
-}
-
-// UpdateSkill edits a workspace skill in place. Each pointer field is applied
-// only when non-nil (partial update), merging over the skill's current values
-// so the agent can change just the body. Restricted to workspace-tier skills so
-// bundled/global skills can't be overwritten (parity with DeleteSkill).
-func (w agentSkillWriter) UpdateSkill(slug string, name, description, whenToUse, group, body *string, shared *bool) error {
-	cur, ok := w.store.Get(slug)
-	if !ok {
-		return fmt.Errorf("no skill with slug %q (check the skill catalog)", slug)
-	}
-	if cur.Source != skills.SourceWorkspace {
-		return fmt.Errorf("skill %q is a %s skill and cannot be edited (only workspace skills are editable)", slug, cur.Source)
-	}
-	curBody, _ := w.store.Body(slug)
-	in := skills.SkillInput{
-		Name:        cur.Name,
-		Description: cur.Description,
-		WhenToUse:   cur.WhenToUse,
-		Icon:        cur.Icon,
-		Color:       cur.Color,
-		Group:       cur.Group,
-		Shared:      cur.Shared,
-		Body:        curBody,
-	}
-	if name != nil {
-		in.Name = *name
-	}
-	if description != nil {
-		in.Description = *description
-	}
-	if whenToUse != nil {
-		in.WhenToUse = *whenToUse
-	}
-	if group != nil {
-		in.Group = *group
-	}
-	if body != nil {
-		in.Body = *body
-	}
-	if shared != nil {
-		in.Shared = *shared
-	}
-	_, err := w.store.Update(slug, in)
-	return err
-}
-
-func (w agentSkillWriter) DeleteSkill(slug string) error {
-	if err := w.store.Delete(slug); err != nil {
-		return err
-	}
-	// Drop the now-deleted slug from any agent that referenced it so no agent
-	// keeps a dangling skill reference.
-	if w.db != nil {
-		_, _ = w.db.RemoveSkillFromAgents(context.Background(), slug)
-	}
-	return nil
 }
 
 // SetScheduleReloader wires the scheduler's Reload so self-management schedule
@@ -1391,322 +1184,3 @@ func (r *Runtime) agentName(id string) string {
 // AgentName is agentName for callers outside the package (the coordinator-tree
 // API endpoints, which render agent names alongside session ids).
 func (r *Runtime) AgentName(id string) string { return r.agentName(id) }
-
-// BuildSystemPrompt composes the agent's persona from soul + identity. Exported
-// as the SINGLE persona assembler: the chat/preview path (api package) uses it
-// too, so the two paths can never drift apart.
-func BuildSystemPrompt(a db.Agent) string {
-	out := ""
-	if a.Soul != "" {
-		out = a.Soul
-	}
-	if a.Identity != "" {
-		if out != "" {
-			out += "\n\n"
-		}
-		out += a.Identity
-	}
-	return out
-}
-
-// EnvironmentContextBlock renders a one-line machine-environment marker (OS,
-// arch, native shell) so the agent writes shell commands in the correct syntax
-// instead of guessing — on Windows the shell tool is PowerShell, on Unix it is
-// Bash (NewShellRunner picks the same identity). Mirrors the external agent project's
-// <environment> marker, trimmed to the one field that actually changes agent
-// behaviour (shell). Exported so both the chat path (api.composeTurnRequest) and
-// the headless path (autonomousSystemPrompt) inject the identical line. It rides
-// the volatile dynamic suffix, so it never disturbs the cached static prefix.
-func EnvironmentContextBlock() string {
-	// Prefer Bash when a POSIX shell backs it (always on Unix; on Windows only when a
-	// bash.exe — Git Bash / WSL — is on PATH). PowerShell is advertised as the
-	// fallback only for Windows-native tasks (cmdlets, registry, $env:). ShellToolNames
-	// orders Bash first when present, so its first entry is the preferred shell and
-	// can never claim "Bash" on a machine where bash.exe is missing.
-	names := tools.ShellToolNames()
-	shell := "Bash"
-	if len(names) > 0 {
-		shell = names[0]
-	}
-	hint := fmt.Sprintf("write shell commands in %s syntax for this machine.", shell)
-	if shell == "Bash" && runtime.GOOS == "windows" {
-		// Bash-first on Windows, but PowerShell stays available for native tasks.
-		hint = "prefer Bash; use PowerShell only for Windows-native tasks (cmdlets, registry, `$env:`)."
-	}
-	return fmt.Sprintf("<environment os=%q arch=%q shell=%q /> — %s",
-		runtime.GOOS, runtime.GOARCH, shell, hint)
-}
-
-// ShellToolsContextBlock states this session's shell-execution capability, and is
-// the SINGLE source for it on both the chat (composeTurnRequest) and headless
-// (autonomousDynamicSuffix) paths. It never returns empty:
-//
-//   - ENABLED — the shell gate is on (Tunables.ShellEnabled) AND a backing
-//     interpreter is present (same resolvers as buildRegistry via
-//     tools.ShellToolNames, so prompt ↔ catalog never drift) AND the agent's own
-//     tool filter actually offers the tool: advertise only the shell tools that
-//     survive all three, by their exact names.
-//   - DISABLED — the gate is off OR no interpreter backs it OR the agent's
-//     allow/denylist strips every shell tool: the Bash/PowerShell tools are NOT
-//     registered for this agent, so say so explicitly and give the dead-tool rule.
-//     Otherwise the model emits a bare `PowerShell`/`Bash` call, hits "No such
-//     tool available … not enabled in this context", and — with nothing telling it
-//     the tool is gone — repeats the identical call until the turn times out
-//     (FND-9c9a52aa, FND-6095a777, FND-e9c79d9a, FND-495575b8).
-//
-// The per-agent filter is the SAME gate ToolCatalog applies (ToolAllowedFunc), so
-// the block can never advertise a tool the agent's allowlist would strip: a
-// read-only profile (allowlist without Bash/PowerShell) used to be told shell was
-// ENABLED, called Bash, and got "No such tool available" on every attempt.
-//
-// It rides the VOLATILE dynamic suffix on both paths because the gate can toggle
-// mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay the always-on
-// core named in the static instructions.
-func (r *Runtime) ShellToolsContextBlock(ctx context.Context, agent db.Agent, confined bool) string {
-	names := r.availableShellToolNames(ctx, agent)
-	if !r.tun.ShellEnabled() || len(names) == 0 {
-		return "Shell execution is DISABLED for this session: there is NO Bash or PowerShell tool. " +
-			"Do NOT call Bash or PowerShell — such a call fails with \"No such tool available\" / " +
-			"\"not enabled in this context\". Any workspace guidance that assumes a terminal " +
-			"(rtk wrappers, `go test`, `npm …`, shell one-liners) does NOT apply here. " +
-			"General dead-tool rule: if ANY tool call returns \"No such tool available\" / " +
-			"\"not enabled in this context\", treat that tool as absent — do NOT repeat the identical " +
-			"call. Reach the goal with the file tools (Read / Glob / Grep / Edit / Write), or report " +
-			"that the step needs a shell that is not available in this context."
-	}
-	noun, verb := "tool", "runs"
-	if len(names) > 1 {
-		noun, verb = "tools", "run"
-	}
-	scope := "not confined to the working directory (absolute paths and `..` allowed)"
-	if confined {
-		scope = "confined to the working directory (write relative paths; an in-root absolute path is allowed, but escapes are rejected)"
-	}
-	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
-		" " + verb + " host commands — " + scope + ", " +
-		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
-}
-
-// availableShellToolNames narrows the host's backing shell interpreters
-// (tools.ShellToolNames) to the ones THIS agent may actually call, by running each
-// name through the agent's effective tool filter — the same predicate ToolCatalog
-// uses. Host support and the agent's allow/denylist are independent gates: a
-// machine can have bash.exe while the agent's profile allowlist omits "Bash", and
-// only the intersection is real. Returns nil when the agent can call neither.
-func (r *Runtime) availableShellToolNames(ctx context.Context, agent db.Agent) []string {
-	allowed := r.ToolAllowedFunc(ctx, agent)
-	var names []string
-	for _, n := range tools.ShellToolNames() {
-		if allowed(n) {
-			names = append(names, n)
-		}
-	}
-	return names
-}
-
-// systemPrompt builds an agent's static system prefix: its soul+identity persona
-// followed by this workspace's instructions (when set). Both are stable, so they
-// belong in the cached static prefix rather than the volatile dynamic suffix.
-func (r *Runtime) systemPrompt(a db.Agent) string {
-	out := BuildSystemPrompt(a)
-	if p := r.instructions.Load(); p != nil {
-		if ins := strings.TrimSpace(*p); ins != "" {
-			if out != "" {
-				out += "\n\n"
-			}
-			out += "# Workspace Instructions\n" + ins
-		}
-	}
-	// Terse mode rides the same static prefix, AFTER the workspace instructions so
-	// a workspace rule can still be phrased to override the reply style.
-	if tb := r.TerseModeBlock(); tb != "" {
-		if out != "" {
-			out += "\n\n"
-		}
-		out += tb
-	}
-	return out
-}
-
-// autonomousSystemPrompt is systemPrompt plus the agent's Available Skills block,
-// for headless runs (scheduler/spawn/flow). Chat turns add the catalog
-// in composeTurnRequest; the autonomous entry points (which build their own
-// request) had no catalog, so a scheduled agent never learned its skills. Adding
-// it here — together with the autonomous Interaction use_skill bridge — gives
-// headless runs the same skill access chat agents have.
-func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string {
-	cwd := r.sessionCwd(ctx)
-	// PURE builder: the prompt epoch calls it every turn for drift detection but
-	// only ships its output at adopt points, so side effects must stay out here.
-	build := func() string {
-		out := r.systemPrompt(a)
-		if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
-			out = strings.TrimSpace(out + "\n\n" + sb)
-		}
-		// Advertise the agent's LAZY tools (self-management + MCP) as a load-on-demand
-		// catalog. Without it a headless turn calls a deferred tool whose schema was
-		// never loaded and fails with InputValidationError. Ordered right after the
-		// skills block to match the chat path (api.composeTurnRequest), so both paths
-		// produce the same cached static prefix.
-		if tb := r.LazyToolsCatalogBlock(ctx, a); tb != "" {
-			out = strings.TrimSpace(out + "\n\n" + tb)
-		}
-		// Advertise optional external-tool capabilities (e.g. codebase-memory) present
-		// in this workspace so a headless turn reaches for them too, WITH the session's
-		// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow
-		// paths). Presence is stable, so it rides the cached static prefix. Shares ONE
-		// source with the chat path (api.composeTurnRequest).
-		if cb := r.CapabilityContext(ctx, a, cwd); cb != "" {
-			out = strings.TrimSpace(out + "\n\n" + cb)
-		}
-		// Boot/verification sequence (Anthropic long-running-agent harness discipline):
-		// a headless turn starts with a fresh context, so nudge it through the fixed
-		// orient → recall → select-one → verify-baseline → work → close-the-loop routine
-		// before acting. We inject only a pointer to keep the cached prefix small; the
-		// full recipe lives in the tionharness-autonomous-ops skill.
-		if r.tun.AutonomousBootSeq() {
-			out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
-		}
-		// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
-		// commands in the right syntax. Its bytes never change within a process, so
-		// it is safe inside the cached static prefix. The VOLATILE pieces (turn-start
-		// clock, lessons) deliberately live in autonomousDynamicSuffix — putting
-		// them here would change the prefix bytes every turn and defeat prompt
-		// caching for every headless run.
-		return strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
-	}
-	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
-	// store (guarded once per cwd per process; no-op without a cwd or an enabled
-	// codebase-memory server). Outside the builder — it must run on frozen turns too.
-	r.EnsureCodebaseIndexed(ctx, cwd)
-	// Serve through the prompt epoch (frozen snapshot) keyed to this session, so a
-	// headless run's prefix is as drift-proof as a chat turn's. Headless sessions
-	// are single-agent (multiAgent=false); drift is surfaced by the dynamic suffix
-	// via PromptEpochStale (autonomousDynamicSuffix).
-	sys, _ := r.EpochStaticSystem(ctx, SessionIDFrom(ctx), a, false, false, cwd, build)
-	return sys
-}
-
-// DateTimeContextBlock renders the turn-start clock line. Exported so the chat
-// path (api.composeTurnRequest) and the headless dynamic suffix share ONE
-// wording. It is volatile by nature, so it must ride SystemDynamic — never the
-// cached static prefix.
-func DateTimeContextBlock() string {
-	return "Current date and time (captured at the start of this turn; seconds-precise, does not tick mid-turn): " +
-		time.Now().Format("Monday, 2006-01-02 15:04:05 (-07:00)")
-}
-
-// autonomousDynamicSuffix builds the VOLATILE system suffix for headless turns
-// (scheduler/spawn/flow/subagent): the turn-start clock plus the newest failure
-// lessons. Chat turns assemble the same pieces in composeTurnRequest; keeping
-// them out of autonomousSystemPrompt keeps the static prefix byte-stable across
-// turns so cache-capable providers reuse it.
-//
-// agent is the turn's own agent: the shell-capability block below is per-agent
-// (its allow/denylist decides whether Bash/PowerShell are offered at all), so it
-// cannot be derived from the session id alone.
-func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) string {
-	out := DateTimeContextBlock()
-	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
-	// every headless turn so a fresh context does not repeat known failures.
-	// The turn's own agent (resolved via the stamped session) ranks first.
-	agentID, isCoordinator := "", false
-	sid := SessionIDFrom(ctx)
-	if sid != "" {
-		if sess, err := r.db.GetSession(ctx, sid); err == nil {
-			agentID = sess.AgentID
-			isCoordinator = sess.IsCoordinator()
-		}
-	}
-	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
-		out += "\n\n" + lb
-	}
-	// Working-directory context: the chat path injects workdirContextBlock, but a
-	// headless turn had none — so an autonomous worker learned its root and the
-	// relative-path rule only by trial (a rejected in-root absolute, a mis-rooted
-	// guess). State it up front, and describe the confinement when the autonomous
-	// brake is on. Volatile (the brake is a toggamble tunable) → dynamic suffix.
-	confined := r.tun != nil && r.tun.AutonomousConfine()
-	if wb := r.workdirConfineBlock(ctx, confined); wb != "" {
-		out += "\n\n" + wb
-	}
-	// Shell-execution capability, single-sourced with the chat path: advertises
-	// the registered Bash/PowerShell tools when the gate is on + a shell backs it,
-	// else states shell is disabled and gives the dead-tool rule. Volatile →
-	// dynamic suffix, since the gate can toggle mid-session. The confined flag keeps
-	// its "confined/not confined" clause consistent with the block above.
-	if sh := r.ShellToolsContextBlock(ctx, agent, confined); sh != "" {
-		out += "\n\n" + sh
-	}
-	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
-	// holding back a live change — a compact diff on the volatile side. The suffix
-	// runs after autonomousSystemPrompt in request composition, so the diff (set by
-	// EpochStaticSystem) is fresh for this turn.
-	if sid != "" {
-		if note := r.PromptEpochContextNote(sid, agentID); note != "" {
-			out += "\n\n" + note
-		}
-	}
-	// Coordinator turns get an authoritative live worker-state block so the model
-	// can never believe a finished worker is still running (the coalesced-
-	// notification stall). Coordinator-only, reusing the session loaded above —
-	// which includes a mid-level node, whose block also reports its own subtree.
-	if sid != "" && isCoordinator {
-		if wb := r.coordinatorWorkerStatusBlock(ctx, sid); wb != "" {
-			out += "\n\n" + wb
-		}
-	}
-	return out
-}
-
-// workdirConfineBlock renders the headless turn's working-directory context: its
-// root and, when confined is true, the rule that the fs/shell tools cannot leave
-// it (write relative paths; an in-root absolute is accepted, escapes rejected).
-// Mirrors the chat path's workdirContextBlock, which a headless turn never got —
-// so an autonomous worker no longer discovers the boundary by a rejected path.
-// The root is taken from the same source the sandbox roots at: the turn's resolved
-// working dir when ctx carries it, else the session's effective working dir.
-func (r *Runtime) workdirConfineBlock(ctx context.Context, confined bool) string {
-	dir := ""
-	if rw, ok := resolvedWorkDirFromCtx(ctx); ok && strings.TrimSpace(rw.dir) != "" {
-		dir = rw.dir
-	} else {
-		dir = r.effectiveWorkDir(ctx)
-	}
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("## Working directory\n")
-	if confined {
-		b.WriteString("Your file and shell tools are CONFINED to this directory. Write paths relative to it; " +
-			"an absolute path inside it is accepted, but any path that escapes it (an outside absolute path or a " +
-			"`..` traversal) is rejected. Orient with Glob/Grep before guessing a path.\n\n")
-	} else {
-		b.WriteString("Your file and shell tools operate from this directory. Relative paths resolve here; " +
-			"you may also use absolute paths.\n\n")
-	}
-	b.WriteString("- Path: `" + dir + "`\n")
-	return strings.TrimSpace(b.String())
-}
-
-// autonomousBootReminder frames every headless turn (schedule/spawn/flow/
-// subagent). Deliberately stated as GOALS AND BOUNDARIES rather than a numbered
-// step recipe: current-generation models (Fable 5 class) follow intent well and
-// over-prescriptive scaffolding measurably reduces their output quality. Three
-// concerns, per Anthropic's long-running-agent guidance: (1) autonomy — no user
-// is watching, act instead of asking or ending on a plan; (2) grounded progress
-// — claims must be backed by a tool result from this session; (3) durable
-// closure — record what changed so the next fresh context can pick it up. The
-// detailed recipe stays in the tionharness-autonomous-ops skill.
-const autonomousBootReminder = "# Autonomous operation\n" +
-	"This is a headless turn with a fresh context; no user is watching and none can answer questions, " +
-	"so do not ask permission and do not end the turn with a plan or a promise — for reversible actions " +
-	"that follow from the task, act. Orient yourself before changing anything (working directory, git state, " +
-	"the persisted progress file, open tasks) and verify the baseline is green before building on it; " +
-	"fix a broken baseline first. Work on ONE piece of work per turn, done properly, rather than several half-done. " +
-	"Before reporting progress, check each claim against a tool result from this session — report only what you can " +
-	"point to evidence for, and say explicitly when something is not yet verified. Close the loop when finished: " +
-	"commit/record what changed and append a progress note (never overwrite a prior note). " +
-	"Playbook when needed: use_skill \"tionharness-autonomous-ops\"."
