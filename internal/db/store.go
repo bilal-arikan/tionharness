@@ -713,6 +713,11 @@ func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool
 // on an assistant message, rewriting the session's JSONL file. Returns ErrNotFound
 // if the session or message is absent.
 func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string, rating int, note string) error {
+	// Rewrites the transcript: same lock, and taken BEFORE d.mu (see
+	// transcript_lock.go), so it can never interleave with a concurrent append.
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -985,6 +990,12 @@ func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 }
 
 func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func(string) error) error {
+	// Removing the session directory destroys the transcript file, so it takes the
+	// transcript lock like any other writer — otherwise an append could recreate
+	// messages.jsonl underneath a delete that is already in progress.
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.sessions[sessionID]; !ok {
@@ -996,6 +1007,7 @@ func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func
 	delete(d.sessions, sessionID)
 	delete(d.messages, sessionID)
 	d.deleteSessionFilesLocked(sessionID)
+	d.dropTranscriptLock(sessionID)
 	return nil
 }
 
@@ -1085,15 +1097,48 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// the on-disk transcript is canonical (author/recipient recorded, not derived).
 	m.NormalizeParticipants()
 
+	// Serialise on THIS session's transcript lock, not on the global store lock:
+	// two appends to the same session are ordered, appends to different sessions
+	// run concurrently, and no reader of any unrelated entity waits for a disk
+	// write. Held across both the file write and the in-memory commit below, so
+	// the order of lines in the file is the order of messages in RAM.
+	tl := d.transcriptLock(m.SessionID)
+	tl.Lock()
+
+	d.mu.RLock()
+	_, ok := d.sessions[m.SessionID]
+	d.mu.RUnlock()
+	if !ok {
+		tl.Unlock()
+		return m, ErrNotFound
+	}
+
+	// Persist BEFORE publishing in memory. The failure this ordering rules out is
+	// the one 66d1324d had to repair with a rollback: a message that the UI shows
+	// and automations fire for, which never reached the transcript and vanishes on
+	// the next restart (the counters are recomputed from the file). Writing first
+	// means a failed append leaves nothing to undo — the message was never visible,
+	// no activity hook fired, and the caller gets the error.
+	//
+	// Hot path: append only the new message line (O(1)) instead of rewriting the
+	// whole conversation file (which was O(n) per message → O(n²) per session).
+	// The header line keeps a stale MessageCount/UpdatedAt on disk; both are
+	// recomputed from the message lines on load and refreshed by the next full
+	// rewrite (title/summary change).
+	if appendErr := d.appendMessageLine(m.SessionID, m); appendErr != nil {
+		tl.Unlock()
+		return m, appendErr
+	}
+
 	d.mu.Lock()
 	s, ok := d.sessions[m.SessionID]
 	if !ok {
+		// Unreachable while the transcript lock is held (DeleteSession takes it
+		// too), but a session that disappeared must not be resurrected in memory.
 		d.mu.Unlock()
+		tl.Unlock()
 		return m, ErrNotFound
 	}
-	// Snapshot the session header so a failed transcript append can restore it
-	// wholesale (counters, timestamps, unread flag, participant roster).
-	prev := s
 	d.messages[m.SessionID] = append(d.messages[m.SessionID], m)
 	s.MessageCount++
 	// Sum this message's executed tool calls into the session's lifetime tool
@@ -1117,27 +1162,9 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
 	s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
 	d.sessions[s.ID] = s
-	// Hot path: append only the new message line (O(1)) instead of rewriting the
-	// whole conversation file (which was O(n) per message → O(n²) per session).
-	// The header line keeps a stale MessageCount/UpdatedAt on disk; both are
-	// recomputed from the message lines on load and refreshed by the next full
-	// rewrite (title/summary change).
-	if appendErr := d.appendMessageLocked(s.ID, m); appendErr != nil {
-		// The line never reached disk (full disk, locked file, missing directory).
-		// Roll the in-memory mutation back so RAM and the transcript agree: keeping
-		// it would show the message in the UI and fire automations for it, and then
-		// lose it on the next restart — the counters are recomputed from the file.
-		// The activity hook is deliberately NOT fired for a message that does not
-		// exist on disk.
-		msgs := d.messages[m.SessionID]
-		d.messages[m.SessionID] = msgs[:len(msgs)-1]
-		d.sessions[s.ID] = prev
-		d.mu.Unlock()
-		return m, appendErr
-	}
-	// Snapshot the totals for the activity signal, then release the lock BEFORE
+	// Snapshot the totals for the activity signal, then release BOTH locks before
 	// firing the hook (the observer dispatches on its own goroutine, which will
-	// itself take the store lock).
+	// itself take the store lock — and may append to this very session).
 	sig := ActivitySignal{
 		SessionID:    s.ID,
 		MessageTotal: s.MessageCount,
@@ -1146,6 +1173,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		ToolDelta:    toolDelta,
 	}
 	d.mu.Unlock()
+	tl.Unlock()
 	d.fireActivityHook(sig)
 	return m, nil
 }
@@ -1165,10 +1193,14 @@ func addParticipant(list []string, kind, id string) []string {
 	return append(list, id)
 }
 
-// appendMessageLocked appends a single encoded message line to a session's
+// appendMessageLine appends a single encoded message line to a session's
 // transcript file, creating it on the first message (a session's directory is
 // made at creation time, but messages.jsonl only appears once it has one).
-func (d *DB) appendMessageLocked(sessionID string, m Message) error {
+//
+// The caller must hold the session's transcript lock (or be boot, which is
+// single-threaded). It deliberately does NOT require d.mu — that is the whole
+// point of the split: the disk write happens outside the global lock.
+func (d *DB) appendMessageLine(sessionID string, m Message) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -1190,6 +1222,9 @@ func (d *DB) appendMessageLocked(sessionID string, m Message) error {
 // DeleteMessage removes a single message from a session by id and rewrites the
 // session's JSONL file. Returns ErrNotFound if the session or message is absent.
 func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) error {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -1221,6 +1256,9 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 // if the session or message is absent. File changes made by past turns are NOT
 // reverted — this only truncates the transcript.
 func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string) (int, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]

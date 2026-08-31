@@ -175,8 +175,9 @@ func (d *DB) recoverInflight() error {
 			s.Unread = true
 			d.sessions[sessionID] = s
 			// Append the recovered line; tolerate write failure (the sidecar stays
-			// and we retry next boot).
-			_ = d.appendMessageLocked(sessionID, m)
+			// and we retry next boot). No transcript lock: recovery runs inside
+			// load(), single-threaded, before the DB is published.
+			_ = d.appendMessageLine(sessionID, m)
 		}
 		_ = os.Remove(d.inflightPath(sessionID))
 	}

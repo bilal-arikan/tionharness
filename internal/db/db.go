@@ -101,6 +101,12 @@ type DB struct {
 	// lessons, self-healing) — independent of mu for the same reason as debugMu.
 	lessonsMu sync.Mutex
 
+	// transcriptMus holds one mutex per session, serialising writes to that
+	// session's messages.jsonl so the file write no longer needs the global lock.
+	// See transcript_lock.go for the mandatory lock order (transcript then mu).
+	transcriptMusMu sync.Mutex
+	transcriptMus   map[string]*sync.Mutex
+
 	// counters holds the per-entity id RESERVATION high-water mark (prefix -> the
 	// highest n that has been persisted as claimed). It is written to
 	// counters.json; issued tracks what has actually been handed out this
@@ -113,10 +119,12 @@ type DB struct {
 	issued     map[string]int64
 
 	// runningFlowRuns is an O(1) live-state counter for the activity endpoints. It
-	// is read WITHOUT taking mu: an idle poll must never queue behind
-	// appendMessageLocked, which holds the WRITE lock across a synchronous file
-	// write — and a pending writer blocks new readers, so the poll and the live
-	// turn were serialising each other. It is written under mu, in the same
+	// is read WITHOUT taking mu: an idle poll must never queue behind a message
+	// append — historically that append held the WRITE lock across a synchronous
+	// file write, and a pending writer blocks new readers, so the poll and the live
+	// turn were serialising each other. The file write has since moved out from
+	// under mu (transcript_lock.go), but the lock-free read stays: it costs nothing
+	// and keeps the poll independent of every other writer. It is written under mu, in the same
 	// critical section as the map mutation, so a reader sees a value that is at
 	// worst microseconds stale. See ReconcileRunCounters for the drift guard.
 	runningFlowRuns atomic.Int64
@@ -160,6 +168,7 @@ func Open(path string) (*DB, error) {
 		counters:         map[string]int64{},
 		issued:           map[string]int64{},
 		modelResolutions: map[string]ModelResolution{},
+		transcriptMus:    map[string]*sync.Mutex{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
