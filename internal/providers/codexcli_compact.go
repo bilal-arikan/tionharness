@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
@@ -54,10 +55,34 @@ type codexRPCConn struct {
 	lines <-chan codexRPCLine
 	done  chan struct{}
 	// stderr is inspected only once the stream ends, to explain WHY it ended.
-	stderr *bytes.Buffer
+	stderr *syncBuffer
 }
 
-func newCodexRPCConn(w io.Writer, r io.Reader, stderr *bytes.Buffer) *codexRPCConn {
+// syncBuffer is a bytes.Buffer safe to read while os/exec is still writing to
+// it. Assigning a *bytes.Buffer to cmd.Stderr makes exec copy the pipe in a
+// background goroutine that only stops at cmd.Wait(); runAttempt (codexcli.go)
+// stays race-free by reading stderr strictly after Wait, but native compaction
+// needs the text mid-flight — to explain a stream that ended early — while the
+// process is still being waited on in a deferred cleanup. Guarding the buffer is
+// the only way to read it there without a data race.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func newCodexRPCConn(w io.Writer, r io.Reader, stderr *syncBuffer) *codexRPCConn {
 	lines := make(chan codexRPCLine)
 	c := &codexRPCConn{enc: json.NewEncoder(w), lines: lines, done: make(chan struct{}), stderr: stderr}
 	scan := bufio.NewScanner(r)
@@ -173,7 +198,7 @@ func (c *CodexCLI) CompactNative(ctx context.Context, resumeSessionID string, re
 	if err != nil {
 		return nil, err
 	}
-	var stderr bytes.Buffer
+	var stderr syncBuffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start codex app-server: %w", err)

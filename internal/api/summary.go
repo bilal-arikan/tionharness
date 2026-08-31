@@ -449,12 +449,14 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	// turn composes — including the static system prefix. The prefix comes from the
 	// prompt epoch exactly as composeTurnRequest gets it, so a frozen session
 	// yields the same bytes the last turn hashed rather than a freshly built
-	// variant.
+	// variant. Read-only on purpose (EpochStaticSystemPeek, not EpochStaticSystem):
+	// /compact is not a turn, and the turn entry point would re-freeze the prefix
+	// on a ttl-cold or otherwise adopt-triggering session — changing the hash,
+	// failing this compaction, and stranding the CLI thread for later turns too.
 	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, agentRow.ID, history)
-	system, _ := wsp.Runtime.EpochStaticSystem(ctx, session.ID, agentRow, multiAgent, false,
-		strings.TrimSpace(session.WorkingDir), func() string {
-			return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
-		})
+	system := wsp.Runtime.EpochStaticSystemPeek(session.ID, agentRow, func() string {
+		return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
+	})
 	resp, err := native.CompactNative(ctx, session.CLISessionID, providers.Request{
 		Model: agentRow.Model, PermissionMode: agentRow.PermissionMode,
 		WorkDir: wsp.SandboxRoot(), CLIResumeScope: cliResumeScope(session, agentRow, system),

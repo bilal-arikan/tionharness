@@ -253,6 +253,35 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 	return e.System, e.systemStale || e.toolsStale
 }
 
+// EpochStaticSystemPeek returns the static system prefix a NON-TURN caller must
+// reproduce byte-for-byte — the /compact CLI resume scope, which is hashed into
+// the provider's durable home. Unlike EpochStaticSystem it is READ-ONLY: it
+// never re-freezes the snapshot (ttl-cold, model/workdir change, stale
+// threshold), never advances LastUsedAt/StaleTurns and emits no debug event. A
+// re-freeze here would change the prefix, change the hash, and both fail the
+// compaction AND permanently strand the CLI thread the next normal turn tries to
+// resume.
+//
+// With no frozen snapshot (epoch disabled, sidecar cleared, or this agent never
+// composed a turn) it falls back to the live build: that is exactly what the
+// turn path serves in the same state, so the two agree. It deliberately does NOT
+// invent a snapshot — if the bytes the stored thread was hashed with are gone,
+// the provider's scope check rejects the resume with an explicit error rather
+// than compacting the wrong thread.
+func (r *Runtime) EpochStaticSystemPeek(sessionID string, a db.Agent, build func() string) string {
+	if sessionID == "" || !r.PromptEpochEnabled() {
+		return build()
+	}
+	r.epochMu.Lock()
+	defer r.epochMu.Unlock()
+	// Loads the sidecar into the cache on first touch; that is a read, no entry
+	// is created or modified.
+	if e := r.epochEntriesLocked(sessionID)[a.ID]; e != nil {
+		return e.System
+	}
+	return build()
+}
+
 // EpochToolDefs returns the frozen tool defs for one turn, freezing the live
 // set on first use (the epoch entry is created by EpochStaticSystem, which every
 // turn-compose path calls first; a missing entry falls open to live defs so the

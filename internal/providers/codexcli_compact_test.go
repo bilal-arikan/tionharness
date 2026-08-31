@@ -65,9 +65,10 @@ func TestCompactNativeResumeScopeGate(t *testing.T) {
 
 // newTestRPCConn wires a conn to a server the test drives: it returns the conn,
 // the buffer capturing what the conn sent, and a writer feeding it lines.
-func newTestRPCConn(t *testing.T) (*codexRPCConn, *bytes.Buffer, *io.PipeWriter, *bytes.Buffer) {
+func newTestRPCConn(t *testing.T) (*codexRPCConn, *bytes.Buffer, *io.PipeWriter, *syncBuffer) {
 	t.Helper()
-	var sent, stderr bytes.Buffer
+	var sent bytes.Buffer
+	var stderr syncBuffer
 	serverOut, serverIn := io.Pipe()
 	conn := newCodexRPCConn(&sent, serverOut, &stderr)
 	t.Cleanup(func() {
@@ -133,7 +134,7 @@ func TestCodexRPCNextTimesOutOnSilentServer(t *testing.T) {
 
 func TestCodexRPCNextReportsClosedStream(t *testing.T) {
 	conn, _, server, stderr := newTestRPCConn(t)
-	stderr.WriteString("codex: authentication required")
+	_, _ = stderr.Write([]byte("codex: authentication required"))
 	_ = server.Close()
 	_, err := conn.next("initialize")
 	if err == nil || !strings.Contains(err.Error(), "authentication required") {
@@ -165,4 +166,27 @@ func TestCodexCompactCompletedMatchesLifecycleEvents(t *testing.T) {
 	if codexCompactCompleted(other, "t1") {
 		t.Fatal("an unrelated item/completed counted as compaction")
 	}
+}
+
+// TestCodexRPCStderrReadIsRaceFree: next() reads stderr to explain an ended
+// stream while os/exec's copier goroutine may still be writing into it —
+// cmd.Wait only runs in CompactNative's deferred cleanup. With a plain
+// *bytes.Buffer that pair is a data race; CI runs -race and fails here.
+func TestCodexRPCStderrReadIsRaceFree(t *testing.T) {
+	conn, _, server, stderr := newTestRPCConn(t)
+	writing := make(chan struct{})
+	written := make(chan struct{})
+	go func() {
+		defer close(written)
+		close(writing)
+		for i := 0; i < 500; i++ {
+			_, _ = stderr.Write([]byte("codex: starting up\n"))
+		}
+	}()
+	<-writing
+	_ = server.Close()
+	if _, err := conn.next("initialize"); err == nil {
+		t.Fatal("closed stream must report an error")
+	}
+	<-written
 }

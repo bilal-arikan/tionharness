@@ -294,3 +294,66 @@ func TestEpochPerAgentIsolation(t *testing.T) {
 		t.Errorf("agent 2 snapshot lost: %q", got)
 	}
 }
+
+// TestEpochStaticSystemPeekDoesNotMutateColdEpoch: the /compact path reads the
+// frozen prefix through the read-only peek. Going through EpochStaticSystem
+// instead re-froze a TTL-cold (or stale-threshold) epoch, which changed the
+// prefix, changed the CLI resume-scope hash, and permanently stranded the CLI
+// thread for later normal turns too.
+func TestEpochStaticSystemPeekDoesNotMutateColdEpoch(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	rt.SetPromptEpoch(true)
+	ctx := context.Background()
+	sid := "SES_peek_cold"
+
+	turnPrefix, _ := rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "OLD" })
+
+	// Age the snapshot past the TTL and park it on the auto-refresh threshold:
+	// both are adopt triggers on the turn path, neither may fire on the peek.
+	cold := time.Now().Add(-promptEpochAdoptAfter - time.Minute).UnixMilli()
+	rt.epochMu.Lock()
+	frozen := rt.epochCache[sid][epochAgent.ID]
+	frozen.LastUsedAt = cold
+	frozen.StaleTurns = maxStaleTurns
+	rt.epochMu.Unlock()
+
+	got := rt.EpochStaticSystemPeek(sid, epochAgent, func() string { return "NEW" })
+	if got != turnPrefix {
+		t.Fatalf("peek must serve the bytes the last turn hashed, got %q want %q", got, turnPrefix)
+	}
+
+	rt.epochMu.Lock()
+	after := rt.epochCache[sid][epochAgent.ID]
+	rt.epochMu.Unlock()
+	if after != frozen {
+		t.Fatal("peek replaced the frozen entry")
+	}
+	if after.System != "OLD" || after.LastUsedAt != cold || after.StaleTurns != maxStaleTurns {
+		t.Fatalf("peek mutated the epoch: system=%q lastUsed=%d staleTurns=%d", after.System, after.LastUsedAt, after.StaleTurns)
+	}
+
+	// The next NORMAL turn must still see the same snapshot state it would have
+	// seen without the peek: TTL-cold, so it adopts — but only now, on a turn.
+	if next, _ := rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "NEW" }); next != "NEW" {
+		t.Fatalf("turn after a peek must still adopt on its own terms, got %q", next)
+	}
+}
+
+// TestEpochStaticSystemPeekFallsBackToLiveBuild: with no frozen snapshot the
+// peek returns the live prefix — what the turn path serves in the same state —
+// and still creates nothing.
+func TestEpochStaticSystemPeekFallsBackToLiveBuild(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	rt.SetPromptEpoch(true)
+	sid := "SES_peek_empty"
+
+	if got := rt.EpochStaticSystemPeek(sid, epochAgent, func() string { return "LIVE" }); got != "LIVE" {
+		t.Fatalf("peek without a snapshot must build live, got %q", got)
+	}
+	rt.epochMu.Lock()
+	entry := rt.epochCache[sid][epochAgent.ID]
+	rt.epochMu.Unlock()
+	if entry != nil {
+		t.Fatal("peek must not freeze a snapshot")
+	}
+}
