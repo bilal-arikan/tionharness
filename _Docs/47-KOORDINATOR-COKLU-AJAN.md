@@ -1524,3 +1524,59 @@ materyalize **edilmiyor**; her biri kararlı bir sistem ajanına (`SystemKey`:
 **Testler:** `TestSendToWorkerEnforcesSizeAndPolicy`,
 `TestReleaseHeldMessageDeliversOnce`, `TestRefuseHeldMessage`,
 `TestCapNotification` (`internal/agent/inbound_test.go`).
+
+## 18. codex-cli native alt-ajanları (`spawn_agent`) nasıl kapatılır (2026-08-31)
+
+Koordinatör ağacının tamamı TionHarness'in `spawn_worker` yolundan geçmelidir;
+sağlayıcının kendi alt-ajan (collab) mekanizması paralel bir ağaç açar ve o ağaç
+roster'a, worker notlarına, stall guard'ına ve bütçelere **görünmez**. codex-cli
+tarafında bu mekanizma modelin gördüğü `spawn_agent` aracıdır.
+
+Aşağıdaki tablo codex-cli **0.148.0** üzerinde, izole bir `CODEX_HOME` ile A/B
+ölçülmüştür (varsayım değil): her anahtar için `codex debug prompt-input` çıktısı
+(modelin gerçekten gördüğü prompt) id/timestamp normalize edilerek baseline ile
+karşılaştırıldı, ardından gerçek bir tur koşturulup `SubAgentActivity` ve alt-thread
+rollout dosyasının diske yazılıp yazılmadığına bakıldı.
+
+| Anahtar | Sonuç |
+|---|---|
+| `[features] multi_agent = false` | **Etkisiz.** `codex features list` boolu değişir, davranış değişmez: prompt baseline ile byte-özdeş, `spawn_agent` talimatı yerinde, gerçek turda spawn ÇALIŞTI. |
+| `[features] multi_agent_v2 = false` | **Etkisiz** (aynı kanıt). |
+| `features.collaboration_modes = false` | **Etkisiz** — prompt baseline ile byte-özdeş. |
+| `features.multi_agent_mode`, `features.enable_fanout` | **Etkisiz** — prompt baseline ile byte-özdeş. |
+| `[tools]` altında bir collab anahtarı | **Yok.** Binary'deki `ToolsToml` yalnız üç alan taşır: `web_search`, `experimental_request_user_input`, `update_plan`. |
+| `agents.max_depth = 0` | **Etkisiz** — `spawn_agent` prompt'ta kalır. |
+| `agents.max_concurrent_threads_per_session = 0` | **Turu komple düşürür:** `Error: agents.max_concurrent_threads_per_session must be at least 1`. |
+| `[agents] enabled = false` | ✅ **Çalışan tek anahtar.** |
+
+Çalışan yapılandırma:
+
+```toml
+[agents]
+enabled = false
+```
+
+Eşdeğeri: `-c agents.enabled=false`. Gerçek turda hiç `function_call` üretilmez,
+`SubAgentActivity` yoktur, alt-thread dosyası yazılmaz ve model `spawn_agent`
+görmediğini bildirir. `--strict-config` altında kabul edilir. Yan fayda: collab
+talimat bloğu prompt'tan tamamen düştüğü için input token **44369 → 13298**
+(~31k tasarruf). Shell aracı regresyona uğramaz.
+
+> **`--ephemeral` tuzağı (en önemli uyarı).** `--ephemeral` altında araçlar açık
+> kalır ama spawn başarısız olur (`collab spawn failed: no thread with id`) ve
+> model sonucu **uydurur** — ölçümde spawn hiç gerçekleşmediği hâlde model
+> "The sub-agent answered: 4" dedi. Yani aracı açık bırakıp spawn'ı kırmak,
+> aracı kapatmaktan **daha kötüdür**: sessiz halüsinasyon üretir. Alt-ajan yolu
+> ya tamamen kapatılmalı (`agents.enabled=false`) ya da gerçekten çalışmalıdır;
+> arada bir durum kabul edilebilir değildir.
+
+**Nasıl bulundu (tekrarlanabilir yöntem).** `codex debug models` çıktısı model
+kataloğunda bir `multi_agent_version` alanı gösterdi; `codex.exe` string'leri
+içinde 16 alanlı `MultiAgentV2ConfigToml` yapısı bulundu; bölüm adı
+`--strict-config` ile brute-force edildi — `multi_agent`, `collaboration` ve
+`orchestrator` reddedildi, `agents` kabul edildi. Aynı yöntem sürüm yükseltmesinde
+tekrarlanabilir: önce `debug models` + binary string'leri, sonra `--strict-config`
+ile bölüm adı doğrulaması, en sonunda `debug prompt-input` A/B'si + gerçek turda
+`SubAgentActivity` kontrolü. **Kabul kanıtı `codex features list` çıktısı değil,
+prompt farkı + gerçek turdur** — bayrağın "set edilmiş" görünmesi davranışın
+değiştiği anlamına gelmez.

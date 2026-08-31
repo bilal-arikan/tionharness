@@ -614,7 +614,7 @@ Kurulum: `~/.codex/auth.json` izole bir probe home'a kopyalandı
 | 0.6 | MCP aracı **çalışıyor** | ⚠️→✅ **önce başarısız** (§5.1), `default_tools_approval_mode="approve"` ile çözüldü |
 | 0.7 | `resume` + sıcak cache | ✅ `thread_id` **sabit**; kod kelimesi hatırlandı; `cached_input_tokens=14592` |
 | 0.8 | `[tools]` bastırmaları | ✅ `web_search=false`; ⚠️ `update_plan` **bool kabul etmiyor** → `{enabled=false}` |
-| 0.9 | `[features]` ile native collab kapatma | ✅ `multi_agent=false` + `multi_agent_v2=false` config **dosyasında** `--strict-config` altında kabul edildi (codex-cli 0.148.0, canlı `exec` turu); kontrol: uydurma `features.bogus_key_xyz` aynı koşulda `unknown configuration field` ile reddediliyor |
+| 0.9 | native collab kapatma | ✅ **`[agents] enabled = false` ile** (codex-cli 0.148.0, canlı `exec` turu: `SubAgentActivity` yok, alt-thread rollout dosyası yazılmıyor). `[features] multi_agent=false` + `multi_agent_v2=false` yalnız **kabul edilir**, davranışı değiştirmez — prompt baseline ile byte-özdeş, spawn çalışıyor (bkz. 47 §18) |
 | — | stdout saf JSONL / stderr ayrı | ✅ |
 | — | `command_execution` item'ı | ✅ shell koştu, `exit_code:0`, çıktı `aggregated_output`'ta |
 | — | prompt stdin'den | ✅ |
@@ -751,10 +751,18 @@ web_search = false
 update_plan = false                       # → todo_list item'ını susturur
 experimental_request_user_input = { enabled = false }
 
+[agents]
+enabled = false                           # → native spawn_agent'ı GERÇEKTEN kapatan tek anahtar
+
 [features]
-multi_agent = false                       # → native collab/spawn_agent araçları
-multi_agent_v2 = false
+multi_agent = false                       # legacy, ETKİSİZ (bkz. 47 §18)
+multi_agent_v2 = false                    # legacy, ETKİSİZ
 ```
+
+> `[features] multi_agent` / `multi_agent_v2` `--strict-config` altında kabul
+> edilir ama **davranışı değiştirmez**: `spawn_agent` katalogda kalır ve gerçek
+> turda çalışır. Native alt-ajanları kapatan tek anahtar `[agents] enabled = false`
+> (`-c agents.enabled=false`). A/B ölçümü: `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §18.
 
 Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 `shell` / `unified_exec`, `apply_patch`, `view_image`, `plan`,
@@ -769,7 +777,7 @@ Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 | `todo_write` | `update_plan` (`todo_list` item) | ✅ `[tools] update_plan = false` |
 | `ask_user` | `request_user_input` | ✅ `experimental_request_user_input.enabled = false` (üstelik exec'te zaten çalışmıyor) |
 | `WebSearch` | `web_search` | ✅ `[tools] web_search = false` |
-| `run_subagent` / coordinator | `multi_agents` (collab) | ✅ `[features] multi_agent = false` + `multi_agent_v2 = false` — ikisi de codex'te varsayılan AÇIK; `--ephemeral` altında native collab `collab spawn failed: no thread with id` ile ölüyor |
+| `run_subagent` / coordinator | `multi_agents` (collab) | ✅ **yalnız** `[agents] enabled = false` — `[features] multi_agent`/`multi_agent_v2` etkisiz (47 §18); `--ephemeral` altında araç açık kalır ama spawn `collab spawn failed: no thread with id` ile ölür ve model sonucu uydurur |
 | `Bash` / `PowerShell` | `shell`, `unified_exec` | ❌ kapatılamaz — **ama kapatmamalıyız da** |
 | `Read`/`Write`/`Edit` | `apply_patch` | ❌ kapatılamaz — kapatmamalıyız |
 | `use_skill` | Codex `skills` alt sistemi | ⚠️ `[skills]` config ile sınırlanabilir |

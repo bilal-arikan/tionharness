@@ -201,10 +201,13 @@ doğurmamış bir koordinatörü de aday sayıyor. Otonom (spawn/scheduler/flow)
 ve oturum grant'lerini kaydediyor, böylece ask/read-only modda bir claude-cli
 otonom turuna "Yönlendir" reddedilmiyor (`602c1578`).
 
-codex-cli'nin kendi çoklu-ajan collab araçları kapatıldı (`[features]
+codex-cli'nin kendi çoklu-ajan collab araçları kapatılmaya çalışıldı (`[features]
 multi_agent=false, multi_agent_v2=false`) — model `spawn_worker` yerine onları
 seçip `--ephemeral` yüzünden thread store'u olmadığından hata alıyordu
-(`4b60540b`). Buna karşılık `WebSearch`/`WebFetch` yerleşikleri interaction MCP
+(`4b60540b`). **Bu anahtarlar 2026-08-31'de etkisiz ölçüldü**: codex 0.148.0'da
+davranışı değiştiren tek anahtar `[agents] enabled = false`, ve araç açıkken
+kırık spawn modelin sonucu uydurmasına yol açıyor — ayrıntı ve ölçüm yöntemi
+`_Docs/47-KOORDINATOR-COKLU-AJAN.md` §18. Buna karşılık `WebSearch`/`WebFetch` yerleşikleri interaction MCP
 köprüsünden codex-cli ajanlarına açıldı (`384ca6c5`) ve ajan başına "sağlayıcının
 native web araması" anahtarı eklendi (model, API, market pack, şablon ve ajan
 ayar formu; `2f8c5731`).

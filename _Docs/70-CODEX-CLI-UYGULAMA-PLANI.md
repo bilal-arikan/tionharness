@@ -134,7 +134,7 @@ Bu makinede Codex **login değil**. Kod yazmadan önce şunlar canlı doğrulanm
 | 0.6 | `http_headers` Bearer geçiyor | 0.5 içinde; 401 gelirse `bearer_token_env_var`'a geç |
 | 0.7 | `exec resume <thread_id>` sıcak cache veriyor | iki tur koş, 2. turda `cached_input_tokens > 0` |
 | 0.8 | `[tools] update_plan=false` + `web_search=false` etkili | `todo_list` / `web_search` item'ı **gelmiyor** olmalı |
-| 0.9 | `multi_agents` (collab) kapatılabiliyor mu | `--disable <feature>` / `[features]` ile dene; kapanmıyorsa prompt ile caydır |
+| 0.9 | `multi_agents` (collab) kapatılabiliyor mu | ✅ çözüldü: `[agents] enabled = false` (`-c agents.enabled=false`). `[features] multi_agent`/`multi_agent_v2` kabul edilir ama etkisizdir — bkz. `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §18 |
 | 0.10 | MCP tool timeout yükseltilebiliyor | `tool_timeout_sec = 600` ile uzun bir `run_subagent` |
 | 0.11 | Windows sandbox `workspace-write` çalışıyor | çalışma alanı dışına yazma denemesi **bloklanmalı** |
 
