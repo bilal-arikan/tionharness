@@ -417,9 +417,23 @@ func cliResumeScope(session db.Session, agentRow db.Agent, system string) string
 }
 
 // nativeCompactSession invokes the active CLI provider's own compaction control
-// plane. It never falls back to the TionHarness rolling summary: /compact-custom
-// is the explicit command for that separate operation.
+// plane for the explicit /compact command. It never falls back to the TionHarness
+// rolling summary: /compact-custom is the explicit command for that separate
+// operation.
 func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (summaryResult, error) {
+	return s.runNativeCompact(ctx, wsp, session, history, nativeCompactManual)
+}
+
+// runNativeCompact is the shared core behind both call paths. mode only selects
+// the transcript boundary (see nativeCompactBoundary); everything else — the
+// capability gate, the warm-session drop, the resume scope and the lifecycle event
+// handling — is identical, so the automatic gate can call this directly instead of
+// growing a parallel implementation.
+//
+// Preconditions that make native compaction impossible for this session are
+// returned wrapped in errNativeCompactUnavailable so an automatic caller can fall
+// back to the rolling fold without pattern-matching messages.
+func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, mode nativeCompactMode) (summaryResult, error) {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return summaryResult{}, err
@@ -433,13 +447,13 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	}
 	native, ok := provider.(providers.CLINativeManualCompactor)
 	if !ok {
-		return summaryResult{}, fmt.Errorf("provider %s does not support native manual compaction; use /compact-custom", provider.Name())
+		return summaryResult{}, fmt.Errorf("%w: provider %s does not support native manual compaction; use /compact-custom", errNativeCompactUnavailable, provider.Name())
 	}
 	if !providers.HasNativeCLICompactionEvents(provider) {
-		return summaryResult{}, fmt.Errorf("installed %s version does not support native compaction lifecycle events", provider.Name())
+		return summaryResult{}, fmt.Errorf("%w: installed %s version does not support native compaction lifecycle events", errNativeCompactUnavailable, provider.Name())
 	}
 	if session.CLISessionID == "" {
-		return summaryResult{}, errors.New("native compaction requires an existing resumable CLI session; run a normal turn first or use /compact-custom")
+		return summaryResult{}, fmt.Errorf("%w: native compaction requires an existing resumable CLI session; run a normal turn first or use /compact-custom", errNativeCompactUnavailable)
 	}
 	if _, err := wsp.Runtime.DropWarmCLISessionChecked(session.ID); err != nil {
 		return summaryResult{}, fmt.Errorf("stop warm CLI session before native compaction: %w", err)
@@ -494,16 +508,16 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	if resumeID == "" {
 		resumeID = session.CLISessionID
 	}
-	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, len(history)+2); err != nil {
+	boundary := nativeCompactBoundary(mode, len(history))
+	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, boundary); err != nil {
 		return summaryResult{}, fmt.Errorf("persist CLI resume after native compaction: %w", err)
 	}
 	// Same boundary, second bookkeeping axis: the CLI's window now holds a summary
 	// of those messages instead of their tool trace, so the meter and the fold gate
-	// must stop charging the persisted Steps for them. The +2 matches the resume
-	// boundary above — the /compact command and its report are the two messages this
-	// turn adds around the compaction. The auto path in chat_stream.go records the
-	// same thing without a command message; keep the two in step.
-	if err := wsp.DB.SetSessionCLICompactBoundary(ctx, session.ID, len(history)+2); err != nil {
+	// must stop charging the persisted Steps for them. Deliberately the same value
+	// as the resume boundary above — nativeCompactBoundary owns the per-mode offset
+	// so the two axes cannot drift apart.
+	if err := wsp.DB.SetSessionCLICompactBoundary(ctx, session.ID, boundary); err != nil {
 		return summaryResult{}, fmt.Errorf("persist CLI compaction boundary after native compaction: %w", err)
 	}
 	return summaryResult{

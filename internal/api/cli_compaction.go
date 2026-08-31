@@ -1,9 +1,48 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
+
+// errNativeCompactUnavailable marks the "this session cannot be compacted by the
+// CLI itself" class of failure — an unsupported/too-old provider, or a session
+// with no resumable CLI thread yet. It is deliberately separate from a real
+// runtime error (a failed CompactNative call, a persist error): the manual path
+// reports either one to the user, but the automatic gate has to tell them apart
+// so it can fall back to the rolling fold on unavailability and surface a genuine
+// failure. Check with errors.Is, never by string.
+var errNativeCompactUnavailable = errors.New("native CLI compaction unavailable for this session")
+
+// nativeCompactMode names the call path invoking the CLI's native compactor. The
+// two paths differ only in how many messages the turn adds around the compaction,
+// which is what nativeCompactBoundary encodes.
+type nativeCompactMode int
+
+const (
+	// nativeCompactManual is the explicit /compact command: the command message
+	// and its report are appended to the transcript around the compaction.
+	nativeCompactManual nativeCompactMode = iota
+	// nativeCompactAuto is the gate firing inside an ordinary turn: no command
+	// message is appended, so the boundary is the raw history length.
+	nativeCompactAuto
+)
+
+// nativeCompactBoundary returns the transcript index the CLI's rebuilt window
+// starts at, for both the stored resume boundary and the context-meter boundary.
+//
+// historyLen is the pre-command transcript length. The manual path adds +2 on top
+// of it because the /compact command message and the report this turn writes back
+// both land after the snapshot and are already inside the CLI's fresh window. The
+// automatic path appends no command message, so its boundary is historyLen as is.
+func nativeCompactBoundary(mode nativeCompactMode, historyLen int) int {
+	if mode == nativeCompactManual {
+		return historyLen + 2
+	}
+	return historyLen
+}
 
 // isCompletedNativeCompaction reports whether one trace entry is a FINISHED
 // CLI-side compaction lifecycle event. The claude-cli parser emits the same
