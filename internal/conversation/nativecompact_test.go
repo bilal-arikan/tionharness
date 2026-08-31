@@ -138,6 +138,12 @@ func TestPrepareNativeFailureFallsBackToRolling(t *testing.T) {
 // appends user and assistant messages after native compaction, so history grows but
 // the rolling-summary boundary does not. The next over-budget Prepare must still
 // skip native and run the rolling fold, which actually reduces pending text.
+//
+// The third turn pins the OTHER half of the contract: the guard blocks native
+// compaction only until the rolling boundary actually moves. Once turn two's fold
+// advanced SummaryMsgCount, native must be armed again — otherwise a long session
+// would native-compact exactly once in its lifetime and then rely on the rolling
+// fold forever, which is not what "native" mode promises.
 func TestPrepareNativeAntiLoop(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactNative)
@@ -169,5 +175,49 @@ func TestPrepareNativeAntiLoop(t *testing.T) {
 	}
 	if !second.Compacted || second.Fold.Mode != ModeRolling {
 		t.Fatalf("second turn: want a rolling fold, got Compacted=%v mode=%q", second.Compacted, second.Fold.Mode)
+	}
+
+	// The fold moved the rolling boundary in the STORE, but sess is a by-value copy
+	// from before it. Re-reading is what every real turn path does before Prepare
+	// (chat_stream.go re-reads the session at the head of each pass), and it is the
+	// only way the third turn can see the progress the guard keys on.
+	const keepRecent = 2 // the fixture's SetLimits(1, 2)
+	wantBoundary := len(history) - keepRecent
+	reloaded, err := d.GetSession(context.Background(), sess.ID)
+	if err != nil {
+		t.Fatalf("reload session: %v", err)
+	}
+	if reloaded.SummaryMsgCount != wantBoundary {
+		t.Fatalf("rolling boundary after the fold = %d, want %d (%d msgs minus keepRecent %d)",
+			reloaded.SummaryMsgCount, wantBoundary, len(history), keepRecent)
+	}
+
+	// A third real turn: two more messages on top of the folded transcript. The
+	// boundary has advanced since the native attempt was claimed, so native re-arms.
+	history = append(history,
+		db.Message{Role: providers.RoleUser, Text: "u5"},
+		db.Message{Role: providers.RoleAssistant, Text: "a5"},
+	)
+	third, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, reloaded, agent, history)
+	if err != nil {
+		t.Fatalf("third prepare: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("native callback called %d times after the fold advanced the boundary, want 2", calls)
+	}
+	if !third.NativeCompacted || third.Fold.Mode != ModeNative {
+		t.Fatalf("third turn: want native to re-arm, got NativeCompacted=%v mode=%q", third.NativeCompacted, third.Fold.Mode)
+	}
+	if third.Compacted {
+		t.Fatalf("third turn folded as well; a successful native compaction must skip the rolling fold")
+	}
+	// …and the re-armed native turn left the rolling boundary exactly where the
+	// second turn's fold put it: native compaction never touches the transcript.
+	after, err := d.GetSession(context.Background(), sess.ID)
+	if err != nil {
+		t.Fatalf("get session after third turn: %v", err)
+	}
+	if after.SummaryMsgCount != wantBoundary {
+		t.Fatalf("boundary after the re-armed native turn = %d, want %d (unchanged)", after.SummaryMsgCount, wantBoundary)
 	}
 }
