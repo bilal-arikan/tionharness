@@ -396,6 +396,26 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// cliResumeScope composes the opaque CLI resume scope for one session/persona.
+// The Codex provider derives its durable CODEX_HOME from sha256(scope), so every
+// caller MUST produce byte-identical bytes: a scope that differs by one field
+// names an empty home, where the stored thread does not exist and
+// CanResumeScoped rejects the resume.
+//
+// planCodexResume (chat_resume.go) still inlines the same join for the ordinary
+// turn path; it carries uncommitted work in this tree and is deliberately left
+// untouched here. Fold it into this helper when that lands, so the two cannot
+// drift apart again.
+func cliResumeScope(session db.Session, agentRow db.Agent, system string) string {
+	return strings.Join([]string{
+		session.ID,
+		agentRow.ID,
+		agentRow.ProviderRef(),
+		agentRow.Model,
+		system,
+	}, "\x00")
+}
+
 // nativeCompactSession invokes the active CLI provider's own compaction control
 // plane. It never falls back to the TionHarness rolling summary: /compact-custom
 // is the explicit command for that separate operation.
@@ -424,9 +444,20 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	if _, err := wsp.Runtime.DropWarmCLISessionChecked(session.ID); err != nil {
 		return summaryResult{}, fmt.Errorf("stop warm CLI session before native compaction: %w", err)
 	}
+	// Codex derives the durable CODEX_HOME holding this thread's rollout from
+	// sha256(CLIResumeScope), so the scope here must reproduce the one a normal
+	// turn composes — including the static system prefix. The prefix comes from the
+	// prompt epoch exactly as composeTurnRequest gets it, so a frozen session
+	// yields the same bytes the last turn hashed rather than a freshly built
+	// variant.
+	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, agentRow.ID, history)
+	system, _ := wsp.Runtime.EpochStaticSystem(ctx, session.ID, agentRow, multiAgent, false,
+		strings.TrimSpace(session.WorkingDir), func() string {
+			return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
+		})
 	resp, err := native.CompactNative(ctx, session.CLISessionID, providers.Request{
 		Model: agentRow.Model, PermissionMode: agentRow.PermissionMode,
-		WorkDir: wsp.SandboxRoot(), CLIResumeScope: session.ID,
+		WorkDir: wsp.SandboxRoot(), CLIResumeScope: cliResumeScope(session, agentRow, system),
 		OnEvent: func(trace providers.TraceStep) {
 			step := nativeCompactionStep(trace)
 			wsp.Runtime.EmitSessionStep(session.ID, step)
@@ -446,9 +477,17 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 			steps = append(steps, nativeCompactionStep(trace))
 		}
 	}
-	if len(steps) != 1 {
-		return summaryResult{}, fmt.Errorf("%s native compaction produced %d completed lifecycle events, want 1", provider.Name(), len(steps))
+	if len(steps) == 0 {
+		return summaryResult{}, fmt.Errorf("%s native compaction produced no completed lifecycle event", provider.Name())
 	}
+	// More than one completion is NOT a failure: without a PreCompact hook the
+	// claude-cli parser treats consecutive compact_boundary events as separate
+	// compactions (claudecli_stream.go), so one /compact can legitimately report
+	// several. The CLI did compact; keep the LAST boundary, which is the one the
+	// returned resume id and the new transcript baseline correspond to. Failing
+	// here would skip SetSessionCLIResume and leave the stored boundary behind the
+	// CLI's real state.
+	steps = steps[len(steps)-1:]
 	resumeID := resp.SessionID
 	if resumeID == "" {
 		resumeID = session.CLISessionID
