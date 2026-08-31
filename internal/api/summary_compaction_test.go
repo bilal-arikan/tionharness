@@ -112,6 +112,20 @@ func TestNativeCompactionStepPreservesLifecycleIdentity(t *testing.T) {
 	}
 }
 
+func TestNativeCompactionStepPersistsCLIProvenance(t *testing.T) {
+	result := summaryResult{Steps: []agent.TurnStep{nativeCompactionStep(providers.TraceStep{
+		ID: "cmp-1", Kind: "compaction", Source: "cli-native",
+		Provider: "codex-cli", SessionAction: "native-compact",
+	})}}
+	var steps []agent.TurnStep
+	if err := json.Unmarshal([]byte(result.stepsJSON()), &steps); err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 1 || steps[0].Trigger != conversation.TriggerManual || steps[0].Source != "cli-native" || steps[0].SessionAction != "native-compact" {
+		t.Fatalf("native steps = %+v", steps)
+	}
+}
+
 func TestCompactCommandHeadersSeparateNativeAndCustom(t *testing.T) {
 	native, nativeOK := summaryHeader("compact")
 	custom, customOK := summaryHeader("compact-custom")
