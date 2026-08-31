@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -106,6 +107,15 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx = conversation.WithContextOverhead(ctx, overhead)
 	ctx = conversation.WithContextOverheadStepBase(ctx, stepBase)
+	// Native-compaction seam (autoCompactMode native/auto), same as the real turn
+	// paths: the fold this side chat may trigger is a shared session-level effect,
+	// so it must compact the session the same way the next real turn would — a side
+	// chat that quietly used a different strategy would leave the session in a state
+	// the turn path never produces.
+	ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) error {
+		_, nerr := s.runNativeCompact(ctx, ws(r), session, history, nativeCompactAuto)
+		return nerr
+	})
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

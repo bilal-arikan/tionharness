@@ -382,6 +382,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					sse("step", st)
 				}
 			})
+			// Native-compaction seam: under autoCompactMode native/auto the gate asks
+			// the CLI to compact its own window before folding history ourselves. The
+			// error travels back unwrapped — conversation treats any non-nil result as
+			// "not compacted" and falls back to the rolling fold.
+			ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) error {
+				_, err := s.runNativeCompact(ctx, wsp, session, rawHistory, nativeCompactAuto)
+				return err
+			})
 			prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 			if cerr != nil {
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())

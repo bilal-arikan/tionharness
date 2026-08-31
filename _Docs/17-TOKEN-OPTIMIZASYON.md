@@ -974,8 +974,21 @@ her iki durumda da **ceil 256K** rot getirisini sağlar. Büyük ham pencere ist
 Ayarlar ▸ Bağlam'dan seçilir: `rolling` (varsayılan — yukarıda anlatılan TionHarness fold'u, yükseltmede
 davranış değişmez), `native` (CLI sağlayıcısının kendi compaction'ı — **bedeli:** warm CLI oturumunu
 düşürür, sonraki tur cold start olur) veya `auto` (sağlayıcı destekliyor + warm oturum canlıysa native,
-aksi halde rolling). Bu faz yalnız ayar boru hattını kurar; modu okuyup davranışı dallandıran hibrit
-kapı ayrı bir fazda gelir — şu an her üç değer de rolling gibi davranır.
+aksi halde rolling).
+
+**Hibrit kapı (2026-08-31).** `Prepare` artık modu okuyup dallanır: bütçe aşıldığında `native`/`auto`
+modunda önce CLI'ın kendi compaction'ı denenir (`conversation.WithNativeCompact` ctx-seam'i →
+`api.runNativeCompact(..., nativeCompactAuto)`), yalnız o **başarısız olursa** rolling fold'a düşülür.
+`rolling` modunda kod yolu bire bir eskisi gibidir. Native yol transcript'i değiştirmediğinden sonuç
+`Prepared.Compacted` yerine ayrı `Prepared.NativeCompacted` ile raporlanır — `Compacted` çağıranlarda
+warm CLI oturumunu düşürür, ki native compaction'dan sonra tam olarak istenmeyen şey odur —
+ve `Compaction.Mode` (`rolling` | `native`) ile ayırt edilir.
+
+**Anti-loop.** Native compaction CLI'ın penceresini küçültür, TionHarness'in pending transcript'ini
+değil; yani `EstimateTokens` aynı kalır ve kapı sonraki turda yine aşımı görür. Bu yüzden bir oturumda
+native deneme **history uzunluğu başına yalnız bir kez** yapılır (`Manager.claimNativeAttempt`,
+`nativecompact.go`): aynı (veya kısalmış) transcript'le ikinci `Prepare` doğrudan rolling fold'a düşer,
+sistem yakınsar. Testler: `internal/conversation/nativecompact_test.go`.
 
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:

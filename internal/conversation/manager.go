@@ -195,6 +195,10 @@ type Manager struct {
 	logger         *slog.Logger // optional: compaction events to the in-app Logs (nil-safe)
 	// Auto-compaction strategy ("" = rolling). Accessors live in autocompact.go.
 	autoCompactMode string
+	// Per-session history length at which native compaction was last attempted —
+	// the anti-loop guard for the native path (see claimNativeAttempt in
+	// nativecompact.go). Keyed by session because one Manager serves every session.
+	lastNativeCompactAt map[string]int
 }
 
 // SetLogger attaches a logger so the routine budgeted fold (and manual /compact)
@@ -280,6 +284,15 @@ const (
 	TriggerReactive = "reactive" // mid-turn overflow recovery (CompactInFlightMessages)
 )
 
+// Compaction modes. They name WHO compacted: the built-in rolling-summary fold,
+// or the CLI provider's own native compactor (which rebuilds the provider's
+// window and leaves the TionHarness transcript untouched — hence FoldedMsgs 0 and
+// an unchanged token estimate on that path).
+const (
+	ModeRolling = "rolling"
+	ModeNative  = "native"
+)
+
 // Compaction describes one fold of history into the rolling summary: how many
 // messages went in, the context footprint (messages + fixed overhead) before and
 // after, and what triggered it. Zero value = no fold happened.
@@ -288,6 +301,7 @@ type Compaction struct {
 	BeforeTokens int    // estimated context tokens before the fold
 	AfterTokens  int    // estimated context tokens after the fold
 	Trigger      string // TriggerAuto | TriggerManual | TriggerReactive
+	Mode         string // ModeRolling | ModeNative ("" on records written before modes existed)
 }
 
 // Prepared is the result of budgeting a session for one turn.
@@ -295,9 +309,15 @@ type Prepared struct {
 	Summary       string              // rolling summary to inject into the system prompt ("" if none)
 	Messages      []providers.Message // the turns to actually send
 	ContextTokens int                 // estimated tokens of summary + sent messages
-	Compacted     bool                // whether this call folded new messages into the summary
-	Fold          Compaction          // the fold this call performed (zero value unless Compacted)
-	Pressure      float64             // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
+	Compacted     bool                // whether this call folded new messages into the ROLLING summary
+	// NativeCompacted reports that the CLI provider compacted its own window for
+	// this turn instead of the rolling fold. Deliberately a separate flag from
+	// Compacted: callers react to a rolling fold by dropping the warm CLI session
+	// and starting the provider fresh, which is exactly what must NOT happen after
+	// a native compaction (it would throw away the window the CLI just rebuilt).
+	NativeCompacted bool
+	Fold            Compaction // the compaction this call performed (zero value unless Compacted or NativeCompacted)
+	Pressure        float64    // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
 }
 
 // Prepare returns the messages to send for a turn, compacting older history
@@ -325,9 +345,35 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	// preserves the previous message-only behaviour exactly.
 	overhead := contextOverheadFrom(ctx)
 	compacted := false
+	nativeCompacted := false
 	var foldStat Compaction
 	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
-		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
+		// Native-first strategies: ask the CLI provider to compact its own window
+		// before folding anything ourselves. Only nil means it happened; any error
+		// (unsupported provider, no resumable thread, a failed call) falls through to
+		// the rolling fold below, so the "rolling" mode — the default — runs exactly
+		// the code path it ran before this branch existed.
+		if mode := m.AutoCompactMode(); mode == AutoCompactNative || mode == AutoCompactAuto {
+			// claimNativeAttempt is the anti-loop guard: native compaction does not
+			// shrink OUR transcript, so without it the same over-budget footprint would
+			// re-trigger it every turn. See nativecompact.go.
+			if m.claimNativeAttempt(session.ID, len(history)) && fireNativeCompact(ctx) == nil {
+				nativeCompacted = true
+				// The transcript is untouched, so both sides report the same footprint;
+				// Mode is what tells this apart from a rolling fold downstream.
+				foldStat = Compaction{
+					BeforeTokens: before + overhead,
+					AfterTokens:  before + overhead,
+					Trigger:      TriggerAuto,
+					Mode:         ModeNative,
+				}
+				m.log(slog.LevelInfo, "context compacted (CLI native)",
+					"session", session.ID, "agent", agent.ID,
+					"before_tokens", before, "overhead_tokens", overhead, "budget", maxTokens)
+				recordNativeCompactionDebug(database, session.ID, agent.ID, before+overhead, maxTokens)
+			}
+		}
+		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok && !nativeCompacted {
 			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
 			// parity). "auto" = the routine budgeted fold (manual /compact passes
 			// "manual" via its own path).
@@ -362,6 +408,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 				BeforeTokens: before + overhead,
 				AfterTokens:  afterTokens,
 				Trigger:      TriggerAuto,
+				Mode:         ModeRolling,
 			}
 			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
 				"session", session.ID, "agent", agent.ID,
@@ -390,18 +437,19 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		// never sees the real footprint" — the failure this figure went unread
 		// through. A turn that actually folded already has its compaction event, so
 		// it needs no second warning.
-		if !compacted && pressure >= pressureWarnRatio {
+		if !compacted && !nativeCompacted && pressure >= pressureWarnRatio {
 			recordPressureDebug(database, session.ID, agent.ID, contextTokens+overhead, maxTokens, pressure)
 		}
 	}
 
 	return Prepared{
-		Summary:       summary,
-		Messages:      toProviderMessages(ctx, pending),
-		ContextTokens: contextTokens,
-		Compacted:     compacted,
-		Fold:          foldStat,
-		Pressure:      pressure,
+		Summary:         summary,
+		Messages:        toProviderMessages(ctx, pending),
+		ContextTokens:   contextTokens,
+		Compacted:       compacted,
+		NativeCompacted: nativeCompacted,
+		Fold:            foldStat,
+		Pressure:        pressure,
 	}, nil
 }
 
@@ -433,6 +481,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 		BeforeTokens: beforeTokens,
 		AfterTokens:  EstimateTokens(newSummary, keepTail),
 		Trigger:      TriggerManual,
+		Mode:         ModeRolling,
 	}
 	m.log(slog.LevelInfo, "context compacted (manual /compact)",
 		"session", session.ID, "agent", agent.ID, "folded_msgs", fold.FoldedMsgs)
@@ -566,6 +615,29 @@ func recordPressureDebug(database *db.DB, sessionID, agentID string, usedTokens,
 		Name:    "context_pressure",
 		Detail: fmt.Sprintf("context %d/%d tokens · %.0f%% of budget · fold at 100%%",
 			usedTokens, budget, pressure*100),
+	}, 0)
+}
+
+// recordNativeCompactionDebug journals an automatic compaction that the CLI
+// provider performed on its OWN window instead of the rolling fold. It shares the
+// DebugCompaction type so the Debug modal lists both in one series, but carries a
+// distinct name ("auto-native") and no fold figures — no message left the
+// transcript, so folded/after counts would be misleading. Best-effort, same as
+// recordCompactionDebug.
+func recordNativeCompactionDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int) {
+	if database == nil || sessionID == "" {
+		return
+	}
+	detail := fmt.Sprintf("CLI native compaction · %d tokens over budget basis", usedTokens)
+	if budget > 0 {
+		detail += fmt.Sprintf(" · budget %d", budget)
+	}
+	detail += " · transcript unchanged (rolling fold skipped)"
+	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+		Type:    db.DebugCompaction,
+		AgentID: agentID,
+		Name:    TriggerAuto + "-" + ModeNative,
+		Detail:  detail,
 	}, 0)
 }
 

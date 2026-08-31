@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -398,6 +399,16 @@ func (b *interactionBackend) callRunSubagent(ctx context.Context, run *chatRun, 
 	if runFn == nil {
 		return interaction.CallResult{Text: "run_subagent is not available for this turn (delegation disabled)", IsError: true}, nil
 	}
+	// The runner executes on the Interaction server's request ctx, which carries no
+	// session id — but a subagent is persisted as a CHILD of the calling session, so
+	// without it every bridged call died with "subagent persistence requires a parent
+	// session". Stamp the run's session id, exactly like the bridged built-in path
+	// (Runtime.BridgeTools) does for session-scoped tools.
+	if run.sessionID == "" {
+		return interaction.CallResult{Text: "run_subagent needs a persisted session to attach the subagent to; this turn has none", IsError: true}, nil
+	}
+	ctx = tools.WithCurrentSession(ctx, run.sessionID)
+	ctx = agent.WithSessionID(ctx, run.sessionID)
 	out, err := runFn(ctx, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil

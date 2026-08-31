@@ -1,0 +1,70 @@
+package conversation
+
+import (
+	"context"
+	"errors"
+)
+
+// nativeCompactCtxKey carries a callback that asks the ACTIVE CLI provider to
+// compact its own context window — the seam the API layer uses to run native
+// compaction from inside Prepare without conversation importing api (which would
+// cycle). Modelled on preCompactCtxKey above it.
+type nativeCompactCtxKey struct{}
+
+// errNoNativeCompactor is what fireNativeCompact reports when nobody installed a
+// callback (every direct/test caller of Prepare, and every non-CLI turn path).
+// Like any other non-nil result it simply means "native compaction did not
+// happen", so the caller falls back to the rolling fold.
+var errNoNativeCompactor = errors.New("no native compaction callback on context")
+
+// WithNativeCompact returns a context carrying the native-compaction callback the
+// automatic gate invokes before it would fold history into the rolling summary.
+// The callback returns nil when the provider actually compacted its window, and
+// any error when it could not (unsupported provider, no resumable CLI thread, a
+// failed call). conversation deliberately does NOT classify the error — the
+// unavailability sentinel lives in the api package — so the rule here is simply
+// nil = native happened, non-nil = fall back to the rolling fold.
+// nil fn is a no-op.
+func WithNativeCompact(ctx context.Context, fn func(context.Context) error) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, nativeCompactCtxKey{}, fn)
+}
+
+// fireNativeCompact invokes the ctx-carried native-compaction callback, or reports
+// errNoNativeCompactor when there is none.
+func fireNativeCompact(ctx context.Context) error {
+	fn, ok := ctx.Value(nativeCompactCtxKey{}).(func(context.Context) error)
+	if !ok || fn == nil {
+		return errNoNativeCompactor
+	}
+	return fn(ctx)
+}
+
+// claimNativeAttempt is the anti-loop gate in front of native compaction.
+//
+// Native compaction shrinks the CLI's OWN window; it does not shrink the pending
+// transcript TionHarness estimates, so EstimateTokens(summary, pending) is exactly
+// the same on the next turn. Without a guard the gate would therefore see the same
+// over-budget footprint every single turn and fire another native compaction (a CLI
+// round-trip plus a dropped warm session) forever, never converging.
+//
+// The guard: a session may attempt native compaction only once per history length.
+// A second Prepare over the same (or a shrunken) transcript is refused, so that
+// turn falls through to the rolling fold — which does reduce the text — and the
+// system converges. The attempt is claimed here, before the callback runs: a failed
+// native attempt also falls back to rolling on that same turn, so re-claiming it
+// would buy nothing.
+func (m *Manager) claimNativeAttempt(sessionID string, historyLen int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if last, ok := m.lastNativeCompactAt[sessionID]; ok && historyLen <= last {
+		return false
+	}
+	if m.lastNativeCompactAt == nil {
+		m.lastNativeCompactAt = map[string]int{}
+	}
+	m.lastNativeCompactAt[sessionID] = historyLen
+	return true
+}
