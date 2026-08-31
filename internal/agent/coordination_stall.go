@@ -196,11 +196,10 @@ func (r *Runtime) GuardCoordinatorStall(coordSessionID, agentID string, agent db
 // worker RESULT delivered inside the grace window — the state in which a coordinator
 // with no running worker is legitimately digesting rather than frozen.
 //
-// The <coordination-status> note ("all workers have finished — act, spawn, or
-// conclude") shares the same "worker-note" origin but is deliberately NOT a result:
-// it is a runtime instruction to act, and the turn that answers it with prose about
-// delegation is a phantom spawn like any other. Excluded here so it grants no
-// leniency at all.
+// A standalone <coordination-status> message is not a result. A status appended to
+// a <task-notification>, however, is still the last worker's real result and keeps
+// the normal grace window. This distinction prevents the piggyback from turning the
+// final result into an immediate false-positive spawn nudge.
 func (r *Runtime) hasRecentWorkerNoteInbound(coordSessionID string, now time.Time) bool {
 	var inbound db.Message
 	err := r.db.StreamMessages(context.Background(), coordSessionID, func(msg db.Message) bool {
@@ -215,7 +214,8 @@ func (r *Runtime) hasRecentWorkerNoteInbound(coordSessionID string, now time.Tim
 	if err != nil || inbound.Origin != "worker-note" {
 		return false
 	}
-	if strings.Contains(inbound.Text, "<coordination-status>") {
+	if strings.Contains(inbound.Text, "<coordination-status>") &&
+		!strings.Contains(inbound.Text, "<task-notification>") {
 		return false
 	}
 	age := now.Sub(time.Unix(inbound.CreatedAt, 0))

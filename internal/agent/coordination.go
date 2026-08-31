@@ -51,14 +51,13 @@ type coordSlot struct {
 	// starting a second one.
 	driving    bool
 	pending    bool // >=1 notification arrived mid-turn; run once more after
-	ackedIdle  bool // ran the "all workers idle" reconcile turn for this batch
+	ackedIdle  bool // claimed the all-idle signal for this worker wave
 	hadWorkers bool // at least one worker was ever spawned (gates the idle sweep)
 	// idleFolded marks that the CURRENT all-idle transition was already reported by
 	// piggybacking <coordination-status> onto the last worker's own notification, so
 	// the coordinator learns the result and "everyone is done" in a single turn.
 	// It keeps later notifications for that same transition (already-finished
-	// siblings landing after the zero-crossing) from re-arming the sweep and letting
-	// the drain loop inject a duplicate standalone note. Cleared by the next
+	// siblings landing after the zero-crossing) from reopening the claim. Cleared by the next
 	// spawn/continuation, which opens a genuinely new transition.
 	idleFolded bool
 	// coordinatorMode records that this slot belongs to a session that actually has
@@ -78,7 +77,7 @@ type coordSlot struct {
 	spawnHallucStreak int
 	// stallHalted is the hard-halt escalation flag: set once the nudge budget is spent
 	// AND the coordinator is STILL judged to be phantom-spawning. It stops the drain
-	// loop from re-arming (or running the idle-reconcile turn) so a wedged coordinator
+	// loop from re-arming so a wedged coordinator
 	// no longer burns auto-turns, and gates the one-shot user-facing halt notice. Reset
 	// to false by any turn that actually calls a coordination tool (genuine recovery).
 	// See guardCoordinatorStall / escalateCoordinatorStallHalt (coordination_stall.go).
@@ -557,6 +556,11 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	if cwd == "" {
 		cwd = strings.TrimSpace(parent.WorkingDir)
 	}
+	// The reservation above is released exactly once, by whichever path ends this
+	// worker before it ever reaches runWorkerWithCtl: a shutdown drop of the queued
+	// item, or SpawnSession failing outright. Both must report the zero-crossing —
+	// only the observer of the transition may fold the all-idle note.
+	dropped := releaseOnce(slot)
 	res, err := r.SpawnSession(ctx, agentRef, task, SpawnOptions{
 		ModelOverride:            spec.ModelOverride,
 		WorkingDir:               cwd,
@@ -569,13 +573,13 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		CoordinatorMode:          coordinator,
 		CoordinatorWorkflow:      workflow,
 		CoordinatorMaxTurns:      maxTurns,
-		onDrop: func(error) {
-			slot.workers.Add(-1)
-		},
+		onDrop:                   func(error) bool { return dropped() },
 	})
 	if err != nil {
 		// SpawnSession never launched runWorker, so release the reservation here.
-		slot.workers.Add(-1)
+		// No notification is sent on this path — the tool call hands the error back to
+		// the coordinator's live turn — so the zero-crossing needs no further routing.
+		dropped()
 		return SpawnResult{}, err
 	}
 	slot.markHadWorkers()
@@ -1526,8 +1530,7 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 	}); err != nil {
 		cancel()
 		// The fold is only valid if the note carrying it actually reached history.
-		// Give the claim back so the drain loop's standalone backstop can still
-		// deliver the all-idle signal — dropping both would strand the coordinator.
+		// Give the claim back so a later real notification may claim this transition.
 		if folded {
 			slot.mu.Lock()
 			slot.ackedIdle = false
@@ -1605,11 +1608,10 @@ func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 }
 
 // enqueueCoordinatorTurnKeepingIdleAck is enqueueCoordinatorTurn with control over
-// the idle-sweep re-arm. keepIdleAck=true is used by exactly one caller: the
+// the all-idle claim. keepIdleAck=true is used by exactly one caller: the
 // notification that ALREADY carries the folded <coordination-status> note. Without
 // it the default re-arm below would clear the ackedIdle that notification just
-// claimed, and the drain loop would inject a SECOND, standalone copy of the same
-// note and burn the extra turn this fold exists to remove.
+// claimed, allowing a later notification from the same wave to duplicate it.
 func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, keepIdleAck bool) {
 	// Archive is a HARD stop on automatic turns, and it has to be enforced here --
 	// the wake entry point -- not only in RecoverOrphanedTurns. WHY: on 2026-08-27
@@ -1633,16 +1635,12 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 		slot.mu.Unlock()
 		return
 	}
-	// Re-arm the idle-reconcile sweep for the NEXT all-idle transition, UNLESS the
+	// Re-arm the all-idle claim for the NEXT transition, UNLESS the
 	// current one has already been reported by a folded notification (idleFolded).
 	//
 	// Clearing unconditionally is what let the fold be undone: the last worker folds
 	// the note and claims ackedIdle, then its already-finished siblings' notifications
-	// cleared the claim and the drain loop injected the standalone note again — 3
-	// copies, and the extra turn back. Gating on "workers > 0" instead was too broad:
-	// it also silenced the backstop for a wake that arrives with no workers at all
-	// (an orphan reclaim), which is precisely when the standalone note is the ONLY
-	// all-idle signal. idleFolded is narrow: it suppresses re-arming for exactly the
+	// cleared the claim and duplicated the status. idleFolded is narrow: it suppresses re-arming for exactly the
 	// transition a fold already covered, and a spawn/continuation clears it.
 	if !keepIdleAck && !slot.idleFolded {
 		slot.ackedIdle = false
@@ -1738,30 +1736,12 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		// note and hand the coordinator one more turn, making a manual Stop look like it
 		// kept going. Consumed one-shot; a still-running worker re-arms the loop via
 		// enqueueCoordinatorTurn when it finishes (workers keep running through a Stop).
-		stopped := slot.stopRequested
 		slot.stopRequested = false
-		// Idle reconciliation (liveness backstop): if EVERY worker is now finished
-		// and no path has yet delivered the all-idle signal for this transition,
-		// inject an authoritative "all workers finished" note and loop ONCE more.
-		// This guarantees the coordinator gets a final, unambiguous turn even when
-		// it overlooked one notification in a coalesced batch — breaking the "waits
-		// forever on an already-finished worker" stall. One-shot per all-idle
-		// transition (ackedIdle, re-armed by the next notification) and bounded by
-		// CoordinatorMaxTurns (checked at the loop top), so it can never loop.
-		//
-		// The COMMON case no longer reaches here: when the last worker's own
-		// notification observed the all-idle transition, NotifyCoordinator already
-		// folded the note into that message and claimed ackedIdle, so the turn that
-		// read the final result WAS the reconcile — no extra turn, no extra LLM call.
-		// What remains is the genuine backstop: transitions no notification saw
-		// (a worker released by a path that does not notify, a reclaimed orphan),
-		// where this standalone note is still the only all-idle signal.
-		if !stopped && !slot.ackedIdle && slot.hadWorkers && slot.workers.Load() == 0 {
-			slot.ackedIdle = true
-			slot.mu.Unlock()
-			r.appendCoordinationStatus(coordSessionID)
-			continue
-		}
+		// The all-idle signal is delivered only by the last worker's own result.
+		// A standalone reconcile here would create a second notification turn with
+		// no new worker result, which is both costly and prone to false spawn nudges.
+		// Paths that finish workers must therefore preserve the zero-crossing value
+		// from releaseOnce and pass it to notifyCoordinator.
 		slot.driving = false
 		slot.mu.Unlock()
 		// No worker and no queued notification can wake this coordinator now.
@@ -1808,14 +1788,8 @@ func (r *Runtime) scheduleSettleBackstop(coordSessionID string) {
 }
 
 // coordinationStatusNote is the authoritative "every worker has finished" signal.
-// It reaches the coordinator two ways, and the distinction is the whole point:
-//
-//   - PIGGYBACKED (the common path): the last worker's own <task-notification>
-//     carries it, so the turn that delivers the final result ALSO delivers the
-//     all-idle signal — one turn, not two. See attachCoordinationStatus.
-//   - STANDALONE (the backstop): appendCoordinationStatus injects it on its own
-//     when the all-idle transition was NOT observed on a notification path — a
-//     coalesced batch, a reclaimed orphan, a sub-coordinator settle.
+// It is always piggybacked onto the last worker's <task-notification>, so the turn
+// that delivers the final result also delivers the all-idle signal.
 const coordinationStatusNote = "<coordination-status>All workers under this coordinator have finished. " +
 	"Act on any results you have not handled yet, spawn the next steps if the plan has more, " +
 	"or conclude the project. Do NOT wait for a worker that has already finished.</coordination-status>"
@@ -1831,18 +1805,6 @@ const coordinationStatusNote = "<coordination-status>All workers under this coor
 // proves it (see drainCoordinator, which treats a piggybacked note as the reconcile).
 func attachCoordinationStatus(note string) string {
 	return note + "\n\n" + coordinationStatusNote
-}
-
-// appendCoordinationStatus persists a standalone <coordination-status> note into the
-// coordinator session so the idle-reconcile turn opens on an explicit, authoritative
-// signal that every worker has finished. Purely a history append (no enqueue): the
-// caller is already inside the drain loop and continues to the next turn.
-func (r *Runtime) appendCoordinationStatus(coordSessionID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "worker-note", coordinationStatusNote); err != nil {
-		r.logger.Warn("coordination: failed to record idle status note", "coordinator", coordSessionID, "error", err)
-	}
 }
 
 // coordinatorWorkerStatusBlock renders an authoritative, always-fresh snapshot of

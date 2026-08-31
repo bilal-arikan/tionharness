@@ -138,18 +138,31 @@ func TestCoordinatorStallGuardNeverHaltsWhileWorkerNoteFresh(t *testing.T) {
 	}
 }
 
-// TestCoordinationStatusNoteIsNotAWorkerResult pins the second half of the fix: the
-// <coordination-status> note shares the "worker-note" origin but tells the coordinator
-// to ACT, so it must grant no leniency — the turn answering it is judged and haltable
-// like any other.
+// TestCoordinationStatusNoteIsNotAWorkerResult keeps defensive handling for legacy
+// standalone status messages: they are runtime instructions, not worker results.
 func TestCoordinationStatusNoteIsNotAWorkerResult(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	coord := newTestCoordinator(t, rt, 0)
 
-	rt.appendCoordinationStatus(coord)
+	if _, err := rt.recordInjectedUserNote(context.Background(), coord, "worker-note", coordinationStatusNote); err != nil {
+		t.Fatalf("record standalone status: %v", err)
+	}
 
 	if rt.hasRecentWorkerNoteInbound(coord, time.Now()) {
 		t.Fatal("a <coordination-status> note must not count as a fresh worker result")
+	}
+}
+
+func TestPiggybackedCoordinationStatusRemainsWorkerResult(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
+	note := attachCoordinationStatus("<task-notification>SES9 completed</task-notification>")
+	if _, err := rt.recordInjectedUserNote(context.Background(), coord, "worker-note", note); err != nil {
+		t.Fatalf("record piggybacked result: %v", err)
+	}
+
+	if !rt.hasRecentWorkerNoteInbound(coord, time.Now()) {
+		t.Fatal("piggybacked final worker result must retain the worker-note grace window")
 	}
 }
 

@@ -144,8 +144,9 @@ func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
 	_, err = rt.enqueueSpawn(spawnQueueItem{
 		agent:  agent,
 		prompt: "will be dropped",
-		opts: SpawnOptions{CoordinatorSessionID: coord.ID, onDrop: func(error) {
+		opts: SpawnOptions{CoordinatorSessionID: coord.ID, onDrop: func(error) bool {
 			dropped <- struct{}{}
+			return false
 		}},
 		enqueuedAt: time.Now(),
 	})
@@ -181,6 +182,47 @@ func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
 	if !found {
 		t.Fatal("coordinator did not receive dropped-spawn notification")
 	}
+}
+
+// TestSpawnQueueDropCarriesIdleStatusWhenLastWorker pins the drop half of the
+// "only the observer of the zero-crossing reports all-idle" contract. The drain
+// loop runs no standalone reconcile turn, so a queued worker discarded at shutdown
+// must fold the <coordination-status> note into its own failure notification —
+// otherwise the coordinator never learns its fleet is empty.
+func TestSpawnQueueDropCarriesIdleStatusWhenLastWorker(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	agent := queueTestAgent(t, rt)
+	coord, err := rt.db.CreateSession(context.Background(), db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-idle", Title: "Coordinator"})
+	if err != nil {
+		t.Fatalf("create coordinator: %v", err)
+	}
+	// Mirror SpawnWorker's reservation: the worker is counted before it launches, and
+	// the drop is what releases it.
+	slot := rt.coordSlotFor(coord.ID)
+	slot.workers.Add(1)
+	slot.markHadWorkers()
+	release := releaseOnce(slot)
+
+	if _, err := rt.enqueueSpawn(spawnQueueItem{
+		agent:      agent,
+		prompt:     "will be dropped",
+		opts:       SpawnOptions{CoordinatorSessionID: coord.ID, onDrop: func(error) bool { return release() }},
+		enqueuedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	rt.CloseMCP()
+
+	messages, err := rt.db.ListMessages(context.Background(), coord.ID)
+	if err != nil {
+		t.Fatalf("list coordinator messages: %v", err)
+	}
+	for _, message := range messages {
+		if strings.Contains(message.Text, "was dropped") && strings.Contains(message.Text, "<coordination-status>") {
+			return
+		}
+	}
+	t.Fatalf("dropped last worker did not carry the all-idle status: %+v", messages)
 }
 
 func TestSpawnQueuePrefersShallowWork(t *testing.T) {

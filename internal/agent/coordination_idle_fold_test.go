@@ -27,7 +27,7 @@ func lastCoordNote(t *testing.T, rt *Runtime, coord string) string {
 }
 
 // countCoordStatusNotes counts how many separate history entries carry the all-idle
-// signal. The fold must produce exactly one, whether piggybacked or standalone.
+// signal. The fold must produce exactly one piggybacked message.
 func countCoordStatusNotes(t *testing.T, rt *Runtime, coord string) int {
 	t.Helper()
 	msgs, err := rt.db.ListMessages(context.Background(), coord)
@@ -49,6 +49,7 @@ func countCoordStatusNotes(t *testing.T, rt *Runtime, coord string) int {
 // turn whose only new information is "the workers you just heard from are done".
 func TestLastWorkerNotificationCarriesIdleStatus(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
 	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
@@ -107,6 +108,7 @@ func TestLastWorkerNotificationCarriesIdleStatus(t *testing.T) {
 // that would make it conclude early.
 func TestIdleStatusNotFoldedWhileWorkersRemain(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
 	coord := newTestCoordinator(t, rt, 0)
 	rt.coordRunFn = func(string) {}
 
@@ -129,6 +131,7 @@ func TestIdleStatusNotFoldedWhileWorkersRemain(t *testing.T) {
 // were last (duplicate note) or both defer to the other (lost signal).
 func TestIdleStatusFoldedOnceAcrossConcurrentFinishes(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
 	coord := newTestCoordinator(t, rt, 0)
 	rt.coordRunFn = func(string) {}
 
@@ -170,6 +173,7 @@ func TestIdleStatusFoldedOnceAcrossConcurrentFinishes(t *testing.T) {
 // re-arm the second wave's completion would be silent, stranding the coordinator.
 func TestSecondWaveGetsItsOwnIdleSignal(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
 	coord := newTestCoordinator(t, rt, 0)
 	rt.coordRunFn = func(string) {}
 
@@ -201,13 +205,12 @@ func TestSecondWaveGetsItsOwnIdleSignal(t *testing.T) {
 	}
 }
 
-// TestIdleReconcileStillFiresForUnobservedTransition: the standalone backstop must
-// survive the fold. When the all-idle transition happens on a path that does NOT
-// notify (here: a worker released without a notification, as a reclaimed orphan or
-// a settle would), the drain loop is still the only thing that can tell the
-// coordinator — and it must run that reconcile turn.
-func TestIdleReconcileStillFiresForUnobservedTransition(t *testing.T) {
+// TestIdleReconcileNeverSendsStandaloneNotification pins the no-second-turn
+// contract. An unobserved zero-worker state must not manufacture a fleet-finished
+// message; only a real last-worker result may carry that signal.
+func TestIdleReconcileNeverSendsStandaloneNotification(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
 	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
@@ -218,11 +221,17 @@ func TestIdleReconcileStillFiresForUnobservedTransition(t *testing.T) {
 	slot.markHadWorkers() // workers already at 0: the transition nobody notified about
 
 	rt.enqueueCoordinatorTurn(coord)
-	// Processing turn (1) + the standalone reconcile turn (2).
-	waitTurns(t, &mu, &turns, 2, "process + standalone reconcile")
+	waitTurns(t, &mu, &turns, 1, "single processing turn")
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	gotTurns := turns
+	mu.Unlock()
+	if gotTurns != 1 {
+		t.Fatalf("idle reconcile must not create a standalone turn; got %d", gotTurns)
+	}
 
-	if got := countCoordStatusNotes(t, rt, coord); got != 1 {
-		t.Fatalf("the backstop must inject the all-idle note exactly once, got %d", got)
+	if got := countCoordStatusNotes(t, rt, coord); got != 0 {
+		t.Fatalf("idle reconcile must not inject a standalone note, got %d", got)
 	}
 }
 

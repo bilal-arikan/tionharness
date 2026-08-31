@@ -92,7 +92,10 @@ type SpawnOptions struct {
 	NoQueue      bool
 	ChildSession *db.Session
 	// onDrop releases caller-owned reservations if shutdown discards this spawn.
-	onDrop func(error)
+	// It returns whether releasing them took the owning coordinator's fleet to zero
+	// (the same zero-crossing runWorkerWithCtl observes), so the drop notification
+	// can carry the all-idle signal instead of losing the transition.
+	onDrop func(error) bool
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new

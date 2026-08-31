@@ -135,11 +135,17 @@ func (r *Runtime) dropSpawnQueue(cause error) {
 
 func (r *Runtime) dropSpawn(item spawnQueueItem, cause error) {
 	r.logger.Warn("spawn queue: dropped queued spawn", "agent", item.agent.ID, "wait", time.Since(item.enqueuedAt), "error", cause)
+	// A dropped queued spawn ends a worker its coordinator already counted, so it is
+	// a fleet-finishing event exactly like a worker turn returning. onDrop reports the
+	// zero-crossing and it is handed to notifyCoordinator: the drain loop no longer
+	// runs a standalone reconcile turn, so an unobserved transition here would strand
+	// the coordinator without its all-idle signal.
+	lastWorker := false
 	if item.opts.onDrop != nil {
-		item.opts.onDrop(cause)
+		lastWorker = item.opts.onDrop(cause)
 	}
 	if coordID := item.opts.CoordinatorSessionID; coordID != "" {
-		r.NotifyCoordinator(coordID, fmt.Sprintf("<task-notification worker=%q status=\"failed\">Queued spawn for %s was dropped: %v</task-notification>", item.agent.Name, item.agent.Name, cause))
+		r.notifyCoordinator(coordID, fmt.Sprintf("<task-notification worker=%q status=\"failed\">Queued spawn for %s was dropped: %v</task-notification>", item.agent.Name, item.agent.Name, cause), lastWorker, nil)
 	}
 }
 
