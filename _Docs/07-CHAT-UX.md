@@ -207,6 +207,37 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   önizlenip indirilebilmesi buna dayanır. Mutlak `path=` biçiminde bu geçerli
   değildir — orada yalnız medya allowlist'i çalışır.
 
+### Görsel üzerine çizim
+
+- Clipboard PNG/JPEG/WebP girdileri yüklemeden önce doğrulanır; 20 MB, 8192 px ve
+  40 MP sınırları aşılırsa kullanıcıya eyleme dönük hata gösterilir. Kullanıcı
+  görseli doğrudan ekleyebilir, ortak `ImageAnnotator` içinde çizebilir veya iptal
+  edebilir. Çoklu paste sırası korunur; geç tamamlanan decode/upload işlemleri
+  session değişimi ve unmount sonrasında UI durumunu değiştirmez.
+- Editör doğal görsel koordinatlarında stroke tutar; CSS resize, zoom ve DPR
+  değişimlerinde deterministik yeniden çizer. Önizleme backing store'u 8 MP ile,
+  stroke/geçmiş modeli ayrı bellek ve nokta sınırlarıyla korunur. Pointer capture,
+  `pointercancel`, `lostpointercapture` ve pencere blur aktif stroke'u sonlandırır;
+  touch scroll yalnız canvas üzerinde engellenir.
+- Mevcut temel araç serbest kalemdir: kırmızı stroke ve kaynak genişliğine göre
+  ölçeklenen, kullanıcı tarafından değiştirilebilen kalem boyutu sunar. Çizgi,
+  dikdörtgen, ok ve metin araçları henüz yoktur. Undo/redo/clear hem düğmelerle;
+  undo/redo ayrıca Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z ve Ctrl/Cmd+Y ile çalışır.
+- Kaydetme tek-uçuşludur. Transparent kaynak PNG kalır; opak JPEG/WebP kaynak önce
+  WebP dener, encoder reddi/null/uyumsuz MIME durumunda bir kez PNG'ye düşer.
+  Export canvas backing store'u işlem sonunda serbest bırakılır. Kapanış kirli
+  çizimde onay ister; modal focus trap, Escape, odak geri yükleme ve async unmount
+  guard'larını uygular.
+- Image artifact çizimi orijinali değiştirmez; dosya body yerine `sourcePath`
+  üzerinden okunur ve `derivedFromArtifactId` ile yeni image artifact oluşturur.
+  Artifact yaratma başarısızsa staging dosyası silinir; silme de başarısız olursa
+  iki hata birlikte kullanıcıya gösterilir.
+- `ImageAnnotator`, `document.body` portalında açılır. Böylece Composer veya artifact
+  önizlemesinin stacking context'i ile mobil workspace öneri kartları, modalın
+  kontrollerinin üstüne çıkamaz. Gerçek Chromium kabulünde 560×520 viewport'ta
+  Kaydet hit-test'i doğrudan düğmeyi verdi; odak tuzağı ve kapanışta odak iadesi
+  portal üzerinden korunur.
+
 ### Adım-adım akış (SSE streaming)
 Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil).
 
