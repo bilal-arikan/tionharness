@@ -26,7 +26,7 @@ func (r *Runtime) InsightScanActive() bool { return r.insightScanActive.Load() }
 // runs the scanner, and — when an app-fix repo is configured — appends new
 // app-fix findings to that repo's backlog. agentID selects the analysis agent
 // (empty = the workspace's default agent).
-func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, agentID string) (insight.ScanResult, error) {
+func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, agentID string) (scanRes insight.ScanResult, scanErr error) {
 	if r == nil || r.db == nil {
 		return insight.ScanResult{}, errors.New("insight: runtime not ready")
 	}
@@ -43,20 +43,26 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		Target: map[string]string{"scanning": "true"},
 	})
 	doneFindings := 0
-	doneSessionID := ""
-	doneError := ""
+	// The finish event reports the function's OWN outcome (named return scanErr) and
+	// the recorder's session, both read in the defer. Deriving them at each exit
+	// instead let every early return — an unreadable ledger, a missing agent, a
+	// failed Scan — publish a green "tamamlandı, 0 bulgu" and, worse, leave the
+	// session id out so the client's live "conversing" indicator never disarmed.
+	var doneRecorder *insightStepRecorder
 	defer func() {
 		r.insightScanActive.Store(false)
 		target := map[string]string{"scanning": "false", "findings": strconv.Itoa(doneFindings)}
 		// The scan's own session id, when it opened one: the hub bridge needs it to
 		// turn this finish event into that session's turn_done — without it the
 		// client's live "conversing" indicator stays armed forever.
-		if doneSessionID != "" {
-			target["sessionId"] = doneSessionID
+		if doneRecorder != nil {
+			if sid := doneRecorder.SessionID(); sid != "" {
+				target["sessionId"] = sid
+			}
 		}
 		level, title, body := "success", "İçgörü taraması tamamlandı", fmt.Sprintf("%d bulgu", doneFindings)
-		if doneError != "" {
-			level, title, body = "error", "İçgörü taraması başarısız", doneError
+		if scanErr != nil {
+			level, title, body = "error", "İçgörü taraması başarısız", scanErr.Error()
 		}
 		r.publish(events.Event{Type: "insight", Level: level, Title: title, Body: body, Target: target})
 	}()
@@ -133,6 +139,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	// first analysis, streams one card per analysed pair, and writes the whole trace
 	// as one assistant message at the end.
 	recorder := newInsightStepRecorder(r, runID, analysisAgent.ID, insightRunTitle(len(lensIDs), 0))
+	doneRecorder = recorder // the finish event addresses this session (see defer)
 	analyzer := &insightAnalyzer{rt: r, agent: analysisCfg, system: insightPrompt, steps: recorder, findings: findings}
 
 	start := time.Now()
@@ -153,17 +160,15 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		return res, err
 	}
 	if terminalErr := analyzer.permanentError(); terminalErr != nil {
-		scanErr := fmt.Errorf("insight scan stopped: %w", terminalErr)
-		doneError = scanErr.Error()
+		stopped := fmt.Errorf("insight scan stopped: %w", terminalErr)
 		report := insightRunReport{
 			RunID: runID, LensIDs: lensIDs, AgentID: analysisAgent.ID,
-			Duration: time.Since(start), Result: res, Failure: scanErr,
+			Duration: time.Since(start), Result: res, Failure: stopped,
 		}
 		if finishErr := recorder.finish(ctx, report); finishErr != nil {
-			return res, errors.Join(scanErr, fmt.Errorf("persist failed insight scan: %w", finishErr))
+			return res, errors.Join(stopped, fmt.Errorf("persist failed insight scan: %w", finishErr))
 		}
-		doneSessionID = recorder.SessionID()
-		return res, scanErr
+		return res, stopped
 	}
 
 	// Route app-fix findings to the configured repo backlog (idempotent append).
@@ -226,7 +231,6 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		r.logger.Warn("insight run session failed", "error", fErr, "run", runID)
 	}
 	sessionID := recorder.SessionID()
-	doneSessionID = sessionID // the finish event addresses this session (see defer)
 	if sessionID != "" {
 		// Retention: the scan sessions are unbounded otherwise (the run log has its
 		// own cap). Archive, never delete.

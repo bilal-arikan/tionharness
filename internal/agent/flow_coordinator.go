@@ -173,7 +173,12 @@ func (r *Runtime) waitCoordinatorIdle(ctx context.Context, coordSessionID string
 			// decrements it the moment its own turn ends — while its branch keeps
 			// working — so the slot alone would read as settled with grandchildren
 			// still running, and the node would take a half-finished result.
-			if r.coordSlotIdle(coordSessionID, slot) && r.activeSubtreeWorkers(ctx, coordSessionID) == 0 {
+			if !r.coordSlotIdle(coordSessionID, slot) {
+				continue
+			}
+			// An unreadable subtree is not an idle one: keep polling and let the
+			// deadline above surface it as a failure to settle.
+			if active, err := r.activeSubtreeWorkers(ctx, coordSessionID); err == nil && active == 0 {
 				return nil
 			}
 		}

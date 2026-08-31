@@ -97,13 +97,17 @@ func (r *Runtime) ListSubtreeWorkers(ctx context.Context, coordSessionID string)
 // activeSubtreeWorkers counts the descendants of a coordinator whose turn is
 // currently running. Used to decide whether a branch is genuinely settled — see
 // the file header for why the direct-children count is not enough.
-func (r *Runtime) activeSubtreeWorkers(ctx context.Context, coordSessionID string) int {
+//
+// The error is part of the answer and must not be collapsed into a count: an
+// unreadable tree means UNKNOWN, and every caller has to treat unknown as "the
+// branch may still be live". Returning 0 there would let a coordinator conclude
+// on top of workers that are still running — the exact failure this file exists
+// to prevent.
+func (r *Runtime) activeSubtreeWorkers(ctx context.Context, coordSessionID string) (int, error) {
 	ws, err := r.ListSubtreeWorkers(ctx, coordSessionID)
 	if err != nil {
-		// Unknown rather than zero: treating an unreadable tree as "all done" would
-		// let a coordinator conclude on top of workers that are still running.
 		r.logger.Warn("coordination: cannot inspect subtree", "coordinator", coordSessionID, "error", err)
-		return 0
+		return 0, err
 	}
 	n := 0
 	for _, w := range ws {
@@ -111,7 +115,7 @@ func (r *Runtime) activeSubtreeWorkers(ctx context.Context, coordSessionID strin
 			n++
 		}
 	}
-	return n
+	return n, nil
 }
 
 // formatWorkerTree renders a subtree as an indented status list for the
@@ -170,10 +174,20 @@ func (r *Runtime) deferWorkerReport(ctx context.Context, sess db.Session, status
 		r.stopSubtree(ctx, sess.ID, "sub-coordinator turn ended with status "+status)
 		return false
 	}
-	if !r.coordSlotFor(sess.ID).hasWorkers() && r.activeSubtreeWorkers(ctx, sess.ID) == 0 {
-		// It never delegated (or everything already finished and it synthesized in
-		// this same turn): the turn genuinely is the result, report it as usual.
-		return false
+	if !r.coordSlotFor(sess.ID).hasWorkers() {
+		active, err := r.activeSubtreeWorkers(ctx, sess.ID)
+		if err == nil && active == 0 {
+			// It never delegated (or everything already finished and it synthesized in
+			// this same turn): the turn genuinely is the result, report it as usual.
+			return false
+		}
+		if err != nil {
+			// Unknown subtree: withhold the completion notification. A needless
+			// "delegating" note costs the coordinator one wasted wait that the settle
+			// backstop resolves; reporting completed over a live branch is unrecoverable.
+			r.logger.Warn("coordination: withholding worker report, subtree state unknown",
+				"session", sess.ID, "error", err)
+		}
 	}
 	r.setOwesReport(ctx, sess.ID, true)
 	return true
@@ -203,8 +217,16 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 	if sess.CoordinatorSessionID == "" {
 		return fmt.Errorf("this session has no coordinator to report to")
 	}
-	if running := r.activeSubtreeWorkers(ctx, sessionID); running > 0 && status == turnStatusCompleted {
-		return fmt.Errorf("cannot report \"completed\" while %d of your own workers are still running: wait for their notifications and synthesize them first, or stop them and report \"incomplete\"", running)
+	if status == turnStatusCompleted {
+		running, err := r.activeSubtreeWorkers(ctx, sessionID)
+		if err != nil {
+			// Refuse rather than guess: "completed" is the one status that tells the
+			// parent it may build on this result.
+			return fmt.Errorf("cannot verify whether your own workers are still running (%w); retry, or stop them and report \"incomplete\"", err)
+		}
+		if running > 0 {
+			return fmt.Errorf("cannot report \"completed\" while %d of your own workers are still running: wait for their notifications and synthesize them first, or stop them and report \"incomplete\"", running)
+		}
 	}
 	// Clear the outstanding report BEFORE sending, so an armed settle backstop
 	// racing this call finds nothing to claim and stays quiet. The agent's own
@@ -237,7 +259,14 @@ func (r *Runtime) settleReportBackstop(ctx context.Context, sessionID string) {
 	if !r.owesReportNow(ctx, sessionID) {
 		return
 	}
-	if r.activeSubtreeWorkers(ctx, sessionID) > 0 {
+	running, err := r.activeSubtreeWorkers(ctx, sessionID)
+	if err != nil {
+		// Unknown subtree: do not settle. The node stays owing its report and a later
+		// backstop (or the node itself) resolves it once the tree reads again.
+		r.logger.Warn("coordination: not settling, subtree state unknown", "session", sessionID, "error", err)
+		return
+	}
+	if running > 0 {
 		return // branch still live; nothing to settle yet
 	}
 	sess, err := r.db.GetSession(ctx, sessionID)
@@ -324,7 +353,13 @@ func (r *Runtime) SetSessionCoordinatorMode(ctx context.Context, sessionID strin
 		return "Coordinator mode is already off.", nil
 	}
 	if !enabled {
-		if running := r.activeSubtreeWorkers(ctx, sessionID); running > 0 {
+		running, err := r.activeSubtreeWorkers(ctx, sessionID)
+		if err != nil {
+			// Unknown, so refuse: dropping the tools while workers may still be running
+			// leaves the agent unable to stop or continue them.
+			return "", fmt.Errorf("cannot verify whether your workers are still running (%w); try again", err)
+		}
+		if running > 0 {
 			return "", fmt.Errorf("cannot turn coordinator mode off while %d worker(s) of yours are still running: stop them with stop_worker, or wait for their notifications, then try again", running)
 		}
 	}

@@ -594,16 +594,48 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	return res, nil
 }
 
+// coordinatorTreeLock is one tree's spawn lock plus the number of callers that
+// currently hold or are waiting for it. The count is what makes removal safe: the
+// entry may only leave the registry once nobody can still be blocked on this exact
+// mutex, otherwise two callers would serialize on two different mutexes.
+type coordinatorTreeLock struct {
+	mu   sync.Mutex
+	refs int // guarded by coordinatorTreeLocksMu
+}
+
 // coordinatorTreeLocks holds one spawn lock per coordinator TREE, keyed by root id.
-var coordinatorTreeLocks sync.Map
+// Entries are reference-counted and removed when the last holder releases, so a
+// long-lived process does not accumulate one mutex per coordinator tree it ever ran.
+var (
+	coordinatorTreeLocksMu sync.Mutex
+	coordinatorTreeLocks   = map[string]*coordinatorTreeLock{}
+)
 
 // lockCoordinatorTree serializes budget-check-plus-create for one coordinator tree
-// and returns the unlock func.
+// and returns the unlock func. The unlock func must be called exactly once.
 func lockCoordinatorTree(rootID string) func() {
-	v, _ := coordinatorTreeLocks.LoadOrStore(rootID, &sync.Mutex{})
-	mu := v.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+	coordinatorTreeLocksMu.Lock()
+	entry := coordinatorTreeLocks[rootID]
+	if entry == nil {
+		entry = &coordinatorTreeLock{}
+		coordinatorTreeLocks[rootID] = entry
+	}
+	entry.refs++
+	coordinatorTreeLocksMu.Unlock()
+
+	entry.mu.Lock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			entry.mu.Unlock()
+			coordinatorTreeLocksMu.Lock()
+			entry.refs--
+			if entry.refs == 0 && coordinatorTreeLocks[rootID] == entry {
+				delete(coordinatorTreeLocks, rootID)
+			}
+			coordinatorTreeLocksMu.Unlock()
+		})
+	}
 }
 
 // liveWorkerRef names one worker that still occupies a tree-budget slot, for the
@@ -1018,9 +1050,19 @@ func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionI
 	if coordSessionID != "" && ws.CoordinatorSessionID != coordSessionID {
 		return fmt.Errorf("session %s is not a worker of this coordinator", workerSessionID)
 	}
-	subtreeRunning := 0
+	// subtreeLive stays true when the subtree could not be read: stopping is the safe
+	// direction, but claiming the worker had "already finished" over an unreadable
+	// branch is not.
+	subtreeLive := false
 	if ws.IsCoordinator() {
-		subtreeRunning = r.activeSubtreeWorkers(ctx, workerSessionID)
+		running, err := r.activeSubtreeWorkers(ctx, workerSessionID)
+		if err != nil {
+			r.logger.Warn("coordination: stopping worker with unknown subtree state",
+				"session", workerSessionID, "error", err)
+			subtreeLive = true
+		} else {
+			subtreeLive = running > 0
+		}
 		r.stopSubtree(ctx, workerSessionID, "stop_worker on their sub-coordinator")
 	}
 	_, wasRunning := r.workerCancels.Load(workerSessionID)
@@ -1031,7 +1073,7 @@ func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionI
 		if wasRunning {
 			return nil
 		}
-		if subtreeRunning > 0 {
+		if subtreeLive {
 			// The sub-coordinator itself was between turns; its branch is what was
 			// actually running and we just cancelled it. Report that truthfully
 			// instead of the misleading "already finished?".
