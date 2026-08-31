@@ -333,6 +333,14 @@ edilir (2026-07-02: `enableDelegation` master toggle'ı kaldırıldı; görünü
 Araçlar ekranından). CLI yolunda canlı `providers.Request` olmadığından *inherited-context*
 modu yalnız prompt'a düşer.
 
+**Oturum kapsamlı köprü araçlarında session id damgası (2026-08-31):** Köprü dispatch'i
+Interaction sunucusunun ham HTTP istek ctx'i üzerinde koşar; bu ctx'te **session id yoktur**.
+`run_subagent` gibi oturum kapsamlı araçlar runner'a geçmeden önce `run.sessionID`'yi ctx'e
+damgalamalıdır (`tools.WithCurrentSession` + `agent.WithSessionID`). Aksi halde subagent
+persistence `subagent persistence requires a parent session` ile düşer — native araç döngüsü
+etkilenmediğinden hata yalnız claude-cli / codex-cli oturumlarında görünür. Oturumun kalıcı
+kaydı yoksa sessizce yutmak yerine açık `IsError` döndür.
+
 **`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
 _(Not: `core_memory_*` araçları 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI;
 bu bölümün core-memory kısmı tarihseldir, `conversation_search` köprüsü hâlâ geçerli.)_
