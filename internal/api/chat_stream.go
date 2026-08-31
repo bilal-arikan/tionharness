@@ -354,7 +354,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// static prefix keeps the message-only estimate under budget while the real
 			// footprint runs over — the fold never fires (the 127%-but-never-compacted
 			// coordinator case). systemFillers is the same basis the context meter uses.
-			ctx = conversation.WithContextOverhead(ctx, s.contextOverheadTokens(ctx, wsp, session, history, multiAgent))
+			overhead, oerr := s.contextOverheadTokens(ctx, wsp, session, history, multiAgent)
+			if oerr != nil {
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "context_overhead_failed", "context overhead: "+oerr.Error())
+				return
+			}
+			ctx = conversation.WithContextOverhead(ctx, overhead)
 			// PreCompact lifecycle hook (Claude Code parity): Prepare invokes this just
 			// before it folds older turns into the rolling summary. Fire-and-forget audit.
 			ctx = conversation.WithPreCompact(ctx, func(trigger string) {

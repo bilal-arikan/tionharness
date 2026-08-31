@@ -269,7 +269,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
-	messageFillers, err := buildFillers(session.Summary, pending, agentRow.Provider == "codex-cli")
+	messageFillers, err := buildFillers(session.Summary, pending, hasWarmCLIThread(session))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -425,6 +425,17 @@ func dirSize(dir string) (int64, int) {
 	return total, count
 }
 
+// hasWarmCLIThread reports whether the session has a live provider-side thread
+// that still holds the earlier turns' tool trace. Both CLI providers resume the
+// same way — the next request carries only the delta after CLISentMsgCount (see
+// claudeResumeDecision in chat_resume.go, and the codex path beside it) — so the
+// question is never "which provider", it is "is there a warm thread". A cold
+// turn (no CLI session id, or nothing sent into it yet) replays the composed
+// history instead and retains nothing, so its Steps must NOT be counted.
+func hasWarmCLIThread(session db.Session) bool {
+	return session.CLISessionID != "" && session.CLISentMsgCount > 0
+}
+
 // buildFillers turns the live context window into labelled, token-weighted buckets.
 func buildFillers(summary string, pending []db.Message, retainSteps bool) ([]contextFiller, error) {
 	byRole := map[string]*contextFiller{}
@@ -490,9 +501,10 @@ func buildFillers(summary string, pending []db.Message, retainSteps bool) ([]con
 // history is the session's stored turns: needed for the recent-tool-activity
 // recap, which is rendered from the turns' Steps traces and shipped on the
 // volatile side by composeTurnRequest. Native request history maps a stored turn
-// to Text only. Codex CLI resume is the exception: its durable provider thread
-// retains the turn's internal tool calls/results, which buildFillers accounts for
-// separately from this bounded recap.
+// to Text only. A WARM CLI thread (claude-cli or codex-cli resume) is the
+// exception: its durable provider thread retains the turn's internal tool
+// calls/results, which buildFillers accounts for separately from this bounded
+// recap — see hasWarmCLIThread.
 func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) []contextFiller {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
@@ -573,12 +585,30 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 // Fed into Prepare via conversation.WithContextOverhead so the budgeted fold gates
 // on the true footprint (messages + this), not on messages alone: reusing
 // systemFillers guarantees the meter and the fold engine agree on the overhead.
-func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) int {
+//
+// On a WARM CLI thread it also adds the persisted Steps trace the provider still
+// holds for the pending turns. EstimateTokens deliberately excludes it (those
+// bytes are never re-sent by us), so without this term the gate measured only
+// the visible text while the real thread ran multiples over budget and no fold
+// ever fired. The meter counts the same trace in its own bucket, so both sides
+// now see one number.
+func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) (int, error) {
 	total := 0
 	for _, f := range s.systemFillers(ctx, wsp, session, history, multiAgent) {
 		total += f.Tokens
 	}
-	return total
+	if hasWarmCLIThread(session) {
+		pending := history
+		if session.SummaryMsgCount <= len(history) {
+			pending = history[session.SummaryMsgCount:]
+		}
+		steps, err := conversation.EstimatePersistedStepTokens(pending)
+		if err != nil {
+			return 0, err
+		}
+		total += steps
+	}
+	return total, nil
 }
 
 // countCatalogSkills counts the entries in a rendered "# Available Skills" block.

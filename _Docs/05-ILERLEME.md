@@ -2,6 +2,51 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
 
+## Auto-compact gate'i kalıcı CLI izini sayıyor (2026-08-31) ⏳
+
+**Belirti (ölçüldü).** SES2230 (codex-cli, gpt-5.6-sol, etkin bütçe 70000): panel
+257272 token gösterirken fold gate'inin gördüğü sayı 25190'da kalıyordu — fark
+232083 (185 kalıcı step, 32 asistan mesajı). Sonuç: `session.json` içinde
+`summary:""`, `summaryMsgCount:0`, `debug.jsonl`'in 237 satırında `foldIndex:0`.
+Panel bütçenin 3.7 katını gösterirken hiç compaction tetiklenmiyordu.
+
+**Kök neden.** `EstimateTokens` `Steps`'i bilinçli olarak saymaz (o iz sağlayıcıya
+yeniden gönderilmez), ama sıcak bir CLI thread'inde sağlayıcı onu **kendi
+tarafında tutmaya devam eder**. Panel bu izi ayrı bir kovada sayıyordu, gate ise
+hiç görmüyordu.
+
+- **Tek pay kaynağı.** Yeni `conversation.EstimatePersistedStepTokens(msgs []db.Message) (int, error)`
+  (`internal/conversation/persisted.go`) yalnız asistan mesajlarının `Steps`
+  izini toplar. Bozuk iz sessizce 0 sayılmaz, hata olarak döner.
+  `EstimateTokens` **değişmedi** — `TestStepsAreNotSentAndNotEstimated` aynen
+  yeşil; iz gate'e ayrı bir terim olarak eklenir.
+- **Sağlayıcı adı yerine sıcak-thread testi.** `buildFillers`'ın `retainSteps`
+  koşulu `agentRow.Provider == "codex-cli"` idi; iki yönden yanlıştı — claude-cli
+  de aynı delta gönderimini yapıyor (`claudeResumeDecision`) yani orada hata hiç
+  sayılmıyordu, codex dalı ise **soğuk** turu da sayıp doluluğu şişiriyordu. Artık
+  tek yardımcı: `hasWarmCLIThread(session)` = `CLISessionID != "" && CLISentMsgCount > 0`
+  (`internal/api/session_info.go`). Provider string karşılaştırması tamamen kalktı.
+- **Gate aynı paya oturdu.** `contextOverheadTokens` artık `(int, error)` döner ve
+  sıcak thread durumunda `EstimatePersistedStepTokens(pending)` terimini ekler; üç
+  çağrı sitesi (`chat_stream`, `chat_btw`, `wake_turn`) hatayı yutmadan raporlar.
+  Böylece `Prepare`'in `before+overhead > maxTokens` gate'i panelle **aynı** sayıyı
+  görür.
+- **`Prepared.Pressure` erken uyarıya bağlandı.** Alan hesaplanıyor ama üretimde
+  hiç okunmuyordu. `Prepare` artık fold etmeyen ama `pressure >= 0.85` olan turda
+  `debug.jsonl`'e yeni `db.DebugPressure` ("pressure") olayı yazar; fold olan tur
+  zaten kendi `compaction` olayını üretiyor, ikinci uyarı yazılmaz.
+
+Kapsam dışı bırakıldı (ayrı iş): codex native compaction'ı otomatik yola bağlamak,
+auto-compact sınırını `CLISentMsgCount`'a geri beslemek.
+
+Testler: `TestEstimatePersistedStepTokensCountsAssistantOnly`,
+`TestEstimatePersistedStepTokensSurfacesMalformedTrace`,
+`TestPrepareFoldsOnPersistedTraceOverhead` (SES2230'un birim karşılığı: metin
+bütçe altında, iz dahil üstünde), `TestPrepareJournalsContextPressure`,
+`TestHasWarmCLIThread`, `TestBuildFillersCountsRetainedTraceOnlyWhenWarm`.
+Doğrulama: `go test ./internal/conversation/... ./internal/api/... ./internal/db/... -count=1` ok,
+`git diff --check` sıfır.
+
 ## Haftalık özellik denetimi: teardown context sızıntısı ve refactor (2026-08-31) ✅
 
 Hafta boyunca eklenen özelliklerin denetiminde bulunan ve düzeltilen üç konu:

@@ -325,6 +325,15 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	pressure := 0.0
 	if maxTokens > 0 {
 		pressure = float64(contextTokens+overhead) / float64(maxTokens)
+		// Early warning: the turn fits, but only just. Journalling it makes the
+		// approach to the threshold readable BEFORE the fold, which is the only
+		// way to tell "the gate is working and about to fire" apart from "the gate
+		// never sees the real footprint" — the failure this figure went unread
+		// through. A turn that actually folded already has its compaction event, so
+		// it needs no second warning.
+		if !compacted && pressure >= pressureWarnRatio {
+			recordPressureDebug(database, session.ID, agent.ID, contextTokens+overhead, maxTokens, pressure)
+		}
 	}
 
 	return Prepared{
@@ -482,6 +491,25 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 // together they make cumulative summary drift readable across folds. A
 // foldIndex <= 0 means the ordinal could not be established; it is then left off
 // the event and said so in Detail rather than silently journalled as fold #0.
+// pressureWarnRatio is how full the context budget has to be for Prepare to
+// journal an early-warning event instead of staying silent until the fold.
+const pressureWarnRatio = 0.85
+
+// recordPressureDebug journals a "context budget nearly full" warning for a turn
+// that did NOT fold. Best-effort, same as recordCompactionDebug.
+func recordPressureDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int, pressure float64) {
+	if database == nil || sessionID == "" {
+		return
+	}
+	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+		Type:    db.DebugPressure,
+		AgentID: agentID,
+		Name:    "context_pressure",
+		Detail: fmt.Sprintf("context %d/%d tokens · %.0f%% of budget · fold at 100%%",
+			usedTokens, budget, pressure*100),
+	}, 0)
+}
+
 func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes, foldIndex, summaryBytes int) {
 	if database == nil || sessionID == "" {
 		return

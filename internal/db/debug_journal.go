@@ -42,6 +42,7 @@ const (
 	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
 	DebugLesson     = "lesson"      // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
 	DebugEpoch      = "epoch"       // prompt-epoch lifecycle: created/adopted/stale/refreshed (reason in Name/Detail)
+	DebugPressure   = "pressure"    // context budget is close to the fold threshold (ratio in Detail)
 	DebugBuild      = "build"       // backend build running when the session journal was created
 )
 
