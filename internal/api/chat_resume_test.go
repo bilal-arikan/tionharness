@@ -102,6 +102,14 @@ func TestClaudeResumeDecision(t *testing.T) {
 			if c.wantActive && plan.sentCount != c.wantSent {
 				t.Errorf("sentCount = %d, want %d", plan.sentCount, c.wantSent)
 			}
+			// coldStart is exactly "resume applied to this turn but no warm thread
+			// carried into it" — the signal the transcript's new-CLI-session divider
+			// is drawn from (TSK514). Derived from the row rather than hand-listed so
+			// a new case cannot forget it.
+			wantCold := c.wantActive && c.wantResume == ""
+			if plan.coldStart != wantCold {
+				t.Errorf("coldStart = %v, want %v", plan.coldStart, wantCold)
+			}
 		})
 	}
 }

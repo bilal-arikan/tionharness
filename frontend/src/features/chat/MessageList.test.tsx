@@ -98,3 +98,33 @@ describe('MessageList ghost assistant agent fallback', () => {
     expect(renderedAgent(earlier, 'earlier')).toBeNull()
   })
 })
+
+// The CLI cold-start divider is backend-attributed (db.Message.CLIColdStart), so
+// it must render off that flag alone — independent of the timestamp gap the cache
+// divider is derived from.
+describe('MessageList CLI cold-start divider', () => {
+  const dividerText = (container: HTMLElement) => container.textContent ?? ''
+
+  it('draws the divider above a turn that restarted the CLI session', () => {
+    const flagged: Message = { ...message('cold'), cliColdStart: true }
+    const container = renderList({ messages: [flagged], streaming: false })
+
+    expect(dividerText(container)).toContain('yeni CLI oturumu')
+  })
+
+  it('draws nothing for an ordinary warm-resumed turn', () => {
+    const container = renderList({ messages: [message('warm')], streaming: false })
+
+    expect(dividerText(container)).not.toContain('yeni CLI oturumu')
+  })
+
+  it('stacks both dividers when a long gap also broke the CLI thread', () => {
+    const earlier = message('earlier')
+    // Two hours apart: past the 1h cache TTL, so the cache divider applies too.
+    const flagged: Message = { ...message('cold'), createdAt: 7300, cliColdStart: true }
+    const container = renderList({ messages: [earlier, flagged], streaming: false })
+
+    expect(dividerText(container)).toContain('yeni CLI oturumu')
+    expect(dividerText(container)).toContain('cache soğudu')
+  })
+})

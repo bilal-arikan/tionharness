@@ -1,5 +1,13 @@
 # TionHarness — İlerleme Takibi
 
+## Sidebar yerel aramasında session ID desteği (2026-08-31) ⏳
+
+- **TSK570.** `SessionsSidebar` yerel filtresi kapsam çiplerinden sonra başlık yanında
+  session ID üzerinde de case-insensitive substring eşleşmesi yapıyor. Mesaj gövdesi
+  aramasının debounce/backend akışı değişmedi. Arama placeholder'ı başlık, ID ve mesaj
+  kapsamını açıkça belirtiyor; saf `sessionMatchesQuery` yardımcısı başlık, kısmi ID,
+  alakasız sorgu, ID büyük/küçük harf ve boş sorgu vakalarıyla test ediliyor.
+
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
 
 ## Auto-compact gate'i kalıcı CLI izini sayıyor (2026-08-31) ⏳
@@ -97,6 +105,39 @@ TionHarness fold adımı taşımaz), `TestSetSessionCLICompactBoundaryIsMonotoni
 Doğrulama: `go build ./...` ok,
 `go test ./internal/providers/... ./internal/api/... ./internal/db/... ./internal/conversation/... -count=1` ok,
 `git diff --check` sıfır.
+
+## Oturum listesi canlı filtreleri + CLI yeniden başlangıç ayracı (2026-08-31) ⏳
+
+Panodan iki kart; ikisi de "olan biteni görünür kıl" ekseninde.
+
+- **TSK513 — beşli oturum kategorisi.** `SessionsSidebar` kapsam çipleri
+  `Worker` + `Arşiv` ikilisinden dörde çıktı: `Çalışan` (oturumun kendi turu akıyor)
+  ve `Worker Bekleyen` (kendisi boşta, altındaki en az bir doğrudan worker canlı)
+  eklendi. Sınıflandırma `sessionKindMeta.ts` içindeki saf `sessionLiveScope()`
+  fonksiyonunda; iki değer karşılıklı dışlayıcıdır (kendi turu da akan bir
+  koordinatör `Çalışan` sayılır), böylece bir satırı görünür tutmak için iki çipin
+  birden açık olması gerekmez. Sidebar'da tek bir `chipShapeOf()` hem çip
+  sayaçlarını hem görünür listeyi besler — rozet sayısı ile filtrenin tuttuğu satır
+  sayısı ayrışamaz. `sessionMatchesChips`'te canlı alanlar opsiyonel: runtime anlık
+  görüntüsü olmayan çağıranlar eski davranışı korur. Detay: `_Docs\07-CHAT-UX.md`.
+- **TSK514 — yeni CLI oturumu çizgisi.** Transkriptte `ColdCacheDivider`'ın yanına
+  `CLIColdStartDivider` geldi: `--resume` etkinken sıcak thread taşınamadığında
+  (oturumun ilk CLI turu, compaction fold'u, ya da saklanan thread id'sinin CLI
+  home'unda bulunmaması) turun üstüne çizgi çizilir. Cache ayracı zaman
+  damgasından türetilir, bu yeni ayraç ise backend atıflıdır
+  (`db.Message.CLIColdStart` ← `cliResumePlan.coldStart`) ve ikisi aynı turda
+  üst üste binebilir. `coldStart` `claudeResumeDecision` içinde **true başlar**,
+  yalnız sıcak dalda temizlenir; ayrıca iki provider doğrulama yolu
+  (`CanResume`, `CanResumeScoped`) kararı reddettiğinde yeniden `true` yapılır —
+  sonradan eklenen bir soğuk yol sessizce ayracı kaçıramaz.
+
+Doğrulama: `go test ./internal/api/... ./internal/db/... -count=1` ok, frontend
+`npm test` 510+ test geçti (yeni: `sessionKindMeta.test.ts` canlı kapsam blokları,
+`MessageList.test.tsx` ayraç blokları), `npx tsc --noEmit` ve
+`npm run format:check` temiz, `git diff --check` sıfır.
+
+Kartlar `review`'da; aynı turda `internal/agent` tarafında TSK505/TSK508 (worker
+bildirim yolu) ayrı bir oturumda paralel sürüyor.
 
 ## Haftalık özellik denetimi: teardown context sızıntısı ve refactor (2026-08-31) ✅
 

@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest'
+import { sessionMatchesQuery } from './sessionSearch'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
+
+describe('sessionMatchesQuery', () => {
+  const session = { id: 'SES2235', title: 'Haftalık plan' }
+
+  it('matches the title', () => {
+    expect(sessionMatchesQuery(session, 'plan')).toBe(true)
+  })
+
+  it('matches partial session IDs', () => {
+    expect(sessionMatchesQuery(session, '223')).toBe(true)
+    expect(sessionMatchesQuery({ ...session, id: 'SES223' }, '223')).toBe(true)
+  })
+
+  it('rejects unrelated queries', () => {
+    expect(sessionMatchesQuery(session, 'fatura')).toBe(false)
+  })
+
+  it('matches session IDs case-insensitively', () => {
+    expect(sessionMatchesQuery(session, 'ses2235')).toBe(true)
+  })
+
+  it('matches an empty query', () => {
+    expect(sessionMatchesQuery(session, '   ')).toBe(true)
+  })
+})
 
 const visibleState = {
   loading: false,

@@ -207,6 +207,12 @@ export interface Message {
   // interrupted, which is a crash-recovered partial). Text/trace are whatever
   // completed before the stop.
   cancelled?: boolean
+  // True when a CLI provider served this turn from a BRAND NEW underlying CLI
+  // session because the warm `--resume` path did not apply (unresumable stored
+  // thread, a fold re-baseline, or the session's first CLI turn). Only set when
+  // resume was otherwise enabled, so it means "the CLI conversation restarted
+  // here" — the transcript draws a divider above the turn.
+  cliColdStart?: boolean
   // Per-turn enrichment (assistant role): the model that actually answered, why
   // generation ended, this turn's token usage, and its wall-clock duration. All
   // optional/absent for user/system or older messages.

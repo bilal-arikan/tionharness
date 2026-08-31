@@ -525,10 +525,15 @@ export function MessageList({
                 {row}
               </div>
             )
-            if (!coldBoundary) return rowEl
+            // A CLI cold start is a SEPARATE boundary from the cache one: the
+            // underlying CLI conversation restarted here even though no long gap
+            // preceded it. Both can land on the same turn (a day-long pause makes
+            // the CLI thread unresumable too), so they stack rather than compete.
+            if (!coldBoundary && !m.cliColdStart) return rowEl
             return (
               <div key={`cold-${m.id}`} className="flex flex-col gap-4">
-                <ColdCacheDivider gapSec={gapSec} />
+                {coldBoundary && <ColdCacheDivider gapSec={gapSec} />}
+                {m.cliColdStart && <CLIColdStartDivider />}
                 {rowEl}
               </div>
             )
@@ -579,6 +584,24 @@ function ColdCacheDivider({ gapSec }: { gapSec: number }) {
     >
       <span className="h-px flex-1 bg-[var(--color-border)]" />
       <span className="shrink-0 opacity-80">❄️ cache soğudu · {formatGap(gapSec)} ara</span>
+      <span className="h-px flex-1 bg-[var(--color-border)]" />
+    </div>
+  )
+}
+
+// CLIColdStartDivider marks the turn where the underlying CLI conversation
+// restarted: `--resume` was enabled but no warm thread carried into this turn, so
+// the provider opened a fresh CLI session and re-sent the prepared transcript.
+// Backend-attributed (db.Message.CLIColdStart), unlike ColdCacheDivider which is
+// derived from timestamps alone.
+function CLIColdStartDivider() {
+  return (
+    <div
+      className="flex items-center gap-2 px-2 text-[10px] text-[var(--color-text-dim)]"
+      title="Bu turda CLI oturumu yeniden başladı — --resume uygulanamadı (önceki thread sürdürülemedi, compaction tabanı sıfırladı ya da oturumun ilk CLI turu). Hazırlanan transkript yeni CLI oturumuna baştan gönderildi."
+    >
+      <span className="h-px flex-1 bg-[var(--color-border)]" />
+      <span className="shrink-0 opacity-80">🔄 yeni CLI oturumu</span>
       <span className="h-px flex-1 bg-[var(--color-border)]" />
     </div>
   )

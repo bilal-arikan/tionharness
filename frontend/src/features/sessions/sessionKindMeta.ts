@@ -46,15 +46,22 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
 // Sidebar chips (multi-select, display order). The kind chips cover EVERY
 // Session.Kind the backend can produce — including the ones the old filter tabs
 // left out (flow-coordinator, inbox) plus an "Diğer" catch-all for a kind this
-// build does not know — so nothing can be invisible in the list. The two
-// trailing scope chips widen the list instead of narrowing it by kind: worker
-// sessions (coordinator-spawned) and archived ones. Every chip is selected by
-// default, so the sidebar shows everything and the user unticks what they don't
-// want to see.
+// build does not know — so nothing can be invisible in the list. The four
+// trailing scope chips widen the list instead of narrowing it by kind: sessions
+// with a live turn of their own, sessions idle but waiting on live workers below
+// them, worker sessions (coordinator-spawned) and archived ones. Every chip is
+// selected by default, so the sidebar shows everything and the user unticks what
+// they don't want to see.
 export const WORKER_CHIP = 'worker'
 export const SUBAGENT_CHIP = 'subagent'
 export const ARCHIVED_CHIP = 'archived'
 export const OTHER_CHIP = 'other'
+// The two live-state scope chips. `running` is the session's OWN turn streaming;
+// `awaiting-workers` is the coordinator shape: its own turn is idle but at least
+// one worker below it is live. They are mutually exclusive by construction (see
+// sessionLiveScope) so a row never needs both chips on to stay visible.
+export const RUNNING_CHIP = 'running'
+export const AWAITING_WORKERS_CHIP = 'awaiting-workers'
 
 export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'chat', label: 'Sohbet' },
@@ -70,6 +77,8 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'flow-coordinator', label: 'Akış Koord.' },
   { key: 'inbox', label: 'Inbox' },
   { key: OTHER_CHIP, label: 'Diğer' },
+  { key: RUNNING_CHIP, label: 'Çalışan' },
+  { key: AWAITING_WORKERS_CHIP, label: 'Worker Bekleyen' },
   { key: WORKER_CHIP, label: 'Worker' },
   { key: ARCHIVED_CHIP, label: 'Arşiv' },
 ]
@@ -149,9 +158,26 @@ export function sessionChipKey(s: {
   return kindChipKey(s.kind)
 }
 
+// sessionLiveScope classifies a session on the live-activity axis, which is
+// independent of its kind. `running` wins over `awaiting-workers`: a coordinator
+// that is itself streaming is reported as running, so the two scopes never
+// overlap and a row is filtered by exactly one of them.
+export type SessionLiveScope = typeof RUNNING_CHIP | typeof AWAITING_WORKERS_CHIP | null
+
+export function sessionLiveScope(s: {
+  isRunning: boolean
+  liveWorkerCount: number
+}): SessionLiveScope {
+  if (s.isRunning) return RUNNING_CHIP
+  if (s.liveWorkerCount > 0) return AWAITING_WORKERS_CHIP
+  return null
+}
+
 // sessionMatchesChips reports whether a session survives the sidebar's chip
-// selection: its kind chip must be on, and a worker/archived session also needs
-// its scope chip on.
+// selection: its kind chip must be on, and a worker/archived/live session also
+// needs its scope chip on. The live fields are optional so callers that have no
+// runtime snapshot (tests, the bulk overview table) keep the previous behaviour
+// of ignoring the live axis entirely.
 export function sessionMatchesChips(
   s: {
     kind: string
@@ -159,11 +185,18 @@ export function sessionMatchesChips(
     executionType?: string
     isWorker: boolean
     isArchived: boolean
+    isRunning?: boolean
+    liveWorkerCount?: number
   },
   selected: ReadonlySet<string>,
 ): boolean {
   if (s.isArchived && !selected.has(ARCHIVED_CHIP)) return false
   if (s.isWorker && !selected.has(WORKER_CHIP)) return false
+  const live = sessionLiveScope({
+    isRunning: s.isRunning ?? false,
+    liveWorkerCount: s.liveWorkerCount ?? 0,
+  })
+  if (live && !selected.has(live)) return false
   return selected.has(sessionChipKey(s))
 }
 

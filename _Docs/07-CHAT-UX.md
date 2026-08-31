@@ -1041,6 +1041,34 @@ iskelet satırlar, lazy panellerin `Suspense` fallback'leri ise düz metin yerin
 ile başlar — ilk paint "boş" değil "yükleniyor" olur; `TaskBoard`, `Schedules`,
 `Automations`, `FlowsPanel`, `MarketPanel`, `ArtifactsPanel` bu desene taşındı.
 
+### Oturum listesi filtre çipleri (TSK513)
+
+`SessionsSidebar` filtresi çok-seçimli çiplerdir (`sessionKindMeta.ts`); tümü
+**varsayılan olarak açıktır** ve kullanıcı görmek istemediğini kapatır. `localStorage`
+(`SESSION_CHIPS_OFF_KEY`) **kapalı olanları** saklar, açık olanları değil — böylece
+sonraki bir sürümde eklenen çip kimsede sessizce gizli başlamaz.
+
+İki eksen vardır ve bağımsız çalışır:
+
+- **Tür çipleri** — `Session.Kind`'in tamamını kapsar (`chat`, `task`, `flow`, `spawned`,
+  `subagent`, `automation`, `insight`, `flow-coordinator`, `inbox`) + bu sürümün tanımadığı
+  bir tür için `Diğer` yakalayıcısı. Hiçbir oturum görünmez kalamaz.
+- **Kapsam çipleri** — türden bağımsız dört adet: `Çalışan`, `Worker Bekleyen`, `Worker`,
+  `Arşiv`. Eskiden yalnız son ikisi vardı (aktif/worker/arşiv üçlüsü); canlı eksen TSK513
+  ile eklendi.
+
+Canlı eksen `sessionLiveScope()` ile hesaplanır ve **iki değeri karşılıklı dışlayıcıdır**:
+
+- `Çalışan` — oturumun **kendi** turu akıyor (`streamingSessionIds` ya da runtime `running`).
+- `Worker Bekleyen` — oturum kendisi boşta ama **altındaki** en az bir doğrudan worker canlı
+  (`liveWorkerCounts`). Koordinatör şeklidir; kendi turu da akıyorsa `Çalışan` kazanır.
+
+Sidebar'da tek bir `chipShapeOf()` yardımcısı hem çip **sayaçlarını** hem görünür listeyi
+sınıflandırır; bu yüzden bir çipin rozet sayısı ile o çipin gerçekten tuttuğu satır sayısı
+ayrışamaz. `sessionMatchesChips` içinde canlı alanlar **opsiyoneldir** — runtime anlık
+görüntüsü olmayan çağıranlar (testler, toplu genel bakış tablosu) canlı ekseni tümden
+yok sayar, eski davranışı korur.
+
 ### Prompt-cache görünürlüğü (2026-08-11)
 
 Cache kırılımı artık yalnız Debug kartında değil, **sohbetin kendisinde** görünür.
@@ -1054,6 +1082,7 @@ Tespit/atıf katmanı değişmedi (`internal/agent/cachebreak.go`, `_Docs\50` P4
 | `CacheWarmthDot` (tur altbilgisi 🔥/❄) | "Hangi turlar soğuk koştu?" | `Message.usage.cacheRead/cacheWrite` |
 | `CacheBreakCard` (`cache_break` adımı) | "Neden kırıldı, ne yapmalıyım?" | backend atıflı `cache_break` olayı |
 | `MessageDebugPanel` cache bölümü | "Sebep + kaçınılabilir fazla ödeme?" | `TurnDebug.cacheBreak*`/`coolingWaste*` |
+| `CLIColdStartDivider` (transkript ayracı) | "CLI sohbeti nerede baştan başladı?" | `Message.cliColdStart` (backend atıflı) |
 
 Kritik ayrımlar:
 
@@ -1072,6 +1101,24 @@ Kritik ayrımlar:
 - `prompt-or-tools-changed` kartı **şüpheli** tonda: prompt epoch açıkken (varsayılan) bu
   kırılım oturum ortasında olmamalı (`_Docs\57`) → kart bunu söyler ve "Bağlamı yenile"
   (`/refresh-context`) aksiyonunu sunar.
+
+### CLI oturum yeniden başlangıcı ayracı (TSK514)
+
+`ColdCacheDivider` iki mesajın **zaman damgasından türetilir**; `CLIColdStartDivider` ise
+backend'in attığı bir bayrağı okur: `db.Message.CLIColdStart`. İkisi ayrı sorulara cevap
+verir ve aynı turda **üst üste** çizilebilir (uzun mola hem cache'i soğutur hem CLI thread'ini
+sürdürülemez kılar).
+
+Bayrak `internal/api/chat_resume.go` içindeki `cliResumePlan.coldStart` alanından gelir ve
+yalnız **resume zaten etkinken** anlamlıdır: `plan.active && plan.coldStart`. Yani "resume
+kapalı" ile "resume açıktı ama sıcak thread taşınamadı" birbirine karışmaz. `coldStart`
+`claudeResumeDecision` içinde **true başlar** ve yalnızca sıcak dalda temizlenir — böylece
+sonradan eklenen her yeni soğuk yol varsayılan olarak işaretlenir, sessizce ayracı kaçırmaz.
+Ek olarak iki doğrulama yolu (`ResumeVerifier.CanResume`, `ScopedCLIResumer.CanResumeScoped`)
+kararı sıcak bulup provider reddettiğinde bayrağı yeniden `true` yapar.
+
+Ayracın çizildiği tipik üç durum: oturumun ilk CLI turu, compaction'ın tabanı sıfırlaması
+(fold), ve saklanan thread id'sinin ilgili CLI home'unda artık bulunmaması.
 
 ### Yazılabilir oturum türleri + "Salt okunur" rozeti (2026-08-24)
 

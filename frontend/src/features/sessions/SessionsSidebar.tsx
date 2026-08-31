@@ -1,5 +1,12 @@
 import { resolveAgent } from '@/shared/lib/agentLookup'
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import {
   Sparkles,
   Trash2,
@@ -33,6 +40,7 @@ import {
   SESSION_CHIPS,
   SESSION_CHIPS_OFF_KEY,
   sessionMatchesChips,
+  sessionLiveScope,
   WORKER_CHIP,
   SUBAGENT_CHIP,
   sessionChipKey,
@@ -41,6 +49,7 @@ import { RunStateBadge, StatusPill } from './sessionKindBadges'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
+import { sessionMatchesQuery } from './sessionSearch'
 
 interface Props {
   sessions: Session[]
@@ -168,17 +177,6 @@ export function SessionsSidebar({
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
 
-  const chipCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const s of sessions) {
-      const key = sessionChipKey(s)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-      if (isWorkerSession(s)) counts.set(WORKER_CHIP, (counts.get(WORKER_CHIP) ?? 0) + 1)
-      if (s.state === 'archived') counts.set(ARCHIVED_CHIP, (counts.get(ARCHIVED_CHIP) ?? 0) + 1)
-    }
-    return counts
-  }, [sessions])
-
   // coordinatorSessionId → how many of its DIRECT workers have a live turn. A
   // coordinator usually sits idle while its branch works, so without this the row
   // looks finished while the tree is still busy. Counting direct children only
@@ -197,23 +195,46 @@ export function SessionsSidebar({
     return counts
   }, [sessions, streamingSessionIds, runtimeById])
 
+  // chipShapeOf builds the one shape both the chip counters and the visible-list
+  // filter classify a session with, so a chip's badge count can never disagree
+  // with how many rows that chip actually keeps.
+  const chipShapeOf = useCallback(
+    (s: Session) => ({
+      kind: s.kind,
+      category: s.category,
+      executionType: s.executionType,
+      isWorker: isWorkerSession(s),
+      isArchived: s.state === 'archived',
+      isRunning:
+        (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false),
+      liveWorkerCount: liveWorkerCounts.get(s.id) ?? 0,
+    }),
+    [streamingSessionIds, runtimeById, liveWorkerCounts],
+  )
+
+  const chipCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const s of sessions) {
+      const shape = chipShapeOf(s)
+      const key = sessionChipKey(s)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      if (shape.isWorker) counts.set(WORKER_CHIP, (counts.get(WORKER_CHIP) ?? 0) + 1)
+      if (shape.isArchived) counts.set(ARCHIVED_CHIP, (counts.get(ARCHIVED_CHIP) ?? 0) + 1)
+      const live = sessionLiveScope(shape)
+      if (live) counts.set(live, (counts.get(live) ?? 0) + 1)
+    }
+    return counts
+  }, [sessions, chipShapeOf])
+
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. The chip selection narrows first, then a title search. The worker
+  // order. The chip selection narrows first, then a title/session ID search. The worker
   // check uses the lineage helper, not `role === 'worker'`: a mid-level node of
   // a nested coordinator tree is a worker too.
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
-      const shape = {
-        kind: s.kind,
-        category: s.category,
-        executionType: s.executionType,
-        isWorker: isWorkerSession(s),
-        isArchived: s.state === 'archived',
-      }
-      if (!sessionMatchesChips(shape, chipSet)) continue
-      if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
+      if (!sessionMatchesChips(chipShapeOf(s), chipSet)) continue
+      if (!sessionMatchesQuery(s, query)) continue
       // Pinned rows leave the recency buckets entirely and form their own group,
       // which BUCKET_ORDER renders first — otherwise an old pinned chat would sink
       // into "Daha eski" even though the list itself floats it to the top.
@@ -223,7 +244,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, chipSet])
+  }, [sessions, query, chipSet, chipShapeOf])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -331,7 +352,7 @@ export function SessionsSidebar({
         </button>
       </div>
 
-      {/* Title search */}
+      {/* Local title/session ID filter plus debounced message search. */}
       <div className="relative px-3 pb-2 pt-1">
         <Search
           size={13}
@@ -340,7 +361,7 @@ export function SessionsSidebar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Oturum + mesaj ara…"
+          placeholder="Oturum adı, ID veya mesaj ara…"
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pl-7 pr-7 text-xs outline-none focus:border-[var(--color-accent)]"
         />
         {query && (

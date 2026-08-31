@@ -14,6 +14,12 @@ import (
 type cliResumePlan struct {
 	active    bool
 	sentCount int // raw message count the CLI will know AFTER this turn's user msg
+	// coldStart is true when resume was ENABLED for this turn but no warm thread
+	// was carried into it, so the CLI conversation restarts here: first CLI turn,
+	// a fold re-baseline, or a stored id the provider could not resume. It is the
+	// signal the transcript draws its "new CLI session" divider from; a turn where
+	// resume is off entirely leaves the whole plan zero and never sets it.
+	coldStart bool
 }
 
 // planCLIResume keeps Claude's existing opt-in/persistent-session semantics and
@@ -60,7 +66,10 @@ func (s *Server) planCodexResume(ctx context.Context, provider providers.Provide
 				"component", "conversation", "session", session.ID,
 				"agent", agentRow.ID, "prev_cli_session", resumeID)
 		}
+		// The decision said warm, but the scoped home cannot serve that thread — this
+		// turn really does start a new Codex conversation, so re-flag it cold.
 		resumeID = ""
+		plan.coldStart = true
 	}
 	if resumeID != "" {
 		llmReq.ResumeSessionID = resumeID
@@ -106,7 +115,10 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 				s.logger.Info("cli resume reset: stored session id is not resumable from this config home",
 					"component", "conversation", "session", session.ID, "prev_cli_session", resumeID)
 			}
+			// Same as the Codex path: the warm decision does not survive verification,
+			// so this turn opens a fresh CLI conversation and is flagged cold.
 			resumeID = ""
+			plan.coldStart = true
 		}
 	}
 	if resumeID != "" {
@@ -161,7 +173,10 @@ func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen i
 	if !enabled {
 		return cliResumePlan{}, "", 0
 	}
-	plan = cliResumePlan{active: true, sentCount: rawLen}
+	// coldStart starts true and is cleared only on the warm branch below, so every
+	// new cold path added here is flagged by default rather than silently missing
+	// the divider.
+	plan = cliResumePlan{active: true, sentCount: rawLen, coldStart: true}
 	// A fold just re-baselined the transcript into the rolling summary. Warm-resuming
 	// here would keep the CLI's now-stale FULL history warm server-side and merely
 	// stack the fresh summary on top — the fold would never actually shrink the CLI's
@@ -173,6 +188,7 @@ func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen i
 		return plan, "", 0
 	}
 	if cliSessionID != "" && sentCount > 0 && sentCount < rawLen {
+		plan.coldStart = false
 		return plan, cliSessionID, sentCount
 	}
 	return plan, "", 0
