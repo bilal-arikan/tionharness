@@ -93,8 +93,8 @@ function stubDecodableSource(close = vi.fn()) {
 describe('ImageArtifactEditButton', () => {
   let container: HTMLDivElement
   let root: Root | null
-  let onUpdated: ReturnType<typeof vi.fn>
-  let onError: ReturnType<typeof vi.fn>
+  let onUpdated: ReturnType<typeof vi.fn<(artifact: Artifact) => void>>
+  let onError: ReturnType<typeof vi.fn<(msg: string) => void>>
 
   const editButton = () =>
     container.querySelector<HTMLButtonElement>('[data-testid="artifact-image-edit"]')
@@ -134,8 +134,8 @@ describe('ImageArtifactEditButton', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = null
-    onUpdated = vi.fn()
-    onError = vi.fn()
+    onUpdated = vi.fn<(artifact: Artifact) => void>()
+    onError = vi.fn<(msg: string) => void>()
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
