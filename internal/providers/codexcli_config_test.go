@@ -439,10 +439,10 @@ func TestWriteCodexConfigReportsAllDroppedKeys(t *testing.T) {
 	}
 }
 
-// Codex ships its native multi-agent/collab tools ON by default; they shadow
-// TionHarness's spawn_worker delegation and cannot work under --ephemeral. Both
-// keys must reach the file, and the block must sit after the top-level keys so
-// they are not swallowed into [features].
+// This test verifies only rendered config content, not whether Codex obeys the
+// flags; codex 0.148.0 was measured not to obey them. Both keys must reach the
+// file, and the block must sit after the top-level keys so they are not swallowed
+// into [features].
 func TestCodexConfigDisablesNativeMultiAgent(t *testing.T) {
 	got := renderCodexConfig(codexConfig{
 		ReasoningEffort:         "high",
@@ -457,9 +457,10 @@ func TestCodexConfigDisablesNativeMultiAgent(t *testing.T) {
 	}
 }
 
-// The production builder must always close codex's native collaboration gates
-// while retaining the TionHarness MCP bridge that supplies spawn_worker,
-// send_to_worker, and list_workers.
+// This test verifies only rendered config content, not whether Codex obeys the
+// flags; codex 0.148.0 was measured not to obey them. The production builder must
+// retain the TionHarness MCP bridge that supplies spawn_worker, send_to_worker,
+// and list_workers while writing both compatibility flags.
 func TestCodexBuildConfigDisablesNativeMultiAgentAndKeepsBridge(t *testing.T) {
 	bridge := map[string]CLIMCPServer{
 		"tionharness_interaction": {

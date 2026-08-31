@@ -103,7 +103,7 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 			allowed = append(allowed, "mcp__"+interactionCoreKey+"__"+t)
 		}
 		allowed = append(allowed, "mcp__"+interactionExtendedKey)
-		disallowed = append(disallowed, codexNativeSuppressions()...)
+		disallowed = append(disallowed, codexAdvisorySuppressions()...)
 	}
 
 	if len(servers) == 0 {
@@ -179,7 +179,7 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 	}
 }
 
-// codexNativeSuppressions lists the codex built-ins that would SHADOW a bridged
+// codexAdvisorySuppressions lists the codex built-ins that would SHADOW a bridged
 // TionHarness tool. Codex has no --disallowedTools flag, so this list is advisory
 // for now: it rides DisallowedTools so the suppression intent is recorded in one
 // place, and the codex config renderer disables the real overlaps structurally
@@ -198,7 +198,7 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // `web_search = false`, so there is nothing left to suppress here; with it on the
 // user has explicitly asked for the native search to run next to the bridged
 // TionHarness WebSearch/WebFetch, so listing it here would revoke that choice.
-func codexNativeSuppressions() []string {
+func codexAdvisorySuppressions() []string {
 	// update_plan shadows the bridged todo_write (the progress card sink);
 	// experimental_request_user_input shadows ask_user. The collaboration tools
 	// bypass TionHarness's worker lifecycle and shadow spawn_worker,

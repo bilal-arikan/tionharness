@@ -73,12 +73,9 @@ func renderCodexConfig(cfg codexConfig) string {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		// Both flags default to ON in codex and expose its native collab tools
-		// (spawn_agent and friends), which compete with TionHarness's own
-		// spawn_worker delegation. Under --ephemeral there is no persistent
-		// thread store behind them, so a model that picks the native tool dies
-		// with "collab spawn failed: no thread with id" and the TionHarness
-		// delegation is never attempted.
+		// Write both native collaboration feature keys for compatibility. On codex
+		// 0.148.0 they are accepted but were measured to have no behavioral effect:
+		// collaboration.spawn_agent remains available and can still spawn an agent.
 		b.WriteString("[features]\n")
 		b.WriteString("multi_agent = false\n")
 		b.WriteString("multi_agent_v2 = false\n")

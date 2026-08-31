@@ -217,9 +217,13 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		// its search by default and `web_search = true` is not a documented/verified
 		// key, so under --strict-config an unknown value would fail the whole turn.
 		DisableWebSearch: !req.NativeWebSearch,
-		// Codex's native multi-agent/collab tools duplicate spawn_worker and are
-		// unusable under --ephemeral (no thread store), so a model that reaches
-		// for them loses the turn to "collab spawn failed: no thread with id".
+		// On codex 0.148.0 these keys were measured to be ineffective: even with
+		// multi_agent = false, collaboration.spawn_agent remains in both the prompt
+		// and tool catalog, and a real spawn succeeds. They are still cheap to write
+		// for forward/backward compatibility, but provide no enforcement alone.
+		// Because this turn runs with --strict-config, if a future codex drops either
+		// key, strict-config rejects it and EVERY turn fails despite no protection
+		// being lost. Re-check both keys whenever the codex version is bumped.
 		DisableNativeMultiAgent: true,
 		Servers:                 c.mcpServers,
 	}
