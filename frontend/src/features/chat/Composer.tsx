@@ -826,7 +826,13 @@ export function Composer({
           if (!sessionId) return
           e.preventDefault()
           setDragOver(false)
-          uploadFiles(Array.from(e.dataTransfer.files ?? []))
+          // Same split as the file picker: dropped files come from the file
+          // system, so their mime type is trustworthy. Images go through the
+          // validation queue instead of straight to upload.
+          const files = Array.from(e.dataTransfer.files ?? [])
+          const images = files.filter((file) => file.type.startsWith('image/'))
+          uploadFiles(files.filter((file) => !images.includes(file)))
+          enqueueImages(images)
         }}
       >
         {trigger && items.length > 0 && (

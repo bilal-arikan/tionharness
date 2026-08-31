@@ -79,7 +79,7 @@ export function AttachmentChip({
           onClick={onEdit}
           title="Görseli düzenle"
           aria-label="Görseli düzenle"
-          className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/30 bg-black/65 text-white opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100"
+          className="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/30 bg-black/65 text-white opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100"
         >
           <Pencil size={12} />
         </button>

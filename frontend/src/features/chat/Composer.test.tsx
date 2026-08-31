@@ -110,6 +110,13 @@ function paste(container: HTMLElement, files: File[]) {
   return event
 }
 
+function drop(container: HTMLElement, files: File[]) {
+  const event = new Event('drop', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', { value: { files } })
+  act(() => container.querySelector('textarea')!.dispatchEvent(event))
+  return event
+}
+
 function pickFiles(container: HTMLElement, files: File[]) {
   const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
   Object.defineProperty(input, 'files', { configurable: true, value: files })
@@ -178,6 +185,30 @@ describe('Composer clipboard integration', () => {
 
     expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', text)
     expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+  })
+
+  it('routes dropped images through validation and stages them with an edit action', async () => {
+    const { container } = renderComposer()
+    const dropped = image('dropped.png')
+    const event = drop(container, [dropped])
+    expect(event.defaultPrevented).toBe(true)
+    // Validation runs before the upload, so nothing is sent synchronously.
+    expect(mocks.uploadFile).not.toHaveBeenCalled()
+    await flush()
+
+    expect(mocks.uploadFile).toHaveBeenCalledTimes(1)
+    expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', dropped)
+    expect(container.querySelectorAll('[aria-label="Görseli düzenle"]')).toHaveLength(1)
+  })
+
+  it('keeps non-image dropped files on the normal upload path', async () => {
+    const { container } = renderComposer()
+    const text = new File(['hello'], 'dropped.txt', { type: 'text/plain' })
+    drop(container, [text])
+    await flush()
+
+    expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', text)
+    expect(container.querySelector('[aria-label="Görseli düzenle"]')).toBeNull()
   })
 
   it('surfaces picker image validation errors without uploading', async () => {
