@@ -15,8 +15,19 @@ Ajanlar arası iletişimin arayüzdeki üç pürüzü giderildi:
   sourceID="agent-messages:<agentID>")` ile aranır — **`(agentID, kind)` ile
   değil**: `"chat"` insanın açtığı ad-hoc oturumların da türü olduğundan o arama
   kullanıcının kendi sohbetini bulup peer mesajlarını oraya sızdırırdı
-  (`TestDeliverAgentMessage_DoesNotHijackExistingChat`). Eski `inbox` kind'lı
-  transkriptler korunur: sidebar çipi ve `graph.go` etiketi legacy olarak durur.
+  (`TestDeliverAgentMessage_DoesNotHijackExistingChat`).
+- **Eski `inbox` oturumları göç ettirildi.** `db.migrateLegacyInboxSessions`
+  açılışta (`Open`) eski build'lerin yazdığı `inbox` oturumlarını `chat`'e çevirir
+  ve `PeerThreadSourceID(agentID)` damgalar. SourceId damgası şart: onsuz oturum
+  teslim tarafındaki aramaya görünmez ve bir sonraki mesaj yanına ikinci bir
+  thread açarak geçmişi ikiye bölerdi. Idempotent, oturum başına best-effort
+  (tek bir yazılamayan header boot'u düşürmez), dolu `sourceId`'ye dokunmaz.
+  Ortak sabit `db.PeerThreadSourceID` runtime ile migration'ın ayrışmasını
+  engeller. Sidebar çipi + `graph.go` etiketi legacy olarak korunur.
+  **Canlı doğrulandı:** gerçek WS27 kopyasında `converted=2` (2ms), ikinci boot
+  no-op, `GetOrCreateSourceSession` göç eden SES122/SES123'ü buldu (yeni thread
+  açmadı), mesaj geçmişi korundu. API matrisi: göç eden peer thread + `worker`
+  → HTTP 200; `task`/`flow`/`flow-coordinator`/`insight` → HTTP 403.
 - **`worker` oturumları yazılabilir.** Worker transkripti bitmiş bir koşu kaydı
   değil, koordinatörün `SendToWorker` ile zaten içine tur enjekte ettiği canlı bir
   konuşmadır; izleyen insan da yanıtlayabilmeli, rotayı düzeltebilmeli.

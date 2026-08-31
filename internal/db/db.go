@@ -552,6 +552,19 @@ func (d *DB) load() error {
 	// Consolidate any pre-unification files into the per-session artifacts layout
 	// and back existing chat attachments with artifacts (idempotent, best-effort).
 	d.timeLoadPhase("migrateUnifiedLayout", func() error { d.migrateUnifiedLayout(); return nil })
+	// Convert pre-TSK507 "inbox" sessions into ordinary writable chat threads, so
+	// peer transcripts written by an older build stop being read-only and keep
+	// receiving new deliveries instead of being orphaned beside a fresh thread.
+	d.timeLoadPhase("migrateLegacyInboxSessions", func() error {
+		converted, failed := d.migrateLegacyInboxSessions()
+		if converted > 0 {
+			slog.Info("migrated legacy inbox sessions to chat", "component", "db", "converted", converted)
+		}
+		if failed > 0 {
+			slog.Warn("some legacy inbox sessions could not be migrated", "component", "db", "failed", failed)
+		}
+		return nil
+	})
 	// Reclaim transient render_template output: drop dirs for sessions that no
 	// longer exist and TTL-sweep stale files (startup-only, best-effort).
 	d.timeLoadPhase("cleanupRenders", func() error { d.cleanupRenders(); return nil })

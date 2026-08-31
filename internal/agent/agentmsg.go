@@ -36,8 +36,13 @@ const inboxSessionKind = "chat"
 // The recipient's id is part of the SourceID because GetOrCreateSourceSession
 // matches on (kind, sourceID) and ignores agentID: a constant source would make
 // every agent in the workspace share one single thread.
+//
+// Delegates to db.PeerThreadSourceID so this and the boot migration that stamps
+// the same id onto converted legacy sessions (db.migrateLegacyInboxSessions)
+// cannot drift: if they disagreed, a migrated thread would not be found here and
+// the next delivery would open a second one beside it.
 func inboxSessionSource(agentID string) string {
-	return "agent-messages:" + agentID
+	return db.PeerThreadSourceID(agentID)
 }
 
 // inboxSessionTitle labels the per-agent peer-message thread in the sidebar. It

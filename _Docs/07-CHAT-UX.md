@@ -1114,9 +1114,19 @@ aynen yansıtır.
   `agent-messages:<agentID>`), **`(agentID, kind)` ile değil**: `"chat"` aynı
   zamanda insanın açtığı her ad-hoc oturumun türü olduğundan, ikinci arama
   kullanıcının kendi sohbetini bulup peer mesajlarını oraya teslim ederdi.
-  Regresyon: `TestDeliverAgentMessage_DoesNotHijackExistingChat`. Eski
-  transkriptler hâlâ `inbox` kind'ı taşıyabilir; sidebar çipi ve
-  `graph.go` etiketi bu yüzden korunur (salt okunur kalırlar).
+  Regresyon: `TestDeliverAgentMessage_DoesNotHijackExistingChat`.
+- **Göç (migration):** eski build'lerin yazdığı `inbox` oturumları açılışta
+  otomatik `chat`'e çevrilir — `db.migrateLegacyInboxSessions`, `Open` içinde
+  `migrateLegacyInboxSessions` fazı. Her oturuma `PeerThreadSourceID(agentID)`
+  damgalanır; **bu şart**, çünkü sourceId'siz kalan oturum teslim tarafındaki
+  `GetOrCreateSourceSession` aramasına görünmez ve bir sonraki mesaj yanına
+  **ikinci bir thread** açarak ajanın geçmişini ikiye bölerdi. Idempotent (her
+  boot koşar, ikinci geçiş no-op) ve oturum başına best-effort: yazılamayan tek
+  bir header yüzünden boot düşmez, sayılıp loglanır. Dolu bir `sourceId`'ye
+  dokunulmaz. Testler: `internal/db/session_inbox_migrate_test.go` (5 test,
+  `TestOpenRunsLegacyInboxMigration` boot yolunu da kapsar).
+  Sidebar çipi ve `graph.go` etiketi yine de korunur: göç edemeyen bir oturum
+  kalırsa "Diğer"e düşmesin.
 - **`"schedule"` bilinçli istisnadır.** Zamanlayıcı da oraya yazar, ama o bir
   koşu-başına log değil, ajanın uzun ömürlü cron thread'idir; kullanıcı tikler
   arasında konuşmaya devam edebilmelidir (sorulanı yanıtlamak, düzeltmek, bağlam
