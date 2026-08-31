@@ -24,7 +24,7 @@ func TestCodexMultiToolFillersMatchComposedRequestEstimate(t *testing.T) {
 		Usage: &db.MessageUsage{InputTokens: 900000, OutputTokens: 100000},
 	}
 
-	fillers, err := buildFillers("", []db.Message{message}, true)
+	fillers, err := buildFillers("", []db.Message{message}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestCodexMultiToolFillersMatchComposedRequestEstimate(t *testing.T) {
 }
 
 func TestBuildFillersRejectsMalformedRetainedSteps(t *testing.T) {
-	_, err := buildFillers("", []db.Message{{Role: "assistant", Steps: "{"}}, true)
+	_, err := buildFillers("", []db.Message{{Role: "assistant", Steps: "{"}}, 0)
 	if err == nil {
 		t.Fatal("malformed retained Steps must be observable")
 	}

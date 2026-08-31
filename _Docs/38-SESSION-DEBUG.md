@@ -48,10 +48,11 @@ alanı taşır:
 {"ts":1719..., "type":"compaction", "detail":"context_overflow"}
 {"ts":1719..., "type":"recovery",   "detail":"max_output_tokens"}
 {"ts":1719..., "type":"cache_break", "name":"ttl-or-server-eviction", "detail":"Önek değişmedi ama cache okunmadı → 1s TTL doldu…", "cacheWrite":9000}
+{"ts":1719..., "type":"pressure",   "name":"context_pressure", "detail":"context 176000/200000 tokens · 88% of budget · fold at 100%"}
 ```
 
 Tip sabitleri (`internal/db/debug_journal.go`): `turn`, `llm_call`, `tool`,
-`hook`, `error`, `compaction`, `recovery`, `cache_break`, ve self-healing/epoch
+`hook`, `error`, `compaction`, `recovery`, `cache_break`, `pressure`, ve self-healing/epoch
 katmanlarıyla gelenler: `repair` (mesaj-dizisi onarımı), `guardrail` (tool-loop
 guardrail kararı), `lesson` (hata→ders damıtıldı), `epoch` (prompt-epoch yaşam
 döngüsü: created/adopted/stale/refreshed). Detay: `56-SELF-HEALING.md`,
@@ -102,6 +103,7 @@ kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 | `hook` | `hooks.go` — her eşleşen Pre/PostToolUse hook'u kararıyla |
 | `error` | `toolloop.go fail()` + permission/budget hataları **ve** başarısız slash komutları (`api/summary.go recordSummaryFailure` — `name="/compact"`, `kind="command"`, `err=true`, `detail`/`error` sağlayıcı hatasını birebir taşır) |
 | `compaction` | İki yol: (a) `toolloop.go` — reaktif (bağlam-taşması kurtarması) compact; (b) `conversation/manager.go` — rutin bütçe-tabanlı rolling-summary fold'u (`Prepare`, `Name="auto"`) **ve** manuel `/compact` (`ForceCompact`, `Name="manual"`). (b) `SavedBytes` + `Detail`("folded N msgs · before→after tokens") taşır; her tur-türünde (chat/spawned/wake/koordinatör) tek noktadan yazılır — böylece spawned turda katlanan bir fold da görünür olur |
+| `pressure` | `conversation/manager.go recordPressureDebug` — tur **fold'a girmedi** ama bağlam kullanımı etkin bütçenin `pressureWarnRatio`=**%85**'ini geçti; fold'un kendisi değil, fold'dan önceki erken uyarıdır (`Name="context_pressure"`, `Detail`: "context kullanılan/bütçe tokens · %N of budget · fold at 100%") |
 | `recovery` | `toolloop.go` — çıktı-cap resume kurtarması |
 | `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler. **Soğuma israfı:** yalnız `ttl-or-server-eviction` (geç gelen tur öneki soğuttu — model/prompt değişimi meşru geçersizleşmedir, israf değil) durumunda olay `wasteUsd`/`wasteEst` taşır = yeniden yazılan öneğin (native Anthropic `cache_creation`) yazma-tier'ı eksi zamanında okunsa ödenecek okuma-tier'ı (`providers.CoolingWaste`; abonelik sağlayıcıda tahmini). OpenRouter soğuk öneği input'a katıp write saymadığı için orada ~0 |
 

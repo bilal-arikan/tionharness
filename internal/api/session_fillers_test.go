@@ -18,7 +18,7 @@ func TestBuildFillersSplitsUserBucketByOrigin(t *testing.T) {
 	}
 
 	got := map[string]contextFiller{}
-	fillers, err := buildFillers("", pending, false)
+	fillers, err := buildFillers("", pending, -1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -252,8 +252,20 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// Pending window = messages not yet folded into the summary (what is actually
 	// sent to the model). Mirrors handleSessionContext.
 	pending := history
+	pendingStart := 0
 	if session.SummaryMsgCount <= len(history) {
-		pending = history[session.SummaryMsgCount:]
+		pendingStart = session.SummaryMsgCount
+		pending = history[pendingStart:]
+	}
+	// The tool-trace bucket has its own, later start: a CLI that compacted its own
+	// window no longer holds the trace of the messages before that boundary, even
+	// though their TEXT is still pending here. Rebase the index into `pending`.
+	stepsFrom := warmCLIStepBaseline(session, len(history))
+	if stepsFrom >= 0 {
+		stepsFrom -= pendingStart
+		if stepsFrom < 0 {
+			stepsFrom = 0
+		}
 	}
 	// Non-message context sent on every turn (system prompt, tool/MCP schemas,
 	// artifact block) — estimated so the meter reflects the real footprint, not
@@ -269,7 +281,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
-	messageFillers, err := buildFillers(session.Summary, pending, hasWarmCLIThread(session))
+	messageFillers, err := buildFillers(session.Summary, pending, stepsFrom)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -437,13 +449,20 @@ func hasWarmCLIThread(session db.Session) bool {
 }
 
 // buildFillers turns the live context window into labelled, token-weighted buckets.
-func buildFillers(summary string, pending []db.Message, retainSteps bool) ([]contextFiller, error) {
+//
+// stepsFrom is the index in pending at which persisted assistant Steps start
+// counting toward the "tur içi araç bağlamı" bucket — the trace a warm CLI thread
+// still holds. Anything earlier was dropped provider-side (a CLI self-compaction)
+// and is not in the context any more. A negative stepsFrom means there is no warm
+// thread at all, so no trace is counted; see warmCLIStepBaseline, which is what
+// the caller resolves it from.
+func buildFillers(summary string, pending []db.Message, stepsFrom int) ([]contextFiller, error) {
 	byRole := map[string]*contextFiller{}
 	order := []string{}
 	var trace contextFiller
 	trace.Label = "Tur içi araç bağlamı"
 	trace.Role = "tool-history"
-	for _, m := range pending {
+	for i, m := range pending {
 		role := fillerRoleFor(m)
 		f := byRole[role]
 		if f == nil {
@@ -456,7 +475,7 @@ func buildFillers(summary string, pending []db.Message, retainSteps bool) ([]con
 		// otherwise the usage bar's segments under-fill by 4×msgCount.
 		f.Tokens += conversation.EstimateText(m.Text) + conversation.MsgOverhead
 		f.Count++
-		if retainSteps && m.Role == providers.RoleAssistant {
+		if stepsFrom >= 0 && i >= stepsFrom && m.Role == providers.RoleAssistant {
 			tokens, count, err := conversation.EstimatePersistedSteps(m.Steps)
 			if err != nil {
 				return nil, err
@@ -591,18 +610,15 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 // bytes are never re-sent by us), so without this term the gate measured only
 // the visible text while the real thread ran multiples over budget and no fold
 // ever fired. The meter counts the same trace in its own bucket, so both sides
-// now see one number.
+// now see one number. Where that trace starts is warmCLIStepBaseline's call —
+// it also drops the part a CLI-side compaction already discarded.
 func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) (int, error) {
 	total := 0
 	for _, f := range s.systemFillers(ctx, wsp, session, history, multiAgent) {
 		total += f.Tokens
 	}
-	if hasWarmCLIThread(session) {
-		pending := history
-		if session.SummaryMsgCount <= len(history) {
-			pending = history[session.SummaryMsgCount:]
-		}
-		steps, err := conversation.EstimatePersistedStepTokens(pending)
+	if base := warmCLIStepBaseline(session, len(history)); base >= 0 {
+		steps, err := conversation.EstimatePersistedStepTokens(history[base:])
 		if err != nil {
 			return 0, err
 		}

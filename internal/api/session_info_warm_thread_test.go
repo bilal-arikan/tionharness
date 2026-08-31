@@ -36,8 +36,8 @@ func TestBuildFillersCountsRetainedTraceOnlyWhenWarm(t *testing.T) {
 	steps := `[{"kind":"tool","tool":"Bash","input":{"cmd":"ls"},"output":"` + strings.Repeat("x ", 400) + `"}]`
 	msgs := []db.Message{{Role: "assistant", Text: "done", Steps: steps}}
 
-	sum := func(retain bool) int {
-		fillers, err := buildFillers("", msgs, retain)
+	sum := func(stepsFrom int) int {
+		fillers, err := buildFillers("", msgs, stepsFrom)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -49,14 +49,14 @@ func TestBuildFillersCountsRetainedTraceOnlyWhenWarm(t *testing.T) {
 	}
 
 	textOnly := conversation.EstimateText("done") + conversation.MsgOverhead
-	if got := sum(false); got != textOnly {
+	if got := sum(-1); got != textOnly {
 		t.Fatalf("cold total = %d, want %d (text only)", got, textOnly)
 	}
 	stepTokens, _, err := conversation.EstimatePersistedSteps(steps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sum(true); got != textOnly+stepTokens {
+	if got := sum(0); got != textOnly+stepTokens {
 		t.Fatalf("warm total = %d, want %d (text + retained trace)", got, textOnly+stepTokens)
 	}
 }

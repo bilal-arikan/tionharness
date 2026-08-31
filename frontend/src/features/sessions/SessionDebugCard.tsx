@@ -295,6 +295,7 @@ export function SessionDebugCard({
                   'recovery',
                   'cache_break',
                   'epoch',
+                  'pressure',
                 ].map((t) => (
                   <button
                     key={t || 'all'}

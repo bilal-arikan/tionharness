@@ -37,7 +37,7 @@ hiç görmüyordu.
   zaten kendi `compaction` olayını üretiyor, ikinci uyarı yazılmaz.
 
 Kapsam dışı bırakıldı (ayrı iş): codex native compaction'ı otomatik yola bağlamak,
-auto-compact sınırını `CLISentMsgCount`'a geri beslemek.
+auto-compact sınırını geri beslemek — bkz. bir sonraki bölüm.
 
 Testler: `TestEstimatePersistedStepTokensCountsAssistantOnly`,
 `TestEstimatePersistedStepTokensSurfacesMalformedTrace`,
@@ -45,6 +45,57 @@ Testler: `TestEstimatePersistedStepTokensCountsAssistantOnly`,
 bütçe altında, iz dahil üstünde), `TestPrepareJournalsContextPressure`,
 `TestHasWarmCLIThread`, `TestBuildFillersCountsRetainedTraceOnlyWhenWarm`.
 Doğrulama: `go test ./internal/conversation/... ./internal/api/... ./internal/db/... -count=1` ok,
+`git diff --check` sıfır.
+
+## CLI kendi kendine compact edince sınır geri besleniyor (2026-08-31) ⏳
+
+Bir önceki bölümün kapsam dışı bıraktığı yarım: CLI sağlayıcılar bağlamları
+dolunca **kendi içlerinde** compaction yapar ve bunu bir yaşam-döngüsü olayı
+olarak bildirir (claude-cli: `compact_boundary` / `PostCompact` / `status`,
+codex-cli: `context_compaction` item'ı, `Trigger:"auto"`). TionHarness bu sinyali
+**algılıyordu ama ölçüme geri beslemiyordu**: sağlayıcı izi kendi penceresinden
+attıktan sonra da `contextOverheadTokens` ve panel kovası aynı `Steps`'i saymaya
+devam ediyor, meter şişik kalıyor ve gate gereksiz erken fold tetikleyebiliyordu.
+
+- **Yeni sınır alanı.** `db.Session.CLICompactMsgCount` — sağlayıcının kendi
+  bağlamını en son hangi transkript uzunluğunda sıkıştırdığı.
+  `DB.SetSessionCLICompactBoundary(ctx, sessionID, msgCount)` **monotondur**: geç
+  gelen küçük bir değer sınırı geri sarmaz.
+- **Tek eşik hesabı.** `warmCLIStepBaseline(session, historyLen)`
+  (`internal/api/cli_compaction.go`) iki tabanın **geç olanını** döner: rolling
+  summary sınırı (`SummaryMsgCount`) ve CLI'nin kendi compaction sınırı. Sıcak
+  thread yoksa `-1` döner (hiçbir iz sayılmaz). Sınır transkriptin dışına
+  düşerse (mesaj silme/düzenleme) 0'a düşülür — sessizce sıfır saymak yerine
+  eskisi gibi tümü sayılır.
+- **İki ölçüm sitesi de aynı tabana oturdu.** `contextOverheadTokens` artık
+  `history[base:]` sayıyor; `buildFillers`'ın `retainSteps bool` parametresi
+  `stepsFrom int` oldu (negatif = soğuk thread, iz sayılmaz). Böylece gate ile
+  panelin tek sayı görme sözleşmesi auto-compact sonrasında da korunuyor.
+- **Otomatik yol bağlandı.** `cliCompactionBoundary(steps, rawLen)` turun kendi
+  izinde tamamlanmış bir CLI-native compaction arar; bulursa `chat_stream`
+  sınırı `len(rawHistory)` yapar (`+1` değil: compaction bu turun yanıtından
+  **önce** oldu, yanıtın kendi izi hâlâ sıcak). Ortak yüklem
+  `isCompletedNativeCompaction(kind, source, running)` — açık `/compact` yolu
+  (`nativeCompactSession`) da aynı yüklemi kullanıyor, ikisi ayrışamaz.
+- **Açık yol da sınırı yazıyor.** `nativeCompactSession` `SetSessionCLIResume`'un
+  yanında `SetSessionCLICompactBoundary(..., len(history)+2)` çağırıyor; hata
+  yutulmuyor, `summaryResult{}, error` olarak dönüyor.
+
+**codex-cli durumu:** sinyal **var**. `feedContextCompaction`
+(`internal/providers/codexcli_events.go:351`) normal tur akışında
+`Kind:"compaction", Source:"cli-native", Trigger:"auto"` üretiyor, yani yukarıdaki
+sağlayıcıdan bağımsız yüklem codex'i de kapsıyor. Manuel yol (`CompactNative`,
+`Trigger:"manual"`) ayrı bir çağrıda koştuğu için tur akışına hiç düşmüyor —
+tetik filtresine gerek yok.
+
+Testler: `TestCLICompactionBoundaryDetectsCompletedAutoCompaction` (iki yönlü:
+tamamlanmış claude/codex sinyali sınırı taşır; running compaction, sıradan tur ve
+TionHarness fold adımı taşımaz), `TestSetSessionCLICompactBoundaryIsMonotonic`,
+`TestWarmCLIStepBaselineFollowsCLICompaction`,
+`TestBuildFillersDropsTraceBeforeCLICompactionBoundary`. Mevcut
+`claudecli_compaction_test.go` ve `summary*_test.go` gevşetilmedi.
+Doğrulama: `go build ./...` ok,
+`go test ./internal/providers/... ./internal/api/... ./internal/db/... ./internal/conversation/... -count=1` ok,
 `git diff --check` sıfır.
 
 ## Haftalık özellik denetimi: teardown context sızıntısı ve refactor (2026-08-31) ✅

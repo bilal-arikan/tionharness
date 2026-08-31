@@ -475,7 +475,7 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	}
 	var steps []agent.TurnStep
 	for _, trace := range resp.Trace {
-		if trace.Kind == "compaction" && trace.Source == "cli-native" && !trace.Running {
+		if isCompletedNativeCompaction(trace.Kind, trace.Source, trace.Running) {
 			steps = append(steps, nativeCompactionStep(trace))
 		}
 	}
@@ -496,6 +496,15 @@ func (s *Server) nativeCompactSession(ctx context.Context, wsp *workspace.Worksp
 	}
 	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, len(history)+2); err != nil {
 		return summaryResult{}, fmt.Errorf("persist CLI resume after native compaction: %w", err)
+	}
+	// Same boundary, second bookkeeping axis: the CLI's window now holds a summary
+	// of those messages instead of their tool trace, so the meter and the fold gate
+	// must stop charging the persisted Steps for them. The +2 matches the resume
+	// boundary above — the /compact command and its report are the two messages this
+	// turn adds around the compaction. The auto path in chat_stream.go records the
+	// same thing without a command message; keep the two in step.
+	if err := wsp.DB.SetSessionCLICompactBoundary(ctx, session.ID, len(history)+2); err != nil {
+		return summaryResult{}, fmt.Errorf("persist CLI compaction boundary after native compaction: %w", err)
 	}
 	return summaryResult{
 		Body:  fmt.Sprintf("%s yerel oturumu sıkıştırıldı; TionHarness rolling summary sınırı değiştirilmedi.", provider.Name()),

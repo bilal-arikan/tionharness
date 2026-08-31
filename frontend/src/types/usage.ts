@@ -201,6 +201,7 @@ export interface SessionDebugEvent {
     | 'guardrail'
     | 'lesson'
     | 'epoch'
+    | 'pressure'
   sessionId?: string
   turnId?: string
   agentId?: string
