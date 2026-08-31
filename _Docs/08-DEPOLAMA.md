@@ -179,13 +179,36 @@ Her oturum **iki dosya** kullanır; header ile transkript ayrıdır:
   (`{rating:±1,note,at}` — 👍/👎 kalıcı kalite sinyali, reflektör/eval için).
   Hepsi `omitempty` (eski mesajlar + user/system turları boş).
 
-`AddMessage` mesajı belleğe ekler, oturum sayacını artırır ve **yalnızca yeni
-satırı `messages.jsonl`'e ekler** (`O_APPEND`, O(1)) — dosyayı yeniden yazmaz.
+`AddMessage` **yalnızca yeni satırı `messages.jsonl`'e ekler** (`O_APPEND`, O(1))
+— dosyayı yeniden yazmaz — ve ancak bundan sonra mesajı belleğe ekleyip oturum
+sayacını artırır (sıra gerekçesi aşağıda).
 Eski davranış her mesajda dosyanın tamamını yeniden yazıyordu (mesaj başına O(n),
 oturum başına O(n²)); append-only ile bu O(1)'e indi. `session.json`'daki
 `messageCount`/`updatedAt` bu yüzden diskte **bayat** kalabilir; bu sayaçlar
 (ve katılımcı listesi) boot'ta mesaj satırlarından **yeniden hesaplanır**
 (`reconcileHeader`).
+
+**Kilitleme (2026-08-31):** Transkript yazımı global store kilidi `mu` altında
+DEĞİL, **oturum başına ayrı bir mutex** altında yapılır
+(`internal/db/transcript_lock.go`). Kilit sırası zorunludur: önce transkript
+kilidi, sonra `mu` — `mu` tutulurken transkript kilidi alınamaz. Aynı oturuma
+yazan her yol (`AddMessage`, `DeleteMessage`, `DeleteMessagesFrom`,
+`SetMessageFeedback`, `DeleteSession`) bu kilidi alır; farklı oturumlar birbirini
+beklemez. `AddMessage` satırı **önce diske yazar, sonra belleğe yayınlar**: yazım
+başarısızsa mesaj hiç görünmez, aktivite hook'u atmaz ve hata çağırana döner —
+yani "UI'da var, diskte yok" durumu oluşamaz. Bu, ek bir kontrolle değil
+**sıralamayla** sağlanır: kod yolunda diske yazımı belleğe yayımdan ayıran bir
+telafi adımı yoktur. Tersi sıra (önce belleğe) mükerrer satır riski taşımaz ama
+gözlemlenebilir bir "bellekte var, diskte yok" penceresi açardı; bu pencere
+şimdi hiç var olmuyor. Boot yolları (`recoverInflight`, düzen göçleri) tek iş
+parçacıklı olduğu için bu kilidi almaz — `recoverInflight` sidecar'ı yazmadan
+önce zaten diskten yüklenmiş olan `d.messages[sessionID]` içinde aynı
+`MessageID`'yi arar (`alreadyPersisted`), dolayısıyla append edilmiş ama sidecar'ı
+temizlenmemiş bir mesaj yeniden yazılmaz.
+
+`mu` yalnız bellek içi haritaları (`d.sessions`, `d.messages`) korur; `mu`
+altında hiçbir transkript I/O'su yapılmaz. Profil tarafındaki karşılığı için bkz.
+[16-PROFILLEME.md](16-PROFILLEME.md).
 
 **Header/transkript ayrımı neden var:** header ile mesajlar tek dosyadayken
 *sadece* metadata değiştiren her işlem — yeniden adlandırma, etiket, pin,

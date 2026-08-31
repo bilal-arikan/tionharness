@@ -845,6 +845,61 @@ Tasarrufun tersi: geç gelen bir tur sıcak prompt-cache öneğini soğuttuğund
   birebir tutarlı). UI: `SessionDetailPanel`'de **"Bu oturumun harcaması"** kartı (maliyet + prompt-cache
   kazancı) — eskiden yalnız "ajanın bugünkü toplamı" gösteriliyordu.
 
+### Hata turu faturalandırması (2026-08-31)
+
+Sağlayıcı sözleşmesi hata durumunda `(nil, err)` döner; bu yüzden **başarısız tur
+sıfır token** olarak kaydediliyordu. Oysa istek gönderildikten *sonra* düşen bir
+tur (sonuç zarfında rate-limit/auth reddi, son iç tur sırasında CLI çökmesi)
+girdi tokenlarını ve tamamlanmış her iç gidiş-dönüşü zaten ödemiştir — yani en
+pahalı turlar tam olarak $0 faturalanıyordu.
+
+**Sözleşme** (`internal/providers/usage_error.go`):
+
+- `UsageError{Err, Model, Usage, ProviderCalls}` — hâlâ bir `error`'dır
+  (`Error()`/`Unwrap()`), yanına *ayrıca* bir `*Response` konmaz. Bilinçli:
+  `Complete`/`Turn` çağıranlarının tamamı "hata varsa yanıt yoktur" varsayar;
+  hatanın yanına dolu bir yanıt koymak, `err` kontrolünü atlayan bir çağrı
+  noktasında başarısız turu başarılı gösterirdi.
+- `WithUsage(err, model, usage, providerCalls)` — hatayı usage ile sarar.
+  `err == nil` **veya** usage tamamen sıfırsa hatayı **değiştirmeden** döndürür;
+  zincirde zaten bir `UsageError` varsa yeniden sarmaz (en içteki sarmalama,
+  ölçümü yapan ayrıştırıcıya en yakın olandır).
+- `UsageFromError(err)` — `errors.As` ile taşınan usage'ı çıkarır.
+
+**Kayıt yolu** (`internal/agent/toolloop.go`, `recordFailedUsage`): hata usage
+taşımıyorsa **hiçbir şey kaydedilmez** (hiç istek gitmemiş demektir).
+Taşıyorsa `ue.Model` (boşsa `req.Model`) ile normal `RecordUsage` çağrılır — yani
+başarısız tur da ajan+gün ve session rollup'larına, `ByKind`/`ByModel` dahil,
+başarılı tur ile aynı yoldan işlenir.
+
+Çağrıldığı üç yer, ikiye ayrılır:
+
+| Yol | Fonksiyon | Kapsam |
+|-----|-----------|--------|
+| Tool-loop içi | `recordedComplete` | Kalıcı (persistent) CLI turu düştüğünde **ve** ardından tek-atımlık `Complete` düştüğünde ayrı ayrı — fallback zaten ayrı faturalanır, atlanırsa bütün bir turun tokenları düşerdi |
+| Tool-loop içi | `recordedStream` | Akış (`Stream`) hatası |
+| Tool-loop dışı | `guardedComplete` (`budget.go:145-159`) | Yardımcı turlar: reflect (`coordination_stall.go`, `insightanalyzer.go`, `lessons.go`), summary (`summarizer.go`), title (`titler.go`), btw (`btw.go`) |
+
+**Çift faturalandırma yok:** `guardedComplete`'e gelen çağıranlar sağlayıcıya
+yalnız bu huniden erişir, hiçbiri `recordedComplete`/`recordedStream`'den
+geçmez. `guardedComplete` ayrıca `recordedComplete` ile aynı `Warn` logunu atar
+(`provider complete failed`), böylece yardımcı tur hatası sessizce yukarı
+sızmaz.
+
+**Bilinen açıklar** (bilerek belgeleniyor, henüz kapatılmadı):
+
+- **Üretici taraf tek sağlayıcıda bağlı.** `WithUsage`'ı çağıran tek üretim
+  yolu `providers/claudecli_stream.go`'daki `usageError` yardımcısıdır.
+  `internal/providers/codexcli.go` hiçbir hata dönüşünde usage sarmaz — yani
+  **codex-cli hata turunda harcanan token hâlâ düşer**. Kayıt tarafı hazır;
+  eksik olan sağlayıcı sarmalaması.
+- **claude-cli retry'ında ilk denemenin usage'ı kaybolur.** `ClaudeCLI.Complete`
+  içindeki `for attempt := 0; attempt < 2` döngüsünde attempt 0 *retryable*
+  düşüp attempt 1 başarılı olursa fonksiyon `return resp, nil` yapar; attempt
+  0'ın `UsageError`'ı hiçbir yere ulaşmaz. Yalnız **son** hata (`lastErr`) ya da
+  başarı yukarı çıktığı için, başarılı retry'ın önündeki ölü denemenin tokenları
+  faturalanmaz.
+
 ### Hesaplama düzeltmeleri (2026-07-08)
 Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
 

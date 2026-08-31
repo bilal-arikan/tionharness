@@ -10467,3 +10467,45 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   session davranışı değiştirilmedi.
 - Başarılı persist/arşiv ve persist-hatasında arşivlememe regresyon testleri eklendi;
   mevcut eşzamanlı idle-fold lifecycle testleri korunur.
+
+## Sayısal ayar alanlarında stale-write koruması (`NumberField`) (2026-08-31)
+
+**Sorun:** `onChange={(e) => set('x', Number(e.target.value))}` yazan bir sayı
+alanı, kullanıcı geçersiz bir şey yazdığında (boş dize, `-`, `1e`, aralık dışı)
+taslağa sessizce **eski/yanlış** bir değer işler ve Kaydet bunu kalıcılaştırır —
+kullanıcı ekranda gördüğü metinden farklı bir değerin kaydedildiğini fark etmez.
+
+**Desen** (`frontend/src/features/settings/primitives.tsx`):
+
+- `NumberField` — yazılan metni **kendi local state'inde** tutar, böylece ara
+  girdi (`""`, `-`, `1e`) ekranda kalır ama taslağa `0`/`NaN` olarak yazılmaz.
+  Her tuş vuruşunda `min`/`max` ve `Number.isFinite` doğrulaması yapar,
+  reddedilen değerin gerekçesini alanın altında `role="alert"` ile gösterir ve
+  `onChange`'i **yalnız geçerli** değerde çağırır. Dışarıdan gelen değişiklik
+  (ayar yeniden yüklendi, sıfırlandı) metni tazeler; alanın kendi commit'leri
+  bununla çakışmaz (`committed` ref).
+- `useNumberValidity()` + `NumberValidityProvider` — geçersiz alan kimliklerini
+  bir küme olarak tutar; `hasInvalid` doğruyken panelin **Kaydet** butonu
+  kapatılır. Alan unmount olurken kendi kaydını temizler, yoksa Kaydet sonsuza
+  dek kapalı kalırdı.
+
+**Her panel kendi provider'ını kurar.** Provider, alanları *ve* Kaydet butonunu
+birlikte render eden ekranda çağrılır; tek global provider yoktur:
+`features/settings/SettingsPanel.tsx` ve `features/insight/SettingsTab.tsx`
+kendi `useNumberValidity()`'lerini kurar, `features/insight/LessonsTab.tsx` de
+kendi provider'ıyla sarar. `features/flows/NodeInspector.tsx` `NumberField`
+kullanır ama **bilerek provider dışındadır** — orada `onPatch` canlıdır (ayrı
+bir taslak + Kaydet adımı yoktur), yani stale-write yolu hiç oluşmaz;
+`NumberField` provider yokluğunda `useContext` context'in `null` varsayılanını
+döndürdüğü için sorunsuz çalışır (`validity?.report`), yalnız satır-içi
+doğrulama gösterir.
+
+**Kalıntı (henüz desene geçmedi):**
+
+- `frontend/src/features/settings/HooksPanel.tsx:272` — `timeoutSec` hâlâ ham
+  `Number(e.target.value)` ile yazılıyor (alan `min=1`/`max=120` iddia ediyor
+  ama bu yalnız tarayıcı ipucu; taslağa yazımı engellemiyor).
+- `frontend/src/features/schedules/AutomationFields.tsx:134,192,259` —
+  `priority`, `threshold` ve `interval` `Number(...) || 0` ile yazılıyor; bu
+  kalıp geçersiz girdiyi sessizce `0`'a çeviriyor ve `MIN_TOKEN_THRESHOLD` /
+  `MIN_COUNTER_INTERVAL` alt sınırlarını atlıyor.
