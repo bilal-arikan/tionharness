@@ -281,14 +281,23 @@ describe('artifact-origin image source', () => {
     await act(async () => {})
     expect(annotatorProps).not.toBeNull()
 
-    await expect(
-      annotatorProps?.onSave({
-        blob: new Blob(['png'], { type: 'image/png' }),
-        mime: 'image/png',
-        width: 1,
-        height: 1,
-      }),
-    ).rejects.toThrow('DERIVED_ARTIFACT_SAVE_FAILED')
+    // onSave rejects AND flips the annotator back to an editable state, so the
+    // rejection has to be captured inside act() — asserting on the bare promise
+    // leaves that state update unwrapped.
+    let saveError: unknown
+    await act(async () => {
+      saveError = await annotatorProps
+        ?.onSave({
+          blob: new Blob(['png'], { type: 'image/png' }),
+          mime: 'image/png',
+          width: 1,
+          height: 1,
+        })
+        .then(() => null)
+        .catch((err: unknown) => err)
+    })
+    expect(saveError).toBeInstanceOf(Error)
+    expect((saveError as Error).message).toBe('DERIVED_ARTIFACT_SAVE_FAILED')
     expect(apiMock.deleteFile).toHaveBeenCalledWith('artifacts/SES1/staged.png')
     expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
     expect(close).not.toHaveBeenCalled()
@@ -338,6 +347,7 @@ describe('artifact-origin image source', () => {
     expect((rejected as AggregateError).errors).toEqual([saveFailure, cleanupFailure])
     expect((rejected as AggregateError).errors[0]).toBe(saveFailure)
     expect((rejected as AggregateError).errors[1]).toBe(cleanupFailure)
+    expect((rejected as AggregateError).cause).toBe(cleanupFailure)
     expect(apiMock.deleteFile).toHaveBeenCalledWith('artifacts/SES1/staged.png')
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(
       'Türetilmiş artifact kaydedilemedi ve geçici görsel temizlenemedi.',
