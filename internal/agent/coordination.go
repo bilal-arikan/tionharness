@@ -945,10 +945,12 @@ func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, worker
 	slot.ackedIdle = false
 	slot.idleFolded = false
 	slot.mu.Unlock()
-	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
-	r.workerCancels.Store(workerSessionID, ctl)
 	if r.workerRunFn != nil {
 		// Test seam: the caller counts the slots, so mirror the real path's release.
+		// It runs SYNCHRONOUSLY, so there is no launch race to close here — keep the
+		// bare ctl registration rather than newWorkerRun's cancellable run.
+		ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+		r.workerCancels.Store(workerSessionID, ctl)
 		defer r.releaseSpawnSlot()
 		defer slot.workers.Add(-1)
 		defer r.workerCancels.CompareAndDelete(workerSessionID, ctl)
@@ -956,7 +958,11 @@ func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, worker
 		r.workerRunFn(agent, workerSessionID, message, coordSessionID)
 		return nil
 	}
-	go r.runWorkerRegistered(agent, workerSessionID, message, coordSessionID, ctl)
+	// Registered before the goroutine starts: SendToWorker returns to the
+	// coordinator's tool loop immediately, and a stop_worker in the next iteration
+	// must be able to cancel this turn even while it is still queued.
+	runCtx, cancelRun, ctl := r.newWorkerRun(workerSessionID)
+	go r.runWorkerRegistered(runCtx, cancelRun, agent, workerSessionID, message, coordSessionID, ctl)
 	return nil
 }
 
@@ -1078,6 +1084,15 @@ func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionI
 			// actually running and we just cancelled it. Report that truthfully
 			// instead of the misleading "already finished?".
 			return nil
+		}
+		// No cancellable turn. For a worker that already reached a terminal state that
+		// is the expected race and reported as such below. A worker still marked
+		// "running" is different: either it is unwinding right now (its own terminal
+		// write is moments away) or its registration was lost — answering "already
+		// finished" would be a plain false statement about a session the coordinator
+		// can still see running. Say what is actually known and let it re-read.
+		if ws.RunState == runStateRunning {
+			return fmt.Errorf("worker %s is marked running but has no cancellable turn in this process; it is most likely finishing right now — re-read the session before retrying", workerSessionID)
 		}
 		return fmt.Errorf("worker %s is not running (already finished?): %w", workerSessionID, errWorkerNotRunning)
 	}
@@ -1232,18 +1247,39 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 // It mirrors runSpawn but is coordinator-aware and notifies on EVERY outcome
 // (completed / failed / killed), unlike a plain spawn.
 func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessionID string) {
-	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
-	r.workerCancels.Store(workerSessionID, ctl)
-	r.runWorkerRegistered(agent, workerSessionID, prompt, coordSessionID, ctl)
+	runCtx, cancelRun, ctl := r.newWorkerRun(workerSessionID)
+	r.runWorkerRegistered(runCtx, cancelRun, agent, workerSessionID, prompt, coordSessionID, ctl)
 }
 
-func (r *Runtime) runWorkerRegistered(agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
+// newWorkerRun creates the worker turn's cancellable context and registers BOTH
+// stop paths — the coordinator's workerCancels entry and the session cancel
+// registry CancelSession reads — before the turn goroutine is started. The launch
+// sites call this SYNCHRONOUSLY: SpawnWorker/SendToWorker return the worker session
+// id to the caller's tool loop the moment they return, so a stop issued in the very
+// next iteration must find something to cancel. Registering inside the goroutine
+// left that window (unbounded, because the turn-slot claim can queue) uncancellable
+// while the row already read "running", so stop_worker answered "already finished"
+// for a worker that then went on to run.
+//
+// The ctl's initial cancel is cancelRun itself, so a stop landing before the first
+// turn attempt registers its own cancel still tears the run down; the idle-resume
+// loop re-points it per attempt (see setCancel).
+func (r *Runtime) newWorkerRun(workerSessionID string) (context.Context, context.CancelFunc, *workerCtl) {
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	ctl.setCancel(cancelRun)
+	r.workerCancels.Store(workerSessionID, ctl)
+	r.trackSession(workerSessionID, cancelRun)
+	return runCtx, cancelRun, ctl
+}
+
+func (r *Runtime) runWorkerRegistered(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
 	defer r.workerCancels.CompareAndDelete(workerSessionID, ctl)
 	defer close(ctl.done)
-	r.runWorkerWithCtl(agent, workerSessionID, prompt, coordSessionID, ctl)
+	r.runWorkerWithCtl(runCtx, cancelRun, agent, workerSessionID, prompt, coordSessionID, ctl)
 }
 
-func (r *Runtime) runWorkerWithCtl(agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
+func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, workerSessionID, prompt, coordSessionID string, ctl *workerCtl) {
 	// Registered first so the global lifecycle slot is released last. Test/runtime
 	// shutdown uses spawnActive as the definitive drain barrier; dropping it before
 	// queue finalization lets cleanup race the goroutine's final store access.
@@ -1269,15 +1305,40 @@ func (r *Runtime) runWorkerWithCtl(agent db.Agent, workerSessionID, prompt, coor
 	// decremented above) so it never overlaps another turn on the same worker
 	// session: a second send_to_worker that raced the isSessionActive check (that
 	// check is a UI hint, not a lock), or a user/wake/peer turn opened on the worker
-	// session (all of which now claim this same slot).
-	releaseSlot := r.claimSessionTurnSlot(workerSessionID, turnqueue.KindWorker, "worker görevi")
+	// session (all of which now claim this same slot). The claim watches runCtx (the
+	// worker turn's own cancellable context, created and registered by newWorkerRun
+	// before this goroutine started): a stop issued while this turn waits in the
+	// queue must not be outlived by it.
+	releaseSlot, slotErr := r.claimSessionTurnSlotCtx(runCtx, workerSessionID, turnqueue.KindWorker, "worker görevi")
 	defer releaseSlot()
-
-	// Own cancelable context for this worker turn so a human "Durdur"
-	// (CancelSession) can stop it, alongside the coordinator's own stop_worker.
-	runCtx, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
-	r.trackSession(workerSessionID, cancelRun)
+	if slotErr != nil {
+		// Stopped while waiting for the worker session's turn slot: the turn never ran,
+		// so stamp the terminal state and tell the coordinator instead of starting work
+		// nobody is waiting for. "killed", not "failed": a later retry_of must not be
+		// refused as "still running", and this genuinely was a stop.
+		r.logger.Info("worker: cancelled before its turn started",
+			"session", workerSessionID, "coordinator", coordSessionID)
+		// context.Background() deliberately: runCtx is already cancelled and the
+		// terminal state must still be persisted.
+		bg := context.Background()
+		if rsErr := r.db.SetSessionRunState(bg, workerSessionID, turnStatusKilled, time.Now().Unix()); rsErr != nil {
+			r.logger.Error("worker: failed to persist killed state", "session", workerSessionID, "error", rsErr)
+		}
+		r.untrackSession(workerSessionID)
+		r.emitWorkerEvent(agent, workerSessionID, coordSessionID, turnStatusKilled)
+		// The coordinator is waiting on this worker whatever happened to it, so the
+		// kill is reported like any other outcome — dropping it would freeze the
+		// coordinator on a worker that will never speak.
+		note := formatTaskNotification(workerSessionID, agent.ID, agent.Name, agent.Model, turnStatusKilled,
+			"⏹️ Worker turu, sırası gelmeden durduruldu.", 0, 0)
+		if notifyErr := r.notifyCoordinator(coordSessionID, note, workerDone(), nil, workerSessionID); notifyErr != nil {
+			r.logger.Error("worker: kill notification failed",
+				"session", workerSessionID, "coordinator", coordSessionID, "error", notifyErr)
+		}
+		return
+	}
+
 	// Raise the "thinking" indicator for the worker session (see emitTurnStart);
 	// the completion "worker" event clears it.
 	r.emitTurnStart(workerSessionID, "🤝 Worker turu çalışıyor")

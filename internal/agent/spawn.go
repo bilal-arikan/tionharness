@@ -323,7 +323,12 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	// worker takes the coordinator-aware path (history-aware turn + notify-back);
 	// an ordinary spawn takes the plain path.
 	if coordID != "" {
-		go r.runWorker(agent, session.ID, prompt, coordID)
+		// Same reason as the plain-spawn branch below: SpawnWorker returns the worker
+		// session id to the coordinator's tool loop, which may call stop_worker in the
+		// very next iteration. Registering the ctl and the session cancel BEFORE the
+		// goroutine starts is what makes that stop land.
+		runCtx, cancelRun, ctl := r.newWorkerRun(session.ID)
+		go r.runWorkerRegistered(runCtx, cancelRun, agent, session.ID, prompt, coordID, ctl)
 	} else {
 		// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
 		// the session id back to its caller (run_subagent) the moment this returns, and
