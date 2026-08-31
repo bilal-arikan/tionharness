@@ -74,7 +74,7 @@ function renderCard(overrides: Partial<Task> = {}, onUnarchive?: (task: Task) =>
 }
 
 describe('TaskCard task id', () => {
-  it('positions the real task id at the top right and includes it in the accessible name', () => {
+  it('positions the real task id at the bottom right and includes it in the accessible name', () => {
     const container = renderCard()
     const card = container.querySelector<HTMLElement>('[data-testid="task-card"]')
     const id = Array.from(container.querySelectorAll('span')).find(
@@ -87,11 +87,37 @@ describe('TaskCard task id', () => {
     expect(card?.className).not.toMatch(/(?:^|\s)pt-/)
     expect(id?.className).toContain('absolute')
     expect(id?.className).toContain('right-2')
-    expect(id?.className).toContain('top-2')
+    expect(id?.className).toContain('bottom-2')
+    expect(id?.className).not.toContain('top-2')
     expect(id?.className).toContain('text-[var(--color-text-dim)]')
     expect(id?.className).toContain('opacity-70')
     expect(id?.nextElementSibling?.className).toContain('pr-12')
     expect(card?.getAttribute('aria-label')).toContain('görev kimliği TSK548')
+  })
+
+  it('reserves right-side space on the bottom metadata row without shifting the whole card', () => {
+    const container = renderCard({ artifactIds: ['ART1'] })
+    const card = container.querySelector<HTMLElement>('[data-testid="task-card"]')
+    const attachment = container.querySelector<HTMLElement>('span[title="1 ek (artifact)"]')
+    const metadata = attachment?.parentElement
+
+    expect(metadata?.className).toContain('pr-12')
+    expect(card?.className).not.toMatch(/(?:^|\s)pb-/)
+  })
+
+  it('reserves id clearance on the last content row when metadata is absent', () => {
+    const container = renderCard({ description: 'Dar kartta son içerik' })
+    const card = container.querySelector<HTMLElement>('[data-testid="task-card"]')
+    const title = Array.from(container.querySelectorAll('div')).find(
+      (element) => element.textContent === task.title,
+    )
+    const description = Array.from(container.querySelectorAll('div')).find(
+      (element) => element.textContent === 'Dar kartta son içerik',
+    )
+
+    expect(title?.className).not.toContain('pr-12')
+    expect(description?.className).toContain('pr-12')
+    expect(card?.className).not.toMatch(/(?:^|\s)pb-/)
   })
 
   it('keeps the restore action in normal flow, separate from the positioned id', () => {

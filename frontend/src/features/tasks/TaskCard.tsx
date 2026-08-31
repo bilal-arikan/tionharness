@@ -83,6 +83,11 @@ function TaskCardImpl({
   const { owner, flow, depIds, unmetDeps, unmetColColor, image } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
   const pending = t.id.startsWith('temp-')
+  const hasAttributeBadges = Boolean(t.priority || (t.tags?.length ?? 0) > 0)
+  const hasMetadata = Boolean(
+    owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0,
+  )
+  const idClearanceClass = pending ? '' : 'pr-12'
 
   return (
     <div
@@ -154,7 +159,7 @@ function TaskCardImpl({
       }`}
     >
       {!pending && (
-        <span className="absolute right-2 top-2 font-mono text-[10px] leading-4 text-[var(--color-text-dim)] opacity-70">
+        <span className="absolute right-2 bottom-2 font-mono text-[10px] leading-4 text-[var(--color-text-dim)] opacity-70">
           {t.id}
         </span>
       )}
@@ -190,19 +195,27 @@ function TaskCardImpl({
           />
         </div>
       )}
-      <div className={`${pending ? '' : 'pr-12'} font-medium`}>{t.title}</div>
+      <div
+        className={`${!t.description && !hasAttributeBadges && !hasMetadata ? idClearanceClass : ''} font-medium`}
+      >
+        {t.title}
+      </div>
       {pending ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>
       ) : (
         t.description && (
-          <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
+          <div
+            className={`mt-1 line-clamp-2 ${!hasAttributeBadges && !hasMetadata ? idClearanceClass : ''} text-xs text-[var(--color-text-dim)]`}
+          >
             {t.description}
           </div>
         )
       )}
       {/* Rich attribute badges: priority and tags. */}
-      {(t.priority || (t.tags?.length ?? 0) > 0) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {hasAttributeBadges && (
+        <div
+          className={`mt-1.5 flex flex-wrap items-center gap-1 ${!hasMetadata ? idClearanceClass : ''}`}
+        >
           {t.priority && PRIORITY_META[t.priority] && (
             <span
               className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
@@ -224,8 +237,10 @@ function TaskCardImpl({
           ))}
         </div>
       )}
-      {(owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+      {hasMetadata && (
+        <div
+          className={`mt-2 flex flex-wrap items-center gap-1.5 ${idClearanceClass} text-xs text-[var(--color-text-dim)]`}
+        >
           {owner && <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />}
           {(t.artifactIds?.length ?? 0) > 0 && (
             <span
