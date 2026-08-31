@@ -338,7 +338,17 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "history_error", herr.Error())
 				return
 			}
-			session, _ = database.GetSession(ctx, session.ID)
+			// Re-read the session so this pass sees the freshest metadata (title, CLI
+			// resume ids a previous agent wrote). A failure here means the session no
+			// longer exists (deleted mid-turn, store swapped): abort the turn instead of
+			// continuing with the zero value, whose empty ID would persist this reply
+			// under no session and publish to a hub scope nobody watches.
+			refreshed, serr := database.GetSession(ctx, session.ID)
+			if serr != nil {
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "session_not_found", serr.Error())
+				return
+			}
+			session = refreshed
 			// Raw (un-annotated) message list — the basis for the claude-cli resume delta
 			// (stable indices, unlike the annotated history below). Includes this turn's
 			// just-added user message.
