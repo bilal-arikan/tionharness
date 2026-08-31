@@ -195,6 +195,11 @@ type Request struct {
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming
 	// providers. Must be safe to call from the provider's goroutine.
 	OnEvent func(TraceStep)
+	// OnWatchdog, when set, is called by CLI providers when one of their stdout
+	// watchdogs kills a wedged subprocess, so the caller can record the kill in its
+	// observability stream (debug.jsonl). Diagnostic only — the turn error is still
+	// returned normally. Must be safe to call from the provider's goroutine.
+	OnWatchdog func(WatchdogKill)
 	// ResumeSessionID, when set, asks a CLI provider (claude-cli) to RESUME a prior
 	// session (--resume <id>) instead of starting fresh: the CLI reuses its
 	// server-side conversation + prompt cache, so the caller need only send the new

@@ -126,6 +126,34 @@
 - Yeni adım reason'ları: `provider_retry` (StepRecovery), `guardrail_block`/
   `guardrail_halt`. UI mevcut StepRecovery/StepError kartlarıyla gösterir.
 
+### Faz E2 — codex-cli stdout sessizlik gözcüsü (TSK441)
+Üstteki tur-seviyesi gözcünün ALTINDA, alt-süreç seviyesinde ikinci bir kat.
+Bir codex alt süreci öldüğünde hayatta kalan bir torun süreç stdout borusunu açık
+tutabilir; bu durumda `cmd.Wait` hiç dönmez ve tur "boş cevap" gibi görünür.
+
+- **İki pencere** (`internal/providers/codexcli.go`): `codexStartupTimeout`
+  (90 sn, ilk-çıktıya-kadar) ve stdout sessizlik penceresi. İkisi de
+  `proc.KillTree` ile **süreç AĞACINI** öldürür (`internal/proc/reap_windows.go`
+  → `taskkill /F /T /PID`; PowerShell AST yardımcısı, conhost dahil).
+- **Ayrı hata metinleri**: startup hang → "likely MCP startup hang (**retryable**)";
+  idle hang → "killed after the idle output timeout (**non-retryable**)" + stdout
+  kuyruğu. Hiçbiri normal boş cevap olarak raporlanmaz.
+- **Ayarlanabilir pencere**: `codexStdoutIdleSec` ayarı (varsayılan **90 sn**,
+  0 = kapalı, Ayarlar ▸ Araçlar ▸ "Codex stdout sessizlik penceresi").
+  `applySettings` → `providers.SetCodexIdleOutputTimeout`. Birim saniyedir çünkü
+  pencere, sohbet/tur boşta gözcüsünün (varsayılan **3 dk**, TSK440) ALTINDA
+  kalmalı — aksi halde jenerik tur iptali her zaman önce ateşler ve stdout
+  kuyruklu spesifik teşhis hiç üretilmez; dakika granülaritesi bu tavanın altına
+  makul bir payla sığmaz. 90 sn, çıktı üretmeden çalışan normal bir araç
+  çağrısının sessiz aralığından uzun, 3 dk'lık tavandan belirgin şekilde kısadır.
+  Pencere tur başlangıcında bir kez okunur; ayar değişimi uçuştaki turu kaydırmaz.
+- **debug.jsonl kaydı**: gözcü öldürdüğünde sağlayıcı `Request.OnWatchdog`
+  (`internal/providers/watchdog.go`, `WatchdogKill`) ile bildirir; `internal/agent`
+  bunu `emitDebug` üzerinden `type=error`,
+  `name=codex-cli_watchdog_{startup|idle}` olarak yazar (`durMs` = pencere,
+  `detail` = stdout kuyruğu). `providers` paketi `internal/db`'yi import ETMEZ —
+  sink `OnEvent` ile aynı desende yukarıdan enjekte edilir, import döngüsü yok.
+
 ### Faz F — Hata→ders döngüsü (lesson reflect, 2026-07-07)
 external-context-agent `background_review`'un TionHarness uyarlaması (memory alt sistemi
 kaldırıldığı için hedef store dar-kapsamlı yeni bir sidecar):
