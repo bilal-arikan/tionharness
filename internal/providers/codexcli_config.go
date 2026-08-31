@@ -36,9 +36,15 @@ type codexConfig struct {
 	// accepts none|minimal|low|medium|high|xhigh|max|ultra.
 	ReasoningEffort string
 	// DisableNativeMultiAgent emits `multi_agent = false` and
-	// `multi_agent_v2 = false` under [features], turning off codex's own
-	// agent-spawning/collab tools.
+	// `multi_agent_v2 = false` under [features]. Both keys are legacy: on codex
+	// 0.148.0 they were measured to have no effect. DisableSubAgents is the key
+	// that actually turns codex's own agent spawning off.
 	DisableNativeMultiAgent bool
+	// DisableSubAgents emits `enabled = false` under [agents]. This is the
+	// effective switch: with it set, codex 0.148.0 emits no spawn_agent call, no
+	// sub-agent thread and drops the collaboration instruction block from the
+	// prompt entirely.
+	DisableSubAgents bool
 	// DisableWebSearch emits `web_search = false` under [tools].
 	DisableWebSearch bool
 	// DisableUpdatePlan emits `update_plan = { enabled = false }` under [tools].
@@ -76,9 +82,22 @@ func renderCodexConfig(cfg codexConfig) string {
 		// Write both native collaboration feature keys for compatibility. On codex
 		// 0.148.0 they are accepted but were measured to have no behavioral effect:
 		// collaboration.spawn_agent remains available and can still spawn an agent.
+		// The actual enforcement is `[agents] enabled = false` below.
 		b.WriteString("[features]\n")
 		b.WriteString("multi_agent = false\n")
 		b.WriteString("multi_agent_v2 = false\n")
+	}
+
+	if cfg.DisableSubAgents {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		// Measured on codex 0.148.0: this is the only key that actually removes
+		// spawn_agent from the tool catalog and the collaboration instructions from
+		// the prompt. agents.max_depth = 0 is ignored, and
+		// agents.max_concurrent_threads_per_session = 0 is rejected outright.
+		b.WriteString("[agents]\n")
+		b.WriteString("enabled = false\n")
 	}
 
 	if cfg.DisableWebSearch || cfg.DisableUpdatePlan || cfg.DisableRequestUserInput {

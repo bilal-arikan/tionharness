@@ -490,6 +490,45 @@ func TestCodexBuildConfigDisablesNativeMultiAgentAndKeepsBridge(t *testing.T) {
 	}
 }
 
+// This test verifies only rendered config content, not whether Codex obeys the
+// key — but unlike the [features] pair, `[agents] enabled = false` WAS measured
+// live on codex 0.148.0: no spawn_agent call, no sub-agent thread on disk, and
+// the collaboration instruction block gone from the prompt.
+func TestCodexConfigDisablesSubAgents(t *testing.T) {
+	got := renderCodexConfig(codexConfig{
+		ReasoningEffort:         "high",
+		DisableNativeMultiAgent: true,
+		DisableSubAgents:        true,
+		DisableUpdatePlan:       true,
+	})
+	want := "model_reasoning_effort = \"high\"\n" +
+		"\n[features]\nmulti_agent = false\nmulti_agent_v2 = false\n" +
+		"\n[agents]\nenabled = false\n" +
+		"\n[tools]\nupdate_plan = { enabled = false }\n"
+	if got != want {
+		t.Fatalf("agents block mismatch\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// The production builder must write the effective switch, not only the legacy
+// [features] pair.
+func TestCodexBuildConfigDisablesSubAgents(t *testing.T) {
+	c := &CodexCLI{}
+	cfg := c.buildConfig(Request{})
+	if !cfg.DisableSubAgents {
+		t.Fatal("production config must disable codex native sub-agents")
+	}
+	if !strings.Contains(renderCodexConfig(cfg), "[agents]\nenabled = false\n") {
+		t.Fatalf("rendered production config missing the agents block:\n%s", renderCodexConfig(cfg))
+	}
+}
+
+func TestCodexConfigAgentsOmittedWhenNotDisabled(t *testing.T) {
+	if got := renderCodexConfig(codexConfig{ReasoningEffort: "low"}); strings.Contains(got, "[agents]") {
+		t.Fatalf("agents block must be opt-in, got %q", got)
+	}
+}
+
 func TestCodexConfigFeaturesOmittedWhenNotDisabled(t *testing.T) {
 	if got := renderCodexConfig(codexConfig{ReasoningEffort: "low"}); strings.Contains(got, "[features]") {
 		t.Fatalf("features block must be opt-in, got %q", got)
