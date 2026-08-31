@@ -141,7 +141,7 @@ function TaskCardImpl({
         e.stopPropagation()
         onFileDrop(t, files)
       }}
-      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${taskCardShadowClass(recentlyChanged, pending)} ${
+      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 pt-7 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${taskCardShadowClass(recentlyChanged, pending)} ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
       } ${
         pending
@@ -153,26 +153,24 @@ function TaskCardImpl({
             }`
       }`}
     >
-      {(onUnarchive || !pending) && (
-        <div className="mb-1 flex min-h-4 items-start justify-end gap-2">
-          {onUnarchive && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onUnarchive(t)
-              }}
-              title="Arşivden çıkar (panoya geri al)"
-              className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            >
-              <ArchiveRestore size={11} /> Geri al
-            </button>
-          )}
-          {!pending && (
-            <span className="font-mono text-[10px] leading-4 text-[var(--color-text-dim)] opacity-70">
-              {t.id}
-            </span>
-          )}
+      {!pending && (
+        <span className="absolute right-2 top-2 font-mono text-[10px] leading-4 text-[var(--color-text-dim)] opacity-70">
+          {t.id}
+        </span>
+      )}
+      {onUnarchive && (
+        <div className="mb-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onUnarchive(t)
+            }}
+            title="Arşivden çıkar (panoya geri al)"
+            className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <ArchiveRestore size={11} /> Geri al
+          </button>
         </div>
       )}
       {/* Attachment preview: the last image attached to the card, above the

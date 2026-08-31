@@ -74,7 +74,7 @@ function renderCard(overrides: Partial<Task> = {}, onUnarchive?: (task: Task) =>
 }
 
 describe('TaskCard task id', () => {
-  it('shows the real task id in the top row and includes it in the accessible name', () => {
+  it('positions the real task id at the top right and includes it in the accessible name', () => {
     const container = renderCard()
     const card = container.querySelector<HTMLElement>('[data-testid="task-card"]')
     const id = Array.from(container.querySelectorAll('span')).find(
@@ -82,16 +82,26 @@ describe('TaskCard task id', () => {
     )
 
     expect(id).toBeDefined()
-    expect(id?.parentElement?.className).toContain('justify-end')
+    expect(card?.className).toContain('relative')
+    expect(card?.className).toContain('pt-7')
+    expect(id?.className).toContain('absolute')
+    expect(id?.className).toContain('right-2')
+    expect(id?.className).toContain('top-2')
+    expect(id?.className).toContain('text-[var(--color-text-dim)]')
+    expect(id?.className).toContain('opacity-70')
     expect(card?.getAttribute('aria-label')).toContain('görev kimliği TSK548')
   })
 
-  it('keeps the restore action and id together without absolute positioning', () => {
+  it('keeps the restore action in normal flow, separate from the positioned id', () => {
     const container = renderCard({}, vi.fn())
     const restore = container.querySelector<HTMLButtonElement>('button[title^="Arşivden çıkar"]')
+    const id = Array.from(container.querySelectorAll('span')).find(
+      (element) => element.textContent === 'TSK548',
+    )
 
     expect(restore).not.toBeNull()
-    expect(restore?.parentElement?.textContent).toContain('TSK548')
+    expect(restore?.parentElement).not.toBe(id?.parentElement)
+    expect(restore?.parentElement?.textContent).not.toContain('TSK548')
     expect(restore?.className).not.toContain('absolute')
   })
 
