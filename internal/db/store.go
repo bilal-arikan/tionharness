@@ -1091,6 +1091,9 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		d.mu.Unlock()
 		return m, ErrNotFound
 	}
+	// Snapshot the session header so a failed transcript append can restore it
+	// wholesale (counters, timestamps, unread flag, participant roster).
+	prev := s
 	d.messages[m.SessionID] = append(d.messages[m.SessionID], m)
 	s.MessageCount++
 	// Sum this message's executed tool calls into the session's lifetime tool
@@ -1119,7 +1122,19 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// The header line keeps a stale MessageCount/UpdatedAt on disk; both are
 	// recomputed from the message lines on load and refreshed by the next full
 	// rewrite (title/summary change).
-	appendErr := d.appendMessageLocked(s.ID, m)
+	if appendErr := d.appendMessageLocked(s.ID, m); appendErr != nil {
+		// The line never reached disk (full disk, locked file, missing directory).
+		// Roll the in-memory mutation back so RAM and the transcript agree: keeping
+		// it would show the message in the UI and fire automations for it, and then
+		// lose it on the next restart — the counters are recomputed from the file.
+		// The activity hook is deliberately NOT fired for a message that does not
+		// exist on disk.
+		msgs := d.messages[m.SessionID]
+		d.messages[m.SessionID] = msgs[:len(msgs)-1]
+		d.sessions[s.ID] = prev
+		d.mu.Unlock()
+		return m, appendErr
+	}
 	// Snapshot the totals for the activity signal, then release the lock BEFORE
 	// firing the hook (the observer dispatches on its own goroutine, which will
 	// itself take the store lock).
@@ -1132,7 +1147,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	}
 	d.mu.Unlock()
 	d.fireActivityHook(sig)
-	return m, appendErr
+	return m, nil
 }
 
 // addParticipant appends an agent id to a session's participant roster when it is

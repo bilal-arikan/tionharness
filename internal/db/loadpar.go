@@ -47,11 +47,12 @@ func loadWorkers(n int) int {
 // parallelLoad applies fn to every item with a bounded worker pool and returns
 // the results IN INPUT ORDER, plus the FIRST error by input order.
 //
-// Input-order results and input-order error selection are both load-bearing.
-// Boot treats a corrupt entity file as fatal, so which file gets blamed — and
-// whether a boot fails at all — must not depend on goroutine scheduling. A
-// scheduling-dependent boot failure is the kind of bug that reproduces once a
-// month and never in a test.
+// Input-order results and input-order error selection are both load-bearing:
+// which item gets blamed — and whether the caller fails at all — must not depend
+// on goroutine scheduling. A scheduling-dependent boot failure is the kind of bug
+// that reproduces once a month and never in a test. (loadJSONDir no longer routes
+// per-file corruption through this error path — it skips and logs — but callers
+// that DO treat fn's error as fatal still get a deterministic one.)
 //
 // fn must be safe to call concurrently. Every current caller only reads files
 // and fills a value it owns; nothing touches the store's maps, which are

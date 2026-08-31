@@ -352,6 +352,13 @@ func readJSONFile(path string, v any) error {
 // a fresh T, returning the slice in directory order. A missing directory yields
 // an empty slice. The files are read CONCURRENTLY — see loadpar.go for why that
 // is the single biggest lever on boot time.
+//
+// Failure is ISOLATED PER ENTITY: a file that cannot be read or parsed is skipped
+// and reported at ERROR level (with its path), the remaining files still load.
+// One hand-edited tasks/TSK7.json used to fail the whole store open, which failed
+// the whole workspace open — hundreds of sessions unreachable because of a stray
+// comma. Only the directory scan itself is fatal here; that is a bootstrap
+// failure, not an entity failure.
 func loadJSONDir[T any](dir string) ([]T, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -368,14 +375,31 @@ func loadJSONDir[T any](dir string) ([]T, error) {
 		}
 		paths = append(paths, filepath.Join(dir, name))
 	}
-	return parallelLoad(paths, func(p string) (T, error) {
+	// The per-file error travels INSIDE the result so parallelLoad's own error
+	// channel stays reserved for genuinely fatal conditions.
+	type loaded struct {
+		v   T
+		err error
+	}
+	results, err := parallelLoad(paths, func(p string) (loaded, error) {
 		var v T
 		if err := readJSONFile(p, &v); err != nil {
-			var zero T
-			return zero, err
+			return loaded{err: err}, nil
 		}
-		return v, nil
+		return loaded{v: v}, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]T, 0, len(results))
+	for i, r := range results {
+		if r.err != nil {
+			slog.Error("skipping unreadable entity file", "component", "db", "file", paths[i], "error", r.err)
+			continue
+		}
+		out = append(out, r.v)
+	}
+	return out, nil
 }
 
 func removeFile(path string) error {

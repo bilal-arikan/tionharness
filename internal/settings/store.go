@@ -2,10 +2,13 @@ package settings
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // fileName is the settings document inside the data directory.
@@ -29,7 +32,9 @@ type Store struct {
 
 // Open loads settings.json from dataDir, creating it with defaults if absent.
 // Missing individual fields (e.g. after a schema addition) fall back to their
-// default values.
+// default values. A document that does not parse at all is QUARANTINED (renamed
+// to settings.json.corrupt-<unix>) and replaced with defaults instead of failing
+// the application start — see openCorrupt.
 func Open(dataDir string, cipher Cipher) (*Store, error) {
 	s := &Store{
 		path:   filepath.Join(dataDir, fileName),
@@ -52,10 +57,33 @@ func Open(dataDir string, cipher Cipher) (*Store, error) {
 	// persisted document.
 	loaded := Default()
 	if err := json.Unmarshal(data, &loaded); err != nil {
-		return nil, err
+		if qerr := s.quarantine(err); qerr != nil {
+			return nil, qerr
+		}
+		return s, nil
 	}
 	s.cur = normalize(loaded)
 	return s, nil
+}
+
+// quarantine moves an unparseable settings.json aside and writes a fresh default
+// document in its place. A syntax error in a hand-edited file used to make the
+// application unstartable with no way to fix it from the UI — while normalize
+// deliberately tolerates bad VALUES for exactly that reason. The event is logged
+// at ERROR level with both paths so the user can see what happened and recover
+// their old file. A failed rename IS returned: silently overwriting a file we
+// could not preserve would destroy the only copy of the user's settings.
+func (s *Store) quarantine(parseErr error) error {
+	dest := s.path + ".corrupt-" + strconv.FormatInt(time.Now().Unix(), 10)
+	if err := os.Rename(s.path, dest); err != nil {
+		slog.Error("settings.json is corrupt and could not be quarantined",
+			"component", "settings", "path", s.path, "parse_error", parseErr, "error", err)
+		return parseErr
+	}
+	slog.Error("settings.json was corrupt: quarantined and replaced with defaults",
+		"component", "settings", "path", s.path, "quarantine", dest, "parse_error", parseErr)
+	s.cur = Default()
+	return s.persist(s.cur)
 }
 
 // Path returns the absolute path of the settings.json document on disk. Exposed

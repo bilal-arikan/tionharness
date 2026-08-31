@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -100,24 +99,10 @@ func TestLoadWorkersBounds(t *testing.T) {
 	}
 }
 
-// TestLoadJSONDirSurfacesCorruption: concurrency must not turn a fatal parse
-// error into a silently short result set. A corrupt entity file still fails the
-// boot, exactly as it did serially.
-func TestLoadJSONDirSurfacesCorruption(t *testing.T) {
-	dir := t.TempDir()
-	for i := 0; i < 40; i++ {
-		body := fmt.Sprintf(`{"id":"AGT%d","name":"a%d"}`, i, i)
-		if i == 25 {
-			body = `{"id": THIS IS NOT JSON`
-		}
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("AGT%d.json", i)), []byte(body), 0o644); err != nil {
-			t.Fatalf("write: %v", err)
-		}
-	}
-	if _, err := loadJSONDir[Agent](dir); err == nil {
-		t.Fatal("corrupt entity file did not fail the load")
-	}
-}
+// Per-file corruption is no longer routed through parallelLoad's error path:
+// loadJSONDir skips and logs the bad file so one entity cannot take the whole
+// store down. That behaviour is covered by TestLoadJSONDirSkipsCorruptFile in
+// store_append_rollback_test.go.
 
 // TestConcurrentBootLoadsEverySession is the end-to-end guard on the concurrent
 // loaders: a store with many sessions must come back byte-identical after a
