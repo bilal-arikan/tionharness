@@ -347,8 +347,11 @@ func (m *Manager) Rename(id, name string) error {
 		return errors.New("workspace not found")
 	}
 	ws.Meta.Name = name
+	// Snapshot in the SAME hold as the rename, so two concurrent renames cannot
+	// interleave "set name" and "read registry" and write the older name last.
+	metas := m.registryMetasLocked()
 	m.mu.Unlock()
-	return m.persist()
+	return m.persist(metas)
 }
 
 // UpdateSettings applies a settings patch to a workspace, persists it, and

@@ -31,7 +31,7 @@ func TestPersistKeepsDegradedWorkspaces(t *testing.T) {
 	m.markDegraded(broken, errors.New("store is corrupt"))
 	m.markDegraded(broken, errors.New("store is corrupt")) // idempotent
 
-	if err := m.persist(); err != nil {
+	if err := m.persist(m.registryMetas()); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
 	metas, err := m.loadMetas()
@@ -58,7 +58,7 @@ func TestPersistIsAtomic(t *testing.T) {
 	m := testManager(t)
 	m.workspaces["WS1"] = &Workspace{Meta: Meta{ID: "WS1", Name: "a", CreatedAt: 1}}
 	m.order = append(m.order, "WS1")
-	if err := m.persist(); err != nil {
+	if err := m.persist(m.registryMetas()); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
 	if _, err := os.Stat(m.metaPath() + ".tmp"); !os.IsNotExist(err) {

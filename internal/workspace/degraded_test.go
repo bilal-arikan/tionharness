@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -87,6 +89,74 @@ func TestDeleteDegradedRollsBackOnPersistFailure(t *testing.T) {
 	}
 }
 
+// TestDeleteDegradedRollbackIsNotObservable: the rollback of a failed delete must
+// happen in the SAME lock hold as the removal, so no reader ever sees the entry
+// missing. While persist() locked internally, deleteDegraded had to drop the lock
+// around it — a concurrent ListWithDegraded could then observe a workspace that
+// was never actually deleted as gone. Readers run for the whole (failing) delete
+// and every observation must still contain WS2.
+func TestDeleteDegradedRollbackIsNotObservable(t *testing.T) {
+	m := testManager(t)
+	m.markDegraded(Meta{ID: "WS1", Name: "first", CreatedAt: 10}, errors.New("boom"))
+	dir := filepath.Join(t.TempDir(), "ws2")
+	if err := os.MkdirAll(filepath.Join(dir, "store"), 0o755); err != nil {
+		t.Fatalf("seed workspace dir: %v", err)
+	}
+	m.markDegraded(Meta{ID: "WS2", Name: "broken", CreatedAt: 50, Path: dir}, errors.New("store is corrupt"))
+
+	// Force the persist to fail: a non-empty directory at the registry path can
+	// never be replaced by a rename.
+	if err := os.MkdirAll(m.metaPath(), 0o755); err != nil {
+		t.Fatalf("seed blocking dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(m.metaPath(), "blocker"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed blocking file: %v", err)
+	}
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var misses atomic.Int64
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				found := false
+				for _, e := range m.ListWithDegraded() {
+					if e.ID == "WS2" {
+						found = true
+					}
+				}
+				if !found {
+					misses.Add(1)
+				}
+			}
+		}()
+	}
+
+	for i := 0; i < 50; i++ {
+		if err := m.Delete("WS2"); err == nil {
+			close(stop)
+			wg.Wait()
+			t.Fatal("delete must fail when the registry cannot be persisted")
+		}
+	}
+	close(stop)
+	wg.Wait()
+
+	if n := misses.Load(); n != 0 {
+		t.Fatalf("ListWithDegraded observed WS2 as deleted %d times during a rolled-back delete", n)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("workspace dir removed despite the failed delete: %v", err)
+	}
+}
+
 // TestListWithDegradedFlagsBrokenWorkspaces: a degraded workspace is invisible in
 // List() (every caller pairs a Meta with a live handle), so the registry view the
 // user sees must come from ListWithDegraded and must say WHY it is broken.
@@ -133,7 +203,7 @@ func TestPersistRemovesTempOnFailure(t *testing.T) {
 		t.Fatalf("seed blocking file: %v", err)
 	}
 
-	if err := m.persist(); err == nil {
+	if err := m.persist(m.registryMetas()); err == nil {
 		t.Fatal("persist must fail when the registry path cannot be replaced")
 	}
 	if _, err := os.Stat(m.metaPath() + ".tmp"); !os.IsNotExist(err) {
@@ -148,7 +218,7 @@ func TestPersistSyncsBeforeRename(t *testing.T) {
 	m := testManager(t)
 	m.workspaces["WS1"] = &Workspace{Meta: Meta{ID: "WS1", Name: "a", CreatedAt: 1}}
 	m.order = append(m.order, "WS1")
-	if err := m.persist(); err != nil {
+	if err := m.persist(m.registryMetas()); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
 	data, err := os.ReadFile(m.metaPath())

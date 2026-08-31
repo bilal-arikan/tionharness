@@ -644,7 +644,7 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 	if err := m.open(meta); err != nil {
 		return nil, err
 	}
-	if err := m.persist(); err != nil {
+	if err := m.persist(m.registryMetas()); err != nil {
 		return nil, err
 	}
 	return m.Get(meta.ID)
@@ -690,7 +690,7 @@ func (m *Manager) Attach(path string) (*Workspace, error) {
 	if err := m.open(meta); err != nil {
 		return nil, err
 	}
-	if err := m.persist(); err != nil {
+	if err := m.persist(m.registryMetas()); err != nil {
 		return nil, err
 	}
 	return m.Get(meta.ID)
@@ -750,7 +750,10 @@ func (m *Manager) Delete(id string) error {
 	if err := os.RemoveAll(ws.DataDir); err != nil {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
 	}
-	return m.persist()
+	// No lock is held here on purpose: stopping the scheduler, closing the DB and
+	// removing the directory must not run under m.mu. registryMetas takes the read
+	// lock only for the snapshot.
+	return m.persist(m.registryMetas())
 }
 
 // deleteDegraded removes a registered-but-unopenable workspace. Without it a
@@ -767,6 +770,14 @@ func (m *Manager) Delete(id string) error {
 // workspaces.json, so it is put back into m.degraded at its original position.
 // Dropping it from memory only would let the next successful persist (a Create,
 // say) erase a registry entry the user never managed to delete.
+//
+// The removal, the write and the rollback all happen in ONE write-lock hold, so
+// the half-deleted state is never observable: a concurrent ListWithDegraded
+// either sees the workspace registered or sees it gone, never "missing but about
+// to come back". That is only possible because persist takes its snapshot as an
+// argument instead of locking internally. The directory removal stays OUTSIDE the
+// hold — it is slow, destructive IO on a directory nothing points at any more once
+// persist has succeeded, and holding m.mu across it would stall every reader.
 func (m *Manager) deleteDegraded(id string) error {
 	m.mu.Lock()
 	var entry DegradedWorkspace
@@ -782,14 +793,13 @@ func (m *Manager) deleteDegraded(id string) error {
 		return errors.New("workspace not found")
 	}
 	m.degraded = removeDegraded(m.degraded, id)
-	m.mu.Unlock()
-
-	if err := m.persist(); err != nil {
-		m.mu.Lock()
+	if err := m.persist(m.registryMetasLocked()); err != nil {
 		m.degraded = insertDegraded(m.degraded, idx, entry)
 		m.mu.Unlock()
 		return err
 	}
+	m.mu.Unlock()
+
 	dir := entry.Path
 	if dir == "" {
 		dir = filepath.Join(m.rootDir, "workspaces", entry.ID)
@@ -975,10 +985,19 @@ func (m *Manager) loadMetas() ([]Meta, error) {
 }
 
 // registryMetas is everything workspaces.json must contain: the live workspaces
-// plus the degraded ones, in creation order.
+// plus the degraded ones, in creation order. For call sites that hold no lock of
+// their own; anything already holding m.mu must use registryMetasLocked.
 func (m *Manager) registryMetas() []Meta {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.registryMetasLocked()
+}
+
+// registryMetasLocked is registryMetas without taking the lock. m.mu (read or
+// write) must already be held: sync.RWMutex is not reentrant, so a caller that
+// wants the snapshot and the mutation it describes in ONE hold — deleteDegraded's
+// remove/persist/rollback — has no other way to get it.
+func (m *Manager) registryMetasLocked() []Meta {
 	out := make([]Meta, 0, len(m.order)+len(m.degraded))
 	for _, id := range m.order {
 		out = append(out, m.workspaces[id].Meta)
@@ -990,12 +1009,17 @@ func (m *Manager) registryMetas() []Meta {
 	return out
 }
 
-// persist writes the workspace registry atomically (temp file + rename). This
-// file is the only pointer to every workspace's data directory: a half-written
-// workspaces.json left by a crash mid-write is unrecoverable, so it is never
-// written in place.
-func (m *Manager) persist() error {
-	data, err := json.MarshalIndent(m.registryMetas(), "", "  ")
+// persist writes the given registry snapshot atomically (temp file + rename).
+// This file is the only pointer to every workspace's data directory: a
+// half-written workspaces.json left by a crash mid-write is unrecoverable, so it
+// is never written in place.
+//
+// It takes the snapshot as an argument and acquires NO lock, so a caller may hold
+// m.mu across the write. That is what lets deleteDegraded keep its removal, the
+// write and the rollback in a single hold; a persist that locked internally could
+// never be called from one.
+func (m *Manager) persist(metas []Meta) error {
+	data, err := json.MarshalIndent(metas, "", "  ")
 	if err != nil {
 		return err
 	}
