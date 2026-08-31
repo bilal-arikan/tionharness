@@ -612,19 +612,23 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 // ever fired. The meter counts the same trace in its own bucket, so both sides
 // now see one number. Where that trace starts is warmCLIStepBaseline's call —
 // it also drops the part a CLI-side compaction already discarded.
-func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) (int, error) {
-	total := 0
+// stepBase is the transcript index the Steps term was charged from (-1 when there
+// is no warm thread and none was counted). Callers hand it to Prepare via
+// conversation.WithContextOverheadStepBase so a fold can drop the trace of the
+// messages it just summarized away instead of reporting a stale footprint.
+func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) (total, stepBase int, err error) {
 	for _, f := range s.systemFillers(ctx, wsp, session, history, multiAgent) {
 		total += f.Tokens
 	}
-	if base := warmCLIStepBaseline(session, len(history)); base >= 0 {
-		steps, err := conversation.EstimatePersistedStepTokens(history[base:])
+	stepBase = warmCLIStepBaseline(session, len(history))
+	if stepBase >= 0 {
+		steps, err := conversation.EstimatePersistedStepTokens(history[stepBase:])
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 		total += steps
 	}
-	return total, nil
+	return total, stepBase, nil
 }
 
 // countCatalogSkills counts the entries in a rendered "# Available Skills" block.

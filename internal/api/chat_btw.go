@@ -99,12 +99,13 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// Budget the shared fold against the true per-turn footprint (messages + static
 	// prefix / tool schemas / artifacts), not messages alone — the same overhead the
 	// real turn and the context meter account for.
-	overhead, err := s.contextOverheadTokens(ctx, ws(r), session, history, multiAgent)
+	overhead, stepBase, err := s.contextOverheadTokens(ctx, ws(r), session, history, multiAgent)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "context overhead: "+err.Error())
 		return
 	}
 	ctx = conversation.WithContextOverhead(ctx, overhead)
+	ctx = conversation.WithContextOverheadStepBase(ctx, stepBase)
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

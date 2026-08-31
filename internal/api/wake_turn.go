@@ -67,11 +67,12 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// otherwise a large static prefix (e.g. a claude-cli coordinator draining
 		// worker notifications) holds the message-only estimate under budget and no
 		// fold ever fires while the real context runs over.
-		overhead, err := s.contextOverheadTokens(ctx, wsp, session, history, multiAgent)
+		overhead, stepBase, err := s.contextOverheadTokens(ctx, wsp, session, history, multiAgent)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: context overhead: %w", err)
 		}
 		ctx = conversation.WithContextOverhead(ctx, overhead)
+		ctx = conversation.WithContextOverheadStepBase(ctx, stepBase)
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)
