@@ -86,7 +86,7 @@ func heartbeatInterval(idle time.Duration) time.Duration {
 // Returns a stop func that MUST be called once the operation finishes (call it
 // explicitly — do not defer it inside a loop, or the goroutines accumulate until
 // the function returns). No-op (nil-safe stop) when the turn carries no watchdog
-// (idle disabled, or an interactive turn).
+// (idle disabled, or a turn wrapped by the bare WithActivityTimeout).
 func startActivityHeartbeat(ctx context.Context) func() {
 	touch := activityTouchFrom(ctx)
 	interval := activityIntervalFrom(ctx)
@@ -134,6 +134,16 @@ func withActivityTimeout(parent context.Context, hard, idle time.Duration) (cont
 		ctx = withActivityInterval(ctx, heartbeatInterval(idle))
 	}
 	return ctx, stop
+}
+
+// WithChatActivityTimeout bounds an INTERACTIVE chat turn exactly like a
+// background turn: hard ceiling + inactivity window + the heartbeat interval, so
+// startActivityHeartbeat is live on the chat path too. Without the interval the
+// heartbeat degrades to a no-op and a legitimately long step-less operation (a
+// non-streaming completion, one multi-minute tool call) would be cut by the same
+// short idle window that exists to reclaim a stalled provider stream.
+func WithChatActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
+	return withActivityTimeout(parent, hard, idle)
 }
 
 // WithActivityTimeout bounds a turn by an optional absolute ceiling and an

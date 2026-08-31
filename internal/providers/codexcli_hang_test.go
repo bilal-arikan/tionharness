@@ -124,21 +124,34 @@ func TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe(t *testing.T) 
 		}
 	})
 
-	originalTimeout := codexIdleOutputTimeoutDuration
-	codexIdleOutputTimeoutDuration = 100 * time.Millisecond
-	t.Cleanup(func() { codexIdleOutputTimeoutDuration = originalTimeout })
+	originalTimeout := codexIdleOutputWindow()
+	const window = 100 * time.Millisecond
+	SetCodexIdleOutputTimeout(window)
+	t.Cleanup(func() { SetCodexIdleOutputTimeout(originalTimeout) })
+
+	var kills []WatchdogKill
+	req := Request{OnWatchdog: func(k WatchdogKill) { kills = append(kills, k) }}
 
 	c := &CodexCLI{binPath: self}
 	args := []string{"-test.run=TestCodexHelperExitsLeavingChild", "-test.v=false"}
-	_, retryable, err := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{}, "")
+	_, retryable, err := c.runAttempt(context.Background(), args, "prompt", "gpt-test", req, "")
 	if err == nil {
 		t.Fatal("runAttempt returned no idle timeout error")
 	}
 	if retryable {
 		t.Fatal("idle timeout error was retryable")
 	}
-	if message := err.Error(); !strings.Contains(message, codexIdleOutputTimeout.String()) || !strings.Contains(message, "idle-test-output") {
+	if message := err.Error(); !strings.Contains(message, window.String()) || !strings.Contains(message, "idle-test-output") {
 		t.Fatalf("idle timeout error lacks timeout or output tail: %v", err)
+	}
+	if len(kills) != 1 {
+		t.Fatalf("watchdog kills reported = %d, want 1", len(kills))
+	}
+	if kills[0].Reason != WatchdogReasonIdle || kills[0].Window != window {
+		t.Fatalf("watchdog kill = %+v, want idle/%s", kills[0], window)
+	}
+	if !strings.Contains(kills[0].Detail, "idle-test-output") {
+		t.Fatalf("watchdog kill detail lacks the stdout tail: %q", kills[0].Detail)
 	}
 }
 

@@ -398,12 +398,37 @@ func (c *CodexCLI) ProbeAuth(ctx context.Context) error {
 // bounded by tool_timeout_sec and the caller's ctx.
 const codexStartupTimeout = 90 * time.Second
 
-// codexIdleOutputTimeout generously bounds the gap between output lines. A
-// surviving grandchild can hold the stdout pipe open after codex itself exits;
-// 15 minutes still permits a legitimately slow, silent 10-minute tool call.
-const codexIdleOutputTimeout = 15 * time.Minute
+// codexIdleOutputTimeout bounds the gap between output lines once the stream has
+// started. A surviving grandchild can hold the stdout pipe open after codex
+// itself exits, so silence alone never ends the read loop — this timer does.
+// It is the compiled-in fallback only: the effective window comes from the
+// codexStdoutIdleSec setting via SetCodexIdleOutputTimeout, and must stay below
+// the caller's turn idle watchdog (default 3 minutes) so THIS diagnosis (with
+// the stdout tail) wins the race against the generic turn cancel.
+const codexIdleOutputTimeout = 90 * time.Second
 
-var codexIdleOutputTimeoutDuration = codexIdleOutputTimeout
+var (
+	codexIdleMu sync.RWMutex
+	// codexIdleOutputTimeoutDuration is the effective window. Tests override it
+	// directly to shrink the wait; the running server sets it from settings.
+	// <= 0 disables the idle watchdog (startup timeout and ctx still apply).
+	codexIdleOutputTimeoutDuration = codexIdleOutputTimeout
+)
+
+// SetCodexIdleOutputTimeout configures the stdout-silence watchdog for every
+// subsequent codex turn. d <= 0 disables it. Called from the settings apply path;
+// providers cannot import the settings owner, so the value is pushed down here.
+func SetCodexIdleOutputTimeout(d time.Duration) {
+	codexIdleMu.Lock()
+	codexIdleOutputTimeoutDuration = d
+	codexIdleMu.Unlock()
+}
+
+func codexIdleOutputWindow() time.Duration {
+	codexIdleMu.RLock()
+	defer codexIdleMu.RUnlock()
+	return codexIdleOutputTimeoutDuration
+}
 
 // runAttempt runs the codex subprocess once and parses its stream. retryable is
 // true only when re-running is free of duplicate side effects: the process
@@ -478,7 +503,10 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 
 	startup := time.NewTimer(codexStartupTimeout)
 	defer startup.Stop()
-	idle := time.NewTimer(codexIdleOutputTimeoutDuration)
+	// Resolved once per attempt so a settings change mid-turn cannot move the
+	// deadline underneath a running read loop.
+	idleWindow := codexIdleOutputWindow()
+	idle := time.NewTimer(idleWindow)
 	if !idle.Stop() {
 		<-idle.C
 	}
@@ -505,7 +533,9 @@ readLoop:
 					default:
 					}
 				}
-				idle.Reset(codexIdleOutputTimeoutDuration)
+				if idleWindow > 0 {
+					idle.Reset(idleWindow)
+				}
 				p.feed(it.line)
 				if s := strings.TrimSpace(it.line); s != "" {
 					tail = append(tail, s)
@@ -532,10 +562,24 @@ readLoop:
 		case <-startup.C:
 			startupHang = true
 			proc.KillTree(cmd)
+			reportWatchdogKill(req, WatchdogKill{
+				Provider: "codex-cli",
+				Model:    model,
+				Reason:   WatchdogReasonStartup,
+				Window:   codexStartupTimeout,
+				Detail:   stdoutCrashTail(tail),
+			})
 			break readLoop
 		case <-idle.C:
 			idleHang = true
 			proc.KillTree(cmd)
+			reportWatchdogKill(req, WatchdogKill{
+				Provider: "codex-cli",
+				Model:    model,
+				Reason:   WatchdogReasonIdle,
+				Window:   idleWindow,
+				Detail:   stdoutCrashTail(tail),
+			})
 			break readLoop
 		case <-ctx.Done():
 			// Cancellation (idle watchdog, hard cap, human stop) must end the read
@@ -582,7 +626,7 @@ readLoop:
 	if idleHang {
 		return nil, false, fmt.Errorf(
 			"codex CLI produced no output for %s and was killed after the idle output timeout (non-retryable) (exit: %v) %s",
-			codexIdleOutputTimeout, runErr, stdoutCrashTail(tail))
+			idleWindow, runErr, stdoutCrashTail(tail))
 	}
 	if runErr == nil {
 		// The process exited cleanly yet produced no turn.completed — a truncated

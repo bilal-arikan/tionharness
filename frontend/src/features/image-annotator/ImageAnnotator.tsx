@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, ModalOverlay } from '@/shared/components'
 import {
@@ -218,7 +219,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
     }
   }
 
-  return (
+  return createPortal(
     <ModalOverlay onClose={close} closeOnEscape={false} padding="p-3">
       <section
         ref={dialogRef}
@@ -393,6 +394,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
           />
         </div>
       </section>
-    </ModalOverlay>
+    </ModalOverlay>,
+    document.body,
   )
 }

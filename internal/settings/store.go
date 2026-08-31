@@ -223,6 +223,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
 	applyInt(&next.ChatTurnTimeoutMin, p.ChatTurnTimeoutMin)
 	applyInt(&next.ChatTurnIdleTimeoutMin, p.ChatTurnIdleTimeoutMin)
+	applyInt(&next.CodexStdoutIdleSec, p.CodexStdoutIdleSec)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
 	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
 	applyInt(&next.TurnWatchdogMin, p.TurnWatchdogMin)
@@ -470,6 +471,15 @@ func normalize(v Settings) Settings {
 	}
 	if v.ChatTurnTimeoutMin > 0 && v.ChatTurnIdleTimeoutMin > v.ChatTurnTimeoutMin {
 		v.ChatTurnIdleTimeoutMin = v.ChatTurnTimeoutMin
+	}
+	// Codex stdout-silence watchdog: 0 disables it entirely; a negative value is a
+	// typo, not an intent, so it falls back to the default. The value is in seconds;
+	// the ceiling is a day, matching the other timeout knobs.
+	if v.CodexStdoutIdleSec < 0 {
+		v.CodexStdoutIdleSec = Default().CodexStdoutIdleSec
+	}
+	if v.CodexStdoutIdleSec > 86400 {
+		v.CodexStdoutIdleSec = 86400
 	}
 	// Idle-resume budget: 0 disables it, cap at 5 so a persistently-idle turn cannot
 	// chew through many full idle windows before it is finally reported unfinished.

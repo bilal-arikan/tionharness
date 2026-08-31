@@ -10,6 +10,16 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
 
+## Görsel anotasyon canlı kabul ve mobil modal katmanı (2026-08-31) ✅
+
+Clipboard görseli, bozuk kaynak, serbest kalem, undo/redo/clear, kaydet/iptal,
+pointer'ın canvas dışına çıkması, resize/piksel sınırı ve klavye/odak/ARIA akışları
+izole veri dizini ve portta gerçek Chromium ile doğrulandı. Mobil viewport'ta
+workspace öneri kartlarının anotasyon modalındaki **Kaydet** düğmesini örttüğü
+bulundu. `ImageAnnotator` body portalına taşındı; modal artık üst seviye stacking
+context'te kalıyor. Aynı hit-test düzeltme sonrası Kaydet düğmesini döndürdü;
+konsol ve ağ hatası oluşmadı. Ayrıntı: `_Docs/07-CHAT-UX.md`.
+
 ## Auto-compact gate'i kalıcı CLI izini sayıyor (2026-08-31) ⏳
 
 **Belirti (ölçüldü).** SES2230 (codex-cli, gpt-5.6-sol, etkin bütçe 70000): panel

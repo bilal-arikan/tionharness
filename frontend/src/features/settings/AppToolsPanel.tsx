@@ -196,7 +196,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         </Field>
         <Field
           label="Sohbet turu boşta süresi (dk)"
-          hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 20; 0 = kapalı)."
+          hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir; takılan bir sağlayıcı akışı böyle geri alınır. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 3; 0 = kapalı)."
         >
           <input
             type="number"
@@ -204,6 +204,19 @@ export function ToolsPanel({ draft, set }: PanelProps) {
             max={1440}
             value={draft.chatTurnIdleTimeoutMin}
             onChange={(e) => set('chatTurnIdleTimeoutMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Codex stdout sessizlik penceresi (sn)"
+          hint="Akışa başlamış bir codex-cli alt süreci bu kadar saniye hiç çıktı üretmezse süreç ağacı öldürülür ve tur 'takıldı' olarak raporlanır (stdout kuyruğu debug.jsonl'e yazılır). Sohbet boşta süresinden küçük tutun (varsayılan 90; 0 = kapalı)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={86400}
+            value={draft.codexStdoutIdleSec}
+            onChange={(e) => set('codexStdoutIdleSec', Number(e.target.value))}
             className={inputCls}
           />
         </Field>

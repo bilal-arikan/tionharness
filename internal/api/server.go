@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -92,6 +93,11 @@ type Server struct {
 	// first use so a bare Server needs no extra wiring.
 	updateChk   *updateChecker
 	updatesOnce sync.Once
+	// chatTurnIdleOverride shortens the interactive turn's inactivity window past
+	// the minute granularity of the user-facing tunable. Never set in production
+	// (see chatTurnIdle); it exists so a test can actually OBSERVE a stalled turn
+	// being reclaimed instead of asserting it in under a minute of wall clock.
+	chatTurnIdleOverride time.Duration
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
@@ -283,6 +289,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
+	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)
