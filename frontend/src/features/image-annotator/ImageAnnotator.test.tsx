@@ -199,7 +199,34 @@ describe('ImageAnnotator', () => {
     expect(host.querySelector('[data-testid="drawing-viewport"]')?.className).toContain(
       'bg-transparent',
     )
-    expect(host.querySelector('[role="dialog"]')?.className).toContain('bg-[var(--bg-primary)]')
+    expect(host.querySelector('[role="dialog"]')?.className).toContain('bg-[var(--color-bg)]')
+  })
+
+  it('draws new strokes with the selected pen color', () => {
+    const renderedColors: string[] = []
+    Object.defineProperty(context, 'strokeStyle', {
+      configurable: true,
+      get: () => renderedColors.at(-1) ?? '',
+      set: (value: string) => renderedColors.push(value),
+    })
+    act(() => root.render(<ImageAnnotator source={source} onSave={vi.fn()} onClose={vi.fn()} />))
+    const green = host.querySelector<HTMLButtonElement>('[aria-label="Yeşil kalem"]')!
+    expect(green.getAttribute('aria-pressed')).toBe('false')
+
+    act(() => green.click())
+
+    expect(green.getAttribute('aria-pressed')).toBe('true')
+    expect(host.querySelector('[aria-label="Kırmızı kalem"]')?.getAttribute('aria-pressed')).toBe(
+      'false',
+    )
+
+    const canvas = host.querySelector('canvas')!
+    act(() => {
+      pointer(canvas, 'pointerdown')
+      pointer(canvas, 'pointerup')
+    })
+
+    expect(renderedColors).toContain('#22c55e')
   })
 
   it('ignores secondary pointers', () => {

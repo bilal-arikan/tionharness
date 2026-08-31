@@ -34,11 +34,24 @@ interface Props {
 
 const MAX_PREVIEW_PIXELS = 8_000_000
 
+// Fixed palette for the pen. Kept as literal hex values (not theme variables)
+// because the stroke is baked into the exported bitmap and must not follow the
+// UI theme.
+const PEN_COLORS = [
+  { value: '#ef4444', labelKey: 'imageAnnotator.colorRed' },
+  { value: '#eab308', labelKey: 'imageAnnotator.colorYellow' },
+  { value: '#22c55e', labelKey: 'imageAnnotator.colorGreen' },
+  { value: '#3b82f6', labelKey: 'imageAnnotator.colorBlue' },
+  { value: '#000000', labelKey: 'imageAnnotator.colorBlack' },
+  { value: '#ffffff', labelKey: 'imageAnnotator.colorWhite' },
+] as const
+
 export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }: Props) {
   const { t } = useTranslation('common')
   const defaultPenWidth = Math.max(2, source.width / 300)
   const [model, setModel] = useState(() => createDrawingModel(initialStrokes))
   const [penWidth, setPenWidth] = useState(defaultPenWidth)
+  const [penColor, setPenColor] = useState<string>(PEN_COLORS[0].value)
   const modelRef = useRef(model)
   const [baseline, setBaseline] = useState(() => snapshot(createDrawingModel(initialStrokes)))
   const [error, setError] = useState<string | null>(null)
@@ -230,58 +243,93 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
             first.focus()
           }
         }}
-        className="flex h-[min(90vh,900px)] w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]"
+        className="flex h-[min(90vh,900px)] w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]"
       >
-        <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-3">
-          <Button
-            aria-label={t('imageAnnotator.undo')}
-            disabled={!model.undo.length || !!model.active}
-            onClick={() => apply(undo(modelRef.current))}
-          >
-            {t('imageAnnotator.undo')}
-          </Button>
-          <Button
-            aria-label={t('imageAnnotator.redo')}
-            disabled={!model.redo.length || !!model.active}
-            onClick={() => apply(redo(modelRef.current))}
-          >
-            {t('imageAnnotator.redo')}
-          </Button>
-          <Button
-            aria-label={t('imageAnnotator.clear')}
-            disabled={!model.strokes.length || !!model.active}
-            onClick={() => apply(clear(modelRef.current))}
-          >
-            {t('imageAnnotator.clear')}
-          </Button>
-          <label className="flex items-center gap-2 text-sm" htmlFor="image-annotator-pen-width">
-            {t('imageAnnotator.penSize')}
-            <input
-              id="image-annotator-pen-width"
-              aria-label={t('imageAnnotator.penSize')}
-              type="range"
-              min={Math.max(1, defaultPenWidth / 2)}
-              max={Math.max(12, defaultPenWidth * 4)}
-              step={Math.max(0.5, defaultPenWidth / 4)}
-              value={penWidth}
-              onChange={(event) => setPenWidth(Number(event.currentTarget.value))}
-              aria-valuetext={`${penWidth}px`}
-            />
-          </label>
+        <header className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              aria-label={t('imageAnnotator.undo')}
+              disabled={!model.undo.length || !!model.active}
+              onClick={() => apply(undo(modelRef.current))}
+            >
+              {t('imageAnnotator.undo')}
+            </Button>
+            <Button
+              variant="secondary"
+              aria-label={t('imageAnnotator.redo')}
+              disabled={!model.redo.length || !!model.active}
+              onClick={() => apply(redo(modelRef.current))}
+            >
+              {t('imageAnnotator.redo')}
+            </Button>
+            <Button
+              variant="secondary"
+              aria-label={t('imageAnnotator.clear')}
+              disabled={!model.strokes.length || !!model.active}
+              onClick={() => apply(clear(modelRef.current))}
+            >
+              {t('imageAnnotator.clear')}
+            </Button>
+          </div>
           <span className="flex-1" />
-          <Button aria-label={t('imageAnnotator.close')} onClick={close}>
-            {t('imageAnnotator.cancel')}
-          </Button>
-          <Button
-            aria-label={t('imageAnnotator.save')}
-            disabled={!dirty || saving}
-            onClick={() => void save()}
-          >
-            {saving ? t('common.saving') : t('common.save')}
-          </Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm" htmlFor="image-annotator-pen-width">
+              {t('imageAnnotator.penSize')}
+              <input
+                id="image-annotator-pen-width"
+                aria-label={t('imageAnnotator.penSize')}
+                type="range"
+                min={Math.max(1, defaultPenWidth / 2)}
+                max={Math.max(12, defaultPenWidth * 4)}
+                step={Math.max(0.5, defaultPenWidth / 4)}
+                value={penWidth}
+                onChange={(event) => setPenWidth(Number(event.currentTarget.value))}
+                aria-valuetext={`${penWidth}px`}
+              />
+            </label>
+            <div
+              role="group"
+              aria-label={t('imageAnnotator.penColor')}
+              className="flex items-center gap-1"
+            >
+              {PEN_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  aria-label={t(color.labelKey)}
+                  aria-pressed={penColor === color.value}
+                  onClick={() => setPenColor(color.value)}
+                  style={{ backgroundColor: color.value }}
+                  className={`h-6 w-6 rounded-full border border-[var(--color-border)] transition ${
+                    penColor === color.value
+                      ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-surface)]'
+                      : 'hover:opacity-80'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+          <span className="flex-1" />
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" aria-label={t('imageAnnotator.close')} onClick={close}>
+              {t('imageAnnotator.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              aria-label={t('imageAnnotator.save')}
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+            >
+              {saving ? t('common.saving') : t('common.save')}
+            </Button>
+          </div>
         </header>
         {error && (
-          <p role="alert" className="m-2 rounded bg-red-500/10 px-3 py-2 text-sm text-red-500">
+          <p
+            role="alert"
+            className="m-2 rounded-md border border-[color-mix(in_srgb,var(--color-danger)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] px-3 py-1.5 text-sm text-[var(--color-danger)]"
+          >
             {error}
           </p>
         )}
@@ -293,7 +341,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
             ref={canvasRef}
             tabIndex={0}
             aria-label={t('imageAnnotator.canvas')}
-            className="mx-auto block h-full max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            className="mx-auto block h-full max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             style={{ touchAction: 'none', aspectRatio: `${source.width} / ${source.height}` }}
             onPointerDown={(event) => {
               if (!event.isPrimary || event.button !== 0 || activePointerRef.current !== null)
@@ -308,7 +356,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
               const result = beginStroke(
                 modelRef.current,
                 pointFromEvent(event),
-                '#ef4444',
+                penColor,
                 penWidth,
               )
               apply(result.model, result.warning)
