@@ -78,6 +78,23 @@ ile başarısız olur — araç yok değildir, şeması henüz yüklenmemiştir.
   karıştırma: TionHarness ajan adını `subagent_type`'a, `subagent_type` değerini
   TionHarness delegasyon araçlarına geçirme.
 
+## Ana çalışma ağacında yıkıcı git komutları
+
+Ana çalışma ağacı (`C:\Users\user\Desktop\Projects\TionHarness`) kullanıcıyla
+paylaşılır ve **commitlenmemiş değişiklik içerebilir**. Orada `git reset --hard`,
+`git checkout -- .`, `git stash` ve `git clean` **yasaktır** — stage'lenmemiş bir
+düzenlemenin nesne veritabanında blob'u yoktur, `--hard` onu kalıcı olarak siler
+(reflog, `fsck`, editör local-history hiçbiri geri getirmez; bu bir kez yaşandı ve
+iki dosyalık iş kayboldu).
+
+- İzole çalışma gerektiğinde `git worktree add` ile ayrı bir ağaç aç; ana ağaçta
+  branch değiştirme.
+- `git checkout -b <ad>` "branch already exists" ile düşerse bu **bloklayıcıdır**:
+  branch büyük olasılıkla başka bir worktree'de çekilidir (`git worktree list` ile
+  doğrula). Ana ağaçta çalışmaya devam etme.
+- Kendi değişikliklerini geri almak gerekiyorsa yalnız kendi dokunduğun yolları
+  hedefle (`git checkout -- <dosya>`), asla `.` verme.
+
 ## Shell ve Go araç zinciri
 
 - Bu Windows çalışma alanının zorunlu komut kabuğu **Git Bash**'tir. Komutları POSIX
