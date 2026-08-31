@@ -424,12 +424,21 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// back to "" would restore the ambiguous legacy state. Validate against the
 	// model this same patch lands on, so switching model and tier together is
 	// judged as one result rather than against the stale stored model.
-	if req.ThinkingLevel != nil {
+	//
+	// A model-only patch is judged the same way: the tier it leaves in place is
+	// still the tier the agent runs with, and ThinkingTiersFor differs per model,
+	// so a swap can strand the stored level outside the new model's set. Without
+	// this the level would survive the write and be silently dropped at turn time.
+	if req.ThinkingLevel != nil || req.Model != nil {
 		model := prev.Model
 		if req.Model != nil {
 			model = *req.Model
 		}
-		if err := providers.ValidateThinkingLevel(model, *req.ThinkingLevel); err != nil {
+		level := prev.ThinkingLevel
+		if req.ThinkingLevel != nil {
+			level = *req.ThinkingLevel
+		}
+		if err := providers.ValidateThinkingLevel(model, level); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

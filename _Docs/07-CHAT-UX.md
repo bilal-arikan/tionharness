@@ -1287,6 +1287,13 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   (`internal/providers/thinking.go`). Kapı üç yerde: `agents.go` create/update → 400,
   `chat_stream.go` tur-bazlı override (boş = "override yok" olarak kalır, dolu değer doğrulanır),
   ve `db.CreateAgent` — API dışı yollar (pack install, template, `create_agent` aracı) için.
+  **Model-only patch de doğrulanır (2026-08-31):** `handleUpdateAgent` kapısı artık
+  `req.ThinkingLevel != nil || req.Model != nil` ile açılır ve etkin çifti (patch'te
+  olanı, yoksa depodaki değeri) doğrular. Yalnız model değiştiren bir patch de ajanın
+  koştuğu tiyeri değiştirir çünkü `ThinkingTiersFor` modele göre farklıdır: eskiden
+  `max` seviyeli bir ajan `claude-opus-4-6`'ya taşındığında kayıt geçiyor, seviye tur
+  anında sessizce düşüyordu. Artık 400 döner. Test:
+  `TestUpdateAgentValidatesStoredLevelOnModelOnlyPatch`.
   **Boot migration** (`db.BackfillThinkingLevels`, `manager.go`'da `EnsureSystemAgents`'tan
   hemen sonra): yalnız boş satırlara dokunur, `LegacyThinkingLevelFor(providerKind)` ile
   eski davranışı **birebir korur** — `claude-cli`/`codex-cli`/boş provider → `high`,

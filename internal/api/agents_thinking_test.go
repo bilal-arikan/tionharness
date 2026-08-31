@@ -111,3 +111,45 @@ func TestUpdateAgentRejectsBlankAndUnsupportedThinkingLevel(t *testing.T) {
 		t.Fatalf("unrelated patch: expected 200, got %d: %s", rename.Code, rename.Body.String())
 	}
 }
+
+// TestUpdateAgentValidatesStoredLevelOnModelOnlyPatch: a patch that swaps the
+// model without naming a level still has to agree with the level already
+// stored. Without the check the agent would be written with a tier the new
+// model cannot reason at, and the level would be dropped at turn time instead.
+func TestUpdateAgentValidatesStoredLevelOnModelOnlyPatch(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+
+	created := postAgent(t, s, wsp,
+		`{"name":"Ada","provider":"claude-cli","model":"claude-opus-4-8","thinkingLevel":"max"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("setup: expected 201, got %d: %s", created.Code, created.Body.String())
+	}
+	var agent db.Agent
+	if err := json.Unmarshal(created.Body.Bytes(), &agent); err != nil {
+		t.Fatalf("decode created agent: %v", err)
+	}
+
+	// max exists only on the adaptive class, so a move to the legacy model is
+	// refused even though the patch never mentions thinkingLevel.
+	stranded := putAgent(t, s, wsp, agent.ID, `{"model":"claude-opus-4-6"}`)
+	if stranded.Code != http.StatusBadRequest {
+		t.Fatalf("model-only patch stranding the stored level: expected 400, got %d: %s",
+			stranded.Code, stranded.Body.String())
+	}
+	if !strings.Contains(stranded.Body.String(), "claude-opus-4-6") {
+		t.Fatalf("error should name the model being moved onto: %s", stranded.Body.String())
+	}
+
+	// Naming a tier the new model supports in the same patch goes through.
+	together := putAgent(t, s, wsp, agent.ID, `{"model":"claude-opus-4-6","thinkingLevel":"high"}`)
+	if together.Code != http.StatusOK {
+		t.Fatalf("model+level together: expected 200, got %d: %s", together.Code, together.Body.String())
+	}
+
+	// And a model-only patch whose stored level survives the move is still fine.
+	back := putAgent(t, s, wsp, agent.ID, `{"model":"claude-opus-4-8"}`)
+	if back.Code != http.StatusOK {
+		t.Fatalf("model-only patch with a compatible level: expected 200, got %d: %s",
+			back.Code, back.Body.String())
+	}
+}
