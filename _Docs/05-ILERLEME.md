@@ -1,6 +1,16 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-30**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
+
+## Görsel anotasyon canlı kabul ve mobil modal katmanı (2026-08-31) ✅
+
+Clipboard görseli, bozuk kaynak, serbest kalem, undo/redo/clear, kaydet/iptal,
+pointer'ın canvas dışına çıkması, resize/piksel sınırı ve klavye/odak/ARIA akışları
+izole veri dizini ve portta gerçek Chromium ile doğrulandı. Mobil viewport'ta
+workspace öneri kartlarının anotasyon modalındaki **Kaydet** düğmesini örttüğü
+bulundu. `ImageAnnotator` body portalına taşındı; modal artık üst seviye stacking
+context'te kalıyor. Aynı hit-test düzeltme sonrası Kaydet düğmesini döndürdü;
+konsol ve ağ hatası oluşmadı. Ayrıntı: `_Docs/07-CHAT-UX.md`.
 
 ## Worktree git hata çıktısı ve log buffer sınırları (2026-08-30) ✅
 

@@ -26,7 +26,8 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-let host: HTMLDivElement
+let host: HTMLElement
+let rootHost: HTMLDivElement
 let root: Root
 let devicePixelRatio = 1
 let dprChangeListener: (() => void) | undefined
@@ -39,9 +40,10 @@ beforeEach(() => {
   renderedWidths = []
   source.draw.mockClear()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
+  rootHost = document.createElement('div')
+  document.body.append(rootHost)
+  root = createRoot(rootHost)
+  host = document.body
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
   vi.spyOn(window, 'devicePixelRatio', 'get').mockImplementation(() => devicePixelRatio)
   vi.stubGlobal(
@@ -83,7 +85,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount())
-  host.remove()
+  rootHost.remove()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
