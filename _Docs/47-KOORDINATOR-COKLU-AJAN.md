@@ -266,6 +266,16 @@ func (e *CoordinationEngine) OnWorkerFinished(ctx, tf TurnFinished) {
    tüm dosya değişikliklerini normal mesajlardaki `DiffCard` ile gösterir.
 2. **Per-session tur kuyruğuna** bir "tur talebi" bırakır.
 
+**Terminal worker arşivleme (2026-08-31, TSK568):** Her normal worker terminal
+turu (`completed`, `timeout`, `incomplete`, `failed`, `killed`) için worker
+session'ı, `<task-notification>` koordinatör geçmişine başarıyla yazıldıktan hemen
+sonra `State="archived"` yapılır; ardından koordinatör turu kuyruğa alınır.
+Bildirim persist edilemezse worker arşivlenmez ve hata `ERROR` olarak raporlanır.
+Yeni worker dalgası veya olası `send_to_worker` devamı için bekleme/kontrol yoktur;
+`send_to_worker`'ın archived session davranışı değişmemiştir. Alt koordinatörün
+alt dalı hâlâ çalışırken kullanılan `delegating` ara bildirimi terminal sayılmaz;
+bu sahiplik davranışı korunur.
+
 **Per-session tur kuyruğu** (`Runtime.sessionTurnQueue`): oturum başına tek bir
 sıralayıcı. Amaç: (a) aynı oturumda iki tur ASLA eşzamanlı koşmaz; (b) koordinatör
 meşgulken biriken **birden çok bildirim TEK sonraki turda birleşir** (4 worker

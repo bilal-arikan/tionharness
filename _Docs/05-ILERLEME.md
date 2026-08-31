@@ -10261,3 +10261,14 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   çıkarımı yapılmaz.
 - UI, “Gerçek bağlam — chat” ve worker kind bilgisini taşıyan ayrı “Gerçek bağlam
   — worker” satırlarını gösterir.
+
+## TSK568 — Terminal worker session arşivleme (2026-08-31)
+
+- Worker terminal `<task-notification>` mesajı koordinatör geçmişine kalıcı
+  yazıldıktan sonra worker session doğrudan `State="archived"` yapılır.
+- Bildirim persist hatasında arşivleme ve koordinatör turu tetikleme yapılmaz;
+  hata sessiz yutulmaz.
+- Alt koordinatörün `delegating` sahiplik akışı ve `send_to_worker` archived
+  session davranışı değiştirilmedi.
+- Başarılı persist/arşiv ve persist-hatasında arşivlememe regresyon testleri eklendi;
+  mevcut eşzamanlı idle-fold lifecycle testleri korunur.

@@ -69,7 +69,7 @@ func TestLastWorkerNotificationCarriesIdleStatus(t *testing.T) {
 		Patch:   "-old\n+new",
 		Added:   1,
 		Removed: 1,
-	}})
+	}}, "")
 
 	waitTurns(t, &mu, &turns, 1, "the single folded turn")
 
@@ -117,7 +117,7 @@ func TestIdleStatusNotFoldedWhileWorkersRemain(t *testing.T) {
 	slot.workers.Add(2) // two workers running
 
 	// Only the first finishes: its release does not reach zero, so no fold.
-	rt.notifyCoordinator(coord, "<task-notification>SES1 completed</task-notification>", releaseOnce(slot)(), nil)
+	rt.notifyCoordinator(coord, "<task-notification>SES1 completed</task-notification>", releaseOnce(slot)(), nil, "")
 
 	note := lastCoordNote(t, rt, coord)
 	if strings.Contains(note, "<coordination-status>") {
@@ -147,7 +147,7 @@ func TestIdleStatusFoldedOnceAcrossConcurrentFinishes(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start // release all finishers at once to maximise the overlap
-			rt.notifyCoordinator(coord, "<task-notification>done</task-notification>", releaseOnce(slot)(), nil)
+			rt.notifyCoordinator(coord, "<task-notification>done</task-notification>", releaseOnce(slot)(), nil, "")
 		}()
 	}
 	close(start)
@@ -182,7 +182,7 @@ func TestSecondWaveGetsItsOwnIdleSignal(t *testing.T) {
 
 	// First wave: one worker finishes and folds the signal.
 	slot.workers.Add(1)
-	rt.notifyCoordinator(coord, "<task-notification>wave1</task-notification>", releaseOnce(slot)(), nil)
+	rt.notifyCoordinator(coord, "<task-notification>wave1</task-notification>", releaseOnce(slot)(), nil, "")
 	if got := countCoordStatusNotes(t, rt, coord); got != 1 {
 		t.Fatalf("first wave must fold exactly one signal, got %d", got)
 	}
@@ -194,7 +194,7 @@ func TestSecondWaveGetsItsOwnIdleSignal(t *testing.T) {
 	slot.idleFolded = false
 	slot.mu.Unlock()
 
-	rt.notifyCoordinator(coord, "<task-notification>wave2</task-notification>", releaseOnce(slot)(), nil)
+	rt.notifyCoordinator(coord, "<task-notification>wave2</task-notification>", releaseOnce(slot)(), nil, "")
 
 	note := lastCoordNote(t, rt, coord)
 	if !strings.Contains(note, "wave2") || !strings.Contains(note, "<coordination-status>") {
@@ -286,7 +286,7 @@ func TestFoldReleasedWhenNotePersistFails(t *testing.T) {
 	slot.markHadWorkers()
 	slot.workers.Add(1)
 
-	rt.notifyCoordinator(missing, "<task-notification>orphan</task-notification>", releaseOnce(slot)(), nil)
+	rt.notifyCoordinator(missing, "<task-notification>orphan</task-notification>", releaseOnce(slot)(), nil, "")
 
 	slot.mu.Lock()
 	acked := slot.ackedIdle

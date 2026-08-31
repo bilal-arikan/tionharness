@@ -78,8 +78,8 @@ func TestStallNudgeReachesNextTurnContextAndCounts(t *testing.T) {
 
 // TestRunWorkerPersistsFailedRunState drives the REAL runWorker path with no usable
 // provider, so the turn dies on a provider error — the branch most at risk of being
-// left unrecorded. It must still end with RunState=failed on the session, because a
-// run that died is exactly the one an operator must be able to tell from a live one.
+// left unrecorded. It must still end with RunState=failed and, after its terminal
+// notification persists, leave the active session list through archival.
 func TestRunWorkerPersistsFailedRunState(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
@@ -105,8 +105,8 @@ func TestRunWorkerPersistsFailedRunState(t *testing.T) {
 	if got.RunStateAt == 0 {
 		t.Error("RunStateAt must be stamped when RunState is written")
 	}
-	if got.State != "active" {
-		t.Fatalf("State = %q, want active (run outcome must not touch the visibility field)", got.State)
+	if got.State != "archived" {
+		t.Fatalf("State = %q, want archived after terminal notification", got.State)
 	}
 }
 

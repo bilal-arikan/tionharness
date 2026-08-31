@@ -145,7 +145,9 @@ func (r *Runtime) dropSpawn(item spawnQueueItem, cause error) {
 		lastWorker = item.opts.onDrop(cause)
 	}
 	if coordID := item.opts.CoordinatorSessionID; coordID != "" {
-		r.notifyCoordinator(coordID, fmt.Sprintf("<task-notification worker=%q status=\"failed\">Queued spawn for %s was dropped: %v</task-notification>", item.agent.Name, item.agent.Name, cause), lastWorker, nil)
+		if err := r.notifyCoordinator(coordID, fmt.Sprintf("<task-notification worker=%q status=\"failed\">Queued spawn for %s was dropped: %v</task-notification>", item.agent.Name, item.agent.Name, cause), lastWorker, nil, ""); err != nil {
+			r.logger.Error("spawn queue: failed to notify coordinator", "coordinator", coordID, "error", err)
+		}
 	}
 }
 

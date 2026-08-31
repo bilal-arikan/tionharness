@@ -1354,7 +1354,9 @@ func (r *Runtime) runWorkerWithCtl(agent db.Agent, workerSessionID, prompt, coor
 	// Release BEFORE notifying: this worker is done, and whether it took the fleet to
 	// zero decides if the all-idle note folds into this very message (saving the
 	// coordinator a separate reconcile turn).
-	r.notifyCoordinator(coordSessionID, note, workerDone(), steps)
+	if notifyErr := r.notifyCoordinator(coordSessionID, note, workerDone(), steps, workerSessionID); notifyErr != nil {
+		r.logger.Error("worker: terminal notification failed", "session", workerSessionID, "coordinator", coordSessionID, "error", notifyErr)
+	}
 }
 
 // RecoverOrphanedTurns reclaims autonomous background turns (worker / plain spawn /
@@ -1469,16 +1471,18 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 	// Callers outside runWorker (orphan reclaim, sub-coordinator reports, the settle
 	// backstop) did not observe a zero-crossing, so they never fold. Their all-idle
 	// transition — if any — is the drain loop's standalone backstop to report.
-	r.notifyCoordinator(coordSessionID, note, false, nil)
+	if err := r.notifyCoordinator(coordSessionID, note, false, nil, ""); err != nil {
+		r.logger.Error("coordination: notification failed", "coordinator", coordSessionID, "error", err)
+	}
 }
 
 // notifyCoordinator is NotifyCoordinator with the last-worker observation from
 // releaseOnce. lastWorker=true means THIS notification's worker took the fleet to
 // zero and may therefore carry the folded <coordination-status> note.
-func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool, steps []TurnStep) {
+func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool, steps []TurnStep, terminalWorkerSessionID string) error {
 	coordSessionID = strings.TrimSpace(coordSessionID)
 	if coordSessionID == "" || strings.TrimSpace(note) == "" {
-		return
+		return nil
 	}
 	// Same byte limit as send_message / send_to_worker, applied differently: this
 	// path is ONE-WAY (the worker turn that produced the note is already over), so
@@ -1517,7 +1521,7 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 		if err != nil {
 			cancel()
 			r.logger.Error("coordination: failed to encode worker steps", "coordinator", coordSessionID, "error", err)
-			return
+			return fmt.Errorf("encode worker steps: %w", err)
 		}
 		stepsJSON = string(encoded)
 	}
@@ -1537,11 +1541,19 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 			slot.idleFolded = false
 			slot.mu.Unlock()
 		}
-		r.logger.Warn("coordination: failed to record task-notification", "coordinator", coordSessionID, "error", err)
-		return
+		r.logger.Error("coordination: failed to persist task-notification", "coordinator", coordSessionID, "worker", terminalWorkerSessionID, "error", err)
+		return fmt.Errorf("persist task-notification: %w", err)
 	}
 	cancel()
+	var archiveErr error
+	if terminalWorkerSessionID != "" {
+		if err := r.db.SetSessionState(context.Background(), terminalWorkerSessionID, "archived"); err != nil {
+			archiveErr = fmt.Errorf("archive terminal worker session: %w", err)
+			r.logger.Error("coordination: failed to archive terminal worker session", "coordinator", coordSessionID, "worker", terminalWorkerSessionID, "error", err)
+		}
+	}
 	r.enqueueCoordinatorTurnKeepingIdleAck(coordSessionID, folded)
+	return archiveErr
 }
 
 // recordInjectedUserNote persists a runtime-injected user-role note to a
