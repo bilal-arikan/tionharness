@@ -32,6 +32,8 @@ interface Props {
   onClose(): void
 }
 
+const MAX_PREVIEW_PIXELS = 8_000_000
+
 export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }: Props) {
   const { t } = useTranslation('common')
   const defaultPenWidth = Math.max(2, source.width / 300)
@@ -42,11 +44,25 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const saveGenerationRef = useRef(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
   const frameRef = useRef<number | null>(null)
   const pendingPointRef = useRef<StrokePoint | null>(null)
   const activePointerRef = useRef<number | null>(null)
   const dirty = useMemo(() => !snapshotsEqual(snapshot(model), baseline), [baseline, model])
+
+  useEffect(() => {
+    mountedRef.current = true
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    canvasRef.current?.focus()
+    return () => {
+      mountedRef.current = false
+      saveGenerationRef.current += 1
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
+    }
+  }, [])
 
   const apply = useCallback((next: DrawingModel, warning?: ImageAnnotatorErrorCode) => {
     modelRef.current = next
@@ -58,7 +74,9 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1))
+    const deviceRatio = Math.min(3, Math.max(1, window.devicePixelRatio || 1))
+    const pixelRatio = Math.sqrt(MAX_PREVIEW_PIXELS / Math.max(1, rect.width * rect.height))
+    const ratio = Math.min(deviceRatio, pixelRatio)
     const width = Math.max(1, Math.round(rect.width * ratio))
     const height = Math.max(1, Math.round(rect.height * ratio))
     if (canvas.width !== width || canvas.height !== height) {
@@ -135,6 +153,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
   }
 
   const close = useCallback(() => {
+    if (savingRef.current) return
     if (!dirty || window.confirm(t('imageAnnotator.closeQuestion'))) onClose()
   }, [dirty, onClose, t])
 
@@ -163,6 +182,7 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
   const save = async () => {
     if (savingRef.current || !dirty) return
     savingRef.current = true
+    const generation = ++saveGenerationRef.current
     const savingSnapshot = snapshot(modelRef.current)
     const savingRevision = modelRef.current.revision
     setSaving(true)
@@ -170,23 +190,46 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
     try {
       const exported = await exportAnnotation(source, savingSnapshot.strokes)
       await onSave({ ...exported, revision: savingRevision })
-      setBaseline(savingSnapshot)
+      if (mountedRef.current && generation === saveGenerationRef.current)
+        setBaseline(savingSnapshot)
     } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : IMAGE_ANNOTATOR_ERROR_MESSAGES.EXPORT_FAILED,
-      )
+      if (mountedRef.current && generation === saveGenerationRef.current)
+        setError(
+          reason instanceof Error ? reason.message : IMAGE_ANNOTATOR_ERROR_MESSAGES.EXPORT_FAILED,
+        )
     } finally {
-      savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current && generation === saveGenerationRef.current) {
+        savingRef.current = false
+        setSaving(false)
+      }
     }
   }
 
   return (
     <ModalOverlay onClose={close} closeOnEscape={false} padding="p-3">
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('imageAnnotator.dialogLabel')}
+        aria-describedby="image-annotator-help"
+        aria-busy={saving}
+        onKeyDown={(event) => {
+          if (event.key !== 'Tab') return
+          const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), canvas[tabindex="0"]',
+          )
+          if (!focusable?.length) return
+          const first = focusable[0]
+          const last = focusable[focusable.length - 1]
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+          }
+        }}
         className="flex h-[min(90vh,900px)] w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-primary)]"
       >
         <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-3">
@@ -242,9 +285,13 @@ export function ImageAnnotator({ source, initialStrokes = [], onSave, onClose }:
             {error}
           </p>
         )}
+        <p id="image-annotator-help" className="sr-only">
+          {t('imageAnnotator.keyboardHelp')}
+        </p>
         <div className="min-h-0 flex-1 bg-transparent p-2" data-testid="drawing-viewport">
           <canvas
             ref={canvasRef}
+            tabIndex={0}
             aria-label={t('imageAnnotator.canvas')}
             className="mx-auto block h-full max-w-full cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
             style={{ touchAction: 'none', aspectRatio: `${source.width} / ${source.height}` }}

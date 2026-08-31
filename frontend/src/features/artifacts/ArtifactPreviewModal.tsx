@@ -32,6 +32,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
   const [annotatorSource, setAnnotatorSource] = useState<DrawableSource | null>(null)
   const [openingEditor, setOpeningEditor] = useState(false)
   const editorGenerationRef = useRef(0)
+  const mountedRef = useRef(true)
   const editorAbortRef = useRef<AbortController | null>(null)
   const bitmapRef = useRef<ImageBitmap | null>(null)
 
@@ -41,15 +42,16 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
     bitmap?.close()
   }
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
       editorGenerationRef.current += 1
       editorAbortRef.current?.abort()
       editorAbortRef.current = null
       closeBitmap()
-    },
-    [],
-  )
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -137,12 +139,21 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
   }
 
   const closeEditor = () => {
+    editorGenerationRef.current += 1
     closeBitmap()
     setAnnotatorSource(null)
   }
 
+  const closePreview = () => {
+    if (!annotatorSource) onClose()
+  }
+
   return (
-    <ModalOverlay onClose={onClose} className="backdrop-blur-sm">
+    <ModalOverlay
+      onClose={closePreview}
+      closeOnEscape={!annotatorSource}
+      className="backdrop-blur-sm"
+    >
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
@@ -224,19 +235,39 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
           source={annotatorSource}
           onClose={closeEditor}
           onSave={async ({ blob, mime }) => {
+            const generation = editorGenerationRef.current
             const extension = mime === 'image/webp' ? 'webp' : 'png'
             const upload = await api.uploadFile(
               artifact.sessionId || '_shared',
               new File([blob], `${artifact.id}-derived.${extension}`, { type: mime }),
             )
-            const derived = await api.createArtifact({
-              title: t('artifactAnnotation.derivedTitle', { title: artifact.title }),
-              kind: 'image',
-              sessionId: artifact.sessionId,
-              sourcePath: upload.relPath,
-              origin: 'manual',
-              derivedFromArtifactId: artifact.id,
-            })
+            if (!upload.relPath) throw new Error(t('artifactAnnotation.stagingPathError'))
+            if (!mountedRef.current || generation !== editorGenerationRef.current) {
+              await api.deleteFile(upload.relPath)
+              return
+            }
+            let derived
+            try {
+              derived = await api.createArtifact({
+                title: t('artifactAnnotation.derivedTitle', { title: artifact.title }),
+                kind: 'image',
+                sessionId: artifact.sessionId,
+                sourcePath: upload.relPath,
+                origin: 'manual',
+                derivedFromArtifactId: artifact.id,
+              })
+            } catch (createError) {
+              try {
+                await api.deleteFile(upload.relPath)
+              } catch (cleanupError) {
+                throw new AggregateError(
+                  [createError, cleanupError],
+                  t('artifactAnnotation.saveAndCleanupError'),
+                )
+              }
+              throw createError
+            }
+            if (!mountedRef.current || generation !== editorGenerationRef.current) return
             closeEditor()
             onOpenFull?.(derived.id)
           }}

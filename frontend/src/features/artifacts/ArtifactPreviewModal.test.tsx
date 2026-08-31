@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react'
+import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { artifactApi } from '@/api/artifacts'
@@ -18,6 +18,7 @@ const apiMock = vi.hoisted(() => ({
   getArtifactSource: vi.fn(),
   uploadFile: vi.fn(),
   createArtifact: vi.fn(),
+  deleteFile: vi.fn(),
 }))
 
 let annotatorProps: null | {
@@ -29,8 +30,19 @@ let annotatorProps: null | {
 vi.mock('@/api', () => ({ api: apiMock }))
 vi.mock('@/features/image-annotator/ImageAnnotator', () => ({
   ImageAnnotator: (props: NonNullable<typeof annotatorProps>) => {
-    annotatorProps = props
-    return <div data-testid="image-annotator" />
+    const [error, setError] = useState<string | null>(null)
+    annotatorProps = {
+      ...props,
+      onSave: async (result) => {
+        try {
+          await props.onSave(result)
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : String(reason))
+          throw reason
+        }
+      },
+    }
+    return <div data-testid="image-annotator">{error && <div role="alert">{error}</div>}</div>
   },
 }))
 
@@ -254,6 +266,7 @@ describe('artifact-origin image source', () => {
     )
     apiMock.uploadFile.mockResolvedValue({ relPath: 'artifacts/SES1/staged.png' })
     apiMock.createArtifact.mockRejectedValue(failure)
+    apiMock.deleteFile.mockResolvedValue(undefined)
     root = createRoot(container)
 
     await act(async () => {
@@ -276,7 +289,98 @@ describe('artifact-origin image source', () => {
         height: 1,
       }),
     ).rejects.toThrow('DERIVED_ARTIFACT_SAVE_FAILED')
+    expect(apiMock.deleteFile).toHaveBeenCalledWith('artifacts/SES1/staged.png')
     expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
     expect(close).not.toHaveBeenCalled()
+  })
+
+  it('preserves save and cleanup errors in order and shows the combined failure', async () => {
+    const saveFailure = new Error('DERIVED_ARTIFACT_SAVE_FAILED')
+    const cleanupFailure = new Error('STAGED_UPLOAD_CLEANUP_FAILED')
+    apiMock.getArtifactSource.mockResolvedValue(
+      new Response(pngHeader, { headers: { 'Content-Type': 'image/png' } }),
+    )
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 1, height: 1, close: vi.fn() } as ImageBitmap),
+    )
+    apiMock.uploadFile.mockResolvedValue({ relPath: 'artifacts/SES1/staged.png' })
+    apiMock.createArtifact.mockRejectedValue(saveFailure)
+    apiMock.deleteFile.mockRejectedValue(cleanupFailure)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<ArtifactPreviewModal artifactId="ART1" onClose={vi.fn()} />)
+    })
+    await act(async () => {})
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('button[title="Orijinali koruyarak üzerine çiz"]')
+        ?.click(),
+    )
+    await act(async () => {})
+
+    let rejected: unknown
+    await act(async () => {
+      try {
+        await annotatorProps!.onSave({
+          blob: new Blob(['png'], { type: 'image/png' }),
+          mime: 'image/png',
+          width: 1,
+          height: 1,
+        })
+      } catch (reason) {
+        rejected = reason
+      }
+    })
+
+    expect(rejected).toBeInstanceOf(AggregateError)
+    expect((rejected as AggregateError).errors).toEqual([saveFailure, cleanupFailure])
+    expect((rejected as AggregateError).errors[0]).toBe(saveFailure)
+    expect((rejected as AggregateError).errors[1]).toBe(cleanupFailure)
+    expect(apiMock.deleteFile).toHaveBeenCalledWith('artifacts/SES1/staged.png')
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      'Türetilmiş artifact kaydedilemedi ve geçici görsel temizlenemedi.',
+    )
+  })
+
+  it('removes a staged upload when the preview unmounts during save', async () => {
+    const close = vi.fn()
+    const uploadResult = deferred<{ relPath: string }>()
+    apiMock.getArtifactSource.mockResolvedValue(
+      new Response(pngHeader, { headers: { 'Content-Type': 'image/png' } }),
+    )
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 1, height: 1, close } as ImageBitmap),
+    )
+    apiMock.uploadFile.mockReturnValue(uploadResult.promise)
+    apiMock.deleteFile.mockResolvedValue(undefined)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<ArtifactPreviewModal artifactId="ART1" onClose={vi.fn()} />)
+    })
+    await act(async () => {})
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('button[title="Orijinali koruyarak üzerine çiz"]')
+        ?.click(),
+    )
+    await act(async () => {})
+    const save = annotatorProps!.onSave({
+      blob: new Blob(['png'], { type: 'image/png' }),
+      mime: 'image/png',
+      width: 1,
+      height: 1,
+    })
+    await act(async () => {
+      root?.unmount()
+      root = null
+    })
+    uploadResult.resolve({ relPath: 'uploads/stale.png' })
+    await act(async () => save)
+
+    expect(apiMock.deleteFile).toHaveBeenCalledWith('uploads/stale.png')
+    expect(apiMock.createArtifact).not.toHaveBeenCalled()
   })
 })

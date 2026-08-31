@@ -116,6 +116,47 @@ describe('ImageAnnotator', () => {
     expect(source.draw).toHaveBeenCalledTimes(drawsBeforeDprChange + 1)
   })
 
+  it('caps the preview backing store for a large visible canvas', () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 4000,
+      bottom: 3000,
+      width: 4000,
+      height: 3000,
+      toJSON: () => ({}),
+    })
+    devicePixelRatio = 3
+
+    act(() => root.render(<ImageAnnotator source={source} onSave={vi.fn()} onClose={vi.fn()} />))
+
+    const canvas = host.querySelector('canvas')!
+    expect(canvas.width * canvas.height).toBeLessThanOrEqual(8_010_000)
+  })
+
+  it('focuses the canvas, traps focus, and restores previous focus on unmount', () => {
+    const opener = document.createElement('button')
+    document.body.append(opener)
+    opener.focus()
+    act(() => root.render(<ImageAnnotator source={source} onSave={vi.fn()} onClose={vi.fn()} />))
+    const canvas = host.querySelector('canvas')!
+    expect(document.activeElement).toBe(canvas)
+
+    const last = host.querySelector<HTMLButtonElement>('[aria-label="Görseli kaydet"]')!
+    last.focus()
+    act(() => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })))
+    expect(document.activeElement).toBe(
+      host.querySelector<HTMLInputElement>('[aria-label="Kalem boyutu"]'),
+    )
+
+    act(() => root.unmount())
+    expect(document.activeElement).toBe(opener)
+    root = createRoot(host)
+    opener.remove()
+  })
+
   it('draws with primary pointer and enables undo/save', () => {
     act(() => root.render(<ImageAnnotator source={source} onSave={vi.fn()} onClose={vi.fn()} />))
     const canvas = host.querySelector('canvas')!
@@ -218,5 +259,27 @@ describe('ImageAnnotator', () => {
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Görseli kaydet"]')?.disabled).toBe(
       false,
     )
+  })
+
+  it('does not update state after unmount while save settles', async () => {
+    let resolveSave!: () => void
+    const onSave = vi.fn(() => new Promise<void>((resolve) => (resolveSave = resolve)))
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => {
+      callback(new Blob(['png'], { type: 'image/png' }))
+    })
+    act(() => root.render(<ImageAnnotator source={source} onSave={onSave} onClose={vi.fn()} />))
+    const canvas = host.querySelector('canvas')!
+    act(() => {
+      pointer(canvas, 'pointerdown')
+      pointer(canvas, 'pointerup')
+    })
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[aria-label="Görseli kaydet"]')?.click(),
+    )
+    expect(onSave).toHaveBeenCalledOnce()
+
+    act(() => root.unmount())
+    await act(async () => resolveSave())
+    root = createRoot(host)
   })
 })
