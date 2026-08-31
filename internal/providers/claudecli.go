@@ -498,12 +498,19 @@ func (c *ClaudeCLI) CompactNative(ctx context.Context, resumeSessionID string, r
 	if resp.NativeCompactionError != "" {
 		return resp, &NativeCompactionFailure{Detail: resp.NativeCompactionError}
 	}
-	for _, step := range resp.Trace {
-		if step.Kind == "compaction" && step.Source == "cli-native" {
-			return resp, nil
-		}
+	if hasCompletedNativeCompaction(resp) {
+		return resp, nil
 	}
 	return nil, errors.New("claude native compaction completed without a success lifecycle event")
+}
+
+func hasCompletedNativeCompaction(resp *Response) bool {
+	for _, step := range resp.Trace {
+		if step.Kind == "compaction" && step.Source == "cli-native" && !step.Running {
+			return true
+		}
+	}
+	return false
 }
 
 // ProbeAuth runs a minimal, tool-free `claude -p` against this provider's config

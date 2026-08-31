@@ -13,7 +13,7 @@ interface Props {
 // rather than hidden, so a new backend trigger shows up instead of vanishing.
 const TRIGGER_LABEL: Record<string, string> = {
   auto: 'bütçe eşiği',
-  manual: '/compact',
+  manual: 'manuel',
   reactive: 'taşma kurtarması',
 }
 

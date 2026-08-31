@@ -111,3 +111,11 @@ func TestNativeCompactionStepPreservesLifecycleIdentity(t *testing.T) {
 		t.Fatalf("failure tombstone = %+v", tombstone)
 	}
 }
+
+func TestCompactCommandHeadersSeparateNativeAndCustom(t *testing.T) {
+	native, nativeOK := summaryHeader("compact")
+	custom, customOK := summaryHeader("compact-custom")
+	if !nativeOK || !customOK || native == custom {
+		t.Fatalf("headers: native=%q/%v custom=%q/%v", native, nativeOK, custom, customOK)
+	}
+}

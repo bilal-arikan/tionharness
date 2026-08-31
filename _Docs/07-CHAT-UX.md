@@ -67,38 +67,30 @@ Kart ayrıca katlamanın kaynağını ve CLI oturum sonucunu taşır: `source`
 `sessionAction` (`resume` | `native-compact` | `restart-summary`). Codex 0.148.0+
 `exec --json`, snake_case `context_compaction` item'ını started/completed çiftiyle
 taşır. App Server'ın camelCase `contextCompaction` item'ı ve
-`thread/compact/start` RPC'si ayrı transporttur. Claude Code 2.1.238+
+`thread/compact/start` RPC'si `/compact` tarafından doğrudan kullanılan native
+transporttur. Claude Code 2.1.238+
 `--include-hook-events` ile `PreCompact` başlangıcını; `compact_boundary`,
 `system/status compact_result=success` ve `PostCompact` tamamlanma kanıtını taşır.
-Completion sinyalleri deduplicate edilir. Manuel native tetik yalnız mevcut CLI
-oturumuna `claude -p --resume <id> ...` çağrısının stdin'inde **tek başına**
-`/compact` gönderilerek yapılır. Normal provider prompt render'ından geçirilmez:
-sistem/dinamik bağlam veya başka metinle çevrelenirse slash command yerine model
-promptu olur. Native oturum yoksa TionHarness rolling-summary fold'u ve
-`restart-summary` fallback'i korunur. Eksik/eski CLI sürümünde capability
-fail-closed kalır.
+Completion sinyalleri deduplicate edilir.
+Eksik/eski CLI sürümünde capability fail-closed kalır.
 
-Manuel API yolu da provider `OnEvent` akışını session hub'a bağlar: running kartı
-CLI lifecycle ID'siyle açılır, tamamlanan kart aynı ID'yi taşır. Structured
-başarısızlıkta parser aynı ID'ye tombstone yollar; fallback kartı ayrı TionHarness
-fold sonucu olarak kalıcılaşır.
+Komut sözleşmesi ikiye ayrılır:
 
-Native manuel başarı `cli-native/native-compact` kartı ve `DebugCompaction`
-yazar; TionHarness rolling summary'sini ve `SummaryMsgCount` sınırını değiştirmez.
-CLI `compact_result=failed` döndürürse structured hata `DebugCompaction` içinde
-saklanır ve TionHarness rolling-summary fallback'i çalışır. Transport/process
-hataları hard failure kalır.
-TionHarness'ın auto/reactive fold'u CLI'ya `/compact` enjekte etmez; sıcak CLI
-oturumunu bırakır ve aynı kartta `restart-summary` göstererek TionHarness özeti +
-son mesaj kuyruğuyla fresh CLI session başlatır.
+- `/compact`, yalnız mevcut resumable `claude-cli` veya `codex-cli` oturumunun
+  native compaction kontrolünü çağırır. Claude'da tek başına `/compact` girdisi,
+  Codex'te App Server `thread/compact/start` RPC'si kullanılır. Native oturum veya
+  desteklenen CLI sürümü yoksa açık hata döner; rolling-summary fallback yapılmaz.
+- `/compact-custom`, önceki TionHarness davranışıdır: eski mesajları rolling
+  summary'ye katlar, CLI resume durumunu temizler ve sonraki turu özet + son mesaj
+  kuyruğuyla fresh CLI session olarak başlatır.
 
-Manuel `/compact` başarı mesajı aynı yapısal `compaction` adımını kendi `steps`
-alanında kalıcı taşır. Resumable Claude CLI oturumunda kaynak `cli-native`, aksiyon
-`native-compact` olur. Diğer yollarda `source=tionharness`; CLI fallback'i
-`sessionAction=restart-summary` taşır. TionHarness fold'u sonrası hem DB'deki
-resume id/sınırı temizlenir hem Claude persistent-pool süreci düşürülür. Auto,
-wake ve side-chat fold yolları da persistent süreci provider çağrısından önce
-düşürür; özet eski warm transcriptin üstüne eklenmez.
+Her iki manuel komutun başarı mesajı aynı yapısal `compaction` adımını kendi
+`steps` alanında kalıcı taşır. `/compact`: `trigger=manual`, `source=cli-native`,
+`sessionAction=native-compact`; `/compact-custom`: `source=tionharness`, CLI ise
+`sessionAction=restart-summary`. Custom fold sonrası hem DB'deki resume id/sınırı
+temizlenir hem Claude persistent-pool süreci düşürülür. Auto, wake ve side-chat
+fold yolları da persistent süreci provider çağrısından önce düşürür; özet eski
+warm transcriptin üstüne eklenmez.
 
 **Adımı yayan yollar.** Katlama nerede olursa olsun aynı kart çıkar:
 
@@ -106,7 +98,8 @@ düşürür; özet eski warm transcriptin üstüne eklenmez.
 |-----|-------------|--------|
 | İnteraktif tur | `auto` | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go` |
 | Otonom tur (wake/spawn/worker) | `auto` | aynı yardımcı — `wake_turn.go` |
-| `/compact` komutu | `manual` | resumable Claude CLI'da native lifecycle; diğer durumda `Manager.ForceCompact` dönüşü |
+| `/compact` komutu | `manual` | Claude slash-control veya Codex `thread/compact/start` |
+| `/compact-custom` komutu | `manual` | `Manager.ForceCompact` dönüşü |
 | Tur içi taşma kurtarması | `reactive` | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
 | Yan sohbet (`btw`) | `auto` | `chat_btw.go`; `Prepare`'in paylaşılan katlaması |
 

@@ -493,7 +493,6 @@ type NativeCompactionFailure struct {
 func (e *NativeCompactionFailure) Error() string {
 	return "native compaction failed: " + e.Detail
 }
-
 func HasNativeCLICompactionEvents(p Provider) bool {
 	c, ok := p.(CLICompactionLifecycle)
 	return ok && c.NativeCompactionEvents()

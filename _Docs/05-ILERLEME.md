@@ -10189,14 +10189,14 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
 - Manuel `/compact` başarı mesajındaki boş `Steps: "[]"` kaldırıldı. Gerçek fold,
   `trigger=manual`, `source=tionharness` ve CLI için
   `sessionAction=restart-summary` içeren kalıcı `compaction` TurnStep yazar.
-- TSK501 düzeltmesi: Claude Code 2.1.238 print transportunda `/compact`, yalnız
+- TSK501'in eski fallback sözleşmesi TSK512 ile değiştirildi: Claude Code 2.1.238
+  print transportunda `/compact`, yalnız
   mevcut `--resume` oturumuna stdin'in tamamı olarak gönderildiğinde native komut
   olur. Provider'ın normal sistem/dinamik/history render'ı kullanılmaz. Başarı
   `cli-native/native-compact` TurnStep + `DebugCompaction` yazar; rolling summary
-  ve `SummaryMsgCount` değişmez. Resume/capability yoksa mevcut TionHarness fold
-  fallback'i kullanılır. Structured `compact_result=failed` ayrıntısı
-  `DebugCompaction` içinde korunur ve rolling-summary fallback'ine geçilir;
-  transport/process hataları fallback ile yutulmaz.
+  ve `SummaryMsgCount` değişmez. TSK512 sonrası resume/capability yokluğu ve
+  native hata açıkça döner; rolling-summary fallback yapılmaz. Eski TionHarness
+  fold davranışı yalnız `/compact-custom` komutundadır.
 - Doğrulama: provider/agent paket testleri, `go build ./...`, `go vet ./...`,
   frontend `tsc` + build + ilgili kart testleri + Prettier ve `git diff --check`
   geçti. Tam `internal/api` paketi, bu görev dışındaki görsel-artifact dalında
