@@ -75,6 +75,10 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'automation', label: 'Otomasyon' },
   { key: 'insight', label: 'İçgörü' },
   { key: 'flow-coordinator', label: 'Akış Koord.' },
+  // Legacy: peer messages now land in the recipient's ordinary chat thread
+  // (TSK507), so nothing creates an 'inbox' session any more. The chip stays so
+  // sessions created before that change remain filterable rather than falling
+  // into "Diğer".
   { key: 'inbox', label: 'Inbox' },
   { key: OTHER_CHIP, label: 'Diğer' },
   { key: RUNNING_CHIP, label: 'Çalışan' },

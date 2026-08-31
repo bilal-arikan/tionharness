@@ -13,7 +13,17 @@
 // transcript, context preview, debug panel, session info — but the composer is
 // hidden for them, since a new user turn has no run to attach to. The same holds
 // for an 'insight' transcript, which is the read-only audit log of one insight
-// scan run, and for an 'inbox' session.
+// scan run.
+//
+// 'worker' IS writable (TSK507): a worker transcript is a live conversation its
+// coordinator already injects user turns into (SendToWorker), so the human
+// watching it must be able to answer, correct or add context there too rather
+// than only read. Like 'schedule', the human turn and the coordinator's turn
+// share the session's single turn slot on the backend and serialize.
+//
+// There is no 'inbox' kind any more: peer messages between agents are delivered
+// into the recipient's standing 'chat' thread (internal/agent/agentmsg.go), which
+// is writable because it is an ordinary chat.
 //
 // 'schedule' is the exception: it is not a per-run log but the agent's single
 // long-lived cron thread, which every reuse-mode fire appends to. The user must be
@@ -37,6 +47,7 @@ export function isWritableSessionKind(kind: string): boolean {
     kind === 'spawned' ||
     kind === 'schedule' ||
     kind === 'automation-run' ||
-    kind === 'schedule-run'
+    kind === 'schedule-run' ||
+    kind === 'worker'
   )
 }
