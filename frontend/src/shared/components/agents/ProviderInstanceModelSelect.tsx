@@ -7,6 +7,10 @@ import { useMemo, useState } from 'react'
 import { useProviderInstances } from '@/features/settings/providers/useProviderInstances'
 import type { CatalogModelInfo } from '@/api/providers'
 
+// Sentinel <option> value for "the user has not picked a model yet". It must
+// differ from '' — that is the catalog's real "session model" entry.
+const UNSELECTED = '__unselected__'
+
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 
@@ -32,7 +36,11 @@ function parseModelOverride(s: string): CatalogModelInfo[] {
 interface Props {
   /** The agent's current provider INSTANCE id (Agent.providerInstanceId). */
   providerInstanceId: string
-  model: string
+  /** The selected model id. `''` is a REAL choice — the catalog's ID:"" entry
+   * ("… oturum modeli"), which lets the CLI pick the model. `null` means the
+   * user has not chosen yet: the select shows a placeholder and the caller is
+   * expected to block submit. */
+  model: string | null
   /** Called with (kindId, instanceId, model) whenever the selection changes —
    * the caller persists kindId as `provider` (backend derives it anyway, but
    * keeping the local form state consistent avoids a stale badge) and
@@ -61,9 +69,12 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
     return selectedKind?.models ?? []
   }, [selected, selectedKind])
 
-  const inList = models.some((m) => m.id === model)
-  const showCustom = custom || (!inList && model !== '' && !!selected)
-  const selectedModelInfo = models.find((m) => m.id === model)
+  // `null` = nothing picked yet. It is neither a list entry nor a custom id, so
+  // it must short-circuit both checks below.
+  const unselected = model === null
+  const inList = !unselected && models.some((m) => m.id === model)
+  const showCustom = custom || (!unselected && !inList && model !== '' && !!selected)
+  const selectedModelInfo = unselected ? undefined : models.find((m) => m.id === model)
 
   const selectInstance = (instanceId: string) => {
     const inst = instances.find((i) => i.id === instanceId)
@@ -121,7 +132,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
             <div className="flex gap-1">
               <input
                 data-testid="model-custom-input"
-                value={model}
+                value={model ?? ''}
                 onChange={(e) =>
                   onChange(selected?.kindId ?? '', providerInstanceId, e.target.value)
                 }
@@ -146,17 +157,22 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
           ) : (
             <select
               data-testid="model-select"
-              value={model}
+              value={unselected ? UNSELECTED : model}
               onChange={(e) => {
                 if (e.target.value === '__custom__') {
                   setCustom(true)
-                } else {
+                } else if (e.target.value !== UNSELECTED) {
                   onChange(selected?.kindId ?? '', providerInstanceId, e.target.value)
                 }
               }}
               className={inputCls}
               disabled={isOrphaned}
             >
+              {unselected && (
+                <option value={UNSELECTED} disabled>
+                  Model seçin…
+                </option>
+              )}
               {models.map((m) => {
                 const w = formatContextWindow(m.contextWindow)
                 return (

@@ -5,12 +5,15 @@ import type { PillOption } from '@/shared/components/OptionPills'
 // IS the default), but reuse the same icon language as the composer's per-turn
 // pickers (see composer/pickerOptions.ts) for visual consistency.
 
-// Thinking (extended reasoning) level. Empty string = off (matches storage).
+// Thinking (extended reasoning) level. Every pill carries a real backend token —
+// "off" included. The empty string is NOT one of them: the backend rejects a
+// blank level on the agent write path, because it used to mean "no thinking" on
+// the native API but "high effort" on the CLI path.
 // Icons form an intensity ramp: ○ off · ◔ low · ◑ medium · ● high · ◉ xhigh · ✦ max.
 // xhigh/max map to the effort tiers of adaptive-class models (Opus 4.7/4.8,
 // Sonnet 5, Fable 5); on older models they clamp down to high.
 export const THINKING_OPTIONS: PillOption[] = [
-  { value: '', label: 'Kapalı', hint: 'Düşünme yok', icon: '○' },
+  { value: 'off', label: 'Kapalı', hint: 'Düşünme yok', icon: '○' },
   { value: 'low', label: 'Düşük', hint: '~2K token / effort low', icon: '◔' },
   { value: 'medium', label: 'Orta', hint: '~8K token / effort medium', icon: '◑' },
   { value: 'high', label: 'Yüksek', hint: '~16K token / effort high', icon: '●' },

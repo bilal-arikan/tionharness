@@ -586,6 +586,11 @@ export function useSessionsController({
           soul,
           provider,
           model,
+          // The backend has no default for this. 'off' is what a new agent used
+          // to get implicitly: no extended reasoning natively, and on the CLI
+          // path it maps to the same effortLevel the blank value did. The user
+          // raises it from the agent settings form.
+          thinkingLevel: 'off',
           coordinatorMode: coordinator?.mode,
           coordinatorWorkflow: coordinator?.workflow,
           coordinatorPrompt: coordinator?.prompt,

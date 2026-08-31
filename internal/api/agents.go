@@ -9,6 +9,7 @@ import (
 
 	agentpkg "github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
@@ -127,22 +128,32 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fall back for any blank field. Precedence: request value → the first
-	// existing agent in this workspace (its concrete provider/model) → built-in
-	// last resort. There is no abstract "default provider/model" any more (neither
+	// Provider falls back when blank. Precedence: request value → the first
+	// existing agent in this workspace (its concrete provider) → built-in last
+	// resort. There is no abstract "default provider" any more (neither
 	// per-workspace nor app-global): a new agent copies a real agent's setup, or —
-	// when it is the very first agent — the keyless local claude-cli with the
-	// provider's own default model.
+	// when it is the very first agent — the keyless local claude-cli.
 	cfg := s.settings.Get()
-	fp, fm := s.firstAgentProviderModel(r.Context(), ws(r))
 	if req.Provider == "" {
-		req.Provider = fp
+		req.Provider = s.firstAgentProvider(r.Context(), ws(r))
 	}
 	if req.Provider == "" {
 		req.Provider = "claude-cli" // last-resort: local Claude Code login, no API key
 	}
-	if req.Model == "" {
-		req.Model = fm // may stay "" → provider applies its own default model
+	// Model is NOT filled in from another agent. The UI now always sends an
+	// explicit choice, and a blank model is one of those choices: the catalog
+	// carries an ID:"" entry ("claude/codex oturum modeli") which makes the CLI
+	// provider omit --model and leave the decision to the CLI session. Copying a
+	// neighbour's model here would silently overwrite that deliberate pick.
+
+	// Reasoning level is mandatory and must be meaningful on the requested model:
+	// a blank level is the ambiguous legacy state (see
+	// db.Agent.ThinkingLevel) and a tier the model does not support would be a
+	// silent no-op. Neither is quietly rewritten to a default here — the caller
+	// has to say what it wants.
+	if err := providers.ValidateThinkingLevel(req.Model, req.ThinkingLevel); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	// Permission mode: request → application default → "auto" (db also defaults).
 	if req.PermissionMode == "" {
@@ -239,15 +250,16 @@ func (s *Server) handleDuplicateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, agent)
 }
 
-// firstAgentProviderModel returns the provider/model of the first (newest)
-// existing agent in the workspace, or empty strings when none exist. New agents
-// inherit a real agent's concrete setup instead of an abstract workspace default.
-func (s *Server) firstAgentProviderModel(ctx context.Context, wsp *workspace.Workspace) (provider, model string) {
+// firstAgentProvider returns the provider of the first (newest) existing agent
+// in the workspace, or "" when none exist. New agents inherit a real agent's
+// concrete provider instead of an abstract workspace default. The model is
+// deliberately NOT inherited — see handleCreateAgent.
+func (s *Server) firstAgentProvider(ctx context.Context, wsp *workspace.Workspace) string {
 	agents, err := wsp.DB.ListAgents(ctx)
 	if err != nil || len(agents) == 0 {
-		return "", ""
+		return ""
 	}
-	return agents[0].Provider, agents[0].Model
+	return agents[0].Provider
 }
 
 // agentRunning reports whether the agent has work in flight right now, delegating
@@ -407,6 +419,20 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.SystemKey != nil && *req.SystemKey != prev.SystemKey {
 		writeError(w, http.StatusBadRequest, "systemKey cannot be changed")
 		return
+	}
+	// A patch that touches the reasoning level must name a real tier — clearing it
+	// back to "" would restore the ambiguous legacy state. Validate against the
+	// model this same patch lands on, so switching model and tier together is
+	// judged as one result rather than against the stale stored model.
+	if req.ThinkingLevel != nil {
+		model := prev.Model
+		if req.Model != nil {
+			model = *req.Model
+		}
+		if err := providers.ValidateThinkingLevel(model, *req.ThinkingLevel); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	patch := db.AgentProfilePatch{

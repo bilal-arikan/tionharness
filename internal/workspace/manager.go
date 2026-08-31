@@ -325,6 +325,15 @@ func (m *Manager) open(meta Meta) error {
 	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
 		return fmt.Errorf("seed system agents: %w", err)
 	}
+	// Fill in agent rows written while an empty ThinkingLevel was still a legal
+	// (but ambiguous) third state. Behaviour-preserving and idempotent — the next
+	// boot finds nothing to do. Runs after the seeding above so freshly created
+	// system agents are covered by the same pass.
+	if migrated, err := database.BackfillThinkingLevels(context.Background()); err != nil {
+		return fmt.Errorf("backfill thinking levels: %w", err)
+	} else if migrated > 0 {
+		m.logger.Info("thinking levels backfilled", "workspace", meta.ID, "agents", migrated)
+	}
 	// Boot cost of THIS workspace's store, attributed per workspace so a slow
 	// startup points at the workspace responsible instead of a single total. It is
 	// the regression metric for the message lazy-loading work: db.Open parses every

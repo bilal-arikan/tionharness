@@ -65,8 +65,13 @@ type Agent struct {
 	// (kind id == default instance id for every migrated instance, _Docs/71 §3).
 	ProviderInstanceID string `json:"providerInstanceId"`
 	Model              string `json:"model"`
-	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
-	// "high". Applied on plain (non-tool) completions; anthropic provider only.
+	// ThinkingLevel requests extended reasoning. Valid values are exactly
+	// "off" | "low" | "medium" | "high" | "xhigh" | "max" (providers.
+	// ValidThinkingLevels) — the empty string is NO LONGER valid. It used to be
+	// a third state next to "off" that meant two different things depending on
+	// the path (no thinking natively, "high" effort on the CLI); writes are now
+	// rejected at the API and legacy rows are filled in once at boot by
+	// BackfillThinkingLevels.
 	ThinkingLevel string `json:"thinkingLevel"`
 	// NativeWebSearch controls whether the agent may use its CLI provider's OWN
 	// web search (codex `web_search`; Claude Code's WebSearch/WebFetch built-ins).
@@ -543,6 +548,15 @@ type Session struct {
 	// warm CLI session yet (next turn starts cold and captures a fresh id).
 	CLISessionID    string `json:"cliSessionId,omitempty"`
 	CLISentMsgCount int    `json:"cliSentMsgCount,omitempty"`
+
+	// CLICompactMsgCount is the transcript boundary the PROVIDER compacted its own
+	// context at — recorded whenever a CLI reports a completed native compaction,
+	// whether it fired on its own mid-turn (auto) or was asked for by /compact.
+	// Messages before it live on only as the CLI's internal summary, so the tool
+	// trace persisted for them is NO LONGER in the warm thread and must not be
+	// charged to the context meter or the fold gate. 0 = the CLI has not compacted
+	// this session yet (the rolling-summary boundary alone applies).
+	CLICompactMsgCount int `json:"cliCompactMsgCount,omitempty"`
 
 	// Model is a snapshot of the model serving this session's CURRENT turn —
 	// set at creation from the agent's configured model and updated when a turn's

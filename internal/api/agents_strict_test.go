@@ -52,7 +52,7 @@ func TestHandleCreateAgentRejectsWorkingDir(t *testing.T) {
 func TestHandleCreateAgentValidBodyStillWorks(t *testing.T) {
 	s, wsp := agentStrictFixture(t)
 
-	body := []byte(`{"name":"Ada","soul":"helpful","provider":"claude-cli","mcpEnabled":true}`)
+	body := []byte(`{"name":"Ada","soul":"helpful","provider":"claude-cli","thinkingLevel":"off","mcpEnabled":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), workspaceCtxKey, wsp))

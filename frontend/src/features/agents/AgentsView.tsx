@@ -118,7 +118,10 @@ export function AgentsView({
   // provider holds the provider INSTANCE id (default "claude-cli" — the
   // built-in default instance's id equals its kind id, _Docs/71 §3).
   const [provider, setProvider] = useState('claude-cli')
-  const [model, setModel] = useState('')
+  // null = the user has not picked a model yet (submit stays blocked). '' is a
+  // valid pick: the catalog's "… oturum modeli" entry, which leaves the model
+  // decision to the CLI session.
+  const [model, setModel] = useState<string | null>(null)
   // Coordinator defaults on the create form, mirroring AgentSettingsForm: the
   // recipe and the prompt only appear once the mode is on, and are sent empty
   // when it is off so a non-coordinator carries no orchestration leftovers.
@@ -165,8 +168,10 @@ export function AgentsView({
 
   const bulkAgents = regularAgents.filter((agent) => sel.selected.has(agent.id))
 
+  const canSubmit = name.trim() !== '' && model !== null
+
   const submit = () => {
-    if (!name.trim()) return
+    if (!canSubmit || model === null) return
     onCreateAgent(name.trim(), soul.trim(), provider, model, {
       mode: coordinatorMode,
       workflow: coordinatorMode ? coordinatorWorkflow : '',
@@ -174,6 +179,7 @@ export function AgentsView({
     })
     setName('')
     setSoul('')
+    setModel(null)
     setCoordinatorMode(false)
     setCoordinatorWorkflow('')
     setCoordinatorPrompt('')
@@ -376,7 +382,13 @@ export function AgentsView({
                 </p>
               </>
             )}
-            <Button onClick={submit} data-testid="agent-create-submit" className="w-full">
+            <Button
+              onClick={submit}
+              disabled={!canSubmit}
+              title={model === null ? 'Önce bir model seçin' : undefined}
+              data-testid="agent-create-submit"
+              className="w-full"
+            >
               Oluştur
             </Button>
           </div>

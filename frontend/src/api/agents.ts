@@ -22,6 +22,9 @@ export const agentApi = {
     identity?: string
     provider?: string
     model?: string
+    // Required by the backend: there is no blank reasoning level any more, and it
+    // will not pick one for the caller (see providers.ValidateThinkingLevel).
+    thinkingLevel: string
     avatar?: string
     color?: string
     // Coordinator defaults for the sessions the new agent opens. coordinatorMode

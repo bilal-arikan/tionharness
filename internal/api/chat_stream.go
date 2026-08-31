@@ -293,8 +293,16 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 		// Each agent answers in turn, re-reading the (growing) history so later
 		// agents see the earlier replies.
 		for i, agentRow := range agents {
-			// Per-turn reasoning override (local copy only — never persisted).
+			// Per-turn reasoning override (local copy only — never persisted). Here
+			// "" keeps its own distinct meaning — "no override, use the agent's own
+			// level" — but anything else must be a tier this agent's model actually
+			// supports, exactly as on the agent write path. Silently running the turn
+			// at the stored level would hide that the request had no effect.
 			if req.ThinkingLevel != "" {
+				if terr := providers.ValidateThinkingLevel(agentRow.Model, req.ThinkingLevel); terr != nil {
+					s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "invalid_thinking_level", terr.Error())
+					return
+				}
 				agentRow.ThinkingLevel = req.ThinkingLevel
 			}
 			if req.PermissionMode != "" {
@@ -705,6 +713,9 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				StopReason: resp.StopReason,
 				Usage:      messageUsage(resp.Usage),
 				DurationMs: time.Since(agentStart).Milliseconds(),
+				// Flag the boundary where the underlying CLI conversation restarted,
+				// so the transcript can draw a divider above this turn (TSK514).
+				CLIColdStart: resumePlan.active && resumePlan.coldStart,
 			})
 			if aerr != nil {
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "persist_error", aerr.Error())
@@ -726,6 +737,18 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						"session", session.ID, "agent", agentRow.ID,
 						"agent_model", agentRow.Model, "cli_model", resp.Model,
 						"cli_session", resp.SessionID)
+				}
+			}
+			// A CLI that ran out of room compacts its OWN context mid-turn and keeps
+			// serving the turn. It reports that as a completed native-compaction
+			// lifecycle event — the same one /compact produces (nativeCompactSession) —
+			// so re-baseline the compaction boundary here too, or the meter and the fold
+			// gate keep charging a persisted trace the CLI has already thrown away and
+			// fold early for no reason. len(rawHistory), not +1: the compaction happened
+			// BEFORE this turn's reply, whose own trace is still warm.
+			if boundary, compacted := cliCompactionBoundary(steps, len(rawHistory)); compacted {
+				if berr := database.SetSessionCLICompactBoundary(ctx, session.ID, boundary); berr != nil {
+					s.logger.Error("persist cli compaction boundary failed", "session", session.ID, "error", berr)
 				}
 			}
 			// P1.1: update the session header's model snapshot when the actual

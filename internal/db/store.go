@@ -61,6 +61,15 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.PermissionMode == "" {
 		a.PermissionMode = "auto"
 	}
+	// ThinkingLevel has no valid empty value any more (see Agent.ThinkingLevel).
+	// The API create path rejects a blank level outright; the remaining creation
+	// paths (pack install, workspace templates, self-management create_agent,
+	// system-agent seeding) may still omit it, and resolving it here with the
+	// same rule the boot migration uses keeps them from writing a row that only
+	// becomes valid after the next restart.
+	if a.ThinkingLevel == "" {
+		a.ThinkingLevel = LegacyThinkingLevelFor(a.Provider)
+	}
 	if a.AllowedTools == "" {
 		a.AllowedTools = "[]"
 	}
@@ -738,6 +747,19 @@ func (d *DB) SetSessionCLIResume(ctx context.Context, sessionID, cliSessionID st
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.CLISessionID = cliSessionID
 		s.CLISentMsgCount = sentMsgCount
+	})
+}
+
+// SetSessionCLICompactBoundary records the transcript length the provider's own
+// context was compacted at (see Session.CLICompactMsgCount). Monotonic: a later
+// compaction always moves the boundary forward, and a stale/smaller value is
+// ignored rather than rewinding the baseline. Does not bump UpdatedAt —
+// bookkeeping must not reorder the session list.
+func (d *DB) SetSessionCLICompactBoundary(ctx context.Context, sessionID string, msgCount int) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		if msgCount > s.CLICompactMsgCount {
+			s.CLICompactMsgCount = msgCount
+		}
 	})
 }
 

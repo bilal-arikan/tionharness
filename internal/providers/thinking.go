@@ -1,6 +1,62 @@
 package providers
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
+
+// validThinkingLevels is the single definition of the reasoning-tier tokens the
+// system accepts, in ramp order. Everything that stores or requests a level
+// (agent rows, the agent API, the per-turn chat override) validates against
+// this list instead of carrying its own copy.
+//
+// The empty string is deliberately NOT a member. It used to be stored as a
+// third state next to "off" and meant two different things at runtime — no
+// thinking on the native API path, but "high" effort on the CLI path — so it is
+// now rejected at write time and backfilled for legacy rows (see
+// db.BackfillThinkingLevels).
+var validThinkingLevels = []string{"off", "low", "medium", "high", "xhigh", "max"}
+
+// ValidThinkingLevels returns the accepted reasoning-tier tokens in ramp order.
+func ValidThinkingLevels() []string {
+	out := make([]string, len(validThinkingLevels))
+	copy(out, validThinkingLevels)
+	return out
+}
+
+// IsValidThinkingLevel reports whether level is one of the accepted tokens. The
+// empty string is not.
+func IsValidThinkingLevel(level string) bool {
+	for _, v := range validThinkingLevels {
+		if v == level {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateThinkingLevel checks a requested reasoning level twice: that the token
+// itself is known, and that it is meaningful on the given model per
+// ThinkingTiersFor. A tier outside the model's set would be a silent no-op (or,
+// on the always-on class, a dropped field), so it is reported as an error rather
+// than accepted and ignored. Bare family aliases and an empty model id land in
+// the "alias" class, which offers the full ramp — nothing is rejected there.
+func ValidateThinkingLevel(model, level string) error {
+	if level == "" {
+		return fmt.Errorf("thinkingLevel is required (one of: %s)", strings.Join(validThinkingLevels, ", "))
+	}
+	if !IsValidThinkingLevel(level) {
+		return fmt.Errorf("unknown thinkingLevel %q (one of: %s)", level, strings.Join(validThinkingLevels, ", "))
+	}
+	tiers := ThinkingTiersFor(model)
+	for _, t := range tiers {
+		if t == level {
+			return nil
+		}
+	}
+	return fmt.Errorf("thinkingLevel %q is not supported by model %q (supported: %s)",
+		level, model, strings.Join(tiers, ", "))
+}
 
 // Thinking wire formats on the Anthropic Messages API differ by model class:
 //

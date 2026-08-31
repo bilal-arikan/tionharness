@@ -80,7 +80,10 @@ export function AgentSettingsForm({
     agent.providerInstanceId || agent.provider,
   )
   const [model, setModel] = useState(agent.model ?? '')
-  const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
+  // A legacy row loaded before the boot migration may still carry '', which is no
+  // longer a value the backend accepts — show (and re-save) it as the 'off' it
+  // behaved as on every non-CLI provider.
+  const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel || 'off')
   // undefined = the agent never stored the flag, which means ENABLED (see
   // Agent.nativeWebSearch) — the checkbox must start checked, not cleared.
   const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? true)
@@ -102,16 +105,17 @@ export function AgentSettingsForm({
   // visible; no-op levels are shown greyed with a reason (e.g. "Kapalı" on the
   // always-on Fable class, "Çok yüksek"/"Maks" on legacy models that clamp them,
   // or every level but off on a non-thinking model). tiers null = unknown/custom
-  // → all enabled. The pill list uses '' for off (backend token "off"); the
+  // → all enabled. Every pill value is already a backend token; the
   // currently-stored level stays selectable even if outside the set.
   const catalog = useCatalog()
   const thinkingOptions = useMemo(() => {
     const { tiers, cls } = thinkingInfoForModel(catalog, provider, model)
     if (tiers == null) return THINKING_OPTIONS
     return THINKING_OPTIONS.map((o) => {
-      const token = o.value === '' ? 'off' : o.value
-      const supported = o.value === thinkingLevel || tiers.includes(token)
-      return supported ? o : { ...o, disabled: true, hint: thinkingTierDisabledReason(cls, token) }
+      const supported = o.value === thinkingLevel || tiers.includes(o.value)
+      return supported
+        ? o
+        : { ...o, disabled: true, hint: thinkingTierDisabledReason(cls, o.value) }
     })
   }, [catalog, provider, model, thinkingLevel])
 
@@ -126,7 +130,7 @@ export function AgentSettingsForm({
       identity !== (agent.identity ?? '') ||
       providerInstanceId !== (agent.providerInstanceId || agent.provider) ||
       model !== (agent.model ?? '') ||
-      thinkingLevel !== (agent.thinkingLevel ?? '') ||
+      thinkingLevel !== (agent.thinkingLevel || 'off') ||
       nativeWebSearch !== (agent.nativeWebSearch ?? true) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       coordinatorMode !== (agent.coordinatorMode ?? false) ||
@@ -423,7 +427,7 @@ export function AgentSettingsForm({
           kapanır ("think XOR batch"). <strong>Kapalı</strong> thinking'i tamamen kapatır (
           <code>MAX_THINKING_TOKENS=0</code>).
         </p>
-        {provider === 'claude-cli' && !thinkingLevel && (
+        {provider === 'claude-cli' && thinkingLevel === 'off' && (
           <p className="-mt-1 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1 text-xs text-[var(--color-text-dim)]">
             ⚡ <strong>Kapalı + claude-cli:</strong> Claude Code ≥2.1.203 thinking açıkken paralel
             araç çağrısı yapmaz ("think XOR batch"). Bu seçimle thinking kapanır ve paralel

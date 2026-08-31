@@ -1158,6 +1158,23 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   `disabled` opsiyonlarını destekler; kaynak `thinkingInfoForModel(catalog, provider, model)`. Model
   kataloğda yoksa (özel id) tüm tiyerler aktif; mevcut seçili seviye ve "Oto" her zaman tıklanabilir
   kalır. Backend kırpma güvenlik ağı yerinde durur.
+  **Boş seviye kalktı — `thinkingLevel` zorunlu (2026-08-31):** `ThinkingLevel == ""` artık
+  geçersiz. Sebep: boş değer iki farklı şey demekti — native yolda `thinkingBudgetForLevel("")`
+  → `0` (düşünme **kapalı**), claude-cli yolunda `cliEffortLevel("")` → `"high"`. Aynı kayıt,
+  sağlayıcıya göre zıt davranış. Tek doğruluk kaynağı `providers.ValidateThinkingLevel(model, level)`:
+  seviye token setinde yoksa **ve** `ThinkingTiersFor(model)` içinde yoksa hata döner
+  (`internal/providers/thinking.go`). Kapı üç yerde: `agents.go` create/update → 400,
+  `chat_stream.go` tur-bazlı override (boş = "override yok" olarak kalır, dolu değer doğrulanır),
+  ve `db.CreateAgent` — API dışı yollar (pack install, template, `create_agent` aracı) için.
+  **Boot migration** (`db.BackfillThinkingLevels`, `manager.go`'da `EnsureSystemAgents`'tan
+  hemen sonra): yalnız boş satırlara dokunur, `LegacyThinkingLevelFor(providerKind)` ile
+  eski davranışı **birebir korur** — `claude-cli`/`codex-cli`/boş provider → `high`,
+  diğerleri → `off`. Idempotent (ikinci koşu 0 satır). Frontend "Kapalı" pill'inin değeri
+  `''` → `'off'` oldu; `createAgent` alanı zorunlu gönderir.
+  *Bilinen yan etki:* always-on sınıfı (fable/mythos) `ThinkingTiersFor`'da `off` içermez,
+  migration ise native sağlayıcıyı `off` yapar — böyle bir legacy ajan **ayar formundan
+  yeniden kaydedilirken** bir tiyer seçmek zorunda kalır (400). Çalışma zamanı etkilenmez;
+  saklı seviye tur başında yeniden doğrulanmaz.
   - **Native streaming** (`anthropic.Stream`): SSE `content_block_delta` artık `text_delta`
     **ve** `thinking_delta`'yı ayrıştırır. Tipli `providers.StreamDelta{Kind: text|thinking}`
     ile yayılır → `recordedStream` thinking parçalarını sabit `liveThinkingID` ile canlı
