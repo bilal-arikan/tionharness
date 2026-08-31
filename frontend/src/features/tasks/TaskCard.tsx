@@ -91,7 +91,7 @@ function TaskCardImpl({
       draggable={!pending}
       tabIndex={pending ? -1 : 0}
       role="button"
-      aria-label={`${t.title}, ${columnLabel} sütunu, ${columnIndex + 1}/${columnCount}. Taşımak için sol veya sağ ok tuşunu kullanın.`}
+      aria-label={`${t.title}${pending ? '' : `, görev kimliği ${t.id}`}, ${columnLabel} sütunu, ${columnIndex + 1}/${columnCount}. Taşımak için sol veya sağ ok tuşunu kullanın.`}
       onKeyDown={(e) => {
         if (pending) return
         // Ignore arrow keys while an input/textarea/select inside the card (if
@@ -153,18 +153,27 @@ function TaskCardImpl({
             }`
       }`}
     >
-      {onUnarchive && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onUnarchive(t)
-          }}
-          title="Arşivden çıkar (panoya geri al)"
-          className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-        >
-          <ArchiveRestore size={11} /> Geri al
-        </button>
+      {(onUnarchive || !pending) && (
+        <div className="mb-1 flex min-h-4 items-start justify-end gap-2">
+          {onUnarchive && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onUnarchive(t)
+              }}
+              title="Arşivden çıkar (panoya geri al)"
+              className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              <ArchiveRestore size={11} /> Geri al
+            </button>
+          )}
+          {!pending && (
+            <span className="font-mono text-[10px] leading-4 text-[var(--color-text-dim)] opacity-70">
+              {t.id}
+            </span>
+          )}
+        </div>
       )}
       {/* Attachment preview: the last image attached to the card, above the
           title. The box is a fixed 4:3 so the preview never grows taller than
