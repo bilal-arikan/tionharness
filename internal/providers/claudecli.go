@@ -315,11 +315,16 @@ type cliMessage struct {
 }
 
 type cliEvent struct {
-	Type            string                     `json:"type"`
-	Subtype         string                     `json:"subtype"`
-	Message         *cliMessage                `json:"message"`
-	IsError         bool                       `json:"is_error"`
-	APIErrorStatus  string                     `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
+	Type    string      `json:"type"`
+	Subtype string      `json:"subtype"`
+	Message *cliMessage `json:"message"`
+	IsError bool        `json:"is_error"`
+	// api_error_status is a result-envelope field the CLI types inconsistently: a
+	// slug ("rate_limit") on some builds, a bare HTTP status NUMBER (429) on
+	// others. flexString accepts both — with a plain string the number made
+	// encoding/json reject the WHOLE envelope, losing session_id, usage and the
+	// result itself (see flexString's own comment).
+	APIErrorStatus  flexString                 `json:"api_error_status"` // result envelope: upstream API error (e.g. rate_limit)
 	Error           string                     `json:"error"`            // standalone error line (e.g. {"error":"authentication_failed"})
 	Result          string                     `json:"result"`
 	Usage           *cliUsage                  `json:"usage"`

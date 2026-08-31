@@ -170,6 +170,11 @@ type codexStreamParser struct {
 	sawComplete bool
 	hadError    bool
 	errText     string
+	// Malformed-line accounting. A codex schema change used to manifest as missing
+	// tool steps or a truncated answer with ZERO diagnostic anywhere; the first
+	// drop is reported in full and the rest are counted for the finish summary.
+	notedParseDrop bool
+	parseDropCount int
 }
 
 func newCodexParser(model string, onEvent func(TraceStep)) *codexStreamParser {
@@ -188,6 +193,36 @@ func (p *codexStreamParser) emit(i int) {
 	}
 	p.emitted[i] = true
 	p.onEvent(p.resp.Trace[i])
+}
+
+// noteParseDrop reports the first malformed JSON line of the turn as a plain
+// text step (the same bracket-prefixed convention as "[codex error] ...") and
+// counts the rest. Dropping these lines silently is how a schema change turns
+// into missing tool steps, missing usage or a truncated answer with no log, no
+// trace step and no counter anywhere.
+func (p *codexStreamParser) noteParseDrop(line string, err error) {
+	p.parseDropCount++
+	if p.notedParseDrop {
+		return
+	}
+	p.notedParseDrop = true
+	note := boundedNote(fmt.Sprintf("[codex parse drop] line bytes=%d: %v; payload=%s", len(line), err, line))
+	p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: note})
+	p.emit(len(p.resp.Trace) - 1)
+}
+
+// summarizeParseDrops appends the "and N more" tail for the drops that followed
+// the one detailed note, so a systematic drop cannot look like a single hiccup.
+func (p *codexStreamParser) summarizeParseDrops() {
+	n := p.parseDropCount - 1
+	if n <= 0 {
+		return
+	}
+	p.resp.Trace = append(p.resp.Trace, TraceStep{
+		Kind: "text",
+		Text: fmt.Sprintf("[codex parse drop] +%d more line(s) dropped this turn", n),
+	})
+	p.emit(len(p.resp.Trace) - 1)
 }
 
 // appendStep appends a trace step and remembers it under the item id so a later
@@ -211,7 +246,8 @@ func (p *codexStreamParser) feed(line string) {
 		return
 	}
 	var ev codexEvent
-	if json.Unmarshal([]byte(line), &ev) != nil {
+	if err := json.Unmarshal([]byte(line), &ev); err != nil {
+		p.noteParseDrop(line, err)
 		return
 	}
 
@@ -420,6 +456,7 @@ func (p *codexStreamParser) feedAgentMessage(it *codexItem, final bool) {
 
 // finish resolves the final answer, or reports the failure the stream carried.
 func (p *codexStreamParser) finish() (*Response, error) {
+	p.summarizeParseDrops()
 	if p.hadError {
 		msg := strings.TrimSpace(p.errText)
 		if msg == "" {

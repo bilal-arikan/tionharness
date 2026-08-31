@@ -69,11 +69,55 @@ type CLISession struct {
 	closed      bool
 }
 
+// cliSessionIdleTimeout bounds stdout SILENCE inside one persistent turn. The
+// one-shot path deliberately guards only time-to-first-output (later silence is a
+// legitimately long tool call), but a persistent process that wedges is worse: it
+// holds s.mu, so every later turn for the same (session, agent) key blocks behind
+// it forever. The window is therefore generous — a single long build or slow MCP
+// fetch must not trip it — and only fires on a genuinely dead stream.
+const cliSessionIdleTimeout = 15 * time.Minute
+
+var (
+	cliSessionIdleMu sync.RWMutex
+	// cliSessionIdleTimeoutDuration is the effective window; <= 0 disables the idle
+	// watchdog (the startup guard and ctx cancellation still apply). Tests shrink it.
+	cliSessionIdleTimeoutDuration = cliSessionIdleTimeout
+)
+
+// SetCLISessionIdleTimeout configures the stdout-silence watchdog for every
+// subsequent persistent claude-cli turn. d <= 0 disables it.
+func SetCLISessionIdleTimeout(d time.Duration) {
+	cliSessionIdleMu.Lock()
+	cliSessionIdleTimeoutDuration = d
+	cliSessionIdleMu.Unlock()
+}
+
+func cliSessionIdleWindow() time.Duration {
+	cliSessionIdleMu.RLock()
+	defer cliSessionIdleMu.RUnlock()
+	return cliSessionIdleTimeoutDuration
+}
+
+// sessionReadItem is one line (or the terminal read error) from the persistent
+// process's stdout, handed over by the reader goroutine.
+type sessionReadItem struct {
+	line string
+	err  error
+}
+
 // Turn writes one user message to the live process and reads its stream-json events
 // until the turn's result envelope, returning the parsed Response. prompt is the
 // exact text to send (full transcript on a cold start, just the new user message on
 // a warm reuse — the pool decides). onEvent, when set, streams each activity step.
-func (s *CLISession) Turn(ctx context.Context, prompt string, onEvent func(TraceStep)) (*Response, error) {
+// req supplies the per-turn watchdog sink (Request.OnWatchdog).
+//
+// The read runs in a goroutine so ctx cancellation, a startup hang and stdout
+// silence are all observable BETWEEN bytes: bufio.ReadString blocks, so the naive
+// loop only noticed cancellation between complete lines and a wedged CLI held the
+// session mutex indefinitely (the user's Stop button did nothing). Any watchdog
+// firing tears the process down and marks the session closed, so the pool drops it
+// instead of handing the next turn a dead pipe.
+func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEvent func(TraceStep)) (*Response, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -93,24 +137,76 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, onEvent func(Trace
 	}
 
 	p := newCLIParser(s.model, onEvent)
-	for !p.sawResult {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		ln, rerr := s.stdout.ReadString('\n')
-		if ln != "" {
-			p.feed(ln)
-		}
-		if rerr != nil {
-			// Stream ended before a result → the process died mid-turn. Surface a
-			// salvage if any content arrived; otherwise an error (the pool drops it).
-			if partial := p.salvage(); partial != nil {
-				s.turns++
-				s.lastUsed = time.Now()
-				return partial, nil
+
+	lines := make(chan sessionReadItem, 1)
+	readerDone := make(chan struct{})
+	defer close(readerDone)
+	go func() {
+		for {
+			ln, rerr := s.stdout.ReadString('\n')
+			select {
+			case lines <- sessionReadItem{ln, rerr}:
+			case <-readerDone:
+				return
 			}
-			detail := strings.TrimSpace(s.stderr.String())
-			return nil, fmt.Errorf("cli session stream ended before result: %v %s", rerr, detail)
+			if rerr != nil {
+				return
+			}
+		}
+	}()
+
+	startup := time.NewTimer(cliStartupTimeout)
+	defer startup.Stop()
+	idleWindow := cliSessionIdleWindow()
+	idle := time.NewTimer(idleWindow)
+	if !idle.Stop() {
+		<-idle.C
+	}
+	defer idle.Stop()
+	sawOutput := false
+	for !p.sawResult {
+		select {
+		case it := <-lines:
+			if it.line != "" {
+				if !sawOutput {
+					sawOutput = true
+					startup.Stop() // first output → the turn is alive
+				}
+				if !idle.Stop() {
+					select {
+					case <-idle.C:
+					default:
+					}
+				}
+				if idleWindow > 0 {
+					idle.Reset(idleWindow)
+				}
+				p.feed(it.line)
+			}
+			if it.err != nil {
+				// Stream ended before a result → the process died mid-turn. Surface a
+				// salvage if any content arrived; otherwise an error (the pool drops it).
+				if partial := p.salvage(); partial != nil {
+					s.turns++
+					s.lastUsed = time.Now()
+					return partial, nil
+				}
+				detail := strings.TrimSpace(s.stderr.String())
+				return nil, fmt.Errorf("cli session stream ended before result: %v %s", it.err, detail)
+			}
+		case <-startup.C:
+			return nil, s.abortTurnLocked(req, WatchdogReasonStartup, cliStartupTimeout, fmt.Errorf(
+				"cli session produced no output within %s and was killed as a likely hang (the process is dropped; the next turn cold-starts)",
+				cliStartupTimeout))
+		case <-idle.C:
+			return nil, s.abortTurnLocked(req, WatchdogReasonIdle, idleWindow, fmt.Errorf(
+				"cli session stdout went silent for %s mid-turn and was killed (the process is dropped; the next turn cold-starts)",
+				idleWindow))
+		case <-ctx.Done():
+			// The turn was cancelled (human Stop, idle watchdog, hard cap). The
+			// blocking read cannot be interrupted, so kill the process: leaving it
+			// alive would keep the reader — and s.mu — held for every later turn.
+			return nil, s.abortTurnLocked(req, "", 0, ctx.Err())
 		}
 	}
 	s.turns++
@@ -123,6 +219,42 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, onEvent func(Trace
 		}
 	}
 	return resp, err
+}
+
+// abortTurnLocked tears the persistent process down from INSIDE Turn (s.mu is
+// already held, so Close/closeChecked would deadlock), marks the session closed so
+// the pool drops it, reports the watchdog kill when reason is set, and returns the
+// error the caller should propagate. Kill failures are not swallowed: they are
+// folded into the returned error, because a process we could not kill still holds
+// the pipes this session will never read again.
+func (s *CLISession) abortTurnLocked(req Request, reason string, window time.Duration, cause error) error {
+	var killErr error
+	if s.cmd != nil && s.cmd.Process != nil {
+		proc.KillTree(s.cmd) // reap MCP servers / tool subprocesses holding the pipes
+		if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			killErr = err
+		}
+	}
+	if s.stdin != nil {
+		_ = s.stdin.Close()
+	}
+	s.closed = true
+	if s.sysFilePath != "" {
+		_ = os.Remove(s.sysFilePath)
+	}
+	if reason != "" {
+		reportWatchdogKill(req, WatchdogKill{
+			Provider: "claude-cli",
+			Model:    s.model,
+			Reason:   reason,
+			Window:   window,
+			Detail:   strings.TrimSpace(s.stderr.String()),
+		})
+	}
+	if killErr != nil {
+		return fmt.Errorf("%w; the CLI process could NOT be killed: %v", cause, killErr)
+	}
+	return cause
 }
 
 // Close terminates the process and removes its system-prompt temp file. Safe to
@@ -381,7 +513,7 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 		prompt = withDynamic(lastUserText(req.Messages), joinNonEmpty(req.SystemDynamic, req.Summary))
 	}
 
-	resp, err := sess.Turn(ctx, prompt, onEvent)
+	resp, err := sess.Turn(ctx, prompt, req, onEvent)
 	if err != nil {
 		pl.mu.Lock()
 		if pl.sessions[key] == sess {

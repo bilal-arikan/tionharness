@@ -1,5 +1,44 @@
 # TionHarness — İlerleme Takibi
 
+## CLI olay çözümlemesi toleranslı, kalıcı oturumda watchdog (2026-08-31) ⏳
+
+**Belirti.** `api_error_status` alanı bazı CLI sürümlerinde slug ("rate_limit"),
+bazılarında çıplak HTTP durumu (429) geliyordu. Alan `string` olduğu için sayı
+geldiğinde `encoding/json` **tüm olayı** reddediyor, result zarfı ile birlikte
+`session_id` (→ `--resume` kırılıyor), `usage` (→ tur 0 token faturalanıyor),
+`is_error` ve `result` metni kayboluyordu; `sawResult` false kaldığı için tur
+"no result in stream" ile düşüyordu.
+
+- **Toleranslı çözümleme.** Yeni `flexString` tipi (`claudecli_stream.go`) string,
+  sayı, bool ve null kabul eder; `cliEvent.APIErrorStatus` bu tipe geçti. Katı
+  çözümleme yine de düşerse `salvageCLIEvent` olayı **alan alan** çözer, başaranları
+  tutar, düşenleri isimleriyle döner. Kayıp asla sessiz değil: ilk olay
+  `[claude-cli field drop]` notu alır.
+- **Sayısal durum sınıflandırması.** `classifyAPIErrorStatusCode` 429'u rate limit,
+  401/403'ü auth hatası sayar — 429 artık genel hata gibi boşuna retry edilmiyor.
+- **Hata turunda muhasebe.** Result zarfının `usage` + `num_turns` katlaması
+  `is_error` dalının **üstüne** taşındı; rate-limit/auth turlarının ödenmiş input
+  token'ları artık kayıt altında.
+- **Düşürme sayacı.** Tur başına tek ayrıntılı not korunuyor, kalanlar sayılıp
+  `finish()`'te `+N more ...` özeti olarak ekleniyor (claude ve codex). Codex
+  ayrıştırıcısı bozuk satırları artık tamamen sessiz düşürmüyor
+  (`[codex parse drop]`).
+- **Kalıcı oturum watchdog'u.** `CLISession.Turn` okumayı goroutine'e aldı ve
+  `ctx.Done()` / startup (90 sn) / idle (varsayılan 15 dk,
+  `SetCLISessionIdleTimeout` ile ayarlanır) üzerinden `select` ediyor. Bloklayan
+  `bufio.ReadString` yüzünden iptal yalnız satır aralarında görülüyordu; asılan
+  bir CLI `s.mu`'yu süresiz tutup aynı (oturum, ajan) anahtarının sonraki tüm
+  turlarını kilitliyordu. Watchdog süreci `proc.KillTree` ile indiriyor, oturumu
+  kapalı işaretliyor (havuz düşürüyor) ve `WatchdogKill` raporluyor.
+
+Testler: `TestCLIParserKeepsResultEnvelopeWithNumericAPIErrorStatus`,
+`TestCLIParserSalvagesEventAndReportsDroppedField`,
+`TestCLIParserSummarizesRepeatedParseDrops`, `TestCLIParserRecordsUsageOnErrorResult`,
+`TestCodexParserReportsMalformedLineOnceAndCountsTheRest`,
+`TestCodexParserIgnoresNonJSONLines`,
+`TestCLISessionTurnHonoursContextCancellation`,
+`TestCLISessionTurnIdleWatchdogReclaimsSilentStream`.
+
 ## Sidebar yerel aramasında session ID desteği (2026-08-31) ⏳
 
 - **TSK570.** `SessionsSidebar` yerel filtresi kapsam çiplerinden sonra başlık yanında

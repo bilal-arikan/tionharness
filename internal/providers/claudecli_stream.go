@@ -8,11 +8,71 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 )
+
+// flexString is a string that also decodes from a JSON number, boolean or null.
+// The CLI types some cosmetic fields loosely (api_error_status is a slug on one
+// build and a bare HTTP status number on another), and a strict `string` field
+// turns that into a whole-object decode failure: one number costs the event its
+// session_id, usage, result text and is_error. Accept the scalar, render it as
+// text, and let the read sites treat it as the string it always was.
+type flexString string
+
+func (f *flexString) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		*f = ""
+		return nil
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		*f = flexString(s)
+		return nil
+	}
+	// Numbers and booleans render as their literal source text ("429", "true"),
+	// which is what every read site (substring classification, error message)
+	// wants. Anything else — an object or an array — is a genuine schema break
+	// and must still fail so salvageCLIEvent reports the field as dropped.
+	switch b[0] {
+	case '{', '[':
+		return fmt.Errorf("flexString: cannot decode %s into a string", string(b[:1]))
+	}
+	*f = flexString(strings.TrimSpace(string(b)))
+	return nil
+}
+
+// salvageCLIEvent rebuilds an event from a line strict decoding rejected, by
+// decoding each top-level field on its own and keeping the ones that succeed.
+// A single unmodelled field type must not cost the turn its result envelope, so
+// the fields that DID decode are used and the ones that did not are returned by
+// name for the caller to report (never dropped silently). ok is false only when
+// the line is not a JSON object at all — then there is nothing to salvage.
+func salvageCLIEvent(line string) (ev cliEvent, dropped []string, ok bool) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		return cliEvent{}, nil, false
+	}
+	for k, v := range raw {
+		one, err := json.Marshal(map[string]json.RawMessage{k: v})
+		if err != nil {
+			dropped = append(dropped, k)
+			continue
+		}
+		if err := json.Unmarshal(one, &ev); err != nil {
+			dropped = append(dropped, k)
+		}
+	}
+	sort.Strings(dropped) // map iteration order is unspecified; keep the note stable
+	return ev, dropped, true
+}
 
 // cliStreamParser incrementally consumes the stream-json event log, building a
 // Response.Trace and (when onEvent is set) emitting each step the moment it is
@@ -30,6 +90,9 @@ type cliStreamParser struct {
 	errText        string
 	notedMCP       bool                 // the unusable-MCP-server note was already emitted for this turn
 	notedParseDrop bool                 // malformed stream JSON was already reported for this turn
+	parseDropCount int                  // events lost entirely to a decode failure (summarised at finish)
+	notedFieldDrop bool                 // a partially-salvaged event was already reported for this turn
+	fieldDropCount int                  // events salvaged with at least one field lost (summarised at finish)
 	notedBlock     map[string]bool      // assistant content block types already reported as unknown
 	sawModelTurn   bool                 // any assistant/tool/result content seen (vs. only system/init noise)
 	rateLimited    bool                 // the turn was rejected by a subscription usage / rate limit
@@ -136,19 +199,63 @@ func (p *cliStreamParser) noteUnknownBlock(blockType string) {
 // payload keeps a broken stream from flooding the activity trace while retaining
 // the line length and parser error needed to diagnose a lost tool call.
 func (p *cliStreamParser) noteParseDrop(line string, err error) {
+	p.parseDropCount++
 	if p.notedParseDrop {
 		return
 	}
 	p.notedParseDrop = true
-	const maxNoteBytes = 500
-	note := fmt.Sprintf("[claude-cli parse drop] line bytes=%d: %v; payload=%s", len(line), err, line)
-	if len(note) > maxNoteBytes {
-		note = note[:maxNoteBytes]
-		for !utf8.ValidString(note) {
-			note = note[:len(note)-1]
-		}
+	p.note(boundedNote(fmt.Sprintf("[claude-cli parse drop] line bytes=%d: %v; payload=%s", len(line), err, line)))
+}
+
+// noteFieldDrop reports the first event that survived only partially — strict
+// decoding failed, salvageCLIEvent recovered the rest, and these named fields
+// were lost. The event itself is kept (that is the whole point), but the loss is
+// never silent: a field that starts failing every turn is a CLI schema change.
+func (p *cliStreamParser) noteFieldDrop(fields []string, err error) {
+	p.fieldDropCount++
+	if p.notedFieldDrop {
+		return
 	}
-	p.note(note)
+	p.notedFieldDrop = true
+	if len(fields) == 0 {
+		// Strict decoding failed but every field decoded on its own — report the
+		// event as suspect anyway rather than pretending nothing happened.
+		fields = []string{"(unidentified)"}
+	}
+	p.note(boundedNote(fmt.Sprintf("[claude-cli field drop] kept the event, dropped field(s) %s: %v",
+		strings.Join(fields, ", "), err)))
+}
+
+// boundedNote caps a parser note so a broken stream cannot flood the activity
+// trace, trimming back to a valid UTF-8 boundary.
+func boundedNote(note string) string {
+	const maxNoteBytes = 500
+	if len(note) <= maxNoteBytes {
+		return note
+	}
+	note = note[:maxNoteBytes]
+	for !utf8.ValidString(note) {
+		note = note[:len(note)-1]
+	}
+	return note
+}
+
+// summarizeDrops appends the "and N more" tail for the drops that followed the
+// one detailed note. Without it a deterministic drop — every result envelope of
+// every rate-limited turn — is indistinguishable from a single hiccup. Called
+// from finish, which appends to the trace directly (rather than via note) so the
+// pending assistant text still becomes the final answer.
+func (p *cliStreamParser) summarizeDrops() {
+	add := func(text string) {
+		p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: text})
+		p.emit(len(p.resp.Trace) - 1)
+	}
+	if n := p.parseDropCount - 1; n > 0 {
+		add(fmt.Sprintf("[claude-cli parse drop] +%d more event(s) dropped this turn", n))
+	}
+	if n := p.fieldDropCount - 1; n > 0 {
+		add(fmt.Sprintf("[claude-cli field drop] +%d more event(s) salvaged with missing field(s) this turn", n))
+	}
 }
 
 // describePermissionDenials renders the result envelope's permission_denials
@@ -268,8 +375,17 @@ func (p *cliStreamParser) feed(line string) {
 	}
 	var ev cliEvent
 	if err := json.Unmarshal([]byte(line), &ev); err != nil {
-		p.noteParseDrop(line, err)
-		return
+		// Never let one unmodelled field type cost the whole event: decode field
+		// by field and keep what survives. Dropping a result envelope here loses
+		// session_id (breaking --resume), usage (turn billed as zero) and
+		// sawResult (a completed turn reported as "no result in stream").
+		salvaged, dropped, ok := salvageCLIEvent(line)
+		if !ok {
+			p.noteParseDrop(line, err)
+			return
+		}
+		ev = salvaged
+		p.noteFieldDrop(dropped, err)
 	}
 	// Capture the CLI session id wherever it appears (system/init first, result
 	// last). The result event's id is the one to resume from next turn, so letting
@@ -451,18 +567,49 @@ func (p *cliStreamParser) feed(line string) {
 		if denials := describePermissionDenials(ev.PermissionDenials); denials != "" {
 			p.note(denials)
 		}
+		// Usage accounting BEFORE the error branch: a turn that failed at the result
+		// envelope (rate limit, auth) still paid for the input tokens it sent, and
+		// the envelope carries the authoritative aggregate. Recording it only on the
+		// success path under-reported exactly the turns that cost the most.
+		if ev.Usage != nil {
+			if ev.Usage.InputTokens > 0 {
+				p.resp.Usage.InputTokens = ev.Usage.InputTokens
+			}
+			if ev.Usage.OutputTokens > 0 {
+				p.resp.Usage.OutputTokens = ev.Usage.OutputTokens
+			}
+			if ev.Usage.CacheReadInputTokens > 0 {
+				p.resp.Usage.CacheReadTokens = ev.Usage.CacheReadInputTokens
+			}
+			if ev.Usage.CacheCreationInputTokens > 0 {
+				p.resp.Usage.CacheWriteTokens = ev.Usage.CacheCreationInputTokens
+			}
+		}
+		// num_turns = how many internal model API round-trips the CLI made this turn.
+		// The Usage above is the SUM across those round-trips (cache_read especially is
+		// cumulative — verified: result cacheRead == Σ per-assistant cacheRead), so the
+		// caller divides Usage by ProviderCalls to recover the per-call context size.
+		// Recorded next to the usage it divides, on both paths.
+		if ev.NumTurns > 0 {
+			p.resp.ProviderCalls = ev.NumTurns
+		}
 		if ev.IsError {
 			p.hadError = true
 			p.errText = ev.Result
-			isRate := isRateLimitText(ev.APIErrorStatus) || isRateLimitText(ev.Result)
-			isAuth := isAuthErrorText(ev.APIErrorStatus) || isAuthErrorText(ev.Result)
+			apiErr := string(ev.APIErrorStatus)
+			// api_error_status is a slug ("rate_limit") on some CLI builds and a bare
+			// HTTP status on others, so classify both spellings — otherwise a 429 is
+			// mistaken for a generic failure and retried straight into the same wall.
+			statusRate, statusAuth := classifyAPIErrorStatusCode(apiErr)
+			isRate := statusRate || isRateLimitText(apiErr) || isRateLimitText(ev.Result)
+			isAuth := statusAuth || isAuthErrorText(apiErr) || isAuthErrorText(ev.Result)
 			// A usage/rate-limit rejection often surfaces here as the result error
 			// (api_error_status == "rate_limit" or wording in the result text) rather
 			// than a separate rate_limit_event — classify it either way.
 			if isRate {
 				p.rateLimited = true
 				if p.rateLimitMsg == "" {
-					p.rateLimitMsg = strings.TrimSpace(ev.APIErrorStatus + " " + ev.Result)
+					p.rateLimitMsg = strings.TrimSpace(apiErr + " " + ev.Result)
 				}
 			}
 			// A login lapse commonly surfaces here as result "Not logged in · Please
@@ -488,21 +635,6 @@ func (p *cliStreamParser) feed(line string) {
 			return
 		}
 		p.finalText = ev.Result
-		if ev.Usage != nil {
-			if ev.Usage.InputTokens > 0 {
-				p.resp.Usage.InputTokens = ev.Usage.InputTokens
-			}
-			if ev.Usage.OutputTokens > 0 {
-				p.resp.Usage.OutputTokens = ev.Usage.OutputTokens
-			}
-			// The result envelope carries the authoritative aggregate; let it win.
-			if ev.Usage.CacheReadInputTokens > 0 {
-				p.resp.Usage.CacheReadTokens = ev.Usage.CacheReadInputTokens
-			}
-			if ev.Usage.CacheCreationInputTokens > 0 {
-				p.resp.Usage.CacheWriteTokens = ev.Usage.CacheCreationInputTokens
-			}
-		}
 		// A single turn can touch more than one model: ENABLE_TOOL_SEARCH runs an
 		// auxiliary haiku call alongside the primary (opus) answer, so the result
 		// envelope's modelUsage holds several keys. Iterating the map and taking
@@ -512,13 +644,6 @@ func (p *cliStreamParser) feed(line string) {
 		// the model that did the real work: the one with the most tokens.
 		if m := primaryModelUsage(ev.ModelUsage); m != "" {
 			p.resp.Model = m
-		}
-		// num_turns = how many internal model API round-trips the CLI made this turn.
-		// The Usage above is the SUM across those round-trips (cache_read especially is
-		// cumulative — verified: result cacheRead == Σ per-assistant cacheRead), so the
-		// caller divides Usage by ProviderCalls to recover the per-call context size.
-		if ev.NumTurns > 0 {
-			p.resp.ProviderCalls = ev.NumTurns
 		}
 	}
 }
@@ -628,6 +753,7 @@ func (p *cliStreamParser) finish() (*Response, error) {
 		}
 	}
 	p.nativeCompactionMu.Unlock()
+	p.summarizeDrops()
 	if p.hadError {
 		return nil, fmt.Errorf("claude CLI error: %s", p.errText)
 	}
@@ -703,6 +829,25 @@ func isRateLimitText(s string) bool {
 		strings.Contains(s, "usage limit") ||
 		strings.Contains(s, "usage_limit") ||
 		strings.Contains(s, "quota")
+}
+
+// classifyAPIErrorStatusCode reads a bare HTTP status in api_error_status (some
+// CLI builds report 429 instead of "rate_limit") and maps it onto the two classes
+// that change the caller's behaviour: rate limits are retryable after the window
+// resets, auth failures are not retryable at all. Anything else — including a
+// non-numeric slug, which the text matchers handle — reports neither.
+func classifyAPIErrorStatusCode(s string) (rate, auth bool) {
+	code, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return false, false
+	}
+	switch code {
+	case 429:
+		return true, false
+	case 401, 403:
+		return false, true
+	}
+	return false, false
 }
 
 // isAuthErrorText reports whether a result/api-error/error string signals an
