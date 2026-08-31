@@ -86,6 +86,9 @@ func TestDefaultRecipesValid(t *testing.T) {
 		if sk.Pattern == "" || !KnownPattern(sk.Pattern) {
 			t.Errorf("recipe %q has invalid pattern %q", sk.Slug, sk.Pattern)
 		}
+		if sk.Slug == "coordinator-wf-loop" && sk.MaxTurns != 10 {
+			t.Errorf("loop recipe MaxTurns = %d, want 10", sk.MaxTurns)
+		}
 	}
 	if found < 6 {
 		t.Errorf("found %d coordinator-workflow defaults, want >= 6", found)

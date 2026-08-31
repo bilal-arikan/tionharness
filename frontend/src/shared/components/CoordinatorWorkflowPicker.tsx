@@ -27,6 +27,8 @@ const PATTERN_LABEL: Record<string, string> = {
   tournament: 'Turnuva — adaylar ikişerli karşılaştırılarak eleme yapılır',
 }
 
+const ADVANCED_PATTERNS = new Set(['classify', 'loop', 'tournament'])
+
 // recipeHelp composes one recipe's popover note from its frontmatter. Everything
 // here is optional in the skill file, so each line is emitted only when present —
 // a recipe with nothing but a name still gets a note rather than an empty bubble.
@@ -81,6 +83,10 @@ export function CoordinatorWorkflowPicker({
   const [recipes, setRecipes] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
 
+  const standardRecipes = recipes.filter((recipe) => !ADVANCED_PATTERNS.has(recipe.pattern ?? ''))
+  const advancedRecipes = recipes.filter((recipe) => ADVANCED_PATTERNS.has(recipe.pattern ?? ''))
+  const selectedAdvanced = advancedRecipes.some((recipe) => recipe.slug === value)
+
   useEffect(() => {
     let alive = true
     api
@@ -123,7 +129,7 @@ export function CoordinatorWorkflowPicker({
           ekleyin.
         </div>
       )}
-      {recipes.map((r) => (
+      {standardRecipes.map((r) => (
         <div key={r.slug} className="flex items-center gap-0.5">
           <label className={`min-w-0 flex-1 ${recipeRowClass(value === r.slug)}`}>
             <input
@@ -154,6 +160,45 @@ export function CoordinatorWorkflowPicker({
           )}
         </div>
       ))}
+      {advancedRecipes.length > 0 && (
+        <details open={selectedAdvanced} className="pt-0.5">
+          <summary className="cursor-pointer px-1.5 py-1 text-[11px] text-[var(--color-text-dim)]">
+            Gelişmiş / opsiyonel
+          </summary>
+          <div className="space-y-0.5 pl-2">
+            {advancedRecipes.map((r) => (
+              <div key={r.slug} className="flex items-center gap-0.5">
+                <label className={`min-w-0 flex-1 ${recipeRowClass(value === r.slug)}`}>
+                  <input
+                    type="radio"
+                    name={groupName}
+                    checked={value === r.slug}
+                    onChange={() => onChange(r.slug)}
+                    disabled={disabled}
+                    className="accent-[var(--color-accent)]"
+                  />
+                  <span className="truncate">
+                    {r.icon ? `${r.icon} ` : ''}
+                    {r.name}
+                  </span>
+                </label>
+                <InfoPopover text={recipeHelp(r)} label={`${r.name} — ne yapar?`} fixed />
+                {onOpenSkill && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenSkill(r.slug)}
+                    title={`"${r.name}" skill'ini Skills ekranında aç`}
+                    aria-label={`${r.name} skill'ini aç`}
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    <BookOpen size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }

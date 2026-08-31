@@ -17,6 +17,19 @@ type RunAgentResult struct {
 	Reply     string
 	SessionID string
 	Async     bool
+	// Artifacts are the artifacts the subagent produced during this run, owned by
+	// its own child session. They are handed back as REFERENCES, not content: the
+	// point of delegation is that the sub-task's output never floods the caller's
+	// context, and a large document would do exactly that. The caller reads one by
+	// id with read_artifact when it actually needs the body.
+	Artifacts []SubagentArtifact
+}
+
+// SubagentArtifact is one artifact reference returned to the delegating caller.
+type SubagentArtifact struct {
+	ID    string
+	Title string
+	Kind  string
 }
 
 // RunAgentSpec is the parsed run_subagent request. Unset axes take their default
@@ -164,8 +177,23 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
+	return FormatRunAgentResult(res)
+}
+
+// FormatRunAgentResult renders a finished run for the calling model. Split out of
+// Call so the wording — which is the entire interface the caller sees — can be
+// asserted without standing up a runtime.
+func FormatRunAgentResult(res RunAgentResult) (string, error) {
 	if res.Async {
 		return fmt.Sprintf("Started subagent %q in the background (session %s). It runs on its own; you do not wait for it.", res.AgentName, res.SessionID), nil
 	}
-	return fmt.Sprintf("Result from subagent %q:\n\n%s", res.AgentName, res.Reply), nil
+	var b strings.Builder
+	fmt.Fprintf(&b, "Result from subagent %q:\n\n%s", res.AgentName, res.Reply)
+	if len(res.Artifacts) > 0 {
+		b.WriteString("\n\nArtifacts it produced (owned by its run; read one with read_artifact):")
+		for _, a := range res.Artifacts {
+			fmt.Fprintf(&b, "\n- %s — %s (%s)", a.ID, a.Title, a.Kind)
+		}
+	}
+	return b.String(), nil
 }

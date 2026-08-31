@@ -967,6 +967,10 @@ artık onun alias'ı) — bilinmeyen/yanlış türdeki slug hem `validateFlowPre
 hem düğüm çalışırken hata verdirir, **asla sessizce serbest koordinasyona düşmez**.
 UI tarafında seçici tek paylaşılan bileşendir: `shared/components/CoordinatorWorkflowPicker`
 (`CoordinatorSection` de ona taşındı) → iki liste ayrışamaz.
+Seçici `classify`, `loop` ve `tournament` desenlerini varsayılan kapalı
+**Gelişmiş / opsiyonel** grubunda gösterir; gelişmiş bir reçete seçiliyse grup
+kaydın görünür kalması için açık başlar. Serbest seçenek daima listenin ilkidir.
+Yerleşik **Loop Until Done** reçetesinin güvenlik üst sınırı `max_turns: 10`'dur.
 
 Bu dokümandaki tüm mekanikler (notify-loop, coalesce, idle reconcile, canlı
 worker-state bloğu, `CoordinatorMaxTurns`) aynen geçerlidir — düğüm yalnız

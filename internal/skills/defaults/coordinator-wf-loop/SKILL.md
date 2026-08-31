@@ -5,7 +5,7 @@ pattern: loop
 description: "Keep spawning workers round after round until a stop condition holds (no new findings for N rounds). For open-ended discovery."
 worker_targets: [explore]
 stop_condition: "two consecutive rounds produce no new findings"
-max_turns: 30
+max_turns: 10
 icon: "🔁"
 color: "#8b5cf6"
 access: shared

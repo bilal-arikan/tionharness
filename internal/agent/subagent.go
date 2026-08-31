@@ -312,6 +312,14 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		return tools.RunAgentResult{}, err
 	}
 	childCtx = WithSessionID(childCtx, child.ID)
+	// Re-bind the session-scoped sinks to the CHILD before the run. They are
+	// inherited from the caller's context, and the tool loop only installs a
+	// fallback when none is present — so without this an artifact the subagent
+	// creates is filed under the CALLER's session and agent, and the delegated work
+	// loses its provenance exactly where it matters most (a file produced by a
+	// subagent looks like the parent wrote it).
+	childCtx = tools.WithCurrentSession(childCtx, child.ID)
+	childCtx = tools.WithArtifacts(childCtx, r.NewArtifactSink(child.ID, agent.ID))
 	if err := r.initializeChildSession(ctx, child.ID, func() error {
 		_, err := r.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: strings.TrimSpace(spec.Task)})
 		return err
@@ -403,7 +411,11 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 			sink.addSteps(sub.Steps...)
 		}
 	}
-	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
+	return tools.RunAgentResult{
+		AgentName: agent.Name,
+		Reply:     resp.Text,
+		Artifacts: r.collectChildArtifacts(ctx, child.ID),
+	}, nil
 }
 
 func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec tools.RunAgentSpec) db.Session {

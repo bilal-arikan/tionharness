@@ -435,6 +435,43 @@ Testler: `subagent_retry_test.go` (numaralama, zincirin zinciri, sahiplik/canlı
 eksik reddi, damgasız düz koşu), `subagent_control_test.go` (birlikte kurulum,
 sahiplik reddi, bitmiş koşu, iptal + `killed` damgası).
 
+## Artifact çıkışı (TSK599, 2026-08-31)
+
+Subagent'ın ürettiği artifact **kendi child oturumuna** yazılır ve çağırana
+**referans** olarak döner.
+
+### Sahiplik: sink child'a yeniden bağlanır
+
+Artifact sink çağıranın bağlamından miras kalır ve tur döngüsü yalnız **hiç sink
+yoksa** fallback kurar (`toolloop.go`). Bu yüzden yeniden bağlama olmadan
+subagent'ın yarattığı artifact **çağıranın** oturumuna ve **çağıranın** ajanına
+yazılıyordu — delegasyonun provenance'ı tam da en çok gerektiği yerde kayboluyor,
+alt-ajanın ürettiği dosya ana ajan yazmış gibi görünüyordu. `runAgent` artık child
+oturumu yarattıktan hemen sonra `tools.WithCurrentSession` + `tools.WithArtifacts`
+ile ikisini de child'a yeniden bağlar.
+
+### Teslim: gövde değil referans
+
+`RunAgentResult.Artifacts` (`[]tools.SubagentArtifact{ID,Title,Kind}`) koşu bittikten
+sonra `collectChildArtifacts` ile child oturumundan toplanır ve araç çıktısına
+"Artifacts it produced … read one with read_artifact" bloğu olarak eklenir.
+**Gövde taşınmaz:** delegasyonun varlık sebebi alt görevin çıktısının çağıranın
+bağlamını doldurmamasıdır; üretilen bir dokümanı satır içine almak bunu çıktının en
+büyük olduğu durumda geri alırdı. Çağıran gerektiğinde `read_artifact` ile id'den
+okur. Artifact üretmeyen koşu **hiç blok kazanmaz**.
+
+**Listeleme hatası koşuyu düşürmez.** Alt-ajanın işi o noktada bitmiş ve
+kalıcılaşmıştır; eksik bir indeks satırı yüzünden tamamlanmış koşuyu çöpe atmak
+yanlış olurdu — çağıran yalnız referansları görmez, artifact'lar child oturumunda
+erişilebilir kalır (uyarı loglanır).
+
+**Başarısız/iptal koşu:** artifact'lar silinmez. Child oturumu terminal durumuyla
+(`failed`/`killed`) durur ve ürettikleri orada incelenebilir; referans dönmez çünkü
+çağrı hata ile döner. `sourcePath` güvenliği mevcut `db.ImportMediaSource`
+yolundadır (workspace dışındaki dosya içeri kopyalanır).
+
+**Kapsam dışı (takip):** artifact'ı bir board task'ına otomatik bağlama.
+
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)
