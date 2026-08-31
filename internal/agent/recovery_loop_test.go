@@ -2,29 +2,34 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // scriptedResp is one programmed reply from fakeProvider.
 type scriptedResp struct {
-	text string
-	stop string
-	err  error
+	text      string
+	stop      string
+	toolCalls []providers.ToolCall
+	err       error
 }
 
 // fakeProvider returns a fixed sequence of replies, letting a test drive the
 // native tool loop through its recovery branches deterministically (no key, no
 // network). Calls past the script return a plain end_turn.
 type fakeProvider struct {
-	calls    int
-	script   []scriptedResp
-	requests []providers.Request
+	calls     int
+	script    []scriptedResp
+	requests  []providers.Request
+	onRequest func(int, providers.Request)
 }
 
 func (f *fakeProvider) Name() string { return "fake" }
@@ -33,6 +38,9 @@ func (f *fakeProvider) Complete(_ context.Context, req providers.Request) (*prov
 	f.requests = append(f.requests, req)
 	i := f.calls
 	f.calls++
+	if f.onRequest != nil {
+		f.onRequest(i, req)
+	}
 	if i >= len(f.script) {
 		return &providers.Response{StopReason: providers.StopEndTurn, Text: ""}, nil
 	}
@@ -40,7 +48,37 @@ func (f *fakeProvider) Complete(_ context.Context, req providers.Request) (*prov
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &providers.Response{StopReason: s.stop, Text: s.text}, nil
+	return &providers.Response{StopReason: s.stop, Text: s.text, ToolCalls: s.toolCalls}, nil
+}
+
+type countingSettingsBridge struct{ snapshots int }
+
+func (*countingSettingsBridge) Path() string { return "settings.json" }
+
+func (b *countingSettingsBridge) Snapshot() (string, error) {
+	b.snapshots++
+	return `{"theme":"dark"}`, nil
+}
+
+func (*countingSettingsBridge) Apply(string) (string, error) { return "", nil }
+
+func requestHasTool(req providers.Request, name string) bool {
+	for _, def := range req.Tools {
+		if def.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func lastToolResult(req providers.Request) (providers.ToolResult, bool) {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		results := req.Messages[i].ToolResults
+		if len(results) > 0 {
+			return results[len(results)-1], true
+		}
+	}
+	return providers.ToolResult{}, false
 }
 
 // loopRuntime builds a runtime whose sandbox registers the built-in fs tools, so
@@ -62,6 +100,63 @@ func hasRecovery(steps []TurnStep, reason string) bool {
 		}
 	}
 	return false
+}
+
+// TestLoop_LazyToolAutoActivation drives the native structured-tool loop across
+// the activation boundary. The first speculative call only activates the tool;
+// the reissued call executes its handler after the schema reaches the provider.
+func TestLoop_LazyToolAutoActivation(t *testing.T) {
+	rt := loopRuntime(t)
+	bridge := &countingSettingsBridge{}
+	rt.SetSettingsBridge(bridge)
+	if err := rt.db.SetWorkspaceToolConfig(context.Background(), db.WorkspaceToolConfig{
+		ToolVisibility: map[string]string{"get_settings": tools.VisibilitySummary},
+	}); err != nil {
+		t.Fatalf("set workspace tool config: %v", err)
+	}
+
+	agent := db.Agent{ID: "a1", Model: "m", MCPEnabled: true}
+	call := providers.ToolCall{ID: "settings-1", Name: "get_settings", Input: json.RawMessage(`{}`)}
+	var snapshotsAtRequest []int
+	fp := &fakeProvider{script: []scriptedResp{
+		{stop: providers.StopToolUse, toolCalls: []providers.ToolCall{call}},
+		{stop: providers.StopToolUse, toolCalls: []providers.ToolCall{{ID: "settings-2", Name: call.Name, Input: call.Input}}},
+		{stop: providers.StopEndTurn, text: "settings loaded"},
+	}, onRequest: func(_ int, _ providers.Request) {
+		snapshotsAtRequest = append(snapshotsAtRequest, bridge.snapshots)
+	}}
+
+	req := providers.Request{Messages: []providers.Message{{Role: providers.RoleUser, Text: "read settings"}}}
+	resp, _, err := rt.CompleteWithToolsTraced(context.Background(), agent, fp, req, false)
+	if err != nil {
+		t.Fatalf("complete with tools: %v", err)
+	}
+	if fp.calls != 3 {
+		t.Fatalf("provider calls = %d, want 3", fp.calls)
+	}
+	if requestHasTool(fp.requests[0], call.Name) {
+		t.Fatal("inactive lazy tool schema present in first provider request")
+	}
+	if !requestHasTool(fp.requests[1], call.Name) {
+		t.Fatal("activated lazy tool schema absent from second provider request")
+	}
+	first, ok := lastToolResult(fp.requests[1])
+	if !ok || !first.IsError || !strings.Contains(first.Content, "activated automatically") {
+		t.Fatalf("first tool result = %#v, want auto-activation error", first)
+	}
+	second, ok := lastToolResult(fp.requests[2])
+	if !ok || second.IsError || !strings.Contains(second.Content, `{"theme":"dark"}`) {
+		t.Fatalf("second tool result = %#v, want successful settings snapshot", second)
+	}
+	if bridge.snapshots != 1 {
+		t.Fatalf("settings handler calls = %d, want 1", bridge.snapshots)
+	}
+	if got := snapshotsAtRequest; len(got) != 3 || got[0] != 0 || got[1] != 0 || got[2] != 1 {
+		t.Fatalf("settings handler calls at provider requests = %v, want [0 0 1]", got)
+	}
+	if resp.Text != "settings loaded" || resp.StopReason != providers.StopEndTurn {
+		t.Fatalf("final response = (%q, %q), want final assistant text", resp.Text, resp.StopReason)
+	}
 }
 
 // TestLoop_MaxTokenResume drives the full loop: the model is cut off by the
