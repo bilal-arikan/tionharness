@@ -379,9 +379,29 @@ rolling fold'a düşer. Varsayılanın native olmamasının sebebi bu tablodaki
 kendi `pending` transcript'ini küçültmez — yani `EstimateTokens` aynı kalır ve
 kapı bir sonraki turda yine aşımı görür. `Manager.claimNativeAttempt`
 (`internal/conversation/nativecompact.go`) bu yüzden oturum kimliği başına son
-denemenin `len(history)` değerini tutar: transkripte yeni mesaj eklenmediyse
-(veya kısaldıysa) ikinci native denemesi yapılmaz, o tur doğrudan rolling fold'a
-düşer. Rolling fold metni gerçekten kısalttığı için sistem yakınsar.
+denemenin **rolling sınırını** tutar: `Prepare`'in native'e geçtiği yerde
+argüman `start`, yani clamp'lenmiş `SummaryMsgCount`'tır
+(`internal/conversation/manager.go`). Kayıt yoksa **veya** güncel
+`SummaryMsgCount` önceki denemeninkinden ileriyse claim verilir; aksi hâlde
+reddedilir ve o tur doğrudan rolling fold'a düşer.
+
+Sınır olarak history uzunluğu değil `SummaryMsgCount` kullanılmasının sebebi:
+her gerçek tur transkripte user+assistant mesajı ekler, yani `len(history)` her
+turda büyür — bu ölçüte bağlı bir kapı hiçbir zaman reddetmez, native her turda
+ateşler ve rolling fold hiç koşmaz. `SummaryMsgCount` ise yalnız gerçek bir fold
+olduğunda ilerler, yani ilerleme kanıtıdır.
+
+Yakınsama zinciri: native turu transkripti katlamaz → `SummaryMsgCount` sabit
+kalır → bir sonraki turda claim reddedilir → o tur gerçek bir rolling fold olur →
+`SummaryMsgCount` ilerler → native tekrar serbest kalır. Sürekli bütçe aşan bir
+oturumda native ve rolling turlar dönüşümlü koşar, transkript her rolling turda
+kısaldığı için sistem yakınsar.
+
+Claim, callback çalışmadan **önce** alınır: başarısız bir native denemesi zaten
+aynı turda rolling'e düşer, tekrar claim edilmesi bir şey kazandırmaz.
+
+Bilinen sınırlama: `lastNativeCompactAt` map'i hiç temizlenmez — oturum başına
+bir giriş yazılır ve süreç ömrü boyunca durur (kodda silme yolu yoktur).
 
 **`NativeCompacted` neden `Compacted`'ten ayrı.** Çağıranlar `Prepared.Compacted`
 görünce `DropWarmCLISession` + cold resume yapar. Native compaction sonrası bu,

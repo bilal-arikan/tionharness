@@ -986,9 +986,12 @@ ve `Compaction.Mode` (`rolling` | `native`) ile ayırt edilir.
 
 **Anti-loop.** Native compaction CLI'ın penceresini küçültür, TionHarness'in pending transcript'ini
 değil; yani `EstimateTokens` aynı kalır ve kapı sonraki turda yine aşımı görür. Bu yüzden bir oturumda
-native deneme **history uzunluğu başına yalnız bir kez** yapılır (`Manager.claimNativeAttempt`,
-`nativecompact.go`): aynı (veya kısalmış) transcript'le ikinci `Prepare` doğrudan rolling fold'a düşer,
-sistem yakınsar. Testler: `internal/conversation/nativecompact_test.go`.
+native deneme **rolling sınırı (`SummaryMsgCount`) başına yalnız bir kez** yapılır
+(`Manager.claimNativeAttempt`, `nativecompact.go`): sınır önceki denemeden ileri gitmediyse claim
+reddedilir ve tur rolling fold'a düşer. Sınır olarak history uzunluğu kullanılamaz — her tur mesaj
+eklediği için hep büyür ve kapı hiç reddetmezdi. Native turu fold yapmadığından sınır sabit kalır,
+sonraki tur gerçek bir rolling fold olur, sınır ilerler ve native tekrar serbest kalır; iki tür tur
+dönüşümlü koşarak yakınsar. Testler: `internal/conversation/nativecompact_test.go`.
 
 Mod tablosunun tamamı ve compaction journal satırının neden bağlam ölçeriyle aynı sayıyı
 göstermediği `38-SESSION-DEBUG.md`'de anlatılır.
