@@ -341,6 +341,13 @@ persistence `subagent persistence requires a parent session` ile düşer — nat
 etkilenmediğinden hata yalnız claude-cli / codex-cli oturumlarında görünür. Oturumun kalıcı
 kaydı yoksa sessizce yutmak yerine açık `IsError` döndür.
 
+Aynı damga köprülü **`Bash`/`PowerShell`** (`callShell`) için de zorunludur: shell runner
+komutun çalışma dizinini ctx'teki session id'den çözer (`Runtime.effectiveWorkDir` →
+`Runtime.SessionWorkdir`), damgasız çağrı oturumun `WorkingDir`'i yerine **sessizce**
+workspace varsayılan dizininde koşardı. Shell, kalıcı kaydı olmayan bir run'da da meşru
+olduğundan burada `IsError` yerine uyarı loglanır ve çağrı sürer; `SessionWorkdir`
+fallback'leri de (oturum okunamadı / dizin yok / dizin değil) artık `Warn` ile loglanır.
+
 **`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
 _(Not: `core_memory_*` araçları 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI;
 bu bölümün core-memory kısmı tarihseldir, `conversation_search` köprüsü hâlâ geçerli.)_

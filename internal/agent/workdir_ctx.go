@@ -44,13 +44,36 @@ func (r *Runtime) effectiveWorkDir(ctx context.Context) string {
 // workspace default.
 func (r *Runtime) SessionWorkdir(sessionID string) string {
 	if sessionID != "" {
-		if s, err := r.db.GetSession(context.Background(), sessionID); err == nil {
-			if d := strings.TrimSpace(s.WorkingDir); d != "" {
-				if info, statErr := os.Stat(d); statErr == nil && info.IsDir() {
-					return d
-				}
+		s, err := r.db.GetSession(context.Background(), sessionID)
+		if err != nil {
+			// The fallback stays (every caller needs a directory back), but it must
+			// not be silent: a failed lookup moves the turn's fs/shell sandbox off
+			// the session's own working dir with no other trace.
+			r.logWorkdirFallback("session workdir: session lookup failed, using workspace default",
+				"session", sessionID, "error", err)
+		} else if d := strings.TrimSpace(s.WorkingDir); d != "" {
+			info, statErr := os.Stat(d)
+			switch {
+			case statErr != nil:
+				r.logWorkdirFallback("session workdir: stat failed, using workspace default",
+					"session", sessionID, "dir", d, "error", statErr)
+			case !info.IsDir():
+				r.logWorkdirFallback("session workdir: path is not a directory, using workspace default",
+					"session", sessionID, "dir", d)
+			default:
+				return d
 			}
 		}
 	}
 	return r.WorkspaceDefaultDir()
+}
+
+// logWorkdirFallback reports a working-directory fallback. Runtime values built
+// without a logger (bare test fixtures) are common on this path, so the nil check
+// lives here instead of at every call site.
+func (r *Runtime) logWorkdirFallback(msg string, args ...any) {
+	if r.logger == nil {
+		return
+	}
+	r.logger.Warn(msg, args...)
 }

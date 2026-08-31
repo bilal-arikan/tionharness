@@ -384,11 +384,33 @@ func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, toolNa
 	if runFn == nil {
 		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
 	}
+	// The runner resolves the command's working directory from the session id on
+	// the context (Runtime.effectiveWorkDir); the Interaction server's request ctx
+	// carries none, so an unstamped call silently ran in the workspace default dir
+	// instead of the session's WorkingDir. Stamp it, exactly like callRunSubagent.
+	// Unlike a subagent, a shell call is still legitimate on a run with no
+	// persisted session — but the fallback directory must not be silent.
+	if run.sessionID == "" {
+		b.logWarn("bridged shell call has no session id; command runs in the workspace default dir",
+			"tool", toolName, "workspace", run.workspaceID)
+	} else {
+		ctx = tools.WithCurrentSession(ctx, run.sessionID)
+		ctx = agent.WithSessionID(ctx, run.sessionID)
+	}
 	out, err := runFn(ctx, toolName, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}
 	return interaction.CallResult{Text: out}, nil
+}
+
+// logWarn records a warning from a bridged tool call. The backend is also built
+// bare in tests (no owning server), so the nil checks live here.
+func (b *interactionBackend) logWarn(msg string, args ...any) {
+	if b.apiSrv == nil || b.apiSrv.logger == nil {
+		return
+	}
+	b.apiSrv.logger.Warn(msg, args...)
 }
 
 // callRunSubagent dispatches a bridged run_subagent call: it runs a subagent
