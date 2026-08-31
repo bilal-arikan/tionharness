@@ -94,18 +94,23 @@ func (p *Projector) Neighborhood(ctx context.Context, focus Ref) (Neighborhood, 
 		return Neighborhood{}, err
 	}
 
-	children, err := p.structuralChildren(ctx, focus)
+	// One snapshot for the whole walk: the parent scan below asks every node in
+	// the workspace for its children, and without the cache each session-shaped
+	// answer re-read (and re-copied) the full session list from the store.
+	cache := p.newStructuralCache()
+
+	children, err := cache.children(ctx, focus)
 	if err != nil {
 		return Neighborhood{}, err
 	}
-	candidates, err := p.structuralNodes(ctx)
+	candidates, err := cache.nodes(ctx)
 	if err != nil {
 		return Neighborhood{}, err
 	}
 
 	parents := make([]Handle, 0)
 	for _, candidate := range candidates {
-		candidateChildren, childErr := p.structuralChildren(ctx, candidate.Ref)
+		candidateChildren, childErr := cache.children(ctx, candidate.Ref)
 		if childErr != nil {
 			if candidate.Ref.Kind == KindCategory &&
 				(candidate.Ref.ID == CategorySkills || candidate.Ref.ID == CategoryInsights) {
@@ -149,69 +154,6 @@ func validateStructuralRef(ref Ref) error {
 		return fmt.Errorf("view: unknown %s ref %q", ref.Kind, ref.ID)
 	}
 	return nil
-}
-
-// structuralChildren is Children without the legacy per-node presentation cap.
-func (p *Projector) structuralChildren(ctx context.Context, ref Ref) ([]Handle, error) {
-	switch ref.Kind {
-	case KindSpace:
-		return workspaceChildren(), nil
-	case KindCategory:
-		return p.categoryMembers(ctx, ref.ID)
-	case KindBoard:
-		if ref.Sub != "" {
-			return nil, nil
-		}
-		return p.boardColumnChildren(ctx)
-	case KindAgent:
-		return p.agentSessionChildren(ctx, ref.ID)
-	case KindSession:
-		return p.sessionWorkerChildren(ctx, ref.ID)
-	case KindBudget, KindTools, KindFlowRun, KindSchedule,
-		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("view: children unsupported for kind %q", ref.Kind)
-	}
-}
-
-// structuralNodes enumerates every possible parent node once. It uses the same
-// store-backed relationship builders as Children, preserving workspace scope.
-func (p *Projector) structuralNodes(ctx context.Context) ([]Handle, error) {
-	root := Handle{Label: "workspace", Ref: Ref{Kind: KindSpace, ID: WorkspaceRefID}, Level: LevelCard}
-	nodes := []Handle{root}
-	rootChildren := workspaceChildren()
-	nodes = append(nodes, rootChildren...)
-
-	for _, node := range rootChildren {
-		children, err := p.structuralChildren(ctx, node.Ref)
-		if err != nil {
-			// Skills and insights are optional projector sources. Their absence
-			// must not prevent resolving an unrelated focus node.
-			if node.Ref.Kind == KindCategory &&
-				(node.Ref.ID == CategorySkills || node.Ref.ID == CategoryInsights) {
-				continue
-			}
-			return nil, err
-		}
-		nodes = append(nodes, children...)
-	}
-
-	// Sessions can also parent worker sessions, and agents parent their sessions.
-	// Both kinds are already present through root categories; expanding them here
-	// is enough to discover every incoming structural edge without recursion.
-	base := uniqueSortedHandles(nodes)
-	for _, node := range base {
-		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindSession {
-			continue
-		}
-		children, err := p.structuralChildren(ctx, node.Ref)
-		if err != nil {
-			return nil, err
-		}
-		nodes = append(nodes, children...)
-	}
-	return uniqueSortedHandles(nodes), nil
 }
 
 func uniqueSortedHandles(handles []Handle) []Handle {
@@ -270,108 +212,26 @@ func workspaceChildren() []Handle {
 // ProjectCategory reads this to count members honestly; Children caps the same
 // list. An unknown category id is an error — see ProjectCategory's rationale.
 func (p *Projector) categoryMembers(ctx context.Context, id string) ([]Handle, error) {
-	switch id {
-	case CategorySessions:
-		sessions, err := p.store.ListSessions(ctx, "")
-		if err != nil {
-			return nil, fmt.Errorf("view: category sessions: %w", err)
-		}
-		return sessionHandleList(liveSessions(sessions)), nil
-	case CategoryFlows:
-		runs, err := p.store.ListFlowRuns(ctx, "")
-		if err != nil {
-			return nil, fmt.Errorf("view: category flows: %w", err)
-		}
-		return flowRunHandleList(runs), nil
-	case CategoryAgents:
-		agents, err := p.store.ListAgents(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("view: category agents: %w", err)
-		}
-		return agentHandleList(agents), nil
-	case CategoryArtifacts:
-		artifacts, err := p.store.ListArtifacts(ctx, "")
-		if err != nil {
-			return nil, fmt.Errorf("view: category artifacts: %w", err)
-		}
-		return artifactHandleList(artifacts), nil
-	case CategoryAutomations:
-		automations, err := p.store.ListAutomations(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("view: category automations: %w", err)
-		}
-		return automationHandleList(automations), nil
-	case CategorySkills:
-		if p.sources.Skills == nil {
-			return nil, fmt.Errorf("view: category skills: skill catalog unavailable")
-		}
-		return skillHandleList(p.sources.Skills.List()), nil
-	case CategoryInsights:
-		if p.sources.Findings == nil {
-			return nil, fmt.Errorf("view: category insights: findings store unavailable")
-		}
-		return insightHandleList(p.sources.Findings.ListFindings()), nil
-	}
-	if key, found := cutColumnPrefix(id); found {
-		tasks, err := p.store.ListActiveTasks(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("view: category %s: %w", id, err)
-		}
-		return columnCardHandles(tasks, key), nil
-	}
-	return nil, fmt.Errorf("view: unknown category %q", id)
+	return p.newStructuralCache().categoryMembers(ctx, id)
 }
 
 // boardColumnChildren is the board's structural children: one category node per
 // column that exists on the board. A column drills into its cards.
 func (p *Projector) boardColumnChildren(ctx context.Context) ([]Handle, error) {
-	tasks, err := p.store.ListActiveTasks(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("view: board columns: %w", err)
-	}
-	cols := boardColumns(tasks)
-	hs := make([]Handle, 0, len(cols))
-	for _, c := range cols {
-		hs = append(hs, Handle{
-			Label: fmt.Sprintf("%s (%d kart)", c.Key, len(c.Tasks)),
-			Ref:   Ref{Kind: KindCategory, ID: categoryColumnPrefix + c.Key},
-			Level: LevelCard,
-		})
-	}
-	return hs, nil
+	return p.newStructuralCache().boardColumnChildren(ctx)
 }
 
 // agentSessionChildren is an agent's structural children: the sessions bound to
 // it.
 func (p *Projector) agentSessionChildren(ctx context.Context, agentID string) ([]Handle, error) {
-	if agentID == "" {
-		return nil, fmt.Errorf("view: agent children: empty id")
-	}
-	sessions, err := p.store.ListSessions(ctx, agentID)
-	if err != nil {
-		return nil, fmt.Errorf("view: agent %s sessions: %w", agentID, err)
-	}
-	return sessionHandleList(liveSessions(sessions)), nil
+	return p.newStructuralCache().agentSessionChildren(ctx, agentID)
 }
 
 // sessionWorkerChildren is a session's structural children: the worker sessions
 // that report up to it (a coordinator drills into its fleet). A plain session
 // simply has none.
 func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string) ([]Handle, error) {
-	if sessionID == "" {
-		return nil, fmt.Errorf("view: session children: empty id")
-	}
-	all, err := p.store.ListSessions(ctx, "")
-	if err != nil {
-		return nil, fmt.Errorf("view: session %s workers: %w", sessionID, err)
-	}
-	var workers []db.Session
-	for _, s := range all {
-		if s.State != "archived" && s.CoordinatorSessionID == sessionID {
-			workers = append(workers, s)
-		}
-	}
-	return sessionHandleList(workers), nil
+	return p.newStructuralCache().sessionWorkerChildren(ctx, sessionID)
 }
 
 // sessionHandleList orders sessions most-recently-active first and renders each
@@ -392,9 +252,10 @@ func sessionHandleList(sessions []db.Session) []Handle {
 // flowRunHandleList orders runs most-recent first and renders each as a
 // flow-run handle.
 func flowRunHandleList(runs []db.FlowRun) []Handle {
-	sort.Slice(runs, func(i, j int) bool { return runs[i].UpdatedAt > runs[j].UpdatedAt })
-	hs := make([]Handle, 0, len(runs))
-	for _, r := range runs {
+	sorted := append([]db.FlowRun(nil), runs...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	hs := make([]Handle, 0, len(sorted))
+	for _, r := range sorted {
 		hs = append(hs, Handle{
 			Label: "run:" + r.ID + " " + string(r.Status),
 			Ref:   Ref{Kind: KindFlowRun, ID: r.ID},
@@ -435,9 +296,10 @@ func artifactHandleList(artifacts []db.Artifact) []Handle {
 
 // automationHandleList renders automations (newest first) as automation handles.
 func automationHandleList(automations []db.Automation) []Handle {
-	sort.SliceStable(automations, func(i, j int) bool { return automations[i].CreatedAt > automations[j].CreatedAt })
-	hs := make([]Handle, 0, len(automations))
-	for _, a := range automations {
+	sorted := append([]db.Automation(nil), automations...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].CreatedAt > sorted[j].CreatedAt })
+	hs := make([]Handle, 0, len(sorted))
+	for _, a := range sorted {
 		hs = append(hs, Handle{
 			Label: "automation:" + a.ID + " " + clip(orDash(a.Name), 40),
 			Ref:   Ref{Kind: KindAutomation, ID: a.ID},
