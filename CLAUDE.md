@@ -251,6 +251,15 @@ paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
   her `.go` dosyasından BOM'u soyar ve `pre-commit: stripped UTF-8 BOM from <dosya>` diye
   bildirir, ama bu yalnız hook kuruluysa (`git config core.hooksPath .githooks`) ve
   `--no-verify` kullanılmadıysa korur — hâlâ BOM'suz yazmak esas kuraldır.
+- **`//go:embed`'lenen varlıklar LF kalmalı.** Windows'ta `core.autocrlf=true`, kökteki
+  `* text=auto` kuralıyla birleşince gömülü dosyaların çalışma kopyasını CRLF'e çevirir;
+  Go kaynağındaki `\n` tabanlı sabitlerle bayt-bayt karşılaştırılan testler (ör.
+  `TestResolveLessonConfigDefaultPathUnchanged`) her taze klonda düşer. `.gitattributes`
+  bunu `internal/*/defaults/** text eol=lf` ile sabitler — depodaki her `//go:embed` kökü
+  bu kalıbın altındadır (`internal/web/dist` hariç: takip edilmeyen derleme çıktısı).
+  Yeni bir gömülü varlık dizini eklersen kalıbın kapsadığından emin ol; mevcut bir çalışma
+  kopyasını düzeltmek için `git add --renormalize .` yetmez, dosyaları silip
+  `git checkout --` ile geri almak gerekir.
 - **Harici araç isteyen testler `t.Skip` ile geçitlenir** (rg, python, node, claude CLI, ağ).
   Yeni bir testin böyle bir bağımlılığı varsa aynı deseni izle, yoksa CI kırılır.
 - **Arka plan goroutine'i başlatan test, dönmeden önce `drainSpawns(t, rt)` çağırmalı**
