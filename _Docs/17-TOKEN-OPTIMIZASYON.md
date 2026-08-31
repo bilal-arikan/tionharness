@@ -1050,6 +1050,17 @@ seçilir), böylece raporlanan ek yük gerçek CLI tax'e iner. Worker-state blo�
 turuna girmediği (yalnız `autonomousDynamicSuffix`) ve küçük (worker listesi) olduğu için
 tahmine katılmaz.
 
+**Chat/worker gerçek bağlam ayrımı (TSK503, 2026-08-31):** Context preview artık
+debug journal'ı geriye doğru tek geçişte tarayıp en yeni `kind=="chat"` ile en yeni
+`kind!="chat"` ölçümlerini bağımsız seçer. Her biri
+`(input+cacheRead+cacheWrite)/max(Calls,1)` olarak raporlanır. Yeni alanlar
+`chatMeasuredTokens/chatCalls` ve
+`workerMeasuredTokens/workerCalls/workerKind`'dır; eski
+`measuredTokens/calls/overheadTokens` alanları geriye uyumlu chat alias'larıdır.
+Usage rollup fallback'i yalnız chat ölçümünü doldurur; worker journal olayı yoksa
+worker değeri sıfır kalır. Ek yük yalnız chat tahminiyle hesaplanır ve negatif sonuç
+sıfıra clamp edilir; worker bağlamından tahmini ek yük çıkarılmaz.
+
 - **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
   system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
   (saniye-hassas saat + özet) konuşma prompt'una `[Context]` bloğu

@@ -240,9 +240,15 @@ export interface SessionContextPreview {
 export interface CLIOverhead {
   note: string
   estimatedTokens: number
+  // Backward-compatible aliases for chatMeasuredTokens/chatCalls.
   measuredTokens: number
   overheadTokens: number
   calls: number
+  chatMeasuredTokens: number
+  chatCalls: number
+  workerMeasuredTokens: number
+  workerCalls: number
+  workerKind: string
   predictedOverhead: number
 }
 

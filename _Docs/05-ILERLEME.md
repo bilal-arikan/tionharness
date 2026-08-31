@@ -1,6 +1,19 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-30**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
+
+## TSK500 — Dosya seçicisinde görsel anotasyon kuyruğu (2026-08-31)
+
+- Dosya seçicisindeki destekli görseller, clipboard ile aynı doğrulama sınırlarından geçer ve
+  FIFO kuyruğuyla tek tek otomatik `ImageAnnotator` içinde açılır. Görsel olmayan dosyalar mevcut
+  normal upload yolunu kullanır; doğrulama hataları composer hata yüzeyinde görünür.
+- Kaydetme ve iptal, aktif bitmap kaynağını tek sefer kapatıp sıradaki görsele geçer. Aktif kayıt
+  invariant'ı eksikse işlem sessizce yutulmaz.
+- Annotator erişilebilir kalem boyutu kontrolü kazandı. Kaynak ölçeğine bağlı varsayılan korunur;
+  seçim yalnız yeni stroke'lara uygulanır. Yalnız çizim viewport'u şeffaftır; modal, toolbar,
+  kaynak görsel çizimi ve export davranışı korunur.
+- TSK474/TSK475/TSK476 kapsamları değiştirilmedi; TSK500 yalnız dosya seçicisi entegrasyonu,
+  kalem boyutu ve viewport görünümünü kapsar.
 
 ## Worktree git hata çıktısı ve log buffer sınırları (2026-08-30) ✅
 
@@ -10112,7 +10125,25 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
 - Manuel `/compact` başarı mesajındaki boş `Steps: "[]"` kaldırıldı. Gerçek fold,
   `trigger=manual`, `source=tionharness` ve CLI için
   `sessionAction=restart-summary` içeren kalıcı `compaction` TurnStep yazar.
+- TSK501 düzeltmesi: Claude Code 2.1.238 print transportunda `/compact`, yalnız
+  mevcut `--resume` oturumuna stdin'in tamamı olarak gönderildiğinde native komut
+  olur. Provider'ın normal sistem/dinamik/history render'ı kullanılmaz. Başarı
+  `cli-native/native-compact` TurnStep + `DebugCompaction` yazar; rolling summary
+  ve `SummaryMsgCount` değişmez. Resume/capability yoksa mevcut TionHarness fold
+  fallback'i kullanılır. Structured `compact_result=failed` ayrıntısı
+  `DebugCompaction` içinde korunur ve rolling-summary fallback'ine geçilir;
+  transport/process hataları fallback ile yutulmaz.
 - Doğrulama: provider/agent paket testleri, `go build ./...`, `go vet ./...`,
   frontend `tsc` + build + ilgili kart testleri + Prettier ve `git diff --check`
   geçti. Tam `internal/api` paketi, bu görev dışındaki görsel-artifact dalında
   `IMAGE_DECODE_FAILED` veren iki test nedeniyle kırmızı kaldı.
+
+## TSK503 — Claude CLI chat/worker gerçek bağlam ayrımı (2026-08-31)
+
+- Session context preview, debug journal'dan en yeni chat ve en yeni non-chat
+  ölçümlerini bağımsız raporlar; çağrı-başı hesap her iki tur tipi için korunur.
+- Eski `measuredTokens/calls/overheadTokens` chat alias'ı olarak korunur. Usage
+  fallback ve tahmini ek yük yalnız chat'e uygulanır; worker değerinde ek yük
+  çıkarımı yapılmaz.
+- UI, “Gerçek bağlam — chat” ve worker kind bilgisini taşıyan ayrı “Gerçek bağlam
+  — worker” satırlarını gösterir.

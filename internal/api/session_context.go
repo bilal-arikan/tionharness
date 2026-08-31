@@ -87,11 +87,16 @@ type sessionContextPreview struct {
 // as DebugEvent.Calls) to recover the per-call figure. It is 0 until the first turn
 // has been sent.
 type cliOverheadPreview struct {
-	Note            string `json:"note"`
-	EstimatedTokens int    `json:"estimatedTokens"` // TionHarness segment sum (== TotalTokens)
-	MeasuredTokens  int    `json:"measuredTokens"`  // real model input per call (turn total ÷ num_turns); 0 until first turn
-	OverheadTokens  int    `json:"overheadTokens"`  // max(0, measured - estimated)
-	Calls           int    `json:"calls"`           // CLI internal round-trips behind measuredTokens (num_turns)
+	Note                 string `json:"note"`
+	EstimatedTokens      int    `json:"estimatedTokens"`      // TionHarness segment sum (== TotalTokens)
+	MeasuredTokens       int    `json:"measuredTokens"`       // backward-compatible alias of ChatMeasuredTokens
+	OverheadTokens       int    `json:"overheadTokens"`       // backward-compatible chat-only overhead
+	Calls                int    `json:"calls"`                // backward-compatible alias of ChatCalls
+	ChatMeasuredTokens   int    `json:"chatMeasuredTokens"`   // newest chat call's real model input per call
+	ChatCalls            int    `json:"chatCalls"`            // CLI round-trips behind ChatMeasuredTokens
+	WorkerMeasuredTokens int    `json:"workerMeasuredTokens"` // newest non-chat call's real model input per call
+	WorkerCalls          int    `json:"workerCalls"`          // CLI round-trips behind WorkerMeasuredTokens
+	WorkerKind           string `json:"workerKind"`           // origin kind of the newest non-chat call
 	// PredictedOverhead is the projected CLI-harness cost from the empirically
 	// measured reference (conversation.PredictCLIOverhead) — available BEFORE the
 	// first turn is billed, so the UI can warn up front. It equals OverheadTokens
@@ -493,7 +498,8 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// the turn later activates via ToolSearch add more at runtime, so this is a floor.
 	predicted := conversation.PredictCLIOverhead(eagerTools)
 
-	measured, calls := 0, 0
+	chatMeasured, chatCalls := 0, 0
+	workerMeasured, workerCalls, workerKind := 0, 0, ""
 	// Agent-level preview (no session) passes an empty sessionID: there is no
 	// recorded turn to measure, so skip the debug/usage reads and return the
 	// predicted-only projection below.
@@ -505,13 +511,10 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// a heavier headless turn (kind=spawned/task/flow — it carries the live
 	// worker-state block and runs single-call, so in+cacheRead+cacheWrite is much
 	// larger). Measuring THAT against a chat estimate reports a phantom overhead, so
-	// scan back to the newest chat-kind call. ReadDebugEvents filters by Type only,
-	// so read all llm_calls and pick the last with Kind=="chat".
+	// scan back once and independently select the newest chat and non-chat calls.
+	// Stop as soon as both are found; older events cannot replace either selection.
 	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 0); sessionID != "" && derr == nil {
 		for i := len(evs) - 1; i >= 0; i-- {
-			if evs[i].Kind != "chat" {
-				continue
-			}
 			e := evs[i]
 			// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
 			// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
@@ -522,9 +525,17 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 			if n < 1 {
 				n = 1
 			}
-			measured = (e.In + e.CacheRead + e.CacheWrite) / n
-			calls = n
-			break
+			measured := (e.In + e.CacheRead + e.CacheWrite) / n
+			if e.Kind == "chat" {
+				if chatCalls == 0 {
+					chatMeasured, chatCalls = measured, n
+				}
+			} else if workerCalls == 0 {
+				workerMeasured, workerCalls, workerKind = measured, n, e.Kind
+			}
+			if chatCalls > 0 && workerCalls > 0 {
+				break
+			}
 		}
 	}
 	// Fallback (debug journal off / no llm_call yet): lifetime average per call. The
@@ -532,34 +543,39 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// token totals by it recovers the per-call (single-pass) context just like the
 	// debug path — not merely a per-TionHarness-turn average. Sessions recorded before
 	// the counter existed have ProviderCalls 0 → fall back to the turn count.
-	if measured == 0 && sessionID != "" {
+	if chatCalls == 0 && sessionID != "" {
 		if u, err := wsp.DB.GetSessionUsage(ctx, sessionID); err == nil && u.Calls > 0 {
 			n := u.ProviderCalls
 			if n < 1 {
 				n = u.Calls
 			}
-			calls = n
-			measured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / n
+			chatCalls = n
+			chatMeasured = (u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens) / n
 		}
 	}
 
-	over := measured - estimated
+	over := chatMeasured - estimated
 	if over < 0 {
 		over = 0
 	}
 
 	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. 'Gerçek' = bir çağrının tek-geçiş girdisi (input+cacheRead+cacheWrite). Not: claude-cli in/out/cache'i tek tur içindeki iç tool-loop adımları (num_turns) boyunca KÜMÜLATİF raporlar → çağrı başına bağlamı bulmak için num_turns'e bölünür."
-	if measured == 0 {
+	if chatMeasured == 0 {
 		note = name + " kendi sistem promptu (~" + strconv.Itoa(conversation.CLIBaseSystemTokens) + ") + dahili araçları (~" + strconv.Itoa(conversation.CLIBuiltinToolsTokens) + ") + köprülü araç şemalarını ekler (segment tahmini bunu saymaz). Henüz tur gönderilmedi → aşağıdaki 'beklenen ek yük' ölçülmüş referanstan tahmindir; gerçek girdi ilk turdan sonra ölçülür."
 	}
 
 	return &cliOverheadPreview{
-		Note:              note,
-		EstimatedTokens:   estimated,
-		MeasuredTokens:    measured,
-		OverheadTokens:    over,
-		Calls:             calls,
-		PredictedOverhead: predicted,
+		Note:                 note,
+		EstimatedTokens:      estimated,
+		MeasuredTokens:       chatMeasured,
+		OverheadTokens:       over,
+		Calls:                chatCalls,
+		ChatMeasuredTokens:   chatMeasured,
+		ChatCalls:            chatCalls,
+		WorkerMeasuredTokens: workerMeasured,
+		WorkerCalls:          workerCalls,
+		WorkerKind:           workerKind,
+		PredictedOverhead:    predicted,
 	}
 }
 

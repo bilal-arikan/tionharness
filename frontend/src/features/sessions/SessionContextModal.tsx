@@ -213,11 +213,17 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                   {data.lazyTools.length > 0 && (
                     <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
                   )}
-                  {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
+                  {data.cliOverhead && data.cliOverhead.chatMeasuredTokens > 0 && (
                     <Stat
-                      label="Gerçek (CLI, ölçülen)"
-                      value={data.cliOverhead.measuredTokens}
+                      label="Gerçek bağlam — chat"
+                      value={data.cliOverhead.chatMeasuredTokens}
                       accent
+                    />
+                  )}
+                  {data.cliOverhead && data.cliOverhead.workerMeasuredTokens > 0 && (
+                    <Stat
+                      label={`Gerçek bağlam — worker (${data.cliOverhead.workerKind})`}
+                      value={data.cliOverhead.workerMeasuredTokens}
                     />
                   )}
                   {/* Predicted CLI projection — shown alongside the measured figure (dim)
@@ -226,7 +232,7 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                     <Stat
                       label="Beklenen taban (CLI)"
                       value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
-                      accent={data.cliOverhead.measuredTokens === 0}
+                      accent={data.cliOverhead.chatMeasuredTokens === 0}
                     />
                   )}
                   {data.multiAgent && (
@@ -248,14 +254,15 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                           label="CLI ek yükü nasıl hesaplanır?"
                         />
                       </span>
-                      {data.cliOverhead.measuredTokens > 0 ? (
+                      {data.cliOverhead.chatMeasuredTokens > 0 ? (
                         <span className="text-[var(--color-text-dim)]">
-                          Tahmin <strong>{count(data.cliOverhead.estimatedTokens)}</strong> → gerçek{' '}
-                          <strong>{count(data.cliOverhead.measuredTokens)}</strong> (+
+                          Tahmin <strong>{count(data.cliOverhead.estimatedTokens)}</strong> → gerçek
+                          bağlam — chat{' '}
+                          <strong>{count(data.cliOverhead.chatMeasuredTokens)}</strong> (+
                           <strong>{count(data.cliOverhead.overheadTokens)}</strong> ek yük
                           {data.cliOverhead.estimatedTokens > 0 &&
-                            `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
-                          {`, ${data.cliOverhead.calls} çağrı ort.`})
+                            `, ~${(data.cliOverhead.chatMeasuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
+                          {`, ${data.cliOverhead.chatCalls} çağrı ort.`})
                           {/* Also surface the reference-based FLOOR next to the measured value;
                       the gap (measured − floor) is accumulated warm context. */}
                           {data.cliOverhead.predictedOverhead > 0 && (
@@ -285,6 +292,13 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                         </span>
                       ) : (
                         <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
+                      )}
+                      {data.cliOverhead.workerMeasuredTokens > 0 && (
+                        <span className="text-[var(--color-text-dim)]">
+                          Gerçek bağlam — worker ({data.cliOverhead.workerKind}){' '}
+                          <strong>{count(data.cliOverhead.workerMeasuredTokens)}</strong>
+                          {`, ${data.cliOverhead.workerCalls} çağrı ort.`}
+                        </span>
                       )}
                     </div>
                   </div>
