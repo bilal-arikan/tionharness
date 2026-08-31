@@ -138,6 +138,52 @@ func contextOverheadFrom(ctx context.Context) int {
 	return 0
 }
 
+// contextOverheadStepBaseCtxKey carries the transcript index from which the
+// overhead above includes the persisted Steps trace of a warm CLI thread. It is
+// what makes the overhead FOLD-AWARE: the step term is charged for
+// history[base:], so when Prepare folds history[:newCount] into the summary the
+// steps of the folded messages leave the footprint with them. Without it Prepare
+// reported the post-fold footprint with the pre-fold overhead — on a real session
+// that meant an "after" of 100201 tokens against a 70000 budget where the true
+// figure was 24778, and the same stale number drove the pressure ratio.
+type contextOverheadStepBaseCtxKey struct{}
+
+// WithContextOverheadStepBase records that the overhead carried on ctx includes
+// the persisted Steps of history[base:]. A negative base (no warm CLI thread, so
+// no step trace was counted) is stored as-is and simply yields no deduction.
+func WithContextOverheadStepBase(ctx context.Context, base int) context.Context {
+	return context.WithValue(ctx, contextOverheadStepBaseCtxKey{}, base)
+}
+
+// contextOverheadStepBaseFrom returns the step baseline stamped on the context.
+// ok is false when the caller supplied no baseline — the overhead is then treated
+// as opaque and left untouched by a fold, exactly as before.
+func contextOverheadStepBaseFrom(ctx context.Context) (base int, ok bool) {
+	v, ok := ctx.Value(contextOverheadStepBaseCtxKey{}).(int)
+	return v, ok
+}
+
+// foldedStepOverhead reports how much of the overhead's persisted-Steps term
+// belongs to messages this fold just moved into the summary — the amount that
+// must leave the post-fold footprint. base is the index the overhead started
+// charging steps from and newCount the new summary boundary; the overlap is
+// history[max(base,0):newCount]. Returns 0 when the caller stamped no baseline,
+// when there is no warm thread (base < 0) or when the ranges do not overlap.
+func foldedStepOverhead(ctx context.Context, history []db.Message, newCount int) (int, error) {
+	base, ok := contextOverheadStepBaseFrom(ctx)
+	if !ok || base < 0 {
+		return 0, nil
+	}
+	if base > newCount {
+		return 0, nil
+	}
+	newCount = clampStart(newCount, len(history))
+	if base > newCount {
+		return 0, nil
+	}
+	return EstimatePersistedStepTokens(history[base:newCount])
+}
+
 // Manager performs token-budgeted compaction. It is safe to share and its
 // limits can be updated live from the Settings screen.
 type Manager struct {
@@ -147,6 +193,8 @@ type Manager struct {
 	budgetFraction float64      // share of the model window spendable on transcript
 	budgetCeil     int          // hard cap on the auto-derived budget (tokens)
 	logger         *slog.Logger // optional: compaction events to the in-app Logs (nil-safe)
+	// Auto-compaction strategy ("" = rolling). Accessors live in autocompact.go.
+	autoCompactMode string
 }
 
 // SetLogger attaches a logger so the routine budgeted fold (and manual /compact)
@@ -295,6 +343,17 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			}
 			pending = keepTail
 			compacted = true
+			// The overhead was measured BEFORE the fold, so its persisted-Steps term
+			// still charges the trace of the messages just folded away. Drop that part
+			// (an error here is propagated, never counted as zero) so the reported
+			// footprint — and the pressure ratio below — describe the post-fold turn.
+			foldedSteps, err := foldedStepOverhead(ctx, history, newCount)
+			if err != nil {
+				return Prepared{}, fmt.Errorf("post-fold overhead: %w", err)
+			}
+			if overhead -= foldedSteps; overhead < 0 {
+				overhead = 0 // a step term larger than the whole overhead is nonsense; floor it
+			}
 			afterTokens := EstimateTokens(summary, pending) + overhead
 			// The on-screen compaction step and the debug journal share one figure
 			// set: the TRUE footprint (messages + fixed overhead) on both sides.
