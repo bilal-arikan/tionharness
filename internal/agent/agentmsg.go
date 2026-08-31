@@ -12,9 +12,50 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
-// inboxSessionKind is the persistent per-agent session that accumulates direct
-// messages from other agents (the agent's "📥 Inbox"). One per recipient agent.
-const inboxSessionKind = "inbox"
+// inboxSessionKind is the kind of the persistent per-agent session that
+// accumulates direct messages from other agents. One such thread per recipient
+// agent.
+//
+// It deliberately uses the ordinary, WRITABLE "chat" kind rather than a
+// dedicated read-only "inbox" kind (TSK507). A peer thread is a real, live,
+// single-agent conversation — not an orchestrator-owned run log — so the human
+// must be able to join it from the composer: read what another agent sent, then
+// answer, correct or add context in the same thread. Owning a separate kind was
+// the only thing that made it read-only, since just the kinds listed in
+// db.WritableSessionKinds accept a new user turn.
+const inboxSessionKind = "chat"
+
+// inboxSessionSource builds the stable SourceID identifying one agent's peer
+// thread among its other "chat" sessions.
+//
+// The lookup MUST be keyed by (kind, sourceID) — GetOrCreateSourceSession — and
+// never by (agentID, kind) alone: "chat" is also the kind of every ad-hoc
+// session a human opens, so an (agentID, "chat") lookup would silently adopt the
+// user's own first chat with that agent and deliver peer messages into it.
+//
+// The recipient's id is part of the SourceID because GetOrCreateSourceSession
+// matches on (kind, sourceID) and ignores agentID: a constant source would make
+// every agent in the workspace share one single thread.
+//
+// Delegates to db.PeerThreadSourceID so this and the boot migration that stamps
+// the same id onto converted legacy sessions (db.migrateLegacyInboxSessions)
+// cannot drift: if they disagreed, a migrated thread would not be found here and
+// the next delivery would open a second one beside it.
+func inboxSessionSource(agentID string) string {
+	return db.PeerThreadSourceID(agentID)
+}
+
+// inboxSessionTitle labels the per-agent peer-message thread in the sidebar. It
+// carries the recipient's name because an agent may own several "chat" sessions
+// and this one is not an ad-hoc chat but the standing thread that every
+// send_message delivery appends to.
+func inboxSessionTitle(agentName string) string {
+	name := strings.TrimSpace(agentName)
+	if name == "" {
+		return "💬 Mesajlar"
+	}
+	return "💬 " + name + " — Mesajlar"
+}
 
 // formatAgentMessage wraps a peer message with its sender identity, mirroring
 // Claude Code's <teammate_message teammate_id=…> tag: the recipient sees exactly
@@ -153,7 +194,7 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 	if !r.acquireSpawnSlot() {
 		return fmt.Errorf("message delivery limit reached (%d concurrent background turns); try again once some finish", r.tun.SpawnMaxConcurrent())
 	}
-	inbox, err := r.db.GetOrCreateKindSession(ctx, target.ID, inboxSessionKind, "📥 Inbox")
+	inbox, err := r.db.GetOrCreateSourceSession(ctx, inboxSessionKind, inboxSessionSource(target.ID), target.ID, inboxSessionTitle(target.Name))
 	if err != nil {
 		r.releaseSpawnSlot()
 		return err

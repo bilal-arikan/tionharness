@@ -842,6 +842,21 @@ kırpıldı:
   gönderen ajan inbox thread'inin katılımcısı olur, `labelMultiAgentHistory` (inbox turu
   `wake_turn.go` üzerinden bundan geçer) mesajı `[Gönderen → Alıcı (you)]` atfeder.
   Detay `_Docs/47`.
+- **Ajan yazdığı her enjekte tur atfedilir (TSK507):** aynı katılımcı damgası artık
+  yalnız peer teslimlerinde değil, **bir ajanın yazdığı her enjekte user-turunda**
+  uygulanır — spawn açılış promptu (`spawn.go`, yazar = `SpawnOptions.CreatedBy`) ve
+  koordinatörün worker'a follow-up'ı (`coordination.go: dispatchWorkerTurn`, yazar =
+  koordinatör oturumunun ajanı). Ortak yardımcı:
+  `Runtime.recordAgentAuthoredNote`. Böylece bu mesajlar `MessageList`'te
+  `isPeer` → **`PeerTurn`** (soldan gelen balon) olarak çizilir; öncesinde insanın
+  kendi turu gibi görünüyorlardı.
+  **Atıf yalnız gerçek bir ajana çözülürse damgalanır:** `CreatedBy` ajan olmayan
+  köken de taşır (`"automation:<id>"`), frontend ise `authorId`'yi ajan listesinde
+  arayıp isim yazar — çözülemeyen id isimsiz bir peer balonu üretirdi. Çözülemeyen
+  yazar düz balona düşer (insan spawn'ı da öyle). Testler:
+  `TestSpawnSession_AttributesPromptToSpawningAgent`,
+  `TestSpawnSession_HumanSpawnStaysUnattributed`,
+  `TestSendToWorkerAttributesFollowUpToCoordinator`.
 - **Sıradaki-tur bağlam önizleme (debug, 2026-06-23):** Agent ekranındaki bağlam
   önizlemesinin oturum karşılığı. SessionDetailPanel → **"Bağlam (debug)"** →
   `SessionContextModal`, `GET /api/sessions/{id}/context-preview?message=`. Ajanın bu
@@ -1159,9 +1174,37 @@ aynen yansıtır.
 
 - **Tek doğruluk kaynağı:** `writableSessionKindList` / `IsWritableSessionKind`
   (`internal/db/models.go`). Liste: `""` (manuel sohbet), `"chat"`, `"spawned"`,
-  `"schedule"`. Geri kalan her tür (task, flow, automation, flow-coordinator,
-  worker, insight, inbox) orkestratörün yazdığı koşu kaydıdır — tam okunur ama
-  yeni bir kullanıcı turunun bağlanacağı koşu yoktur.
+  `"schedule"`, `"automation-run"`, `"schedule-run"`, `"worker"`. Geri kalan her
+  tür (task, flow, automation, flow-coordinator, insight) orkestratörün yazdığı
+  koşu kaydıdır — tam okunur ama yeni bir kullanıcı turunun bağlanacağı koşu
+  yoktur.
+- **`"worker"` yazılabilir (TSK507).** Worker transkripti bitmiş bir koşu kaydı
+  değil, koordinatörün **zaten içine yazdığı** canlı bir konuşmadır
+  (`SendToWorker` user-rolünde tur enjekte eder). Transkripti izleyen insanın da
+  aynısını yapabilmesi gerekir: worker'ın sorduğunu yanıtlamak, rotasını
+  düzeltmek, eksik bağlamı vermek. Çakışma riski `schedule` ile aynı şekilde
+  sınırlıdır — insan turu ile koordinatörün enjekte ettiği tur aynı per-session
+  turn slot'unu talep eder, sıraya girer.
+- **`"inbox"` türü kaldırıldı (TSK507).** Ajanlar arası mesajlar artık alıcının
+  **sıradan `chat` thread'ine** düşer (`agent/agentmsg.go`), o da sohbet olduğu
+  için doğal olarak yazılabilir — yani insan o konuşmaya da katılabilir. Thread
+  `(kind, sourceID)` ile aranır (`GetOrCreateSourceSession`, sourceID =
+  `agent-messages:<agentID>`), **`(agentID, kind)` ile değil**: `"chat"` aynı
+  zamanda insanın açtığı her ad-hoc oturumun türü olduğundan, ikinci arama
+  kullanıcının kendi sohbetini bulup peer mesajlarını oraya teslim ederdi.
+  Regresyon: `TestDeliverAgentMessage_DoesNotHijackExistingChat`.
+- **Göç (migration):** eski build'lerin yazdığı `inbox` oturumları açılışta
+  otomatik `chat`'e çevrilir — `db.migrateLegacyInboxSessions`, `Open` içinde
+  `migrateLegacyInboxSessions` fazı. Her oturuma `PeerThreadSourceID(agentID)`
+  damgalanır; **bu şart**, çünkü sourceId'siz kalan oturum teslim tarafındaki
+  `GetOrCreateSourceSession` aramasına görünmez ve bir sonraki mesaj yanına
+  **ikinci bir thread** açarak ajanın geçmişini ikiye bölerdi. Idempotent (her
+  boot koşar, ikinci geçiş no-op) ve oturum başına best-effort: yazılamayan tek
+  bir header yüzünden boot düşmez, sayılıp loglanır. Dolu bir `sourceId`'ye
+  dokunulmaz. Testler: `internal/db/session_inbox_migrate_test.go` (5 test,
+  `TestOpenRunsLegacyInboxMigration` boot yolunu da kapsar).
+  Sidebar çipi ve `graph.go` etiketi yine de korunur: göç edemeyen bir oturum
+  kalırsa "Diğer"e düşmesin.
 - **`"schedule"` bilinçli istisnadır.** Zamanlayıcı da oraya yazar, ama o bir
   koşu-başına log değil, ajanın uzun ömürlü cron thread'idir; kullanıcı tikler
   arasında konuşmaya devam edebilmelidir (sorulanı yanıtlamak, düzeltmek, bağlam
@@ -1177,7 +1220,7 @@ aynen yansıtır.
   `<Badge tone="muted">Salt okunur</Badge>` çizer — koşul tam olarak
   `info && !isWritableSessionKind(info.kind)`. Yani rozet **yalnız** composer'ın
   gizlendiği oturumlarda görünür; amacı eksik composer'ın hata gibi görünmesini
-  engellemektir. `schedule` oturumunda rozet **çıkmaz**.
+  engellemektir. `schedule` ve `worker` oturumlarında rozet **çıkmaz**.
 - **API karşılığı:** `rejectNonWritableSession`
   (`internal/api/session_readonly.go`) aynı kapıyı sunucuda uygular ve `403`
   döner. Yanına iki kural daha oturur: `rejectReadOnlySession` (rewind — canlı

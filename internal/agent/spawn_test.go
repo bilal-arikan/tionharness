@@ -130,6 +130,81 @@ func TestSpawnSession_OpensIndependentSession(t *testing.T) {
 	drainSpawns(t, rt)
 }
 
+// TestSpawnSession_AttributesPromptToSpawningAgent: when an AGENT orders a spawn,
+// the opening prompt is that agent speaking, so it must be stamped with the
+// participant fields the frontend keys its peer bubble on (role "user" +
+// authorKind "agent" + authorId). Without them the prompt renders as the human's
+// own turn and the reader cannot tell an agent wrote it (TSK507).
+func TestSpawnSession_AttributesPromptToSpawningAgent(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Lead", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	target, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Helper", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	res, err := rt.SpawnSession(ctx, target.ID, "Do the thing", SpawnOptions{CreatedBy: caller.ID})
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	msgs, err := rt.db.ListMessages(ctx, res.SessionID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(msgs) == 0 {
+		t.Fatal("expected the opening prompt")
+	}
+	first := msgs[0]
+	if first.AuthorKind != db.AuthorAgent || first.AuthorID != caller.ID || first.RecipientID != target.ID {
+		t.Errorf("participant fields wrong: kind=%q author=%q recipient=%q (want agent/%s/%s)",
+			first.AuthorKind, first.AuthorID, first.RecipientID, caller.ID, target.ID)
+	}
+	drainSpawns(t, rt)
+}
+
+// TestSpawnSession_HumanSpawnStaysUnattributed is the other half of the rule: a
+// spawn with no agent author (a UI/API spawn, or a provenance string like
+// "automation:<id>" that no agent owns) must stay a plain bubble. Stamping an
+// unresolvable authorId would render an unnamed peer message and misattribute a
+// human's words to an agent.
+func TestSpawnSession_HumanSpawnStaysUnattributed(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	target, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Helper", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	for name, createdBy := range map[string]string{
+		"user spawn":       "",
+		"automation spawn": "automation:AUT1",
+	} {
+		t.Run(name, func(t *testing.T) {
+			res, err := rt.SpawnSession(ctx, target.ID, "Do the thing", SpawnOptions{CreatedBy: createdBy})
+			if err != nil {
+				t.Fatalf("spawn: %v", err)
+			}
+			msgs, err := rt.db.ListMessages(ctx, res.SessionID)
+			if err != nil {
+				t.Fatalf("list messages: %v", err)
+			}
+			if len(msgs) == 0 {
+				t.Fatal("expected the opening prompt")
+			}
+			if got := msgs[0].AuthorKind; got == db.AuthorAgent {
+				t.Errorf("authorKind = %q, want anything but %q for a non-agent spawn", got, db.AuthorAgent)
+			}
+		})
+	}
+	drainSpawns(t, rt)
+}
+
 // TestSpawnSession_ResolvesByName confirms a spawn target may be given by display
 // name (not just id), and that two spawns produce two distinct sessions.
 func TestSpawnSession_ResolvesByNameAndIsIndependent(t *testing.T) {
