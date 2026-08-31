@@ -397,15 +397,21 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			if err != nil {
 				return Prepared{}, fmt.Errorf("post-fold overhead: %w", err)
 			}
+			// Keep the pre-deduction figure: "before" must describe the footprint as
+			// it stood when the gate fired, which still carried the folded trace.
+			// Reporting both sides off the reduced overhead hides exactly the part the
+			// fold removed, understating the "X→Y" ratio by foldedSteps.
+			overheadBefore := overhead
 			if overhead -= foldedSteps; overhead < 0 {
 				overhead = 0 // a step term larger than the whole overhead is nonsense; floor it
 			}
 			afterTokens := EstimateTokens(summary, pending) + overhead
-			// The on-screen compaction step and the debug journal share one figure
-			// set: the TRUE footprint (messages + fixed overhead) on both sides.
+			// The on-screen compaction step and the debug journal share one formula:
+			// messages + the non-message overhead as it stands AT THAT MOMENT — the
+			// pre-fold overhead on the before side, the post-deduction one after.
 			foldStat = Compaction{
 				FoldedMsgs:   len(fold),
-				BeforeTokens: before + overhead,
+				BeforeTokens: before + overheadBefore,
 				AfterTokens:  afterTokens,
 				Trigger:      TriggerAuto,
 				Mode:         ModeRolling,

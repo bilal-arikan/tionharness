@@ -62,6 +62,15 @@ func TestPrepareDropsFoldedStepsFromPositiveBaseline(t *testing.T) {
 		t.Fatalf("AfterTokens = %d, want %d (deduction must be history[%d:%d] only)",
 			prep.Fold.AfterTokens, wantAfter, base, len(history)-keepRecent)
 	}
+	// The before side reports the footprint as it stood when the gate fired: the
+	// deduction had not happened yet, so the charged trace is still whole. Taking
+	// the reduced overhead here would understate the fold by exactly the steps it
+	// removed (2986 instead of 3802 on the measured session).
+	wantBefore := EstimateTokens("", history) + systemFillers + chargedSteps
+	if prep.Fold.BeforeTokens != wantBefore {
+		t.Fatalf("BeforeTokens = %d, want %d (pre-fold overhead, deduction not yet applied)",
+			prep.Fold.BeforeTokens, wantBefore)
+	}
 	if prep.Fold.AfterTokens >= prep.Fold.BeforeTokens {
 		t.Fatalf("fold did not shrink the footprint: %d → %d", prep.Fold.BeforeTokens, prep.Fold.AfterTokens)
 	}
