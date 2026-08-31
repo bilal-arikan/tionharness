@@ -169,6 +169,15 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if spec.Target == "" || spec.Task == "" {
 		return "", fmt.Errorf("both \"target\" and \"task\" are required")
 	}
+	// An out-of-enum axis is refused, never defaulted: wait="background" would run
+	// SYNCHRONOUSLY and context="inherit" would run ISOLATED, both silently — the
+	// caller would get the exact opposite of what it asked for with no way to notice.
+	if !oneOfEnum(spec.Wait, "sync", "async") {
+		return "", fmt.Errorf("\"wait\" must be one of sync, async; got %q", spec.Wait)
+	}
+	if !oneOfEnum(spec.Context, "isolated", "inherited") {
+		return "", fmt.Errorf("\"context\" must be one of isolated, inherited; got %q", spec.Context)
+	}
 	run := RunAgentFrom(ctx)
 	if run == nil {
 		return "", fmt.Errorf("subagents are not available in this context")
@@ -196,4 +205,18 @@ func FormatRunAgentResult(res RunAgentResult) (string, error) {
 		}
 	}
 	return b.String(), nil
+}
+
+// oneOfEnum reports whether v is empty (unset — the caller takes the default) or one
+// of the allowed values. Already trimmed and lower-cased by the caller.
+func oneOfEnum(v string, allowed ...string) bool {
+	if v == "" {
+		return true
+	}
+	for _, a := range allowed {
+		if v == a {
+			return true
+		}
+	}
+	return false
 }

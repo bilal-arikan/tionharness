@@ -37,6 +37,15 @@ func (r *Runtime) StopSubagent(ctx context.Context, parentSessionID, childSessio
 		return false, fmt.Errorf("session %s is not one of your subagent runs", childSessionID)
 	}
 	if !r.CancelSession(childSessionID) {
+		// No cancellable turn. For a child that already reached a terminal state that
+		// is the expected race and not an error (the caller cannot win it). A child
+		// still marked "running" is different: either it is unwinding right now (its
+		// own terminal write is moments away) or its registration was lost, and
+		// answering "already finished" would be a plain false statement. Say what is
+		// actually known and let the caller re-read.
+		if child.RunState == runStateRunning {
+			return false, fmt.Errorf("subagent %s is marked running but has no cancellable turn in this process; it is most likely finishing right now — re-read the session before retrying", childSessionID)
+		}
 		return false, nil
 	}
 	// The cancelled invoke writes its own terminal transcript as it unwinds, but

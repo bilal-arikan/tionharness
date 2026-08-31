@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -41,6 +42,30 @@ type delegStateKey struct{}
 func delegStateFrom(ctx context.Context) (delegState, bool) {
 	s, ok := ctx.Value(delegStateKey{}).(delegState)
 	return s, ok
+}
+
+// spend takes one unit of the shared per-turn delegation budget, reporting whether
+// the call fits under max. Atomic add-then-check (not check-then-add) so parallel
+// fan-out can never overspend the cap; an over-cap add is undone immediately.
+func (s delegState) spend(max int) bool {
+	if s.calls == nil {
+		return true
+	}
+	if atomic.AddInt32(s.calls, 1) > int32(max) {
+		atomic.AddInt32(s.calls, -1)
+		return false
+	}
+	return true
+}
+
+// refund returns a unit taken by spend when the subagent never actually ran. A run
+// that reached the provider is NOT refunded — the tokens are gone and the cap exists
+// to bound them. A setup failure (spawn refused, child session not created) costs
+// nothing, so charging for it silently shrinks the caller's remaining budget.
+func (s delegState) refund() {
+	if s.calls != nil {
+		atomic.AddInt32(s.calls, -1)
+	}
 }
 
 // resolveAgent finds a workspace agent by id first, then by case-insensitive

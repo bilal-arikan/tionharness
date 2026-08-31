@@ -325,7 +325,15 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	if coordID != "" {
 		go r.runWorker(agent, session.ID, prompt, coordID)
 	} else {
-		go r.runSpawn(agent, session.ID, prompt, opts)
+		// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
+		// the session id back to its caller (run_subagent) the moment this returns, and
+		// a caller may stop the run before the goroutine is even scheduled — let alone
+		// before it clears the blocking turn-slot claim. Registering inside the turn
+		// left that whole window uncancellable while the row already read "running", so
+		// stop_subagent answered "already finished" for a run that kept going.
+		runCtx, cancelRun := context.WithCancel(context.Background())
+		r.trackSession(session.ID, cancelRun)
+		go r.runSpawn(runCtx, cancelRun, agent, session.ID, prompt, opts)
 	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil
@@ -335,8 +343,13 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 // session live (so the executions feed shows a "running" indicator), runs the
 // agent autonomously (daily budget enforced), records the reply (or the failure)
 // as an assistant turn, then releases the concurrency slot and notifies.
-func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
+//
+// runCtx/cancelRun are created and REGISTERED by launchSpawn before this goroutine
+// starts (see trackSession there), so the run is cancellable from the instant
+// SpawnSession returns — including while it is still queued behind another turn.
+func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
 	defer r.releaseSpawnSlot()
+	defer cancelRun()
 
 	// Hard wall-clock ceiling PLUS an idle watchdog (see withActivityTimeout): a
 	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
@@ -346,15 +359,27 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// Serialize this detached spawn turn on the session's turn slot so it never
 	// overlaps a user/wake/peer turn opened on the same session (all of which claim
 	// the same slot). A fresh spawn is usually alone, but the session can be chatted
-	// into or woken while the spawn runs.
-	releaseSlot := r.claimSessionTurnSlot(sessionID, turnqueue.KindSpawn, "spawn turu")
+	// into or woken while the spawn runs. The claim watches runCtx: a stop issued
+	// while this turn waits in the queue must not be outlived by it.
+	releaseSlot, slotErr := r.claimSessionTurnSlotCtx(runCtx, sessionID, turnqueue.KindSpawn, "spawn turu")
 	defer releaseSlot()
+	if slotErr != nil {
+		// Cancelled while waiting for the session's turn slot: the turn never ran, so
+		// record the terminal state instead of starting work nobody is waiting for.
+		// stop_subagent stamps "killed" itself; this covers a plain CancelSession.
+		r.logger.Info("spawn: cancelled before its turn started", "session", sessionID)
+		if opts.ChildSession != nil {
+			// context.Background() deliberately: runCtx is already cancelled and the
+			// terminal state must still be persisted.
+			if err := r.db.SetSessionRunState(context.Background(), sessionID, "killed", time.Now().Unix()); err != nil {
+				r.logger.Error("spawn: failed to persist killed state", "session", sessionID, "error", err)
+			}
+		}
+		r.untrackSession(sessionID)
+		r.emitSpawnEvent(agent, sessionID, prompt, false)
+		return
+	}
 
-	// Own cancelable context for this detached turn so a human "Durdur"
-	// (CancelSession) can stop it — a spawn is never registered in chatRuns.
-	runCtx, cancelRun := context.WithCancel(context.Background())
-	defer cancelRun()
-	r.trackSession(sessionID, cancelRun)
 	// Raise the chat "thinking" indicator immediately, mirroring the wake path: a
 	// spawned turn runs detached in the runtime (never registered in the api
 	// server's chatRuns), so without this the session shows no running state and

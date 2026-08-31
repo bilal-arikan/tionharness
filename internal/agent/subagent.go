@@ -263,11 +263,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 
 	// Spend one unit of the shared per-turn budget (atomic so concurrent fan-out
 	// never exceeds the cap; refund and refuse if this call would push us over).
-	if cur.calls != nil {
-		if atomic.AddInt32(cur.calls, 1) > int32(maxCalls) {
-			atomic.AddInt32(cur.calls, -1)
-			return tools.RunAgentResult{}, fmt.Errorf("subagent budget (%d per turn) exhausted; do the rest yourself", maxCalls)
-		}
+	if !cur.spend(maxCalls) {
+		return tools.RunAgentResult{}, fmt.Errorf("subagent budget (%d per turn) exhausted; do the rest yourself", maxCalls)
 	}
 
 	// Async mode: detach into a persistent background session (fire-and-forget).
@@ -286,6 +283,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 			ChildSession:  &childMeta,
 		})
 		if err != nil {
+			// The spawn never started: nothing ran, so the budget unit goes back.
+			cur.refund()
 			return tools.RunAgentResult{}, err
 		}
 		return tools.RunAgentResult{AgentName: res.AgentName, SessionID: res.SessionID, Async: true}, nil
@@ -309,6 +308,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	stampRetryLineage(&childMeta, retryOfID, attempt)
 	child, err := r.db.CreateChildSession(ctx, childMeta)
 	if err != nil {
+		// No child row, no turn: the unit was never used.
+		cur.refund()
 		return tools.RunAgentResult{}, err
 	}
 	childCtx = WithSessionID(childCtx, child.ID)
@@ -324,6 +325,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		_, err := r.db.AddMessage(ctx, db.Message{SessionID: child.ID, Role: "user", Text: strings.TrimSpace(spec.Task)})
 		return err
 	}); err != nil {
+		// The child row exists but is stamped failed and no turn ran — refund.
+		cur.refund()
 		return tools.RunAgentResult{}, err
 	}
 
@@ -372,6 +375,9 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 
 	// Run in an isolated trace. autonomous=true keeps it headless (interactive
 	// tools like ask_user no-op) and enforces the caller's daily budget.
+	//
+	// Past this point the run is real: no failure below refunds the budget unit —
+	// provider tokens were spent and the cap exists to bound exactly those.
 	started := time.Now()
 	resp, steps, err := r.completeTraced(WithCallKind(childCtx, KindSubagent), agent, provider, req, true, onStep)
 	if err != nil {

@@ -60,6 +60,14 @@ func (r *Runtime) claimSessionTurnSlot(sessionID string, kind turnqueue.Kind, la
 	return rel
 }
 
+// claimSessionTurnSlotCtx is claimSessionTurnSlot for a turn whose cancel func is
+// registered BEFORE it queues (a spawn: see launchSpawn). Without it a stop issued
+// while the turn waits for the slot would be silently outlived — the queued turn
+// would start after the stop and run to completion.
+func (r *Runtime) claimSessionTurnSlotCtx(ctx context.Context, sessionID string, kind turnqueue.Kind, label string) (release func(), err error) {
+	return r.claimTurnSlot(ctx, sessionID, kind, label, false)
+}
+
 // claimTurnSlot is the single choke point onto the queue. resetCap zeroes the
 // coordinator auto-turn budget (human back in the loop).
 func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turnqueue.Kind, label string, resetCap bool) (func(), error) {
