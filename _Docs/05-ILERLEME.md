@@ -10193,7 +10193,9 @@ Zamanlamanın `sessionMode: "spawn"` yolu (`deliverSpawnedPrompt`,
   print transportunda `/compact`, yalnız
   mevcut `--resume` oturumuna stdin'in tamamı olarak gönderildiğinde native komut
   olur. Provider'ın normal sistem/dinamik/history render'ı kullanılmaz. Başarı
-  `cli-native/native-compact` TurnStep + `DebugCompaction` yazar; rolling summary
+  yalnız `cli-native/native-compact` TurnStep yazar; `DebugCompaction` debug
+  olayı yazılmaz (o olay custom fold ve reactive compaction yollarına aittir),
+  native yolda yalnız hata durumunda `DebugError` yazılır; rolling summary
   ve `SummaryMsgCount` değişmez. TSK512 sonrası resume/capability yokluğu ve
   native hata açıkça döner; rolling-summary fallback yapılmaz. Eski TionHarness
   fold davranışı yalnız `/compact-custom` komutundadır.
