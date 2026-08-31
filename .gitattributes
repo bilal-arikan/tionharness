@@ -9,6 +9,14 @@
 *.sh text eol=lf
 .githooks/* text eol=lf
 
+# Assets compiled into the binary with //go:embed must keep LF in the working
+# tree. The embedded bytes are compared byte-for-byte against \n-based literals
+# in Go source (and written back out verbatim when seeding a workspace), so a
+# CRLF checkout on Windows makes those comparisons fail on every fresh clone.
+# Every //go:embed root in the repository lives under internal/<pkg>/defaults/,
+# except internal/web/dist, which is untracked build output.
+internal/*/defaults/** text eol=lf
+
 # Windows-only scripts must keep CRLF in the working tree.
 *.cmd text eol=crlf
 *.bat text eol=crlf
