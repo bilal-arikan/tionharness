@@ -11,8 +11,6 @@ import { FacetDropdown, type FacetOption } from './FacetDropdown'
 import { SavedViewMenu } from './SavedViewMenu'
 import {
   DEP_LABELS,
-  DUE_LABELS,
-  DUE_ORDER,
   GROUP_BY_LABELS,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -109,7 +107,6 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
     count: columnCounts.get(c.key) ?? 0,
   }))
 
-  const dueOptions: FacetOption[] = DUE_ORDER.map((d) => ({ value: d, label: DUE_LABELS[d] }))
   const depOptions: FacetOption[] = (['blocked', 'ready'] as const).map((d) => ({
     value: d,
     label: DEP_LABELS[d],
@@ -192,12 +189,6 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
         options={agentOptions}
         selected={f.agentIds ?? []}
         onChange={(v) => patch({ agentIds: v })}
-      />
-      <FacetDropdown
-        label="Tarih"
-        options={dueOptions}
-        selected={f.dues ?? []}
-        onChange={(v) => patch({ dues: v as never })}
       />
       <FacetDropdown
         label="Bağımlılık"

@@ -8,21 +8,6 @@ import type { BoardFilter, BoardSort, Task } from '@/types'
 import { PRIORITY_ORDER } from './boardViewTypes'
 import { compareText } from '@/shared/lib/intl'
 
-// todayISO returns the local date as YYYY-MM-DD, matching the format tasks store
-// in startDate/dueDate. Deliberately local (not UTC): "due today" must mean the
-// user's today, otherwise a card flips to overdue hours early or late.
-export function todayISO(now = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-}
-
-// addDaysISO shifts a YYYY-MM-DD date by n days, staying in local time.
-function addDaysISO(iso: string, n: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, m - 1, d + n)
-  return todayISO(dt)
-}
-
 // foldForSearch normalises text for substring matching.
 //
 // Plain Turkish lowercasing is WRONG here: it maps 'I' to 'ı', so typing
@@ -44,21 +29,6 @@ export function parseDeps(raw: string): string[] {
   }
 }
 
-// dueBucket classifies a task's due date. ISO dates compare correctly as
-// strings, so no Date objects are needed on the hot path.
-function dueBucket(
-  task: Task,
-  today: string,
-  weekEnd: string,
-): 'overdue' | 'today' | 'week' | 'none' | 'later' {
-  const due = task.dueDate
-  if (!due) return 'none'
-  if (due < today) return 'overdue'
-  if (due === today) return 'today'
-  if (due <= weekEnd) return 'week'
-  return 'later'
-}
-
 // depState classifies a task's dependency situation against the full task list.
 // A dependency id that no longer resolves is ignored rather than treated as
 // unmet — a deleted blocker should not pin a card in "blocked" forever.
@@ -78,9 +48,7 @@ function depState(task: Task, byID: Map<string, Task>): 'none' | 'blocked' | 're
 // filterTasks applies every active facet. `all` is the unfiltered task list,
 // needed because dependency state is relational (a card's blocked-ness depends
 // on cards that the filter itself may have hidden).
-export function filterTasks(all: Task[], filter: BoardFilter, now = new Date()): Task[] {
-  const today = todayISO(now)
-  const weekEnd = addDaysISO(today, 7)
+export function filterTasks(all: Task[], filter: BoardFilter): Task[] {
   const byID = new Map(all.map((t) => [t.id, t]))
   const text = filter.text ? foldForSearch(filter.text.trim()) : ''
 
@@ -103,15 +71,6 @@ export function filterTasks(all: Task[], filter: BoardFilter, now = new Date()):
     }
     if (filter.columns?.length && !filter.columns.includes(t.boardState)) {
       return false
-    }
-    if (filter.dues?.length) {
-      const bucket = dueBucket(t, today, weekEnd)
-      // 'week' is inclusive of today and overdue is separate, so selecting
-      // "bu hafta" alone still surfaces something due tomorrow.
-      const matches = filter.dues.some((want) =>
-        want === 'week' ? bucket === 'today' || bucket === 'week' : bucket === want,
-      )
-      if (!matches) return false
     }
     if (filter.dep) {
       if (depState(t, byID) !== filter.dep) return false
@@ -162,13 +121,6 @@ export function sortTasks(
       case 'priority': {
         const d = priorityRank(a.priority) - priorityRank(b.priority)
         if (d !== 0) return d
-        break
-      }
-      case 'due': {
-        // Dated cards first, earliest deadline leading; undated sink to the end.
-        const da = a.dueDate || '￿'
-        const db = b.dueDate || '￿'
-        if (da !== db) return da < db ? -1 : 1
         break
       }
       case 'deps': {

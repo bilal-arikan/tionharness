@@ -96,9 +96,11 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// Tasks (kanban board). Read/create/edit/move/delete on any task. The board
 		// is passive — no run tool.
 		tools.NewListTasksTool(r.db, agent.ID),
-		tools.NewCreateTaskTool(r.db, agent.ID),
+		tools.NewGetTaskTool(r.db, agent.ID),
+		tools.NewCreateTaskTool(r.db, agent.ID, r.TitleFor),
 		tools.NewUpdateTaskTool(r.db, agent.ID),
 		tools.NewMoveTaskTool(r.db, agent.ID),
+		tools.NewSetArchivedTaskTool(r.db, agent.ID),
 		tools.NewDeleteTaskTool(r.db, agent.ID),
 		// Hooks (PreToolUse/PostToolUse). List/create/update/delete on any hook.
 		tools.NewListHooksTool(r.db, agent.ID),

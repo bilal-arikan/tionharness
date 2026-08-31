@@ -5,9 +5,8 @@
 // This is what makes one board serve four questions. The render code never
 // changes — only the columns it is handed, and the field a drop mutates.
 
-import type { Agent, BoardColumnDef, BoardGroupBy, BoardDueFilter, Task, TaskPatch } from '@/types'
-import { DUE_LABELS, DUE_ORDER, PRIORITY_LABELS, PRIORITY_ORDER } from './boardViewTypes'
-import { todayISO } from './filterTasks'
+import type { Agent, BoardColumnDef, BoardGroupBy, Task, TaskPatch } from '@/types'
+import { PRIORITY_LABELS, PRIORITY_ORDER } from './boardViewTypes'
 import { compareText } from '@/shared/lib/intl'
 
 // Column key used for "this card has no value on the current axis".
@@ -28,26 +27,9 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: '#6b7280',
 }
 
-const DUE_COLORS: Record<BoardDueFilter, string> = {
-  overdue: '#ef4444',
-  today: '#f59e0b',
-  week: '#3b82f6',
-  none: '',
-}
-
-// dueKeyOf classifies a task into one of the date columns. Unlike the filter's
-// bucket this is exhaustive: anything past the week window lands in 'week' so no
-// card can silently fall out of the board.
-function dueKeyOf(task: Task, today: string): string {
-  if (!task.dueDate) return NONE_KEY
-  if (task.dueDate < today) return 'overdue'
-  if (task.dueDate === today) return 'today'
-  return 'week'
-}
-
 // columnKeyOf reports which derived column a task belongs to, for a given axis.
 // Under the 'tag' axis a task can belong to several columns, hence the array.
-export function columnKeysOf(task: Task, groupBy: BoardGroupBy, today: string): string[] {
+export function columnKeysOf(task: Task, groupBy: BoardGroupBy): string[] {
   switch (groupBy) {
     case 'status':
       return [task.boardState]
@@ -55,8 +37,6 @@ export function columnKeysOf(task: Task, groupBy: BoardGroupBy, today: string): 
       return [task.ownerAgentId || NONE_KEY]
     case 'priority':
       return [task.priority || NONE_KEY]
-    case 'due':
-      return [dueKeyOf(task, today)]
     case 'tag': {
       const tags = task.tags ?? []
       return tags.length > 0 ? tags : [NONE_KEY]
@@ -75,10 +55,8 @@ export function deriveColumns(
   tasks: Task[],
   agents: Agent[],
   boardColumns: BoardColumnDef[],
-  now = new Date(),
 ): DerivedColumn[] {
-  const today = todayISO(now)
-  const needsNone = tasks.some((t) => columnKeysOf(t, groupBy, today).includes(NONE_KEY))
+  const needsNone = tasks.some((t) => columnKeysOf(t, groupBy).includes(NONE_KEY))
   const noneCol = (label: string): DerivedColumn => ({
     key: NONE_KEY,
     label,
@@ -117,16 +95,6 @@ export function deriveColumns(
       return cols
     }
 
-    case 'due': {
-      const cols: DerivedColumn[] = DUE_ORDER.filter((d) => d !== 'none').map((d) => ({
-        key: d,
-        label: DUE_LABELS[d],
-        color: DUE_COLORS[d],
-      }))
-      if (needsNone) cols.push(noneCol(DUE_LABELS.none))
-      return cols
-    }
-
     case 'tag': {
       const counts = new Map<string, number>()
       for (const t of tasks) {
@@ -145,9 +113,6 @@ export function deriveColumns(
 // current axis. Returns null when the axis cannot express a drop, so the caller
 // can refuse the gesture instead of silently doing nothing.
 //
-// The 'due' axis returns null deliberately: "make this due today" is a real
-// edit, but "make this due sometime this week" is not a well-defined date, and
-// guessing one would quietly falsify a deadline.
 export function dropPatch(groupBy: BoardGroupBy, columnKey: string, task: Task): TaskPatch | null {
   const isNone = columnKey === NONE_KEY
   switch (groupBy) {
@@ -162,12 +127,8 @@ export function dropPatch(groupBy: BoardGroupBy, columnKey: string, task: Task):
       const tags = task.tags ?? []
       return tags.includes(columnKey) ? null : { tags: [...tags, columnKey] }
     }
-    case 'due':
-      return null
   }
 }
 
 // Human-readable reason a drop is refused, shown as a transient hint.
-export const DROP_REFUSED_REASON: Partial<Record<BoardGroupBy, string>> = {
-  due: 'Tarihe göre gruplandırmada kart sürüklenemez — bitiş tarihini kart üzerinden düzenleyin.',
-}
+export const DROP_REFUSED_REASON: Partial<Record<BoardGroupBy, string>> = {}

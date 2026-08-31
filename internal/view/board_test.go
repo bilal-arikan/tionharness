@@ -24,8 +24,7 @@ func boardFixture(now time.Time) BoardInput {
 			{ID: "T4", Title: "broke", BoardState: db.BoardFailed, UpdatedAt: yesterday, OwnerAgentID: "AG1"},
 			{ID: "T5", Title: "waits on T2", BoardState: db.BoardTodo, UpdatedAt: fresh,
 				Dependencies: `["T2"]`, OwnerAgentID: "AG1"},
-			{ID: "T6", Title: "late", BoardState: db.BoardTodo, UpdatedAt: fresh,
-				DueDate: now.Add(-48 * time.Hour).Format("2006-01-02"), OwnerAgentID: "AG1"},
+			{ID: "T6", Title: "late", BoardState: db.BoardTodo, UpdatedAt: fresh, OwnerAgentID: "AG1"},
 			{ID: "T7", Title: "ownerless", BoardState: db.BoardTodo, UpdatedAt: fresh},
 			{ID: "T8", Title: "shipped", BoardState: db.BoardDone, UpdatedAt: old, OwnerAgentID: "AG1"},
 		},
@@ -60,9 +59,6 @@ func TestBoardCardSurfacesEverySignal(t *testing.T) {
 	}
 	if !strings.Contains(txt, "bloke: T5") {
 		t.Errorf("dependency-blocked card missing:\n%s", txt)
-	}
-	if !strings.Contains(txt, "gecikmiş: T6") {
-		t.Errorf("overdue card missing:\n%s", txt)
 	}
 	if !strings.Contains(txt, "1 kartın sahibi yok") {
 		t.Errorf("unassigned count wrong (done cards must not count):\n%s", txt)

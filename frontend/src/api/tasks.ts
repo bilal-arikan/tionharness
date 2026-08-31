@@ -27,9 +27,6 @@ export const taskApi = {
     priority?: Task['priority']
     tags?: string[]
     artifactIds?: string[]
-    progress?: number
-    startDate?: string
-    dueDate?: string
   }) =>
     req<Task>('/api/tasks', {
       method: 'POST',

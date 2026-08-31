@@ -23,12 +23,6 @@ export interface Task {
   // Referenced workspace artifacts (files dropped on the card become artifacts,
   // or existing artifacts linked from the editor). Order is user-meaningful.
   artifactIds?: string[]
-  // Completion percentage, 0..100 (absent/0 = not tracked).
-  progress?: number
-  // Planned window, both YYYY-MM-DD (absent = unset). dueDate drives the board's
-  // date facet (overdue / today / this week) and the future timeline view.
-  startDate?: string
-  dueDate?: string
   // Archived cards are hidden from the active board (reversible soft-hide). Only
   // present/true on archived cards; the default board list omits them entirely.
   archived?: boolean
@@ -54,9 +48,6 @@ export type TaskPatch = Partial<
     | 'priority'
     | 'tags'
     | 'artifactIds'
-    | 'progress'
-    | 'startDate'
-    | 'dueDate'
   >
 >
 

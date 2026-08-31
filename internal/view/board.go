@@ -135,12 +135,10 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 	if body := firstNonBlank(card.Description, card.Prompt); body != "" {
 		l.add("özet: %s", clip(body, 160))
 	}
-	l.addIf(card.Progress > 0, "ilerleme: %%%d", card.Progress)
 	// A flow-backed card is not run by prompting its owner — running it executes
 	// this flow. That changes what the reader does with the card, so it belongs on
 	// the drill-down even though the board roll-up has no room for it.
 	l.addIf(card.FlowID != "", "akış: flow:%s", card.FlowID)
-	l.addIf(card.DueDate != "", "termin: %s%s", card.DueDate, overdueMark(card, now))
 	if deps, ok := decodeDependencies(card.Dependencies); !ok {
 		// An unreadable dependency list is the opposite fact from "no dependencies":
 		// the card may well be blocked. Say the list could not be read.
@@ -173,14 +171,6 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 	v.Handles = []Handle{{Label: "panoya dön", Ref: Ref{Kind: KindBoard, ID: BoardRefID}, Level: LevelCard}}
 	v.finalize()
 	return v, nil
-}
-
-// overdueMark flags a due date already passed on an unfinished card.
-func overdueMark(t *db.Task, now time.Time) string {
-	if t.DueDate != "" && t.DueDate < now.Format("2006-01-02") && t.BoardState != db.BoardDone {
-		return " ⚠gecikmiş"
-	}
-	return ""
 }
 
 // blockedMark flags that at least one of a card's dependencies is not done.
@@ -291,11 +281,6 @@ func boardSignals(in BoardInput, cols []boardColumn, now time.Time) []string {
 		out = append(out, fmt.Sprintf("⛔ %d kart bağımlılıkla bloke: %s",
 			len(blocked), namesOf(blocked, boardSignalCards)))
 	}
-	if over := overdueCards(in.Tasks, now); len(over) > 0 {
-		out = append(out, fmt.Sprintf("📅 %d kart gecikmiş: %s",
-			len(over), namesOf(over, boardSignalCards)))
-	}
-
 	if recent := recentlyTouched(in.Tasks, now, 24*time.Hour); len(recent) > 0 {
 		out = append(out, fmt.Sprintf("Δ24s: %d kart değişti (%s)",
 			len(recent), namesOf(recent, boardSignalCards)))
@@ -414,18 +399,6 @@ func decodeDependencies(raw string) (ids []string, ok bool) {
 		return nil, false
 	}
 	return ids, true
-}
-
-// overdueCards are unfinished cards whose due date has passed.
-func overdueCards(tasks []db.Task, now time.Time) []db.Task {
-	today := now.Format("2006-01-02")
-	var out []db.Task
-	for _, t := range tasks {
-		if t.DueDate != "" && t.DueDate < today && t.BoardState != db.BoardDone {
-			out = append(out, t)
-		}
-	}
-	return out
 }
 
 // recentlyTouched are cards updated inside the window.

@@ -93,10 +93,6 @@ export function TaskFormModal({
   const [tagInput, setTagInput] = useState('')
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task?.dependencies ?? '[]'))
   const [artifactIds, setArtifactIds] = useState<string[]>(task?.artifactIds ?? [])
-  // Planned window (YYYY-MM-DD). dueDate feeds the board's date facet, its
-  // date-grouping axis and the overdue badge on the card.
-  const [startDate, setStartDate] = useState(task?.startDate ?? '')
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? '')
   // Workspace artifacts, loaded once to resolve refs to titles/kinds and feed the
   // "link existing" picker; drag-dropped files append newly created artifacts.
   const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
@@ -140,8 +136,6 @@ export function TaskFormModal({
     priority,
     tags,
     artifactIds,
-    startDate,
-    dueDate,
   })
 
   const save = async () => {
@@ -183,8 +177,6 @@ export function TaskFormModal({
       priority: p.priority,
       tags: p.tags,
       artifactIds: p.artifactIds,
-      startDate: p.startDate,
-      dueDate: p.dueDate,
       lastRunId: '',
       lastRunStatus: '',
       lastRunAt: 0,
@@ -359,27 +351,6 @@ export function TaskFormModal({
                   )
                 })}
               </div>
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Başlangıç tarihi">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                data-testid="task-start-date"
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-              />
-            </Field>
-            <Field label="Bitiş tarihi">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                data-testid="task-due-date"
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
-              />
             </Field>
           </div>
 

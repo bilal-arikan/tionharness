@@ -135,9 +135,6 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	cur.Priority = t.Priority
 	cur.Tags = t.Tags
 	cur.ArtifactIDs = t.ArtifactIDs
-	cur.Progress = t.Progress
-	cur.StartDate = t.StartDate
-	cur.DueDate = t.DueDate
 	cur.UpdatedAt = now()
 	err := d.persistTaskLocked(cur)
 	d.mu.Unlock()

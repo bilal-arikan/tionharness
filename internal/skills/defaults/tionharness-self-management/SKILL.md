@@ -100,9 +100,11 @@ fields with the compiled defaults.
 cron timing or enabled state — the manual trigger; it works on any schedule, not
 only ones you created (running is not destructive).
 
-**Tasks (kanban board)** — `list_tasks`, `create_task`, `update_task`, `move_task`,
-`delete_task`. The board is passive (no run tool). Read/create/edit/move/delete
-ANY task (including user-created ones) — `delete_task` is irreversible.
+**Tasks (kanban board)** — `list_tasks`, `get_task`, `create_task`, `update_task`,
+`move_task`, `set_archived_task`, `delete_task`. The board is passive (no run
+tool). `list_tasks` returns active cards by default and archived cards separately
+with `archived:true`; `get_task` returns one complete card. Read/create/edit/move/
+archive/delete ANY task (including user-created ones) — `delete_task` is irreversible.
 
 **Hooks** — `list_hooks`, `create_hook`, `update_hook`, `delete_hook`. PreToolUse/PostToolUse
 external commands that intercept native tool calls (standard hook contract).

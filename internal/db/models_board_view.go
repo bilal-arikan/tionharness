@@ -16,24 +16,14 @@ const (
 	GroupByAgent    = "agent"
 	GroupByPriority = "priority"
 	GroupByTag      = "tag"
-	GroupByDue      = "due"
 )
 
 // Board sort orders applied within each column.
 const (
 	SortUpdated  = "updated"
 	SortPriority = "priority"
-	SortDue      = "due"
 	SortDeps     = "deps"
 	SortTitle    = "title"
-)
-
-// Due-date filter buckets.
-const (
-	DueOverdue = "overdue" // dueDate strictly before today
-	DueToday   = "today"   // dueDate == today
-	DueWeek    = "week"    // dueDate within the next 7 days (today included)
-	DueNone    = "none"    // no dueDate set
 )
 
 // Dependency filter buckets.
@@ -63,10 +53,6 @@ type BoardFilter struct {
 	Tags       []string `json:"tags,omitempty"`
 	AgentIDs   []string `json:"agentIds,omitempty"` // UnassignedAgentID matches ownerless tasks
 	Columns    []string `json:"columns,omitempty"`  // boardState keys to keep
-	// Dues is a multi-select over the Due* buckets (OR within the facet), so a
-	// view can ask for "today OR already late" — the single most useful
-	// combination — which a single-valued enum could not express.
-	Dues []string `json:"dues,omitempty"`
 	// Dep stays single-valued: blocked and ready are mutually exclusive states of
 	// the same task, so the UI renders it as a radio, not a checklist.
 	Dep string `json:"dep,omitempty"`
@@ -75,7 +61,7 @@ type BoardFilter struct {
 // IsZero reports whether no facet is active (the filter matches every task).
 func (f BoardFilter) IsZero() bool {
 	return f.Text == "" && len(f.Priorities) == 0 && len(f.Tags) == 0 &&
-		len(f.AgentIDs) == 0 && len(f.Columns) == 0 && len(f.Dues) == 0 && f.Dep == ""
+		len(f.AgentIDs) == 0 && len(f.Columns) == 0 && f.Dep == ""
 }
 
 // Validate rejects unknown enum values so a client typo cannot silently persist
@@ -86,13 +72,6 @@ func (f BoardFilter) Validate() error {
 	for _, p := range f.Priorities {
 		if p == "" || !ValidPriority(p) {
 			return fmt.Errorf("unknown priority in filter: %q", p)
-		}
-	}
-	for _, d := range f.Dues {
-		switch d {
-		case DueOverdue, DueToday, DueWeek, DueNone:
-		default:
-			return fmt.Errorf("unknown due filter: %q", d)
 		}
 	}
 	switch f.Dep {
@@ -132,12 +111,12 @@ func (v BoardViewDef) Validate() error {
 		return errors.New("board view label is required")
 	}
 	switch v.GroupBy {
-	case "", GroupByStatus, GroupByAgent, GroupByPriority, GroupByTag, GroupByDue:
+	case "", GroupByStatus, GroupByAgent, GroupByPriority, GroupByTag:
 	default:
 		return fmt.Errorf("unknown board groupBy: %q", v.GroupBy)
 	}
 	switch v.Sort {
-	case "", SortUpdated, SortPriority, SortDue, SortDeps, SortTitle:
+	case "", SortUpdated, SortPriority, SortDeps, SortTitle:
 	default:
 		return fmt.Errorf("unknown board sort: %q", v.Sort)
 	}

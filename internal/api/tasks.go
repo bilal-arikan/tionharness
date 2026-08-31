@@ -83,9 +83,6 @@ type createTaskReq struct {
 	Priority     string   `json:"priority"`
 	Tags         []string `json:"tags"`
 	ArtifactIDs  []string `json:"artifactIds"`
-	Progress     int      `json:"progress"`
-	StartDate    string   `json:"startDate"`
-	DueDate      string   `json:"dueDate"`
 }
 
 // placeholderTitle derives an instant, single-line title from a card's content,
@@ -101,17 +98,6 @@ func placeholderTitle(source string) string {
 		return strings.TrimSpace(string(r[:60])) + "…"
 	}
 	return source
-}
-
-// clampProgress keeps a progress value within [0,100].
-func clampProgress(p int) int {
-	if p < 0 {
-		return 0
-	}
-	if p > 100 {
-		return 100
-	}
-	return p
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -177,9 +163,6 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Priority:     req.Priority,
 		Tags:         req.Tags,
 		ArtifactIDs:  req.ArtifactIDs,
-		Progress:     clampProgress(req.Progress),
-		StartDate:    req.StartDate,
-		DueDate:      req.DueDate,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -237,9 +220,6 @@ type updateTaskReq struct {
 	Priority     *string   `json:"priority"`
 	Tags         *[]string `json:"tags"`
 	ArtifactIDs  *[]string `json:"artifactIds"`
-	Progress     *int      `json:"progress"`
-	StartDate    *string   `json:"startDate"`
-	DueDate      *string   `json:"dueDate"`
 }
 
 // handleUpdateTask edits any subset of a task's mutable fields (PATCH-like PUT).
@@ -260,7 +240,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	oldFlowID := task.FlowID
 	oldPriority := task.Priority
 	oldTags := append([]string(nil), task.Tags...)
-	oldProgress := task.Progress
 
 	req, ok := bindJSON[updateTaskReq](w, r)
 	if !ok {
@@ -321,16 +300,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	if req.ArtifactIDs != nil {
 		task.ArtifactIDs = *req.ArtifactIDs
 	}
-	if req.Progress != nil {
-		task.Progress = clampProgress(*req.Progress)
-	}
-	if req.StartDate != nil {
-		task.StartDate = *req.StartDate
-	}
-	if req.DueDate != nil {
-		task.DueDate = *req.DueDate
-	}
-
 	if err := wsp.DB.UpdateTask(r.Context(), task); writeDBError(w, err, "task not found") {
 		return
 	}
@@ -349,7 +318,6 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 			task.OwnerAgentID != oldOwner ||
 			task.FlowID != oldFlowID ||
 			task.Priority != oldPriority ||
-			task.Progress != oldProgress ||
 			!equalStringSlice(task.Tags, oldTags)
 		if changed {
 			publishEntityChange(wsp, "board", "Görev güncellendi: "+task.Title, task.BoardState,

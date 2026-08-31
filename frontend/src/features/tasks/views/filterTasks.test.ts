@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '@/types'
-import { filterTasks, sortTasks, todayISO, topoLevels } from './filterTasks'
-
-// A fixed "now" so date-bucket assertions are stable regardless of when the
-// suite runs.
-const NOW = new Date(2026, 6, 31) // 2026-07-31, local time
-const TODAY = '2026-07-31'
+import { filterTasks, sortTasks, topoLevels } from './filterTasks'
 
 function task(over: Partial<Task> & { id: string }): Task {
   return {
@@ -25,23 +20,15 @@ function task(over: Partial<Task> & { id: string }): Task {
   }
 }
 
-describe('todayISO', () => {
-  it('formats the local date, not UTC', () => {
-    // 23:30 local on the 31st must still read as the 31st; a UTC-based
-    // implementation would roll over to the 1st for positive offsets.
-    expect(todayISO(new Date(2026, 6, 31, 23, 30))).toBe('2026-07-31')
-  })
-})
-
 describe('filterTasks', () => {
   const tasks = [
     task({ id: 'a', title: 'Login akışı', priority: 'high', tags: ['ui'], ownerAgentId: 'ag1' }),
     task({ id: 'b', title: 'Veritabanı şeması', priority: 'low', tags: ['db', 'ui'] }),
-    task({ id: 'c', title: 'Rapor', boardState: 'done', dueDate: '2026-07-01' }),
-    task({ id: 'd', title: 'Deploy', dueDate: TODAY, dependencies: '["c"]' }),
+    task({ id: 'c', title: 'Rapor', boardState: 'done' }),
+    task({ id: 'd', title: 'Deploy', dependencies: '["c"]' }),
     task({ id: 'e', title: 'Test', dependencies: '["d"]' }),
   ]
-  const ids = (f: Parameters<typeof filterTasks>[1]) => filterTasks(tasks, f, NOW).map((t) => t.id)
+  const ids = (f: Parameters<typeof filterTasks>[1]) => filterTasks(tasks, f).map((t) => t.id)
 
   it('returns everything for an empty filter', () => {
     expect(ids({})).toEqual(['a', 'b', 'c', 'd', 'e'])
@@ -56,7 +43,7 @@ describe('filterTasks', () => {
     // Turkish lowercasing would turn 'I' into 'ı' and lose the match; invariant
     // lowercasing would turn 'İ' into 'i'+combining dot and lose the other one.
     const tr = [task({ id: 'i1', title: 'İstanbul' }), task({ id: 'i2', title: 'Ilık' })]
-    const find = (text: string) => filterTasks(tr, { text }, NOW).map((t) => t.id)
+    const find = (text: string) => filterTasks(tr, { text }).map((t) => t.id)
     expect(find('istanbul')).toEqual(['i1'])
     expect(find('İSTANBUL')).toEqual(['i1'])
     expect(find('ilik')).toEqual(['i2'])
@@ -73,13 +60,6 @@ describe('filterTasks', () => {
     expect(ids({ agentIds: ['ag1'] })).toEqual(['a'])
   })
 
-  it('buckets due dates against the local today', () => {
-    expect(ids({ dues: ['overdue'] })).toEqual(['c'])
-    expect(ids({ dues: ['today'] })).toEqual(['d'])
-    expect(ids({ dues: ['overdue', 'today'] })).toEqual(['c', 'd'])
-    expect(ids({ dues: ['none'] })).toEqual(['a', 'b', 'e'])
-  })
-
   it('classifies dependency state against the full list', () => {
     // d depends on c, which is done → ready. e depends on d, which is not → blocked.
     expect(ids({ dep: 'ready' })).toEqual(['d'])
@@ -93,8 +73,8 @@ describe('filterTasks', () => {
 
   it('ignores a dependency id that no longer resolves', () => {
     const orphan = [task({ id: 'x', dependencies: '["gone"]' })]
-    expect(filterTasks(orphan, { dep: 'blocked' }, NOW)).toEqual([])
-    expect(filterTasks(orphan, { dep: 'ready' }, NOW)).toEqual([])
+    expect(filterTasks(orphan, { dep: 'blocked' })).toEqual([])
+    expect(filterTasks(orphan, { dep: 'ready' })).toEqual([])
   })
 })
 
@@ -129,18 +109,5 @@ describe('sortTasks', () => {
       null,
     )
     expect(out.map((t) => t.id)).toEqual(['crit', 'low', 'none'])
-  })
-
-  it('sinks undated tasks to the end of a due sort', () => {
-    const out = sortTasks(
-      [
-        task({ id: 'undated' }),
-        task({ id: 'late', dueDate: '2026-12-01' }),
-        task({ id: 'soon', dueDate: '2026-08-01' }),
-      ],
-      'due',
-      null,
-    )
-    expect(out.map((t) => t.id)).toEqual(['soon', 'late', 'undated'])
   })
 })

@@ -36,8 +36,6 @@ interface Props {
   /** This card changed since the board was last opened — glows until the
    *  board view is left (the flag resets on unmount, not on a timer). */
   recentlyChanged: boolean
-  /** Today in ISO, for the due-date chip. Passed in so every card agrees. */
-  today: string
   /** This card's position among the board's current columns, for the keyboard
    *  move shortcut and its aria-label (e.g. "3 / 5"). */
   columnIndex: number
@@ -70,7 +68,6 @@ function TaskCardImpl({
   selected,
   fileDropActive,
   recentlyChanged,
-  today,
   columnIndex,
   columnCount,
   columnLabel,
@@ -196,23 +193,9 @@ function TaskCardImpl({
           </div>
         )
       )}
-      {/* Rich attribute badges: due date, priority, tags. */}
-      {(t.dueDate || t.priority || (t.tags?.length ?? 0) > 0) && (
+      {/* Rich attribute badges: priority and tags. */}
+      {(t.priority || (t.tags?.length ?? 0) > 0) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {t.dueDate && (
-            <span
-              title={`Bitiş: ${t.dueDate}`}
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                t.dueDate < today
-                  ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
-                  : t.dueDate === today
-                    ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
-                    : 'bg-[var(--color-surface)] text-[var(--color-text-dim)]'
-              }`}
-            >
-              ◷ {t.dueDate.slice(5)}
-            </span>
-          )}
           {t.priority && PRIORITY_META[t.priority] && (
             <span
               className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"

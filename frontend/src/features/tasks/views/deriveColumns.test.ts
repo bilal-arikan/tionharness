@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Agent, BoardColumnDef, Task } from '@/types'
 import { NONE_KEY, columnKeysOf, deriveColumns, dropPatch } from './deriveColumns'
 
-const NOW = new Date(2026, 6, 31)
-const TODAY = '2026-07-31'
-
 function task(over: Partial<Task> & { id: string }): Task {
   return {
     title: '',
@@ -35,7 +32,7 @@ const statusCols: BoardColumnDef[] = [
 
 describe('deriveColumns', () => {
   it('returns the workspace columns verbatim on the status axis', () => {
-    expect(deriveColumns('status', [], agents, statusCols, NOW)).toBe(statusCols)
+    expect(deriveColumns('status', [], agents, statusCols)).toBe(statusCols)
   })
 
   it('only lists agents that own a card', () => {
@@ -44,7 +41,6 @@ describe('deriveColumns', () => {
       [task({ id: 'a', ownerAgentId: 'ag1' })],
       agents,
       statusCols,
-      NOW,
     )
     expect(cols.map((c) => c.key)).toEqual(['ag1'])
   })
@@ -55,20 +51,18 @@ describe('deriveColumns', () => {
       [task({ id: 'a', ownerAgentId: 'ghost' })],
       agents,
       statusCols,
-      NOW,
     )
     expect(cols.map((c) => c.key)).toEqual(['ghost'])
   })
 
   it('appends the none column only when some card lacks a value', () => {
-    const withNone = deriveColumns('priority', [task({ id: 'a' })], agents, statusCols, NOW)
+    const withNone = deriveColumns('priority', [task({ id: 'a' })], agents, statusCols)
     expect(withNone.at(-1)?.key).toBe(NONE_KEY)
     const withoutNone = deriveColumns(
       'priority',
       [task({ id: 'a', priority: 'high' })],
       agents,
       statusCols,
-      NOW,
     )
     expect(withoutNone.some((c) => c.key === NONE_KEY)).toBe(false)
   })
@@ -76,11 +70,7 @@ describe('deriveColumns', () => {
 
 describe('columnKeysOf', () => {
   it('puts a multi-tagged card in every tag column', () => {
-    expect(columnKeysOf(task({ id: 'a', tags: ['ui', 'db'] }), 'tag', TODAY)).toEqual(['ui', 'db'])
-  })
-
-  it('routes anything past this week into the week column, never off-board', () => {
-    expect(columnKeysOf(task({ id: 'a', dueDate: '2027-01-01' }), 'due', TODAY)).toEqual(['week'])
+    expect(columnKeysOf(task({ id: 'a', tags: ['ui', 'db'] }), 'tag')).toEqual(['ui', 'db'])
   })
 })
 
@@ -102,9 +92,5 @@ describe('dropPatch', () => {
   it('appends a tag but no-ops when the card already carries it', () => {
     expect(dropPatch('tag', 'db', task({ id: 'a', tags: ['ui'] }))).toEqual({ tags: ['ui', 'db'] })
     expect(dropPatch('tag', 'ui', task({ id: 'a', tags: ['ui'] }))).toBeNull()
-  })
-
-  it('refuses a drop on the date axis rather than inventing a deadline', () => {
-    expect(dropPatch('due', 'week', task({ id: 'a' }))).toBeNull()
   })
 })

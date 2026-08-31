@@ -84,9 +84,6 @@ type Task struct {
 	// skipped by the UI. Independent of artifact lifecycle — deleting the task
 	// drops the refs, it does not delete the artifacts.
 	ArtifactIDs []string `json:"artifactIds,omitempty"`
-	Progress    int      `json:"progress,omitempty"`  // 0..100
-	StartDate   string   `json:"startDate,omitempty"` // YYYY-MM-DD
-	DueDate     string   `json:"dueDate,omitempty"`   // YYYY-MM-DD
 	// Worktree* fields are owned exclusively by the card lifecycle manager. The
 	// removed session-level worktree feature must integrate with that manager if
 	// it is ever restored; it must not create a second lifecycle owner.

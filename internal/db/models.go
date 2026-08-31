@@ -651,6 +651,14 @@ type Message struct {
 	// distinct from Interrupted (a crash-recovered partial). The text/trace are
 	// whatever completed before the stop. Empty/false for normal turns.
 	Cancelled bool `json:"cancelled,omitempty"`
+	// CLIColdStart marks an assistant turn that a CLI provider had to serve from a
+	// BRAND NEW underlying CLI session because the warm `--resume` path did not
+	// apply — the stored thread was unresumable, a fold re-baselined it, or this is
+	// the session's first CLI turn. Only ever set on a turn where resume was
+	// otherwise enabled, so it reads as "here the CLI conversation restarted", not
+	// "resume is off". The transcript draws a divider at this boundary, mirroring
+	// the cold-cache divider. Empty/false everywhere else.
+	CLIColdStart bool `json:"cliColdStart,omitempty"`
 	// Model is the provider model that actually served THIS assistant turn (the
 	// agent's model can change, and a turn may carry a per-turn override). Empty for
 	// user/system turns.

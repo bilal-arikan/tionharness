@@ -13,11 +13,10 @@ Kanban 30 kartta iyi, 300 kartta çöker. Sebep panonun kendisi değil, panonun
 | ---------------------------------------------- | ------------------------------------------------ |
 | Filtre yok                                     | Her açılışta tüm workspace tek ekranda           |
 | Tek gruplama ekseni (`boardState`)             | "Hangi ajan neyle meşgul" sorusu panoda cevapsız |
-| `startDate` / `dueDate` / `progress` UI'da yok | Backend'in sakladığı alanlar ölü veri            |
+| Tarih / yüzde ilerleme alanları gereksizdi     | Kart modeli ve görünüm eksenleri şişiyordu       |
 | `dependencies` yalnızca rozet                  | Bloke işler görünmez                             |
 
-Veri modeli zaten hazırdı (`db.Task`: `priority`, `tags`, `dueDate`,
-`dependencies`, `progress`). Eksik olan tek şey onları **eksen** olarak
+Veri modeli kart önceliği, etiket ve bağımlılık alanlarını taşır. Eksik olan tek şey onları **eksen** olarak
 kullanan bir katmandı.
 
 ## Mimari
@@ -203,7 +202,5 @@ Testler: `filterTasks.test.ts`, `deriveColumns.test.ts` (saf fonksiyonlar),
 
 - **Hiyerarşi (`parentID`)** — üst düzey kartlar + `3/7` rozeti; alt kartlara
   zoom. Kalabalığa karşı filtreden sonraki en büyük kazanç.
-- **Timeline / Gantt** — `startDate`/`dueDate`/`progress` artık düzenlenebilir;
-  `deriveColumns` altyapısının üstüne bir zaman ekseni oturur.
 - **Ajan tarafı görünüm üretimi** — `BoardViewDef` zaten tipli; bir
   self-management aracı "bloke işlerimi göster" görünümünü kendi kaydedebilir.

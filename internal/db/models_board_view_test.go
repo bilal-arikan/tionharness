@@ -44,11 +44,6 @@ func TestBoardViewValidate(t *testing.T) {
 
 	t.Run("rejects unknown filter enums", func(t *testing.T) {
 		v := base
-		v.Filter = BoardFilter{Dues: []string{"yesterday"}}
-		if err := v.Validate(); err == nil {
-			t.Error("unknown due bucket should be rejected")
-		}
-		v = base
 		v.Filter = BoardFilter{Dep: "stuck"}
 		if err := v.Validate(); err == nil {
 			t.Error("unknown dep bucket should be rejected")
@@ -85,7 +80,7 @@ func TestBoardFilterIsZero(t *testing.T) {
 	if !(BoardFilter{}).IsZero() {
 		t.Error("zero filter should report IsZero")
 	}
-	if (BoardFilter{Dues: []string{DueToday}}).IsZero() {
+	if (BoardFilter{Dep: DepBlocked}).IsZero() {
 		t.Error("an active facet must not report IsZero")
 	}
 }

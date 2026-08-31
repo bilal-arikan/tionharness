@@ -23,7 +23,6 @@ import { BoardFilterBar } from './views/BoardFilterBar'
 import { useBoardView } from './views/useBoardView'
 import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTasks'
 import { DROP_REFUSED_REASON, columnKeysOf, deriveColumns, dropPatch } from './views/deriveColumns'
-import { todayISO } from './views/filterTasks'
 import { consumePendingBoardChanges } from './boardChangeHighlights'
 
 // Fallback columns used until workspace settings are loaded.
@@ -293,20 +292,18 @@ export function TaskBoard({ agents, onError }: Props) {
   // full list so a hidden blocker still pushes its dependents down.
   const levels = useMemo(() => (sort === 'deps' ? topoLevels(tasks) : null), [sort, tasks])
 
-  const today = todayISO()
-
   // The rendered cards, per column key, in their final order.
   const cardsByColumn = useMemo(() => {
     const m = new Map<string, Task[]>()
     for (const col of derivedColumns) m.set(col.key, [])
     for (const t of visible) {
-      for (const key of columnKeysOf(t, groupBy, today)) {
+      for (const key of columnKeysOf(t, groupBy)) {
         m.get(key)?.push(t)
       }
     }
     for (const [key, arr] of m) m.set(key, sortTasks(arr, sort, levels))
     return m
-  }, [derivedColumns, visible, groupBy, sort, levels, today])
+  }, [derivedColumns, visible, groupBy, sort, levels])
 
   // Everything a card shows that is DERIVED rather than on the task itself, keyed
   // by task id and computed once per data change.
@@ -429,7 +426,7 @@ export function TaskBoard({ agents, onError }: Props) {
     const task = tasks.find((x) => x.id === taskId)
     if (!task) return
     const keys = derivedColumns.map((c) => c.key)
-    const currentKey = columnKeysOf(task, groupBy, today)[0]
+    const currentKey = columnKeysOf(task, groupBy)[0]
     const idx = keys.indexOf(currentKey)
     if (idx === -1) return
     const nextIdx = idx + direction
@@ -701,7 +698,6 @@ export function TaskBoard({ agents, onError }: Props) {
                         selected={sel.isSelected(t.id)}
                         fileDropActive={fileDropId === t.id}
                         recentlyChanged={recentlyChangedIds.has(t.id)}
-                        today={today}
                         columnIndex={colIdx}
                         columnCount={derivedColumns.length}
                         columnLabel={col.label}

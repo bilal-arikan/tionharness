@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -26,12 +27,28 @@ type taskDeps struct {
 	actorID string
 }
 
+// TaskTitleFunc generates a concise card title from its content. The runtime
+// supplies the same titler used by the REST task endpoint.
+type TaskTitleFunc func(ctx context.Context, preferredAgentID, source string) (string, error)
+
 // truncateForTool caps long text so a tool result stays compact.
 func truncateForTool(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
 	return textutil.TruncBytes(s, max) + "…(truncated)"
+}
+
+func placeholderTaskTitle(source string) string {
+	source = strings.TrimSpace(source)
+	if i := strings.IndexAny(source, "\r\n"); i >= 0 {
+		source = strings.TrimSpace(source[:i])
+	}
+	runes := []rune(source)
+	if len(runes) > 60 {
+		return strings.TrimSpace(string(runes[:60])) + "…"
+	}
+	return source
 }
 
 // ---- list_tasks ----
@@ -48,12 +65,12 @@ func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_tasks",
 		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, " +
-			"flowId, priority, tags, artifactIds, last run status, and whether each was created by an agent). " +
+			"flowId, dependencies, priority, tags, artifactIds, last run status, and whether each was created by an agent). " +
 			"artifactIds are workspace artifacts attached to the card (e.g. a plan) — read one with read_artifact. " +
 			"You can edit, move and delete ANY task. Built-in board columns are: pbi, todo, in_progress, review, " +
 			"done, failed — this workspace may also define custom columns; check existing tasks' boardState values " +
 			"or the board UI to see them. Results are PAGINATED: pass limit (default 20, max 100) and offset to " +
-			"page; the reply reports total and hasMore, and you reach the next page with offset += limit. Archived cards are excluded (from both the results and total). Filters: " +
+			"page; the reply reports total and hasMore, and you reach the next page with offset += limit. Active cards are returned by default; archived=true returns only archived cards, never mixed with active cards. Filters: " +
 			"boardState (exact), priority (exact), ownerAgentId (exact), tags (comma-separated; a card must carry " +
 			"ALL of them). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
 			"name_desc (name = card title).",
@@ -64,6 +81,7 @@ func (ListTasksTool) Def() providers.ToolDef {
     "priority": { "type": "string", "description": "Only tasks with this priority: critical|high|medium|low." },
     "ownerAgentId": { "type": "string", "description": "Only tasks owned by this agent." },
     "tags": { "type": "string", "description": "Comma-separated tags; a task must carry ALL of them." },
+    "archived": { "type": "boolean", "description": "When true, return only archived cards. Omit or false for active cards." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
     "limit": { "type": "integer", "description": "Max tasks per page (default 20, max 100)." },
     "offset": { "type": "integer", "description": "How many matching tasks to skip before this page (default 0)." }
@@ -79,6 +97,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 		Priority     string `json:"priority"`
 		OwnerAgentID string `json:"ownerAgentId"`
 		Tags         string `json:"tags"`
+		Archived     bool   `json:"archived"`
 		Sort         string `json:"sort"`
 		Limit        int    `json:"limit"`
 		Offset       int    `json:"offset"`
@@ -90,7 +109,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	}
 	limit, offset := PageArgs(in.Limit, in.Offset)
 
-	tasks, err := t.d.db.ListActiveTasks(ctx)
+	tasks, err := t.d.db.ListTasks(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -101,6 +120,9 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	wantTags := SplitTags(in.Tags)
 	matches := make([]db.Task, 0, len(tasks))
 	for _, tk := range tasks {
+		if tk.Archived != in.Archived {
+			continue
+		}
 		if boardState != "" && tk.BoardState != boardState {
 			continue
 		}
@@ -138,6 +160,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 		BoardState     string   `json:"boardState"`
 		OwnerAgentID   string   `json:"ownerAgentId,omitempty"`
 		FlowID         string   `json:"flowId,omitempty"`
+		Dependencies   string   `json:"dependencies"`
 		Priority       string   `json:"priority,omitempty"`
 		Tags           []string `json:"tags,omitempty"`
 		ArtifactIDs    []string `json:"artifactIds,omitempty"`
@@ -152,6 +175,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 			BoardState:     tk.BoardState,
 			OwnerAgentID:   tk.OwnerAgentID,
 			FlowID:         tk.FlowID,
+			Dependencies:   tk.Dependencies,
 			Priority:       tk.Priority,
 			Tags:           tk.Tags,
 			ArtifactIDs:    tk.ArtifactIDs,
@@ -162,20 +186,72 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	return pageResult(out, total, offset, limit)
 }
 
+// ---- get_task ----
+
+// GetTaskTool returns one complete card, including archived and lifecycle
+// metadata. It is the lossless counterpart to list_tasks' compact rows.
+type GetTaskTool struct{ d taskDeps }
+
+func NewGetTaskTool(database *db.DB, actorID string) GetTaskTool {
+	return GetTaskTool{d: taskDeps{db: database, actorID: actorID}}
+}
+
+func (GetTaskTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "get_task",
+		Description: "Get one task by id and return the complete stored card, including description, prompt, dependencies, artifacts, archive state, worktree metadata, provenance and timestamps.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{"id":{"type":"string","description":"The task id (see list_tasks)"}},
+			"required":["id"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t GetTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	task, err := t.d.db.GetTask(ctx, in.ID)
+	if err != nil {
+		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
+	}
+	b, err := json.Marshal(task)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // ---- create_task ----
 
 // CreateTaskTool adds a task to the board.
-type CreateTaskTool struct{ d taskDeps }
+type CreateTaskTool struct {
+	d        taskDeps
+	titleFor TaskTitleFunc
+}
 
 // NewCreateTaskTool constructs create_task.
-func NewCreateTaskTool(database *db.DB, actorID string) CreateTaskTool {
-	return CreateTaskTool{d: taskDeps{db: database, actorID: actorID}}
+func NewCreateTaskTool(database *db.DB, actorID string, titleFor ...TaskTitleFunc) CreateTaskTool {
+	tool := CreateTaskTool{d: taskDeps{db: database, actorID: actorID}}
+	if len(titleFor) > 0 {
+		tool.titleFor = titleFor[0]
+	}
+	return tool
 }
 
 func (CreateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_task",
-		Description: "Create a task on the kanban board. Provide at least one of title, prompt (the instruction run by the owner agent), or flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), dependencies (JSON array of task IDs that must complete before this one), priority (critical/high/medium/low), tags (string array) and artifactIds (workspace artifact ids to attach). The task is tagged as created by you. Returns the new task id.",
+		Description: "Create a task on the kanban board. Provide at least one of title, description, prompt (the instruction run by the owner agent), or flowId. When title is omitted, an immediate content excerpt is stored and the same background AI titler used by the REST API replaces it when available. Optionally set ownerAgentId, boardState (default todo), dependencies, priority, tags and artifactIds. The task is tagged as created by you. Returns the new task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -214,8 +290,9 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	in.Title = strings.TrimSpace(in.Title)
 	in.Prompt = strings.TrimSpace(in.Prompt)
-	if in.Title == "" && in.Prompt == "" && in.FlowID == "" {
-		return "", fmt.Errorf("provide at least one of: prompt, title, flowId")
+	in.Description = strings.TrimSpace(in.Description)
+	if in.Title == "" && in.Description == "" && in.Prompt == "" && in.FlowID == "" {
+		return "", fmt.Errorf("provide at least one of: title, description, prompt, flowId")
 	}
 	if in.BoardState != "" && !db.IsValidBoardKey(in.BoardState) {
 		return "", enumErr("boardState", in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
@@ -233,9 +310,14 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 			return "", fmt.Errorf("no flow with id %q (use list_flows)", in.FlowID)
 		}
 	}
+	titleSource := in.Description
+	if titleSource == "" {
+		titleSource = in.Prompt
+	}
 	title := in.Title
-	if title == "" {
-		title = truncateForTool(in.Prompt, 60)
+	autoTitle := title == "" && titleSource != ""
+	if autoTitle {
+		title = placeholderTaskTitle(titleSource)
 	}
 	created, err := t.d.db.CreateTask(ctx, db.Task{
 		Title:        title,
@@ -254,6 +336,26 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", fmt.Errorf("create task: %w", err)
 	}
 	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev oluşturuldu: " + created.Title, Body: created.BoardState, TaskID: created.ID, Op: "create"})
+	if autoTitle && t.titleFor != nil {
+		placeholder := title
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			newTitle, err := t.titleFor(bgCtx, in.OwnerAgentID, titleSource)
+			newTitle = strings.TrimSpace(newTitle)
+			if err != nil || newTitle == "" || newTitle == placeholder {
+				return
+			}
+			cur, err := t.d.db.GetTask(bgCtx, created.ID)
+			if err != nil || cur.Title != placeholder {
+				return
+			}
+			cur.Title = newTitle
+			if t.d.db.UpdateTask(bgCtx, cur) == nil {
+				notifyBoardChanged(t.d.db, BoardChange{Title: "Görev başlığı güncellendi: " + newTitle, Body: cur.BoardState, TaskID: cur.ID, Op: "update"})
+			}
+		}()
+	}
 	b, _ := json.Marshal(map[string]string{"id": created.ID, "boardState": created.BoardState, "action": "created"})
 	return string(b), nil
 }
@@ -459,6 +561,57 @@ func sameStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// ---- set_archived_task ----
+
+// SetArchivedTaskTool archives or restores a card without deleting it.
+type SetArchivedTaskTool struct{ d taskDeps }
+
+func NewSetArchivedTaskTool(database *db.DB, actorID string) SetArchivedTaskTool {
+	return SetArchivedTaskTool{d: taskDeps{db: database, actorID: actorID}}
+}
+
+func (SetArchivedTaskTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "set_archived_task",
+		Description: "Archive or restore a task. archived=true hides it from the active board; archived=false restores it. Reversible, unlike delete_task.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"id":{"type":"string","description":"The task id"},
+				"archived":{"type":"boolean","description":"true to archive, false to restore"}
+			},
+			"required":["id","archived"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t SetArchivedTaskTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID       string `json:"id"`
+		Archived *bool  `json:"archived"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	if in.Archived == nil {
+		return "", fmt.Errorf("archived is required")
+	}
+	if _, err := t.d.db.GetTask(ctx, in.ID); err != nil {
+		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
+	}
+	if err := t.d.db.SetTaskArchived(ctx, in.ID, *in.Archived); err != nil {
+		return "", fmt.Errorf("set task archived: %w", err)
+	}
+	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev arşiv durumu güncellendi", TaskID: in.ID, Op: "update"})
+	b, _ := json.Marshal(map[string]any{"id": in.ID, "archived": *in.Archived})
+	return string(b), nil
 }
 
 // ---- delete_task ----
