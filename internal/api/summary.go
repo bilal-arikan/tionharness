@@ -23,13 +23,30 @@ type summaryResult struct {
 	Body     string
 	Fold     conversation.Compaction
 	Provider providers.Provider
+	Steps    []agent.TurnStep
 }
 
 func (r summaryResult) stepsJSON() string {
+	if len(r.Steps) > 0 {
+		return string(mustJSON(r.Steps))
+	}
 	if r.Fold.FoldedMsgs == 0 {
 		return "[]"
 	}
 	return string(mustJSON([]agent.TurnStep{compactionLeadStep(r.Fold, r.Provider)}))
+}
+
+func nativeCompactionStep(trace providers.TraceStep) agent.TurnStep {
+	trigger := trace.Trigger
+	if trigger == "" && trace.Kind == "compaction" {
+		trigger = conversation.TriggerManual
+	}
+	return agent.TurnStep{
+		ID: trace.ID, Ref: trace.Ref, Running: trace.Running,
+		Kind: agent.StepKind(trace.Kind), Trigger: trigger, Source: trace.Source,
+		Provider: trace.Provider, SessionAction: trace.SessionAction,
+		FoldedMsgs: trace.FoldedMsgs, BeforeTokens: trace.BeforeTokens, AfterTokens: trace.AfterTokens,
+	}
 }
 
 // summaryHeaders gives each summary kind a self-explanatory chat header so the
@@ -391,6 +408,75 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	// ambient home and can fail auth even when TionHarness is logged in).
 	if err := wsp.Runtime.PinCLIHome(provider); err != nil {
 		return summaryResult{}, err
+	}
+	// Claude Code print mode dispatches /compact only when it is the complete
+	// input to a resumable native session. Never route it through Complete: that
+	// path adds system/dynamic/history text and turns the command into an ordinary
+	// model prompt. Sessions without a verified warm transcript retain the
+	// TionHarness rolling-summary fallback below.
+	if native, ok := provider.(providers.CLINativeManualCompactor); ok &&
+		providers.HasNativeCLICompactionEvents(provider) && session.CLISessionID != "" {
+		if verifier, vok := provider.(providers.ResumeVerifier); !vok || verifier.CanResume(session.CLISessionID) {
+			if _, err := wsp.Runtime.DropWarmCLISessionChecked(session.ID); err != nil {
+				return summaryResult{}, fmt.Errorf("stop warm CLI session before native compaction: %w", err)
+			}
+			resp, err := native.CompactNative(ctx, session.CLISessionID, providers.Request{
+				Model:          agentRow.Model,
+				PermissionMode: agentRow.PermissionMode,
+				WorkDir:        wsp.SandboxRoot(),
+				OnEvent: func(trace providers.TraceStep) {
+					step := nativeCompactionStep(trace)
+					wsp.Runtime.EmitSessionStep(session.ID, step)
+					if step.Kind == agent.StepTombstone {
+						s.publishHub(wsp.ID, session.ID, sessionhub.KindTombstone, step, true)
+						return
+					}
+					s.publishHub(wsp.ID, session.ID, sessionhub.KindStep, step, false)
+				},
+			})
+			if err != nil {
+				var nativeFailure *providers.NativeCompactionFailure
+				if !errors.As(err, &nativeFailure) {
+					return summaryResult{}, err
+				}
+				if jerr := wsp.DB.AppendDebugEvent(session.ID, db.DebugEvent{
+					Type: db.DebugCompaction, AgentID: agentRow.ID, Name: conversation.TriggerManual,
+					Detail: "claude-cli native manual compaction rejected; using rolling summary fallback: " + nativeFailure.Detail,
+				}, 0); jerr != nil {
+					return summaryResult{}, fmt.Errorf("journal native compaction fallback: %w", jerr)
+				}
+			} else {
+				var steps []agent.TurnStep
+				for _, trace := range resp.Trace {
+					if trace.Kind != "compaction" || trace.Source != "cli-native" {
+						continue
+					}
+					steps = append(steps, nativeCompactionStep(trace))
+				}
+				if len(steps) != 1 {
+					return summaryResult{}, fmt.Errorf("claude native compaction produced %d completed lifecycle events, want 1", len(steps))
+				}
+				resumeID := resp.SessionID
+				if resumeID == "" {
+					resumeID = session.CLISessionID
+				}
+				// history excludes the command; +2 accounts for the persisted /compact
+				// user message and the assistant lifecycle report written by the caller.
+				if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, len(history)+2); err != nil {
+					return summaryResult{}, fmt.Errorf("persist CLI resume after native compaction: %w", err)
+				}
+				if err := wsp.DB.AppendDebugEvent(session.ID, db.DebugEvent{
+					Type: db.DebugCompaction, AgentID: agentRow.ID, Name: conversation.TriggerManual,
+					Detail: "claude-cli native manual compaction completed; rolling summary boundary unchanged",
+				}, 0); err != nil {
+					return summaryResult{}, fmt.Errorf("journal native compaction: %w", err)
+				}
+				return summaryResult{
+					Body:  "Claude Code yerel oturumu sıkıştırıldı; TionHarness rolling summary sınırı değiştirilmedi.",
+					Steps: steps,
+				}, nil
+			}
+		}
 	}
 	// history is the pre-command snapshot captured by the caller (before the
 	// "/compact" user message was appended), so the fold boundary matches the real

@@ -53,7 +53,10 @@ type Server struct {
 	interactions  *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
 	inbox         *inboxStore       // per-session durable command queue (serial worker → turns)
 	runs          *chatRuns         // in-flight streaming turns (stop/steer control)
-	grants        *permGrantStore   // per-session "Always allow" permission grants
+	teardownLocks sessionTeardownLocks
+	stopWorker    func(context.Context, *workspace.Workspace, string) error
+	deleteSession func(context.Context, *workspace.Workspace, string) error // test seam for delete-lock ordering
+	grants        *permGrantStore                                           // per-session "Always allow" permission grants
 	logger        *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),

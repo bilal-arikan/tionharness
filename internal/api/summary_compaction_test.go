@@ -74,3 +74,40 @@ func TestSummaryResultWithoutFoldHasNoSteps(t *testing.T) {
 		t.Fatalf("steps = %s, want []", got)
 	}
 }
+
+func TestSummaryResultNativeCompactionStepsTakePrecedence(t *testing.T) {
+	step := agent.TurnStep{
+		Kind: agent.StepCompaction, Trigger: conversation.TriggerManual,
+		Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact",
+	}
+	got := (summaryResult{Steps: []agent.TurnStep{step}}).stepsJSON()
+	var steps []agent.TurnStep
+	if err := json.Unmarshal([]byte(got), &steps); err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 1 || steps[0].Source != "cli-native" || steps[0].SessionAction != "native-compact" {
+		t.Fatalf("steps = %+v", steps)
+	}
+}
+
+func TestNativeCompactionStepPreservesLifecycleIdentity(t *testing.T) {
+	running := nativeCompactionStep(providers.TraceStep{
+		ID: "claude-compact-1", Running: true, Kind: "compaction",
+		Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact",
+	})
+	completed := nativeCompactionStep(providers.TraceStep{
+		ID: "claude-compact-1", Kind: "compaction",
+		Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact",
+	})
+	tombstone := nativeCompactionStep(providers.TraceStep{Kind: "tombstone", Ref: "claude-compact-1"})
+
+	if running.ID != completed.ID || !running.Running || completed.Running {
+		t.Fatalf("lifecycle identity/state mismatch: running=%+v completed=%+v", running, completed)
+	}
+	if completed.Trigger != conversation.TriggerManual || completed.Source != "cli-native" || completed.Provider != "claude-cli" || completed.SessionAction != "native-compact" {
+		t.Fatalf("completed provenance = %+v", completed)
+	}
+	if tombstone.Kind != agent.StepTombstone || tombstone.Ref != running.ID || tombstone.Trigger != "" {
+		t.Fatalf("failure tombstone = %+v", tombstone)
+	}
+}

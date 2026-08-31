@@ -113,6 +113,9 @@ func TestClaudeParserStatusCompactionFailedRetractsRunning(t *testing.T) {
 	if len(p.resp.Trace) != 0 {
 		t.Fatalf("trace = %+v, failed compaction must not complete", p.resp.Trace)
 	}
+	if got := p.resp.NativeCompactionError; got != "Not enough messages to compact." {
+		t.Fatalf("NativeCompactionError = %q", got)
+	}
 }
 
 func TestClaudeParserStatusCompactionSuccess(t *testing.T) {

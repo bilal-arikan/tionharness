@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { Pencil, X } from 'lucide-react'
 import type { Attachment } from '@/types'
 import { attachmentMeta, formatBytes, imageURL } from '@/shared/lib/attachments'
 
@@ -14,11 +14,21 @@ interface Props {
   uploading?: boolean
   // When set, the chip is rendered as a button and calls this on click.
   onClick?: () => void
+  // Composer image attachments can expose an explicit edit action without
+  // turning the whole thumbnail into a navigation target.
+  onEdit?: () => void
 }
 
 // AttachmentChip renders one attachment as either an image thumbnail or a compact
 // file card (icon + name + size). Shared by the composer tray and the user bubble.
-export function AttachmentChip({ attachment, onRemove, previewURL, uploading, onClick }: Props) {
+export function AttachmentChip({
+  attachment,
+  onRemove,
+  previewURL,
+  uploading,
+  onClick,
+  onEdit,
+}: Props) {
   const { Icon, label, tint } = attachmentMeta(attachment.kind)
   const img = previewURL ?? imageURL(attachment)
 
@@ -61,6 +71,18 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading, on
         <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-[var(--color-overlay)]/40">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
         </div>
+      )}
+
+      {onEdit && !uploading && (
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Görseli düzenle"
+          aria-label="Görseli düzenle"
+          className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/30 bg-black/65 text-white opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100"
+        >
+          <Pencil size={12} />
+        </button>
       )}
 
       {onRemove && (

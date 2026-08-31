@@ -2,6 +2,70 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
 
+## Haftalık özellik denetimi: teardown context sızıntısı ve refactor (2026-08-31) ✅
+
+Hafta boyunca eklenen özelliklerin denetiminde bulunan ve düzeltilen üç konu:
+
+- **Teardown context sızıntısı (`internal/api/chat_control.go`).** Her tur
+  `register`'da `context.Background()` kökünden bir teardown context'i yaratıyordu,
+  fakat `teardownCancel` yalnız silme yolunda (`cancelSessionCalls`) çağrılıyordu.
+  Silinmeyen — yani turların ezici çoğunluğu — her tur, süreç ömrü boyunca canlı bir
+  cancel func sızdırıyordu. `unregister` artık bekleyen bridge call yoksa context'i
+  hemen serbest bırakıyor; bekleyen call varsa serbest bırakma son call'un
+  `endCall`'ına erteleniyor. `cancelSessionCalls` ve `reopenSessionCalls` serbest
+  bırakılmış (nil) cancel'a karşı güvenli. Regresyon:
+  `TestUnregister_ReleasesTeardownContext`,
+  `TestUnregister_DrainingRunReleasesTeardownContextOnLastCall`,
+  `TestCancelSessionCalls_AfterRelease`.
+- **Silinen oturumun MCP alt süreçleri kapatılmıyordu (canlı testte bulundu).**
+  `applyMCPScratchpadRoot` (`internal/agent/mcp_playwright.go`) dosya yazan bir MCP
+  sunucusunun cwd'sini oturumun scratchpad'ine ayarlar. Teardown'da bu scoped
+  bağlantıları kapatan bir faz yoktu — yalnız 300 sn'lik idle reaper topluyordu.
+  Windows canlı bir sürecin cwd'si olan dizini silmediği için oturum silme
+  `unlinkat ...\scratchpad: Dosya başka bir işlem tarafından kullanıldığından`
+  hatasıyla fail-closed düşüyordu (oturum korunuyordu — davranış doğruydu, eksik
+  olan kapatma fazıydı).
+  - `internal/mcp/pool.go` → `CloseSession(sessionID)`: yalnız o oturuma ait
+    scoped bağlantıları kapatır; paylaşılan slot ve diğer oturumlar korunur.
+    Eşleşme `"<sessionID>|"` sınırındadır (SES1 silinince SES11 kapanmaz), boş id
+    hiçbir şey kapatmaz. Kapatma havuz kilidi dışında yapılır (`reapScoped` deseni).
+  - `internal/agent/runtime.go` → `CloseSessionMCP` geçidi.
+  - `internal/api/session_teardown.go` → Faz 7, worker durdurmadan **sonra**
+    (worker turları o ana kadar MCP aracı çağırıyor olabilir). Tersinir değil ve
+    kasten fatal değil: bağlantı talep üzerine yeniden kurulur.
+  - Testler: `TestPoolCloseSessionClosesOnlyThatSession`,
+    `TestPoolCloseSessionDoesNotMatchIDPrefix`, `TestPoolCloseSessionEmptyIsNoOp`.
+- **Sessizce yutulan handoff bağlaması (`internal/agent/handoff.go`).**
+  `SetSessionHandoffArtifact` hatası `_ =` ile yutuluyordu; başarısızlıkta handoff
+  artifact'ı yazılmış ama oturumun handoff'u olarak bulunamaz hâlde kalıyordu.
+  Artık hata sarmalanıp döndürülüyor.
+- **Refactor — büyük dosyaların bölünmesi.** Davranış değişikliği yok; yalnız
+  dosya sınırları. Her parça kendi kaygısını taşıyan ayrı bir dosyaya alındı,
+  testler yerinde bırakıldı:
+
+  | Önce | Sonra |
+  |------|-------|
+  | `internal/agent/coordination.go` 2303 | 2167 + `coordination_teardown.go` 178 |
+  | `internal/providers/claudecli.go` 1776 | 971 + `claudecli_stream.go` 819 |
+  | `internal/agent/runtime.go` 1720 | 1174 + `runtime_skills.go` 243 + `runtime_prompt.go` 336 |
+
+  - `coordination_teardown.go` — tersinir worker teardown (`StopWorkerForTeardown`,
+    `FinishWorkerTeardown`, `markTreeTeardown`, `clearTreeTeardown`,
+    `spawnBlockedByTreeTeardown`). `coordination.go` yalnız spawn/queue/notify
+    akışında kaldı. Testleri: `coordination_tree_test.go`, `worker_queue_test.go`.
+  - `claudecli_stream.go` — `cliStreamParser` ve stream-json olay tüketimi
+    (trace adımları, usage, native-compaction yaşam döngüsü, rate-limit/auth
+    sınıflandırması). `claudecli.go` alt süreç yönetiminde kaldı.
+  - `runtime_skills.go` — skill kataloğu prompt bloğu ve `agentSkillLib` /
+    `agentSkillWriter` sink'leri. `runtime_prompt.go` — persona birleştirme
+    (`BuildSystemPrompt`) ve context blokları (environment, tarih/saat, shell
+    araçları, workdir confine) ile otonom tur varyantları.
+
+Doğrulama: `go build ./...`, `go vet ./...`, `go test ./... -count=1` (39 paket, 0
+hata), `npm test` (71 dosya / 510 test), `npx tsc --noEmit`, `git diff --check`.
+`ArtifactPreviewModal.test.tsx`'teki `act(...)` sarmalanmamış state güncellemesi
+uyarısı da giderildi.
+
 ## TSK500 — Dosya seçicisinde görsel anotasyon kuyruğu (2026-08-31)
 
 - Dosya seçicisindeki destekli görseller, clipboard ile aynı doğrulama sınırlarından geçer ve

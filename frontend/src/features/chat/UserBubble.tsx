@@ -166,7 +166,7 @@ export function UserBubble({
       <div className="flex flex-col items-end">
         {text.trim() && (
           <div
-            className={`max-w-[80%] min-w-0 break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-[var(--color-on-accent)] ${
+            className={`max-w-[80%] min-w-0 break-words rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm leading-relaxed text-[var(--color-on-accent)] [&_a]:!text-[var(--color-on-accent)] [&_button]:!text-[var(--color-on-accent)] ${
               hasMention ? 'ring-1 ring-white/40' : ''
             } ${clamp ? 'line-clamp-2' : ''}`}
           >

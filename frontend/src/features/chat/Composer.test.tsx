@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   uploadFile: vi.fn(),
   deleteFile: vi.fn(),
   annotatorProps: null as null | {
+    source: unknown
     onSave(result: AnnotatorExport): Promise<void>
     onClose(): void
   },
@@ -55,16 +56,20 @@ const agent = {
 
 function image(name: string, type = 'image/png') {
   const file = new File([pngHeader], name, { type })
+  mockFileStream(file, pngHeader)
+  return file
+}
+
+function mockFileStream(file: File, bytes: Uint8Array) {
   Object.defineProperty(file, 'stream', {
     value: () =>
       new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(pngHeader)
+          controller.enqueue(bytes)
           controller.close()
         },
       }),
   })
-  return file
 }
 const attachment = (file: File) => ({
   id: `uploaded-${file.name}`,
@@ -105,12 +110,10 @@ function paste(container: HTMLElement, files: File[]) {
   return event
 }
 
-function button(container: HTMLElement, label: string) {
-  const hit = [...container.querySelectorAll('button')].find(
-    (candidate) => candidate.textContent?.trim() === label,
-  )
-  if (!hit) throw new Error(`button not found: ${label}`)
-  return hit as HTMLButtonElement
+function pickFiles(container: HTMLElement, files: File[]) {
+  const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+  Object.defineProperty(input, 'files', { configurable: true, value: files })
+  act(() => input.dispatchEvent(new Event('change', { bubbles: true })))
 }
 
 async function flush() {
@@ -140,6 +143,145 @@ afterEach(() => {
 })
 
 describe('Composer clipboard integration', () => {
+  it('opens selected images automatically in FIFO order and disposes each source', async () => {
+    const closes = [vi.fn(), vi.fn()]
+    const decoders: Array<(bitmap: ImageBitmap) => void> = []
+    vi.mocked(createImageBitmap).mockImplementation(
+      () => new Promise((resolve) => decoders.push(resolve)) as Promise<ImageBitmap>,
+    )
+    const { container } = renderComposer()
+    pickFiles(container, [image('first.png'), image('second.png')])
+    await flush()
+
+    await act(async () => decoders[1]({ width: 10, height: 10, close: closes[1] } as ImageBitmap))
+    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+    await act(async () => decoders[0]({ width: 10, height: 10, close: closes[0] } as ImageBitmap))
+
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+    act(() => mocks.annotatorProps!.onClose())
+    await flush()
+    expect(closes[0]).toHaveBeenCalledOnce()
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+
+    await act(async () =>
+      mocks.annotatorProps!.onSave({
+        blob: new Blob(['marked'], { type: 'image/png' }),
+        mime: 'image/png',
+        width: 10,
+        height: 10,
+      }),
+    )
+    expect(closes[1]).toHaveBeenCalledOnce()
+    expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
+      'second-annotated.png',
+    ])
+  })
+
+  it('keeps non-image picker files on the normal upload path', async () => {
+    const { container } = renderComposer()
+    const text = new File(['hello'], 'notes.txt', { type: 'text/plain' })
+    pickFiles(container, [text])
+    await flush()
+
+    expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', text)
+    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+  })
+
+  it('surfaces picker image validation errors without uploading', async () => {
+    const { container } = renderComposer()
+    pickFiles(container, [image('bad.gif', 'image/gif')])
+    await flush()
+    await flush()
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Bu görsel türü desteklenmiyor',
+    )
+    expect(mocks.uploadFile).not.toHaveBeenCalled()
+  })
+
+  it('edits an uploaded picker image again and safely replaces its pending attachment', async () => {
+    const { container } = renderComposer()
+    pickFiles(container, [image('picked.png')])
+    await flush()
+
+    await act(async () =>
+      mocks.annotatorProps!.onSave({
+        blob: new Blob([pngHeader], { type: 'image/png' }),
+        mime: 'image/png',
+        width: 10,
+        height: 10,
+      }),
+    )
+    mockFileStream(mocks.uploadFile.mock.calls[0][1] as File, pngHeader)
+
+    const editButton = container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')
+    expect(editButton).not.toBeNull()
+    act(() => editButton!.click())
+    await flush()
+    await flush()
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+
+    await act(async () =>
+      mocks.annotatorProps!.onSave({
+        blob: new Blob(['second edit'], { type: 'image/webp' }),
+        mime: 'image/webp',
+        width: 10,
+        height: 10,
+      }),
+    )
+
+    expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
+      'picked-annotated.png',
+      'picked-annotated-annotated.webp',
+    ])
+    expect(mocks.deleteFile).toHaveBeenCalledWith('uploads/picked-annotated.png')
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'blob:picked-annotated-annotated.webp',
+    )
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:picked-annotated.png')
+    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+  })
+
+  it('rolls back a picker image replacement when deleting its previous upload fails', async () => {
+    const { container } = renderComposer()
+    pickFiles(container, [image('picked.png')])
+    await flush()
+    await act(async () =>
+      mocks.annotatorProps!.onSave({
+        blob: new Blob([pngHeader], { type: 'image/png' }),
+        mime: 'image/png',
+        width: 10,
+        height: 10,
+      }),
+    )
+    mockFileStream(mocks.uploadFile.mock.calls[0][1] as File, pngHeader)
+
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')!.click())
+    await flush()
+    await flush()
+    const deleteError = new Error('Seçilen eski upload silinemedi')
+    mocks.deleteFile.mockRejectedValueOnce(deleteError).mockResolvedValueOnce(undefined)
+
+    await expect(
+      act(async () => {
+        await mocks.annotatorProps!.onSave({
+          blob: new Blob(['second edit'], { type: 'image/webp' }),
+          mime: 'image/webp',
+          width: 10,
+          height: 10,
+        })
+      }),
+    ).rejects.toThrow(deleteError)
+
+    expect(mocks.deleteFile.mock.calls).toEqual([
+      ['uploads/picked-annotated.png'],
+      ['uploads/picked-annotated-annotated.webp'],
+    ])
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:picked-annotated.png')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:picked-annotated.png')
+  })
+
   it('validates a clipboard image and directly uploads the original exactly once', async () => {
     const { container } = renderComposer()
     const original = image('screen.png')
@@ -148,22 +290,21 @@ describe('Composer clipboard integration', () => {
     expect(mocks.uploadFile).not.toHaveBeenCalled()
     await flush()
 
-    expect(container.querySelector('[aria-label="Yapıştırılan görsel seçimi"]')).not.toBeNull()
-    act(() => button(container, 'Doğrudan ekle').click())
-    await flush()
-
+    expect(container.querySelector('[aria-label="Yapıştırılan görsel seçimi"]')).toBeNull()
     expect(mocks.uploadFile).toHaveBeenCalledTimes(1)
     expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', original)
   })
 
-  it('opens annotator and uploads only exported Blob', async () => {
+  it('opens annotator from the composer thumbnail and replaces the original upload', async () => {
     const { container } = renderComposer()
     const original = image('screen.png')
     paste(container, [original])
     await flush()
-    act(() => button(container, 'Üzerine çiz').click())
+    expect(mocks.uploadFile).toHaveBeenCalledWith('SES1', original)
+
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')!.click())
+    await flush()
     expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
-    expect(mocks.uploadFile).not.toHaveBeenCalled()
 
     const exported = new Blob(['annotated'], { type: 'image/webp' })
     await act(async () => {
@@ -175,12 +316,45 @@ describe('Composer clipboard integration', () => {
       })
     })
 
-    expect(mocks.uploadFile).toHaveBeenCalledTimes(1)
-    const uploaded = mocks.uploadFile.mock.calls[0][1] as File
+    expect(mocks.uploadFile).toHaveBeenCalledTimes(2)
+    const uploaded = mocks.uploadFile.mock.calls[1][1] as File
     expect(uploaded).not.toBe(original)
     expect(uploaded.name).toBe('screen-annotated.webp')
     expect(uploaded.type).toBe('image/webp')
     expect(await uploaded.text()).toBe('annotated')
+    expect(mocks.deleteFile).toHaveBeenCalledWith('uploads/screen.png')
+    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+  })
+
+  it('rolls back the replacement and keeps the editor open when deleting the original fails', async () => {
+    const { container } = renderComposer()
+    const original = image('screen.png')
+    paste(container, [original])
+    await flush()
+
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')!.click())
+    await flush()
+    const deleteError = new Error('Eski upload silinemedi')
+    mocks.deleteFile.mockRejectedValueOnce(deleteError).mockResolvedValueOnce(undefined)
+
+    await expect(
+      act(async () => {
+        await mocks.annotatorProps!.onSave({
+          blob: new Blob(['annotated'], { type: 'image/webp' }),
+          mime: 'image/webp',
+          width: 10,
+          height: 10,
+        })
+      }),
+    ).rejects.toThrow(deleteError)
+
+    expect(mocks.deleteFile.mock.calls).toEqual([
+      ['uploads/screen.png'],
+      ['uploads/screen-annotated.webp'],
+    ])
+    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:screen.png')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:screen.png')
   })
 
   it('keeps multiple pastes FIFO despite reverse decode completion', async () => {
@@ -194,13 +368,8 @@ describe('Composer clipboard integration', () => {
     await flush()
 
     await act(async () => decoders[1]({ width: 10, height: 10, close: vi.fn() } as ImageBitmap))
-    expect(container.textContent).toContain('Görsel doğrulanıyor…')
+    expect(mocks.uploadFile).not.toHaveBeenCalled()
     await act(async () => decoders[0]({ width: 10, height: 10, close: vi.fn() } as ImageBitmap))
-    expect(container.textContent).toContain('first.png')
-    act(() => button(container, 'Doğrudan ekle').click())
-    await flush()
-    expect(container.textContent).toContain('second.png')
-    act(() => button(container, 'Doğrudan ekle').click())
     await flush()
 
     expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
@@ -250,8 +419,6 @@ describe('Composer clipboard integration', () => {
     const original = image('upload-race.png')
     paste(container, [original])
     await flush()
-    act(() => button(container, 'Doğrudan ekle').click())
-    await flush()
     render('SES2')
 
     await act(async () => resolveUpload(attachment(original)))
@@ -263,8 +430,6 @@ describe('Composer clipboard integration', () => {
   it('creates and revokes each preview URL once on session cleanup', async () => {
     const { container, render } = renderComposer()
     paste(container, [image('preview.png')])
-    await flush()
-    act(() => button(container, 'Doğrudan ekle').click())
     await flush()
 
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
@@ -285,8 +450,6 @@ describe('Composer clipboard integration', () => {
 
     mocks.uploadFile.mockRejectedValueOnce(new Error('upload failed'))
     paste(container, [image('failure.png')])
-    await flush()
-    act(() => button(container, 'Doğrudan ekle').click())
     await flush()
     expect(container.textContent).toContain('upload failed')
     expect(mocks.uploadFile).toHaveBeenCalledTimes(1)

@@ -4,11 +4,59 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
+
+func TestStopWorkerForTeardownIdleCoordinatorStopsActiveGrandchild(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	root := newTreeNode(t, rt, "root-stop", "", "", 0, true)
+	mid := newTreeNode(t, rt, "mid-stop", root.ID, root.ID, 1, true)
+	leaf := newTreeNode(t, rt, "leaf-stop", mid.ID, root.ID, 2, false)
+	done := make(chan struct{})
+	var once sync.Once
+	ctl := &workerCtl{done: done}
+	ctl.setCancel(func() { once.Do(func() { close(done) }) })
+	rt.workerCancels.Store(leaf.ID, ctl)
+
+	if err := rt.StopWorkerForTeardown(context.Background(), mid.ID); err != nil {
+		t.Fatalf("teardown idle parent: %v", err)
+	}
+	if !ctl.teardown.Load() {
+		t.Fatal("active grandchild was not prepared for teardown")
+	}
+	rt.FinishWorkerTeardown(mid.ID, true)
+}
+
+func TestConcurrentSpawnRejectedWhileSubtreeTeardownInProgress(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	root := newTreeNode(t, rt, "root-race", "", "", 0, true)
+	mid := newTreeNode(t, rt, "mid-race", root.ID, root.ID, 1, true)
+	leaf := newTreeNode(t, rt, "leaf-race", mid.ID, root.ID, 2, false)
+	target, err := rt.db.CreateAgent(context.Background(), db.Agent{Name: "spawn-target", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create spawn target: %v", err)
+	}
+	cancelled := make(chan struct{})
+	ctl := &workerCtl{done: make(chan struct{})}
+	ctl.setCancel(func() { close(cancelled) })
+	rt.workerCancels.Store(leaf.ID, ctl)
+	teardownDone := make(chan error, 1)
+	go func() { teardownDone <- rt.StopWorkerForTeardown(context.Background(), mid.ID) }()
+	<-cancelled
+
+	if _, err := rt.SpawnWorker(context.Background(), mid.ID, target.ID, "must not start", "test", WorkerSpec{}); err == nil || !strings.Contains(err.Error(), "being torn down") {
+		t.Fatalf("concurrent spawn must hit teardown gate, got %v", err)
+	}
+	close(ctl.done)
+	if err := <-teardownDone; err != nil {
+		t.Fatalf("teardown: %v", err)
+	}
+	rt.FinishWorkerTeardown(mid.ID, false)
+}
 
 // newTreeNode creates a session at a given place in a coordinator tree without
 // running any turn, so the tree-shape logic can be tested in isolation.

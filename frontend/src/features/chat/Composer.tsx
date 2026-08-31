@@ -39,16 +39,23 @@ interface PendingAttachment {
   uploading: boolean
   error?: string
   attachment?: Attachment // populated when the upload succeeds
+  editableFile?: File // image backing the composer edit action
 }
 
 interface PasteChoice {
   key: string
   operationId: number
   index: number
+  autoAnnotate: boolean
   image: ValidatedClipboardImage | null
 }
 
 type ResolvedPasteChoice = PasteChoice & { image: ValidatedClipboardImage }
+
+interface EditingAttachment {
+  localId: string
+  image: ValidatedClipboardImage
+}
 
 interface Props {
   disabled: boolean
@@ -135,6 +142,7 @@ export function Composer({
   const [pending, setPending] = useState<PendingAttachment[]>([])
   const [pasteChoices, setPasteChoices] = useState<PasteChoice[]>([])
   const [editingPaste, setEditingPaste] = useState<ResolvedPasteChoice | null>(null)
+  const [editingAttachment, setEditingAttachment] = useState<EditingAttachment | null>(null)
   const [pasteErrors, setPasteErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   // A submit is in flight (the enqueue round-trip). The input is locked until it
@@ -175,6 +183,7 @@ export function Composer({
   const canceledPasteKeys = useRef(new Set<string>())
   const pasteChoicesRef = useRef(pasteChoices)
   const editingPasteRef = useRef(editingPaste)
+  const editingAttachmentRef = useRef(editingAttachment)
   const pendingRef = useRef(pending)
   const revokedPreviewURLs = useRef(new Set<string>())
   const revokePreview = useCallback((url?: string) => {
@@ -186,8 +195,9 @@ export function Composer({
   useEffect(() => {
     pasteChoicesRef.current = pasteChoices
     editingPasteRef.current = editingPaste
+    editingAttachmentRef.current = editingAttachment
     pendingRef.current = pending
-  }, [editingPaste, pasteChoices, pending])
+  }, [editingAttachment, editingPaste, pasteChoices, pending])
 
   useEffect(() => {
     const generation = ++mountGeneration.current
@@ -196,6 +206,10 @@ export function Composer({
       return []
     })
     setEditingPaste((current) => {
+      current?.image.dispose()
+      return null
+    })
+    setEditingAttachment((current) => {
       current?.image.dispose()
       return null
     })
@@ -212,6 +226,7 @@ export function Composer({
     () => () => {
       pasteChoicesRef.current.forEach((choice) => choice.image?.dispose())
       editingPasteRef.current?.image.dispose()
+      editingAttachmentRef.current?.image.dispose()
       pendingRef.current.forEach((item) => revokePreview(item.previewURL))
     },
     [revokePreview],
@@ -285,14 +300,17 @@ export function Composer({
 
   // uploadFiles uploads each file, tracking per-file progress in `pending`. Image
   // files get a local object-URL preview shown immediately. Requires a session.
-  const stageFile = async (file: File, propagateError = false) => {
+  const stageFile = async (file: File, propagateError = false, editableFile?: File) => {
     if (!sessionId) return
     const generation = mountGeneration.current
     const uploadSessionId = sessionId
     const localId = `att-${seq.current++}`
     const isImage = file.type.startsWith('image/')
     const previewURL = isImage ? URL.createObjectURL(file) : undefined
-    setPending((p) => [...p, { localId, name: file.name, previewURL, uploading: true }])
+    setPending((p) => [
+      ...p,
+      { localId, name: file.name, previewURL, uploading: true, editableFile },
+    ])
     try {
       const attachment = await api.uploadFile(uploadSessionId, file)
       if (mountGeneration.current !== generation) {
@@ -331,8 +349,56 @@ export function Composer({
     setPending((p) => p.filter((x) => x.localId !== localId))
   }
 
+  const enqueueImages = (images: File[], autoAnnotate: boolean) => {
+    if (images.length === 0) return
+    const operationId = pasteOperationSeq.current++
+    const generation = mountGeneration.current
+    setPasteChoices((current) =>
+      [
+        ...current,
+        ...images.map((_, index) => ({
+          key: `${operationId}-${index}`,
+          operationId,
+          index,
+          autoAnnotate,
+          image: null,
+        })),
+      ].sort(comparePasteOrder),
+    )
+    images.forEach((file, index) => {
+      void validateClipboardImage(file)
+        .then((image) => {
+          const key = `${operationId}-${index}`
+          if (mountGeneration.current !== generation || canceledPasteKeys.current.has(key)) {
+            image.dispose()
+            return
+          }
+          setPasteChoices((current) =>
+            current.map((choice) =>
+              choice.operationId === operationId && choice.index === index
+                ? { ...choice, image }
+                : choice,
+            ),
+          )
+        })
+        .catch((error: unknown) => {
+          if (mountGeneration.current !== generation) return
+          const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
+          setPasteErrors((current) => [...current, message])
+          setPasteChoices((current) =>
+            current.filter(
+              (choice) => choice.operationId !== operationId || choice.index !== index,
+            ),
+          )
+        })
+    })
+  }
+
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    uploadFiles(Array.from(e.target.files ?? []))
+    const files = Array.from(e.target.files ?? [])
+    const images = files.filter((file) => file.type.startsWith('image/'))
+    uploadFiles(files.filter((file) => !images.includes(file)))
+    enqueueImages(images, true)
     e.target.value = '' // allow re-selecting the same file
   }
 
@@ -369,46 +435,7 @@ export function Composer({
     if (images.length > 0) {
       e.preventDefault()
       if (otherFiles.length > 0) uploadFiles(otherFiles)
-      const operationId = pasteOperationSeq.current++
-      const generation = mountGeneration.current
-      setPasteChoices((current) =>
-        [
-          ...current,
-          ...images.map((_, index) => ({
-            key: `${operationId}-${index}`,
-            operationId,
-            index,
-            image: null,
-          })),
-        ].sort(comparePasteOrder),
-      )
-      images.forEach((file, index) => {
-        void validateClipboardImage(file)
-          .then((image) => {
-            const key = `${operationId}-${index}`
-            if (mountGeneration.current !== generation || canceledPasteKeys.current.has(key)) {
-              image.dispose()
-              return
-            }
-            setPasteChoices((current) =>
-              current.map((choice) =>
-                choice.operationId === operationId && choice.index === index
-                  ? { ...choice, image }
-                  : choice,
-              ),
-            )
-          })
-          .catch((error: unknown) => {
-            if (mountGeneration.current !== generation) return
-            const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
-            setPasteErrors((current) => [...current, message])
-            setPasteChoices((current) =>
-              current.filter(
-                (choice) => choice.operationId !== operationId || choice.index !== index,
-              ),
-            )
-          })
-      })
+      enqueueImages(images, false)
       return
     }
     if (otherFiles.length > 0) {
@@ -432,21 +459,124 @@ export function Composer({
 
   const uploadAnnotatedPaste = async (result: AnnotatorExport) => {
     const choice = editingPaste
-    if (!choice) return
-    await stageFile(annotatedPasteFile(choice.image.file, result), true)
+    if (!choice) throw new Error('Image annotator invariant violated: active image is missing')
+    const annotatedFile = annotatedPasteFile(choice.image.file, result)
+    await stageFile(annotatedFile, true, annotatedFile)
     setEditingPaste(null)
     choice.image.dispose()
   }
 
+  useEffect(() => {
+    if (editingPaste || pasteChoices.length === 0) return
+    const next = pasteChoices[0]
+    if (!next.autoAnnotate || !next.image) return
+    const resolved = next as ResolvedPasteChoice
+    setPasteChoices((current) => current.filter((choice) => choice.key !== resolved.key))
+    setEditingPaste(resolved)
+  }, [editingPaste, pasteChoices])
+
   const uploadDirectPaste = async (choice: ResolvedPasteChoice) => {
     removePasteChoice(choice, false)
     try {
-      await stageFile(choice.image.file, true)
+      await stageFile(choice.image.file, true, choice.image.file)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Görsel yüklenemedi.'
       setPasteErrors((current) => [...current, message])
     } finally {
       choice.image.dispose()
+    }
+  }
+
+  useEffect(() => {
+    if (editingPaste || pasteChoices.length === 0) return
+    const next = pasteChoices[0]
+    if (next.autoAnnotate || !next.image) return
+    void uploadDirectPaste(next as ResolvedPasteChoice)
+    // Queue head is the trigger; helpers intentionally stay outside dependencies
+    // so unrelated composer renders cannot restart an in-flight upload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingPaste, pasteChoices])
+
+  const editPendingImage = async (item: PendingAttachment) => {
+    if (!item.editableFile || item.uploading) return
+    try {
+      const image = await validateClipboardImage(item.editableFile)
+      if (!pendingRef.current.some((pendingItem) => pendingItem.localId === item.localId)) {
+        image.dispose()
+        return
+      }
+      setEditingAttachment({ localId: item.localId, image })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Görsel doğrulanamadı.'
+      setPasteErrors((current) => [...current, message])
+    }
+  }
+
+  const savePendingImage = async (result: AnnotatorExport) => {
+    const editing = editingAttachment
+    if (!editing)
+      throw new Error('Image annotator invariant violated: active attachment is missing')
+    const current = pendingRef.current.find((item) => item.localId === editing.localId)
+    if (!current?.editableFile || !sessionId) {
+      throw new Error('Image annotator invariant violated: editable attachment is missing')
+    }
+    const replacement = annotatedPasteFile(current.editableFile, result)
+    const oldRelPath = current.attachment?.relPath
+    setPending((items) =>
+      items.map((item) =>
+        item.localId === editing.localId ? { ...item, uploading: true, error: undefined } : item,
+      ),
+    )
+    try {
+      const attachment = await api.uploadFile(sessionId, replacement)
+      if (oldRelPath) {
+        try {
+          await api.deleteFile(oldRelPath)
+        } catch (deleteError) {
+          try {
+            if (!attachment.relPath) {
+              throw new Error('Replacement upload is missing its deletion path', {
+                cause: deleteError,
+              })
+            }
+            await api.deleteFile(attachment.relPath)
+          } catch (rollbackError) {
+            throw new AggregateError(
+              [deleteError, rollbackError],
+              'Eski görsel silinemedi ve yeni yükleme geri alınamadı.',
+              { cause: rollbackError },
+            )
+          }
+          throw deleteError
+        }
+      }
+      const previewURL = URL.createObjectURL(replacement)
+      revokePreview(current.previewURL)
+      setPending((items) =>
+        items.map((item) =>
+          item.localId === editing.localId
+            ? {
+                ...item,
+                name: replacement.name,
+                previewURL,
+                uploading: false,
+                attachment,
+                editableFile: replacement,
+              }
+            : item,
+        ),
+      )
+      setEditingAttachment(null)
+      editing.image.dispose()
+    } catch (error) {
+      setPending((items) =>
+        items.map((item) =>
+          item.localId === editing.localId
+            ? { ...item, uploading: false, error: (error as Error).message }
+            : item,
+        ),
+      )
+      throw error
     }
   }
 
@@ -692,46 +822,6 @@ export function Composer({
           ))}
         </div>
       )}
-      {pasteChoices.length > 0 && !editingPaste && (
-        <div
-          role="dialog"
-          aria-label="Yapıştırılan görsel seçimi"
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"
-        >
-          <section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
-            <h2 className="font-semibold">Görsel nasıl eklensin?</h2>
-            <p className="mt-1 text-sm text-[var(--color-text-dim)]">
-              {pasteChoices[0].image?.file.name || 'Görsel doğrulanıyor…'}
-            </p>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => removePasteChoice(pasteChoices[0])}>
-                Vazgeç
-              </button>
-              <button
-                type="button"
-                disabled={!pasteChoices[0].image}
-                onClick={() => {
-                  const choice = pasteChoices[0] as ResolvedPasteChoice
-                  void uploadDirectPaste(choice)
-                }}
-              >
-                Doğrudan ekle
-              </button>
-              <button
-                type="button"
-                disabled={!pasteChoices[0].image}
-                onClick={() => {
-                  const choice = pasteChoices[0] as ResolvedPasteChoice
-                  removePasteChoice(choice, false)
-                  setEditingPaste(choice)
-                }}
-              >
-                Üzerine çiz
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
       {editingPaste && (
         <ImageAnnotator
           source={editingPaste.image.source}
@@ -740,6 +830,17 @@ export function Composer({
             const choice = editingPaste
             setEditingPaste(null)
             choice.image.dispose()
+          }}
+        />
+      )}
+      {editingAttachment && (
+        <ImageAnnotator
+          source={editingAttachment.image.source}
+          onSave={savePendingImage}
+          onClose={() => {
+            const editing = editingAttachment
+            setEditingAttachment(null)
+            editing.image.dispose()
           }}
         />
       )}
@@ -794,6 +895,7 @@ export function Composer({
                 previewURL={p.previewURL}
                 uploading={p.attachment ? undefined : p.uploading}
                 onRemove={() => removePending(p.localId)}
+                onEdit={p.editableFile ? () => void editPendingImage(p) : undefined}
               />
             ))}
           </div>

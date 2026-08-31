@@ -457,6 +457,38 @@ func TestCodexConfigDisablesNativeMultiAgent(t *testing.T) {
 	}
 }
 
+// The production builder must always close codex's native collaboration gates
+// while retaining the TionHarness MCP bridge that supplies spawn_worker,
+// send_to_worker, and list_workers.
+func TestCodexBuildConfigDisablesNativeMultiAgentAndKeepsBridge(t *testing.T) {
+	bridge := map[string]CLIMCPServer{
+		"tionharness_interaction": {
+			Transport: "http",
+			URL:       "http://127.0.0.1:8731/core?full=1",
+		},
+	}
+	c := &CodexCLI{mcpServers: bridge}
+
+	cfg := c.buildConfig(Request{})
+	if !cfg.DisableNativeMultiAgent {
+		t.Fatal("production config must disable codex native collaboration")
+	}
+	if got := cfg.Servers["tionharness_interaction"].URL; got != bridge["tionharness_interaction"].URL {
+		t.Fatalf("TionHarness interaction bridge lost or changed: got %q", got)
+	}
+
+	rendered := renderCodexConfig(cfg)
+	for _, want := range []string{
+		"multi_agent = false\n",
+		"multi_agent_v2 = false\n",
+		"[mcp_servers.tionharness_interaction]\n",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered production config missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestCodexConfigFeaturesOmittedWhenNotDisabled(t *testing.T) {
 	if got := renderCodexConfig(codexConfig{ReasoningEffort: "low"}); strings.Contains(got, "[features]") {
 		t.Fatalf("features block must be opt-in, got %q", got)

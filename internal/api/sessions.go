@@ -418,22 +418,39 @@ func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
+	// Own the session-scoped delete lock across BOTH runtime teardown and durable
+	// deletion. A second delete must not enter teardown while this request is in the
+	// lifecycle-hook/DB gap and reopen state owned by the first request.
+	unlockDelete := s.teardownLocks.lock(scopeKey(wsp.ID, id))
+	defer unlockDelete()
 	// Tear down this session's LIVE runtime (in-flight turn + its claude-cli subprocess,
 	// warm pooled processes, the inbox worker, any autonomous worker) BEFORE removing it.
 	// Fail closed: if a live process/turn cannot be stopped, abort with 409 so we never
 	// strand a process pointing at a session that no longer exists (the session is left
 	// fully intact — queue restored, worker resumed).
-	if err := s.teardownSessionRuntime(wsp, id); err != nil {
+	prepared, err := s.prepareSessionRuntimeLocked(wsp, id, sessionTeardownGrace)
+	if err != nil {
 		s.logger.Error("session delete aborted: could not tear down live runtime", "session", id, "error", err)
 		writeError(w, http.StatusConflict, "session has live processes that could not be stopped; not deleted: "+err.Error())
 		return
 	}
+	runtimeCommitted := false
+	defer func() {
+		s.finishSessionRuntime(wsp, id, prepared, runtimeCommitted)
+	}()
 	// SessionEnd lifecycle hook (Claude Code parity): fire BEFORE the delete so a
 	// cleanup hook can still read the session's files. Fire-and-forget audit.
 	wsp.Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})
-	if err := wsp.DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
+	var deleteErr error
+	if s.deleteSession != nil {
+		deleteErr = s.deleteSession(r.Context(), wsp, id)
+	} else {
+		deleteErr = wsp.DB.DeleteSession(r.Context(), id)
+	}
+	if writeDBError(w, deleteErr, "session not found") {
 		return
 	}
+	runtimeCommitted = true
 	s.logger.Info("session deleted", "session", id)
 	// Cross-window sync: a sibling window showing this session in its sidebar
 	// drops the row immediately; the active session (if it was the deleted one)

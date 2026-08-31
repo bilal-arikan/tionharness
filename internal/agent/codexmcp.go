@@ -188,7 +188,10 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // The list is deliberately much shorter than the claude one — codex simply does
 // not ship most of those natives (no Task/Agent launcher, no Skill tool, no
 // native TodoWrite family beyond update_plan). Only the genuine overlaps are
-// named, so a reader can tell suppression from absence.
+// named, so a reader can tell suppression from absence. The collaboration names
+// are the actual codex tool ids; the renderer disables their shared feature
+// gates (`multi_agent` and `multi_agent_v2`) rather than trying to configure the
+// tools one by one.
 // web_search is left out on purpose, but no longer because it is always off: it
 // is now an AGENT-level toggle (db.Agent.NativeWebSearch → Request.NativeWebSearch
 // → codexConfig.DisableWebSearch). With the toggle off the config renderer writes
@@ -197,9 +200,20 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // TionHarness WebSearch/WebFetch, so listing it here would revoke that choice.
 func codexNativeSuppressions() []string {
 	// update_plan shadows the bridged todo_write (the progress card sink);
-	// experimental_request_user_input shadows ask_user. Both are also switched
-	// off structurally in the rendered config.toml.
-	return []string{"update_plan", "experimental_request_user_input"}
+	// experimental_request_user_input shadows ask_user. The collaboration tools
+	// bypass TionHarness's worker lifecycle and shadow spawn_worker,
+	// send_to_worker, and list_workers. All are also switched off structurally in
+	// the rendered config.toml.
+	return []string{
+		"update_plan",
+		"experimental_request_user_input",
+		"collaboration.spawn_agent",
+		"collaboration.send_message",
+		"collaboration.followup_task",
+		"collaboration.wait_agent",
+		"collaboration.interrupt_agent",
+		"collaboration.list_agents",
+	}
 }
 
 // trimTrailingSlash strips one trailing "/" so URL joins do not double it.

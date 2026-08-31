@@ -165,6 +165,13 @@ func (s *Server) waitInteractionCLI(ctx context.Context, run *chatRun, pi *pendi
 			// call alive for the answer and stop selecting the closed channel.
 			runDone = nil
 		case <-ctxDone:
+			run.callMu.Lock()
+			closing := run.closing
+			run.callMu.Unlock()
+			if closing {
+				s.cancelInteraction(pi, "session closing")
+				return "", "ctx"
+			}
 			if runDone == nil {
 				ctxDone = nil
 				continue

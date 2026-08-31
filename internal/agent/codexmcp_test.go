@@ -101,9 +101,24 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 			t.Errorf("allowlist missing %q; got %v", w, spec.AllowedTools)
 		}
 	}
-	// Carried through unchanged even though the codex renderer ignores them today.
-	if len(spec.DisallowedTools) == 0 {
-		t.Errorf("expected the codex native suppressions to be carried, got none")
+	// Carried through unchanged even though structural config feature gates do
+	// the actual enforcement. Keep the exact native collaboration ids visible so
+	// a future renderer cannot accidentally re-enable a subset.
+	disallowed := map[string]bool{}
+	for _, name := range spec.DisallowedTools {
+		disallowed[name] = true
+	}
+	for _, want := range []string{
+		"collaboration.spawn_agent",
+		"collaboration.send_message",
+		"collaboration.followup_task",
+		"collaboration.wait_agent",
+		"collaboration.interrupt_agent",
+		"collaboration.list_agents",
+	} {
+		if !disallowed[want] {
+			t.Errorf("native collaboration suppression missing %q; got %v", want, spec.DisallowedTools)
+		}
 	}
 }
 

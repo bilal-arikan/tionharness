@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -881,10 +880,12 @@ func toolNameDistance(a, b string) int {
 
 // Call implements interaction.Backend.
 func (b *interactionBackend) Call(ctx context.Context, token, name string, args json.RawMessage) (interaction.CallResult, error) {
-	run := b.runs.byToken(token)
-	if run == nil {
-		return interaction.CallResult{}, errors.New("no live turn for token")
+	run, callCtx, endCall, err := b.runs.beginCall(ctx, token)
+	if err != nil {
+		return interaction.CallResult{}, err
 	}
+	defer endCall()
+	ctx = callCtx
 	bare := bareToolName(name)
 	if text := b.toolCallError(token, name, run); text != "" {
 		return interaction.CallResult{Text: text, IsError: true}, nil

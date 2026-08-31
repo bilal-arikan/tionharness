@@ -242,6 +242,22 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
 ## Uygulama durumu (2026-07-10)
 
 **Backend (tamam):**
+- **Delete/koordinasyon teardown atomikliği (2026-08-31):** session delete hazırlığı
+  inbox'u dondurur ve bridge call gate'i kapatır, fakat inbox/hub'u yalnız kalıcı
+  `DB.DeleteSession` başarılı olunca bırakır; DB hatasında worker kuyruğuyla birlikte
+  inbox, hub aboneleri/ring'i ve bridge gate tam geri açılır. Koordinatör dalı
+  teardown edilirken ağaç kilidi altında spawn kapısı kapanır; boşta olan bir
+  alt-koordinatörün çalışan torunları da aynı atomik snapshot içinde iptal edilir.
+  DB sonucu commit/rollback verene kadar dala yeni `spawn_worker` kabul edilmez.
+  Tersinir worker teardown'ı (`StopWorkerForTeardown` / `FinishWorkerTeardown` ve
+  ağaç-teardown spawn kapısı) `internal/agent/coordination_teardown.go` dosyasında
+  toplanır; `coordination.go` yalnızca spawn/queue/notify akışını taşır.
+  Her turun teardown context'i `context.Background()` köküne bağlı olduğundan
+  `unregister` — bekleyen bridge call yoksa — context'i hemen serbest bırakır;
+  bekleyen call varsa serbest bırakma son call'un `endCall`'ına ertelenir. Aksi
+  hâlde silinmeyen her tur süreç ömrü boyunca canlı bir cancel func sızdırırdı
+  (regresyon: `TestUnregister_ReleasesTeardownContext` ve
+  `TestUnregister_DrainingRunReleasesTeardownContextOnLastCall`).
 - `internal/sessionhub/hub.go` — per-session monoton `seq` + ring buffer (512) +
   epoch + gap-aware `Replay`; `Publish`/`Subscribe`/`Head`/`SubscriberCount`
   (presence temeli). Testler: `hub_test.go` (4/4).
@@ -512,13 +528,29 @@ devam ediyordu, (4) autonomous worker/coordinator (`StopWorker` yok).
 Çözüm: DB silmesinden **önce** `teardownSessionRuntime` (`session_teardown.go`), **fail
 closed** — canlı bir tur/subprocess durdurulamazsa delete 409 ile iptal edilir ve session
 tam olarak korunur (kuyruk geri yüklenir, worker devam eder). Sıra: kuyruğu `closing`
-bayrağıyla **dondur** (yeni dispatch durur ama mesajlar korunur) → uçuştaki turu iptal
-edip `run.done`'u bekle (`sessionTeardownGrace`=15sn, bitmezse abort) → warm süreçleri
+bayrağıyla **dondur** (yeni dispatch durur ama mesajlar korunur) → Interaction MCP
+çağrı kapısını kapat (yeni CLI/bridge çağrıları `session closing` ile reddedilir) →
+uçuştaki turu iptal edip `run.done`'u bekle → provider finalizasyonundan sonra hâlâ
+yaşayan MCP çağrılarını delete context'iyle iptal edip bitmelerini bekle
+(`sessionTeardownGrace`=15sn tüm bu fazların ortak deadline'ıdır; bitmezse abort) → warm süreçleri
 **doğrulanmış kill** ile düşür (`DropSessionChecked`/`closeChecked`: öldürülemeyen süreç
-havuzda kalır, orphan olmaz, delete'i bloke eder) → autonomous worker'ı durdur → inbox
-girdisini kaldır. `CLISession.closeChecked` `os.ErrProcessDone`'u başarı sayar, kill
-hatasında `closed=false` bırakıp retry'a izin verir. Testler: `session_teardown_test.go`
-(stop/timeout/freeze/resume). `go build`/`go vet` temiz, 403 test geçiyor.
+havuzda kalır, orphan olmaz, delete'i bloke eder) → autonomous worker'ı aynı deadline
+context'iyle iki fazlı durdurup goroutine temizliğinin bitmesini bekle (timeout/hata
+delete'i bloke eder ve worker kontrolü + bekleyen follow-up kuyruğu yeniden açılır) →
+kalıcı DB delete başarılıysa inbox girdisi ile hub state'ini kaldır. DB delete hatasında
+inbox/hub/bridge call gate ve worker hazırlığını birlikte geri al. `CLISession.closeChecked`
+`os.ErrProcessDone`'u başarı sayar, kill
+hatasında `closed=false` bırakıp retry'a izin verir. Abort çağrı kapısını da yeniden
+açar; aynı `(workspace, session)` teardown'ları session-kapsamlı kilitle serileştirilir,
+bu nedenle başarısız bir teardown başka teardown'ın kapısını/inbox'ını açamaz; farklı
+session'lar birbirini bloklamaz. HTTP delete kilidi runtime teardown'dan DB
+`DeleteSession` dönüşüne kadar tutulur. Worker hazırlığı ancak DB silme başarılıysa
+commit edilip bekleyen follow-up kuyruğu düşürür; DB hata verirse abort kuyruğu yeniden
+işlenebilir hale getirir. Normal `StopWorker` ile queue drain'in dispatch kararı aynı
+worker-queue kritik bölümündedir; stop başarı döndükten sonra yeni tur başlayamaz.
+Normal turn completion `ask_user` çağrılarını iptal etmez. Testler:
+`session_teardown_test.go` (stop/timeout/freeze/resume, bridge drain/reject/fail-closed,
+geç yazım sonrası dizinin yeniden oluşmaması). `go build`/`go vet` temiz, 403 test geçiyor.
 
 ## Slash komutları hub'a taşındı (durable, 2026-08-04)
 

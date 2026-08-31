@@ -286,12 +286,14 @@ func (r *Runtime) stopSubtree(ctx context.Context, sessionID, reason string) {
 		if !w.Running {
 			continue
 		}
+		r.workerQueueMu.Lock()
 		if v, ok := r.workerCancels.Load(w.SessionID); ok {
 			ctl := v.(*workerCtl)
 			ctl.stopped.Store(true)
 			ctl.cancel()
 			stopped++
 		}
+		r.workerQueueMu.Unlock()
 	}
 	if stopped > 0 {
 		r.logger.Info("coordination: cascaded stop through subtree",

@@ -68,20 +68,37 @@ Kart ayrıca katlamanın kaynağını ve CLI oturum sonucunu taşır: `source`
 `exec --json`, snake_case `context_compaction` item'ını started/completed çiftiyle
 taşır. App Server'ın camelCase `contextCompaction` item'ı ve
 `thread/compact/start` RPC'si ayrı transporttur. Claude Code 2.1.238+
-`--include-hook-events` ile `PreCompact` başlangıcını; `compact_boundary` ve
-`PostCompact` tamamlanma kanıtını taşır. Completion sinyalleri deduplicate edilir.
-Eksik/eski CLI sürümünde capability fail-closed kalır.
+`--include-hook-events` ile `PreCompact` başlangıcını; `compact_boundary`,
+`system/status compact_result=success` ve `PostCompact` tamamlanma kanıtını taşır.
+Completion sinyalleri deduplicate edilir. Manuel native tetik yalnız mevcut CLI
+oturumuna `claude -p --resume <id> ...` çağrısının stdin'inde **tek başına**
+`/compact` gönderilerek yapılır. Normal provider prompt render'ından geçirilmez:
+sistem/dinamik bağlam veya başka metinle çevrelenirse slash command yerine model
+promptu olur. Native oturum yoksa TionHarness rolling-summary fold'u ve
+`restart-summary` fallback'i korunur. Eksik/eski CLI sürümünde capability
+fail-closed kalır.
 
-TionHarness fold'u CLI'ya `/compact` enjekte etmez; sıcak CLI
+Manuel API yolu da provider `OnEvent` akışını session hub'a bağlar: running kartı
+CLI lifecycle ID'siyle açılır, tamamlanan kart aynı ID'yi taşır. Structured
+başarısızlıkta parser aynı ID'ye tombstone yollar; fallback kartı ayrı TionHarness
+fold sonucu olarak kalıcılaşır.
+
+Native manuel başarı `cli-native/native-compact` kartı ve `DebugCompaction`
+yazar; TionHarness rolling summary'sini ve `SummaryMsgCount` sınırını değiştirmez.
+CLI `compact_result=failed` döndürürse structured hata `DebugCompaction` içinde
+saklanır ve TionHarness rolling-summary fallback'i çalışır. Transport/process
+hataları hard failure kalır.
+TionHarness'ın auto/reactive fold'u CLI'ya `/compact` enjekte etmez; sıcak CLI
 oturumunu bırakır ve aynı kartta `restart-summary` göstererek TionHarness özeti +
 son mesaj kuyruğuyla fresh CLI session başlatır.
 
-Manuel `/compact` başarı mesajı da aynı yapısal `compaction` adımını kendi
-`steps` alanında kalıcı taşır (`trigger=manual`, `source=tionharness`, CLI ise
-`sessionAction=restart-summary`). Gerçek fold sonrası hem DB'deki resume id/sınırı
-temizlenir hem Claude persistent-pool süreci düşürülür. Auto, wake ve side-chat
-fold yolları da persistent süreci provider çağrısından önce düşürür; özet eski
-warm transcriptin üstüne eklenmez.
+Manuel `/compact` başarı mesajı aynı yapısal `compaction` adımını kendi `steps`
+alanında kalıcı taşır. Resumable Claude CLI oturumunda kaynak `cli-native`, aksiyon
+`native-compact` olur. Diğer yollarda `source=tionharness`; CLI fallback'i
+`sessionAction=restart-summary` taşır. TionHarness fold'u sonrası hem DB'deki
+resume id/sınırı temizlenir hem Claude persistent-pool süreci düşürülür. Auto,
+wake ve side-chat fold yolları da persistent süreci provider çağrısından önce
+düşürür; özet eski warm transcriptin üstüne eklenmez.
 
 **Adımı yayan yollar.** Katlama nerede olursa olsun aynı kart çıkar:
 
@@ -89,7 +106,7 @@ warm transcriptin üstüne eklenmez.
 |-----|-------------|--------|
 | İnteraktif tur | `auto` | `api.compactionLeadStep(prep.Fold)` — `chat_stream.go` |
 | Otonom tur (wake/spawn/worker) | `auto` | aynı yardımcı — `wake_turn.go` |
-| `/compact` komutu | `manual` | `Manager.ForceCompact` dönüşü |
+| `/compact` komutu | `manual` | resumable Claude CLI'da native lifecycle; diğer durumda `Manager.ForceCompact` dönüşü |
 | Tur içi taşma kurtarması | `reactive` | `agent.reactiveCompactionStep` — `toolloop.go`'daki iki kurtarma dalı |
 | Yan sohbet (`btw`) | `auto` | `chat_btw.go`; `Prepare`'in paylaşılan katlaması |
 
@@ -204,7 +221,7 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
 1. **claude-cli (trace tabanlı):** `providers.Request.OnEvent func(TraceStep)` —
    `claudecli.go` stream-json'u **satır satır** (`bufio`) okuyup olayları anında
    yayınlar: thinking hemen, ara metin flush'ta, tool adımı sonucu gelince.
-   `cliStreamParser` (feed/finish) artımlı durumu tutar. JSON ayrıştırması bozulan
+   `cliStreamParser` (feed/finish, `claudecli_stream.go`) artımlı durumu tutar. JSON ayrıştırması bozulan
    olaylar sessizce kaybolmaz: tur başına yalnız ilk hata, `len(line)` ve ayrıştırma
    hatasıyla birlikte en fazla 500 baytlık `[claude-cli parse drop]` notu olarak
    ize eklenir. Girdi satırına boyut sınırı uygulanmaz; 1 MiB üzerindeki satırlar da

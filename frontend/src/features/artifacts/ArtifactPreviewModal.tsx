@@ -263,6 +263,7 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
                 throw new AggregateError(
                   [createError, cleanupError],
                   t('artifactAnnotation.saveAndCleanupError'),
+                  { cause: cleanupError },
                 )
               }
               throw createError

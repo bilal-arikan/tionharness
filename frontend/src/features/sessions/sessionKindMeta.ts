@@ -61,7 +61,7 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'task', label: 'Görev' },
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
-  { key: SUBAGENT_CHIP, label: 'Subagent Oturumları' },
+  { key: SUBAGENT_CHIP, label: 'Subagent' },
   // Cron schedules are time-triggered automations, so the chip unifies both
   // kinds under one "Otomasyon" label (matching the management screen's umbrella
   // naming). The per-row icon still distinguishes them (Clock vs Zap).

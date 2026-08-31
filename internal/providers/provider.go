@@ -324,6 +324,10 @@ type Response struct {
 	// turn, so the caller must store THIS value to resume on the next turn. Empty for
 	// providers without a resumable server-side session.
 	SessionID string
+	// NativeCompactionError is populated when the CLI emitted a structured
+	// compact_result=failed lifecycle. Ordinary turns may continue after such an
+	// event; explicit manual-compaction callers treat it as their command error.
+	NativeCompactionError string
 	// ProviderCalls is the number of underlying model API round-trips this Response
 	// aggregates. 0 for native single-call providers (one Complete == one call); for
 	// claude-cli it is the CLI's internal tool-loop turn count (result event
@@ -468,6 +472,26 @@ type ScopedCLIResumer interface {
 // undocumented /compact command; TionHarness restarts from summary + recent tail.
 type CLICompactionLifecycle interface {
 	NativeCompactionEvents() bool
+}
+
+// CLINativeManualCompactor runs the CLI's documented manual compaction command
+// against an existing native session. Implementations must send the command as
+// the complete user input; rendering it through an ordinary completion request
+// turns it into model-visible text instead of a slash command.
+type CLINativeManualCompactor interface {
+	CompactNative(ctx context.Context, resumeSessionID string, req Request) (*Response, error)
+}
+
+// NativeCompactionFailure is a structured rejection from the CLI's native
+// compactor (for example, too little native transcript history). Callers may
+// safely fall back to their own compactor; transport and process errors remain
+// ordinary errors and must not be swallowed.
+type NativeCompactionFailure struct {
+	Detail string
+}
+
+func (e *NativeCompactionFailure) Error() string {
+	return "native compaction failed: " + e.Detail
 }
 
 func HasNativeCLICompactionEvents(p Provider) bool {

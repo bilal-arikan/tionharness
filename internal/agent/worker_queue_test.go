@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -131,7 +132,7 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 
 	// Turn ends: isSessionActive flips false (untrackSession), then the drain runs.
 	rt.untrackSession(workerID)
-	rt.drainWorkerQueue(wa, workerID, coordID)
+	rt.drainWorkerQueue(wa, workerID, coordID, &workerCtl{})
 
 	msg, ok := delivered()
 	want := "first task\n\n---\n\nsecond task\n\n---\n\nthird task"
@@ -144,6 +145,142 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 	rt.workerQueueMu.Unlock()
 	if still {
 		t.Fatal("queue slot must be freed after delivery")
+	}
+}
+
+func TestStopWorker_DropsQueuedFollowUpWithoutRestart(t *testing.T) {
+	rt, coordID, workerID, delivered := queueTestFixture(t)
+	ctx := context.Background()
+	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	rt.workerCancels.Store(workerID, ctl)
+	rt.trackSession(workerID, func() {})
+	if _, err := rt.SendToWorker(ctx, coordID, workerID, "must not restart"); err != nil {
+		t.Fatalf("queue follow-up: %v", err)
+	}
+
+	stopDone := make(chan error, 1)
+	go func() { stopDone <- rt.StopWorker(ctx, coordID, workerID) }()
+	deadline := time.Now().Add(time.Second)
+	for !ctl.stopped.Load() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !ctl.stopped.Load() {
+		t.Fatal("StopWorker did not mark control stopped")
+	}
+	rt.untrackSession(workerID)
+	workerSession, err := rt.db.GetSession(ctx, workerID)
+	if err != nil {
+		t.Fatalf("get worker: %v", err)
+	}
+	workerAgent, err := rt.db.GetAgent(ctx, workerSession.AgentID)
+	if err != nil {
+		t.Fatalf("get agent: %v", err)
+	}
+	rt.drainWorkerQueue(workerAgent, workerID, coordID, ctl)
+	close(ctl.done)
+	if err := <-stopDone; err != nil {
+		t.Fatalf("StopWorker: %v", err)
+	}
+	rt.workerCancels.Delete(workerID)
+	if _, ok := delivered(); ok {
+		t.Fatal("stopped worker must not dispatch queued follow-up")
+	}
+	rt.workerQueueMu.Lock()
+	_, queued := rt.workerQueue[workerID]
+	rt.workerQueueMu.Unlock()
+	if queued {
+		t.Fatal("stopped worker queue must be dropped fail-closed")
+	}
+	if err := rt.StopWorker(ctx, coordID, workerID); err == nil || !errors.Is(err, errWorkerNotRunning) {
+		t.Fatalf("finished worker should report not running, got %v", err)
+	}
+}
+
+func TestStopWorkerAtomicWithQueueDrainDispatch(t *testing.T) {
+	rt, coordID, workerID, delivered := queueTestFixture(t)
+	ctx := context.Background()
+	oldCtl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	rt.workerCancels.Store(workerID, oldCtl)
+	rt.workerQueue[workerID] = []string{"racing follow-up"}
+
+	drainAtDecision := make(chan struct{})
+	releaseDrain := make(chan struct{})
+	rt.workerDrainBeforeDispatch = func() {
+		close(drainAtDecision)
+		<-releaseDrain
+	}
+	workerSession, _ := rt.db.GetSession(ctx, workerID)
+	workerAgent, _ := rt.db.GetAgent(ctx, workerSession.AgentID)
+	drainDone := make(chan struct{})
+	go func() {
+		rt.drainWorkerQueue(workerAgent, workerID, coordID, oldCtl)
+		close(drainDone)
+	}()
+	<-drainAtDecision
+
+	stopDone := make(chan error, 1)
+	go func() { stopDone <- rt.StopWorker(ctx, coordID, workerID) }()
+	select {
+	case err := <-stopDone:
+		t.Fatalf("stop crossed drain decision critical section: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(releaseDrain)
+	<-drainDone
+	close(oldCtl.done)
+	if err := <-stopDone; err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if msg, ok := delivered(); !ok || msg != "racing follow-up" {
+		t.Fatalf("authorized drain should finish before stop returns, got (%q, %v)", msg, ok)
+	}
+	if _, running := rt.workerCancels.Load(workerID); running {
+		t.Fatal("no worker turn may remain after stop returns")
+	}
+}
+
+func TestStopWorkerForTeardownTimeoutRestoresQueuedFollowUp(t *testing.T) {
+	rt, _, workerID, delivered := queueTestFixture(t)
+	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
+	rt.workerCancels.Store(workerID, ctl)
+	rt.workerQueue[workerID] = []string{"preserve me"}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := rt.StopWorkerForTeardown(ctx, workerID); err == nil {
+		t.Fatal("want teardown timeout")
+	}
+	if ctl.teardown.Load() {
+		t.Fatal("failed preparation must reopen worker control")
+	}
+	rt.workerCancels.Delete(workerID)
+	close(ctl.done)
+	rt.FinishWorkerTeardown(workerID, false)
+	if msg, ok := delivered(); !ok || msg != "preserve me" {
+		t.Fatalf("aborted teardown must resume queued follow-up, got (%q, %v)", msg, ok)
+	}
+}
+
+func TestSuccessfulWorkerTeardownDropsQueueWithoutRestart(t *testing.T) {
+	rt, _, workerID, delivered := queueTestFixture(t)
+	rt.workerQueue[workerID] = []string{"must never run"}
+	rt.FinishWorkerTeardown(workerID, true)
+	rt.workerQueueMu.Lock()
+	_, queued := rt.workerQueue[workerID]
+	rt.workerQueueMu.Unlock()
+	if queued {
+		t.Fatal("committed teardown must discard queued follow-up")
+	}
+	if _, ok := delivered(); ok {
+		t.Fatal("committed teardown must not restart worker")
+	}
+}
+
+func TestAbortWorkerTeardownAfterDeleteErrorResumesQueue(t *testing.T) {
+	rt, _, workerID, delivered := queueTestFixture(t)
+	rt.workerQueue[workerID] = []string{"retry after delete error"}
+	rt.FinishWorkerTeardown(workerID, false)
+	if msg, ok := delivered(); !ok || msg != "retry after delete error" {
+		t.Fatalf("delete rollback must resume queued work, got (%q, %v)", msg, ok)
 	}
 }
 
