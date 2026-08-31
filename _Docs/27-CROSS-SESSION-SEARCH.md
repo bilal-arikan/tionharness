@@ -9,7 +9,8 @@
 > daima sunulur.
 >
 > **Durum (2026-06-22): Parça 1, 2, 3 TAMAMEN UYGULANDI — görsel arama dahil.**
-> Sidebar arama kutusu artık başlık + mesaj-içeriği arıyor; sonuca tıklayınca
+> Sidebar arama kutusu artık yüklenen oturumlarda başlık + session ID'yi yerel,
+> mesaj-içeriğini backend üzerinden arıyor; sonuca tıklayınca
 > oturum açılıp ilgili mesaja kaydırılıp flash'lanıyor. Uygulama özeti dosyanın sonunda.
 >
 > **CLI köprüsü (2026-06-22):** `conversation_search` artık claude-cli ajanlarına da
@@ -241,8 +242,9 @@ Parça 1, 2 ve Parça 3'ün backend/contract'ı sevk edildi. Plandan sapma yok.
   `sessionApi.searchMessages(q, {limit,role,exclude})` (`api/sessions.ts`).
   `tsc --noEmit` temiz.
 - **Doğrulama:** `go build ./...` + db/tools/api/agent testleri (200) yeşil.
-- **Görsel arama (2026-06-22):** `SessionsSidebar` arama kutusu artık çift işlevli —
-  yereldeki başlık filtresi + `api.searchMessages` ile mesaj-içeriği araması (≥2 char,
+- **Görsel arama (2026-06-22, ID filtresi 2026-08-31):** `SessionsSidebar` arama kutusu
+  artık çift işlevli — yüklenenlerde case-insensitive başlık/session ID substring filtresi
+  + `api.searchMessages` ile mesaj-içeriği araması (≥2 char,
   250ms debounce, `cancelled` guard'lı). "Mesajlarda (N)" bölümü rol-rozeti + snippet +
   yaş ile listeler; tıklayınca `onSelectSession(sessionId, messageId)`. App `selectSession`
   artık opsiyonel `messageId` taşır → `scrollToMsgId` state → `MessageList`. `MessageList`
