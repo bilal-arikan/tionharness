@@ -155,3 +155,88 @@ func TestPoolReapEvictsIdleScopedOnly(t *testing.T) {
 		t.Fatal("shared connection must stay alive")
 	}
 }
+
+// CloseSession closes every connection scoped to the named session — across all
+// of that session's agents — and leaves other sessions and the shared slot alone.
+// Session deletion depends on this: a scoped stdio server's cwd is the session's
+// scratchpad, and Windows will not remove a directory a live process sits in.
+func TestPoolCloseSessionClosesOnlyThatSession(t *testing.T) {
+	ctx := context.Background()
+	p := newTestPool(scopedIdleTTL, nil)
+	defer p.Close()
+
+	for _, scope := range []string{"s1|a1", "s1|a2", "s2|a1"} {
+		if _, _, errs := p.Catalog(ctx, []ServerConfig{scopedCfg(scope)}); len(errs) != 0 {
+			t.Fatalf("%s build errs: %v", scope, errs)
+		}
+	}
+	if _, _, errs := p.Catalog(ctx, []ServerConfig{fakeCfg()}); len(errs) != 0 {
+		t.Fatalf("shared build errs: %v", errs)
+	}
+	doomedA1 := p.entry(scopedEntryKey("s1|a1", "fake")).client
+	doomedA2 := p.entry(scopedEntryKey("s1|a2", "fake")).client
+	survivor := p.entry(scopedEntryKey("s2|a1", "fake")).client
+	shared := p.entry("fake").client
+
+	if closed := p.CloseSession("s1"); closed != 2 {
+		t.Fatalf("want 2 closed connections for s1, got %d", closed)
+	}
+
+	for name, key := range map[string]string{
+		"s1|a1": scopedEntryKey("s1|a1", "fake"),
+		"s1|a2": scopedEntryKey("s1|a2", "fake"),
+	} {
+		if _, ok := p.entries[key]; ok {
+			t.Errorf("%s entry must be dropped from the pool", name)
+		}
+	}
+	if doomedA1.Alive() || doomedA2.Alive() {
+		t.Error("every connection of the deleted session must be closed")
+	}
+	if _, ok := p.entries[scopedEntryKey("s2|a1", "fake")]; !ok || !survivor.Alive() {
+		t.Error("another session's connection must survive")
+	}
+	if _, ok := p.entries["fake"]; !ok || !shared.Alive() {
+		t.Error("the shared connection must survive")
+	}
+}
+
+// A session id must match on the full "<sessionID>|" boundary, so closing SES1
+// never takes SES11 down with it.
+func TestPoolCloseSessionDoesNotMatchIDPrefix(t *testing.T) {
+	ctx := context.Background()
+	p := newTestPool(scopedIdleTTL, nil)
+	defer p.Close()
+
+	for _, scope := range []string{"SES1|a1", "SES11|a1"} {
+		if _, _, errs := p.Catalog(ctx, []ServerConfig{scopedCfg(scope)}); len(errs) != 0 {
+			t.Fatalf("%s build errs: %v", scope, errs)
+		}
+	}
+	neighbour := p.entry(scopedEntryKey("SES11|a1", "fake")).client
+
+	if closed := p.CloseSession("SES1"); closed != 1 {
+		t.Fatalf("want exactly 1 closed connection, got %d", closed)
+	}
+	if _, ok := p.entries[scopedEntryKey("SES11|a1", "fake")]; !ok || !neighbour.Alive() {
+		t.Fatal("SES11 must not be closed by deleting SES1")
+	}
+}
+
+// An empty session id closes nothing: it would otherwise be a prefix of every
+// scope key and take the whole pool down.
+func TestPoolCloseSessionEmptyIsNoOp(t *testing.T) {
+	ctx := context.Background()
+	p := newTestPool(scopedIdleTTL, nil)
+	defer p.Close()
+
+	if _, _, errs := p.Catalog(ctx, []ServerConfig{scopedCfg("s1|a1")}); len(errs) != 0 {
+		t.Fatalf("scoped build errs: %v", errs)
+	}
+	if closed := p.CloseSession(""); closed != 0 {
+		t.Fatalf("empty session id must close nothing, closed %d", closed)
+	}
+	if !p.entry(scopedEntryKey("s1|a1", "fake")).client.Alive() {
+		t.Fatal("connection must stay alive")
+	}
+}

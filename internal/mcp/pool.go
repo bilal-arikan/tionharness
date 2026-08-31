@@ -400,6 +400,54 @@ func (p *Pool) Stats() []EntryStat {
 // IdleTTL is the scoped-connection idle-eviction window (0 = eviction disabled).
 func (p *Pool) IdleTTL() time.Duration { return p.idleTTL }
 
+// CloseSession terminates every SCOPED connection belonging to one session and
+// returns how many it closed. Shared (unscoped) slots are untouched — they serve
+// other sessions.
+//
+// Session deletion needs this: a scoped stdio server runs as a subprocess whose
+// cwd is that session's scratchpad (see agent.applyMCPScratchpadRoot). Windows
+// refuses to remove a directory that is any live process's cwd, so leaving the
+// subprocess alive until the idle reaper evicts it makes the delete fail with
+// "the process cannot access the file". Closing here is what lets the session
+// directory actually go away.
+//
+// Scoped keys are "<sessionID>|<agentID>" + scopeSep + server, so one session may
+// own several entries (one per agent that used the server).
+func (p *Pool) CloseSession(sessionID string) int {
+	if sessionID == "" {
+		return 0
+	}
+	prefix := sessionID + "|"
+	p.mu.Lock()
+	var doomed []*poolEntry
+	for k, e := range p.entries {
+		scope, _, ok := strings.Cut(k, scopeSep)
+		if !ok || !strings.HasPrefix(scope, prefix) {
+			continue
+		}
+		doomed = append(doomed, e)
+		delete(p.entries, k)
+	}
+	p.mu.Unlock()
+	// Close outside the pool lock, matching reapScoped: a slow Close must not stall
+	// unrelated callers.
+	closed := 0
+	for _, e := range doomed {
+		e.mu.Lock()
+		if e.client != nil {
+			_ = e.client.Close()
+			e.client = nil
+			e.listed = false
+			closed++
+		}
+		e.mu.Unlock()
+	}
+	if closed > 0 {
+		p.log(slog.LevelInfo, "mcp pool: closed session-scoped connections", "session", sessionID, "closed", closed)
+	}
+	return closed
+}
+
 // Close terminates every pooled connection and stops the reaper. Safe to call
 // multiple times.
 func (p *Pool) Close() {
