@@ -259,8 +259,12 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	// historyKinds is every execution kind that piles up in the "Geçmiş" archive
 	// anchor. Beyond the Activity feed's chat/task/flow/schedule it now also
-	// includes worker/spawned/inbox and flow-coordinator, so finished coordinator
+	// includes worker/spawned and flow-coordinator, so finished coordinator
 	// workers are visible (and filterable) instead of vanishing when they end.
+	//
+	// "inbox" is retained for sessions created BEFORE peer messages moved into the
+	// recipient's ordinary chat thread (TSK507). Nothing stamps that kind any more,
+	// but existing transcripts still carry it and must stay visible here.
 	historyKinds := map[string]bool{
 		"chat": true, "task": true, "flow": true, "schedule": true,
 		"worker": true, "spawned": true, "inbox": true,
@@ -382,13 +386,15 @@ func instanceCount(m map[string][]string) int {
 // instanceRunLabel names the execution path behind an agent instance in Turkish
 // (the UI language) — what makes two copies of the same agent tell apart.
 var instanceRunLabel = map[string]string{
-	"chat":                "Sohbet",
-	"task":                "Görev",
-	"flow":                "Akış",
-	"flow-coordinator":    "Akış koordinatörü",
-	"schedule":            "Zamanlama",
-	"spawned":             "Spawn",
-	"worker":              "Worker",
+	"chat":             "Sohbet",
+	"task":             "Görev",
+	"flow":             "Akış",
+	"flow-coordinator": "Akış koordinatörü",
+	"schedule":         "Zamanlama",
+	"spawned":          "Spawn",
+	"worker":           "Worker",
+	// Legacy only — no new session carries "inbox" (TSK507); kept so old
+	// transcripts still render a name instead of a raw kind string.
 	"inbox":               "Inbox",
 	db.SessionKindInsight: "İçgörü taraması",
 }

@@ -69,9 +69,10 @@ func postRewind(t *testing.T, s *Server, wsp *workspace.Workspace, sessionID, ms
 // past checkpoint. On an orchestrator-owned run log there is no composer to
 // re-drive the conversation from that checkpoint, so the rewind would only
 // destroy the record — every non-writable kind must refuse it with 403, and the
-// messages must survive.
+// messages must survive. "worker" is absent since TSK507: it became writable, so
+// there IS a composer to re-drive a worker conversation from a checkpoint.
 func TestRewindRejectedOnReadOnlySessions(t *testing.T) {
-	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator", "worker", db.SessionKindInsight} {
+	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator", db.SessionKindInsight} {
 		t.Run(kind, func(t *testing.T) {
 			s, wsp := newWorkspaceServer(t)
 			ctx := context.Background()
@@ -127,9 +128,11 @@ func TestRewindAllowedOnWritableKinds(t *testing.T) {
 // transcripts are orchestrator-owned run logs — the UI hides the composer for
 // them and the API must agree, instead of silently accepting a turn that has no
 // run to attach to. "schedule" is deliberately absent: it is the agent's
-// long-lived cron thread, which the user may keep talking in.
+// long-lived cron thread, which the user may keep talking in. "worker" is absent
+// for the same reason since TSK507 — it is a live conversation, not a finished
+// record (see TestEnqueueMessageAcceptedOnWorkerSession).
 func TestEnqueueMessageRejectsOrchestratorSessions(t *testing.T) {
-	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator", "worker"} {
+	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator"} {
 		t.Run(kind, func(t *testing.T) {
 			s, wsp := newWorkspaceServer(t)
 			sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: kind, Title: kind})
@@ -149,6 +152,22 @@ func TestEnqueueMessageRejectsOrchestratorSessions(t *testing.T) {
 				t.Fatal("a refused message must not create a queue for the session")
 			}
 		})
+	}
+}
+
+// TestEnqueueMessageAcceptedOnWorkerSession: the composer half of TSK507. A
+// worker transcript is a live conversation its coordinator already injects turns
+// into, so a human turn must be ENQUEUED rather than refused — otherwise the UI
+// shows a composer the API rejects, the exact drift the writable list exists to
+// prevent.
+func TestEnqueueMessageAcceptedOnWorkerSession(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: "worker", Title: "worker"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if rec := postMessage(t, s, wsp, sess.ID); rec.Code == http.StatusForbidden {
+		t.Fatalf("a worker session must accept a user message: %s", rec.Body.String())
 	}
 }
 

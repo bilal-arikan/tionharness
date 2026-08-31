@@ -15,7 +15,10 @@ import (
 //	flow     — orchestration flow run transcript
 //	task     — kanban task run transcript
 //	schedule — cron/scheduler delivery transcript
-//	inbox    — the agent's persistent peer-message inbox
+//
+// There is no dedicated peer-message kind: an agent's standing thread of messages
+// from other agents is an ordinary "chat" session (TSK507, see
+// internal/agent/agentmsg.go), so it archives and lists as a chat.
 const (
 	sessionKindChat     = "chat"
 	sessionKindSpawned  = "spawned"
@@ -23,7 +26,6 @@ const (
 	sessionKindFlow     = "flow"
 	sessionKindTask     = "task"
 	sessionKindSchedule = "schedule"
-	sessionKindInbox    = "inbox"
 )
 
 // archivableSessionKinds is the full set archive_sessions can sweep — i.e. what
@@ -36,7 +38,6 @@ var archivableSessionKinds = []string{
 	sessionKindFlow,
 	sessionKindTask,
 	sessionKindSchedule,
-	sessionKindInbox,
 }
 
 // defaultArchiveKinds is what archive_sessions matches when the caller passes no

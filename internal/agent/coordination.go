@@ -896,7 +896,11 @@ func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, worker
 	if !r.acquireSpawnSlotAtDepth(depth) {
 		return fmt.Errorf("background turn limit reached; try again once some finish")
 	}
-	if _, err := r.recordInjectedUserNote(ctx, workerSessionID, "", message); err != nil {
+	// Credit the coordinator that wrote this follow-up so the worker transcript
+	// shows it as an incoming message FROM that agent, the same way a peer inbox
+	// delivery renders (TSK507). Best-effort: if the coordinator's agent cannot be
+	// resolved the note still lands, just unattributed.
+	if _, err := r.recordAgentAuthoredNote(ctx, workerSessionID, r.sessionAgentID(ctx, coordSessionID), agent.ID, message); err != nil {
 		r.releaseSpawnSlot()
 		return err
 	}
@@ -1559,6 +1563,61 @@ func (r *Runtime) recordInjectedUserNote(ctx context.Context, sessionID, origin,
 		Role:      "user",
 		Origin:    origin,
 		Text:      text,
+	})
+}
+
+// sessionAgentID resolves which agent owns a session, for attributing a note that
+// session's agent wrote into ANOTHER session. It returns "" when there is nothing
+// to credit (no session id, or the session is gone) — attribution is a display
+// nicety, so a failed lookup must degrade to an unattributed note rather than
+// fail the delivery that carries the actual work.
+func (r *Runtime) sessionAgentID(ctx context.Context, sessionID string) string {
+	if strings.TrimSpace(sessionID) == "" {
+		return ""
+	}
+	sess, err := r.db.GetSession(ctx, sessionID)
+	if err != nil {
+		return ""
+	}
+	return sess.AgentID
+}
+
+// recordAgentAuthoredNote persists a runtime-injected user-role turn that was
+// WRITTEN BY AN AGENT — a spawn prompt, or a coordinator's follow-up to a worker
+// — attributing it to that agent instead of leaving it an anonymous bubble
+// (TSK507).
+//
+// Attribution is what makes the frontend render it as an incoming peer message
+// (MessageList's isPeer → PeerTurn, keyed on role "user" + authorKind "agent" +
+// authorId) rather than as the human's own turn, so a reader can tell at a glance
+// that another agent said this. It is the same participant stamping a peer inbox
+// delivery uses; only the delivery path differs.
+//
+// fromAgentID empty means there is no agent author to credit (a human-initiated
+// spawn from the UI): the note stays a plain bubble, which is correct — inventing
+// an author would misattribute a human's words to an agent.
+//
+// fromAgentID is also REQUIRED TO RESOLVE to a real agent before it is stamped.
+// It is fed from SpawnOptions.CreatedBy, a provenance field that carries
+// non-agent origins too ("automation:<id>" — see automation.go), and the frontend
+// resolves authorId against the agent roster to name the sender. Stamping an id
+// no agent owns would render an unnamed peer bubble, so an unresolvable author
+// degrades to a plain note instead.
+func (r *Runtime) recordAgentAuthoredNote(ctx context.Context, sessionID, fromAgentID, toAgentID, text string) (db.Message, error) {
+	fromAgentID = strings.TrimSpace(fromAgentID)
+	if fromAgentID == "" {
+		return r.recordInjectedUserNote(ctx, sessionID, "", text)
+	}
+	if _, err := r.db.GetAgent(ctx, fromAgentID); err != nil {
+		return r.recordInjectedUserNote(ctx, sessionID, "", text)
+	}
+	return r.recordInjectedUserMessage(ctx, db.Message{
+		SessionID:   sessionID,
+		Role:        "user",
+		Text:        text,
+		AuthorKind:  db.AuthorAgent,
+		AuthorID:    fromAgentID,
+		RecipientID: toAgentID,
 	})
 }
 

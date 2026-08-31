@@ -284,8 +284,13 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 	// real conversation in the activity feed — and bridge it to the hub so a window
 	// watching the spawned session renders the prompt live, in order before the reply
 	// (_Docs/58), not only on reload.
+	//
+	// When an AGENT ordered this spawn (opts.CreatedBy), the prompt is that agent
+	// speaking, so it is attributed to it and renders as an incoming peer message
+	// rather than as the human's own turn (TSK507). A user/API spawn leaves
+	// CreatedBy empty and keeps the plain bubble.
 	addOpeningMessage := func() error {
-		_, err := r.recordInjectedUserNote(ctx, session.ID, "", prompt)
+		_, err := r.recordAgentAuthoredNote(ctx, session.ID, opts.CreatedBy, agent.ID, prompt)
 		return err
 	}
 	if opts.ChildSession != nil {

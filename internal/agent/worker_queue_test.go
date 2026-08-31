@@ -307,3 +307,36 @@ func TestSendToWorkerDeliversWhenIdle(t *testing.T) {
 		t.Fatal("idle delivery must not touch the queue")
 	}
 }
+
+// TestSendToWorkerAttributesFollowUpToCoordinator: a coordinator's follow-up is
+// that agent speaking into the worker's transcript, so it is recorded with the
+// participant fields the frontend renders a peer bubble from — otherwise it
+// reads as if the human typed it (TSK507).
+func TestSendToWorkerAttributesFollowUpToCoordinator(t *testing.T) {
+	rt, coordID, workerID, _ := queueTestFixture(t)
+	ctx := context.Background()
+
+	coord, err := rt.db.GetSession(ctx, coordID)
+	if err != nil {
+		t.Fatalf("get coordinator: %v", err)
+	}
+	if _, err := rt.SendToWorker(ctx, coordID, workerID, "go now"); err != nil {
+		t.Fatalf("idle send: %v", err)
+	}
+
+	msgs, err := rt.db.ListMessages(ctx, workerID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(msgs) == 0 {
+		t.Fatal("the follow-up should be recorded in the worker transcript")
+	}
+	last := msgs[len(msgs)-1]
+	if last.Role != "user" {
+		t.Errorf("follow-up should be a user turn, got %q", last.Role)
+	}
+	if last.AuthorKind != db.AuthorAgent || last.AuthorID != coord.AgentID {
+		t.Errorf("participant fields wrong: kind=%q author=%q (want agent/%s)",
+			last.AuthorKind, last.AuthorID, coord.AgentID)
+	}
+}

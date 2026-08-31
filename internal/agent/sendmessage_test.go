@@ -40,7 +40,7 @@ func TestDeliverAgentMessage_Synchronous(t *testing.T) {
 		t.Errorf("confirmation should name the recipient: %q", res)
 	}
 
-	inbox, err := rt.db.GetOrCreateKindSession(ctx, target.ID, inboxSessionKind, "📥 Inbox")
+	inbox, err := rt.db.GetOrCreateSourceSession(ctx, inboxSessionKind, inboxSessionSource(target.ID), target.ID, inboxSessionTitle(target.Name))
 	if err != nil {
 		t.Fatalf("inbox: %v", err)
 	}
@@ -66,6 +66,55 @@ func TestDeliverAgentMessage_Synchronous(t *testing.T) {
 	}
 }
 
+// TestDeliverAgentMessage_DoesNotHijackExistingChat pins why the peer thread is
+// keyed by (kind, sourceID) and not by (agentID, kind): since TSK507 it lives in
+// an ordinary writable "chat" session, and "chat" is also the kind of every
+// ad-hoc session a human opens. An (agentID, "chat") lookup would find the
+// human's existing conversation first and deliver peer messages into it.
+func TestDeliverAgentMessage_DoesNotHijackExistingChat(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	sender, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Ada", Provider: "anthropic", Model: "m"})
+	target, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Kai", Provider: "anthropic", Model: "m"})
+
+	// The human's own chat with Kai, opened BEFORE any peer message arrives.
+	userChat, err := rt.db.CreateSession(ctx, db.Session{AgentID: target.ID, Kind: "chat", Title: "insan sohbeti"})
+	if err != nil {
+		t.Fatalf("create chat: %v", err)
+	}
+
+	if _, err := rt.DeliverAgentMessage(ctx, sender.ID, "Kai", "", "peer mesajı"); err != nil {
+		t.Fatalf("deliver: %v", err)
+	}
+
+	msgs, err := rt.db.ListMessages(ctx, userChat.ID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("peer message leaked into the user's own chat: %+v", msgs)
+	}
+	peer, err := rt.db.GetOrCreateSourceSession(ctx, inboxSessionKind, inboxSessionSource(target.ID), target.ID, inboxSessionTitle(target.Name))
+	if err != nil {
+		t.Fatalf("peer thread: %v", err)
+	}
+	if peer.ID == userChat.ID {
+		t.Fatal("the peer thread must be a separate session from the user's chat")
+	}
+	if peerMsgs, _ := rt.db.ListMessages(ctx, peer.ID); len(peerMsgs) == 0 {
+		t.Fatal("the peer thread should hold the delivered message")
+	}
+}
+
+// TestPeerThreadIsWritable: the peer thread is deliberately an ordinary chat so
+// the human can join the conversation from the composer (TSK507) — that is the
+// whole reason it no longer has an "inbox" kind of its own.
+func TestPeerThreadIsWritable(t *testing.T) {
+	if !db.IsWritableSessionKind(inboxSessionKind) {
+		t.Fatalf("the peer-message thread kind %q must be writable", inboxSessionKind)
+	}
+}
+
 // TestDeliverAgentMessage_Broadcast delivers to every OTHER agent's inbox.
 func TestDeliverAgentMessage_Broadcast(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
@@ -82,7 +131,7 @@ func TestDeliverAgentMessage_Broadcast(t *testing.T) {
 		t.Errorf("broadcast should report 2 recipients: %q", res)
 	}
 	for _, target := range []db.Agent{b, c} {
-		inbox, _ := rt.db.GetOrCreateKindSession(ctx, target.ID, inboxSessionKind, "📥 Inbox")
+		inbox, _ := rt.db.GetOrCreateSourceSession(ctx, inboxSessionKind, inboxSessionSource(target.ID), target.ID, inboxSessionTitle(target.Name))
 		msgs, _ := rt.db.ListMessages(ctx, inbox.ID)
 		if len(msgs) == 0 || !strings.Contains(msgs[0].Text, `from="Lead"`) {
 			t.Errorf("agent %q should have the broadcast in its inbox: %+v", target.Name, msgs)

@@ -77,6 +77,12 @@ Akış:
    — koordinatör fan-out'uyla açılan worker oturumları (`Role == worker`) aynı
    yerde `🤖 <kısa prompt>` alır, böylece oturum listesinde düz spawn'dan ayrılır.
 5. `AddMessage(user, prompt)` — thread gerçek bir konuşma gibi okunsun.
+   **TSK507:** spawn'ı bir **ajan** başlattıysa (`SpawnOptions.CreatedBy` gerçek
+   bir ajana çözülüyorsa) bu açılış mesajı o ajana atfedilir
+   (`AuthorKind=agent`/`AuthorID=CreatedBy`/`RecipientID=<hedef ajan>`,
+   `recordAgentAuthoredNote`) ve arayüzde `PeerTurn` balonu olarak çizilir —
+   insanın kendi turu gibi değil. İnsan/API spawn'ı (`CreatedBy` boş) ve ajan
+   olmayan köken (`"automation:<id>"`) düz balon kalır.
 6. **Fire-and-forget:** `go r.runSpawn(agent, sessionID, prompt)` ve hemen
    `SpawnResult` döner. Çağıranın `ctx`'i goroutine'i **iptal etmez**
    (`context.WithoutCancel` + kendi timeout'u, vars. 10 dk) — sayfa/HTTP isteği

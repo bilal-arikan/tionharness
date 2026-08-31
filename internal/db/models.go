@@ -286,8 +286,22 @@ func MachineTranscriptKinds() []string {
 // USER TURN may be started. Manual chats ("" / "chat") plus "spawned" sessions
 // (spawn tool and handoff children) are linear transcripts a human is meant to
 // keep talking to. Every other kind — task, flow, automation, flow-coordinator,
-// worker, insight — is an orchestrator-owned transcript: a new user turn there has
+// insight — is an orchestrator-owned transcript: a new user turn there has
 // no run to attach to.
+//
+// "worker" is writable (TSK507). A worker session is not a finished run log but a
+// live single-agent conversation the coordinator is already talking INTO —
+// SendToWorker injects user-role turns into it while it runs. The human watching
+// that transcript must be able to do the same: answer a question the worker
+// asked, correct its course, or add missing context, instead of being limited to
+// reading. Interleaving is bounded the same way "schedule" is: a human turn and a
+// coordinator-injected turn claim the session's single turn slot (turnqueue), so
+// they serialize.
+//
+// Peer messages between agents no longer have a kind of their own: send_message
+// delivers into the recipient's standing "chat" thread (see
+// internal/agent/agentmsg.go), which is writable by virtue of being a chat, so
+// the human can join that conversation too.
 //
 // "schedule" is writable too, and is the one deliberate exception to that rule. A
 // schedule session is not a per-run log: it is the agent's single long-lived cron
@@ -311,7 +325,7 @@ func MachineTranscriptKinds() []string {
 // This list is the single source of truth for the whole product; the frontend's
 // isWritableSessionKind (frontend/src/shared/lib/sessionKind.ts) mirrors it and the
 // two must be changed together.
-var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "automation-run", "schedule-run"}
+var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "automation-run", "schedule-run", "worker"}
 
 // IsWritableSessionKind reports whether a new user turn may be started in a
 // session of this kind (see writableSessionKindList).

@@ -2,6 +2,43 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-31**
 
+## TSK507 — Peer mesajları normal sohbete taşındı, worker yazılabilir oldu (2026-08-31) ✅
+
+Ajanlar arası iletişimin arayüzdeki üç pürüzü giderildi:
+
+- **`inbox` oturum türü kaldırıldı.** `send_message` teslimi artık alıcının ayrı,
+  salt-okunur `📥 Inbox` oturumuna değil, **sıradan `chat` thread'ine** düşer
+  (`agent/agentmsg.go`). Tür bir izin kapısıydı: yalnız
+  `db.WritableSessionKinds` içindeki türler yeni kullanıcı turu kabul ettiğinden,
+  kendi türüne sahip olmak thread'i salt-okunur yapan tek şeydi. Thread ajan
+  başına tektir ve `GetOrCreateSourceSession(kind="chat",
+  sourceID="agent-messages:<agentID>")` ile aranır — **`(agentID, kind)` ile
+  değil**: `"chat"` insanın açtığı ad-hoc oturumların da türü olduğundan o arama
+  kullanıcının kendi sohbetini bulup peer mesajlarını oraya sızdırırdı
+  (`TestDeliverAgentMessage_DoesNotHijackExistingChat`). Eski `inbox` kind'lı
+  transkriptler korunur: sidebar çipi ve `graph.go` etiketi legacy olarak durur.
+- **`worker` oturumları yazılabilir.** Worker transkripti bitmiş bir koşu kaydı
+  değil, koordinatörün `SendToWorker` ile zaten içine tur enjekte ettiği canlı bir
+  konuşmadır; izleyen insan da yanıtlayabilmeli, rotayı düzeltebilmeli.
+  `writableSessionKindList` + frontend aynası `isWritableSessionKind` birlikte
+  güncellendi. Çakışma `schedule` ile aynı şekilde sınırlı — insan turu ile
+  enjekte tur aynı `turnqueue` slot'unu talep eder, sıraya girer.
+  `task`/`flow`/`flow-coordinator`/`insight` **bilinçli olarak salt-okunur kaldı**:
+  onlar gerçekten orkestratörün yazdığı koşu kayıtlarıdır ve yeni bir kullanıcı
+  turunun bağlanacağı koşu yoktur. Testler:
+  `TestEnqueueMessageAcceptedOnWorkerSession`,
+  `TestWorkerKindIsWritableButNotImmutable`.
+- **Ajanın yazdığı enjekte turlar artık atfediliyor.** Peer teslimindeki katılımcı
+  damgası (`AuthorKind=agent`/`AuthorID`/`RecipientID`) ortak bir yardımcıya
+  alındı (`Runtime.recordAgentAuthoredNote`) ve iki yeni yere bağlandı: spawn
+  açılış promptu (yazar = `SpawnOptions.CreatedBy`) ve koordinatörün worker'a
+  follow-up'ı (yazar = koordinatör oturumunun ajanı). Bu mesajlar artık
+  `MessageList`'te `PeerTurn` (soldan gelen balon) olarak çizilir; öncesinde
+  insanın kendi turu gibi görünüyorlardı. Damga **yalnız gerçek bir ajana çözülen**
+  yazar için basılır: `CreatedBy` ajan olmayan köken de taşır (`"automation:<id>"`)
+  ve frontend `authorId`'yi ajan listesinde arayıp isim yazdığından, çözülemeyen id
+  isimsiz bir balon üretirdi.
+
 ## Haftalık özellik denetimi: teardown context sızıntısı ve refactor (2026-08-31) ✅
 
 Hafta boyunca eklenen özelliklerin denetiminde bulunan ve düzeltilen üç konu:
