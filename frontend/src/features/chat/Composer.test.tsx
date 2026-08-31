@@ -143,7 +143,7 @@ afterEach(() => {
 })
 
 describe('Composer clipboard integration', () => {
-  it('opens selected images automatically in FIFO order and disposes each source', async () => {
+  it('uploads selected images directly in FIFO order without opening the annotator', async () => {
     const closes = [vi.fn(), vi.fn()]
     const decoders: Array<(bitmap: ImageBitmap) => void> = []
     vi.mocked(createImageBitmap).mockImplementation(
@@ -154,27 +154,20 @@ describe('Composer clipboard integration', () => {
     await flush()
 
     await act(async () => decoders[1]({ width: 10, height: 10, close: closes[1] } as ImageBitmap))
-    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
+    expect(mocks.uploadFile).not.toHaveBeenCalled()
     await act(async () => decoders[0]({ width: 10, height: 10, close: closes[0] } as ImageBitmap))
-
-    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
-    act(() => mocks.annotatorProps!.onClose())
     await flush()
-    expect(closes[0]).toHaveBeenCalledOnce()
-    expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
 
-    await act(async () =>
-      mocks.annotatorProps!.onSave({
-        blob: new Blob(['marked'], { type: 'image/png' }),
-        mime: 'image/png',
-        width: 10,
-        height: 10,
-      }),
-    )
-    expect(closes[1]).toHaveBeenCalledOnce()
+    expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
     expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
-      'second-annotated.png',
+      'first.png',
+      'second.png',
     ])
+    expect(closes[0]).toHaveBeenCalledOnce()
+    expect(closes[1]).toHaveBeenCalledOnce()
+    // Both staged images keep an edit action, so the picker path behaves exactly
+    // like the paste path.
+    expect(container.querySelectorAll('[aria-label="Görseli düzenle"]')).toHaveLength(2)
   })
 
   it('keeps non-image picker files on the normal upload path', async () => {
@@ -199,21 +192,14 @@ describe('Composer clipboard integration', () => {
     expect(mocks.uploadFile).not.toHaveBeenCalled()
   })
 
-  it('edits an uploaded picker image again and safely replaces its pending attachment', async () => {
+  it('replaces the edited picker chip in place instead of staging a new one', async () => {
     const { container } = renderComposer()
     pickFiles(container, [image('picked.png')])
     await flush()
 
-    await act(async () =>
-      mocks.annotatorProps!.onSave({
-        blob: new Blob([pngHeader], { type: 'image/png' }),
-        mime: 'image/png',
-        width: 10,
-        height: 10,
-      }),
-    )
-    mockFileStream(mocks.uploadFile.mock.calls[0][1] as File, pngHeader)
-
+    expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
+      'picked.png',
+    ])
     const editButton = container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')
     expect(editButton).not.toBeNull()
     act(() => editButton!.click())
@@ -231,14 +217,14 @@ describe('Composer clipboard integration', () => {
     )
 
     expect(mocks.uploadFile.mock.calls.map((call) => (call[1] as File).name)).toEqual([
-      'picked-annotated.png',
-      'picked-annotated-annotated.webp',
+      'picked.png',
+      'picked-annotated.webp',
     ])
-    expect(mocks.deleteFile).toHaveBeenCalledWith('uploads/picked-annotated.png')
-    expect(container.querySelector('img')?.getAttribute('src')).toBe(
-      'blob:picked-annotated-annotated.webp',
-    )
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:picked-annotated.png')
+    // The edited image takes the old chip's place: still exactly one attachment.
+    expect(container.querySelectorAll('[aria-label="Görseli düzenle"]')).toHaveLength(1)
+    expect(mocks.deleteFile).toHaveBeenCalledWith('uploads/picked.png')
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:picked-annotated.webp')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:picked.png')
     expect(container.querySelector('[data-testid="image-annotator"]')).toBeNull()
   })
 
@@ -246,15 +232,6 @@ describe('Composer clipboard integration', () => {
     const { container } = renderComposer()
     pickFiles(container, [image('picked.png')])
     await flush()
-    await act(async () =>
-      mocks.annotatorProps!.onSave({
-        blob: new Blob([pngHeader], { type: 'image/png' }),
-        mime: 'image/png',
-        width: 10,
-        height: 10,
-      }),
-    )
-    mockFileStream(mocks.uploadFile.mock.calls[0][1] as File, pngHeader)
 
     act(() => container.querySelector<HTMLButtonElement>('[aria-label="Görseli düzenle"]')!.click())
     await flush()
@@ -274,12 +251,12 @@ describe('Composer clipboard integration', () => {
     ).rejects.toThrow(deleteError)
 
     expect(mocks.deleteFile.mock.calls).toEqual([
-      ['uploads/picked-annotated.png'],
-      ['uploads/picked-annotated-annotated.webp'],
+      ['uploads/picked.png'],
+      ['uploads/picked-annotated.webp'],
     ])
     expect(container.querySelector('[data-testid="image-annotator"]')).not.toBeNull()
-    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:picked-annotated.png')
-    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:picked-annotated.png')
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:picked.png')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:picked.png')
   })
 
   it('validates a clipboard image and directly uploads the original exactly once', async () => {

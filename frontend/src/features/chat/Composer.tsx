@@ -46,7 +46,6 @@ interface PasteChoice {
   key: string
   operationId: number
   index: number
-  autoAnnotate: boolean
   image: ValidatedClipboardImage | null
 }
 
@@ -141,7 +140,6 @@ export function Composer({
   const [sel, setSel] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
   const [pasteChoices, setPasteChoices] = useState<PasteChoice[]>([])
-  const [editingPaste, setEditingPaste] = useState<ResolvedPasteChoice | null>(null)
   const [editingAttachment, setEditingAttachment] = useState<EditingAttachment | null>(null)
   const [pasteErrors, setPasteErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -182,7 +180,6 @@ export function Composer({
   const mountGeneration = useRef(0)
   const canceledPasteKeys = useRef(new Set<string>())
   const pasteChoicesRef = useRef(pasteChoices)
-  const editingPasteRef = useRef(editingPaste)
   const editingAttachmentRef = useRef(editingAttachment)
   const pendingRef = useRef(pending)
   const revokedPreviewURLs = useRef(new Set<string>())
@@ -194,20 +191,15 @@ export function Composer({
 
   useEffect(() => {
     pasteChoicesRef.current = pasteChoices
-    editingPasteRef.current = editingPaste
     editingAttachmentRef.current = editingAttachment
     pendingRef.current = pending
-  }, [editingAttachment, editingPaste, pasteChoices, pending])
+  }, [editingAttachment, pasteChoices, pending])
 
   useEffect(() => {
     const generation = ++mountGeneration.current
     setPasteChoices((current) => {
       current.forEach((choice) => choice.image?.dispose())
       return []
-    })
-    setEditingPaste((current) => {
-      current?.image.dispose()
-      return null
     })
     setEditingAttachment((current) => {
       current?.image.dispose()
@@ -225,7 +217,6 @@ export function Composer({
   useEffect(
     () => () => {
       pasteChoicesRef.current.forEach((choice) => choice.image?.dispose())
-      editingPasteRef.current?.image.dispose()
       editingAttachmentRef.current?.image.dispose()
       pendingRef.current.forEach((item) => revokePreview(item.previewURL))
     },
@@ -307,9 +298,13 @@ export function Composer({
     const localId = `att-${seq.current++}`
     const isImage = file.type.startsWith('image/')
     const previewURL = isImage ? URL.createObjectURL(file) : undefined
+    // Every staged image is editable from its chip, whichever path staged it
+    // (picker, paste or drop); callers only pass an explicit file when the
+    // editable source differs from the uploaded one.
+    const editable = editableFile ?? (isImage ? file : undefined)
     setPending((p) => [
       ...p,
-      { localId, name: file.name, previewURL, uploading: true, editableFile },
+      { localId, name: file.name, previewURL, uploading: true, editableFile: editable },
     ])
     try {
       const attachment = await api.uploadFile(uploadSessionId, file)
@@ -349,7 +344,10 @@ export function Composer({
     setPending((p) => p.filter((x) => x.localId !== localId))
   }
 
-  const enqueueImages = (images: File[], autoAnnotate: boolean) => {
+  // enqueueImages validates each image before uploading it. Validation is async
+  // and can finish out of order, so the queue keeps the original paste/pick order
+  // and the head is uploaded as soon as it resolves.
+  const enqueueImages = (images: File[]) => {
     if (images.length === 0) return
     const operationId = pasteOperationSeq.current++
     const generation = mountGeneration.current
@@ -360,7 +358,6 @@ export function Composer({
           key: `${operationId}-${index}`,
           operationId,
           index,
-          autoAnnotate,
           image: null,
         })),
       ].sort(comparePasteOrder),
@@ -398,7 +395,7 @@ export function Composer({
     const files = Array.from(e.target.files ?? [])
     const images = files.filter((file) => file.type.startsWith('image/'))
     uploadFiles(files.filter((file) => !images.includes(file)))
-    enqueueImages(images, true)
+    enqueueImages(images)
     e.target.value = '' // allow re-selecting the same file
   }
 
@@ -435,7 +432,7 @@ export function Composer({
     if (images.length > 0) {
       e.preventDefault()
       if (otherFiles.length > 0) uploadFiles(otherFiles)
-      enqueueImages(images, false)
+      enqueueImages(images)
       return
     }
     if (otherFiles.length > 0) {
@@ -457,24 +454,6 @@ export function Composer({
     if (dispose) choice.image?.dispose()
   }
 
-  const uploadAnnotatedPaste = async (result: AnnotatorExport) => {
-    const choice = editingPaste
-    if (!choice) throw new Error('Image annotator invariant violated: active image is missing')
-    const annotatedFile = annotatedPasteFile(choice.image.file, result)
-    await stageFile(annotatedFile, true, annotatedFile)
-    setEditingPaste(null)
-    choice.image.dispose()
-  }
-
-  useEffect(() => {
-    if (editingPaste || pasteChoices.length === 0) return
-    const next = pasteChoices[0]
-    if (!next.autoAnnotate || !next.image) return
-    const resolved = next as ResolvedPasteChoice
-    setPasteChoices((current) => current.filter((choice) => choice.key !== resolved.key))
-    setEditingPaste(resolved)
-  }, [editingPaste, pasteChoices])
-
   const uploadDirectPaste = async (choice: ResolvedPasteChoice) => {
     removePasteChoice(choice, false)
     try {
@@ -488,14 +467,14 @@ export function Composer({
   }
 
   useEffect(() => {
-    if (editingPaste || pasteChoices.length === 0) return
+    if (pasteChoices.length === 0) return
     const next = pasteChoices[0]
-    if (next.autoAnnotate || !next.image) return
+    if (!next.image) return
     void uploadDirectPaste(next as ResolvedPasteChoice)
     // Queue head is the trigger; helpers intentionally stay outside dependencies
     // so unrelated composer renders cannot restart an in-flight upload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingPaste, pasteChoices])
+  }, [pasteChoices])
 
   const editPendingImage = async (item: PendingAttachment) => {
     if (!item.editableFile || item.uploading) return
@@ -821,17 +800,6 @@ export function Composer({
             </div>
           ))}
         </div>
-      )}
-      {editingPaste && (
-        <ImageAnnotator
-          source={editingPaste.image.source}
-          onSave={uploadAnnotatedPaste}
-          onClose={() => {
-            const choice = editingPaste
-            setEditingPaste(null)
-            choice.image.dispose()
-          }}
-        />
       )}
       {editingAttachment && (
         <ImageAnnotator
