@@ -74,6 +74,16 @@ func salvageCLIEvent(line string) (ev cliEvent, dropped []string, ok bool) {
 	return ev, dropped, true
 }
 
+// containsField reports whether salvageCLIEvent lost the named field.
+func containsField(dropped []string, name string) bool {
+	for _, d := range dropped {
+		if d == name {
+			return true
+		}
+	}
+	return false
+}
+
 // cliStreamParser incrementally consumes the stream-json event log, building a
 // Response.Trace and (when onEvent is set) emitting each step the moment it is
 // ready: thinking immediately, intermediate text on flush, a tool step once its
@@ -386,6 +396,25 @@ func (p *cliStreamParser) feed(line string) {
 		}
 		ev = salvaged
 		p.noteFieldDrop(dropped, err)
+		// is_error decides whether the turn succeeded, so losing it must fail
+		// CLOSED. Before salvage a malformed envelope took the whole event down and
+		// the turn failed hard with "no result in stream"; keeping the event while
+		// dropping is_error would trade that hard failure for a silent FALSE
+		// SUCCESS — a rejected turn reported as an answer. Treat the unreadable
+		// field as an error and name it.
+		//
+		// A dropped `type` needs no such handling: without it the event matches no
+		// case and stays invisible, so a lost result envelope still ends the turn
+		// with "no result in stream" — it already fails closed.
+		if containsField(dropped, "is_error") {
+			p.sawResult = true
+			p.sawModelTurn = true
+			p.hadError = true
+			if p.errText == "" {
+				p.errText = "result envelope arrived with an unreadable is_error field — " +
+					"the turn's outcome cannot be trusted and is treated as a failure"
+			}
+		}
 	}
 	// Capture the CLI session id wherever it appears (system/init first, result
 	// last). The result event's id is the one to resume from next turn, so letting
@@ -755,10 +784,10 @@ func (p *cliStreamParser) finish() (*Response, error) {
 	p.nativeCompactionMu.Unlock()
 	p.summarizeDrops()
 	if p.hadError {
-		return nil, fmt.Errorf("claude CLI error: %s", p.errText)
+		return nil, p.usageError(fmt.Errorf("claude CLI error: %s", p.errText))
 	}
 	if !p.sawResult {
-		return nil, fmt.Errorf("claude CLI: no result in stream")
+		return nil, p.usageError(fmt.Errorf("claude CLI: no result in stream"))
 	}
 	for i := range p.resp.Trace {
 		if p.resp.Trace[i].Kind == "tool" {
@@ -776,11 +805,18 @@ func (p *cliStreamParser) finish() (*Response, error) {
 		if cleaned := sanitizeTranscriptText(p.finalText); cleaned != "" {
 			p.finalText = cleaned
 		} else {
-			return nil, fmt.Errorf("claude CLI returned only a repair reminder, not an answer")
+			return nil, p.usageError(fmt.Errorf("claude CLI returned only a repair reminder, not an answer"))
 		}
 	}
 	p.resp.Text = p.finalText
 	return p.resp, nil
+}
+
+// usageError attaches whatever usage this turn accumulated to a failure, so the
+// tokens a failed turn actually spent reach the caller's accounting instead of
+// dying with the (nil, err) return. The result stays an error — see UsageError.
+func (p *cliStreamParser) usageError(err error) error {
+	return WithUsage(err, p.resp.Model, p.resp.Usage, p.resp.ProviderCalls)
 }
 
 // ranTool reports whether any tool was invoked during the turn — used to decide

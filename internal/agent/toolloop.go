@@ -1353,6 +1353,24 @@ func debugToolArgs(input []byte, isError bool) string {
 	return debugSummary(string(input), 200)
 }
 
+// recordFailedUsage bills a turn that ended in an error. A failure at or after
+// the request (a rate-limit or auth rejection in the result envelope, a crash on
+// the last internal round-trip) still consumed the input tokens it sent, and the
+// provider carries that usage out on the error itself (providers.UsageError) —
+// recording usage only on the success path under-reported exactly the turns that
+// cost the most. Errors without usage (nothing was ever sent) record nothing.
+func (r *Runtime) recordFailedUsage(ctx context.Context, agent db.Agent, req providers.Request, err error) {
+	ue, ok := providers.UsageFromError(err)
+	if !ok {
+		return
+	}
+	model := ue.Model
+	if model == "" {
+		model = req.Model
+	}
+	r.RecordUsage(ctx, agent, model, ue.Usage, ue.ProviderCalls)
+}
+
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
 	// A non-streaming completion emits no incremental step, so the idle watchdog —
 	// fed only by emitted steps — would reclaim a legitimately long completion (long
@@ -1386,6 +1404,10 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 				r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 				return resp, nil
 			} else {
+				// The failed persistent turn still spent whatever it spent before dying;
+				// the fallback one-shot below bills separately, so skipping this would
+				// silently drop a whole turn's tokens.
+				r.recordFailedUsage(ctx, agent, req, perr)
 				r.logger.Warn("persistent cli session failed; falling back to one-shot complete",
 					"agent", agent.ID, "session", sid, "error", perr)
 			}
@@ -1393,6 +1415,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	}
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
+		r.recordFailedUsage(ctx, agent, req, err)
 		r.logger.Warn("provider complete failed",
 			"agent", agent.ID, "provider", agent.Provider, "model", req.Model,
 			"callKind", callKindFrom(ctx), "error", err)
@@ -1425,6 +1448,7 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 		}
 	})
 	if err != nil {
+		r.recordFailedUsage(ctx, agent, req, err)
 		return nil, err
 	}
 	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)

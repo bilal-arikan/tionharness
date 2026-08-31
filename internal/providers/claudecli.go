@@ -647,12 +647,39 @@ func ensureEnvDefault(env []string, key, val string) []string {
 	return append(env, prefix+val)
 }
 
-// cliStartupTimeout bounds the time-to-first-output for a claude-cli turn. A
-// subprocess that emits nothing within this window is treated as a hung MCP
+// cliStartupTimeoutDefault bounds the time-to-first-output for a claude-cli turn.
+// A subprocess that emits nothing within this window is treated as a hung MCP
 // startup and killed (retryable). It guards ONLY startup — once the first line
 // arrives the turn is demonstrably alive and later silence is a legitimately
 // long tool call, bounded by the CLI's own MCP_TOOL_TIMEOUT and the caller ctx.
-const cliStartupTimeout = 90 * time.Second
+const cliStartupTimeoutDefault = 90 * time.Second
+
+var (
+	cliStartupMu sync.RWMutex
+	// cliStartupTimeoutDuration is the effective window. Tests shrink it so the
+	// startup-watchdog branch is reachable without a 90s wait — the same injection
+	// pattern as SetCLISessionIdleTimeout.
+	cliStartupTimeoutDuration = cliStartupTimeoutDefault
+)
+
+// SetCLIStartupTimeout configures the time-to-first-output watchdog for every
+// subsequent claude-cli turn (one-shot and persistent). d <= 0 restores the
+// default rather than disabling the guard: a startup hang holds the turn — and,
+// on the persistent path, the session mutex — with nothing else to bound it.
+func SetCLIStartupTimeout(d time.Duration) {
+	cliStartupMu.Lock()
+	if d <= 0 {
+		d = cliStartupTimeoutDefault
+	}
+	cliStartupTimeoutDuration = d
+	cliStartupMu.Unlock()
+}
+
+func cliStartupTimeout() time.Duration {
+	cliStartupMu.RLock()
+	defer cliStartupMu.RUnlock()
+	return cliStartupTimeoutDuration
+}
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
@@ -782,7 +809,7 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 		}
 	}()
 
-	startup := time.NewTimer(cliStartupTimeout)
+	startup := time.NewTimer(cliStartupTimeout())
 	defer startup.Stop()
 	sawOutput := false
 	startupHang := false
@@ -846,9 +873,9 @@ readLoop:
 	// and was killed. There is no salvageable content — surface a clear, retryable
 	// failure so self-healing retries once and the turn fails fast instead of hanging.
 	if startupHang {
-		return nil, true, fmt.Errorf(
+		return nil, true, p.usageError(fmt.Errorf(
 			"claude CLI produced no output within %s and was killed as a likely MCP startup hang (retryable) — check the interaction MCP bridge / concurrent-spawn load (exit: %v)",
-			cliStartupTimeout, runErr)
+			cliStartupTimeout(), runErr))
 	}
 	// The CLI often writes its error to stdout (a non-JSON line) and leaves stderr
 	// empty — surface whatever it printed so the failure is not a bare "exit status
@@ -873,9 +900,9 @@ readLoop:
 		if home == "" {
 			home = "the CLI's default config dir (~/.claude)"
 		}
-		return nil, false, fmt.Errorf(
+		return nil, false, p.usageError(fmt.Errorf(
 			"claude CLI authentication failed (%s): this workspace's claude-home is not logged in — run `claude /login` with CLAUDE_CONFIG_DIR=%s, or switch this agent to an API-key provider (anthropic/openrouter) (exit: %v)",
-			msg, home, runErr)
+			msg, home, runErr))
 	}
 	// Usage / rate-limit rejection: the subscription window is exhausted (overage
 	// disabled), so the request was refused before any answer. Retrying immediately
@@ -886,7 +913,7 @@ readLoop:
 		if msg == "" {
 			msg = "subscription usage window exhausted"
 		}
-		return nil, false, fmt.Errorf("claude CLI usage/rate limit reached: %s (exit: %v)", msg, runErr)
+		return nil, false, p.usageError(fmt.Errorf("claude CLI usage/rate limit reached: %s (exit: %v)", msg, runErr))
 	}
 	// Stale --resume target: the id names a conversation this config home does not
 	// have (typically because the CLI config home moved). The transcript will not
@@ -899,9 +926,9 @@ readLoop:
 		if home == "" {
 			home = "the CLI's default config dir (~/.claude)"
 		}
-		return nil, false, fmt.Errorf(
+		return nil, false, p.usageError(fmt.Errorf(
 			"claude CLI cannot resume session %s: no such conversation under %s — the CLI config home no longer holds this transcript; the next turn must start cold (exit: %v)",
-			req.ResumeSessionID, home, runErr)
+			req.ResumeSessionID, home, runErr))
 	}
 	// Died right after init with zero model output (only system/hook/init events).
 	// This is the signature of a usage-limit rejection that emitted no rate_limit
@@ -909,11 +936,11 @@ readLoop:
 	// likely causes instead of a bare "exit status 1".
 	if !p.sawModelTurn {
 		retryable = !p.ranTool()
-		return nil, retryable, fmt.Errorf("claude CLI exited after init with no model output (likely usage/rate limit, login, or MCP startup failure): %v %s", runErr, strings.TrimSpace(detail))
+		return nil, retryable, p.usageError(fmt.Errorf("claude CLI exited after init with no model output (likely usage/rate limit, login, or MCP startup failure): %v %s", runErr, strings.TrimSpace(detail)))
 	}
 	// A clean crash (no content, no executed tool) is safe to retry once.
 	retryable = !p.ranTool()
-	return nil, retryable, fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail))
+	return nil, retryable, p.usageError(fmt.Errorf("claude CLI failed: %v %s", runErr, strings.TrimSpace(detail)))
 }
 
 // dumpCLIFailure writes the full claude-cli stdout + stderr plus the invocation
