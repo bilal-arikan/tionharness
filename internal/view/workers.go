@@ -200,7 +200,10 @@ func workerSummaryLine(running, finished, pass, fail int) string {
 			s += " A FAIL is unfinished work — re-task its implementer; do not commit or conclude on it."
 		}
 	}
-	if running == 0 {
+	// A failed validator is explicit pending delegation work. An otherwise-finished
+	// fleet may legitimately be the end of the plan, so it must not be told that it
+	// failed to spawn a worker merely because the running count reached zero.
+	if running == 0 && fail > 0 {
 		s += " ALL workers are finished — there is NO running worker to wait for;" +
 			" spawn the remaining steps or conclude."
 	}

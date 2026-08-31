@@ -112,11 +112,11 @@ func TestWorkersRunningShowsElapsed(t *testing.T) {
 	}
 }
 
-// TestWorkersIdleFleetGetsTheNudge pins the line that stops a coordinator
-// waiting forever once everything has reported.
+// TestWorkersIdleFleetGetsTheNudge pins the narrowed predicate: an idle fleet gets
+// the spawn nudge only when a failed verdict proves delegation work remains.
 func TestWorkersIdleFleetGetsTheNudge(t *testing.T) {
 	v, err := ProjectWorkers(WorkersInput{Workers: []Worker{
-		{SessionID: "SES1", AgentName: "a", Summary: "bitti"},
+		{SessionID: "SES1", AgentName: "a", Summary: "VERDICT: FAIL — düzeltme gerekli"},
 		{SessionID: "SES2", AgentName: "b", Summary: "bitti"},
 	}}, LevelCard)
 	if err != nil {
@@ -128,6 +128,19 @@ func TestWorkersIdleFleetGetsTheNudge(t *testing.T) {
 	}
 	if !strings.Contains(txt, "ALL workers are finished") {
 		t.Errorf("idle-fleet nudge missing:\n%s", txt)
+	}
+}
+
+func TestWorkersIdleCompletedFleetGetsNoSpawnNudge(t *testing.T) {
+	v, err := ProjectWorkers(WorkersInput{Workers: []Worker{
+		{SessionID: "SES1", AgentName: "a", Summary: "VERDICT: PASS"},
+		{SessionID: "SES2", AgentName: "b", Summary: "bitti"},
+	}}, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	if txt := v.Text(); strings.Contains(txt, "spawn the remaining steps") {
+		t.Fatalf("completed idle fleet must not receive a spawn nudge:\n%s", txt)
 	}
 }
 

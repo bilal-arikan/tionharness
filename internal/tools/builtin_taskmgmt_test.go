@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -33,6 +35,98 @@ func TestCreateTaskStampsCreatedBy(t *testing.T) {
 	}
 	if got.BoardState != db.BoardTodo {
 		t.Fatalf("BoardState = %q, want %q", got.BoardState, db.BoardTodo)
+	}
+}
+
+func TestCreateTaskDescriptionOnlyUsesRuntimeTitler(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	titled := make(chan struct{}, 1)
+	create := NewCreateTaskTool(d, "actor-1", func(_ context.Context, owner, source string) (string, error) {
+		if owner == "" || source != "Açıklamadan gelen kart" {
+			t.Errorf("titler args = %q, %q", owner, source)
+		}
+		titled <- struct{}{}
+		return "AI başlık", nil
+	})
+	out, err := create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"AG1"}`))
+	if err == nil {
+		t.Fatal("unknown owner must still be validated")
+	}
+	agent, err := d.CreateAgent(ctx, db.Agent{Name: "Owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err = create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"`+agent.ID+`"}`))
+	if err != nil {
+		t.Fatalf("description-only create: %v", err)
+	}
+	var res struct{ ID string }
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-titled:
+	case <-time.After(time.Second):
+		t.Fatal("background titler was not called")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		got, err := d.GetTask(ctx, res.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Title == "AI başlık" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("title stayed %q", got.Title)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestTaskToolsReadActiveAndArchivedSeparately(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	active, _ := d.CreateTask(ctx, db.Task{Title: "Active", Description: "full body", Dependencies: `["dep"]`})
+	archived, _ := d.CreateTask(ctx, db.Task{Title: "Archived"})
+	if err := d.SetTaskArchived(ctx, archived.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	list := NewListTasksTool(d, "actor-1")
+	activeOut, err := list.Call(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(activeOut, active.ID) || strings.Contains(activeOut, archived.ID) || !strings.Contains(activeOut, `"dependencies":"[\"dep\"]"`) {
+		t.Fatalf("active list mismatch: %s", activeOut)
+	}
+	archivedOut, err := list.Call(ctx, json.RawMessage(`{"archived":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(archivedOut, archived.ID) || strings.Contains(archivedOut, active.ID) {
+		t.Fatalf("archived list mismatch: %s", archivedOut)
+	}
+
+	get := NewGetTaskTool(d, "actor-1")
+	full, err := get.Call(ctx, json.RawMessage(`{"id":"`+active.ID+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(full, `"description":"full body"`) || !strings.Contains(full, `"createdAt"`) {
+		t.Fatalf("get_task did not return full card: %s", full)
+	}
+
+	setArchived := NewSetArchivedTaskTool(d, "actor-1")
+	if _, err := setArchived.Call(ctx, json.RawMessage(`{"id":"`+active.ID+`","archived":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.GetTask(ctx, active.ID)
+	if !got.Archived {
+		t.Fatal("set_archived_task did not archive card")
 	}
 }
 
