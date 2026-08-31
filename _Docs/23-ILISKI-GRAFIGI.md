@@ -18,9 +18,11 @@ ayrı chunk; ana bundle'a binmez).
 ## Workspace Ağı ("Ağ" — NavRail)
 
 > ### Ajanlar = çalışan **örnekler** (2026-08-01)
-> Ağda ajan **tanımı** değil, **çalışan oturumu** gösterilir: her in-flight oturum
-> (chat / task / flow / flow-coordinator / schedule / spawned (otomasyon+spawn) /
-> worker / inbox) için ajanın **bir kopyası** çizilir. Aynı ajan üç oturum
+> Ağda ajan **tanımı** değil, **canlı kapsamdaki oturum** gösterilir: her çalışan
+> oturum ile kendisi çalışmadığı hâlde doğrudan çalışan child worker'ı bulunan
+> koordinatör oturumu (`liveScope: running | awaiting-workers`) için ajanın **bir
+> kopyası** çizilir. Kapsanan türler: chat / task / flow / flow-coordinator /
+> schedule / spawned (otomasyon+spawn) / worker / inbox. Aynı ajan üç oturum
 > sürüyorsa **üç düğüm** olur; hiçbir şey çalışmıyorsa **hiç ajan düğümü olmaz**.
 > Bu yüzden ajan düğüm id'si oturumu taşır: `agent:<agentID>#<sessionID>`.
 > Düğüm `sessionId`/`agentId`/`runKind`/`runTarget` alanlarını da döndürür ve
@@ -32,7 +34,8 @@ ayrı chunk; ana bundle'a binmez).
 > Ajana bağlı tüm kenarlar (`owns`/`created`/`uses`/`skill`/`mcp`) **her canlı
 > kopyaya** çoğaltılır; canlı kopyası olmayan ajanın kenarı hiç çizilmez. Skill ve
 > MCP düğümleri de yalnız çalışan bir ajan onları kullanıyorsa görünür.
-> `stats.agents` = canlı örnek sayısı, `stats.agentsTotal` = tanım sayısı
+> Çalışan durum bekleyen-worker durumuna önceliklidir. `stats.agents` = canlı örnek
+> sayısı, `stats.agentsTotal` = canlı kapsamdaki benzersiz ajan sayısı
 > (başlıkta "N aktif ajan / M").
 
 Tüm workspace'in işbirliği ağı. **Düğüm türleri / şekilleri:** ajan (renkli disk),
@@ -50,10 +53,10 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
     hangi ajanların örtüştüğünü gösterir
   - `mcp` (teal) — MCP-enabled ajan → etkin MCP sunucusu (kaba erişim sinyali;
     TionHarness araçları ajan başına allowlist ile geçer, sunucu başına değil)
-- **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP / Geçmiş — her düğüm
+- **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP — her düğüm
   türü açılıp kapatılabilir (ajanlar her zaman görünür); gizli düğüme değen kenarlar
   da düşer. Varsayılan açık: Görevler + Akışlar + Geçmiş; Beceriler/MCP kapalı (sade
-  başlangıç). ("Geçmiş" katmanı yalnız Canlı modda etkindir.)
+  başlangıç).
 - **Facet filtre çubuğu (boards-benzeri, toolbar 2. satır — `NetworkFilters.tsx`):**
   arama (`/` ile odaklanır, TR-uyumlu fold) + **Ajan** / **Tür** (run-kind) / **Durum**
   (board sütunu) / **Etiket** açılır facet'leri (`FacetDropdown` yeniden kullanılır) +
@@ -80,6 +83,13 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   > DAG/ağaç ister; bu veride her bağsız görev ayrı kök olup üst sırayı doldurarak
   > "bozuk" görünür. Hiyerarşi gereken yer **Akışlar** ekranıdır (gerçek DAG). Bu
   > yüzden ağ yalnız fizik düzeni kullanır.
+- **Kalıcı yerleşim:** Düğüm koordinatları workspace kapsamı ve yerleşim sürümü
+  içeren `localStorage` anahtarında saklanır. Okuma sırasında kayıt şeması ile tüm
+  `x`/`y` değerlerinin finite sayı olduğu doğrulanır; bozuk veya eski sürümlü kayıt
+  kullanılmaz. Açılışta bütün düğümlerin kayıtlı konumu varsa fizik kapalı başlar.
+  Yeni düğüm geldiğinde kısa bir stabilization çalışır; `dragEnd` ve stabilization
+  sonrasında konumlar debounce edilerek kaydedilir. Artık grafikte bulunmayan
+  düğümlerin stale koordinatları kayıttan budanır.
 - Başlık çubuğunda istatistik (ajan/görev/akış/beceri/MCP sayısı) + Yenile. Ayrı bir
   mod/gösterge satırı yok — **İlişki/Canlı mod geçişi ve "canlı" gösterge satırı UI'dan
   kaldırıldı**; ağ artık **daima Canlı** (animasyonlu,
@@ -114,24 +124,10 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
 - **Ajanın akışı/skill/MCP'si:** Canlı modda `uses` (akış→ajan), `skill` ve `mcp`
   bağları korunur → ajanın bağlı olduğu akış/beceri/sunucu onunla birlikte sürüklenir.
   Görev/sütun yapısaldır; flow/skill/MCP katmanları chip'lerle açılıp kapatılır.
-- **Geçmiş (arşiv) çekim noktası:** Sağ-alttaki sabit "Geçmiş" çekirdeği; **Aktivite
-  (executions) ekranının birebir aynısı** — çalışmayan oturumlar buraya toplanır.
-  Her run **başlıklı kart** olarak gösterilir (kanban kartı gibi, tür-renkli kenar:
-  chat=mavi, flow=mor, schedule=cyan, task=slate, worker=teal, spawned=amber,
-  inbox=pembe; hover'da tür+ajan). Backend `graphNode` tip `run` olarak son ~50 bitmiş
-  oturumu döndürür (`runKind`+başlık+ajan adı; **agent zorunlu değil** — ajansız flow
-  oturumları da dahil, executions feed'iyle aynı). **Geçmiş kind kümesi genişledi**
-  (`historyKinds`): chat/task/flow/schedule'a ek olarak **worker/spawned/inbox +
-  flow-coordinator** de dahil → biten koordinatör worker'ları kaybolmak yerine Geçmiş'te
-  görünür (ve filtrelenebilir). **Arşiv bayrağı:** arşivlenmiş oturumlar `Archived:true`
-  ile gelir, filtre çubuğunda varsayılan gizli (Arşiv toggle'ı ile açılır; kesik-kenar +
-  🗄 rozetiyle işaretli). Yalnız Canlı modda görünür ("Geçmiş" katman chip'i). Çalışan
-  run aktif bağ alır, bitince "Geçmiş"e kart olarak düşer — iş akışı görünür biçimde
-  arşive akar.
-  > Doğrulandı: MINIMAX'te `/api/executions` (non-running)=13 ↔ graph `run` node=13
-  > (schedule 2 / chat 7 / flow 4) — birebir eşleşme.
-- **Canlı run / "şu an çalışıyor":** Ajan düğümlerinin tamamı çalışan örnek
-  olduğu için hepsi **parlak "live" glow** alır. Çalışan oturum kümesi
+- **Canlı kapsam:** Tamamlanmış/geçmiş run düğümleri grafiğe alınmaz. Ajan ve oturum
+  düğümleri aynı eligible session kümesinden üretilir; silinmiş ajan için orphan
+  düğüm oluşmaz. `running` örnekler **parlak "live" glow**, `awaiting-workers`
+  koordinatörler "Worker Bekleyen" durumunu alır. Çalışan oturum kümesi
   `s.runs.activeSessionIDs()` → bu workspace'in oturumlarına join edilir. Örneğin
   oturumu task/flow-kind ise o **task/flow düğümüne aktif (accent) bağ** kurulur;
   aktif bağ ayrıca `in_progress` görev sahipliğiyle de (fallback) kurulur. Bağlar
@@ -156,13 +152,14 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   - `GET /api/graph` → workspace ağı (`workspaceGraph{nodes,edges,stats}`).
     Düğüm id'leri tür-önekli: `agent:<agentID>#<sessionID>` / `task:` / `flow:` /
     `skill:<slug>` / `mcp:<id>` (türler arası benzersiz). Ajan düğümleri
-    `buildAgentInstances(agents, sessions, running)` ile üretilir — çalışan
+    `buildAgentInstances(agents, sessions, liveScope)` ile üretilir — canlı kapsamdaki
     oturum başına bir düğüm + `agentID → örnek id'leri` indeksi; `addAgentEdges`
     ajana bağlı her kenarı bu indeks üzerinden tüm kopyalara çoğaltır. Akış→ajan
     kenarları `orchestration.ParseGraph` ile akış graf'ından; skill kenarları
     `Agent.Skills`'ten; mcp kenarları etkin `ListMCPServers` + `Agent.MCPEnabled`'dan
     çıkarılır (ikisi de yalnız canlı örneği olan ajanlar için).
-    `stats` skills/mcp + `agents` (canlı örnek) / `agentsTotal` (tanım) içerir.
+    `stats` skills/mcp + `agents` (canlı örnek) / `agentsTotal` (canlı kapsamdaki
+    benzersiz ajan) içerir ve yalnız filtrelenmiş canlı grafiği sayar.
     **Filtre için ek düğüm alanları:** `agentId` artık ajan örneklerine ek olarak
     **görev** (sahip = `OwnerAgentID`) ve **run-history** (oturumun ajanı) düğümlerinde de
     var; `archived` (backing oturum arşivli mi) ve `tags` (oturum/görev etiketleri) tüm
@@ -176,13 +173,18 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
 - `features/network/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
   (`workspaceToVis(graph, visible, mode, boardColumns)`) + kenar/lejant/tür renk
   sabitleri + yardımcılar (`tip`/`truncate`). Ajan düğümünün etiketi iki satır:
-  ad + çalıştırma türü (aynı ajanın kopyalarını ayırt eder).
+  ad + canlı kapsam durumu ("Çalışan" / "Worker Bekleyen"); tooltip aynı Türkçe
+  durumu gösterir ve aynı ajanın kopyalarını ayırt eder.
 - `features/network/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
   yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
   canlı modda merkez-çekimi düşük), **`density`** (itme/yay uzunluğunu ölçekler — canlı
   `setOptions`), **`highlightNeighbors`** (hover'da komşu-dışı düğüm/kenarları soldurur),
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
-  konumlarını korur), stabilize sonrası `fit`.
+  konumlarını korur), stabilize sonrası `fit`; workspace/sürüm anahtarlı kalıcı
+  koordinatları uygular, tam kayıtlı açılışta fiziği kapatır ve yeni düğümlerde kısa
+  stabilization sonrası konumları günceller.
+- `features/network/networkLayoutStorage.ts` — yerleşim anahtarı, şema/finite sayı
+  doğrulamalı okuma-yazma ve stale düğüm koordinatlarını budama yardımcıları.
 - `features/network/networkFilter.ts` — **saf facet filtresi**: `NetworkFilter` modeli
   (`text/agentIds/runKinds/statuses/tags/showArchived`) + `filterGraph(graph,f)` (düğüm
   eleme → kenar/kenarsız-attachment budama) + `isNetworkFilterActive`/

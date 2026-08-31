@@ -58,7 +58,7 @@ export const NODE_LAYERS: { type: WorkspaceNodeType; label: string; color: strin
   { type: 'flow', label: 'Akışlar', color: '#7c3aed' },
   { type: 'skill', label: 'Skills', color: '#eab308' },
   { type: 'mcp', label: 'MCP', color: '#14b8a6' },
-  { type: 'run', label: 'Geçmiş', color: '#52525b' },
+  { type: 'run', label: 'Oturumlar', color: '#52525b' },
 ]
 
 // Completed-run node colors by execution kind (live "Geçmiş" archive).
@@ -82,6 +82,11 @@ const RUN_KIND_LABEL: Record<string, string> = {
   spawned: 'Spawn çalıştırması',
   inbox: 'Inbox',
 }
+
+const LIVE_SCOPE_LABEL = {
+  running: 'Çalışan',
+  'awaiting-workers': 'Worker Bekleyen',
+} as const
 
 // Board-state tints for task nodes.
 const STATUS_COLOR: Record<string, string> = {
@@ -220,11 +225,12 @@ function nodeFor(
     // same agent can appear several times. The run kind goes on a second
     // label line to tell the copies apart; the full subtitle (kind + session
     // title) stays in the tooltip.
-    const kind = n.sub ? n.sub.split(' · ')[0] : ''
+    const kind = n.liveScope ? LIVE_SCOPE_LABEL[n.liveScope] : n.sub ? n.sub.split(' · ')[0] : ''
     return {
       id: n.id,
       label: kind ? `${n.label}\n${kind}` : n.label,
       title: tip(n.label, [
+        n.liveScope ? `Durum: ${LIVE_SCOPE_LABEL[n.liveScope]}` : undefined,
         n.sub,
         n.sessionId ? `Oturum: ${n.sessionId}` : undefined,
         '↗ oturumu açmak için tıkla',
@@ -292,16 +298,17 @@ function nodeFor(
     }
   }
   if (n.type === 'run') {
-    // Completed run (archive): a titled card like the Activity/kanban entries —
-    // a kind-colored bordered box showing the run title; kind + agent on hover.
-    // Archived runs get a dashed border + dimmer fill + an "🗄" prefix so they
-    // read as put-away without being hidden.
+    // Live session: a titled card with its authoritative live-scope status.
     const c = RUN_KIND_COLOR[n.runKind ?? ''] ?? '#52525b'
     const archived = !!n.archived
     return {
       id: n.id,
-      label: (archived ? '🗄 ' : '') + truncate(n.label, archived ? 24 : 26),
+      label:
+        (archived ? '🗄 ' : '') +
+        truncate(n.label, archived ? 24 : 26) +
+        (n.liveScope ? `\n${LIVE_SCOPE_LABEL[n.liveScope]}` : ''),
       title: tip(n.label, [
+        n.liveScope ? `Durum: ${LIVE_SCOPE_LABEL[n.liveScope]}` : undefined,
         RUN_KIND_LABEL[n.runKind ?? ''] ?? 'Çalıştırma',
         n.sub ? `Ajan: ${n.sub}` : undefined,
         archived ? 'Arşivlenmiş' : undefined,
@@ -435,12 +442,12 @@ export function workspaceToVis(
         smooth: false,
       } as Edge)
     }
-    // History/archive anchor (bottom-right) — completed runs pile up here.
+    // Live-session anchor (bottom-right).
     const hasRuns = nodes.some((nd) => (nd.id as string).startsWith('run:'))
     if (hasRuns) {
       nodes.push({
         id: HIST_ID,
-        label: 'Geçmiş',
+        label: 'Canlı Oturumlar',
         shape: 'box',
         x: HIST_X,
         y: HIST_Y,
@@ -451,7 +458,7 @@ export function workspaceToVis(
         margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
         widthConstraint: { minimum: 90 } as Node['widthConstraint'],
       })
-      // Each completed run springs to the archive anchor.
+      // Each eligible live session springs to the shared anchor.
       for (const n of graph.nodes) {
         if (n.type !== 'run' || !shownIds.has(n.id)) continue
         edges.push({
@@ -488,7 +495,9 @@ export function workspaceToVis(
       }
     }
     // Every agent node is a live instance, so all of them get the running glow.
-    const runningAgents = new Set(graph.nodes.filter((n) => n.type === 'agent').map((n) => n.id))
+    const runningAgents = new Set(
+      graph.nodes.filter((n) => n.type === 'agent' && n.liveScope === 'running').map((n) => n.id),
+    )
     // Instances without a task/flow target (chat, schedule, spawn, worker, inbox)
     // have nothing to bond to, so they drift to a shared "Çalışıyor" anchor
     // instead of floating loose. The anchor only appears when someone needs it.

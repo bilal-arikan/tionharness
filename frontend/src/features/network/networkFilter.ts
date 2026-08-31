@@ -3,7 +3,7 @@
 // with AND; values within one facet combine with OR), adapted to graph nodes.
 //
 // The graph is small (agents = live instances, plus tasks/flows/skills/mcp and
-// the recent run history), so filtering happens entirely client-side.
+// live session nodes), so filtering happens entirely client-side.
 
 import type { WorkspaceGraph, WorkspaceGraphNode } from '@/types'
 

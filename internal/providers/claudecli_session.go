@@ -155,7 +155,8 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 		}
 	}()
 
-	startup := time.NewTimer(cliStartupTimeout)
+	startupWindow := cliStartupTimeout()
+	startup := time.NewTimer(startupWindow)
 	defer startup.Stop()
 	idleWindow := cliSessionIdleWindow()
 	idle := time.NewTimer(idleWindow)
@@ -192,21 +193,23 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 					return partial, nil
 				}
 				detail := strings.TrimSpace(s.stderr.String())
-				return nil, fmt.Errorf("cli session stream ended before result: %v %s", it.err, detail)
+				// Whatever the dead turn already spent is still billable — carry it out
+				// with the failure (see UsageError).
+				return nil, p.usageError(fmt.Errorf("cli session stream ended before result: %v %s", it.err, detail))
 			}
 		case <-startup.C:
-			return nil, s.abortTurnLocked(req, WatchdogReasonStartup, cliStartupTimeout, fmt.Errorf(
+			return nil, p.usageError(s.abortTurnLocked(req, WatchdogReasonStartup, startupWindow, fmt.Errorf(
 				"cli session produced no output within %s and was killed as a likely hang (the process is dropped; the next turn cold-starts)",
-				cliStartupTimeout))
+				startupWindow)))
 		case <-idle.C:
-			return nil, s.abortTurnLocked(req, WatchdogReasonIdle, idleWindow, fmt.Errorf(
+			return nil, p.usageError(s.abortTurnLocked(req, WatchdogReasonIdle, idleWindow, fmt.Errorf(
 				"cli session stdout went silent for %s mid-turn and was killed (the process is dropped; the next turn cold-starts)",
-				idleWindow))
+				idleWindow)))
 		case <-ctx.Done():
 			// The turn was cancelled (human Stop, idle watchdog, hard cap). The
 			// blocking read cannot be interrupted, so kill the process: leaving it
 			// alive would keep the reader — and s.mu — held for every later turn.
-			return nil, s.abortTurnLocked(req, "", 0, ctx.Err())
+			return nil, p.usageError(s.abortTurnLocked(req, "", 0, ctx.Err()))
 		}
 	}
 	s.turns++

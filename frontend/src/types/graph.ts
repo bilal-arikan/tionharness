@@ -15,10 +15,10 @@ export interface WorkspaceGraphNode {
   group?: string // owning hub id (cluster layout)
   status?: string // task board state
   desc?: string // longer description (task tooltip)
-  // Live activity (agents): an agent node IS a running instance — one per
-  // in-flight session — so `running` is always true and the same agent can
-  // appear several times, once per session it is driving.
+  // Live activity: one agent instance per eligible live-scope session. A
+  // coordinator waiting on a direct worker has running=false.
   running?: boolean
+  liveScope?: 'running' | 'awaiting-workers'
   runKind?: string // chat | task | flow | schedule | spawned | worker | inbox | flow-coordinator
   runTarget?: string // type-prefixed id of the running task/flow (or empty)
   sessionId?: string // the session behind this agent instance

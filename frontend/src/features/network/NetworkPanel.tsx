@@ -11,6 +11,7 @@ import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { avatarForeground } from '@/shared/lib/avatar'
 
 interface Props {
+  workspaceId: string
   onError: (msg: string) => void
   // Open a session transcript — wired by App to setView('chat') + selectSession.
   // Clicking an agent instance (or a run-history card) navigates to the session
@@ -40,7 +41,7 @@ function sessionIdFromNodeId(id: string): string | null {
 // Agents on this canvas are RUNTIME INSTANCES: the backend emits one agent node
 // per in-flight session (chat / task / flow / schedule / spawn / worker), so a
 // busy agent appears once per run and an idle agent does not appear at all.
-export function NetworkPanel({ onError, onOpenSession }: Props) {
+export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
   // User-defined Kanban columns (mirrors the Board column editor). When set,
@@ -235,7 +236,7 @@ export function NetworkPanel({ onError, onOpenSession }: Props) {
         {isEmpty ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-dim)]">
             Henüz görselleştirilecek bir şey yok. Görev veya akış ekledikçe ağ burada belirir;
-            ajanlar yalnızca çalışırken (sohbet, görev, akış, otomasyon, spawn) görünür.
+            ajanlar yalnızca çalışırken veya worker beklerken görünür.
           </div>
         ) : filteredEmpty ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-[var(--color-text-dim)]">
@@ -249,6 +250,8 @@ export function NetworkPanel({ onError, onOpenSession }: Props) {
           </div>
         ) : (
           <VisNetworkGraph
+            key={workspaceId}
+            workspaceId={workspaceId}
             nodes={nodes}
             edges={edges}
             mode={mode}

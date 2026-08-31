@@ -13,10 +13,9 @@ import (
 // "skill:<slug>", "mcp:<id>") so ids are unique across types and edges can
 // reference them.
 //
-// Agents are RUNTIME INSTANCES, not definitions: one node per in-flight session
-// (chat / task / flow / schedule / spawned / worker / inbox). An agent driving
-// three sessions appears three times; an agent with nothing running does not
-// appear at all. That is why the agent id carries the session suffix.
+// Agents are RUNTIME INSTANCES, not definitions: one node per live-scope session.
+// This includes directly running sessions and coordinators awaiting direct
+// workers. That is why the agent id carries the session suffix.
 type graphNode struct {
 	ID     string `json:"id"`
 	Type   string `json:"type"` // agent | task | flow | skill | mcp
@@ -28,13 +27,13 @@ type graphNode struct {
 	Status string `json:"status,omitempty"` // task board state
 	Desc   string `json:"desc,omitempty"`   // longer description (task tooltip)
 
-	// Live activity (agents only): agent nodes exist ONLY while running, so
-	// Running is always true on them. RunKind is the session kind driving this
-	// instance and RunTarget the type-prefixed id of the task/flow it is running
-	// (empty for chat/schedule/spawned).
+	// Live activity: Running distinguishes direct execution from a coordinator
+	// retained only because a direct worker is active. RunKind is the session kind
+	// and RunTarget the type-prefixed task/flow id when applicable.
 	Running   bool   `json:"running,omitempty"`
 	RunKind   string `json:"runKind,omitempty"`
 	RunTarget string `json:"runTarget,omitempty"`
+	LiveScope string `json:"liveScope,omitempty"` // running | awaiting-workers
 
 	// SessionID is the running session behind an agent instance node (agents
 	// only) — lets the UI deep-link an instance to its transcript.
@@ -115,16 +114,23 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	// Which sessions are in flight right now, derived from the process-wide
 	// running session set joined to this workspace's sessions.
 	running := s.runningSessionIDs(wsp)
-	// Session list backs both the agent instance nodes and the completed
-	// run-history nodes built later.
+	// The graph's session and agent-instance nodes are both derived from this
+	// authoritative live scope. A coordinator waiting between turns remains live
+	// while one of its direct workers runs.
 	sessions, _ := wsp.DB.ListSessions(ctx, "")
+	liveScope := buildGraphLiveScope(sessions, running)
 
 	agentExists := make(map[string]bool, len(agents))
 	for _, a := range agents {
 		agentExists[a.ID] = true
 	}
+	for _, sess := range sessions {
+		if sess.AgentID != "" && !agentExists[sess.AgentID] {
+			delete(liveScope, sess.ID)
+		}
+	}
 
-	instanceNodes, agentInstances := buildAgentInstances(agents, sessions, running)
+	instanceNodes, agentInstances := buildAgentInstances(agents, sessions, liveScope)
 	nodes = append(nodes, instanceNodes...)
 
 	// addAgentEdges links every live instance of an agent to another node. With
@@ -246,43 +252,17 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Completed run history: finished (not-running) execution sessions as "run"
-	// nodes — the same task/flow/schedule transcripts the Activity
-	// (executions) screen lists. The live view drifts these to a "Geçmiş"
-	// (archive) anchor so finished work piles up there as titled cards. Capped to
-	// the most recent runHistoryCap by recency to bound the payload.
+	// Session nodes use the exact same eligible set as agent instances. Completed
+	// history and idle sessions never enter the payload.
 	const runPfx = "run:"
-	const runHistoryCap = 50
 	agentName := make(map[string]string, len(agents))
 	for _, a := range agents {
 		agentName[a.ID] = a.Name
 	}
-	// historyKinds is every execution kind that piles up in the "Geçmiş" archive
-	// anchor. Beyond the Activity feed's chat/task/flow/schedule it now also
-	// includes worker/spawned and flow-coordinator, so finished coordinator
-	// workers are visible (and filterable) instead of vanishing when they end.
-	//
-	// "inbox" is retained for sessions created BEFORE peer messages moved into the
-	// recipient's ordinary chat thread (TSK507). Nothing stamps that kind any more,
-	// but existing transcripts still carry it and must stay visible here.
-	historyKinds := map[string]bool{
-		"chat": true, "task": true, "flow": true, "schedule": true,
-		"worker": true, "spawned": true, "inbox": true,
-		agent.SessionKindFlowCoordinator: true,
-	}
-	// sessions are newest-updated first from ListSessions; take the first N
-	// finished (not-running) ones. Agent is optional (flow sessions may have none)
-	// and only enriches the tooltip. Archived sessions are included but flagged, so
-	// the UI can hide them by default and reveal them on demand.
 	runCount := 0
 	for _, sess := range sessions {
-		if runCount >= runHistoryCap {
-			break
-		}
-		if running[sess.ID] {
-			continue
-		}
-		if !historyKinds[sess.Kind] {
+		scope, eligible := liveScope[sess.ID]
+		if !eligible {
 			continue
 		}
 		label := sess.Title
@@ -290,14 +270,16 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			label = "(" + sess.Kind + ")"
 		}
 		nodes = append(nodes, graphNode{
-			ID:       runPfx + sess.ID,
-			Type:     "run",
-			Label:    label,
-			RunKind:  sess.Kind,
-			Sub:      agentName[sess.AgentID],
-			AgentID:  sess.AgentID,
-			Archived: sess.State == "archived",
-			Tags:     sess.Tags,
+			ID:        runPfx + sess.ID,
+			Type:      "run",
+			Label:     label,
+			RunKind:   sess.Kind,
+			Sub:       agentName[sess.AgentID],
+			AgentID:   sess.AgentID,
+			Running:   scope == "running",
+			LiveScope: scope,
+			Archived:  sess.State == "archived",
+			Tags:      sess.Tags,
 		})
 		runCount++
 	}
@@ -306,10 +288,9 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		Nodes: nodes,
 		Edges: edges,
 		Stats: map[string]int{
-			// "agents" counts live INSTANCES (what the canvas draws), while
-			// "agentsTotal" keeps the definition count for the "x / y" readout.
+			// Every count describes the filtered payload, not workspace history.
 			"agents":      instanceCount(agentInstances),
-			"agentsTotal": len(agents),
+			"agentsTotal": len(agentInstances),
 			"tasks":       len(tasks),
 			"flows":       len(flows),
 			"skills":      skillCount,
@@ -320,14 +301,30 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildAgentInstances turns the running sessions into agent instance nodes: ONE
-// node per in-flight session, so a single agent driving a chat, a task and two
-// spawned runs shows up as four copies. An agent with nothing in flight
-// contributes no node at all — the network only ever shows live work.
+func buildGraphLiveScope(sessions []db.Session, running map[string]bool) map[string]string {
+	scope := make(map[string]string, len(running))
+	for _, sess := range sessions {
+		if running[sess.ID] {
+			scope[sess.ID] = "running"
+		}
+	}
+	for _, sess := range sessions {
+		if running[sess.ID] && sess.CoordinatorSessionID != "" {
+			if _, alreadyRunning := scope[sess.CoordinatorSessionID]; !alreadyRunning {
+				scope[sess.CoordinatorSessionID] = "awaiting-workers"
+			}
+		}
+	}
+	return scope
+}
+
+// buildAgentInstances turns eligible live-scope sessions into agent instance
+// nodes: one node per session. Running and awaiting-worker sessions use the same
+// authoritative set as the session nodes.
 //
 // It returns the nodes plus an agentID → instance-node-ids index, so the
 // relationship edges can fan out across every live copy of an agent.
-func buildAgentInstances(agents []db.Agent, sessions []db.Session, running map[string]bool) ([]graphNode, map[string][]string) {
+func buildAgentInstances(agents []db.Agent, sessions []db.Session, liveScope map[string]string) ([]graphNode, map[string][]string) {
 	agentByID := make(map[string]db.Agent, len(agents))
 	for _, a := range agents {
 		agentByID[a.ID] = a
@@ -335,7 +332,8 @@ func buildAgentInstances(agents []db.Agent, sessions []db.Session, running map[s
 	nodes := make([]graphNode, 0, len(agents))
 	instances := make(map[string][]string)
 	for _, sess := range sessions {
-		if !running[sess.ID] || sess.AgentID == "" {
+		scope, eligible := liveScope[sess.ID]
+		if !eligible || sess.AgentID == "" {
 			continue
 		}
 		a, ok := agentByID[sess.AgentID]
@@ -362,7 +360,8 @@ func buildAgentInstances(agents []db.Agent, sessions []db.Session, running map[s
 			Sub:       instanceSub(sess.Kind, sess.Title),
 			Color:     a.Color,
 			Emoji:     a.Avatar,
-			Running:   true,
+			Running:   scope == "running",
+			LiveScope: scope,
 			RunKind:   sess.Kind,
 			RunTarget: target,
 			SessionID: sess.ID,

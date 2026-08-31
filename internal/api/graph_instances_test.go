@@ -17,13 +17,13 @@ func TestBuildAgentInstancesOnlyRunning(t *testing.T) {
 	}
 
 	// Nothing running → no agent nodes.
-	nodes, inst := buildAgentInstances(agents, sessions, map[string]bool{})
+	nodes, inst := buildAgentInstances(agents, sessions, map[string]string{})
 	if len(nodes) != 0 || len(inst) != 0 {
 		t.Fatalf("idle workspace must yield no agent nodes, got %d nodes / %d entries", len(nodes), len(inst))
 	}
 
 	// Only Bob running → only Bob appears.
-	nodes, inst = buildAgentInstances(agents, sessions, map[string]bool{"SES2": true})
+	nodes, inst = buildAgentInstances(agents, sessions, map[string]string{"SES2": "running"})
 	if len(nodes) != 1 || nodes[0].Label != "Bob" {
 		t.Fatalf("expected only Bob's instance, got %+v", nodes)
 	}
@@ -49,7 +49,7 @@ func TestBuildAgentInstancesOneNodePerSession(t *testing.T) {
 		{ID: "SES4", AgentID: "AGT1", Kind: "chat"}, // not running
 		{ID: "SES5", AgentID: "GONE", Kind: "chat"}, // deleted agent
 	}
-	running := map[string]bool{"SES1": true, "SES2": true, "SES3": true, "SES5": true}
+	running := map[string]string{"SES1": "running", "SES2": "running", "SES3": "running", "SES5": "running"}
 
 	nodes, inst := buildAgentInstances(agents, sessions, running)
 	if len(nodes) != 3 {
@@ -77,6 +77,45 @@ func TestBuildAgentInstancesOneNodePerSession(t *testing.T) {
 	}
 	if instanceCount(inst) != 3 {
 		t.Fatalf("instanceCount mismatch: %d", instanceCount(inst))
+	}
+}
+
+func TestBuildGraphLiveScope(t *testing.T) {
+	sessions := []db.Session{
+		{ID: "parent"},
+		{ID: "child", CoordinatorSessionID: "parent"},
+		{ID: "idle"},
+		{ID: "running-parent"},
+		{ID: "running-child", CoordinatorSessionID: "running-parent"},
+	}
+	scope := buildGraphLiveScope(sessions, map[string]bool{
+		"child":          true,
+		"running-parent": true,
+		"running-child":  true,
+	})
+	if got := scope["parent"]; got != "awaiting-workers" {
+		t.Fatalf("parent scope = %q, want awaiting-workers", got)
+	}
+	if got := scope["child"]; got != "running" {
+		t.Fatalf("child scope = %q, want running", got)
+	}
+	if got := scope["running-parent"]; got != "running" {
+		t.Fatalf("running parent scope = %q, want running", got)
+	}
+	if _, ok := scope["idle"]; ok {
+		t.Fatal("idle session entered live scope")
+	}
+}
+
+func TestBuildAgentInstancesIncludesAwaitingWorkers(t *testing.T) {
+	agents := []db.Agent{{ID: "AGT1", Name: "Coordinator"}}
+	sessions := []db.Session{{ID: "SES1", AgentID: "AGT1", Kind: "chat"}}
+	nodes, inst := buildAgentInstances(agents, sessions, map[string]string{"SES1": "awaiting-workers"})
+	if len(nodes) != 1 || len(inst["AGT1"]) != 1 {
+		t.Fatalf("awaiting coordinator missing: nodes=%+v instances=%+v", nodes, inst)
+	}
+	if nodes[0].Running || nodes[0].LiveScope != "awaiting-workers" {
+		t.Fatalf("awaiting coordinator state wrong: %+v", nodes[0])
 	}
 }
 

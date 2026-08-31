@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Network, type Options, type Node, type Edge } from 'vis-network'
 import { DataSet } from 'vis-data'
+import {
+  pruneNetworkPositions,
+  readNetworkPositions,
+  writeNetworkPositions,
+  type NetworkPositions,
+} from './networkLayoutStorage'
 
 export type VisMode = 'relation' | 'live'
 
@@ -29,6 +35,7 @@ function fitAndCap(net: Network, animated: boolean) {
 }
 
 interface Props {
+  workspaceId: string
   nodes: Node[]
   edges: Edge[]
   // 'relation' = free force cloud; 'live' = board-column flow (fixed anchors at
@@ -138,6 +145,7 @@ function buildOptions(
 // a task moves columns, an agent re-bonds to a new task — the physics engine
 // animates the transition instead of resetting every node's position.
 export function VisNetworkGraph({
+  workspaceId,
   nodes,
   edges,
   mode = 'relation',
@@ -154,6 +162,9 @@ export function VisNetworkGraph({
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
   const populatedRef = useRef(false)
+  const initialOptionsAppliedRef = useRef(false)
+  const savedPositionsRef = useRef<NetworkPositions>(readNetworkPositions(workspaceId))
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onSelectRef = useRef(onSelect)
   // Original edge colors, kept so blurNode can restore exactly what the mapper
   // set (per-edge opacity/width) after a hover dim.
@@ -185,6 +196,18 @@ export function VisNetworkGraph({
     networkRef.current = network
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
     network.on('deselectNode', () => onSelectRef.current?.(null))
+    const savePositions = () => {
+      const ids = nodesDS.getIds() as string[]
+      if (ids.length === 0) return
+      const positions = network.getPositions(ids) as NetworkPositions
+      savedPositionsRef.current = positions
+      writeNetworkPositions(workspaceId, positions)
+    }
+    const scheduleSave = () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(savePositions, 250)
+    }
+    network.on('dragEnd', scheduleSave)
 
     // Hover neighbour highlight: dim everything but the hovered node, its
     // direct neighbours and the edges between them. Restores on blur.
@@ -215,11 +238,12 @@ export function VisNetworkGraph({
       )
     })
     return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       network.destroy()
       networkRef.current = null
       populatedRef.current = false
     }
-  }, [])
+  }, [workspaceId])
 
   // Theme presets are applied as inline root tokens; data-theme additionally
   // distinguishes light mode. Re-resolve both without polling when either changes.
@@ -247,6 +271,11 @@ export function VisNetworkGraph({
     if (!nds || !eds || !net) return
 
     const nodeIds = new Set(nodes.map((n) => n.id as string))
+    const prunedPositions = pruneNetworkPositions(savedPositionsRef.current, nodeIds)
+    if (Object.keys(prunedPositions).length !== Object.keys(savedPositionsRef.current).length) {
+      savedPositionsRef.current = prunedPositions
+      writeNetworkPositions(workspaceId, prunedPositions)
+    }
     ;(nds.getIds() as string[]).forEach((id) => {
       if (!nodeIds.has(id)) nds.remove(id)
     })
@@ -259,7 +288,8 @@ export function VisNetworkGraph({
         const { x: _x, y: _y, ...rest } = n as Node & { x?: number; y?: number }
         toUpdate.push(rest as Node)
       } else {
-        toAdd.push(n)
+        const saved = savedPositionsRef.current[n.id as string]
+        toAdd.push(saved ? { ...n, ...saved } : n)
       }
     }
     if (toAdd.length) nds.add(toAdd)
@@ -276,11 +306,35 @@ export function VisNetworkGraph({
     // Remember each edge's mapper-set color so hover-dim can restore it.
     for (const e of edges) baseEdgeColorRef.current.set(e.id as string, e.color)
 
+    const settleAndSave = (animated: boolean) => {
+      net.setOptions({ physics: { enabled: true } })
+      net.once('stabilizationIterationsDone', () => {
+        net.stopSimulation()
+        const ids = nds.getIds() as string[]
+        const positions = net.getPositions(ids) as NetworkPositions
+        savedPositionsRef.current = positions
+        writeNetworkPositions(workspaceId, positions)
+        fitAndCap(net, animated)
+      })
+      net.startSimulation()
+    }
+
     if (!populatedRef.current && nodes.length > 0) {
       populatedRef.current = true
-      net.once('stabilizationIterationsDone', () => fitAndCap(net, false))
+      const hasSavedPositionForEveryNode = nodes.every(
+        (node) => savedPositionsRef.current[node.id as string] !== undefined,
+      )
+      if (hasSavedPositionForEveryNode) {
+        net.stopSimulation()
+        net.setOptions({ physics: { enabled: false } })
+        fitAndCap(net, false)
+      } else {
+        settleAndSave(false)
+      }
+    } else if (toAdd.length > 0) {
+      settleAndSave(true)
     }
-  }, [nodes, edges])
+  }, [nodes, edges, workspaceId])
 
   // Apply mode / density changes to the live instance (re-runs physics + refits).
   // Fit AFTER stabilization (not immediately) so the layout — especially live
@@ -291,6 +345,10 @@ export function VisNetworkGraph({
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
+    if (!initialOptionsAppliedRef.current) {
+      initialOptionsAppliedRef.current = true
+      return
+    }
     net.setOptions(buildOptions(resolveThemeColors(), density, mode, lite))
     const fit = () => fitAndCap(net, true)
     net.once('stabilizationIterationsDone', fit)
