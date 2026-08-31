@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/market"
 )
 
@@ -151,6 +152,24 @@ func TestAgentModelMappedIntoPack(t *testing.T) {
 	a := packs[0].Payload.Agent
 	if a.Provider != "claude-cli" || a.Model != "claude-haiku-4-5-20251001" {
 		t.Errorf("agent model not mapped: provider=%q model=%q", a.Provider, a.Model)
+	}
+	if want := db.LegacyThinkingLevelFor("claude-cli"); a.ThinkingLevel != want {
+		t.Errorf("thinkingLevel = %q, want %q", a.ThinkingLevel, want)
+	}
+}
+
+// A CC file whose model maps to no provider leaves the kind unresolved, so the
+// pack must carry no level either — the install path resolves the two together.
+func TestAgentThinkingLevelBlankWhenProviderUnresolved(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "agents/finder.md", "---\nname: Finder\ndescription: d\nmodel: inherit\n---\nbody")
+	packs, _, _, err := BuildPacks("local", root, nil, Options{})
+	if err != nil || len(packs) != 1 {
+		t.Fatalf("build: %v packs=%d", err, len(packs))
+	}
+	a := packs[0].Payload.Agent
+	if a.Provider != "" || a.ThinkingLevel != "" {
+		t.Errorf("provider=%q thinkingLevel=%q, want both empty", a.Provider, a.ThinkingLevel)
 	}
 }
 

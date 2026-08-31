@@ -311,6 +311,7 @@ func (UpdateAgentTool) Def() providers.ToolDef {
 				"identity":{"type":"string"},
 				"provider":{"type":"string"},
 				"model":{"type":"string"},
+				"thinkingLevel":{"type":"string","enum":["off","low","medium","high","xhigh","max"],"description":"Extended-reasoning tier. Must be supported by the model this patch lands on. Omit to keep the agent's current tier; \"\" is not a valid value."},
 				"avatar":{"type":"string"},
 				"color":{"type":"string"},
 				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Pass \"\" to clear it."}
@@ -329,8 +330,11 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Identity *string `json:"identity"`
 		Provider *string `json:"provider"`
 		Model    *string `json:"model"`
-		Avatar   *string `json:"avatar"`
-		Color    *string `json:"color"`
+		// ThinkingLevel: omitted leaves the stored tier alone; "" is rejected
+		// (there is no valid empty ThinkingLevel any more).
+		ThinkingLevel *string `json:"thinkingLevel"`
+		Avatar        *string `json:"avatar"`
+		Color         *string `json:"color"`
 		// CoordinatorPrompt: omitted leaves it alone, "" clears it.
 		CoordinatorPrompt *string `json:"coordinatorPrompt"`
 	}
@@ -351,13 +355,36 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 			*p = repairMojibake(*p)
 		}
 	}
+	// Same guard the HTTP update path applies (api/agents.go): a patch that names
+	// a reasoning tier must name a real one — "" would restore the ambiguous
+	// legacy state — and it is judged against the model THIS patch lands on, so
+	// changing model and tier together is validated as one result instead of
+	// against the stale stored model. A model-only patch is judged the same way:
+	// the stored tier survives the write and can be stranded outside the new
+	// model's set, where it would be silently dropped at turn time.
+	if in.ThinkingLevel != nil || in.Model != nil {
+		model := previous.Model
+		if in.Model != nil {
+			model = *in.Model
+		}
+		level := previous.ThinkingLevel
+		if in.ThinkingLevel != nil {
+			*in.ThinkingLevel = strings.TrimSpace(*in.ThinkingLevel)
+			level = *in.ThinkingLevel
+		}
+		if err := providers.ValidateThinkingLevel(model, level); err != nil {
+			return "", err
+		}
+	}
+
 	patch := db.AgentProfilePatch{
-		Name:     in.Name,
-		Soul:     in.Soul,
-		Identity: in.Identity,
-		Model:    in.Model,
-		Avatar:   in.Avatar,
-		Color:    in.Color,
+		Name:          in.Name,
+		Soul:          in.Soul,
+		Identity:      in.Identity,
+		Model:         in.Model,
+		ThinkingLevel: in.ThinkingLevel,
+		Avatar:        in.Avatar,
+		Color:         in.Color,
 
 		CoordinatorPrompt: in.CoordinatorPrompt,
 	}

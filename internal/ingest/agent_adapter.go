@@ -4,6 +4,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/fetch"
 	"github.com/bilal-arikan/tionharness/internal/market"
 	"github.com/bilal-arikan/tionharness/internal/skills"
@@ -63,6 +64,17 @@ func (agentAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 		slug := skills.Slugify(name)
 
 		provider, model, modelWarn := mapCCModel(ccModel)
+		// A CC subagent file names no reasoning tier, so the pack has to say which
+		// one it means (an empty ThinkingLevel is no longer a valid agent value).
+		// Only mapCCModel's recognised branch knows the provider kind; when it
+		// leaves the provider blank the kind is still unresolved here — the
+		// registry decides it at install time — so the level stays blank too and
+		// market_install's explicitThinkingLevel resolves both together. The rule
+		// itself is db.LegacyThinkingLevelFor's, called rather than copied.
+		var thinkingLevel string
+		if provider != "" {
+			thinkingLevel = db.LegacyThinkingLevelFor(provider)
+		}
 		var warnings []string
 		if modelWarn != "" {
 			warnings = append(warnings, modelWarn)
@@ -86,11 +98,12 @@ func (agentAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 					Description: desc,
 					Version:     "1.0.0",
 					Payload: market.Payload{Agent: &market.AgentPayload{
-						Name:         name,
-						Soul:         body,
-						Provider:     provider,
-						Model:        model,
-						AllowedTools: strings.Join(tools, ", "),
+						Name:          name,
+						Soul:          body,
+						Provider:      provider,
+						Model:         model,
+						ThinkingLevel: thinkingLevel,
+						AllowedTools:  strings.Join(tools, ", "),
 					}},
 				}, nil
 			},

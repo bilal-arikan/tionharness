@@ -1301,6 +1301,16 @@ Test: `frontend/src/shared/lib/sessionKind.test.ts`,
   çözülür (`internal/tools/builtin_agentmgmt.go`). Test:
   `TestExplicitThinkingLevel`, `TestCreateAgentToolCarriesThinkingLevel`,
   `TestCreateAgentToolRejectsUnknownThinkingLevel`.
+  **`update_agent` de seviyeyi taşır (2026-08-31):** araç yalnız oluşturmada değil
+  düzenlemede de `thinkingLevel` kabul eder (aynı enum). Semantik create'ten farklıdır:
+  patch alanı **vermezse** saklı seviyeye dokunulmaz (legacy çözümüne düşülmez, o yalnız
+  oluşturma kuralıdır), boş string ise reddedilir. Doğrulama HTTP update yolunun aynısıdır
+  (`internal/api/agents.go`): `thinkingLevel` **veya** `model` patch'te varsa
+  `providers.ValidateThinkingLevel(patch'in indiği model, patch'in bıraktığı seviye)`
+  çalışır — böylece model+seviye birlikte değişince tek sonuç olarak yargılanır ve
+  model-only patch saklı seviyeyi yeni modelin seti dışında bırakamaz. Test:
+  `TestUpdateAgentToolThinkingLevel`, `TestUpdateAgentToolRejectsBadThinkingLevel`
+  (bilinmeyen token, boş string ve `deepseek-flash` + `high` model-sınıfı vakası).
   **Model-only patch de doğrulanır (2026-08-31):** `handleUpdateAgent` kapısı artık
   `req.ThinkingLevel != nil || req.Model != nil` ile açılır ve etkin çifti (patch'te
   olanı, yoksa depodaki değeri) doğrular. Yalnız model değiştiren bir patch de ajanın
