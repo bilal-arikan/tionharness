@@ -13,13 +13,10 @@ export interface BoardColumnDef {
 // Board grouping axis. The board's columns are DERIVED from this: 'status' uses
 // the workspace's BoardColumnDef list (classic kanban), the others build columns
 // from the tasks themselves. Dragging a card writes the field the axis names.
-export type BoardGroupBy = 'status' | 'agent' | 'priority' | 'tag' | 'due'
+export type BoardGroupBy = 'status' | 'agent' | 'priority' | 'tag'
 
 // Sort order applied within each board column.
-export type BoardSort = 'updated' | 'priority' | 'due' | 'deps' | 'title'
-
-// Due-date filter buckets. 'none' matches tasks with no due date at all.
-export type BoardDueFilter = 'overdue' | 'today' | 'week' | 'none'
+export type BoardSort = 'updated' | 'priority' | 'deps' | 'title'
 
 // Dependency filter buckets: 'blocked' = at least one dependency not done,
 // 'ready' = has dependencies and all are done.
@@ -38,8 +35,6 @@ export interface BoardFilter {
   tags?: string[]
   agentIds?: string[]
   columns?: string[]
-  // Multi-select (OR within the facet), so "today OR already late" is expressible.
-  dues?: BoardDueFilter[]
   // Single-valued: blocked and ready are mutually exclusive states of one task,
   // so this renders as a radio rather than a checklist.
   dep?: BoardDepFilter

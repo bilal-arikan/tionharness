@@ -5,6 +5,8 @@ import {
   Background,
   Controls,
   MiniMap,
+  useNodesInitialized,
+  useReactFlow,
   type Edge,
   type NodeTypes,
 } from '@xyflow/react'
@@ -26,6 +28,35 @@ interface Props {
 }
 
 const SINGLE_CLICK_DELAY_MS = 250
+
+function FocusedNodeCenter({ nodes }: { nodes: ExplorerRFNode[] }) {
+  const { getNode, getViewport, setCenter } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const focusNodeId = nodes.find((node) => node.data.focus)?.id
+  const focusSequence = useRef(0)
+
+  useEffect(() => {
+    if (!nodesInitialized || !focusNodeId) return
+    const sequence = ++focusSequence.current
+    const frame = requestAnimationFrame(() => {
+      if (focusSequence.current !== sequence) return
+      const node = getNode(focusNodeId)
+      if (!node?.measured?.width || !node.measured.height) return
+      const zoom = getViewport().zoom
+      void setCenter(
+        node.position.x + node.measured.width / 2,
+        node.position.y + node.measured.height / 2,
+        { zoom },
+      )
+    })
+    return () => {
+      focusSequence.current += 1
+      cancelAnimationFrame(frame)
+    }
+  }, [focusNodeId, getNode, getViewport, nodesInitialized, setCenter])
+
+  return null
+}
 
 // Positions come from the pure focus model; canvas owns only pan/zoom and input.
 export function ExplorerGraph({
@@ -80,6 +111,7 @@ export function ExplorerGraph({
 
   return (
     <ReactFlowProvider>
+      <FocusedNodeCenter nodes={nodes} />
       <div
         className="h-full w-full"
         role="region"

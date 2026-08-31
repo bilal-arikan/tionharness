@@ -36,6 +36,25 @@ describe('buildFocusGraph', () => {
     expect(nodes.find((node) => node.id === 'session:S2')?.data.selected).toBe(true)
   })
 
+  it('keeps the active ancestor chain visible outside the parent limit', () => {
+    const ancestors = [handle('category', 'root'), handle('category', 'branch')]
+    const parents = Array.from({ length: 18 }, (_, index) => handle('agent', `P${index}`))
+    const { nodes, edges, overflow } = buildFocusGraph({
+      neighborhood: neighborhood({ parents }),
+      lineage: [...ancestors, handle('session', 'S1')],
+      selectedKey: null,
+      search: '',
+      loading: false,
+    })
+
+    expect(nodes.some((node) => node.id === 'category:root')).toBe(true)
+    expect(nodes.some((node) => node.id === 'category:branch')).toBe(true)
+    expect(edges.map((edge) => `${edge.source}->${edge.target}`)).toEqual(
+      expect.arrayContaining(['category:root->category:branch', 'category:branch->session:S1']),
+    )
+    expect(overflow.parents).toHaveLength(3)
+  })
+
   it('deduplicates multi-parent refs and sorts nodes deterministically by ref', () => {
     const input = neighborhood({
       parents: [handle('agent', 'Z'), handle('agent', 'A'), handle('agent', 'A')],
@@ -84,8 +103,8 @@ describe('buildFocusGraph', () => {
   })
 
   it('caps each canvas side deterministically and retains every remainder in overflow', () => {
-    const parents = Array.from({ length: 9 }, (_, index) => handle('agent', `P${index}`)).reverse()
-    const children = Array.from({ length: 10 }, (_, index) =>
+    const parents = Array.from({ length: 18 }, (_, index) => handle('agent', `P${index}`)).reverse()
+    const children = Array.from({ length: 19 }, (_, index) =>
       handle('session', `C${index}`),
     ).reverse()
 
@@ -102,7 +121,7 @@ describe('buildFocusGraph', () => {
     expect(
       result.nodes.filter((node) => node.data.depth === 2 && !node.data.overflow),
     ).toHaveLength(VISIBLE_RELATIONS_PER_SIDE)
-    expect(result.overflow.parents.map((item) => item.ref.id)).toEqual(['P6', 'P7', 'P8'])
+    expect(result.overflow.parents.map((item) => item.ref.id)).toEqual(['P7', 'P8', 'P9'])
     expect(result.overflow.children.map((item) => item.ref.id)).toEqual(['C6', 'C7', 'C8', 'C9'])
     expect(result.nodes.find((node) => node.id === '__overflow:parents')?.data.label).toBe(
       '+3 üst bağlantı',

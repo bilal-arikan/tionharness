@@ -45,6 +45,18 @@ vi.mock('@xyflow/react', () => ({
   Background: () => null,
   Controls: () => null,
   MiniMap: () => null,
+  useNodesInitialized: () => true,
+  useReactFlow: () => ({
+    getNode: mocks.getNode,
+    getViewport: mocks.getViewport,
+    setCenter: mocks.setCenter,
+  }),
+}))
+
+const mocks = vi.hoisted(() => ({
+  getNode: vi.fn(),
+  getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+  setCenter: vi.fn(),
 }))
 
 const refs = {
@@ -77,6 +89,39 @@ afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount())
   document.body.replaceChildren()
   vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.clearAllMocks()
+})
+
+describe('ExplorerGraph viewport', () => {
+  it('centers an opened node after measurement and preserves zoom', () => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    mocks.getNode.mockReturnValue({
+      position: { x: 340, y: 92 },
+      measured: { width: 200, height: 60 },
+    })
+    mocks.getViewport.mockReturnValue({ x: 10, y: 20, zoom: 1.75 })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+
+    act(() =>
+      root.render(
+        <ExplorerGraph
+          nodes={[node('session:F', refs.focus, 1, 92)]}
+          edges={[]}
+          onNodeClick={() => {}}
+          onNodeDoubleClick={() => {}}
+          onOverflowClick={() => {}}
+        />,
+      ),
+    )
+
+    expect(mocks.setCenter).toHaveBeenCalledWith(440, 122, { zoom: 1.75 })
+  })
 })
 
 describe('ExplorerGraph pointer interaction', () => {

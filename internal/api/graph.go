@@ -88,7 +88,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	tasks, err := wsp.DB.ListTasks(ctx)
+	tasks, err := wsp.DB.ListActiveTasks(ctx)
 	if writeDBError(w, err, "") {
 		return
 	}

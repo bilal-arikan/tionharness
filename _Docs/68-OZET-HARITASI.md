@@ -146,7 +146,17 @@ TSK492 erişilebilirlik sözleşmesi:
 - Global `prefers-reduced-motion: reduce` kuralı kart/drawer geçişlerini ve spinner
   animasyonlarını yaklaşık anlık hâle getirir.
 
-Canvas görünürlük eşiği yön başına `VISIBLE_RELATIONS_PER_SIDE = 6` olarak sabittir.
+Aktif/focus node açıldığında veya graf odağı değiştiğinde, node ölçümü tamamlandıktan
+sonra viewport bu node'u merkeze alır; mevcut zoom değeri aynen korunur. Selection
+olayı tek başına merkezlemeyi tetiklemez.
+
+Canvas görünürlük eşiği yön başına `VISIBLE_RELATIONS_PER_SIDE = 15` olarak sabittir.
+Child odağına ilerlerken aktif ancestor zinciri root'a kadar görünür kalır; zincir
+parent taşma sınırına dahil edilmez. Ancestor'a dönünce eski suffix kaldırılır.
+Derin URL ile açılışta backend yalnız doğrudan parent döndürdüğü için istemci parent
+neighborhood'larını köke ulaşana kadar seri çözer. Ref-bazlı path guard döngüleri
+sonlandırır; URL/focus değişiminde ayrı AbortController ve nesil kontrolü eski çözümün
+yeni lineage'ı ezmesini önler. Köke bağlanamayan zincir görünür hata üretir.
 Bu bir API veya veri sınırı değildir: model tam, sıralı remainder listesini korur;
 parent ve child tarafında ayrı `+N` sentetik düğüm üretir. Düğüm tüm kalan handle'ları
 scroll edilebilir drawer içinde açar; listedeki tek tık seçer, çift tık odağı değiştirir.
