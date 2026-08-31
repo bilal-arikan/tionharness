@@ -87,6 +87,12 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if prep.Compacted {
 			wsp.Runtime.DropWarmCLISession(session.ID)
 		}
+		if prep.NativeCompacted {
+			session, err = wsp.DB.GetSession(ctx, session.ID)
+			if err != nil {
+				return "", nil, fmt.Errorf("wake turn: reload session after native compaction: %w", err)
+			}
+		}
 		// freshSession=false: a wake always continues an existing conversation.
 		req := s.composeTurnRequest(ctx, wsp, session, ag, []db.Agent{ag}, prompt, prep, false, multiAgent, toolRecap, feedbackRecap, "")
 		// autonomous=true: a wake is a headless, budget-gated run (no live client);

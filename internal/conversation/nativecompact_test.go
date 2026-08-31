@@ -134,10 +134,10 @@ func TestPrepareNativeFailureFallsBackToRolling(t *testing.T) {
 	}
 }
 
-// TestPrepareNativeAntiLoop is the convergence guard. Native compaction shrinks the
-// CLI's window but not our transcript, so a second Prepare over the SAME history is
-// still over budget. It must not fire a second native compaction — it has to fall
-// through to the rolling fold, which actually reduces the text.
+// TestPrepareNativeAntiLoop is the production-shaped convergence guard. A real turn
+// appends user and assistant messages after native compaction, so history grows but
+// the rolling-summary boundary does not. The next over-budget Prepare must still
+// skip native and run the rolling fold, which actually reduces pending text.
 func TestPrepareNativeAntiLoop(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactNative)
@@ -153,12 +153,16 @@ func TestPrepareNativeAntiLoop(t *testing.T) {
 	if !first.NativeCompacted || first.Compacted {
 		t.Fatalf("first turn: want native only, got native=%v rolling=%v", first.NativeCompacted, first.Compacted)
 	}
+	history = append(history,
+		db.Message{Role: providers.RoleUser, Text: "u4"},
+		db.Message{Role: providers.RoleAssistant, Text: "a4"},
+	)
 	second, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {
 		t.Fatalf("second prepare: %v", err)
 	}
 	if calls != 1 {
-		t.Fatalf("native callback called %d times over two identical turns, want 1", calls)
+		t.Fatalf("native callback called %d times after history grew without a rolling fold, want 1", calls)
 	}
 	if second.NativeCompacted {
 		t.Fatalf("second turn compacted natively again — the anti-loop guard is not holding")

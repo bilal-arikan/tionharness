@@ -50,21 +50,23 @@ func fireNativeCompact(ctx context.Context) error {
 // over-budget footprint every single turn and fire another native compaction (a CLI
 // round-trip plus a dropped warm session) forever, never converging.
 //
-// The guard: a session may attempt native compaction only once per history length.
-// A second Prepare over the same (or a shrunken) transcript is refused, so that
-// turn falls through to the rolling fold — which does reduce the text — and the
-// system converges. The attempt is claimed here, before the callback runs: a failed
-// native attempt also falls back to rolling on that same turn, so re-claiming it
-// would buy nothing.
-func (m *Manager) claimNativeAttempt(sessionID string, historyLen int) bool {
+// The guard: a session may attempt native compaction only once per rolling-summary
+// boundary. New user/assistant messages grow history without reducing our pending
+// transcript, so history length cannot prove progress. Only a later rolling fold,
+// observed as a larger SummaryMsgCount, permits another native attempt. Thus
+// persistently over-budget turns alternate native then rolling and converge.
+//
+// The attempt is claimed before the callback runs: a failed native attempt falls
+// back to rolling on that same turn, so re-claiming it would buy nothing.
+func (m *Manager) claimNativeAttempt(sessionID string, summaryMsgCount int) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if last, ok := m.lastNativeCompactAt[sessionID]; ok && historyLen <= last {
+	if last, ok := m.lastNativeCompactAt[sessionID]; ok && summaryMsgCount <= last {
 		return false
 	}
 	if m.lastNativeCompactAt == nil {
 		m.lastNativeCompactAt = map[string]int{}
 	}
-	m.lastNativeCompactAt[sessionID] = historyLen
+	m.lastNativeCompactAt[sessionID] = summaryMsgCount
 	return true
 }

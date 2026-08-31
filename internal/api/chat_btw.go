@@ -124,6 +124,13 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	if prep.Compacted {
 		ws(r).Runtime.DropWarmCLISession(session.ID)
 	}
+	if prep.NativeCompacted {
+		session, err = database.GetSession(ctx, session.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "reload session after native compaction: "+err.Error())
+			return
+		}
+	}
 	// The fold above is a real, shared mutation of the session's rolling summary,
 	// so it must not stay invisible just because the side chat has no transcript.
 	// There is no SSE writer here (the btw endpoint answers with a single JSON

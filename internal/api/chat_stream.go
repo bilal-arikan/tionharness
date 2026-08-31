@@ -398,6 +398,13 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			if prep.Compacted {
 				wsp.Runtime.DropWarmCLISession(session.ID)
 			}
+			if prep.NativeCompacted {
+				session, cerr = database.GetSession(ctx, session.ID)
+				if cerr != nil {
+					s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "session_reload_failed", "reload session after native compaction: "+cerr.Error())
+					return
+				}
+			}
 
 			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, feedbackRecap, passContext)
 			// Prompt-epoch drift step: if the static context changed since the frozen

@@ -357,7 +357,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			// claimNativeAttempt is the anti-loop guard: native compaction does not
 			// shrink OUR transcript, so without it the same over-budget footprint would
 			// re-trigger it every turn. See nativecompact.go.
-			if m.claimNativeAttempt(session.ID, len(history)) && fireNativeCompact(ctx) == nil {
+			if m.claimNativeAttempt(session.ID, start) && fireNativeCompact(ctx) == nil {
 				nativeCompacted = true
 				// The transcript is untouched, so both sides report the same footprint;
 				// Mode is what tells this apart from a rolling fold downstream.
