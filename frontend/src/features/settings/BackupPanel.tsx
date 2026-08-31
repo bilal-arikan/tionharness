@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Archive, RotateCcw, Trash2 } from 'lucide-react'
 import type { BackupStatus, WorkspaceArchives } from '@/types'
 import { api, getActiveWorkspace } from '@/api'
-import { Field, Toggle, inputCls } from './primitives'
+import { Field, NumberField, Toggle, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 import { formatDateTime } from '@/shared/lib/intl'
@@ -122,30 +122,20 @@ export function BackupPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('backupEnabled', v)}
       />
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Yedekleme aralığı (saat)"
           hint="İki otomatik yedek arası süre (en az 1 saat). 24 = günde bir."
-        >
-          <input
-            type="number"
-            min={1}
-            value={draft.backupIntervalHours}
-            onChange={(e) => set('backupIntervalHours', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          value={draft.backupIntervalHours}
+          onChange={(v) => set('backupIntervalHours', v)}
+        />
+        <NumberField
           label="Saklanan yedek sayısı"
           hint="Workspace başına tutulan en yeni arşiv sayısı; eskiler budanır (en az 1)."
-        >
-          <input
-            type="number"
-            min={1}
-            value={draft.backupRetain}
-            onChange={(e) => set('backupRetain', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={1}
+          value={draft.backupRetain}
+          onChange={(v) => set('backupRetain', v)}
+        />
       </div>
       <Field
         label="Yedek klasörü"

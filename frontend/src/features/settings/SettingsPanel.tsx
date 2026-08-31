@@ -9,7 +9,7 @@ import type {
   SlashCommand,
 } from '@/types'
 import { LoadingState, toast } from '@/shared/components'
-import { CatButton, type Cat } from './primitives'
+import { CatButton, NumberValidityProvider, useNumberValidity, type Cat } from './primitives'
 import { APP_CATS } from './settingsCats'
 import {
   ProfilePanel,
@@ -129,6 +129,11 @@ export function SettingsPanel({
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Numeric fields report empty / out-of-range input here; an invalid field never
+  // writes to `draft`, and Save stays disabled until it is corrected so a bad
+  // value can't be persisted as 0 or null.
+  const numberValidity = useNumberValidity()
 
   const dirtyApp = useMemo(
     () => !!(draft && original && JSON.stringify(draft) !== JSON.stringify(original)),
@@ -315,8 +320,18 @@ export function SettingsPanel({
           </span>
           <div className="flex items-center gap-3">
             {cat !== 'secrets' && cat !== 'exttools' && (
-              <span className="text-xs text-[var(--color-text-dim)]">
-                {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
+              <span
+                className={`text-xs ${
+                  numberValidity.hasInvalid
+                    ? 'text-[var(--color-danger)]'
+                    : 'text-[var(--color-text-dim)]'
+                }`}
+              >
+                {numberValidity.hasInvalid
+                  ? 'Geçersiz sayı değeri — düzeltmeden kaydedilemez'
+                  : dirty
+                    ? 'Kaydedilmemiş değişiklik'
+                    : 'Kayıtlı'}
               </span>
             )}
             {cat !== 'about' &&
@@ -325,7 +340,7 @@ export function SettingsPanel({
               cat !== 'hooks' &&
               cat !== 'exttools' &&
               cat !== 'secrets' && (
-                <Button onClick={save} disabled={!dirty || saving}>
+                <Button onClick={save} disabled={!dirty || saving || numberValidity.hasInvalid}>
                   {saving ? 'Kaydediliyor…' : 'Kaydet'}
                 </Button>
               )}
@@ -341,7 +356,7 @@ export function SettingsPanel({
             {!draft ? (
               <LoadingState label="Yükleniyor…" />
             ) : (
-              <>
+              <NumberValidityProvider value={numberValidity}>
                 {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
                 {cat === 'providers' && (
                   <ProvidersPanel
@@ -386,7 +401,7 @@ export function SettingsPanel({
                 )}
                 {cat === 'stepkinds' && <StepKindsPanel />}
                 {cat === 'about' && <AboutPanel />}
-              </>
+              </NumberValidityProvider>
             )}
           </div>
         )}

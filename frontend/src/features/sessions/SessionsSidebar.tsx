@@ -250,18 +250,24 @@ export function SessionsSidebar({
   // flattened visible render order so Shift+Click can span recency buckets.
   const sel = useMultiSelect()
   const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((s) => s.id)), [groups])
+  // Membership lookups below run once per selected id; over an array both would
+  // be O(selected × sessions), which is the whole list on every render.
+  const orderedIdSet = useMemo(() => new Set(orderedIds), [orderedIds])
+  const sessionById = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions])
   // Selected sessions that are currently filtered out of view — bulk actions
   // still apply to them, so we surface the count.
   const hiddenSelected = useMemo(
-    () => [...sel.selected].filter((id) => !orderedIds.includes(id)).length,
-    [sel.selected, orderedIds],
+    () => [...sel.selected].filter((id) => !orderedIdSet.has(id)).length,
+    [sel.selected, orderedIdSet],
   )
   const selectedIds = () => [...sel.selected]
   // With one flat list a selection can mix archived and live rows; the bulk
   // button only flips to "restore" when every selected session is archived.
-  const allSelectedArchived =
-    sel.count > 0 &&
-    [...sel.selected].every((id) => sessions.find((s) => s.id === id)?.state === 'archived')
+  const allSelectedArchived = useMemo(
+    () =>
+      sel.count > 0 && [...sel.selected].every((id) => sessionById.get(id)?.state === 'archived'),
+    [sel.count, sel.selected, sessionById],
+  )
   // Bulk actions reuse the existing per-id handlers in a loop (no new API).
   const bulkArchive = (archived: boolean) => {
     selectedIds().forEach((id) => onSetArchived(id, archived))

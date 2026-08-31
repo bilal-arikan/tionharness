@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
+import {
+  NumberField,
+  NumberValidityProvider,
+  useNumberValidity,
+} from '@/features/settings/primitives'
 import type { InsightSettings } from '@/types'
 
 interface Props {
@@ -19,6 +24,9 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
   const [saving, setSaving] = useState(false)
   const [deep, setDeep] = useState(false)
   const [resetting, setResetting] = useState(false)
+  // Same boundary as LessonsTab: this tab renders the numeric fields and the
+  // Save button, so it owns the validity set and gates Save on it.
+  const numberValidity = useNumberValidity()
 
   const save = async () => {
     setSaving(true)
@@ -50,100 +58,88 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
 
   return (
     <div className="max-w-xl space-y-4">
-      <div className="space-y-3 rounded-md border border-[var(--color-border)] p-3">
-        <label className="block">
-          <span className="text-sm">App-Fix repo yolu (backlog hedefi)</span>
-          <input
-            type="text"
-            value={settings.appFixRepoPath ?? ''}
-            onChange={(e) => setSettings({ ...settings, appFixRepoPath: e.target.value })}
-            placeholder="C:/Users/.../TionHarness"
-            className={`${inputCls} w-full`}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Maks. oturum / tarama (0 = sınırsız)</span>
-          <input
-            type="number"
+      <NumberValidityProvider value={numberValidity}>
+        <div className="space-y-3 rounded-md border border-[var(--color-border)] p-3">
+          <label className="block">
+            <span className="text-sm">App-Fix repo yolu (backlog hedefi)</span>
+            <input
+              type="text"
+              value={settings.appFixRepoPath ?? ''}
+              onChange={(e) => setSettings({ ...settings, appFixRepoPath: e.target.value })}
+              placeholder="C:/Users/.../TionHarness"
+              className={`${inputCls} w-full`}
+            />
+          </label>
+          <NumberField
+            label="Maks. oturum / tarama (0 = sınırsız)"
+            min={0}
             value={settings.maxSessions ?? 0}
-            onChange={(e) => setSettings({ ...settings, maxSessions: Number(e.target.value) })}
-            className={`${inputCls} w-32`}
+            onChange={(v) => setSettings({ ...settings, maxSessions: v })}
           />
-        </label>
-        <label className="block">
-          <span className="text-sm">Maks. analiz (LLM çağrısı) / tarama (0 = sınırsız)</span>
-          <input
-            type="number"
+          <NumberField
+            label="Maks. analiz (LLM çağrısı) / tarama (0 = sınırsız)"
+            hint="Maliyet tavanı — aşan çiftler sonraki taramada işlenir."
+            min={0}
             value={settings.maxAnalyzed ?? 0}
-            onChange={(e) => setSettings({ ...settings, maxAnalyzed: Number(e.target.value) })}
-            className={`${inputCls} w-32`}
+            onChange={(v) => setSettings({ ...settings, maxAnalyzed: v })}
           />
-          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-            Maliyet tavanı — aşan çiftler sonraki taramada işlenir.
-          </span>
-        </label>
-        <label className="block">
-          <span className="text-sm">Sadece son N günü tara (0 = tüm geçmiş)</span>
-          <input
-            type="number"
+          <NumberField
+            label="Sadece son N günü tara (0 = tüm geçmiş)"
+            hint="Eski oturumların (çözülmüş olabilecek) sorunlarını taramamak için pencereyi daralt."
             min={0}
             value={settings.scanSinceDays ?? 0}
-            onChange={(e) => setSettings({ ...settings, scanSinceDays: Number(e.target.value) })}
-            className={`${inputCls} w-32`}
+            onChange={(v) => setSettings({ ...settings, scanSinceDays: v })}
           />
-          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-            Eski oturumların (çözülmüş olabilecek) sorunlarını taramamak için pencereyi daralt.
-          </span>
-        </label>
-        <label className="block">
-          <span className="text-sm">Uygulanan bulguyu otomatik doğrula: N gün (0 = 14)</span>
-          <input
-            type="number"
+          <NumberField
+            label="Uygulanan bulguyu otomatik doğrula: N gün (0 = 14)"
+            hint={
+              '"Uygulandı" bir bulgu bu kadar gün nüksetmezse (ve regrese değilse) otomatik "Doğrulandı" olur.'
+            }
             min={0}
             value={settings.autoVerifyDays ?? 0}
-            onChange={(e) => setSettings({ ...settings, autoVerifyDays: Number(e.target.value) })}
-            className={`${inputCls} w-32`}
+            onChange={(v) => setSettings({ ...settings, autoVerifyDays: v })}
           />
-          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-            "Uygulandı" bir bulgu bu kadar gün nüksetmezse (ve regrese değilse) otomatik
-            "Doğrulandı" olur.
-          </span>
-        </label>
-        <label className="block">
-          <span className="text-sm">Çözülmüş bulguyu buda: N gün (0 = 45)</span>
-          <input
-            type="number"
+          <NumberField
+            label="Çözülmüş bulguyu buda: N gün (0 = 45)"
+            hint={
+              '"Yoksayıldı"/"Doğrulandı" bir bulguya bu kadar gün dokunulmazsa silinir (birikmiş gürültüyü temizler).'
+            }
             min={0}
             value={settings.pruneDays ?? 0}
-            onChange={(e) => setSettings({ ...settings, pruneDays: Number(e.target.value) })}
-            className={`${inputCls} w-32`}
+            onChange={(v) => setSettings({ ...settings, pruneDays: v })}
           />
-          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-            "Yoksayıldı"/"Doğrulandı" bir bulguya bu kadar gün dokunulmazsa silinir (birikmiş
-            gürültüyü temizler).
-          </span>
-        </label>
-        <label className="block">
-          <span className="text-sm">Otomatik tarama cron (boş = kapalı)</span>
-          <input
-            type="text"
-            value={settings.autoScanCron ?? ''}
-            onChange={(e) => setSettings({ ...settings, autoScanCron: e.target.value })}
-            placeholder="0 3 * * *  (her gece 03:00)"
-            className={`${inputCls} w-full font-mono`}
-          />
-          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
-            Standart 5 alanlı cron (dakika saat gün ay haftagünü).
-          </span>
-        </label>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
-        >
-          <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
-      </div>
+          <label className="block">
+            <span className="text-sm">Otomatik tarama cron (boş = kapalı)</span>
+            <input
+              type="text"
+              value={settings.autoScanCron ?? ''}
+              onChange={(e) => setSettings({ ...settings, autoScanCron: e.target.value })}
+              placeholder="0 3 * * *  (her gece 03:00)"
+              className={`${inputCls} w-full font-mono`}
+            />
+            <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
+              Standart 5 alanlı cron (dakika saat gün ay haftagünü).
+            </span>
+          </label>
+          {numberValidity.hasInvalid && (
+            <div className="text-xs text-[var(--color-danger)]">
+              Geçersiz sayı değeri — düzeltmeden kaydedilemez
+            </div>
+          )}
+          <button
+            onClick={save}
+            disabled={saving || numberValidity.hasInvalid}
+            title={
+              numberValidity.hasInvalid
+                ? 'Geçersiz sayı değeri — düzeltmeden kaydedilemez'
+                : undefined
+            }
+            className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
+        </div>
+      </NumberValidityProvider>
 
       {/* Danger zone: reset all insight data for this workspace. */}
       <div className="space-y-2 rounded-md border border-[var(--color-danger)]/40 p-3">

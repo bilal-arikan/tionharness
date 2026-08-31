@@ -1,5 +1,15 @@
 // Shared building blocks for the settings screen: field primitives, the category
 // rail button, the read-only prompt viewer and the category taxonomy.
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
@@ -49,6 +59,143 @@ export function Field({
     <label className="flex flex-col gap-1">
       <span className="text-sm font-medium">{label}</span>
       {children}
+      {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
+    </label>
+  )
+}
+
+// Numeric-field validity tracking. A NumberField whose text is empty, not a
+// number, or outside [min, max] never writes to the settings draft — the last
+// valid value stays there. It registers itself here instead, so the screen
+// hosting the fields can block Save while any of them is invalid (a silent 0 /
+// null reaching the backend is exactly the data loss this prevents).
+export interface NumberValidity {
+  hasInvalid: boolean
+  report: (id: string, invalid: boolean) => void
+}
+
+const NumberValidityCtx = createContext<NumberValidity | null>(null)
+
+// Owns the invalid-field set. Call in the screen that renders the fields AND the
+// Save button, pass the result to NumberValidityProvider, and gate Save on
+// `hasInvalid`.
+export function useNumberValidity(): NumberValidity {
+  const [invalid, setInvalid] = useState<ReadonlySet<string>>(() => new Set())
+  const report = useCallback((id: string, bad: boolean) => {
+    setInvalid((prev) => {
+      if (prev.has(id) === bad) return prev
+      const next = new Set(prev)
+      if (bad) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  return useMemo(() => ({ hasInvalid: invalid.size > 0, report }), [invalid, report])
+}
+
+export function NumberValidityProvider({
+  value,
+  children,
+}: {
+  value: NumberValidity
+  children: ReactNode
+}) {
+  return <NumberValidityCtx.Provider value={value}>{children}</NumberValidityCtx.Provider>
+}
+
+// NumberField is the numeric counterpart of Field: it keeps the typed text in
+// local state so intermediate input ("", "-", "1e") stays on screen without
+// being written to the draft as 0 or NaN, validates against min/max on every
+// keystroke, and shows the reason inline when the value is rejected.
+export function NumberField({
+  label,
+  hint,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  disabled,
+}: {
+  label: string
+  hint?: string
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  step?: number
+  disabled?: boolean
+}) {
+  const id = useId()
+  const validity = useContext(NumberValidityCtx)
+  const report = validity?.report
+  const [text, setText] = useState(() => String(value))
+  const [error, setError] = useState<string | null>(null)
+  // Last value this field itself committed, so an external change (settings
+  // reload, reset) refreshes the text while our own commits do not fight it.
+  const committed = useRef(value)
+
+  useEffect(() => {
+    if (value === committed.current) return
+    committed.current = value
+    setText(String(value))
+    setError(null)
+    report?.(id, false)
+  }, [value, id, report])
+
+  // Unmounting while invalid must not keep Save disabled forever.
+  useEffect(() => () => report?.(id, false), [id, report])
+
+  const onInput = (raw: string) => {
+    setText(raw)
+    const reject = (msg: string) => {
+      setError(msg)
+      report?.(id, true)
+    }
+    const trimmed = raw.trim()
+    if (trimmed === '') {
+      reject('Boş bırakılamaz — bir değer gir.')
+      return
+    }
+    const n = Number(trimmed)
+    if (!Number.isFinite(n)) {
+      reject('Geçerli bir sayı değil.')
+      return
+    }
+    if (min !== undefined && n < min) {
+      reject(`En az ${min} olabilir.`)
+      return
+    }
+    if (max !== undefined && n > max) {
+      reject(`En çok ${max} olabilir.`)
+      return
+    }
+    setError(null)
+    report?.(id, false)
+    committed.current = n
+    onChange(n)
+  }
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-sm font-medium">{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        step={step}
+        value={text}
+        disabled={disabled}
+        aria-invalid={error ? true : undefined}
+        onChange={(e) => onInput(e.target.value)}
+        className={`${inputCls} ${error ? 'border-[var(--color-danger)]' : ''}`}
+      />
+      {error && (
+        <span role="alert" className="text-xs text-[var(--color-danger)]">
+          {error}
+        </span>
+      )}
       {hint && <span className="text-xs text-[var(--color-text-dim)]">{hint}</span>}
     </label>
   )

@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react'
-import { Field, Toggle, Segmented, inputCls } from './primitives'
+import { NumberField, Toggle, Segmented } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -82,32 +82,22 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         çalışır.)
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Maks. delegasyon derinliği"
           hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması."
-        >
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={draft.delegationMaxDepth}
-            onChange={(e) => set('delegationMaxDepth', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={10}
+          value={draft.delegationMaxDepth}
+          onChange={(v) => set('delegationMaxDepth', v)}
+        />
+        <NumberField
           label="Tur başına maks. delegasyon"
           hint="Tek kullanıcı turunda toplam run_subagent çağrısı (1–100). Bütçe koruması."
-        >
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={draft.delegationMaxCalls}
-            onChange={(e) => set('delegationMaxCalls', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={1}
+          max={100}
+          value={draft.delegationMaxCalls}
+          onChange={(v) => set('delegationMaxCalls', v)}
+        />
       </div>
 
       <SubHead icon={Sparkles}>Spawn (arka plan) limitleri</SubHead>
@@ -116,162 +106,102 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         <code>spawn_session</code> + UI spawn düğmesi.
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Maks. eşzamanlı spawn"
           hint="Aynı anda çalışabilen spawn edilmiş oturum sayısı (1–128)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={128}
-            value={draft.spawnMaxConcurrent}
-            onChange={(e) => set('spawnMaxConcurrent', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={128}
+          value={draft.spawnMaxConcurrent}
+          onChange={(v) => set('spawnMaxConcurrent', v)}
+        />
+        <NumberField
           label="Maks. bekleyen spawn"
           hint="Kapasite doluyken kuyrukta bekleyebilecek spawn sayısı (1–128)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={128}
-            value={draft.spawnQueueMax}
-            onChange={(e) => set('spawnQueueMax', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={128}
+          value={draft.spawnQueueMax}
+          onChange={(v) => set('spawnQueueMax', v)}
+        />
+        <NumberField
           label="Tur başına maks. spawn"
           hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={64}
-            value={draft.spawnMaxPerTurn}
-            onChange={(e) => set('spawnMaxPerTurn', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={64}
+          value={draft.spawnMaxPerTurn}
+          onChange={(v) => set('spawnMaxPerTurn', v)}
+        />
+        <NumberField
           label="Spawn süresi — üst sınır (dk)"
           hint="Bir spawn/worker iş turunun MUTLAK süre tavanı; otomatik-devam turları da bu süreyi paylaşır (varsayılan 20)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={draft.spawnTimeoutMin}
-            onChange={(e) => set('spawnTimeoutMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={1440}
+          value={draft.spawnTimeoutMin}
+          onChange={(v) => set('spawnTimeoutMin', v)}
+        />
+        <NumberField
           label="Spawn boşta süresi (dk)"
           hint="Etkinlik izleyicisi: bir spawn/worker turu bu kadar süre hiçbir adım (araç/düşünce/token) yaymazsa 'asılı' sayılıp iptal edilir; üretken uzun tur üst sınıra kadar koşar (varsayılan 5)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={draft.spawnIdleTimeoutMin}
-            onChange={(e) => set('spawnIdleTimeoutMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={1440}
+          value={draft.spawnIdleTimeoutMin}
+          onChange={(v) => set('spawnIdleTimeoutMin', v)}
+        />
+        <NumberField
           label="Sohbet turu üst sınırı (dk)"
           hint="İnteraktif sohbet turunun tüm hazırlık, model ve araç döngüsünü kapsayan mutlak süre tavanı (varsayılan 120; 0 = kapalı)."
-        >
-          <input
-            type="number"
-            min={0}
-            max={1440}
-            value={draft.chatTurnTimeoutMin}
-            onChange={(e) => set('chatTurnTimeoutMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          max={1440}
+          value={draft.chatTurnTimeoutMin}
+          onChange={(v) => set('chatTurnTimeoutMin', v)}
+        />
+        <NumberField
           label="Sohbet turu boşta süresi (dk)"
           hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir; takılan bir sağlayıcı akışı böyle geri alınır. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 3; 0 = kapalı)."
-        >
-          <input
-            type="number"
-            min={0}
-            max={1440}
-            value={draft.chatTurnIdleTimeoutMin}
-            onChange={(e) => set('chatTurnIdleTimeoutMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          max={1440}
+          value={draft.chatTurnIdleTimeoutMin}
+          onChange={(v) => set('chatTurnIdleTimeoutMin', v)}
+        />
+        <NumberField
           label="Codex stdout sessizlik penceresi (sn)"
           hint="Akışa başlamış bir codex-cli alt süreci bu kadar saniye hiç çıktı üretmezse süreç ağacı öldürülür ve tur 'takıldı' olarak raporlanır (stdout kuyruğu debug.jsonl'e yazılır). Sohbet boşta süresinden küçük tutun (varsayılan 90; 0 = kapalı)."
-        >
-          <input
-            type="number"
-            min={0}
-            max={86400}
-            value={draft.codexStdoutIdleSec}
-            onChange={(e) => set('codexStdoutIdleSec', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          max={86400}
+          value={draft.codexStdoutIdleSec}
+          onChange={(v) => set('codexStdoutIdleSec', v)}
+        />
+        <NumberField
           label="Boşta yeniden başlatma (adet)"
           hint="Boşta izleyicisi bir arka-plan turunu kesince, kaldığı yerden sürmek için taze bir boşta penceresinde kaç kez otomatik yeniden başlatılacağı (varsayılan 1; 0 = kapalı). Sert süre tavanı yeniden başlatılmaz."
-        >
-          <input
-            type="number"
-            min={0}
-            max={5}
-            value={draft.idleResumeMax}
-            onChange={(e) => set('idleResumeMax', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={0}
+          max={5}
+          value={draft.idleResumeMax}
+          onChange={(v) => set('idleResumeMax', v)}
+        />
+        <NumberField
           label="Zamanlama süresi (dk)"
           hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) ve elle 'Şimdi çalıştır' koşusunun süre sınırı (varsayılan 60)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={draft.scheduleTimeoutMin}
-            onChange={(e) => set('scheduleTimeoutMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={1440}
+          value={draft.scheduleTimeoutMin}
+          onChange={(v) => set('scheduleTimeoutMin', v)}
+        />
+        <NumberField
           label="Tur izleyicisi (dk)"
           hint="Kuyruktaki bir turun MUTLAK tavanı: bu süreyi aşan tur zorla iptal edilir ki oturum kuyruğu asılı bir turun arkasında tıkanmasın (varsayılan 120). Tıkanma freni olduğu için spawn/zamanlama sürelerinin ALTINA inemez — daha küçük girilirse otomatik yükseltilir."
-        >
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={draft.turnWatchdogMin}
-            onChange={(e) => set('turnWatchdogMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={1440}
+          value={draft.turnWatchdogMin}
+          onChange={(v) => set('turnWatchdogMin', v)}
+        />
+        <NumberField
           label="Tur boşta süresi (dk)"
           hint="Kuyruktaki bir tur bu kadar süre hiçbir etkinlik (araç adımı, düşünce, token) üretmezse asılı sayılıp iptal edilir; üretken tur üst sınıra kadar koşar (varsayılan 20). Üst sınırın üstüne çıkamaz."
-        >
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={draft.turnIdleWatchdogMin}
-            onChange={(e) => set('turnIdleWatchdogMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={1}
+          max={1440}
+          value={draft.turnIdleWatchdogMin}
+          onChange={(v) => set('turnIdleWatchdogMin', v)}
+        />
       </div>
 
       <SubHead icon={Sparkles}>Araç çalıştırma</SubHead>
@@ -281,45 +211,30 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         varsayılanı geçersiz kılar (maks. ile kırpılır).
       </p>
       <div className="grid grid-cols-3 gap-3">
-        <Field
+        <NumberField
           label="Kabuk varsayılan süre (sn)"
           hint="timeout_sec verilmezse kullanılan Bash/PowerShell süresi (varsayılan 30)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={3600}
-            value={draft.shellDefaultTimeoutSec}
-            onChange={(e) => set('shellDefaultTimeoutSec', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={3600}
+          value={draft.shellDefaultTimeoutSec}
+          onChange={(v) => set('shellDefaultTimeoutSec', v)}
+        />
+        <NumberField
           label="Kabuk maks. süre (sn)"
           hint="Bir komutun üst sınırı; timeout_sec bunu aşamaz (varsayılan 120)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={3600}
-            value={draft.shellMaxTimeoutSec}
-            onChange={(e) => set('shellMaxTimeoutSec', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={3600}
+          value={draft.shellMaxTimeoutSec}
+          onChange={(v) => set('shellMaxTimeoutSec', v)}
+        />
+        <NumberField
           label="Araç çıktı sınırı (KB)"
           hint="Bir aracın çıktısı bu boyutu aşarsa kesilir (MCP araçları dahil backstop; varsayılan 100)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={4096}
-            value={draft.maxToolOutputKB}
-            onChange={(e) => set('maxToolOutputKB', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={1}
+          max={4096}
+          value={draft.maxToolOutputKB}
+          onChange={(v) => set('maxToolOutputKB', v)}
+        />
       </div>
 
       <SubHead icon={Sparkles}>Koordinatör (çoklu-ajan) limitleri</SubHead>
@@ -329,45 +244,30 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         başına toplam worker oturumu <strong>sınırsızdır</strong> (limit kaldırıldı).
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Koordinatör başına maks. worker"
           hint="Bir koordinatörün aynı anda çalıştırabileceği aktif worker sayısı (1–64)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={64}
-            value={draft.coordinatorMaxWorkers}
-            onChange={(e) => set('coordinatorMaxWorkers', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={1}
+          max={64}
+          value={draft.coordinatorMaxWorkers}
+          onChange={(v) => set('coordinatorMaxWorkers', v)}
+        />
+        <NumberField
           label="Maks. koordinatör derinliği"
           hint="Koordinatör ağacının kaç seviye derinleşebileceği (kök = 0). Bir alt-koordinatör ancak kendi worker'larına yer kalıyorsa açılabilir. -1 = sınırsız."
-        >
-          <input
-            type="number"
-            min={-1}
-            max={12}
-            value={draft.coordinatorMaxDepth}
-            onChange={(e) => set('coordinatorMaxDepth', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={-1}
+          max={12}
+          value={draft.coordinatorMaxDepth}
+          onChange={(v) => set('coordinatorMaxDepth', v)}
+        />
+        <NumberField
           label="Rapor backstop bekleme (sn)"
           hint="Bir alt-koordinatörün dalı tamamen sustuktan sonra, kendisi rapor vermezse otomatik 'incomplete' raporu gönderilene kadar beklenen süre. Kısa olursa yavaş modelin sentez turu yarışı kaybeder ve gereksiz 'incomplete' gider; uzun olursa takılmış bir dal üstündeki koordinatörü bekletir (5–1800)."
-        >
-          <input
-            type="number"
-            min={5}
-            max={1800}
-            value={draft.coordinatorSettleGraceSec}
-            onChange={(e) => set('coordinatorSettleGraceSec', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={5}
+          max={1800}
+          value={draft.coordinatorSettleGraceSec}
+          onChange={(v) => set('coordinatorSettleGraceSec', v)}
+        />
       </div>
 
       <SubHead icon={Sparkles}>Koordinatör donma koruması</SubHead>
@@ -384,32 +284,22 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('coordinatorStallGuard', v)}
       />
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <NumberField
           label="Gecikme tarayıcı penceresi (dk)"
           hint="Bir koordinatör bu kadar dakika sessiz kalıp hiç çalışan worker'ı yoksa tarayıcı yargıca sorar. 0 = varsayılan (5 dk). -1 = tarayıcıyı kapat (tur-sonu guard'ı yine çalışır)."
-        >
-          <input
-            type="number"
-            min={-1}
-            max={1440}
-            value={draft.coordinatorStallSweepMin}
-            onChange={(e) => set('coordinatorStallSweepMin', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
+          min={-1}
+          max={1440}
+          value={draft.coordinatorStallSweepMin}
+          onChange={(v) => set('coordinatorStallSweepMin', v)}
+        />
+        <NumberField
           label="Maks. ardışık uyarı"
           hint="Aynı koordinatöre peş peşe kaç düzeltici not enjekte edilebileceği. Bu sınıra ulaşınca sistem uyarıp gözlemlenebilir bir hata bırakır (sonsuza dek dırdır etmez). 0 = varsayılan (2)."
-        >
-          <input
-            type="number"
-            min={0}
-            max={10}
-            value={draft.coordinatorStallMaxNudges}
-            onChange={(e) => set('coordinatorStallMaxNudges', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={0}
+          max={10}
+          value={draft.coordinatorStallMaxNudges}
+          onChange={(v) => set('coordinatorStallMaxNudges', v)}
+        />
       </div>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -437,18 +327,13 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('autonomousAutoContinue', v)}
       />
       {draft.autonomousAutoContinue && (
-        <Field
+        <NumberField
           label="Otomatik devam üst sınırı"
           hint="Bir otonom çalıştırmada en fazla kaç devam turu açılabilir. 0 = yerleşik varsayılan (3)."
-        >
-          <input
-            type="number"
-            min={0}
-            value={draft.autonomousAutoContinueMax}
-            onChange={(e) => set('autonomousAutoContinueMax', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
+          min={0}
+          value={draft.autonomousAutoContinueMax}
+          onChange={(v) => set('autonomousAutoContinueMax', v)}
+        />
       )}
     </>
   )

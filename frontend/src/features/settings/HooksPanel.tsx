@@ -94,6 +94,9 @@ export function HooksPanel({ onError }: Props) {
   }
 
   const remove = async (h: Hook) => {
+    // Destructive and irreversible (the command is not stored anywhere else) —
+    // same confirm pattern the other panels use before a permanent delete.
+    if (!confirm('Bu hook kalıcı olarak silinsin mi?')) return
     try {
       await api.deleteHook(h.id)
       await load()
