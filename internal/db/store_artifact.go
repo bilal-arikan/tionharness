@@ -201,6 +201,26 @@ func (d *DB) UpdateArtifactMeta(ctx context.Context, id, title, kind, language s
 	return a, d.persistArtifactLocked(&a)
 }
 
+// UpdateArtifactSource repoints an artifact at a different source file in place
+// (the edit-image-without-forking-a-derivative path). It returns the updated row
+// and the PREVIOUS SourcePath, so the caller can drop the file that is no longer
+// referenced. sourcePath is required — clearing it is not an in-place edit.
+func (d *DB) UpdateArtifactSource(ctx context.Context, id, sourcePath string) (Artifact, string, error) {
+	if sourcePath == "" {
+		return Artifact{}, "", errors.New("sourcePath is required")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.artifacts[id]
+	if !ok {
+		return Artifact{}, "", ErrNotFound
+	}
+	old := a.SourcePath
+	a.SourcePath = sourcePath
+	a.UpdatedAt = now()
+	return a, old, d.persistArtifactLocked(&a)
+}
+
 // SetArtifactGroup assigns an artifact's organisation bucket (its Artifacts-UI
 // `group` label) without touching any other field. An empty group ungroups it.
 // Returns the updated row.

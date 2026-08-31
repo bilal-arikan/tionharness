@@ -75,7 +75,13 @@ export const artifactApi = {
   }) => req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
   updateArtifact: (
     id: string,
-    patch: { content?: string; title?: string; kind?: ArtifactKind; language?: string },
+    patch: {
+      content?: string
+      title?: string
+      kind?: ArtifactKind
+      language?: string
+      sourcePath?: string
+    },
   ) => req<Artifact>(`/api/artifacts/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteArtifact: (id: string) =>
     req<{ ok: boolean }>(`/api/artifacts/${id}`, { method: 'DELETE' }),

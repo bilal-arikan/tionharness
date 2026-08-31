@@ -612,10 +612,29 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 type updateArtifactReq struct {
 	// Content (when present) overwrites the body in place.
 	Content *string `json:"content"`
+	// SourcePath (when present) repoints the artifact at a different file in
+	// place; the previously referenced file is dropped.
+	SourcePath *string `json:"sourcePath"`
 	// Metadata edits.
 	Title    string `json:"title"`
 	Kind     string `json:"kind"`
 	Language string `json:"language"`
+}
+
+// removeArtifactSourceFile drops a source file an artifact no longer references.
+// Best-effort — a missing file is fine and a failure must not fail the request —
+// but never silent: anything else is logged.
+func (s *Server) removeArtifactSourceFile(wsp *workspace.Workspace, rel string) {
+	abs, ok := workspaceArtifactPath(wsp, rel)
+	if !ok {
+		if s.logger != nil {
+			s.logger.Warn("artifact source cleanup skipped: path outside workspace", "path", rel)
+		}
+		return
+	}
+	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) && s.logger != nil {
+		s.logger.Warn("artifact source cleanup failed", "path", rel, "err", err)
+	}
 }
 
 // handleUpdateArtifact overwrites content and/or edits metadata in place.
@@ -635,6 +654,19 @@ func (s *Server) handleUpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	if req.Content != nil {
 		if _, err := database.UpdateArtifactContent(ctx, id, *req.Content); writeDBError(w, err, "artifact not found") {
 			return
+		}
+	}
+	if req.SourcePath != nil {
+		if *req.SourcePath == "" {
+			writeError(w, http.StatusBadRequest, "sourcePath is required")
+			return
+		}
+		_, old, err := database.UpdateArtifactSource(ctx, id, *req.SourcePath)
+		if writeDBError(w, err, "artifact not found") {
+			return
+		}
+		if old != "" && old != *req.SourcePath {
+			s.removeArtifactSourceFile(ws(r), old)
 		}
 	}
 	a, err := database.GetArtifact(ctx, id)
