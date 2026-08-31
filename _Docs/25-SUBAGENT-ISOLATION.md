@@ -379,6 +379,62 @@ iptal veya spawn başlangıç hatası Activity görünümünde sonsuza dek çal�
 iki hata birlikte raporlanır. Depolama bütünüyle yazılamıyorsa son kalıcı durum
 değiştirilemez, fakat hata sessiz kalmaz.
 
+## İptal ve yeniden deneme (TSK597, 2026-08-31)
+
+Async delegasyonun iki eksik yarısı tamamlandı: başlatılan bir koşuyu durdurmak ve
+başarısız bir denemeyi yeniden koşmak.
+
+### `stop_subagent` — async koşunun kapatma anahtarı
+
+`run_subagent` ile `wait:"async"` başlatılan koşunun, insan oturumu açmadan
+kapatılabilir bir yolu yoktu: çağıran işi yazıp geçtikten sonra koşu günlük bütçeyi
+harcamayı sürdürüyor, hedef dosya yazıyorsa depoyu çağıranın altından değiştirmeye
+devam ediyordu. Yeni araç `stop_subagent(session_id)` bunu kapatır
+(`internal/tools/builtin_subagent_stop.go` + `internal/agent/subagent_control.go`).
+
+- **Sahiplik zorunlu.** Hedef, **çağıran oturumun** `subagent` çocuğu olmalıdır
+  (`Runtime.StopSubagent`). Session id'leri tahmin edilebilirdir; bu kontrol olmadan
+  bir ajan ağacın başka bir dalını — ya da insanın kendi oturumunu — iptal edebilir
+  ve arıza, koşu kendiliğinden ölmüş gibi görünürdü. `retry_of` doğrulaması da aynı
+  kuralı uygular.
+- **Bitmiş koşuyu durdurmak hata DEĞİLDİR.** Çağıran durdurmaya karar verdiğinde
+  koşunun kendiliğinden bitmesi kazanılamayacak bir yarıştır; bunu araç hatasına
+  çevirmek modeli anlamsız yeniden denemelere iter. Araç `stopped=false` ile
+  "zaten bitmişti" der.
+- **Terminal durum çağrı dönmeden damgalanır** (`runState="killed"`). İptal edilen
+  tur kendi transkriptini geri sarılırken yazar, ama o yazım bu dönüşle yarışır;
+  hemen ardından oturumu okuyan çağıran onu "running" görmemelidir. İki yazım
+  idempotenttir.
+- Araç `withRunAgent` ile **birlikte** kurulur: bir tur başlatma anahtarını
+  durdurma anahtarı olmadan asla tutamaz.
+
+**Kapsam dışı (takip):** CLI köprüsü (`internal/api/mcp_interaction*.go`) yalnız
+`run_subagent`'ı bridge'ler; claude-cli/codex-cli ajanları async koşu başlatabilir
+ama `stop_subagent`'ı henüz göremez. Native tool-loop ajanlarında araç mevcuttur.
+
+### `retry_of` — denemeleri zincirleme
+
+`run_subagent`'a `retry_of` alanı eklendi. Yeniden deneme **oturumu tekrar
+kullanmaz**: başarısız transkript, ikinci denemenin değip değmediğini yargılamak
+için gereken şeydir, bu yüzden dokunulmadan kalır ve yeni koşu ona bağlı taze bir
+child olur. `db.Session` iki alan kazandı:
+
+- `RetryOfSessionID` — **bir önceki** denemeyi işaret eder (ilkini değil), böylece
+  geriye yürüyünce zincir sırayla kurulur.
+- `Attempt` — zincirdeki sıra numarası (ilk deneme 1). Tek satır okunduğunda
+  "bu 3. deneme" bilgisi zinciri yürümeden görünsün diye vardır.
+
+Retry olmayan koşu **damgalanmaz** (`Attempt` 0 kalır): "retry zincirinin parçası"
+tek bir okunur koşul olarak kalsın ve mevcut hiçbir `session.json` sahip olmadığı
+bir alan kazanmasın diye. Lineage doğrulaması bütçe harcanmadan **önce** yapılır —
+hatalı referans çağırana hiçbir şeye mal olmaz. Hâlâ koşan bir deneme reddedilir:
+aynı sözleşmeye yanıt veren iki canlı koşu bütçeyi iki kez harcar ve raporlamada
+yarışır; çağıran önce `stop_subagent` çağırmalı veya bitmesini beklemelidir.
+
+Testler: `subagent_retry_test.go` (numaralama, zincirin zinciri, sahiplik/canlı/tür/
+eksik reddi, damgasız düz koşu), `subagent_control_test.go` (birlikte kurulum,
+sahiplik reddi, bitmiş koşu, iptal + `killed` damgası).
+
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)

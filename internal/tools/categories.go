@@ -42,7 +42,8 @@ var builtinCategory = map[string]string{
 	// Agents, subagents, sessions, delegation
 	"create_agent": CategoryAgents, "update_agent": CategoryAgents,
 	"delete_agent": CategoryAgents, "list_agents": CategoryAgents,
-	"run_subagent": CategoryAgents, "spawn_session": CategoryAgents,
+	"run_subagent": CategoryAgents, "stop_subagent": CategoryAgents,
+	"spawn_session":   CategoryAgents,
 	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
 	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
 	"archive_sessions": CategoryAgents,

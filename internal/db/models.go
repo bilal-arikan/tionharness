@@ -397,8 +397,16 @@ type Session struct {
 	Visibility    string `json:"visibility,omitempty"`
 	TargetProfile string `json:"targetProfile,omitempty"`
 	TargetAgentID string `json:"targetAgentId,omitempty"`
-	Title         string `json:"title"`
-	MessageCount  int    `json:"messageCount"`
+	// RetryOfSessionID links a subagent child session to the attempt it replaces,
+	// and Attempt numbers the run within that chain (1 for the first try). Both are
+	// empty/zero outside a retry chain. The link points at the IMMEDIATE previous
+	// attempt rather than the first one, so walking it backwards reconstructs the
+	// whole chain in order; Attempt exists so a single row is readable ("attempt
+	// 3 of this task") without that walk.
+	RetryOfSessionID string `json:"retryOfSessionId,omitempty"`
+	Attempt          int    `json:"attempt,omitempty"`
+	Title            string `json:"title"`
+	MessageCount     int    `json:"messageCount"`
 	// ToolCallCount is the session's LIFETIME count of executed tool calls, summed
 	// from each persisted assistant message's tool steps (kind=="tool"). Like
 	// MessageCount it is a monotonic per-session counter; a counter-triggered

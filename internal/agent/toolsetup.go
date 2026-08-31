@@ -226,6 +226,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// app-settings master toggle; the runner still enforces depth/cycle/budget/
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
+	// stop_subagent is the off switch for the async half of run_subagent. It ships
+	// on the same terms (always registered, per-tool visibility decides): a caller
+	// that can detach a background run must be able to end one, or a run it has
+	// written off keeps spending the daily budget and editing files.
+	builtins = append(builtins, tools.NewStopSubagentTool())
 
 	// Coordinator/worker tools (M2, _Docs/47). withCoordination installs the runner
 	// on every session's turn, but populates only the capabilities that session

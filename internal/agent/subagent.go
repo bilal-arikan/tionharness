@@ -186,7 +186,9 @@ func (r *Runtime) withRunAgent(ctx context.Context, caller db.Agent, reqPtr *pro
 	fn := func(rctx context.Context, spec tools.RunAgentSpec) (tools.RunAgentResult, error) {
 		return r.runAgent(rctx, caller, reqPtr, autonomous, spec)
 	}
-	return tools.WithRunAgent(ctx, fn)
+	// stop_subagent rides the same wiring: the two halves of async delegation are
+	// installed together so a turn can never hold the start switch without the stop.
+	return r.withStopSubagent(tools.WithRunAgent(ctx, fn))
 }
 
 // RunSubagentRunner returns a run_subagent runner for the CLI Interaction bridge,
@@ -238,6 +240,19 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	if spec.Wait == "async" && ephemeral {
 		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer|validator|config) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
 	}
+	// Every subagent run is persisted as a child of the calling session, so resolve
+	// the parent once here — both modes need it, and failing now keeps a context
+	// without a session from spending budget or resolving a provider first.
+	parentSessionID := SessionIDFrom(ctx)
+	if parentSessionID == "" {
+		return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
+	}
+	// Guard 5 — retry lineage. Checked before the budget spend so a bad reference
+	// costs the caller nothing and can simply be corrected.
+	retryOfID, attempt, err := r.resolveRetryLineage(ctx, parentSessionID, spec.RetryOf)
+	if err != nil {
+		return tools.RunAgentResult{}, err
+	}
 	if m := strings.TrimSpace(spec.Model); m != "" {
 		agent.Model = m
 	}
@@ -258,11 +273,8 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Async mode: detach into a persistent background session (fire-and-forget).
 	// Only real agents reach here (the ephemeral case was rejected by Guard 4).
 	if spec.Wait == "async" {
-		parentID := SessionIDFrom(ctx)
-		if parentID == "" {
-			return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
-		}
-		childMeta := subagentSessionMeta(parentID, agent, ephemeral, spec)
+		childMeta := subagentSessionMeta(parentSessionID, agent, ephemeral, spec)
+		stampRetryLineage(&childMeta, retryOfID, attempt)
 		// The detached session inherits the caller's turn directory. A sync subagent
 		// already runs in it (it shares this context); an async one used to fall back
 		// to the workspace default and quietly work on the wrong repository.
@@ -293,11 +305,9 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		visited: childVisited,
 		calls:   cur.calls,
 	})
-	parentID := SessionIDFrom(ctx)
-	if parentID == "" {
-		return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
-	}
-	child, err := r.db.CreateChildSession(ctx, subagentSessionMeta(parentID, agent, ephemeral, spec))
+	childMeta := subagentSessionMeta(parentSessionID, agent, ephemeral, spec)
+	stampRetryLineage(&childMeta, retryOfID, attempt)
+	child, err := r.db.CreateChildSession(ctx, childMeta)
 	if err != nil {
 		return tools.RunAgentResult{}, err
 	}
@@ -401,7 +411,7 @@ func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec t
 	if contextMode == "" {
 		contextMode = db.ContextIsolated
 	}
-	s := db.Session{Kind: "subagent", ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal}
+	s := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal}
 	if ephemeral {
 		s.TargetProfile = strings.TrimSpace(spec.Target)
 	} else {
@@ -417,7 +427,7 @@ func (r *Runtime) initializeChildSession(ctx context.Context, sessionID string, 
 	if err := addOpeningMessage(); err != nil {
 		return r.failChildInitialization(ctx, sessionID, "persist opening user message", err)
 	}
-	if err := r.db.SetSessionRunState(ctx, sessionID, "running", time.Now().Unix()); err != nil {
+	if err := r.db.SetSessionRunState(ctx, sessionID, runStateRunning, time.Now().Unix()); err != nil {
 		return r.failChildInitialization(ctx, sessionID, "persist running state", err)
 	}
 	return nil

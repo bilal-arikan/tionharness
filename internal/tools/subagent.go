@@ -37,6 +37,13 @@ type RunAgentSpec struct {
 	Objective    string // the specific goal the subagent must accomplish
 	OutputFormat string // how the reply must be structured (the caller sees only this)
 	Boundaries   string // explicit scope limits — what to exclude / not touch
+
+	// RetryOf names a finished child session this run replaces. The new run is a
+	// fresh child session linked back to that attempt, so the failed transcript
+	// survives for inspection instead of being overwritten. The caller may pair it
+	// with a different target/model/context — retrying the same task a different
+	// way is the point.
+	RetryOf string
 }
 
 // RunAgentFunc executes one (sub)agent run. It is implemented in the agent
@@ -74,6 +81,7 @@ type runSubagentInput struct {
 	Objective    string `json:"objective"`
 	OutputFormat string `json:"output_format"`
 	Boundaries   string `json:"boundaries"`
+	RetryOf      string `json:"retry_of"`
 }
 
 // RunSubagentTool launches an isolated subagent to carry out a self-contained
@@ -117,7 +125,8 @@ func (RunSubagentTool) Def() providers.ToolDef {
     "model": { "type": "string", "description": "Optional model id override." },
     "objective": { "type": "string", "description": "Optional one-sentence goal — prevents scope drift." },
     "output_format": { "type": "string", "description": "Optional reply structure (e.g. \"bulleted file:line list\")." },
-    "boundaries": { "type": "string", "description": "Optional scope limits — what to exclude / NOT touch." }
+    "boundaries": { "type": "string", "description": "Optional scope limits — what to exclude / NOT touch." },
+    "retry_of": { "type": "string", "description": "Session id of a FINISHED subagent run of yours that this call retries. The failed transcript is kept and linked; pair it with a different target/model/context to retry the task a different way." }
   },
   "required": ["target", "task"],
   "additionalProperties": false
@@ -142,6 +151,7 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 		Objective:    strings.TrimSpace(in.Objective),
 		OutputFormat: strings.TrimSpace(in.OutputFormat),
 		Boundaries:   strings.TrimSpace(in.Boundaries),
+		RetryOf:      strings.TrimSpace(in.RetryOf),
 	}
 	if spec.Target == "" || spec.Task == "" {
 		return "", fmt.Errorf("both \"target\" and \"task\" are required")
