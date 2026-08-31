@@ -175,6 +175,12 @@ Ajanlar arası iletişimin arayüzdeki üç pürüzü giderildi:
   no-op, `GetOrCreateSourceSession` göç eden SES122/SES123'ü buldu (yeni thread
   açmadı), mesaj geçmişi korundu. API matrisi: göç eden peer thread + `worker`
   → HTTP 200; `task`/`flow`/`flow-coordinator`/`insight` → HTTP 403.
+  **Üretim store'unda koştu (2026-08-31 22:06).** 18 workspace tarandı, 9 legacy
+  oturum çevrildi (WS1 `converted=4`, WS19/WS24/WS5 birer, WS27 `converted=2`);
+  diskte kalan `inbox` yok, 9/9 `kind:"chat"` + `agent-messages:<agentID>`
+  damgası ajanla eşleşiyor, `messages.jsonl` dosyalarına dokunulmadı (toplam 336
+  mesaj, mtime'lar göç öncesi tarihte kaldı). Migration başlığı değiştirmez —
+  göç eden thread'ler `📥 Inbox` adıyla görünmeye devam eder.
 - **`worker` oturumları yazılabilir.** Worker transkripti bitmiş bir koşu kaydı
   değil, koordinatörün `SendToWorker` ile zaten içine tur enjekte ettiği canlı bir
   konuşmadır; izleyen insan da yanıtlayabilmeli, rotayı düzeltebilmeli.
