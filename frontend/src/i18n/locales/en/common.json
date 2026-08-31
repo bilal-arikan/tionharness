@@ -1,9 +1,31 @@
 {
+  "artifactAnnotation": {
+    "derivedTitle": "{{title}} — Edit",
+    "draw": "Draw on image",
+    "drawTitle": "Draw on a copy while preserving the original",
+    "stagingPathError": "The uploaded image did not return a storage path.",
+    "saveAndCleanupError": "The derived artifact could not be saved and the staged image could not be removed."
+  },
   "common": {
     "save": "Save",
     "saved": "Saved",
     "saving": "Saving…",
     "unsavedChanges": "Unsaved changes"
+  },
+  "imageAnnotator": {
+    "cancel": "Cancel",
+    "canvas": "Drawing canvas",
+    "clear": "Clear drawing",
+    "close": "Close",
+    "closeQuestion": "There are unsaved drawings. Exit without saving?",
+    "decodeError": "Image could not be opened; the file may be corrupt.",
+    "dialogLabel": "Draw on image",
+    "keyboardHelp": "Use the drawing canvas with a pointer. Tab moves between controls. Control or Command Z undoes, and Escape closes.",
+    "penSize": "Pen size",
+    "pointerCaptureError": "Pointer could not be captured. Try drawing again.",
+    "redo": "Redo",
+    "save": "Save image",
+    "undo": "Undo"
   },
   "agents": {
     "bulkEdit": {

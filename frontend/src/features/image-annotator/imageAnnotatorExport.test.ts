@@ -57,4 +57,23 @@ describe('annotation export', () => {
       code: 'EXPORT_FAILED',
     })
   })
+
+  it('releases the export backing store after encoding', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback, mime) =>
+      callback(new Blob(['x'], { type: mime })),
+    )
+    const createElement = document.createElement.bind(document)
+    const exportCanvases: HTMLCanvasElement[] = []
+    vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+      const element = createElement(tagName, options)
+      if (tagName === 'canvas') exportCanvases.push(element as HTMLCanvasElement)
+      return element
+    })
+
+    await exportAnnotation(source(false), [])
+
+    expect(exportCanvases.at(-1)?.width).toBe(0)
+    expect(exportCanvases.at(-1)?.height).toBe(0)
+  })
 })

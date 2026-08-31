@@ -197,6 +197,28 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   önizlenip indirilebilmesi buna dayanır. Mutlak `path=` biçiminde bu geçerli
   değildir — orada yalnız medya allowlist'i çalışır.
 
+### Görsel üzerine çizim
+
+- Clipboard PNG/JPEG/WebP girdileri yüklemeden önce doğrulanır; 20 MB, 8192 px ve
+  40 MP sınırları aşılırsa kullanıcıya eyleme dönük hata gösterilir. Kullanıcı
+  görseli doğrudan ekleyebilir, ortak `ImageAnnotator` içinde çizebilir veya iptal
+  edebilir. Çoklu paste sırası korunur; geç tamamlanan decode/upload işlemleri
+  session değişimi ve unmount sonrasında UI durumunu değiştirmez.
+- Editör doğal görsel koordinatlarında stroke tutar; CSS resize, zoom ve DPR
+  değişimlerinde deterministik yeniden çizer. Önizleme backing store'u 8 MP ile,
+  stroke/geçmiş modeli ayrı bellek ve nokta sınırlarıyla korunur. Pointer capture,
+  `pointercancel`, `lostpointercapture` ve pencere blur aktif stroke'u sonlandırır;
+  touch scroll yalnız canvas üzerinde engellenir.
+- Kaydetme tek-uçuşludur. Transparent kaynak PNG kalır; opak JPEG/WebP kaynak önce
+  WebP dener, encoder reddi/null/uyumsuz MIME durumunda bir kez PNG'ye düşer.
+  Export canvas backing store'u işlem sonunda serbest bırakılır. Kapanış kirli
+  çizimde onay ister; modal focus trap, Escape, odak geri yükleme ve async unmount
+  guard'larını uygular.
+- Image artifact çizimi orijinali değiştirmez; dosya body yerine `sourcePath`
+  üzerinden okunur ve `derivedFromArtifactId` ile yeni image artifact oluşturur.
+  Artifact yaratma başarısızsa staging dosyası silinir; silme de başarısız olursa
+  iki hata birlikte kullanıcıya gösterilir.
+
 ### Adım-adım akış (SSE streaming)
 Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil).
 

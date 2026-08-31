@@ -1,17 +1,47 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
+)
+
+const (
+	maxArtifactImageSourceBytes int64 = 20_971_520
+	maxArtifactImageDimension         = 8_192
+	maxArtifactImagePixels            = 40_000_000
+)
+
+var errArtifactImageTooLarge = errors.New("artifact image exceeds byte limit")
+
+var (
+	errArtifactImageHeaderInvalid      = errors.New("artifact image header is invalid")
+	errArtifactImageDecodeFailed       = errors.New("artifact image decode failed")
+	errArtifactImageDimensionExceeded  = errors.New("artifact image dimension exceeds limit")
+	errArtifactImagePixelLimitExceeded = errors.New("artifact image pixel count exceeds limit")
+)
+
+const (
+	sourceArtifactNotFound  = "SOURCE_ARTIFACT_NOT_FOUND — Kaynak görsel artifact bulunamadı."
+	sourceArtifactNotImage  = "SOURCE_ARTIFACT_NOT_IMAGE — Yalnız image artifact düzenlenebilir."
+	sourceArtifactForbidden = "SOURCE_ARTIFACT_FORBIDDEN — Bu kaynak görsele erişim izniniz yok."
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
@@ -257,14 +287,220 @@ func (s *Server) handleGetArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 type createArtifactReq struct {
-	SessionID  string `json:"sessionId"`
-	AgentID    string `json:"agentId"`
-	Title      string `json:"title"`
-	Kind       string `json:"kind"`
-	Language   string `json:"language"`
-	Content    string `json:"content"`
-	SourcePath string `json:"sourcePath"` // workspace-relative path for media/file kinds
-	Origin     string `json:"origin"`     // chat | manual | agent | tool
+	SessionID             string `json:"sessionId"`
+	AgentID               string `json:"agentId"`
+	Title                 string `json:"title"`
+	Kind                  string `json:"kind"`
+	Language              string `json:"language"`
+	Content               string `json:"content"`
+	SourcePath            string `json:"sourcePath"` // workspace-relative path for media/file kinds
+	Origin                string `json:"origin"`     // chat | manual | agent | tool
+	DerivedFromArtifactID string `json:"derivedFromArtifactId"`
+}
+
+func workspaceArtifactPath(wsp *workspace.Workspace, rel string) (string, bool) {
+	if rel == "" || filepath.IsAbs(rel) {
+		return "", false
+	}
+	root := filepath.Clean(wsp.SandboxRoot())
+	abs := filepath.Clean(filepath.Join(root, filepath.FromSlash(rel)))
+	if resolvedRoot, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolvedRoot
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	} else if resolvedParent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs)); parentErr == nil {
+		abs = filepath.Join(resolvedParent, filepath.Base(abs))
+	}
+	within, err := filepath.Rel(root, abs)
+	if err != nil || within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return abs, true
+}
+
+func artifactImageMIME(header []byte) (string, string, bool) {
+	if len(header) >= 8 && string(header[:8]) == "\x89PNG\r\n\x1a\n" {
+		return "image/png", ".png", true
+	}
+	if len(header) >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff {
+		return "image/jpeg", ".jpg", true
+	}
+	if len(header) >= 12 && string(header[:4]) == "RIFF" && string(header[8:12]) == "WEBP" {
+		return "image/webp", ".webp", true
+	}
+	return "", "", false
+}
+
+func validateArtifactImage(data []byte) (string, string, error) {
+	mime, ext, ok := artifactImageMIME(data)
+	if !ok {
+		return "", "", errArtifactImageHeaderInvalid
+	}
+	var width, height int
+	if mime == "image/webp" {
+		width, height, ok = decodeWebPConfig(data)
+		if !ok {
+			return "", "", errArtifactImageDecodeFailed
+		}
+	} else {
+		config, format, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil || "image/"+format != mime || config.Width <= 0 || config.Height <= 0 {
+			return "", "", errArtifactImageDecodeFailed
+		}
+		width, height = config.Width, config.Height
+	}
+	if width > maxArtifactImageDimension || height > maxArtifactImageDimension {
+		return "", "", errArtifactImageDimensionExceeded
+	}
+	if int64(width)*int64(height) > maxArtifactImagePixels {
+		return "", "", errArtifactImagePixelLimitExceeded
+	}
+	if mime != "image/webp" {
+		decoded, format, err := image.Decode(bytes.NewReader(data))
+		if err != nil || "image/"+format != mime || decoded.Bounds().Dx() != width || decoded.Bounds().Dy() != height {
+			return "", "", errArtifactImageDecodeFailed
+		}
+	}
+	return mime, ext, nil
+}
+
+func decodeWebPConfig(data []byte) (int, int, bool) {
+	if len(data) < 20 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" || int64(binary.LittleEndian.Uint32(data[4:8]))+8 != int64(len(data)) {
+		return 0, 0, false
+	}
+	var width, height int
+	foundImage := false
+	for offset := 12; offset < len(data); {
+		if len(data)-offset < 8 {
+			return 0, 0, false
+		}
+		kind := string(data[offset : offset+4])
+		size := int64(binary.LittleEndian.Uint32(data[offset+4 : offset+8]))
+		start := offset + 8
+		end64 := int64(start) + size
+		if end64 > int64(len(data)) {
+			return 0, 0, false
+		}
+		chunk := data[start:int(end64)]
+		var chunkWidth, chunkHeight int
+		switch kind {
+		case "VP8 ":
+			if len(chunk) < 10 || !bytes.Equal(chunk[3:6], []byte{0x9d, 0x01, 0x2a}) {
+				return 0, 0, false
+			}
+			chunkWidth = int(binary.LittleEndian.Uint16(chunk[6:8]) & 0x3fff)
+			chunkHeight = int(binary.LittleEndian.Uint16(chunk[8:10]) & 0x3fff)
+			foundImage = true
+		case "VP8L":
+			if len(chunk) < 5 || chunk[0] != 0x2f {
+				return 0, 0, false
+			}
+			bits := binary.LittleEndian.Uint32(chunk[1:5])
+			chunkWidth = int(bits&0x3fff) + 1
+			chunkHeight = int((bits>>14)&0x3fff) + 1
+			foundImage = true
+		case "VP8X":
+			if len(chunk) != 10 {
+				return 0, 0, false
+			}
+			chunkWidth = int(chunk[4]) | int(chunk[5])<<8 | int(chunk[6])<<16
+			chunkHeight = int(chunk[7]) | int(chunk[8])<<8 | int(chunk[9])<<16
+			chunkWidth++
+			chunkHeight++
+		}
+		if chunkWidth > 0 && chunkHeight > 0 {
+			if width != 0 && (width != chunkWidth || height != chunkHeight) {
+				return 0, 0, false
+			}
+			width, height = chunkWidth, chunkHeight
+		}
+		offset = int(end64) + int(size&1)
+		if offset > len(data) {
+			return 0, 0, false
+		}
+	}
+	return width, height, foundImage && width > 0 && height > 0
+}
+
+func writeArtifactImageValidationError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errArtifactImageHeaderInvalid):
+		writeError(w, http.StatusUnprocessableEntity, "IMAGE_HEADER_INVALID — Görsel başlığı geçersiz veya dosya türüyle uyuşmuyor.")
+	case errors.Is(err, errArtifactImageDimensionExceeded):
+		writeError(w, http.StatusUnprocessableEntity, "IMAGE_DIMENSION_EXCEEDED — Görsel boyutu 8192 px sınırını aşıyor.")
+	case errors.Is(err, errArtifactImagePixelLimitExceeded):
+		writeError(w, http.StatusUnprocessableEntity, "IMAGE_PIXEL_LIMIT_EXCEEDED — Görsel 40 megapiksel sınırını aşıyor.")
+	default:
+		writeError(w, http.StatusUnprocessableEntity, "IMAGE_DECODE_FAILED — Görsel açılamadı; dosya bozuk olabilir.")
+	}
+}
+
+func readArtifactImageFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, os.ErrPermission
+	}
+	if info.Size() > maxArtifactImageSourceBytes {
+		return nil, errArtifactImageTooLarge
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxArtifactImageSourceBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxArtifactImageSourceBytes {
+		return nil, errArtifactImageTooLarge
+	}
+	return data, nil
+}
+
+// handleArtifactSource serves an image only after atomically resolving its ID
+// against the active workspace store and validating its confined source file.
+func (s *Server) handleArtifactSource(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	a, err := wsp.DB.GetArtifact(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, sourceArtifactNotFound)
+		return
+	}
+	if a.Kind != db.ArtifactImage || a.SourcePath == "" {
+		writeError(w, http.StatusUnprocessableEntity, sourceArtifactNotImage)
+		return
+	}
+	path, ok := workspaceArtifactPath(wsp, a.SourcePath)
+	if !ok {
+		writeError(w, http.StatusForbidden, sourceArtifactForbidden)
+		return
+	}
+	data, err := readArtifactImageFile(path)
+	if err != nil {
+		if errors.Is(err, errArtifactImageTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "IMAGE_TOO_LARGE_BYTES — Görsel 20 MB sınırını aşıyor.")
+		} else if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, sourceArtifactNotFound)
+		} else {
+			writeError(w, http.StatusForbidden, sourceArtifactForbidden)
+		}
+		return
+	}
+	mime, _, validationErr := validateArtifactImage(data)
+	if validationErr != nil {
+		writeArtifactImageValidationError(w, validationErr)
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // handleCreateArtifact creates an artifact manually (from the UI).
@@ -281,16 +517,90 @@ func (s *Server) handleCreateArtifact(w http.ResponseWriter, r *http.Request) {
 	if origin == "" {
 		origin = "manual"
 	}
-	a, err := ws(r).DB.CreateArtifact(r.Context(), db.Artifact{
-		SessionID:  req.SessionID,
-		AgentID:    req.AgentID,
-		Title:      req.Title,
-		Kind:       req.Kind,
-		Language:   req.Language,
-		Content:    req.Content,
-		SourcePath: req.SourcePath,
-		Origin:     origin,
-	})
+	wsp := ws(r)
+	row := db.Artifact{
+		SessionID:             req.SessionID,
+		AgentID:               req.AgentID,
+		Title:                 req.Title,
+		Kind:                  req.Kind,
+		Language:              req.Language,
+		Content:               req.Content,
+		SourcePath:            req.SourcePath,
+		Origin:                origin,
+		DerivedFromArtifactID: req.DerivedFromArtifactID,
+	}
+	var a db.Artifact
+	var err error
+	if req.DerivedFromArtifactID == "" {
+		a, err = wsp.DB.CreateArtifact(r.Context(), row)
+	} else {
+		stagedPath, safe := workspaceArtifactPath(wsp, req.SourcePath)
+		if !safe {
+			writeError(w, http.StatusForbidden, sourceArtifactForbidden)
+			return
+		}
+		stagedOwned := false
+		defer func() {
+			if !stagedOwned {
+				_ = os.Remove(stagedPath)
+			}
+		}()
+		data, readErr := readArtifactImageFile(stagedPath)
+		if readErr != nil {
+			if errors.Is(readErr, errArtifactImageTooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, "IMAGE_TOO_LARGE_BYTES — Görsel 20 MB sınırını aşıyor.")
+			} else if errors.Is(readErr, os.ErrNotExist) {
+				writeError(w, http.StatusNotFound, sourceArtifactNotFound)
+			} else {
+				writeError(w, http.StatusForbidden, sourceArtifactForbidden)
+			}
+			return
+		}
+		_, ext, validationErr := validateArtifactImage(data)
+		if validationErr != nil {
+			writeArtifactImageValidationError(w, validationErr)
+			return
+		}
+		a, err = wsp.DB.CreateDerivedArtifact(r.Context(), row, func(derived *db.Artifact, parent db.Artifact) (string, func() error, error) {
+			parentPath, parentSafe := workspaceArtifactPath(wsp, parent.SourcePath)
+			if !parentSafe {
+				return "", nil, os.ErrPermission
+			}
+			parentFile, parentErr := os.Open(parentPath)
+			if parentErr != nil {
+				return "", nil, parentErr
+			}
+			if closeErr := parentFile.Close(); closeErr != nil {
+				return "", nil, closeErr
+			}
+			derived.SessionID = parent.SessionID
+			rel := filepath.ToSlash(filepath.Join("artifacts", parent.SessionID, derived.ID+ext))
+			target, safe := workspaceArtifactPath(wsp, rel)
+			if !safe {
+				return "", nil, errors.New("unsafe derived artifact target")
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return "", nil, err
+			}
+			if err := os.Rename(stagedPath, target); err != nil {
+				return "", nil, err
+			}
+			stagedOwned = true
+			return rel, func() error { return os.Remove(target) }, nil
+		})
+	}
+	if errors.Is(err, db.ErrArtifactParentNotFound) || errors.Is(err, os.ErrNotExist) {
+		writeError(w, http.StatusNotFound, sourceArtifactNotFound)
+		return
+	}
+	if errors.Is(err, db.ErrArtifactParentNotImage) {
+		writeError(w, http.StatusUnprocessableEntity, sourceArtifactNotImage)
+		return
+	}
+	if errors.Is(err, os.ErrPermission) {
+		writeError(w, http.StatusForbidden, sourceArtifactForbidden)
+		return
+	}
 	if writeDBError(w, err, "") {
 		return
 	}

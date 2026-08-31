@@ -1,9 +1,31 @@
 {
+  "artifactAnnotation": {
+    "derivedTitle": "{{title}} — Düzenleme",
+    "draw": "Üzerine çiz",
+    "drawTitle": "Orijinali koruyarak üzerine çiz",
+    "stagingPathError": "Yüklenen görsel için depolama yolu dönmedi.",
+    "saveAndCleanupError": "Türetilmiş artifact kaydedilemedi ve geçici görsel temizlenemedi."
+  },
   "common": {
     "save": "Kaydet",
     "saved": "Kayıtlı",
     "saving": "Kaydediliyor…",
     "unsavedChanges": "Kaydedilmemiş değişiklik"
+  },
+  "imageAnnotator": {
+    "cancel": "Vazgeç",
+    "canvas": "Çizim alanı",
+    "clear": "Çizimi temizle",
+    "close": "Kapat",
+    "closeQuestion": "Kaydedilmemiş çizimler var. Kaydetmeden çıkılsın mı?",
+    "decodeError": "Görsel açılamadı; dosya bozuk olabilir.",
+    "dialogLabel": "Görsel üzerine çiz",
+    "keyboardHelp": "Çizim alanını işaretçiyle kullanın. Sekme denetimler arasında gezer. Control veya Command Z geri alır, Escape kapatır.",
+    "penSize": "Kalem boyutu",
+    "pointerCaptureError": "İşaretçi yakalanamadı. Çizimi yeniden deneyin.",
+    "redo": "Yinele",
+    "save": "Görseli kaydet",
+    "undo": "Geri al"
   },
   "agents": {
     "bulkEdit": {

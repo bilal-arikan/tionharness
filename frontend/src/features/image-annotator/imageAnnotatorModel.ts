@@ -40,8 +40,31 @@ const copyStrokes = (strokes: Stroke[]): Stroke[] =>
 export const snapshot = (model: DrawingModel): DrawingSnapshot => ({
   strokes: copyStrokes(model.strokes),
 })
-export const snapshotsEqual = (a: DrawingSnapshot, b: DrawingSnapshot): boolean =>
-  JSON.stringify(a) === JSON.stringify(b)
+export const snapshotsEqual = (a: DrawingSnapshot, b: DrawingSnapshot): boolean => {
+  if (a.strokes.length !== b.strokes.length) return false
+  for (let strokeIndex = 0; strokeIndex < a.strokes.length; strokeIndex++) {
+    const left = a.strokes[strokeIndex]
+    const right = b.strokes[strokeIndex]
+    if (
+      left.id !== right.id ||
+      left.color !== right.color ||
+      left.width !== right.width ||
+      left.points.length !== right.points.length
+    )
+      return false
+    for (let pointIndex = 0; pointIndex < left.points.length; pointIndex++) {
+      const leftPoint = left.points[pointIndex]
+      const rightPoint = right.points[pointIndex]
+      if (
+        leftPoint.x !== rightPoint.x ||
+        leftPoint.y !== rightPoint.y ||
+        leftPoint.pressure !== rightPoint.pressure
+      )
+        return false
+    }
+  }
+  return true
+}
 export const totalPoints = (strokes: Stroke[]): number =>
   strokes.reduce((sum, stroke) => sum + stroke.points.length, 0)
 export const modelBytes = (strokes: Stroke[]): number =>
@@ -55,7 +78,7 @@ function deltaBytes(a: DrawingSnapshot, b: DrawingSnapshot): number {
   for (const id of ids) {
     const before = aById.get(id)
     const after = bById.get(id)
-    if (JSON.stringify(before) !== JSON.stringify(after))
+    if (!before || !after || !snapshotsEqual({ strokes: [before] }, { strokes: [after] }))
       bytes += Math.max(modelBytes(before ? [before] : []), modelBytes(after ? [after] : []))
   }
   return bytes

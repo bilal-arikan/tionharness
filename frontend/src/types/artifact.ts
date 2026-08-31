@@ -26,6 +26,8 @@ export interface Artifact {
   content: string
   // Set when the artifact was auto-captured from a file the agent wrote.
   sourcePath?: string
+  // Immutable source relation for image artifacts created by annotation.
+  derivedFromArtifactId?: string
   // How the artifact entered the workspace: chat attachment, manual drop, an
   // agent-written file, a create_artifact tool call, or the session's rolling
   // artifact of approved ExitPlanMode plans ("plan").

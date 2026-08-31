@@ -1,6 +1,6 @@
 // Artifacts — self-contained agent-produced content (workspace-scoped).
 import type { Artifact, ArtifactKind } from '@/types'
-import { req } from './client'
+import { errorFromResponse, req, wsHeaders } from './client'
 
 // ArtifactPage is the paged listing envelope returned by listArtifacts — the
 // API twin of the agent tool's pageResult (TSK68 scope extension). A
@@ -53,6 +53,15 @@ export const artifactApi = {
     )
   },
   getArtifact: (id: string) => req<Artifact>(`/api/artifacts/${id}`),
+  getArtifactSource: async (id: string, signal?: AbortSignal): Promise<Response> => {
+    const response = await fetch(`/api/artifacts/${encodeURIComponent(id)}/source`, {
+      cache: 'no-store',
+      headers: wsHeaders(),
+      signal,
+    })
+    if (!response.ok) throw new Error(await errorFromResponse(response))
+    return response
+  },
   createArtifact: (data: {
     title: string
     kind?: ArtifactKind
@@ -62,6 +71,7 @@ export const artifactApi = {
     agentId?: string
     sourcePath?: string
     origin?: 'chat' | 'manual' | 'agent' | 'tool'
+    derivedFromArtifactId?: string
   }) => req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
   updateArtifact: (
     id: string,
