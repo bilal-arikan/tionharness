@@ -3,6 +3,8 @@ package db
 import (
 	"encoding/json"
 	"os"
+	"strconv"
+	"time"
 )
 
 // inboxFile is the per-session durable command queue: user messages submitted
@@ -43,6 +45,27 @@ func (d *DB) ReadInbox(sessionID string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	return b, true, nil
+}
+
+// QuarantineInbox moves a session's queue sidecar aside as
+// inbox.json.corrupt-<unix> instead of deleting it, so a payload the api layer
+// could not parse stays recoverable by hand — the queued user messages inside it
+// are the only copy. Naming mirrors the settings store's quarantine. It returns
+// the destination path ("" when there was no sidecar); a missing file is not an
+// error.
+func (d *DB) QuarantineInbox(sessionID string) (string, error) {
+	if sessionID == "" {
+		return "", nil
+	}
+	src := d.inboxPath(sessionID)
+	dest := src + ".corrupt-" + strconv.FormatInt(time.Now().Unix(), 10)
+	if err := os.Rename(src, dest); err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return dest, nil
 }
 
 // ClearInbox removes a session's queue sidecar. A missing file is not an error.

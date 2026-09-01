@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -37,8 +38,8 @@ func TestPreToolHookDebugEventCarriesHookID(t *testing.T) {
 	if len(evs) != 1 {
 		t.Fatalf("expected exactly one hook debug event, got %d: %+v", len(evs), evs)
 	}
-	if evs[0].HookID != h.ID {
-		t.Errorf("debug event HookID = %q, want %q", evs[0].HookID, h.ID)
+	if !strings.HasPrefix(evs[0].HookID, "fp:") || evs[0].HookID == h.ID {
+		t.Errorf("debug event HookID = %q, want irreversible fingerprint of %q", evs[0].HookID, h.ID)
 	}
 	if evs[0].Name != db.HookPreToolUse {
 		t.Errorf("debug event Name = %q, want %q", evs[0].Name, db.HookPreToolUse)

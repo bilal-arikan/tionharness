@@ -82,17 +82,56 @@ type persistedInbox struct {
 // decodeInbox parses a persisted inbox payload, accepting BOTH the current object
 // shape ({inflight,items}) and the legacy bare-array shape ([]inboxItem) written
 // before the in-flight slot existed, so an in-place upgrade never strands an old
-// queue. A malformed payload decodes to an empty queue (best effort, like the rest
-// of boot recovery).
-func decodeInbox(data []byte) persistedInbox {
+// queue.
+//
+// A malformed payload is an ERROR, never an empty queue. The two unmarshal errors
+// used to be discarded, so a corrupt sidecar silently became "no queued messages"
+// at boot — every waiting user message, including the interrupted in-flight head,
+// dropped with nothing in the log. The caller must quarantine the file and say so
+// (quarantineInbox).
+func decodeInbox(data []byte) (persistedInbox, error) {
 	if trimmed := skipLeadingWS(data); len(trimmed) > 0 && trimmed[0] == '[' {
 		var legacy []inboxItem
-		_ = json.Unmarshal(data, &legacy)
-		return persistedInbox{Items: legacy}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return persistedInbox{}, fmt.Errorf("legacy inbox array: %w", err)
+		}
+		return persistedInbox{Items: legacy}, nil
 	}
 	var pi persistedInbox
-	_ = json.Unmarshal(data, &pi)
-	return pi
+	if err := json.Unmarshal(data, &pi); err != nil {
+		return persistedInbox{}, fmt.Errorf("inbox object: %w", err)
+	}
+	return pi, nil
+}
+
+// quarantineInbox preserves an unparseable inbox.json (renaming it aside rather
+// than letting the next flush overwrite it) and reports the loss on every channel:
+// the server log and the session's debug journal. Queued messages are user input
+// with no other copy, so this is deliberately loud — a corrupt queue that vanished
+// quietly was indistinguishable from a session that was never written to.
+func (s *Server) quarantineInbox(wsp *workspace.Workspace, sessionID string, cause error) {
+	if wsp == nil || wsp.DB == nil {
+		return
+	}
+	dest, err := wsp.DB.QuarantineInbox(sessionID)
+	if s.logger != nil {
+		if err != nil {
+			s.logger.Error("corrupt inbox.json could not be quarantined; queued messages are lost",
+				"workspace", wsp.ID, "session", sessionID, "error", err, "parseError", cause)
+		} else {
+			s.logger.Error("inbox.json was corrupt: quarantined, its queued messages were NOT dispatched",
+				"workspace", wsp.ID, "session", sessionID, "quarantine", dest, "parseError", cause)
+		}
+	}
+	if aerr := wsp.DB.AppendDebugEventGated(sessionID, db.DebugEvent{
+		Type:   db.DebugError,
+		Name:   "inbox_corrupt",
+		Detail: "durable inbox sidecar was unreadable; queued messages were not dispatched",
+		Error:  cause.Error(),
+		Err:    true,
+	}); aerr != nil && s.logger != nil {
+		s.logger.Error("record corrupt-inbox debug event failed", "session", sessionID, "error", aerr)
+	}
 }
 
 // skipLeadingWS returns data with any leading JSON whitespace removed, so
@@ -302,11 +341,13 @@ func (s *Server) recordQueueTurnFailure(wsp *workspace.Workspace, sessionID, rea
 		s.publishHub(wsp.ID, sessionID, sessionhub.KindReply, msg, false)
 	}
 	// Structured observability record for the Debug panel / read_session_debug.
-	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: agentID,
 		Name:    reason,
 		Detail:  detail,
 		Err:     true,
-	}, 0)
+	}); err != nil && s.logger != nil {
+		s.logger.Error("record queue turn failure debug event failed", "session", sessionID, "error", err)
+	}
 }

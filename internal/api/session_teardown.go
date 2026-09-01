@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
@@ -143,8 +144,25 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 
 	// Phase 3: cancel the in-flight turn and WAIT for it to fully unwind (tears down the
 	// subprocess). If it will not stop in time, abort: unfreeze + resume, keep the session.
-	if err := s.stopInflightTurn(wsID, sessionID, autonomousRunsOf(wsp), time.Until(deadline)); err != nil {
+	//
+	// Snapshot both registries FIRST: once stopInflightTurn returns they are empty
+	// either way, so "there WAS a live turn here" is only knowable from before the
+	// call. A cancelled turn simply stops emitting, so the journal is the one place
+	// the delete is recorded as its cause.
+	auto := autonomousRunsOf(wsp)
+	_, hadChatTurn := s.runs.sessionRunInfo(wsID, sessionID)
+	hadAutonomous := auto != nil && auto.IsSessionActive(sessionID)
+	turnStopStart := time.Now()
+	if err := s.stopInflightTurn(wsID, sessionID, auto, time.Until(deadline)); err != nil {
+		s.noteTeardownGrace(wsp, sessionID, "inflight_turn", deadline, grace)
 		return nil, abort(err)
+	}
+	stopDurMs := time.Since(turnStopStart).Milliseconds()
+	if hadChatTurn {
+		s.recordTeardownLifecycle(wsp, sessionID, "turn_cancelled_by_teardown", "inflight_turn", stopDurMs)
+	}
+	if hadAutonomous {
+		s.recordTeardownLifecycle(wsp, sessionID, "autonomous_cancelled", "inflight_turn", stopDurMs)
 	}
 
 	// Phase 4: provider finalization does not imply its CLI/MCP handlers returned.
@@ -152,6 +170,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	for _, done := range s.runs.cancelSessionCalls(closingRuns) {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
+			s.noteTeardownGrace(wsp, sessionID, "mcp_calls", deadline, grace)
 			return nil, abort(fmt.Errorf("Interaction MCP calls did not stop within %s", grace))
 		}
 		timer := time.NewTimer(remaining)
@@ -161,6 +180,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 				<-timer.C
 			}
 		case <-timer.C:
+			s.noteTeardownGrace(wsp, sessionID, "mcp_calls", deadline, grace)
 			return nil, abort(fmt.Errorf("Interaction MCP calls did not stop within %s", grace))
 		}
 	}
@@ -182,11 +202,13 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	// deadline because worker cleanup may otherwise write after DB deletion.
 	if s.stopWorker != nil {
 		if err := s.stopWorker(deadlineCtx, wsp, sessionID); err != nil {
+			s.noteTeardownGrace(wsp, sessionID, "worker", deadline, grace)
 			return nil, abort(fmt.Errorf("worker teardown: %w", err))
 		}
 	} else if wsp.Runtime != nil {
 		if err := wsp.Runtime.StopWorkerForTeardown(deadlineCtx, sessionID); err != nil {
 			wsp.Runtime.FinishWorkerTeardown(sessionID, false)
+			s.noteTeardownGrace(wsp, sessionID, "worker", deadline, grace)
 			return nil, abort(fmt.Errorf("worker teardown: %w", err))
 		}
 	}
@@ -298,4 +320,39 @@ func (s *Server) resumeInboxAfterAbortedTeardown(wsID, sessionID string) {
 	}
 	s.inbox.unlock()
 	s.kickInbox(wsID, sessionID)
+}
+
+// noteTeardownGrace journals a teardown that ran out of its grace window. Only
+// deadline-driven aborts qualify: a phase that failed for its own reason (a warm
+// process that refused to die, a worker that errored immediately) is a different
+// fault and is already carried by the error the caller returns.
+func (s *Server) noteTeardownGrace(wsp *workspace.Workspace, sessionID, phase string, deadline time.Time, grace time.Duration) {
+	if time.Now().Before(deadline) {
+		return
+	}
+	s.recordTeardownLifecycle(wsp, sessionID, "teardown_grace_exceeded", phase, grace.Milliseconds())
+}
+
+// recordTeardownLifecycle journals one session-teardown lifecycle fact. These
+// events leave no other trace: a turn cancelled by a delete simply stops emitting
+// (on reload it looks like it died on its own), and an aborted delete surfaces
+// only as the HTTP error the caller sees. Every emit here happens BEFORE
+// DB.DeleteSession, so it lands in a journal that still has a session directory.
+//
+// Best effort in the same sense as the other API-side recorders: a missing
+// workspace/DB degrades to no event, an append failure is logged rather than
+// swallowed, and neither changes what teardown does.
+func (s *Server) recordTeardownLifecycle(wsp *workspace.Workspace, sessionID, name, phase string, durationMs int64) {
+	if wsp == nil || wsp.DB == nil {
+		return
+	}
+	if err := wsp.DB.AppendDebugEventGated(sessionID, db.DebugEvent{
+		Type:       db.DebugLifecycle,
+		Name:       name,
+		Phase:      phase,
+		DurationMs: durationMs,
+	}); err != nil && s.logger != nil {
+		s.logger.Error("record session teardown debug event failed",
+			"session", sessionID, "name", name, "error", err)
+	}
 }

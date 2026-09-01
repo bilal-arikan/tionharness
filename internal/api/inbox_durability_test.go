@@ -17,7 +17,10 @@ func TestDecodeInbox_LegacyArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pi := decodeInbox(data)
+	pi, err := decodeInbox(data)
+	if err != nil {
+		t.Fatalf("decode legacy array: %v", err)
+	}
 	if pi.Inflight != nil {
 		t.Fatalf("legacy array must decode with no in-flight, got %+v", pi.Inflight)
 	}
@@ -37,7 +40,10 @@ func TestDecodeInbox_ObjectWithInflight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pi := decodeInbox(data)
+	pi, err := decodeInbox(data)
+	if err != nil {
+		t.Fatalf("decode object shape: %v", err)
+	}
 	if pi.Inflight == nil || pi.Inflight.ClientMsgID != "head" || pi.Inflight.Attempts != 2 {
 		t.Fatalf("in-flight head not preserved: %+v", pi.Inflight)
 	}
@@ -49,17 +55,26 @@ func TestDecodeInbox_ObjectWithInflight(t *testing.T) {
 // TestDecodeInbox_LeadingWhitespace ensures the shape sniff works even when the
 // payload is pretty-printed / whitespace-prefixed.
 func TestDecodeInbox_LeadingWhitespace(t *testing.T) {
-	pi := decodeInbox([]byte("  \n\t[{\"clientMsgId\":\"x\"}]"))
+	pi, err := decodeInbox([]byte("  \n\t[{\"clientMsgId\":\"x\"}]"))
+	if err != nil {
+		t.Fatalf("decode whitespace-prefixed legacy array: %v", err)
+	}
 	if pi.Inflight != nil || len(pi.Items) != 1 || pi.Items[0].ClientMsgID != "x" {
 		t.Fatalf("whitespace-prefixed legacy array misparsed: %+v", pi)
 	}
 }
 
-// TestDecodeInbox_Malformed decodes to an empty queue rather than panicking, so a
-// corrupt sidecar never blocks boot.
+// TestDecodeInbox_Malformed reports an ERROR rather than an empty queue: an empty
+// queue is indistinguishable from "nothing was pending", so the caller would drop
+// every queued user message without knowing it. Both payload shapes must fail.
 func TestDecodeInbox_Malformed(t *testing.T) {
-	pi := decodeInbox([]byte("not json"))
-	if pi.Inflight != nil || len(pi.Items) != 0 {
-		t.Fatalf("malformed payload should decode empty, got %+v", pi)
+	for _, data := range []string{"not json", "[{broken", "{\"items\": "} {
+		pi, err := decodeInbox([]byte(data))
+		if err == nil {
+			t.Fatalf("malformed payload %q decoded silently: %+v", data, pi)
+		}
+		if pi.Inflight != nil || len(pi.Items) != 0 {
+			t.Fatalf("failed decode must yield nothing, got %+v", pi)
+		}
 	}
 }

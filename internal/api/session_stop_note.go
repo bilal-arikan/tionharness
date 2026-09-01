@@ -49,10 +49,12 @@ func (s *Server) recordAutonomousStop(wsp *workspace.Workspace, sessionID string
 		return
 	}
 	s.publishHub(wsp.ID, sessionID, sessionhub.KindReply, msg, false)
-	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: agentID,
 		Name:    "user_stopped",
 		Detail:  "autonomous turn cancelled by the user",
-	}, 0)
+	}); err != nil && s.logger != nil {
+		s.logger.Error("record autonomous stop debug event failed", "session", sessionID, "error", err)
+	}
 }

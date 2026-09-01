@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
@@ -368,9 +369,23 @@ func (s *Server) flushInbox(wsID, sessionID string) {
 	wsp := s.workspaceByID(wsID)
 	if wsp != nil && wsp.DB != nil {
 		if snapshot.Inflight == nil && len(snapshot.Items) == 0 {
-			_ = wsp.DB.ClearInbox(sessionID)
-		} else if data, err := json.Marshal(snapshot); err == nil {
-			_ = wsp.DB.WriteInbox(sessionID, data)
+			if err := wsp.DB.ClearInbox(sessionID); err != nil && s.logger != nil {
+				s.logger.Error("clear inbox sidecar failed", "workspace", wsID, "session", sessionID, "error", err)
+			}
+		} else if data, err := json.Marshal(snapshot); err != nil {
+			// The `else if data, err := …; err == nil` shape this replaces skipped its
+			// body on a marshal failure, leaving the PREVIOUS sidecar on disk — a stale
+			// queue that the next boot replays as if it were current. Drop it instead,
+			// and say so: losing this flush is recoverable, replaying a stale queue is not.
+			if s.logger != nil {
+				s.logger.Error("encode inbox sidecar failed; clearing it to avoid replaying a stale queue",
+					"workspace", wsID, "session", sessionID, "error", err)
+			}
+			if cerr := wsp.DB.ClearInbox(sessionID); cerr != nil && s.logger != nil {
+				s.logger.Error("clear stale inbox sidecar failed", "workspace", wsID, "session", sessionID, "error", cerr)
+			}
+		} else if err := wsp.DB.WriteInbox(sessionID, data); err != nil && s.logger != nil {
+			s.logger.Error("persist inbox sidecar failed", "workspace", wsID, "session", sessionID, "error", err)
 		}
 	}
 	s.publishQueue(wsID, sessionID, view, inflightID, inflightView)
@@ -432,8 +447,10 @@ func (s *Server) republishQueue(wsID, sessionID string) {
 }
 
 // recoverInboxes re-enqueues every session's persisted WAITING queue at boot and
-// kicks its worker, so messages submitted before a crash/restart still run. Best
-// effort: an unreadable sidecar is skipped. Runs once at startup.
+// kicks its worker, so messages submitted before a crash/restart still run. A
+// sidecar that cannot be read (IO/permission) or parsed is skipped, but never
+// silently: both report on the log and the session's debug journal. Runs once at
+// startup.
 func (s *Server) recoverInboxes() {
 	for _, meta := range s.workspaces.List() {
 		wsp, err := s.workspaces.Get(meta.ID)
@@ -446,10 +463,36 @@ func (s *Server) recoverInboxes() {
 		}
 		for _, sess := range sessions {
 			data, ok, err := wsp.DB.ReadInbox(sess.ID)
-			if err != nil || !ok {
+			if err != nil {
+				// A read/permission failure is NOT "no queue": the sidecar may hold
+				// waiting user messages we are about to skip. Leave the file alone
+				// (quarantine is for corrupt content, not an IO fault) but make the
+				// loss visible on the same channels a corrupt inbox uses.
+				if s.logger != nil {
+					s.logger.Error("inbox.json unreadable: queued messages were NOT recovered",
+						"workspace", wsp.ID, "session", sess.ID, "error", err)
+				}
+				if derr := wsp.DB.AppendDebugEventGated(sess.ID, db.DebugEvent{
+					Type:   db.DebugError,
+					Name:   "inbox_unreadable",
+					Detail: "durable inbox sidecar could not be read at boot; queued messages were not dispatched",
+					Error:  err.Error(),
+					Err:    true,
+				}); derr != nil && s.logger != nil {
+					s.logger.Error("record unreadable-inbox debug event failed", "session", sess.ID, "error", derr)
+				}
 				continue
 			}
-			pi := decodeInbox(data)
+			if !ok {
+				continue // no sidecar: this session simply never queued anything
+			}
+			pi, derr := decodeInbox(data)
+			if derr != nil {
+				// The queue is unreadable: preserve the bytes and report the loss
+				// instead of continuing with a silently empty queue.
+				s.quarantineInbox(wsp, sess.ID, derr)
+				continue
+			}
 			// The in-flight head was interrupted by the crash/restart before it
 			// completed. Put it back at the FRONT so it runs first, right where the
 			// worker left off; its Attempts counter already advanced, so the poison
@@ -542,6 +585,9 @@ func (s *Server) handleCancelQueued(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	removed := s.cancelQueued(ws(r).ID, sessionID, msgID)
+	if removed {
+		s.recordQueuedTurnDropped(ws(r), sessionID, "user_cancel")
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"removed": removed})
 }
 
@@ -552,7 +598,11 @@ func (s *Server) handleClearQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "session id required")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": s.clearQueued(ws(r).ID, sessionID)})
+	cleared := s.clearQueued(ws(r).ID, sessionID)
+	if cleared > 0 {
+		s.recordQueuedTurnDropped(ws(r), sessionID, "queue_cleared")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cleared": cleared})
 }
 
 // handleMoveQueuedFront promotes a waiting message to dispatch next.

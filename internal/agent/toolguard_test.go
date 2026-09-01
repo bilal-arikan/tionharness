@@ -162,8 +162,8 @@ func TestAnalyzeCLIGuardrail_FlagsLoopingTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read debug: %v", err)
 	}
-	if len(evs) != 1 || evs[0].Name != "cli_warn" || evs[0].Detail != "Bash" {
-		t.Fatalf("events = %+v, want one cli_warn for Bash", evs)
+	if len(evs) != 1 || evs[0].Name != "cli_warn" || evs[0].Detail != "guardrail detail [redacted]" {
+		t.Fatalf("events = %+v, want one fail-closed cli_warn", evs)
 	}
 
 	// A clean trace flags nothing; warnings off disables the analysis.
