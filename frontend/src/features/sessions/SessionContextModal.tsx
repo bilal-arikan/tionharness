@@ -13,9 +13,6 @@ import {
   useBulkToggle,
   type BulkToggle,
 } from '@/shared/components'
-import { CacheWarmthBadge } from './CacheWarmthBadge'
-import { cacheRemaining } from './sessionDetailFormat'
-import { serverNow } from '@/shared/lib/serverClock'
 import { count } from '@/shared/lib/format'
 
 // FLOOR_NOTE clarifies that the predicted CLI overhead is a per-turn FLOOR (base
@@ -39,9 +36,6 @@ const LAZY_VIS_CHIP: Record<string, string> = {
 interface Props {
   sessionId: string
   title?: string
-  // Session last-activity timestamp (unix seconds) — drives the prompt-cache
-  // warmth countdown in the cache legend. Optional: omit to hide the badge.
-  updatedAt?: number
   onClose: () => void
 }
 
@@ -50,10 +44,8 @@ interface Props {
 // transcript (with author labels + tool recap folded in) and the tool catalog,
 // each with a token estimate. A debug view: an optional sample message shows what
 // the agent would receive if that were sent next. Read-only — no turn is run.
-export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Props) {
+export function SessionContextModal({ sessionId, title, onClose }: Props) {
   const [data, setData] = useState<SessionContextPreview | null>(null)
-  // Live 1s tick for the prompt-cache warmth countdown; self-stops once cold.
-  const [nowSec, setNowSec] = useState(() => serverNow())
   const [err, setErr] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -83,18 +75,6 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
   // Reload whenever the sample message is (re)submitted or a toggle flips.
   // simulate/accurate are dependencies so toggling them refetches immediately.
   useEffect(() => load(message, simulate, accurate), [load, simulate, accurate]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Tick every second while the prompt cache is still warm, then self-stop.
-  useEffect(() => {
-    if (!updatedAt) return
-    const warm = () => cacheRemaining(updatedAt, serverNow()) > 0
-    if (!warm()) return
-    const t = setInterval(() => {
-      setNowSec(serverNow())
-      if (!warm()) clearInterval(t)
-    }, 1000)
-    return () => clearInterval(t)
-  }, [updatedAt])
 
   const copy = () => {
     if (!data) return
@@ -305,28 +285,6 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                 )}
               </>
             )}
-          </div>
-        )}
-
-        {/* Cache legend */}
-        {data && (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--color-border)] px-5 py-1.5 text-[11px]">
-            <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-success)]">
-              <span className="h-2 w-2 rounded-sm bg-[color-mix(in_srgb,var(--color-success)_70%,transparent)]" />
-              cache'li (sıcak, yeniden kullanılır)
-              {data.cache.note && (
-                <InfoPopover text={data.cache.note} label="Cache nasıl çalışır?" />
-              )}
-            </span>
-            {/* Prompt-cache TTL countdown: how long this warm prefix survives
-                before the 1h ephemeral cache goes cold (time axis, distinct from
-                the per-segment cached/uncached flags above). */}
-            {updatedAt ? (
-              <span className="ml-auto inline-flex items-center gap-1">
-                <span className="text-[var(--color-text-dim)]">TTL:</span>
-                <CacheWarmthBadge updatedAt={updatedAt} nowSec={nowSec} />
-              </span>
-            ) : null}
           </div>
         )}
 

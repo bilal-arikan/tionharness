@@ -120,11 +120,9 @@ Adopt tüm entry'yi düşürür → hem system hem tools birlikte yeniden donar
   kaldı** (TTL soğumasına geri sayım) veya ❄️ **Soğuk** (1sa TTL doldu → sonraki
   tur tam cache-miss). Backend alanı YOK (TTL sabit 1sa; `CACHE_TTL_SEC=3600`,
   `sessionDetailFormat.cacheRemaining`). İki yerde: **Oturum bilgisi** panelinin
-  "Genel" bölümünde satır (`SessionDetailPanel`) + **"Sıradaki tur bağlam
-  önizleme"** popup'ının cache legend'ında TTL geri sayımı (`SessionContextModal`,
-  ayrıca 2026-08-11'den beri **chat composer'ının üstünde** `CacheWarmthStrip`,
-  `updatedAt` App.tsx'ten geçer; per-segment cache'li/dışı bayrakları = token
-  ekseni, TTL = zaman ekseni). Her iki yerde 1sn tick tur çalışırken **veya**
+  "Genel" bölümünde satır (`SessionDetailPanel`) + 2026-08-11'den beri **chat
+  composer'ının üstünde** `CacheWarmthStrip` (`updatedAt` App.tsx'ten geçer).
+  Her iki yerde 1sn tick tur çalışırken **veya**
   cache sıcakken döner, soğuyunca kendini durdurur.
 
 ## Context-Change Diff Yüzeyleme (2026-07-10)
@@ -255,5 +253,5 @@ workspace claude-home'unda seed'lenmiş credential ile turlar arasında aralıkl
 - `internal/workspace/settings.go` — ayar; frontend: `WorkspacePanel.tsx`, `chatStreamCommands.ts`, `types/workspace.ts`, `WorkspaceView.tsx`
 - Cache-warmth göstergesi (frontend): `features/sessions/CacheWarmthBadge.tsx` +
   `sessionDetailFormat.ts` (`CACHE_TTL_SEC`/`cacheRemaining`/`formatCountdown`),
-  bağlayanlar `SessionDetailPanel.tsx` (Genel bölümü) + `SessionContextModal.tsx`
-  (popup cache legend) + `app/App.tsx` (`updatedAt` prop'u)
+  bağlayanlar `SessionDetailPanel.tsx` (Genel bölümü) + `CacheWarmthStrip.tsx`
+  (chat composer üstü) + `app/App.tsx` (`updatedAt` prop'u)
