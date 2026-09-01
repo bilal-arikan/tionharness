@@ -51,9 +51,27 @@ export function writeNetworkPositions(
   positions: NetworkPositions,
   storage: Storage = localStorage,
   canonicalNodeIds?: Iterable<string>,
+  knownPositions?: NetworkPositions,
 ): NetworkPositions {
-  const merged = { ...readNetworkPositions(workspaceId, storage), ...positions }
-  const next = canonicalNodeIds ? pruneNetworkPositions(merged, canonicalNodeIds) : merged
+  const latest = readNetworkPositions(workspaceId, storage)
+  const merged = { ...latest }
+  for (const [id, position] of Object.entries(positions)) {
+    const known = knownPositions?.[id]
+    const current = latest[id]
+    // A missing current value that existed in this writer's baseline is an
+    // observed deletion from another tab. Do not resurrect it from a stale
+    // local snapshot.
+    if (known && !current) continue
+    // A snapshot unchanged since this writer's read cannot overwrite a value
+    // another tab changed in the meantime.
+    if (known && current && samePosition(position, known) && !samePosition(current, known)) continue
+    merged[id] = position
+  }
+  const next = canonicalNodeIds
+    ? knownPositions
+      ? pruneKnownNetworkPositions(merged, canonicalNodeIds, latest, knownPositions)
+      : pruneNetworkPositions(merged, canonicalNodeIds)
+    : merged
   try {
     storage.setItem(
       networkLayoutKey(workspaceId),
@@ -61,8 +79,32 @@ export function writeNetworkPositions(
     )
   } catch {
     // Persistence is optional; storage can be unavailable or over quota.
+    return latest
   }
   return next
+}
+
+function pruneKnownNetworkPositions(
+  positions: NetworkPositions,
+  nodeIds: Iterable<string>,
+  latest: NetworkPositions,
+  knownPositions: NetworkPositions,
+): NetworkPositions {
+  // localStorage has no atomic compare-and-swap. This protects changes visible
+  // at read time; an exactly simultaneous setItem can still be last-writer-wins.
+  const currentIds = new Set(nodeIds)
+  return Object.fromEntries(
+    Object.entries(positions).filter(([id]) => {
+      if (currentIds.has(id)) return true
+      const known = knownPositions[id]
+      const current = latest[id]
+      return !known || !current || !samePosition(current, known)
+    }),
+  )
+}
+
+function samePosition(a: NetworkPosition, b: NetworkPosition): boolean {
+  return a.x === b.x && a.y === b.y
 }
 
 export function pruneNetworkPositions(

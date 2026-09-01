@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -48,8 +48,10 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   const [loading, setLoading] = useState(false)
   const loadSequenceRef = useRef(0)
   const activeWorkspaceRef = useRef(workspaceId)
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (activeWorkspaceRef.current === workspaceId) return
     activeWorkspaceRef.current = workspaceId
+    loadSequenceRef.current += 1
   }, [workspaceId])
   // User-defined Kanban columns (mirrors the Board column editor). When set,
   // the live-mode column anchors in the network are taken from here instead of
@@ -94,7 +96,6 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   const load = useCallback(() => {
     const sequence = ++loadSequenceRef.current
     const requestedWorkspaceId = workspaceId
-    setGraphReady(false)
     setLoading(true)
     Promise.all([api.workspaceGraph(), api.getWorkspaceSettings()])
       .then(([g, s]: [WorkspaceGraph, { boardColumns?: BoardColumnDef[] }]) => {
@@ -128,6 +129,7 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   }, [onError, workspaceId])
 
   const canonicalReady = graphReady && graphWorkspaceId === workspaceId
+  const authoritativeGraph = graphWorkspaceId === workspaceId ? graph : null
 
   useEffect(() => {
     load()
@@ -163,7 +165,10 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   // Apply the facet filter to the raw graph first; the vis mapping then runs on
   // the narrowed set (edges to dropped nodes and orphaned skill/MCP icons fall
   // out inside filterGraph).
-  const filteredGraph = useMemo(() => (graph ? filterGraph(graph, filter) : null), [graph, filter])
+  const filteredGraph = useMemo(
+    () => (authoritativeGraph ? filterGraph(authoritativeGraph, filter) : null),
+    [authoritativeGraph, filter],
+  )
 
   const { nodes, edges } = useMemo(
     () =>
@@ -177,15 +182,15 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   // Facet/layer visibility is temporary and must not be mistaken for deletion.
   const canonicalNodeIds = useMemo(
     () =>
-      graph
+      authoritativeGraph
         ? workspaceToVis(
-            graph,
+            authoritativeGraph,
             new Set<WorkspaceNodeType>(NODE_LAYERS.map((layer) => layer.type)),
             mode,
             boardColumns,
           ).nodes.map((node) => node.id as string)
         : [],
-    [graph, mode, boardColumns],
+    [authoritativeGraph, mode, boardColumns],
   )
 
   // In live mode tasks/columns are intrinsic; the flow/skill/MCP layers stay
@@ -197,28 +202,31 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
         )
       : NODE_LAYERS.filter((l) => l.type !== 'run') // 'run' is a live-only archive layer
 
-  const isEmpty = graph && graph.nodes.length === 0
+  const isEmpty = authoritativeGraph && authoritativeGraph.nodes.length === 0
   // Graph has content but the active filter matched nothing — distinct from the
   // truly-empty workspace so we can hint that clearing the filter helps.
-  const filteredEmpty = !isEmpty && graph && filteredGraph && filteredGraph.nodes.length === 0
+  const filteredEmpty =
+    !isEmpty && authoritativeGraph && filteredGraph && filteredGraph.nodes.length === 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Title bar: screen name + right-aligned graph stats + far-right refresh. */}
       <header className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
         <span className="shrink-0 text-sm font-semibold">Ağ</span>
-        {graph && (
+        {authoritativeGraph && (
           <span className="ml-auto truncate text-xs text-[var(--color-text-dim)]">
-            {graph.stats.agents} aktif ajan
-            {graph.stats.agentsTotal ? ` / ${graph.stats.agentsTotal}` : ''} · {graph.stats.tasks}{' '}
-            görev · {graph.stats.flows} akış · {graph.stats.skills ?? 0} beceri ·{' '}
-            {graph.stats.mcp ?? 0} MCP
+            {authoritativeGraph.stats.agents} aktif ajan
+            {authoritativeGraph.stats.agentsTotal
+              ? ` / ${authoritativeGraph.stats.agentsTotal}`
+              : ''}{' '}
+            · {authoritativeGraph.stats.tasks} görev · {authoritativeGraph.stats.flows} akış ·{' '}
+            {authoritativeGraph.stats.skills ?? 0} beceri · {authoritativeGraph.stats.mcp ?? 0} MCP
           </span>
         )}
         <button
           onClick={load}
           disabled={loading}
-          className={`flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40 ${graph ? '' : 'ml-auto'}`}
+          className={`flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-40 ${authoritativeGraph ? '' : 'ml-auto'}`}
           title="Yenile"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -229,12 +237,12 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
       {/* Toolbar: one merged row — board-style facet filters (search /
           agent / kind / status / tag / archive) PLUS the node-type layer chips
           and the density slider, passed in as children. */}
-      {graph && filteredGraph && (
+      {authoritativeGraph && filteredGraph && (
         <NetworkFilters
           filter={filter}
           onChange={setFilter}
           onClear={() => setFilter(emptyNetworkFilter())}
-          graph={graph}
+          graph={authoritativeGraph}
           visibleCount={filteredGraph.nodes.length}
           boardColumns={boardColumns}
         >

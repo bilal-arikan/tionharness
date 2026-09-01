@@ -85,7 +85,7 @@ const RUN_KIND_LABEL: Record<string, string> = {
 
 const LIVE_SCOPE_LABEL = {
   running: 'Çalışan',
-  'awaiting-workers': 'Worker Bekleyen',
+  'awaiting-workers': 'Bekleyen',
 } as const
 
 // Board-state tints for task nodes.

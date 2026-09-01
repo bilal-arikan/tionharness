@@ -134,6 +134,10 @@ const vis = vi.hoisted(() => {
 
     startSimulation() {
       this.startSimulationCalls += 1
+      this.advancePhysics()
+    }
+
+    advancePhysics() {
       for (const id of this.data.nodes.getIds()) {
         const item = this.data.nodes.get(id) as { fixed?: Node['fixed'] } | null
         const fixed = item?.fixed
@@ -354,6 +358,31 @@ describe('VisNetworkGraph layout lifecycle', () => {
     await unmount(root)
   })
 
+  it('persists pagehide and unmount snapshots while a later refresh remains ready', async () => {
+    const { root } = await mount(graph('workspace', [node('a')], ['a']))
+    const network = latestNetwork()
+
+    await render(root, graph('workspace', [node('a')], ['a'], { canonicalReady: true }))
+    network.setPosition('a', { x: 7, y: 8 })
+    window.dispatchEvent(new Event('pagehide'))
+    expect(readNetworkPositions('workspace')).toEqual({ a: { x: 7, y: 8 } })
+
+    network.setPosition('a', { x: 9, y: 10 })
+    await unmount(root)
+    expect(readNetworkPositions('workspace')).toEqual({ a: { x: 9, y: 10 } })
+  })
+
+  it('prunes a node removed after this tab wrote its first snapshot', async () => {
+    const { root } = await mount(graph('workspace', [node('a')], ['a']))
+    latestNetwork().setPosition('a', { x: 7, y: 8 })
+    window.dispatchEvent(new Event('pagehide'))
+    expect(readNetworkPositions('workspace')).toEqual({ a: { x: 7, y: 8 } })
+
+    await render(root, graph('workspace', [], [], { canonicalReady: true }))
+    await unmount(root)
+    expect(readNetworkPositions('workspace')).toEqual({})
+  })
+
   it('keeps temporarily filtered positions and prunes only canonical deletions', async () => {
     writeNetworkPositions('workspace', {
       a: { x: 1, y: 2 },
@@ -428,6 +457,34 @@ describe('VisNetworkGraph layout lifecycle', () => {
     )
     expect(disableIndex).toBeGreaterThanOrEqual(0)
     expect(readNetworkPositions('workspace')).toEqual({ a: { x: 100, y: 200 } })
+    await unmount(root)
+  })
+
+  it('keeps restored nodes temporarily pinned across an incremental refresh', async () => {
+    writeNetworkPositions('workspace', { a: { x: 100, y: 200 } })
+    const originalFixed = { x: false, y: true }
+    const { root } = await mount(graph('workspace', [node('a', { fixed: originalFixed })]))
+    const network = latestNetwork()
+
+    await render(
+      root,
+      graph('workspace', [node('a', { fixed: originalFixed }), node('b', { x: 5, y: 6 })]),
+    )
+    await render(
+      root,
+      graph('workspace', [
+        node('a', { fixed: originalFixed, label: 'refreshed' }),
+        node('b', { x: 5, y: 6, label: 'refreshed' }),
+      ]),
+    )
+
+    expect(network.data.nodes.get('a')).toMatchObject({ fixed: { x: true, y: true } })
+    network.advancePhysics()
+    expect(network.getPositions(['a']).a).toEqual({ x: 100, y: 200 })
+
+    network.emit('stabilizationIterationsDone')
+    expect(network.data.nodes.get('a')).toMatchObject({ fixed: originalFixed })
+    expect(network.getPositions(['a']).a).toEqual({ x: 100, y: 200 })
     await unmount(root)
   })
 

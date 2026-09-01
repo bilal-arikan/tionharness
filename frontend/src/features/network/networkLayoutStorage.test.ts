@@ -77,13 +77,78 @@ describe('network layout storage', () => {
     })
   })
 
-  it('swallows storage quota errors', () => {
+  it('keeps entries introduced or updated after a stale writer snapshot', () => {
     const storage = memoryStorage()
+    writeNetworkPositions('workspace', { kept: { x: 1, y: 2 }, stale: { x: 3, y: 4 } }, storage)
+    const staleWriterSnapshot = readNetworkPositions('workspace', storage)
+
+    writeNetworkPositions(
+      'workspace',
+      { kept: { x: 10, y: 20 }, concurrent: { x: 30, y: 40 }, stale: { x: 50, y: 60 } },
+      storage,
+    )
+
+    expect(
+      writeNetworkPositions(
+        'workspace',
+        staleWriterSnapshot,
+        storage,
+        ['kept'],
+        staleWriterSnapshot,
+      ),
+    ).toEqual({
+      kept: { x: 10, y: 20 },
+      concurrent: { x: 30, y: 40 },
+      stale: { x: 50, y: 60 },
+    })
+  })
+
+  it('still prunes a stale id unchanged since the authoritative writer read', () => {
+    const storage = memoryStorage()
+    writeNetworkPositions('workspace', { kept: { x: 1, y: 2 }, stale: { x: 3, y: 4 } }, storage)
+    const known = readNetworkPositions('workspace', storage)
+
+    expect(
+      writeNetworkPositions('workspace', { kept: { x: 10, y: 20 } }, storage, ['kept'], known),
+    ).toEqual({ kept: { x: 10, y: 20 } })
+  })
+
+  it('does not resurrect a deletion observed after a stale writer snapshot', () => {
+    const storage = memoryStorage()
+    writeNetworkPositions('workspace', { kept: { x: 1, y: 2 }, stale: { x: 3, y: 4 } }, storage)
+    const staleWriterSnapshot = readNetworkPositions('workspace', storage)
+
+    writeNetworkPositions('workspace', { kept: { x: 10, y: 20 } }, storage, ['kept'])
+
+    expect(
+      writeNetworkPositions(
+        'workspace',
+        staleWriterSnapshot,
+        storage,
+        ['kept', 'stale'],
+        staleWriterSnapshot,
+      ),
+    ).toEqual({ kept: { x: 10, y: 20 } })
+    expect(readNetworkPositions('workspace', storage)).toEqual({ kept: { x: 10, y: 20 } })
+  })
+
+  it('keeps the committed baseline after a transient quota failure and retries', () => {
+    const storage = memoryStorage()
+    writeNetworkPositions('workspace', { node: { x: 1, y: 2 } }, storage)
+    const baseline = readNetworkPositions('workspace', storage)
+    const setItem = storage.setItem
     storage.setItem = () => {
       throw new DOMException('quota', 'QuotaExceededError')
     }
-    expect(writeNetworkPositions('workspace', { node: { x: 1, y: 2 } }, storage)).toEqual({
-      node: { x: 1, y: 2 },
-    })
+    expect(
+      writeNetworkPositions('workspace', { node: { x: 10, y: 20 } }, storage, ['node'], baseline),
+    ).toEqual(baseline)
+    expect(readNetworkPositions('workspace', storage)).toEqual(baseline)
+
+    storage.setItem = setItem
+    expect(
+      writeNetworkPositions('workspace', { node: { x: 10, y: 20 } }, storage, ['node'], baseline),
+    ).toEqual({ node: { x: 10, y: 20 } })
+    expect(readNetworkPositions('workspace', storage)).toEqual({ node: { x: 10, y: 20 } })
   })
 })

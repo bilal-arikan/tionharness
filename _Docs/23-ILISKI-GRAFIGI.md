@@ -70,8 +70,10 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   Filtre hem İlişki hem Canlı modda çalışır; hiç eşleşme yoksa "Filtreye uyan düğüm yok"
   + temizle butonu. **Arşiv toggle varsayılan kapalı** → arşivlenmiş oturumlar gizli,
   açılınca görünür (arşiv run kartları kesik-kenar + 🗄 rozetiyle işaretli).
-- **Yoğunluk kaydırıcısı (0.4×–2×):** fizik itme + yay uzunluğunu canlı ölçekler —
-  yüksek değer = daha sıkı paketleme, düşük = daha geniş yayılım.
+- **Yoğunluk kaydırıcısı (0.4×–2×):** sonraki yeni-düğüm stabilizasyonunda fizik
+  itme + yay uzunluğunu ölçekler — yüksek değer = daha sıkı paketleme, düşük = daha
+  geniş yayılım. Yoğunluk, tema ve lite değişiklikleri mevcut fiziği yeniden başlatmaz
+  veya restore edilmiş düğümleri hareket ettirmez.
 - **Yerleşim — fizik (forceAtlas2):** vis-network `forceAtlas2Based` çözücüsü.
   Bağsız/seyrek graflarda bile düğümleri **eşit/organik (homojen)** bir buluta
   yayar (barnesHut'ın aksine kümeye çökmez/dağılıp uçmaz). `avoidOverlap` geniş
@@ -87,9 +89,15 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   içeren `localStorage` anahtarında saklanır. Okuma sırasında kayıt şeması ile tüm
   `x`/`y` değerlerinin finite sayı olduğu doğrulanır; bozuk veya eski sürümlü kayıt
   kullanılmaz. Açılışta bütün düğümlerin kayıtlı konumu varsa fizik kapalı başlar.
-  Yeni düğüm geldiğinde kısa bir stabilization çalışır; `dragEnd` ve stabilization
-  sonrasında konumlar debounce edilerek kaydedilir. Artık grafikte bulunmayan
-  düğümlerin stale koordinatları kayıttan budanır.
+  Yeni düğüm geldiğinde kayıtlı düğümler geçici sabitlenir ve yalnız yeni düğüm için
+  kısa bir stabilization çalışır. Sürükleme ve fizik hareketleri açık sayfa boyunca
+  storage'a yazılmaz; görünür düğümlerin son koordinatları ağ ekranından çıkışta,
+  workspace değişiminde veya `pagehide` sırasında tek snapshot olarak kaydedilir.
+  Geçici filtre/katman gizleme kayıtları silmez; stale koordinatlar yalnız kanonik,
+  filtrelenmemiş workspace düğüm kümesine göre budanır. Writer'ın son okumasında
+  gözlenen diğer-tab ekleme, güncelleme ve silmeleri three-way merge ile korunur.
+  `localStorage` atomik compare-and-swap sunmadığından tam eşzamanlı
+  read-modify-write/`setItem` işlemleri last-writer-wins olabilir.
 - Başlık çubuğunda istatistik (ajan/görev/akış/beceri/MCP sayısı) + Yenile. Ayrı bir
   mod/gösterge satırı yok — **İlişki/Canlı mod geçişi ve "canlı" gösterge satırı UI'dan
   kaldırıldı**; ağ artık **daima Canlı** (animasyonlu,
@@ -98,17 +106,20 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   gelebilir diye kod korundu), ama statik ilişki web'ine giden buton yok.
 
 #### Canlı (live) modu
-Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canlandıran ikinci yerleşim:
-- **5 sabit sütun başlığı** üstte (Yapılacak→Başarısız, `physics:false` — solver taşımaz
-  ama kullanıcı sürükleyebilir; `fixed` kullanılmaz, bkz. "Sabit alanlar sürüklenebilir").
+Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
+- **Workspace board sütun başlıkları** üstte (`physics:false` — solver taşımaz ama
+  kullanıcı sürükleyebilir; `fixed` kullanılmaz, bkz. "Sabit alanlar sürüklenebilir").
+  Özel sütun tanımı varsa aynen kullanılır; tanım yoksa beş yerleşik sütun
+  (Yapılacak→Başarısız) fallback olur.
 - Her görev **kendi durum sütununa** yaylanır (`task→col` kenarı, kesik çizgi) →
   görevler durumlarına göre sütun altlarında kümelenir.
 - **Aktif bağ:** bir ajan yalnız **şu an çalıştığı** göreve bağlanır — `owns` kenarı
   **ve** görev `in_progress` ise. Parlak accent kenar + gölge. Görev durum değişince
   (board'da taşınınca) bağ kopar, ajan serbest kalır; başka görev `in_progress`
   olunca yeni bağ kurulur. Skill/MCP bağları ajanla kalır (onunla sürüklenir).
-- **Gerçek zamanlı:** Canlı modda panel `/api/events` SSE'ye abone olur; görev/zamanlama
-  olaylarında grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı**
+- **Gerçek zamanlı:** `App.tsx` içindeki merkezi event dispatcher `/api/events` SSE
+  akışını dinler; ilgili workspace olaylarını panelin refresh sinyaline dönüştürür ve
+  panel grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı**
   (diff ekle/güncelle/sil, konum sıfırlamadan) güncellediği için fizik motoru ajanı yeni
   bağına **kaydırarak animasyon** yapar — "canlı akış" hissi buradan gelir.
 - **Sabit alanlar sürüklenebilir:** Sütun başlıkları, "Boşta" ve "Geçmiş" çekirdekleri
@@ -127,7 +138,7 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
 - **Canlı kapsam:** Tamamlanmış/geçmiş run düğümleri grafiğe alınmaz. Ajan ve oturum
   düğümleri aynı eligible session kümesinden üretilir; silinmiş ajan için orphan
   düğüm oluşmaz. `running` örnekler **parlak "live" glow**, `awaiting-workers`
-  koordinatörler "Worker Bekleyen" durumunu alır. Çalışan oturum kümesi
+  koordinatörler "Bekleyen" durumunu alır. Çalışan oturum kümesi
   `s.runs.activeSessionIDs()` → bu workspace'in oturumlarına join edilir. Örneğin
   oturumu task/flow-kind ise o **task/flow düğümüne aktif (accent) bağ** kurulur;
   aktif bağ ayrıca `in_progress` görev sahipliğiyle de (fallback) kurulur. Bağlar
@@ -173,7 +184,7 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
 - `features/network/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
   (`workspaceToVis(graph, visible, mode, boardColumns)`) + kenar/lejant/tür renk
   sabitleri + yardımcılar (`tip`/`truncate`). Ajan düğümünün etiketi iki satır:
-  ad + canlı kapsam durumu ("Çalışan" / "Worker Bekleyen"); tooltip aynı Türkçe
+  ad + canlı kapsam durumu ("Çalışan" / "Bekleyen"); tooltip aynı Türkçe
   durumu gösterir ve aynı ajanın kopyalarını ayırt eder.
 - `features/network/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
   yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
@@ -182,7 +193,8 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
   konumlarını korur), stabilize sonrası `fit`; workspace/sürüm anahtarlı kalıcı
   koordinatları uygular, tam kayıtlı açılışta fiziği kapatır ve yeni düğümlerde kısa
-  stabilization sonrası konumları günceller.
+  stabilization çalıştırır. Kalıcı snapshot yalnız unmount/workspace değişimi/`pagehide`
+  çıkışlarında yazılır; tema ve yoğunluk seçenekleri fiziği yeniden açmaz.
 - `features/network/networkLayoutStorage.ts` — yerleşim anahtarı, şema/finite sayı
   doğrulamalı okuma-yazma ve stale düğüm koordinatlarını budama yardımcıları.
 - `features/network/networkFilter.ts` — **saf facet filtresi**: `NetworkFilter` modeli
@@ -193,7 +205,7 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   Durum/Etiket `FacetDropdown`'ları (tasks/views'ten yeniden kullanılır) + Arşiv toggle +
   "N/M düğüm" sayacı; facet seçenekleri/sayıları **filtresiz graf'tan** türetilir.
 - `features/network/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy);
-  İlişki/Canlı mod, yoğunluk kaydırıcısı, katman chip'leri, **facet filtre satırı**
+  tek Canlı görünüm, yoğunluk kaydırıcısı, katman chip'leri, **facet filtre satırı**
   (`filter` state → `filterGraph` → `workspaceToVis`), merkezî SSE yenileme
   sinyali (`useRefreshTrigger('network')`). `app/eventToRefreshSignals.ts`'te
   `chat`/`flow`/`schedule`/`spawned`/`worker`/**`task`**/`board`/`agent` olayları

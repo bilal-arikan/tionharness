@@ -176,6 +176,7 @@ export function VisNetworkGraph({
   const canonicalReadyRef = useRef(canonicalReady)
   const setupGenerationByWorkspaceRef = useRef(new Map<string, number>())
   const stabilizationCleanupRef = useRef<() => void>(() => {})
+  const temporaryFixedRef = useRef<Map<string, Node['fixed']>>(new Map())
   const fitCleanupRef = useRef<() => void>(() => {})
   const onSelectRef = useRef(onSelect)
   // Original edge colors, kept so blurNode can restore exactly what the mapper
@@ -202,6 +203,7 @@ export function VisNetworkGraph({
     const generation = (setupGenerations.get(workspaceId) ?? 0) + 1
     setupGenerations.set(workspaceId, generation)
     persistedPositionsRef.current = readNetworkPositions(workspaceId)
+    let knownPositions = persistedPositionsRef.current
     runtimePositionsRef.current = {}
     const baseEdgeColors = baseEdgeColorRef.current
     const colors = resolveThemeColors()
@@ -251,6 +253,13 @@ export function VisNetworkGraph({
         positions,
         localStorage,
         nodeIds,
+        knownPositions,
+      )
+      knownPositions = Object.fromEntries(
+        nodeIds.flatMap((id) => {
+          const position = persistedPositionsRef.current[id]
+          return position ? [[id, position] as const] : []
+        }),
       )
     }
     const handlePageHide = () => {
@@ -308,6 +317,7 @@ export function VisNetworkGraph({
       window.removeEventListener('pagehide', handlePageHide)
       stabilizationCleanupRef.current()
       stabilizationCleanupRef.current = () => {}
+      temporaryFixedRef.current.clear()
       fitCleanupRef.current()
       fitCleanupRef.current = () => {}
       network.destroy()
@@ -318,7 +328,7 @@ export function VisNetworkGraph({
       baseEdgeColors.clear()
       queueMicrotask(() => {
         if (!ready || setupGenerations.get(workspaceId) !== generation) return
-        writeNetworkPositions(workspaceId, positions, localStorage, nodeIds)
+        writeNetworkPositions(workspaceId, positions, localStorage, nodeIds, knownPositions)
       })
     }
   }, [workspaceId])
@@ -375,7 +385,11 @@ export function VisNetworkGraph({
       if (existing.has(n.id as string)) {
         // Preserve current position (physics result or user drag): drop x/y.
         const { x: _x, y: _y, ...rest } = n as Node & { x?: number; y?: number }
-        toUpdate.push(rest as Node)
+        toUpdate.push(
+          temporaryFixedRef.current.has(n.id as string)
+            ? ({ ...rest, fixed: { x: true, y: true } } as Node)
+            : (rest as Node),
+        )
       } else {
         const saved = knownPositions[n.id as string]
         toAdd.push(saved ? { ...n, ...saved } : n)
@@ -410,6 +424,7 @@ export function VisNetworkGraph({
         fixedBefore.set(id, node?.fixed)
         nds.update({ id, fixed: { x: true, y: true } })
       }
+      temporaryFixedRef.current = fixedBefore
 
       let completed = false
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -418,8 +433,9 @@ export function VisNetworkGraph({
         nds.update(
           [...fixedBefore]
             .filter(([id]) => currentIds.has(id))
-            .map(([id, fixed]) => ({ id, fixed: fixed ?? false })),
+            .map(([id, fixed]) => ({ id, fixed })),
         )
+        if (temporaryFixedRef.current === fixedBefore) temporaryFixedRef.current = new Map()
       }
       const complete = () => {
         if (completed) return

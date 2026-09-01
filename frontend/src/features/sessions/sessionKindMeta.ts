@@ -82,7 +82,7 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'inbox', label: 'Inbox' },
   { key: OTHER_CHIP, label: 'Diğer' },
   { key: RUNNING_CHIP, label: 'Çalışan' },
-  { key: AWAITING_WORKERS_CHIP, label: 'Worker Bekleyen' },
+  { key: AWAITING_WORKERS_CHIP, label: 'Bekleyen' },
   { key: WORKER_CHIP, label: 'Worker' },
   { key: ARCHIVED_CHIP, label: 'Arşiv' },
 ]
