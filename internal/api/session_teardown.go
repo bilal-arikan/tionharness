@@ -16,6 +16,33 @@ import (
 // rather than being stranded against a session that no longer exists.
 const sessionTeardownGrace = 15 * time.Second
 
+// sessionTeardownPoll is how often the autonomous-turn wait re-checks the agent
+// runtime. Those registrations carry no completion channel (unlike chatRun.done),
+// so the only way to observe such a turn unwinding is to look again.
+const sessionTeardownPoll = 10 * time.Millisecond
+
+// autonomousRuns is the slice of the agent runtime session teardown needs: the
+// registry of AUTONOMOUS turns (scheduler wake, automation delivery, autocontinue,
+// flow step, spawn, coordinator drain). It is a separate registry from the server's
+// chatRuns, so it is stated as an interface to keep it injectable in tests.
+type autonomousRuns interface {
+	// CancelSession cancels every autonomous turn registered for a session.
+	CancelSession(id string) bool
+	// IsSessionActive reports whether any registration is still held.
+	IsSessionActive(id string) bool
+}
+
+// autonomousRunsOf adapts a workspace to autonomousRuns. A workspace without a
+// runtime (tests, and the runtime-less phases below) yields an untyped nil rather
+// than an interface holding a nil *agent.Runtime — wrapping the typed nil would
+// pass the caller's nil check and then panic on the first method call.
+func autonomousRunsOf(wsp *workspace.Workspace) autonomousRuns {
+	if wsp == nil || wsp.Runtime == nil {
+		return nil
+	}
+	return wsp.Runtime
+}
+
 type sessionTeardownLock struct {
 	mu   sync.Mutex
 	refs int
@@ -116,7 +143,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 
 	// Phase 3: cancel the in-flight turn and WAIT for it to fully unwind (tears down the
 	// subprocess). If it will not stop in time, abort: unfreeze + resume, keep the session.
-	if err := s.stopInflightTurn(wsID, sessionID, time.Until(deadline)); err != nil {
+	if err := s.stopInflightTurn(wsID, sessionID, autonomousRunsOf(wsp), time.Until(deadline)); err != nil {
 		return nil, abort(err)
 	}
 
@@ -210,28 +237,54 @@ func (s *Server) finishSessionRuntime(wsp *workspace.Workspace, sessionID string
 // error only when a turn is still running after grace — the signal that it could not
 // be stopped. Loops so a straggler direct/autonomous run settling right after the
 // first is also caught; the frozen inbox guarantees no NEW queued turn starts meanwhile.
-func (s *Server) stopInflightTurn(wsID, sessionID string, grace time.Duration) error {
+//
+// Both registries are swept, because they are disjoint. chatRuns holds chat turns
+// plus the autonomous CLI turns that were given an Interaction endpoint
+// (autonomousInteraction registers those); an autonomous turn on a NATIVE provider —
+// or any CLI turn started while no Interaction URL was available — appears only in
+// the agent runtime's own registration list. Cancelling chatRuns alone therefore let
+// a scheduled/automation/autocontinue/flow turn keep running against a session the
+// delete was about to remove, writing into a deleted store.
+//
+// auto may be nil (workspace without a runtime): there is then no autonomous
+// registry to sweep, which is a real absence, not a swallowed failure.
+func (s *Server) stopInflightTurn(wsID, sessionID string, auto autonomousRuns, grace time.Duration) error {
 	deadline := time.Now().Add(grace)
 	for {
-		info, live := s.runs.sessionRunInfo(wsID, sessionID)
-		if !live {
+		// Cancel-all every pass, so a registration that appeared after the previous
+		// sweep is caught too; cancelling an already-cancelled context is a no-op.
+		if auto != nil {
+			auto.CancelSession(sessionID)
+		}
+		if info, live := s.runs.sessionRunInfo(wsID, sessionID); live {
+			// A run that vanished between the snapshot and the lookup finished on its
+			// own; fall through to the autonomous check.
+			if run := s.runs.get(info.RunID); run != nil {
+				run.cancel()
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
+				}
+				select {
+				case <-run.done:
+					// Re-check for a straggler run before declaring the session quiet.
+					continue
+				case <-time.After(remaining):
+					return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
+				}
+			}
+		}
+		if auto == nil || !auto.IsSessionActive(sessionID) {
 			return nil
 		}
-		run := s.runs.get(info.RunID)
-		if run == nil {
-			return nil // finished between the snapshot and the lookup
-		}
-		run.cancel()
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
+			return fmt.Errorf("autonomous turn on session %s did not stop within %s", sessionID, grace)
 		}
-		select {
-		case <-run.done:
-			// Re-check for a straggler run before declaring the session quiet.
-		case <-time.After(remaining):
-			return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
+		if remaining > sessionTeardownPoll {
+			remaining = sessionTeardownPoll
 		}
+		time.Sleep(remaining)
 	}
 }
 

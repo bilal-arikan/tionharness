@@ -90,8 +90,72 @@ func TestStopInflightTurn_Stops(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		s.runs.unregister("R1") // simulates the turn goroutine returning after cancel
 	}()
-	if err := s.stopInflightTurn("WS", "SES", 2*time.Second); err != nil {
+	if err := s.stopInflightTurn("WS", "SES", nil, 2*time.Second); err != nil {
 		t.Fatalf("want stopped, got error: %v", err)
+	}
+}
+
+// fakeAutonomousRuns stands in for the agent runtime's autonomous-turn registry:
+// it stays active until CancelSession is called, like a turn whose context cancel
+// makes its goroutine release the registration.
+type fakeAutonomousRuns struct {
+	mu        sync.Mutex
+	active    bool
+	stubborn  bool // ignores cancellation, like a turn that never unwinds
+	cancelled int
+}
+
+func (f *fakeAutonomousRuns) CancelSession(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancelled++
+	if !f.active {
+		return false
+	}
+	if !f.stubborn {
+		f.active = false
+	}
+	return true
+}
+
+func (f *fakeAutonomousRuns) IsSessionActive(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.active
+}
+
+func (f *fakeAutonomousRuns) calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cancelled
+}
+
+// TestStopInflightTurn_CancelsAutonomousRun: an autonomous turn (scheduler wake,
+// automation, autocontinue, flow) registers with the agent runtime, NOT in chatRuns
+// — on a native provider it never appears there at all. Teardown must cancel it too,
+// otherwise deleting the session leaves that turn running against a deleted store.
+func TestStopInflightTurn_CancelsAutonomousRun(t *testing.T) {
+	s := &Server{runs: newChatRuns()}
+	auto := &fakeAutonomousRuns{active: true}
+	if err := s.stopInflightTurn("WS", "SES", auto, 2*time.Second); err != nil {
+		t.Fatalf("want stopped, got error: %v", err)
+	}
+	if auto.calls() == 0 {
+		t.Fatal("teardown must cancel the session's autonomous turns")
+	}
+	if auto.IsSessionActive("SES") {
+		t.Fatal("autonomous run must not be active after teardown")
+	}
+}
+
+// TestStopInflightTurn_AutonomousTimeout: an autonomous turn that ignores its
+// cancellation is reported un-stoppable, so the delete aborts (fail closed) instead
+// of removing a session a live turn still writes to.
+func TestStopInflightTurn_AutonomousTimeout(t *testing.T) {
+	s := &Server{runs: newChatRuns()}
+	auto := &fakeAutonomousRuns{active: true, stubborn: true}
+	if err := s.stopInflightTurn("WS", "SES", auto, 50*time.Millisecond); err == nil {
+		t.Fatal("want a timeout error for an autonomous turn that never stops")
 	}
 }
 
@@ -101,7 +165,7 @@ func TestStopInflightTurn_Stops(t *testing.T) {
 func TestStopInflightTurn_Timeout(t *testing.T) {
 	s := &Server{runs: newChatRuns()}
 	s.runs.register("R1", "SES", "WS", func() {})
-	if err := s.stopInflightTurn("WS", "SES", 50*time.Millisecond); err == nil {
+	if err := s.stopInflightTurn("WS", "SES", nil, 50*time.Millisecond); err == nil {
 		t.Fatal("want a timeout error for a turn that never stops")
 	}
 }

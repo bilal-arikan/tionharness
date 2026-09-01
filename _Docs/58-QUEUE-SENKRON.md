@@ -648,7 +648,13 @@ closed** — canlı bir tur/subprocess durdurulamazsa delete 409 ile iptal edili
 tam olarak korunur (kuyruk geri yüklenir, worker devam eder). Sıra: kuyruğu `closing`
 bayrağıyla **dondur** (yeni dispatch durur ama mesajlar korunur) → Interaction MCP
 çağrı kapısını kapat (yeni CLI/bridge çağrıları `session closing` ile reddedilir) →
-uçuştaki turu iptal edip `run.done`'u bekle → provider finalizasyonundan sonra hâlâ
+uçuştaki turu iptal edip `run.done`'u bekle (yalnız `chatRuns` değil: aynı fazda
+`Runtime.CancelSession` ile ajan runtime'ının **otonom tur kayıtları** da süpürülür ve
+`IsSessionActive` yanlışa dönene kadar beklenir — otonom bir tur `chatRuns`'a ancak CLI
+sağlayıcı + Interaction endpoint varsa yazılır, yerel/native sağlayıcıda hiç görünmez,
+bu yüzden yalnız `chatRuns` iptali scheduled/automation/autocontinue/flow turlarını
+silinen session'a karşı koşar halde bırakıyordu; durmayan otonom tur da delete'i
+bloke eder) → provider finalizasyonundan sonra hâlâ
 yaşayan MCP çağrılarını delete context'iyle iptal edip bitmelerini bekle
 (`sessionTeardownGrace`=15sn tüm bu fazların ortak deadline'ıdır; bitmezse abort) → warm süreçleri
 **doğrulanmış kill** ile düşür (`DropSessionChecked`/`closeChecked`: öldürülemeyen süreç
