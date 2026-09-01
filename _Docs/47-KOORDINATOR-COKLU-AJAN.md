@@ -100,9 +100,11 @@ geri bildirim → koordinatör devam eder" halkası eksik.
    ayrı bağımsız bir oturum açar; sonuç orada kalır, koordinatörün oturumuna
    dönmez. `FireTurnFinished` yalnızca **yeni** bir oturum spawn edebiliyor
    (automation), var olan koordinatör oturumuna besleme yapamıyor.
-2. **Aynı oturumda eşzamanlı tur koruması YOK.** `activeSessions` (sync.Map,
-   `trackSession`/`untrackSession`) yalnız UI "çalışıyor" göstergesi — **kilit
-   değil**. 4 işçi aynı anda bitip koordinatöre `<task-notification>` yazıp tur
+2. **Aynı oturumda eşzamanlı tur koruması YOK.** `activeSessions` (bugün
+   `activeMu` altında oturum id → **kayıt listesi**; `trackSession` bir
+   `*sessionRun` tutamacı döndürür, `run.release()` yalnız o tutamacı siler)
+   yalnız UI "çalışıyor" göstergesi — **kilit değil**. 4 işçi aynı anda bitip
+   koordinatöre `<task-notification>` yazıp tur
    tetiklerse: iç içe geçmiş mesajlar + çift tur = yarış. **Per-session tur
    kuyruğu şart.**
 3. Koordinatör-farkında sistem promptu / işçi araç kısıtı yok.
@@ -813,8 +815,9 @@ yalnız `isSessionActive` (UI göstergesi, **kilit değil**) ile kontrol ediyord
 check-then-act TOCTOU: iki hızlı `send_to_worker` iki paralel `runWorker`
 başlatabilirdi. Çözüm: `runWorker` `claimSessionTurnSlot(workerSessionID)` (koordinatör
 slotundan ayrı, worker oturumu anahtarlı), `runSpawn` `claimSessionTurnSlot(sessionID)`
-alır → worker/spawn turları aynı oturumdaki her turla serileşir; `isSessionActive`
-hızlı-ret UX olarak kalır, slot gerçek garantidir. (Serileştirme primitifi
+alır → worker/spawn turları aynı oturumdaki her turla serileşir; meşgul göstergesi
+hızlı-ret UX olarak kalır (bugün `workerTurnActive`, o gün `isSessionActive`), slot
+gerçek garantidir. (Serileştirme primitifi
 `TestPlainSessionSerializesConcurrentTurns` ile doğrulanır; iki çağrı yeri onu kullanır.)
 
 Kalan kapsam dışı: `flow.go` (flow-run oturumları interaktif/otonom tur almaz).
@@ -831,22 +834,27 @@ Worker başına backpressure yoktu.
 `SendToWorker` artık:
 
 - Worker **boşsa** → mesajı hemen teslim eder (`dispatchWorkerTurn`), `SendResult{Delivered:true}`.
-- Worker **meşgulse** (`isSessionActive`) → mesajı kuyruğa park eder,
+- Worker **meşgulse** (`workerTurnActive`) → mesajı kuyruğa park eder,
   `SendResult{Queued:true, RunningForSeconds:...}` döner (koordinatör böylece
   worker'ın "meşgul, tıkalı değil" olduğunu görüp gereksiz `stop_worker`a
   yönelmez). Kuyruk **zaten doluysa** ikinci mesaj **net hata** ile reddedilir
   (worker başına yalnız bir bekleyen mesaj).
 
 **Teslim** worker tur-yaşam döngüsüne bağlıdır: `runWorker` en başta
-`defer r.drainWorkerQueue(...)` kaydeder → tüm slot release'leri ve
-`untrackSession`'dan **sonra** (LIFO) çalışır. `drainWorkerQueue` kuyruğu
+`defer r.drainWorkerQueue(...)` kaydeder → tüm slot release'leri ve turun kendi
+`run.release()` çağrısından **sonra** (LIFO) çalışır. `drainWorkerQueue` kuyruğu
 `workerQueueMu` altında pop eder ve varsa `dispatchWorkerTurn` ile sıradaki turu
 başlatır; teslim edilemezse (havuz/DB hatası) sessizce düşürmez, koordinatöre
 `failed` task-notification yollar.
 
 **Yarış güvenliği:** busy-check + enqueue tek kritik bölümde (`workerQueueMu`);
-`isSessionActive` drain'den **önce** false'a döndüğü için, kabul edilen her mesajı
-(active==true iken) drain kesinlikle görür — lost-update yok. Kuyruk erişimi hep
+`workerTurnActive` drain'den **önce** false'a döndüğü için, kabul edilen her mesajı
+(active==true iken) drain kesinlikle görür — lost-update yok. Kapı bilerek
+`isSessionActive` **değildir**: oturum başına kayıt listesiyle o gösterge, aynı
+oturumda kayıtlı yabancı bir tur varken de true kalır ve o pencerede kuyruklanan
+mesaj bir sonraki worker turuna kadar park ederdi; `workerTurnActive` yalnız
+`sessionRun.worker` etiketli kayıtları sayar, çünkü `drainWorkerQueue` yalnız
+worker turuyla eşleşir. Kuyruk erişimi hep
 mutex altında; TOCTOU'ya yer bırakılmaz. `dispatchWorkerTurn` üstündeki `workerRunFn`
 test tohumu, canlı sağlayıcı olmadan accept/refuse/deliver mantığını koşturur
 (`worker_queue_test.go`: busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen).
@@ -867,6 +875,35 @@ endpoint (`handleSessionCoordinatorTree`) her node için `HasQueuedMessage`'i
 (`IsSessionActive` gibi dışa-açık sarmalayıcı) okuyup `queued` alanı ekler; çalışan +
 bekleyen node'a küçük `Inbox` işareti + tooltip düşer. Böylece derin bir node'daki
 bekleyen mesaj kökten de görünür.
+
+### Aktif tur kaydı: oturum başına TEK kayıt değil, LİSTE
+
+`activeSessions` bir zamanlar `sync.Map` idi ve oturum başına **tek** bir
+`context.CancelFunc` tutuyordu: aynı oturumda ikinci bir tur açıldığında ilkinin
+kaydını eziyor, `CancelSession` de yalnız o son kaydı iptal ediyordu. Sonuç:
+"Durdur" bazen koşan turu değil, tur-slotu kuyruğunda bekleyen başka bir turu
+öldürüyordu.
+
+Bugünkü model (`internal/agent/runtime.go`):
+
+- `activeMu sync.Mutex` + `activeSessions map[string][]*sessionRun` — oturum
+  başına kayıt **listesi**.
+- `trackSession(id, cancel)` (ve worker turu için `trackWorkerSession`) bir
+  `*sessionRun` **tutamacı** döndürür. Kaydı bırakmak `run.release()` ile
+  yapılır ve **pointer kimliğiyle** yalnız o tutamacı siler — arkada kuyrukta
+  bekleyen başka bir turun kaydına dokunmaz.
+- `CancelSession` artık **cancel-all**: o oturuma kayıtlı HER turu iptal eder
+  (koşan tur + slot kuyruğunda bekleyenler). Tek üretim çağıranı insan "Durdur"
+  düğmesidir (`internal/api/inbox.go`) ve kastı budur.
+- `isSessionActive` = `len(list) > 0`.
+- Worker backpressure kapısı `isSessionActive` **değil** `workerTurnActive`
+  kullanır (yukarıdaki kuyruk bölümüne bakın).
+
+**Dikkat:** bu modelde kaçırılan bir release **kendini onarmaz**. Eski
+tek-kayıtlı modelde sonraki `Store` bayat kaydı eziyordu; listede bayat kayıt
+kalıcı olarak birikir ve oturum sonsuza dek "running" görünür. Her
+`trackSession`'ın eşleşen bir `release()`'i olmalı. Ayrıntı ve tur-slotu
+etkileşimi: `_Docs/58-QUEUE-SENKRON.md`.
 
 ---
 

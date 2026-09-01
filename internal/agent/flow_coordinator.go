@@ -102,8 +102,8 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	ctx = runCtx
-	r.trackSession(sess.ID, cancelRun)
-	defer r.untrackSession(sess.ID)
+	run := r.trackSession(sess.ID, cancelRun)
+	defer run.release()
 	// Announce it up front so the sidebar/executions feed shows the coordinator
 	// (and, through it, its workers) while the node is still running.
 	r.publish(events.Event{

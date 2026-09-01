@@ -157,6 +157,12 @@ type workerCtl struct {
 	teardown  atomic.Bool // reversible delete preparation; drain preserves queued work
 	startedAt time.Time
 	done      chan struct{}
+	// run is THIS worker turn's activeSessions registration (newWorkerRun). It rides
+	// on the ctl because the ctl already threads through every frame that has to
+	// release it (runWorkerRegistered → runWorkerWithCtl → drainWorkerQueue), so no
+	// signature grows. Nil for the workerRunFn test seam, which registers a bare ctl
+	// and never tracks the session; release() is nil-safe.
+	run *sessionRun
 }
 
 var errWorkerNotRunning = errors.New("worker is not running")
@@ -420,11 +426,13 @@ func (r *Runtime) coordSlotFor(coordSessionID string) *coordSlot {
 	return v.(*coordSlot)
 }
 
-// isSessionActive reports whether a session is currently running an autonomous
-// invoke (used by ListWorkers to distinguish running from finished workers).
+// isSessionActive reports whether a session holds at least one autonomous-turn
+// registration — running OR queued (used by ListWorkers to distinguish running
+// from finished workers).
 func (r *Runtime) isSessionActive(id string) bool {
-	_, ok := r.activeSessions.Load(id)
-	return ok
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	return len(r.activeSessions[id]) > 0
 }
 
 // IsSessionActive is isSessionActive for callers outside the package (the
@@ -870,10 +878,13 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	// message. The busy-check and the enqueue are done under workerQueueMu in one
 	// critical section so they stay atomic against drainWorkerQueue, which pops
 	// under the same mutex once the turn ends (see runWorker's deferred drain).
-	// isSessionActive flips false BEFORE that drain runs, so any message accepted
-	// here (active == true) is guaranteed to be seen by the drain — no lost update.
+	// The gate is workerTurnActive, not the generic isSessionActive: only a WORKER
+	// registration is paired with that drain, so only it guarantees a message
+	// accepted here is seen — a wake/user/peer turn registered on the same session
+	// would otherwise keep this branch taken after the drain already ran, parking
+	// the follow-up until some later worker turn.
 	r.workerQueueMu.Lock()
-	if r.isSessionActive(workerSessionID) {
+	if r.workerTurnActive(workerSessionID) {
 		queue := r.workerQueue[workerSessionID]
 		if len(queue) >= maxWorkerQueueDepth {
 			r.workerQueueMu.Unlock()
@@ -910,7 +921,7 @@ func (r *Runtime) deliverToWorker(ctx context.Context, workerSessionID, message 
 		return err
 	}
 	r.workerQueueMu.Lock()
-	if r.isSessionActive(workerSessionID) {
+	if r.workerTurnActive(workerSessionID) {
 		queue := r.workerQueue[workerSessionID]
 		if len(queue) >= maxWorkerQueueDepth {
 			r.workerQueueMu.Unlock()
@@ -995,7 +1006,8 @@ func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
 
 // drainWorkerQueue delivers a follow-up parked while the worker was mid-turn. It
 // runs as runWorker's LAST deferred action — after every slot release and after
-// untrackSession, so isSessionActive is already false and the delivery re-runs
+// the worker released its registration, so workerTurnActive is already false and
+// the delivery re-runs
 // the worker cleanly. The pop is done under workerQueueMu (the same mutex
 // SendToWorker enqueues under) so an enqueue that raced the turn end is either
 // fully visible here or already took the idle path. Runs on context.Background:
@@ -1273,8 +1285,8 @@ func (r *Runtime) newWorkerRun(workerSessionID string) (context.Context, context
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
 	ctl.setCancel(cancelRun)
+	ctl.run = r.trackWorkerSession(workerSessionID, cancelRun)
 	r.workerCancels.Store(workerSessionID, ctl)
-	r.trackSession(workerSessionID, cancelRun)
 	return runCtx, cancelRun, ctl
 }
 
@@ -1293,6 +1305,12 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// the global lifecycle slot. A parked follow-up can then start from an idle
 	// worker while shutdown still sees this goroutine as active. No-op when empty.
 	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID, ctl)
+	// Leak backstop, registered AFTER the drain defer so it runs BEFORE it: the
+	// worker's registration must be gone by the time the drain pops, otherwise a
+	// follow-up racing the drain is accepted into the queue and never delivered.
+	// The explicit releases below already do this at the old untrack points; this
+	// only covers the early returns. release is idempotent.
+	defer ctl.run.release()
 	// Released exactly once, and BEFORE the terminal notification rather than in a
 	// defer: NotifyCoordinator decides whether this is the last worker (and may fold
 	// the all-idle note into its message) by reading this counter, so a worker that
@@ -1330,7 +1348,7 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 		if rsErr := r.db.SetSessionRunState(bg, workerSessionID, turnStatusKilled, time.Now().Unix()); rsErr != nil {
 			r.logger.Error("worker: failed to persist killed state", "session", workerSessionID, "error", rsErr)
 		}
-		r.untrackSession(workerSessionID)
+		ctl.run.release()
 		r.emitWorkerEvent(agent, workerSessionID, coordSessionID, turnStatusKilled)
 		// The coordinator is waiting on this worker whatever happened to it, so the
 		// kill is reported like any other outcome — dropping it would freeze the
@@ -1377,7 +1395,7 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 			return r.runSessionTurn(turnCtx, agent, workerSessionID, p, true)
 		})
 	defer cancel()
-	r.untrackSession(workerSessionID)
+	ctl.run.release()
 
 	// Why the turn ended, independent of err: a watchdog cancellation (hard cap or
 	// idle) and the loop's own terminal markers (iteration cap, guardrail halt,
@@ -1836,8 +1854,8 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 	// drain's cancel — not a nil map entry (the same defect closed for spawn, worker,
 	// wake, scheduled, automation and peer inbox turns).
 	runCtx, cancelRun := context.WithCancel(context.Background())
-	r.trackSession(coordSessionID, cancelRun)
-	go r.drainCoordinator(coordSessionID, slot, runCtx, cancelRun)
+	run := r.trackSession(coordSessionID, cancelRun)
+	go r.drainCoordinator(coordSessionID, slot, runCtx, cancelRun, run)
 }
 
 // drainCoordinator runs coordinator turns until no more notifications are pending,
@@ -1850,23 +1868,25 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 // not after the whole drain. Nothing is lost by yielding; the notification that
 // re-armed us is persisted in history and slot.pending carries the intent.
 //
-// runCtx/cancelRun are the FIRST iteration's turn context, minted by the caller before
-// the `go` so a stop issued in the instant after enqueue still finds something to
-// cancel. Each later iteration mints its own; the drain owns the cleanup of whichever
-// pair it currently holds.
-func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc) {
+// runCtx/cancelRun/run are the FIRST iteration's turn context and its registration,
+// minted by the caller before the `go` so a stop issued in the instant after enqueue
+// still finds something to cancel. Each later iteration mints its own; the drain owns
+// the cleanup of whichever triple it currently holds. The handle is deliberately NOT
+// hoisted over the whole drain: an early iteration releasing a hoisted handle would
+// evict a later iteration's registration.
+func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun) {
 	// Ends the iteration's turn context and its cancel registration. Called on EVERY
 	// exit path and at the end of every iteration; nil-safe so the loop can re-arm.
-	// untrackSession runs BEFORE the slot is released: in the gap after a release
-	// another queued turn can take the slot and register its own cancel, and a late
-	// Delete would drop THAT registration, making a live turn unstoppable.
+	// The release runs BEFORE the slot is released: in the gap after a release another
+	// queued turn can take the slot and register its own cancel, and releasing by
+	// handle is what keeps this cleanup from touching THAT registration.
 	endTurnCtx := func() {
 		if cancelRun == nil {
 			return
 		}
-		r.untrackSession(coordSessionID)
+		run.release()
 		cancelRun()
-		runCtx, cancelRun = nil, nil
+		runCtx, cancelRun, run = nil, nil, nil
 	}
 	for {
 		slot.mu.Lock()
@@ -1900,7 +1920,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 			var c context.Context
 			c, cancelRun = context.WithCancel(context.Background())
 			runCtx = c
-			r.trackSession(coordSessionID, cancelRun)
+			run = r.trackSession(coordSessionID, cancelRun)
 		}
 
 		// Queue for the slot like everyone else. Whatever is ahead of us — a user
@@ -1944,7 +1964,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 		if r.coordRunFn != nil {
 			r.coordRunFn(coordSessionID)
 		} else {
-			r.runCoordinatorTurn(runCtx, coordSessionID)
+			r.runCoordinatorTurn(runCtx, coordSessionID, run)
 		}
 		// Neither call is deferred: this is a loop body that can iterate up to
 		// CoordinatorMaxTurns times, and a deferred release would hold the slot across
@@ -2103,8 +2123,9 @@ func toViewWorkers(ws []WorkerInfo) []view.Worker {
 // reply and fires the turn-finished hook (for tags/automations on the coordinator).
 // drainCtx is the drain iteration's cancellable context: created and registered with
 // trackSession by drainCoordinator BEFORE it queued for the turn slot, so a stop
-// issued while this turn was still waiting is not outlived by it.
-func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID string) {
+// issued while this turn was still waiting is not outlived by it. run is THAT
+// iteration's registration — never a handle hoisted over the whole drain.
+func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID string, run *sessionRun) {
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
@@ -2146,11 +2167,11 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 			return r.runSessionTurn(turnCtx, agent, coordSessionID, p, true)
 		})
 	defer cancel()
-	// Untracked HERE, not only by the drain loop afterwards: it is what keeps the
+	// Released HERE, not only by the drain loop afterwards: it is what keeps the
 	// record/publish tail below uncancellable. The drain's own endTurnCtx repeats it,
-	// which is safe (sync.Map.Delete is idempotent and the turn slot is still held, so
-	// no other turn can have registered its cancel in between).
-	r.untrackSession(coordSessionID)
+	// which is safe — removal is by pointer identity, so the second call finds nothing
+	// and touches no other turn's registration.
+	run.release()
 
 	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;
 	// lead it with the outcome note (nil error) so the recorded reply reads as a

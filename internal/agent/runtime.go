@@ -262,12 +262,20 @@ type Runtime struct {
 	// from its trace) can still tag those steps. See optimizer_log.go.
 	optLog optimizerLog
 
-	// activeSessions tracks sessions currently executing an autonomous invoke
-	// (schedule / wake / spawn / coordination). Keyed by session id; value is the
-	// context.CancelFunc of that turn, so CancelSession can stop it.
-	// Used by the executions feed to show a live "running" indicator for
-	// autonomous runs that aren't chat-streaming turns.
-	activeSessions sync.Map
+	// activeMu guards activeSessions, which tracks the sessions currently executing
+	// an autonomous invoke (schedule / wake / spawn / coordination). Keyed by session
+	// id; the value is EVERY registration that session currently holds, because each
+	// entry path registers its cancel func BEFORE it queues for the session's turn
+	// slot — so a running turn and a queued one coexist. CancelSession cancels all of
+	// them; a finishing turn removes only its own handle (see sessionRun.release).
+	// Used by the executions feed to show a live "running" indicator for autonomous
+	// runs that aren't chat-streaming turns.
+	//
+	// A plain mutex, not a sync.Map: with a per-session SET, a Load/append racing a
+	// Delete-when-empty would append to a detached slice nobody can cancel. These
+	// operations run once per TURN, so locking costs nothing measurable.
+	activeMu       sync.Mutex
+	activeSessions map[string][]*sessionRun
 
 	// spawnActive counts the spawned sessions currently running their background
 	// turn — the fire-and-forget concurrency guard (capped by SpawnMaxConcurrent).
@@ -317,13 +325,42 @@ type Runtime struct {
 }
 
 // sessionRun is one turn's registration in activeSessions. It exists for its
-// POINTER IDENTITY: activeSessions holds a single entry per session, and the
-// autonomous callers register their cancel func BEFORE queueing for the session's
-// turn slot — so while turn A runs, a queued turn B has already overwritten A's
-// entry with its own. A plain Delete on A's exit would drop B's registration and
-// leave a live turn unstoppable ("Durdur" answers 404). Untracking through the
-// handle deletes only the registration the caller itself made.
-type sessionRun struct{ cancel context.CancelFunc }
+// POINTER IDENTITY: a session holds one registration per turn, and the autonomous
+// callers register their cancel func BEFORE queueing for the session's turn slot —
+// so while turn A runs, a queued turn B is already registered alongside it. A
+// removal that named only the session would drop B's registration and leave a live
+// turn unstoppable ("Durdur" answers 404). Releasing through the handle removes
+// only the registration the caller itself made.
+//
+// CAUTION: a leaked handle no longer heals itself. Under the old single-entry map
+// the next turn's Store overwrote a stale entry; in the list it accumulates, and
+// the session then reads "running" forever — permanently busy agent, permanently
+// non-idle in the sessions view, and a permanently consumed coordinator subtree
+// slot (countsAgainstTreeBudget). Every trackSession call site MUST release on
+// every exit path; prefer `defer run.release()`.
+type sessionRun struct {
+	rt      *Runtime
+	id      string
+	cancel  context.CancelFunc
+	started time.Time // diagnostics only: how long this registration has been live
+	// worker marks a registration made for a WORKER turn (newWorkerRun). The
+	// send_to_worker backpressure gate keys off THIS rather than the generic
+	// "session has any registration": a wake/user/peer turn registered on the same
+	// worker session must not make a follow-up look queueable after the worker's
+	// own drain already ran. Written once under activeMu before the handle escapes.
+	worker bool
+}
+
+// release removes THIS registration from its session's list, leaving every other
+// turn's registration alone. Idempotent: releasing twice (the coordinator drain
+// releases the same handle from two frames) is a no-op the second time, because
+// removal is by pointer identity.
+func (run *sessionRun) release() {
+	if run == nil || run.rt == nil {
+		return
+	}
+	run.rt.untrackSessionRun(run.id, run)
+}
 
 // trackSession marks a session as actively running an autonomous invoke and
 // stores the cancel func of that turn's context, so the run can be stopped from
@@ -332,68 +369,125 @@ type sessionRun struct{ cancel context.CancelFunc }
 // cancelable context; a nil cancel would leave the session untoppable, so it
 // fails loudly here instead of being silently swallowed.
 //
-// The returned handle identifies THIS registration; pass it to untrackSessionRun
-// so the cleanup cannot evict a later turn's registration.
+// The returned handle identifies THIS registration; release it (run.release, or
+// untrackSessionRun) so the cleanup cannot evict a later turn's registration.
 func (r *Runtime) trackSession(id string, cancel context.CancelFunc) *sessionRun {
 	if cancel == nil {
 		panic("agent: trackSession requires a non-nil cancel func for session " + id)
 	}
-	run := &sessionRun{cancel: cancel}
-	r.activeSessions.Store(id, run)
+	run := &sessionRun{rt: r, id: id, cancel: cancel, started: time.Now()}
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	if r.activeSessions == nil {
+		r.activeSessions = make(map[string][]*sessionRun)
+	}
+	r.activeSessions[id] = append(r.activeSessions[id], run)
 	return run
 }
 
-// CancelSession cancels the in-flight autonomous turn of a session, if any.
-// Reports whether a running turn was found and cancelled.
-func (r *Runtime) CancelSession(id string) bool {
-	v, ok := r.activeSessions.Load(id)
-	if !ok {
-		return false
-	}
-	run, ok := v.(*sessionRun)
-	if !ok {
-		return false
-	}
-	run.cancel()
-	return true
+// trackWorkerSession is trackSession for a worker turn, tagging the registration so
+// workerTurnActive can tell it apart from a foreign turn opened on the same session.
+func (r *Runtime) trackWorkerSession(id string, cancel context.CancelFunc) *sessionRun {
+	run := r.trackSession(id, cancel)
+	r.activeMu.Lock()
+	run.worker = true
+	r.activeMu.Unlock()
+	return run
 }
 
-// untrackSession removes the running marker when an invoke finishes, whoever put
-// it there. Use it only where the caller provably owns the session's registration
-// for the whole window (a session it just created, or a turn that still holds the
-// turn slot); otherwise prefer untrackSessionRun.
-func (r *Runtime) untrackSession(id string) { r.activeSessions.Delete(id) }
+// workerTurnActive reports whether a WORKER turn currently holds a registration on
+// this session — running or queued. It is the backpressure gate behind
+// send_to_worker: a follow-up accepted while this is true is guaranteed to be seen
+// by drainWorkerQueue, because the worker releases its own registration BEFORE its
+// deferred drain runs. The generic isSessionActive cannot promise that any more:
+// with a per-turn list it stays true while some OTHER turn is registered, and a
+// message queued in that window would sit parked until the next worker turn.
+func (r *Runtime) workerTurnActive(id string) bool {
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	for _, run := range r.activeSessions[id] {
+		if run.worker {
+			return true
+		}
+	}
+	return false
+}
 
-// untrackSessionRun removes the marker only if it is still the one run registered,
-// so a turn that finished cannot evict the registration of a turn queued behind it.
+// CancelSession cancels EVERY autonomous turn registered for a session — the one
+// in flight and any queued behind it. Reports whether at least one registration
+// was found and cancelled.
+//
+// Cancel-all is what the single production caller means: the human "Durdur" button
+// (internal/api/inbox.go). Cancelling only the running turn would let the queued
+// one start the instant the slot frees, and cancelling only the newest one (the
+// pre-list behaviour) left the RUNNING turn alive while the transcript claimed it
+// had been stopped.
+func (r *Runtime) CancelSession(id string) bool {
+	r.activeMu.Lock()
+	runs := append([]*sessionRun(nil), r.activeSessions[id]...)
+	r.activeMu.Unlock()
+	// Cancel outside the lock: a cancel func may synchronously run deferred work
+	// that releases its own registration, which takes the same mutex.
+	for _, run := range runs {
+		run.cancel()
+	}
+	return len(runs) > 0
+}
+
+// untrackSession removes ALL of a session's registrations at once, whoever put
+// them there. It is a test/teardown helper only: production paths own exactly one
+// registration and must release it by handle, otherwise they evict the turns
+// queued behind them (that is the whole point of the per-turn list).
+func (r *Runtime) untrackSession(id string) {
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	delete(r.activeSessions, id)
+}
+
+// untrackSessionRun removes one registration by pointer identity, so a turn that
+// finished cannot evict the registration of a turn queued behind it. A nil run
+// falls back to removing all of them (the untrackSession semantics).
 func (r *Runtime) untrackSessionRun(id string, run *sessionRun) {
 	if run == nil {
-		r.activeSessions.Delete(id)
+		r.untrackSession(id)
 		return
 	}
-	r.activeSessions.CompareAndDelete(id, run)
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	list := r.activeSessions[id]
+	for i, cur := range list {
+		if cur != run {
+			continue
+		}
+		list = append(list[:i], list[i+1:]...)
+		if len(list) == 0 {
+			delete(r.activeSessions, id)
+		} else {
+			r.activeSessions[id] = list
+		}
+		return
+	}
 }
 
 // ActiveSessionIDs returns the session ids currently running autonomous invokes.
+// One id per session however many turns it has registered.
 func (r *Runtime) ActiveSessionIDs() []string {
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
 	var ids []string
-	r.activeSessions.Range(func(k, _ any) bool {
-		ids = append(ids, k.(string))
-		return true
-	})
+	for id := range r.activeSessions {
+		ids = append(ids, id)
+	}
 	return ids
 }
 
-// HasActiveSessions reports whether any autonomous invoke is in flight, stopping
-// at the first hit and allocating nothing — ActiveSessionIDs builds a slice the
-// activity poll immediately throws away, once per workspace per tick.
+// HasActiveSessions reports whether any autonomous invoke is in flight, allocating
+// nothing — ActiveSessionIDs builds a slice the activity poll immediately throws
+// away, once per workspace per tick.
 func (r *Runtime) HasActiveSessions() bool {
-	active := false
-	r.activeSessions.Range(func(_, _ any) bool {
-		active = true
-		return false // stop the walk
-	})
-	return active
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	return len(r.activeSessions) > 0
 }
 
 // SetPaused toggles this workspace's autonomy brake.

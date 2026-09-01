@@ -57,11 +57,11 @@ func TestSpawnCancelledWhileQueuedNeverRuns(t *testing.T) {
 	}
 	meta := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID}
 	runCtx, cancelRun := context.WithCancel(context.Background())
-	rt.trackSession(childID, cancelRun)
+	run := rt.trackSession(childID, cancelRun)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		rt.runSpawn(runCtx, cancelRun, a, childID, "Do the thing", SpawnOptions{ChildSession: &meta})
+		rt.runSpawn(runCtx, cancelRun, run, a, childID, "Do the thing", SpawnOptions{ChildSession: &meta})
 	}()
 
 	// Wait until the spawn turn is actually queued behind the holder, then stop it.

@@ -57,9 +57,9 @@ func TestSendToWorkerQueuesWhenBusy(t *testing.T) {
 	rt, coordID, workerID, delivered := queueTestFixture(t)
 	ctx := context.Background()
 
-	// Worker is mid-turn: isSessionActive == true, and a workerCtl so the elapsed
+	// Worker is mid-turn: workerTurnActive == true, and a workerCtl so the elapsed
 	// time is reported back.
-	rt.trackSession(workerID, func() {})
+	rt.trackWorkerSession(workerID, func() {})
 	rt.workerCancels.Store(workerID, &workerCtl{startedAt: time.Now().Add(-3 * time.Second)})
 
 	res, err := rt.SendToWorker(ctx, coordID, workerID, "second task")
@@ -90,7 +90,7 @@ func TestSendToWorkerAcceptsMultipleMessagesUpToLimit(t *testing.T) {
 	rt, coordID, workerID, _ := queueTestFixture(t)
 	ctx := context.Background()
 
-	rt.trackSession(workerID, func() {})
+	rt.trackWorkerSession(workerID, func() {})
 
 	for i, message := range []string{"first", "second", "third", "fourth"} {
 		res, err := rt.SendToWorker(ctx, coordID, workerID, message)
@@ -123,15 +123,16 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 	wa, _ := rt.db.GetAgent(ctx, agent.AgentID)
 
 	// Park a message while the worker is busy.
-	rt.trackSession(workerID, func() {})
+	workerRun := rt.trackWorkerSession(workerID, func() {})
 	for _, message := range []string{"first task", "second task", "third task"} {
 		if _, err := rt.SendToWorker(ctx, coordID, workerID, message); err != nil {
 			t.Fatalf("queue %q: %v", message, err)
 		}
 	}
 
-	// Turn ends: isSessionActive flips false (untrackSession), then the drain runs.
-	rt.untrackSession(workerID)
+	// Turn ends: workerTurnActive flips false (the worker released its own
+	// registration), then the drain runs.
+	workerRun.release()
 	rt.drainWorkerQueue(wa, workerID, coordID, &workerCtl{})
 
 	msg, ok := delivered()
@@ -153,7 +154,7 @@ func TestStopWorker_DropsQueuedFollowUpWithoutRestart(t *testing.T) {
 	ctx := context.Background()
 	ctl := &workerCtl{startedAt: time.Now(), done: make(chan struct{})}
 	rt.workerCancels.Store(workerID, ctl)
-	rt.trackSession(workerID, func() {})
+	workerRun := rt.trackWorkerSession(workerID, func() {})
 	if _, err := rt.SendToWorker(ctx, coordID, workerID, "must not restart"); err != nil {
 		t.Fatalf("queue follow-up: %v", err)
 	}
@@ -167,7 +168,7 @@ func TestStopWorker_DropsQueuedFollowUpWithoutRestart(t *testing.T) {
 	if !ctl.stopped.Load() {
 		t.Fatal("StopWorker did not mark control stopped")
 	}
-	rt.untrackSession(workerID)
+	workerRun.release()
 	workerSession, err := rt.db.GetSession(ctx, workerID)
 	if err != nil {
 		t.Fatalf("get worker: %v", err)

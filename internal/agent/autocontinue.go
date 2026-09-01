@@ -143,13 +143,17 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		// Own cancelable context per continuation turn so a human "Durdur"
 		// (CancelSession) can stop the autonomous loop mid-turn.
 		runCtx, cancelRun := context.WithCancel(ctx)
-		r.trackSession(sessionID, cancelRun)
+		// One registration PER ITERATION, released at the end of that iteration. It
+		// nests inside the outer scheduled/spawn/automation registration whose caller
+		// is still holding its own handle — two live entries for one logical run, which
+		// the per-turn list handles correctly (the outer one used to be silently
+		// overwritten here, and with it the only way to stop the outer turn).
 		turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(runCtx, kind), sessionID))
 		turnCtx, meta := WithTurnMeta(turnCtx)
 		turnStart := time.Now()
-		output, cSteps, err := r.runSessionTurn(turnCtx, agent, sessionID, nudge, true)
-		r.untrackSession(sessionID)
-		cancelRun()
+		output, cSteps, err := r.runTrackedContinuation(sessionID, cancelRun, func() (string, []TurnStep, error) {
+			return r.runSessionTurn(turnCtx, agent, sessionID, nudge, true)
+		})
 
 		if err != nil {
 			// A provider error or a daily-budget stop ends the loop; surface it inline
@@ -176,4 +180,18 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		steps = cSteps
 	}
 	r.logger.Info("auto-continue: reached max continuations", "session", sessionID, "agent", agent.ID, "max", max)
+}
+
+// runTrackedContinuation registers ONE auto-continue iteration's turn, runs it, and
+// releases that registration on the way out — including when the turn panics. The
+// release cannot be a plain deferred call in maybeAutoContinue: the registration is
+// per iteration, and a function-scoped defer would hold every iteration's handle until
+// the whole loop ends. With the per-turn registration list a missed release never heals
+// (nothing overwrites it any more): the session would read "running" forever and the
+// agent stay busy forever.
+func (r *Runtime) runTrackedContinuation(sessionID string, cancelRun context.CancelFunc, turn func() (string, []TurnStep, error)) (string, []TurnStep, error) {
+	run := r.trackSession(sessionID, cancelRun)
+	defer cancelRun()
+	defer run.release()
+	return turn()
 }

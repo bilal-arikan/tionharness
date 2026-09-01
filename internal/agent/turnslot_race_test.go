@@ -506,10 +506,10 @@ func waitForQueuedTurns(rt *Runtime, sessionID string, kind turnqueue.Kind, n in
 
 // TestFinishedTurnKeepsTheQueuedTurnsRegistration: the flip side of the four tests
 // above. Every autonomous entry path registers its cancel BEFORE it queues for the
-// session's turn slot, and activeSessions holds ONE entry per session — so while
-// turn A runs, turn B waiting behind it has already replaced A's registration with
-// its own. A's exit must therefore leave the marker alone: an unconditional untrack
-// (or one that lands after A released the slot) drops B's registration, and B then
+// session's turn slot — so while turn A runs, turn B waiting behind it is already
+// registered alongside it. A's exit must therefore leave B's entry alone: an
+// unconditional untrack (or one that lands after A released the slot) drops B's
+// registration, and B then
 // runs untracked — isSessionActive reads false and "Durdur" answers "not running"
 // for a turn that is very much alive.
 func TestFinishedTurnKeepsTheQueuedTurnsRegistration(t *testing.T) {
@@ -528,8 +528,9 @@ func TestFinishedTurnKeepsTheQueuedTurnsRegistration(t *testing.T) {
 	releaseHolder := rt.claimSessionTurnSlot(session.ID, turnqueue.KindUser, "test holder")
 	defer releaseHolder()
 
-	// Turn A gets its own parent context: CancelSession is session-wide and would
-	// only ever reach the LAST registration, so the test ends A through its own ctx.
+	// Turn A gets its own parent context: CancelSession is session-wide and now
+	// cancels EVERY registration, so ending A through CancelSession would take B
+	// down with it. The test ends A through its own ctx instead.
 	ctxA, cancelA := context.WithCancel(ctx)
 	defer cancelA()
 	aDone := make(chan struct{})

@@ -627,8 +627,8 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		// session-scoped tooling — the autonomous Interaction wiring above all —
 		// sees an empty session id and degrades to "unavailable".
 		ctx = WithSessionID(runCtx, sessionID)
-		r.trackSession(sessionID, cancelRun)
-		defer r.untrackSession(sessionID)
+		run := r.trackSession(sessionID, cancelRun)
+		defer run.release()
 		// Record the user turn AND announce the session up front, so the chat
 		// sidebar shows the run — with its input bubble — the instant it starts,
 		// not only after it finishes. The assistant reply is appended at the end

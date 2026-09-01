@@ -337,8 +337,8 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		// whole window uncancellable while the row already read "running", so a stop
 		// answered "already finished" for a run that kept going.
 		runCtx, cancelRun := context.WithCancel(context.Background())
-		r.trackSession(session.ID, cancelRun)
-		go r.runSpawn(runCtx, cancelRun, agent, session.ID, prompt, opts)
+		run := r.trackSession(session.ID, cancelRun)
+		go r.runSpawn(runCtx, cancelRun, run, agent, session.ID, prompt, opts)
 	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil
@@ -352,9 +352,15 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 // runCtx/cancelRun are created and REGISTERED by launchSpawn before this goroutine
 // starts (see trackSession there), so the run is cancellable from the instant
 // SpawnSession returns — including while it is still queued behind another turn.
-func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
+// run is THAT registration: releasing it by handle leaves any turn queued behind
+// this spawn on the same session still registered (and therefore still stoppable).
+func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun, agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
 	defer r.releaseSpawnSlot()
 	defer cancelRun()
+	// Backstop only: the two sites below release at the exact moment the old code
+	// untracked, so the timing of isSessionActive is unchanged. release is idempotent,
+	// and a registration that outlives this goroutine would now leak forever.
+	defer run.release()
 
 	// Hard wall-clock ceiling PLUS an idle watchdog (see withActivityTimeout): a
 	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
@@ -380,7 +386,7 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 				r.logger.Error("spawn: failed to persist killed state", "session", sessionID, "error", err)
 			}
 		}
-		r.untrackSession(sessionID)
+		run.release()
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
 		return
 	}
@@ -414,7 +420,7 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 			return r.invokeTraced(turnCtx, agent, p, true)
 		})
 	defer cancel()
-	r.untrackSession(sessionID)
+	run.release()
 
 	// Why the turn ended, independent of err: a spawn can be cut short and still
 	// return (text, nil) — claude-cli salvages the text captured before its

@@ -476,20 +476,60 @@ yolunda aynıdır:
 4. Turun çıkışta yaptığı untrack **kendi kaydına** dairdir ve slot bırakılmadan
    **önce** çalışır (bkz. aşağıdaki "Kaydın sahipliği").
 
-**Kaydın sahipliği (2026-09-01).** Kural 1'in doğrudan sonucu: `activeSessions`
-oturum başına **tek** kayıt tutar, ama her yol cancel'ını claim'den önce
-kaydettiği için A turu koşarken arkasında bekleyen B turu A'nın kaydını çoktan
-kendi kaydıyla **ezmiş** olur. A'nın çıkışta koşulsuz `Delete` yapması B'nin
-kaydını siler: B takipsiz koşar, `isSessionActive` `false` okur, "Durdur" ise
-"çalışmıyor" der. Bu yüzden `trackSession` artık kaydın **kimliğini** temsil eden
-bir `*sessionRun` tutamacı döndürür ve temizlik `untrackSessionRun(id, run)` ile
-yapılır — `sync.Map.CompareAndDelete`, yani yalnız kayıt hâlâ bizimken siler.
-Ayrıca untrack, slot `release`'inden **önce** çalışacak şekilde (yani `defer`
+**Kaydın sahipliği — kayıt LİSTESİ (2026-09-01).** Kural 1'in doğrudan sonucu:
+her yol cancel'ını claim'den önce kaydettiği için A turu koşarken arkasında
+bekleyen B turu da **aynı anda** kayıtlıdır. Bu yüzden `activeSessions` oturum
+başına tek kayıt değil, o oturumun **tüm turlarının kaydını** tutar:
+
+```go
+activeMu       sync.Mutex
+activeSessions map[string][]*sessionRun
+```
+
+`sync.Map` bilinçli olarak **bırakıldı**: küme + `sync.Map` bileşimi, X
+goroutine'inin listeyi `Load` etmesiyle Y'nin onu boş diye `Delete` etmesi
+arasında yarışır ve X kimsenin iptal edemeyeceği **kopuk** bir listeye ekleme
+yapar. Bu işlemler tur başına bir kez koştuğu için düz kilidin ölçülebilir
+maliyeti yoktur.
+
+- `trackSession(id, cancel) *sessionRun` — listeye ekler, tutamacı döndürür.
+- `run.release()` — **yalnız o tutamacı** (pointer kimliğiyle) listeden çıkarır;
+  liste boşalınca anahtarı siler. Idempotenttir, tercih edilen deyim
+  `defer run.release()`.
+- `isSessionActive(id)` = `len(list) > 0` — yani "çalışan **veya kuyrukta**
+  kayıtlı bir tur var".
+- `untrackSession(id)` artık "**hepsini** sil" demektir ve yalnız test/teardown
+  yardımcısıdır; üretim yolları kaydını tutamaçla bırakmak zorundadır.
+
+Untrack yine slot `release`'inden **önce** çalışacak şekilde (yani `defer`
 sırasında release'den **sonra** ilan edilerek) konumlandırılır: release ile
 untrack arasındaki boşlukta slotu kapan tur da aynı şekilde mağdur olurdu.
-`untrackSession(id)` (koşulsuz) yalnız çağıranın kaydın sahipliğini pencerenin
-tamamı boyunca kanıtlayabildiği yerlerde kalır — az önce kendi yarattığı bir
-oturum, veya slotu hâlâ elinde tutan bir tur.
+
+**`CancelSession` = hepsini iptal et.** Tek üretim çağıranı insanın "Durdur"
+düğmesidir (`internal/api/inbox.go`) ve anlamı "bu oturum çalışmayı bıraksın"dır.
+Yalnız koşanı iptal etmek kuyruktakini slot boşalır boşalmaz başlatırdı; yalnız
+**en yenisini** iptal etmek (liste öncesi davranış) ise koşan turu hayatta
+bırakıp transkripte "durduruldu" notu düşüyordu — bildirilen hata buydu. En az
+bir kayıt iptal edildiyse `true` döner (imza değişmedi). Sıralama özelliği
+korunur: drain her iterasyonda **taze** ctx mint ettiğinden, cancel-all yalnız o
+andaki kayıtlara dokunur.
+
+> ⚠️ **Kayıt sızıntısı artık KENDİNİ ONARMIYOR.** Eski tek-kayıt modelinde
+> kaçırılan bir untrack, sonraki turun `Store`'uyla üzerine yazılıp yok oluyordu.
+> Listede ise kalıcı birikir: oturum **sonsuza dek** "çalışıyor" okunur — ajan
+> kalıcı meşgul (`agent_busy.go`), oturum listesinde kalıcı non-idle ve
+> `countsAgainstTreeBudget` (`coordination.go`) kalıcı olarak bir koordinatör
+> alt-ağaç slotunu yer. Her `trackSession` sitesi **her çıkış yolunda** release
+> etmek zorundadır; tutamacın `started` alanı sıkışmış bir kaydın yaşını
+> tanılamak için tutulur.
+
+**Worker backpressure kapısı.** `send_to_worker`'ın "meşgul → kuyruğa park et"
+dalı artık jenerik `isSessionActive` yerine `workerTurnActive`'e bakar: yalnız
+**worker** kaydı (`newWorkerRun` → `trackWorkerSession`) `drainWorkerQueue` ile
+eşleşir ve worker kendi kaydını o drain'den **önce** bırakır. Liste modelinde
+jenerik predikat, aynı worker oturumuna açılmış yabancı bir tur (wake / kullanıcı
+/ peer) kayıtlıyken drain koştuktan sonra da `true` kalır ve park edilen takip
+mesajı onu boşaltacak kimse olmadan bekler — sessiz bir stall.
 
 Kapsanan yollar: worker (`coordination.go`), spawn (`spawn.go`), wake +
 scheduled prompt (`scheduler.go`), automation (`automation_deliver.go`), peer
@@ -512,7 +552,16 @@ iterasyon kendi ctx'ini mint eder. Tek ctx tüm drain'e yayılamaz: bir Stop
 sonraki iterasyonun claim'ini de öldürür ve "gerçek worker bildirimi önceki
 insan Stop'unu geçersizler" kuralı bozulurdu. `endTurnCtx` `release`'den
 **önce** çağrılır; ters sırada boşluğa giren başka bir tur kendi cancel'ını
-kaydeder ve geç kalan `untrackSession` onu siler → canlı tur durdurulamaz olur.
+kaydeder ve geç kalan bir untrack onu silerdi → canlı tur durdurulamaz olurdu.
+Drain **bir dizi** kaydın sahibidir: ilk iterasyonunki
+`enqueueCoordinatorTurn`'de mint edilir, her re-arm kendi tutamacını alır.
+`endTurnCtx` tutamacı `release()` edip `cancelRun` ile birlikte `nil`'ler; tek
+bir tutamaç asla tüm drain'e yayılmaz (erken bir iterasyonun release'i sonraki
+iterasyonun kaydını tahliye ederdi — bir üst seviyede aynı kusur).
+`runCoordinatorTurn` da aynı tutamacı parametre olarak alır ve kayıt/publish
+kuyruğunu iptal edilemez tutmak için onu kendisi bırakır; drain'in `endTurnCtx`
+çağrısının bunu tekrarlaması zararsızdır (kimliğe göre silme → ikincisi hiçbir
+şey bulmaz).
 
 Claim'de durdurulan drain'in bail'i: `turns++` **atlanır** (koşmayan tur bütçe
 harcamaz), `pending` **korunur** (bildirimi tüketmez; sonraki
