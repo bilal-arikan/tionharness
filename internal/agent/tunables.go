@@ -39,6 +39,11 @@ const DefaultCoordinatorStallHaltTotal = 3
 // abandoned coordinator for long; the independent staleness sweeper remains active.
 const DefaultCoordinatorWorkerNoteGrace = 5 * time.Minute
 
+// DefaultCoordinatorWorkerBatchWindow is the fixed coalescing window opened by
+// the first worker note in a batch. It is deliberately separate from the
+// five-minute stall-guard grace period above.
+const DefaultCoordinatorWorkerBatchWindow = 5 * time.Second
+
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
 // burst of spawns can neither pin unbounded goroutines nor fan a single turn out
 // into a spawn storm.
@@ -197,6 +202,7 @@ type Tunables struct {
 	coordStallSweepMin   int           // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
 	coordStallMaxNudges  int           // 0 → DefaultCoordinatorStallMaxNudges
 	coordWorkerNoteGrace time.Duration // 0 → DefaultCoordinatorWorkerNoteGrace
+	coordWorkerBatch     time.Duration // 0 → DefaultCoordinatorWorkerBatchWindow; <0 disables batching
 	// coordStallHaltTotal is the CUMULATIVE (persisted) stall count that hard-halts a
 	// coordinator even when its in-memory streak keeps being reset. <0 →
 	// DefaultCoordinatorStallHaltTotal; 0 disables this tier.
@@ -822,6 +828,27 @@ func (t *Tunables) CoordinatorWorkerNoteGrace() time.Duration {
 		return DefaultCoordinatorWorkerNoteGrace
 	}
 	return t.coordWorkerNoteGrace
+}
+
+// SetCoordinatorWorkerBatchWindow configures worker-note coalescing. Zero selects
+// the production default; a negative duration disables the wait for tests.
+func (t *Tunables) SetCoordinatorWorkerBatchWindow(window time.Duration) {
+	t.mu.Lock()
+	t.coordWorkerBatch = window
+	t.mu.Unlock()
+}
+
+// CoordinatorWorkerBatchWindow returns the first-note batching window.
+func (t *Tunables) CoordinatorWorkerBatchWindow() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordWorkerBatch == 0 {
+		return DefaultCoordinatorWorkerBatchWindow
+	}
+	if t.coordWorkerBatch < 0 {
+		return 0
+	}
+	return t.coordWorkerBatch
 }
 
 // SetCoordinatorStallHaltTotal configures the cumulative-count halt tier: the

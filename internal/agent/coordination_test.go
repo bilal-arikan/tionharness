@@ -44,6 +44,7 @@ func TestCountToolSteps(t *testing.T) {
 // are already persisted, so the next turn sees them all).
 func TestCoordinatorQueueSerializesAndCoalesces(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	concurrent, maxConcurrent, turns := 0, 0, 0
@@ -65,13 +66,13 @@ func TestCoordinatorQueueSerializesAndCoalesces(t *testing.T) {
 	}
 
 	// First enqueue starts turn 1.
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	<-started
 
 	// Two more notifications arrive WHILE turn 1 runs → they must coalesce (pending),
 	// not spawn new turns.
-	rt.enqueueCoordinatorTurn("COORD")
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
+	rt.enqueueCoordinatorTurn(coord)
 
 	// Let turn 1 finish; the pending flag triggers exactly one follow-up (turn 2).
 	release <- struct{}{}
@@ -107,6 +108,7 @@ func TestCoordinatorQueueSerializesAndCoalesces(t *testing.T) {
 // coalesced follow-up turn.
 func TestUserTurnBlocksAutoTurnsAndDrainsPending(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	turns := 0
@@ -116,11 +118,11 @@ func TestUserTurnBlocksAutoTurnsAndDrainsPending(t *testing.T) {
 		mu.Unlock()
 	}
 
-	release := rt.BeginSessionUserTurn("COORD")
+	release := rt.BeginSessionUserTurn(coord)
 
 	// Two notifications land mid-user-turn: no auto turn may start.
-	rt.enqueueCoordinatorTurn("COORD")
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
+	rt.enqueueCoordinatorTurn(coord)
 	time.Sleep(50 * time.Millisecond)
 	mu.Lock()
 	if turns != 0 {
@@ -158,6 +160,7 @@ func TestUserTurnBlocksAutoTurnsAndDrainsPending(t *testing.T) {
 // auto-turn cap (human back in the loop).
 func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	started := make(chan struct{})
 	releaseAuto := make(chan struct{})
@@ -167,17 +170,17 @@ func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
 	}
 
 	// Pre-load cap state to verify the reset.
-	slot := rt.coordSlotFor("COORD")
+	slot := rt.coordSlotFor(coord)
 	slot.mu.Lock()
 	slot.turns = 40
 	slot.capWarn = true
 	slot.mu.Unlock()
 
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	<-started
 
 	acquired := make(chan func(), 1)
-	go func() { acquired <- rt.BeginSessionUserTurn("COORD") }()
+	go func() { acquired <- rt.BeginSessionUserTurn(coord) }()
 
 	select {
 	case <-acquired:
@@ -208,6 +211,7 @@ func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
 // old coordinator-only gate that returned a no-op for plain sessions is gone).
 func TestClaimSessionTurnSlot(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	turns := 0
@@ -215,12 +219,12 @@ func TestClaimSessionTurnSlot(t *testing.T) {
 
 	// Slot is claimed for an autonomous turn — a notification must fall into
 	// pending, and the cap state must survive (autonomous claim does not reset it).
-	slot := rt.coordSlotFor("COORD")
+	slot := rt.coordSlotFor(coord)
 	slot.mu.Lock()
 	slot.turns = 7
 	slot.mu.Unlock()
-	release := rt.claimSessionTurnSlot("COORD", turnqueue.KindWake, "uyandırma")
-	rt.enqueueCoordinatorTurn("COORD")
+	release := rt.claimSessionTurnSlot(coord, turnqueue.KindWake, "uyandırma")
+	rt.enqueueCoordinatorTurn(coord)
 	time.Sleep(50 * time.Millisecond)
 	mu.Lock()
 	if turns != 0 {
@@ -649,16 +653,17 @@ func waitTurns(t *testing.T, mu *sync.Mutex, turns *int, want int, what string) 
 func TestIdleReconcileDoesNotRunStandaloneTurn(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	defer drainSpawns(t, rt)
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	turns := 0
 	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
 
-	slot := rt.coordSlotFor("COORD")
+	slot := rt.coordSlotFor(coord)
 	slot.markHadWorkers() // simulate a coordinator that has spawned worker(s), now all done
 
 	// One notification produces exactly one processing turn.
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	waitTurns(t, &mu, &turns, 1, "single process")
 
 	// One-shot: no further idle turn may appear without a new notification.
@@ -671,7 +676,7 @@ func TestIdleReconcileDoesNotRunStandaloneTurn(t *testing.T) {
 	}
 
 	// A new notification still produces its own normal processing turn.
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	waitTurns(t, &mu, &turns, 2, "second process")
 }
 
@@ -683,8 +688,9 @@ func TestIdleReconcileDoesNotRunStandaloneTurn(t *testing.T) {
 func TestUserStopSkipsIdleReconcile(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	defer drainSpawns(t, rt)
+	coord := newTestCoordinator(t, rt, 0)
 
-	slot := rt.coordSlotFor("COORD")
+	slot := rt.coordSlotFor(coord)
 	slot.markHadWorkers() // all workers done → the idle sweep WOULD normally fire
 
 	var mu sync.Mutex
@@ -700,7 +706,7 @@ func TestUserStopSkipsIdleReconcile(t *testing.T) {
 		slot.mu.Unlock()
 	}
 
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	waitTurns(t, &mu, &turns, 1, "single stopped turn")
 
 	// No idle-reconcile turn may follow the stop, and the flag must be consumed.
@@ -720,13 +726,13 @@ func TestUserStopSkipsIdleReconcile(t *testing.T) {
 	if pending || driving {
 		t.Fatalf("drain loop must exit clean after a Stop; pending=%v driving=%v", pending, driving)
 	}
-	if rt.sessionTurnBusy("COORD") {
+	if rt.sessionTurnBusy(coord) {
 		t.Fatal("the admission slot must be free once the drain exits")
 	}
 
 	// A later worker notification must still re-arm the loop (Stop is not permanent).
 	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	waitTurns(t, &mu, &turns, 2, "re-armed process after stop")
 }
 
@@ -736,8 +742,9 @@ func TestUserStopSkipsIdleReconcile(t *testing.T) {
 // running worker continues to drive the coordinator through a Stop.
 func TestUserStopHonoursPendingWorker(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
-	slot := rt.coordSlotFor("COORD")
+	slot := rt.coordSlotFor(coord)
 	slot.markHadWorkers()
 	slot.workers.Add(1) // a worker is still running through the Stop
 
@@ -752,12 +759,12 @@ func TestUserStopHonoursPendingWorker(t *testing.T) {
 			// The user stops the live turn AND a worker notification lands in the same window.
 			slot.mu.Lock()
 			slot.stopRequested = true
-			slot.pending = true
 			slot.mu.Unlock()
+			rt.enqueueCoordinatorWorkerTurn(coord, false)
 		}
 	}
 
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	// The pending worker notification supersedes the Stop → a 2nd turn runs.
 	waitTurns(t, &mu, &turns, 2, "pending worker turn must survive a Stop")
 
@@ -776,12 +783,13 @@ func TestUserStopHonoursPendingWorker(t *testing.T) {
 // yields exactly one turn.
 func TestIdleReconcileSkippedWithoutWorkers(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	turns := 0
 	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
 
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	waitTurns(t, &mu, &turns, 1, "single turn, no reconcile")
 	time.Sleep(200 * time.Millisecond)
 	mu.Lock()

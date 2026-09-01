@@ -34,6 +34,7 @@ func waitForTurnWaiters(t *testing.T, rt *Runtime, sessionID string, n int) {
 // it simply runs after the human.
 func TestCoordinatorYieldsSlotToWaitingTurn(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	autoTurns := 0
@@ -50,21 +51,21 @@ func TestCoordinatorYieldsSlotToWaitingTurn(t *testing.T) {
 		}
 	}
 
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 	<-inTurn // the first auto turn holds the slot
 
 	// The user's queued message arrives mid-turn and joins the FIFO...
 	userRan := make(chan struct{})
 	go func() {
-		rel := rt.BeginSessionUserTurn("COORD")
+		rel := rt.BeginSessionUserTurn(coord)
 		close(userRan)
 		rel()
 	}()
-	waitForTurnWaiters(t, rt, "COORD", 1)
+	waitForTurnWaiters(t, rt, coord, 1)
 
 	// ...and a worker notification lands too, which re-arms the drain for another
 	// auto-turn. It must NOT overtake the user.
-	rt.enqueueCoordinatorTurn("COORD")
+	rt.enqueueCoordinatorTurn(coord)
 
 	close(proceed)
 
@@ -96,6 +97,7 @@ func TestCoordinatorYieldsSlotToWaitingTurn(t *testing.T) {
 // never runs concurrently.
 func TestUserTurnBlocksCoordinatorTurn(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
 
 	var mu sync.Mutex
 	turns := 0
@@ -105,9 +107,9 @@ func TestUserTurnBlocksCoordinatorTurn(t *testing.T) {
 		mu.Unlock()
 	}
 
-	release := rt.BeginSessionUserTurn("COORD")
-	rt.enqueueCoordinatorTurn("COORD")
-	waitForTurnWaiters(t, rt, "COORD", 1)
+	release := rt.BeginSessionUserTurn(coord)
+	rt.enqueueCoordinatorTurn(coord)
+	waitForTurnWaiters(t, rt, coord, 1)
 
 	mu.Lock()
 	n := turns

@@ -45,14 +45,23 @@ const maxWorkerQueueDepth = 4
 // without the turn lock).
 type coordSlot struct {
 	mu sync.Mutex
+	// admission serializes worker-note persistence/arming with the drain's final
+	// turn-start gate. Lock order is admission, then mu; neither durable writes nor
+	// coordinator turns run while mu is held.
+	admission chan struct{}
 	// driving marks that a drainCoordinator goroutine owns this coordinator's
 	// auto-turn loop. It is NOT "a turn is running" (ask the queue for that): it
 	// exists so concurrent notifications coalesce into the ONE loop instead of
 	// starting a second one.
-	driving    bool
-	pending    bool // >=1 notification arrived mid-turn; run once more after
-	ackedIdle  bool // claimed the all-idle signal for this worker wave
-	hadWorkers bool // at least one worker was ever spawned (gates the idle sweep)
+	driving bool
+	// pending is an immediate/generic wake. workerPending has its own fixed
+	// first-arrival deadline so flow starts, recovery and stall nudges never wait.
+	pending        bool
+	workerPending  bool
+	workerDeadline time.Time
+	wake           chan struct{}
+	ackedIdle      bool // claimed the all-idle signal for this worker wave
+	hadWorkers     bool // at least one worker was ever spawned (gates the idle sweep)
 	// idleFolded marks that the CURRENT all-idle transition was already reported by
 	// piggybacking <coordination-status> onto the last worker's own notification, so
 	// the coordinator learns the result and "everyone is done" in a single turn.
@@ -427,8 +436,26 @@ func formatWorkerList(ws []WorkerInfo) string {
 
 // coordSlotFor returns (creating if needed) the slot for a coordinator session.
 func (r *Runtime) coordSlotFor(coordSessionID string) *coordSlot {
-	v, _ := r.coordSlots.LoadOrStore(coordSessionID, &coordSlot{})
+	created := &coordSlot{
+		admission: make(chan struct{}, 1),
+		wake:      make(chan struct{}, 1),
+	}
+	created.admission <- struct{}{}
+	v, _ := r.coordSlots.LoadOrStore(coordSessionID, created)
 	return v.(*coordSlot)
+}
+
+// acquireCoordinatorAdmission blocks until this caller owns the session's coordinator
+// admission token and returns its release. Worker-note persistence and the drain's
+// turn-start gate share the token, so a note that lands before the gate is either
+// consumed by the turn about to run or stays armed for a later one.
+func acquireCoordinatorAdmission(ctx context.Context, slot *coordSlot) (func(), error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-slot.admission:
+		return func() { slot.admission <- struct{}{} }, nil
+	}
 }
 
 // isSessionActive reports whether a session holds at least one autonomous-turn
@@ -1692,7 +1719,24 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 			"coordinator", coordSessionID, "bytes", len(note), "max", r.tun.AgentMessageMaxBytes())
 		note = capped
 	}
+	stepsJSON := ""
+	if len(steps) > 0 {
+		encoded, err := json.Marshal(steps)
+		if err != nil {
+			r.logger.Error("coordination: failed to encode worker steps", "coordinator", coordSessionID, "error", err)
+			return fmt.Errorf("encode worker steps: %w", err)
+		}
+		stepsJSON = string(encoded)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	slot := r.coordSlotFor(coordSessionID)
+	releaseAdmission, err := acquireCoordinatorAdmission(ctx, slot)
+	if err != nil {
+		return fmt.Errorf("acquire coordinator admission: %w", err)
+	}
+	defer releaseAdmission()
+
 	slot.mu.Lock()
 	// Fold the all-idle signal into THIS notification when it is the last worker's,
 	// so the coordinator gets the final result and "everyone is done" in one turn
@@ -1712,17 +1756,6 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 	}
 	slot.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	stepsJSON := ""
-	if len(steps) > 0 {
-		encoded, err := json.Marshal(steps)
-		if err != nil {
-			cancel()
-			r.logger.Error("coordination: failed to encode worker steps", "coordinator", coordSessionID, "error", err)
-			return fmt.Errorf("encode worker steps: %w", err)
-		}
-		stepsJSON = string(encoded)
-	}
 	if _, err := r.recordInjectedUserMessage(ctx, db.Message{
 		SessionID: coordSessionID,
 		Role:      "user",
@@ -1730,7 +1763,6 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 		Text:      note,
 		Steps:     stepsJSON,
 	}); err != nil {
-		cancel()
 		// The fold is only valid if the note carrying it actually reached history.
 		// Give the claim back so a later real notification may claim this transition.
 		if folded {
@@ -1742,7 +1774,10 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 		r.logger.Error("coordination: failed to persist task-notification", "coordinator", coordSessionID, "worker", terminalWorkerSessionID, "error", err)
 		return fmt.Errorf("persist task-notification: %w", err)
 	}
-	cancel()
+	persistedAt := time.Now()
+	if r.coordAfterWorkerNotePersist != nil {
+		r.coordAfterWorkerNotePersist(coordSessionID)
+	}
 	var archiveErr error
 	if terminalWorkerSessionID != "" {
 		if err := r.db.SetSessionState(context.Background(), terminalWorkerSessionID, "archived"); err != nil {
@@ -1750,7 +1785,7 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 			r.logger.Error("coordination: failed to archive terminal worker session", "coordinator", coordSessionID, "worker", terminalWorkerSessionID, "error", err)
 		}
 	}
-	r.enqueueCoordinatorTurnKeepingIdleAck(coordSessionID, folded)
+	r.enqueueCoordinatorWorkerTurnAt(coordSessionID, folded, persistedAt)
 	return archiveErr
 }
 
@@ -1864,10 +1899,8 @@ func (r *Runtime) emitInjectedUserNote(sessionID string, msg db.Message) {
 // The per-session turn lock itself lives in turnslot.go / internal/turnqueue; this
 // file only decides WHETHER the coordinator wants another turn.
 
-// enqueueCoordinatorTurn schedules one coordinator turn. If a drain loop already
-// owns this coordinator it just flags pending — that loop will run once more and
-// see the freshly-persisted notification in history (coalescing). Otherwise it
-// starts the loop, which queues for the session's turn slot like any other caller.
+// enqueueCoordinatorTurn schedules an immediate coordinator turn for generic
+// wake sources such as flow start, recovery, resume and stall nudges.
 func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 	r.enqueueCoordinatorTurnKeepingIdleAck(coordSessionID, false)
 }
@@ -1878,6 +1911,20 @@ func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 // it the default re-arm below would clear the ackedIdle that notification just
 // claimed, allowing a later notification from the same wave to duplicate it.
 func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, keepIdleAck bool) {
+	r.enqueueCoordinatorWake(coordSessionID, keepIdleAck, false, time.Time{})
+}
+
+// enqueueCoordinatorWorkerTurn opens a fixed batching window on the first worker
+// note. Later notes join that batch without moving its deadline.
+func (r *Runtime) enqueueCoordinatorWorkerTurn(coordSessionID string, keepIdleAck bool) {
+	r.enqueueCoordinatorWorkerTurnAt(coordSessionID, keepIdleAck, time.Now())
+}
+
+func (r *Runtime) enqueueCoordinatorWorkerTurnAt(coordSessionID string, keepIdleAck bool, persistedAt time.Time) {
+	r.enqueueCoordinatorWake(coordSessionID, keepIdleAck, true, persistedAt)
+}
+
+func (r *Runtime) enqueueCoordinatorWake(coordSessionID string, keepIdleAck, worker bool, persistedAt time.Time) {
 	// Archive is a HARD stop on automatic turns, and it has to be enforced here --
 	// the wake entry point -- not only in RecoverOrphanedTurns. WHY: on 2026-08-27
 	// archiving the three runaway coordinators in WS5 was not enough. Their orphaned
@@ -1910,8 +1957,19 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 	if !keepIdleAck && !slot.idleFolded {
 		slot.ackedIdle = false
 	}
-	if slot.driving {
+	if worker {
+		if !slot.workerPending {
+			slot.workerPending = true
+			slot.workerDeadline = persistedAt.Add(r.tun.CoordinatorWorkerBatchWindow())
+		}
+	} else {
 		slot.pending = true
+	}
+	select {
+	case slot.wake <- struct{}{}:
+	default:
+	}
+	if slot.driving {
 		slot.mu.Unlock()
 		return
 	}
@@ -1923,18 +1981,92 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 	// wake, scheduled, automation and peer inbox turns).
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	run := r.trackSession(coordSessionID, cancelRun)
-	go r.drainCoordinator(coordSessionID, slot, runCtx, cancelRun, run)
+	// startCoordinatorDrain refuses once CloseMCP has begun draining. The arming state
+	// and the registration we just minted must then be undone, or the slot stays
+	// "driving" with no goroutine to drive it and the session looks active forever.
+	if !r.startCoordinatorDrain(coordSessionID, slot, runCtx, cancelRun, run) {
+		run.release()
+		cancelRun()
+		r.clearCoordinatorDrain(slot)
+	}
 }
 
-// drainCoordinator runs coordinator turns until no more notifications are pending,
-// bounded by CoordinatorMaxTurns (the notify-loop guard). Each iteration runs one
-// history-aware turn that sees every notification persisted so far.
+func (r *Runtime) clearCoordinatorDrain(slot *coordSlot) {
+	slot.mu.Lock()
+	r.clearCoordinatorDrainLocked(slot)
+	slot.mu.Unlock()
+}
+
+func (r *Runtime) clearCoordinatorDrainLocked(slot *coordSlot) {
+	slot.pending = false
+	slot.workerPending = false
+	slot.workerDeadline = time.Time{}
+	slot.stopRequested = false
+	slot.driving = false
+}
+
+// waitCoordinatorBatch waits outside admission. Generic wakes interrupt the
+// timer; worker wakes only cause a deadline recheck and never extend it.
+func (r *Runtime) waitCoordinatorBatch(ctx context.Context, slot *coordSlot) bool {
+	for {
+		slot.mu.Lock()
+		if slot.stallHalted {
+			r.clearCoordinatorDrainLocked(slot)
+			slot.mu.Unlock()
+			return false
+		}
+		if slot.pending {
+			slot.mu.Unlock()
+			return true
+		}
+		if !slot.workerPending {
+			r.clearCoordinatorDrainLocked(slot)
+			slot.mu.Unlock()
+			return false
+		}
+		wait := time.Until(slot.workerDeadline)
+		slot.mu.Unlock()
+		if wait <= 0 {
+			return true
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			slot.mu.Lock()
+			r.clearCoordinatorDrainLocked(slot)
+			slot.mu.Unlock()
+			return false
+		case <-slot.wake:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		case <-timer.C:
+			return true
+		}
+	}
+}
+
+// drainCoordinator runs coordinator turns until no more wakes are pending,
+// bounded by CoordinatorMaxTurns. Worker batching never holds admission.
 //
 // The loop re-enters the session's admission queue EVERY iteration rather than
 // holding the slot across the drain. That is the fairness property: a message the
 // user queued mid-drain is already in the FIFO, so it runs after the current turn —
-// not after the whole drain. Nothing is lost by yielding; the notification that
-// re-armed us is persisted in history and slot.pending carries the intent.
+// not after the whole drain. Nothing is lost by yielding; wake intent is tracked
+// separately for immediate work and fixed-deadline worker batches.
+//
+// ctx is the RUNTIME-scoped coordinator context (CloseMCP cancels it). It bounds the
+// batch wait, the admission wait and the session read — the parts that must end when
+// the workspace shuts down, not when one turn is stopped.
 //
 // runCtx/cancelRun/run are the FIRST iteration's turn context and its registration,
 // minted by the caller before the `go` so a stop issued in the instant after enqueue
@@ -1942,7 +2074,7 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 // the cleanup of whichever triple it currently holds. The handle is deliberately NOT
 // hoisted over the whole drain: an early iteration releasing a hoisted handle would
 // evict a later iteration's registration.
-func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun) {
+func (r *Runtime) drainCoordinator(ctx context.Context, coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun) {
 	// Ends the iteration's turn context and its cancel registration. Called on EVERY
 	// exit path and at the end of every iteration; nil-safe so the loop can re-arm.
 	// The release runs BEFORE the slot is released: in the gap after a release another
@@ -1957,28 +2089,16 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 		runCtx, cancelRun, run = nil, nil, nil
 	}
 	for {
-		slot.mu.Lock()
-		// A selected recipe (M5) may lower/raise the notify-loop cap for just this
-		// coordinator session; fall back to the workspace default when unset (0).
-		maxTurns := r.tun.CoordinatorMaxTurns()
-		if sess, err := r.db.GetSession(context.Background(), coordSessionID); err == nil && sess.CoordinatorMaxTurns > 0 {
-			maxTurns = sess.CoordinatorMaxTurns
-		}
-		if slot.turns >= maxTurns {
-			warn := !slot.capWarn
-			slot.capWarn = true
-			slot.pending = false
-			slot.driving = false
-			slot.mu.Unlock()
-			// The first iteration inherits a live ctx from the caller; leaving it tracked
-			// would keep the session listed as active forever.
+		// Batch worker replies OUTSIDE admission: the first worker note opens a fixed
+		// window and every note landing inside it joins the same turn without moving the
+		// deadline. A generic wake (flow start, resume, stall nudge) skips the wait.
+		// A false return means nothing is owed any more and the slot is already cleared,
+		// so the iteration's registration has to be released here too — leaving it
+		// tracked would keep the session listed as active forever.
+		if !r.waitCoordinatorBatch(ctx, slot) {
 			endTurnCtx()
-			if warn {
-				r.warnCoordinatorCap(coordSessionID, slot.turns)
-			}
 			return
 		}
-		slot.mu.Unlock()
 
 		// Adopt the caller's ctx on the first iteration, mint a fresh one on every later
 		// one. Per-iteration, never hoisted over the whole drain: a stop must not also
@@ -2008,7 +2128,9 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 			// driving MUST be cleared: otherwise every later notification takes the
 			// "already driving" branch and no drain ever starts again — a permanent freeze.
 			slot.driving = false
-			owed := !slot.pending
+			// A worker note still inside its batch window is also "owed" a turn: the
+			// backstop must not fire while one is waiting on the deadline.
+			owed := !slot.pending && !slot.workerPending
 			slot.mu.Unlock()
 			endTurnCtx()
 			if owed {
@@ -2018,7 +2140,59 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 			}
 			return
 		}
+
+		// Worker persistence/arming and this final turn-start gate share admission.
+		// Acquiring it only after FIFO admission preserves queue fairness and ensures
+		// every durable note that precedes this gate is either consumed by this turn or
+		// remains armed for a later one. It is bound to the RUNTIME ctx, not the turn's:
+		// a human Stop must not abandon the token while a note is still armed.
+		releaseAdmission, admErr := acquireCoordinatorAdmission(ctx, slot)
+		if admErr != nil {
+			release()
+			endTurnCtx()
+			r.clearCoordinatorDrain(slot)
+			return
+		}
+
+		// TURN START linearizes here. Archive/halt commits before this DB read reject;
+		// commits after it observe an already-active turn. Holding mu across the read
+		// keeps rejection cleanup atomic with resume and generic wake arming.
 		slot.mu.Lock()
+		sess, sessErr := r.db.GetSession(ctx, coordSessionID)
+		// A selected recipe (M5) may lower/raise the notify-loop cap for just this
+		// coordinator session; fall back to the workspace default when unset (0).
+		maxTurns := r.tun.CoordinatorMaxTurns()
+		if sessErr == nil && sess.CoordinatorMaxTurns > 0 {
+			maxTurns = sess.CoordinatorMaxTurns
+		}
+		if sessErr != nil {
+			// A failed read is NOT a stop: the note that armed this iteration is durable
+			// and would be silently dropped. Fall back to the workspace cap and let the
+			// turn run — runCoordinatorTurn reads the session again and bails if it is
+			// genuinely gone. Logged because a read failing here is never routine.
+			r.logger.Warn("coordination: drain could not read the coordinator session, using the workspace turn cap",
+				"coordinator", coordSessionID, "error", sessErr)
+		}
+		closing := ctx.Err() != nil
+		archived := sessErr == nil && sess.State == "archived"
+		noPending := !slot.pending && !slot.workerPending
+		capped := slot.turns >= maxTurns
+		if closing || archived || slot.stallHalted || noPending || capped {
+			warn := capped && !slot.capWarn
+			if capped {
+				slot.capWarn = true
+			}
+			turns := slot.turns
+			r.clearCoordinatorDrainLocked(slot)
+			slot.mu.Unlock()
+			releaseAdmission()
+			endTurnCtx()
+			release()
+			if warn {
+				r.warnCoordinatorCap(coordSessionID, turns)
+			}
+			return
+		}
 		// Count the auto-turn HERE, not before the wait: while we were queued a user
 		// turn may have reset the cap (a human is back in the loop), and a turn that
 		// never ran must not spend the budget.
@@ -2027,7 +2201,10 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 		// is history-aware, so it sees every note persisted so far, including any that
 		// landed while we waited for the slot.
 		slot.pending = false
+		slot.workerPending = false
+		slot.workerDeadline = time.Time{}
 		slot.mu.Unlock()
+		releaseAdmission()
 
 		if r.coordRunFn != nil {
 			r.coordRunFn(coordSessionID)
@@ -2039,6 +2216,10 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 		// the whole drain, destroying the fairness property documented above.
 		endTurnCtx()
 		release()
+		if ctx.Err() != nil {
+			r.clearCoordinatorDrain(slot)
+			return
+		}
 
 		slot.mu.Lock()
 		// Hard-halt escalation (FND-99caeb31): the turn-end stall guard just spent the
@@ -2051,11 +2232,13 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCt
 		if slot.stallHalted {
 			slot.stopRequested = false
 			slot.pending = false
+			slot.workerPending = false
+			slot.workerDeadline = time.Time{}
 			slot.driving = false
 			slot.mu.Unlock()
 			return
 		}
-		if slot.pending {
+		if slot.pending || slot.workerPending {
 			// A real worker notification supersedes an earlier human Stop: a still-running
 			// or just-finished worker is allowed to continue the coordinator (only the
 			// no-pending idle-reconcile is suppressed by a Stop — see below).
@@ -2106,7 +2289,7 @@ func (r *Runtime) scheduleSettleBackstop(coordSessionID string) {
 		time.Sleep(r.tun.CoordinatorSettleGrace())
 		slot := r.coordSlotFor(coordSessionID)
 		slot.mu.Lock()
-		busy := slot.driving || slot.pending
+		busy := slot.driving || slot.pending || slot.workerPending
 		slot.mu.Unlock()
 		// Also check the admission queue: a turn from ANY path (a user message, a
 		// peer delivery) may have taken this session meanwhile — the node is alive
@@ -2245,6 +2428,14 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 	// lead it with the outcome note (nil error) so the recorded reply reads as a
 	// fragment, not a clean result, and the success-only follow-ups below are skipped.
 	output, steps, err, truncated := r.reconcileTurnOutcome(ctx, output, steps, err, hardCap, idleCap)
+	// Runtime teardown is not a human Stop. Do not append a synthetic stop message
+	// or arm stopRequested while CloseMCP drains coordinator goroutines. The signal is
+	// the runtime-scoped coordinator context, not this turn's: drainCtx is cancelled by
+	// a human Stop too, and the two must not be confused.
+	if errors.Is(err, context.Canceled) && r.coordCtx.Err() != nil {
+		r.logger.Info("coordination: coordinator turn cancelled by runtime shutdown", "coordinator", coordSessionID)
+		return
+	}
 	text := output
 	if err != nil {
 		if errors.Is(err, context.Canceled) {

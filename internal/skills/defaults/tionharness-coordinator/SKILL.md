@@ -24,7 +24,7 @@ kullanılabilen diğer koordinasyon yöntemlerini öğretir. Ayrıntılı tasar�
 | Yöntem | Araç | Ne zaman |
 |--------|------|----------|
 | **M1 — Parallel fan-out (sync)** | `run_subagent` ×N (tek turda) | Kısa, bağımsız alt-görevler; cevabı **bu turda** istiyorsun (araştırma taraması). Sonuç anında döner. |
-| **M2 — Koordinatör/İşçi (async)** | `spawn_worker` / `send_to_worker` / `stop_worker` / `list_workers` | Uzun/çok-fazlı iş; turlar boyunca canlı kalıp fan-out + sentez + doğrulama. Sonuç `<task-notification>` ile geri gelir, yeni koordinatör turu **otomatik** başlar. |
+| **M2 — Koordinatör/İşçi (async)** | `spawn_worker` / `send_to_worker` / `stop_worker` / `list_workers` | Uzun/çok-fazlı iş; turlar boyunca canlı kalıp fan-out + sentez + doğrulama. İlk `<task-notification>` sabit 5 saniyelik pencereyi açar; bu sürede gelen sonuçlar tek sonraki koordinatör turunda işlenir. |
 | **M3 — Takım/Peer** | `send_message` (+ inbox) | Merkezî koordinatör yok; eşdüzey ajanlar birbirine mesaj atarak işbirliği yapar. |
 | **M4 — Flow** | Akışlar (graf) | LLM koordinatörü değil, **deterministik** sabit graf: paralel + branch node'ları. |
 
@@ -35,17 +35,18 @@ kullanılabilir.
 
 ```
 1. spawn_worker ×N   → bağımsız worker'ları TEK turda fan-out et, turu bitir
-2. <task-notification> gelir → yeni koordinatör turu otomatik başlar
-3. Bulguları SEN sentezle (dosya:satır içeren spesifik spec yaz)
-4. send_to_worker (bağlam örtüşüyorsa) veya yeni spawn_worker (temiz bağlam)
-5. Doğrulama worker'ı ile kanıtla → kullanıcıya özetle
+2. İlk <task-notification> gelir → 5 saniyelik sabit pencere açılır
+3. Penceredeki ayrı bildirimler → TEK sonraki koordinatör turunda işlenir
+4. Bulguları SEN sentezle (dosya:satır içeren spesifik spec yaz)
+5. send_to_worker (bağlam örtüşüyorsa) veya yeni spawn_worker (temiz bağlam)
+6. Doğrulama worker'ı ile kanıtla → kullanıcıya özetle
 ```
 
 ## 3. Altın kurallar
 
 - **Araç çağrısı = tek gerçeklik.** Bir worker'dan bahsetmeden ÖNCE o tur `spawn_worker`'ı ÇAĞIRMIŞ ol; mevcut worker'lara atıf yapmadan önce `list_workers` çağır. Düz metinde "worker başlattım / 3 worker açtım / round 2 açıldı" demek — aynı turda eşleşen araç çağrısı olmadan — HİÇBİR ŞEY yaratmaz: worker yoktur ve gelmeyecek bir sonucu bekleyerek donarsın (stall). Spawn'ı anlatmak spawn etmek değildir.
 - **Her mesajın kullanıcıya.** `<task-notification>`'lar iç sinyaldir; onlara teşekkür etme.
-- **Fan-out süper gücün.** Bağımsız worker'ları tek turda başlat, sonra turu bitir. Sonuçları **tahmin etme/uydurma** — bildirim gelince yeni tur açılır.
+- **Fan-out süper gücün.** Bağımsız worker'ları tek turda başlat, sonra turu bitir. Sonuçları **tahmin etme/uydurma** — ilk bildirim 5 saniyelik sabit pencereyi açar; yakın sonuçlar pencereyi uzatmadan tek sonraki turu açar.
 - **Sentezi SEN yap.** "Based on your findings" YASAK — bulguları oku, dosya:satır içeren net spec yaz.
 - **Yazma-ağır işleri sıraya koy.** Aynı dosya kümesine aynı anda iki worker yazmasın; araştırma paralel serbest.
 - **Worker görevleri self-contained olmalı** — worker senin konuşmanı görmez; dosya yolu, satır, hata mesajı, "bitti" tanımı ver.

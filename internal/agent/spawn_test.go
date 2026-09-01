@@ -68,7 +68,7 @@ func (r *Runtime) backgroundWorkPending() bool {
 			return true
 		}
 		slot.mu.Lock()
-		busy := slot.driving || slot.pending
+		busy := slot.driving || slot.pending || slot.workerPending
 		slot.mu.Unlock()
 		if !busy {
 			if id, ok := key.(string); ok && r.sessionTurnBusy(id) {

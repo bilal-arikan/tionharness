@@ -162,11 +162,27 @@ sequenceDiagram
     W2->>K: turn finished
     K->>Q: NotifyCoordinator(<task-notification W1>)
     K->>Q: NotifyCoordinator(<task-notification W2>)
-    Note over Q: C meşgulse kuyruğa al; boşalınca<br/>bekleyen TÜM bildirimleri TEK turda birleştir
-    Q->>C: user msg = task-notification(W1)+(W2) → runSessionTurn
+    Note over Q: İlk worker notu 5 sn pencere açar;<br/>sonrakiler deadline'ı uzatmadan aynı tura katılır
+    Q->>C: Ayrı history notlarını TEK runSessionTurn içinde işle
     C->>C: Sentez; gerekirse send_to_worker / yeni spawn_worker
     C->>U: Ara özet
 ```
+
+**Worker sonucu coalescing sözleşmesi (2026-09-01).** Her worker sonucu önce
+ayrı, durable, user-role worker-note mesajı olarak yazılır; fiziksel mesaj
+birleştirmesi yapılmaz. İlk pending worker notunun geliş anı
+deadline = arrival + 5s değerini sabitler. Yakın notlar bu deadline'ı uzatmadan
+aynı history-aware LLM turuna katılır. Not aktif koordinatör turunda gelirse
+pencere yine o anda başlar: tur deadline'dan önce biterse yalnız kalan süre
+beklenir, sonra biterse follow-up hemen başlar.
+
+Flow start, recovery, kullanıcı resume'u ve stall nudge gibi generic wake'ler bu
+pencereye tabi değildir; bekleyen worker timer'ını kesip admission'a hemen geçer
+ve o ana dek persist edilmiş worker notlarını aynı turda tüketir. Batch bekleyişi
+turn-slot tutmaz. Admission sonrası archive, stall-halt ve runtime shutdown tekrar
+doğrulanır; reddedilen otomatik tur transient state'i temizler, durable notu
+korur. Runtime kapanışı batch timer/admission bekleyişini iptal edip drain'leri DB
+kapanmadan önce toplar.
 
 ### 3.2 Yeni araçlar (self-management "coordination" ailesi)
 
@@ -730,10 +746,10 @@ yanıt — ALPHA/BETA/GAMMA, araçsız). Zaman çizelgesi (session.jsonl, epoch 
 | 564 | otomatik tur 1 yanıtı: yalnız ALPHA'yı gördü, "diğerlerini bekliyorum"  |
 | 588 | otomatik tur 2 yanıtı: **3/3 sentez tablosu**                           |
 
-**Sonuç: 3 bildirim → 2 otomatik tur.** SES113+SES112 tek ek turda birleşti —
-`coordSlot` coalescing'i canlıda doğrulandı (birim testin yanına saha kanıtı).
-Tur 1'in yalnız ALPHA görmesi tasarım gereği: history anlık görüntüsü tur
-başında alınır; sonradan gelenler pending'i işaretler.
+**Tarihsel sonuç: 3 bildirim → 2 otomatik tur.** Bu saha kaydı eski, yalnız
+mid-turn coalescing davranışını gösterir. 2026-09-01 sözleşmesi ilk ALPHA notunda
+5 saniyelik sabit pencere açarak yakın SES113/SES112 notlarını fiziksel olarak
+birleştirmeden tek history-aware turda işlemeyi hedefler.
 
 ### Bulgu: stream turu ile koordinatör oto-turu AYRI kilitte → DÜZELTİLDİ ✅
 

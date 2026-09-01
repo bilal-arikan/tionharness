@@ -25,6 +25,9 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	tun := NewTunables()
+	// Unit fixtures should not pay the production five-second worker batch window.
+	// Batching tests opt into a small explicit duration.
+	tun.SetCoordinatorWorkerBatchWindow(-1)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	registry := providers.NewRegistry()
 	// Real boot always has at least the default claude-cli instance (it migrates
@@ -38,6 +41,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// — a flake the -race build amplifies. Registered after the db-close cleanup so
 	// LIFO drains the turns first, then closes the db, then removes the temp dir.
 	t.Cleanup(func() {
+		rt.CloseMCP()
 		deadline := time.Now().Add(5 * time.Second)
 		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
 			time.Sleep(5 * time.Millisecond)

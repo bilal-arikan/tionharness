@@ -240,6 +240,12 @@ func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, a
 	already := slot.stallHalted
 	slot.stallHalted = true
 	slot.pending = false
+	slot.workerPending = false
+	slot.workerDeadline = time.Time{}
+	select {
+	case slot.wake <- struct{}{}:
+	default:
+	}
 	streak := slot.spawnHallucStreak
 	slot.mu.Unlock()
 	if already {

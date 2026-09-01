@@ -190,7 +190,7 @@ func (r *Runtime) waitCoordinatorIdle(ctx context.Context, coordSessionID string
 // active, and no worker is running.
 func (r *Runtime) coordSlotIdle(coordSessionID string, slot *coordSlot) bool {
 	slot.mu.Lock()
-	busy := slot.driving || slot.pending
+	busy := slot.driving || slot.pending || slot.workerPending
 	slot.mu.Unlock()
 	if busy || slot.workers.Load() > 0 {
 		return false

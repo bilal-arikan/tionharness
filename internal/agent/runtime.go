@@ -124,6 +124,13 @@ type Runtime struct {
 	// lives in `turns`, not here — this is only "what should the coordinator do
 	// next". Keyed by session id; value is *coordSlot. See coordination.go.
 	coordSlots sync.Map
+	// coordCtx owns coordinator drain goroutines, including their batch timers and
+	// admission waits. coordLifeMu serializes Add against shutdown's Wait.
+	coordCtx     context.Context
+	coordCancel  context.CancelFunc
+	coordLifeMu  sync.Mutex
+	coordClosing bool
+	coordWG      sync.WaitGroup
 
 	// readTrackers holds one *tools.ReadTracker per session id, the freshness
 	// baseline the Edit/Write guard compares against. Session-scoped and persistent
@@ -154,6 +161,9 @@ type Runtime struct {
 	// drain — a test seam so the queue's serialization/coalescing can be exercised
 	// without a live provider. Nil in production (the real turn runs).
 	coordRunFn func(coordSessionID string)
+	// Test-only deterministic barrier after durable worker-note persistence and
+	// before worker archive/batch arming. Production leaves it nil.
+	coordAfterWorkerNotePersist func(coordSessionID string)
 
 	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
 	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised
@@ -614,6 +624,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	}
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
+	coordCtx, coordCancel := context.WithCancel(context.Background())
 	r := &Runtime{
 		db:          database,
 		providers:   registry,
@@ -635,6 +646,8 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		spawnStop:   make(chan struct{}),
 		spawnDone:   make(chan struct{}),
 		turns:       turnqueue.New(func() int64 { return time.Now().Unix() }),
+		coordCtx:    coordCtx,
+		coordCancel: coordCancel,
 	}
 	go r.runSpawnQueue()
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
@@ -665,6 +678,7 @@ func (r *Runtime) MCPPool() *mcp.Pool { return r.mcpPool }
 // CloseMCP terminates this workspace's persistent MCP connections. Called when
 // the workspace is deleted or the manager shuts down.
 func (r *Runtime) CloseMCP() {
+	r.closeCoordinatorDrains()
 	r.stopSpawnQueue()
 	if r.mcpPool != nil {
 		r.mcpPool.Close()
@@ -672,6 +686,35 @@ func (r *Runtime) CloseMCP() {
 	if r.cliSessions != nil {
 		r.cliSessions.Close()
 	}
+}
+
+// startCoordinatorDrain launches one coordinator drain under the runtime's shutdown
+// barrier. runCtx/cancelRun/run are the FIRST iteration's turn context and its
+// trackSession registration, minted by the caller BEFORE this call so a stop issued in
+// the instant after arming already finds something to cancel. Returns false once
+// CloseMCP has started, in which case the caller owns undoing that registration.
+func (r *Runtime) startCoordinatorDrain(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun) bool {
+	r.coordLifeMu.Lock()
+	defer r.coordLifeMu.Unlock()
+	if r.coordClosing {
+		return false
+	}
+	r.coordWG.Add(1)
+	go func() {
+		defer r.coordWG.Done()
+		r.drainCoordinator(r.coordCtx, coordSessionID, slot, runCtx, cancelRun, run)
+	}()
+	return true
+}
+
+func (r *Runtime) closeCoordinatorDrains() {
+	r.coordLifeMu.Lock()
+	if !r.coordClosing {
+		r.coordClosing = true
+		r.coordCancel()
+	}
+	r.coordLifeMu.Unlock()
+	r.coordWG.Wait()
 }
 
 // CloseSessionMCP terminates the MCP connections scoped to one session and
