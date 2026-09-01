@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,8 +13,8 @@ import (
 // TestSpawnSessionIsCancellableAsSoonAsItReturns: SpawnSession hands the session id
 // to its caller, so the run must be stoppable from that instant. When the cancel
 // func was registered inside the spawn goroutine, a stop issued in the same tool
-// loop iteration found nothing to cancel and stop_subagent reported "already
-// finished" for a run that kept going.
+// loop iteration found nothing to cancel and the caller was told the run had
+// "already finished" while it kept going.
 func TestSpawnSessionIsCancellableAsSoonAsItReturns(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
@@ -111,19 +110,4 @@ func spawnIsQueuedFor(rt *Runtime, sessionID string) bool {
 		}
 	}
 	return false
-}
-
-// TestStopSubagentUntrackedRunningIsAnError: a child still marked "running" with no
-// cancellable turn is NOT the "it already finished" race — claiming so is a plain
-// false statement, and it leaves the caller unable to stop and unable to retry.
-func TestStopSubagentUntrackedRunningIsAnError(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	ctx := context.Background()
-	a, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Helper", Provider: "anthropic"})
-	parentID, childID := subagentChild(t, rt, a.ID, runStateRunning)
-
-	_, err := rt.StopSubagent(ctx, parentID, childID)
-	if err == nil || !strings.Contains(err.Error(), "no cancellable turn") {
-		t.Fatalf("expected an explicit no-cancellable-turn error, got %v", err)
-	}
 }

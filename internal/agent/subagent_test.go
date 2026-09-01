@@ -107,7 +107,7 @@ func TestResolveSubagentProfile(t *testing.T) {
 // TestResolveSubagentAgentBeatsProfile verifies an existing workspace agent wins
 // over a built-in profile of the same name (case-insensitive). Regression for the
 // shadowing bug where a real "Reviewer" agent was intercepted by the `reviewer`
-// profile — which also broke async delegation (profiles are ephemeral).
+// profile.
 func TestResolveSubagentAgentBeatsProfile(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()
@@ -174,20 +174,6 @@ func TestResolveSubagentConfigProfile(t *testing.T) {
 		if !want[tool] {
 			t.Fatalf("config profile must not allow %q (config-only sandbox); allowlist=%v", tool, allow)
 		}
-	}
-}
-
-// TestAsyncProfileRejected verifies async delegation to a built-in profile (no
-// persistent session) fails with an explanatory error naming the profile.
-func TestAsyncProfileRejected(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	ctx := context.Background()
-	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "anthropic"})
-	var n int32
-	run := runAgentFor(t, rt, caller, delegState{depth: 0, visited: map[string]bool{caller.ID: true}, calls: &n})
-	_, err := run(tools.RunAgentSpec{Target: "explore", Task: "x", Wait: "async"})
-	if err == nil || !strings.Contains(err.Error(), "persistent agent target") {
-		t.Fatalf("expected explanatory async-profile rejection, got %v", err)
 	}
 }
 

@@ -334,8 +334,8 @@ type Settings struct {
 	DelegationMaxDepth int `json:"delegationMaxDepth"` // max subagent nesting (0 = default 3)
 	DelegationMaxCalls int `json:"delegationMaxCalls"` // max subagent runs per turn (0 = default 8)
 
-	// Spawn guards — the detached background surface: run_subagent wait:"async"
-	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
+	// Spawn guards — the detached background surface: coordinator workers
+	// (spawn_worker), the bridged spawn_session (claude-cli) + the UI spawn button.
 	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 16)
 	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 16)
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)

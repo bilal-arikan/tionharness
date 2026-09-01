@@ -35,9 +35,10 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// instances (to pick one for create_agent/update_agent's `provider`),
 		// but creating/editing/deleting them stays in the Settings screen.
 		tools.NewListProvidersTool(r.providers.ListInstances),
-		// Note: agent→agent work is unified under run_subagent (above) — async
-		// background runs go through its wait:"async" mode (→ SpawnSession). The
-		// old call_agent / spawn_session / send_agent_message tools were removed.
+		// Note: agent→agent work is unified under run_subagent (above), which always
+		// runs synchronously; background work goes through coordinator mode
+		// (spawn_worker). The old call_agent / spawn_session / send_agent_message
+		// tools were removed.
 		// send_message is the "peer DM" complement: an addressed, sender-tagged
 		// message into another agent's persistent inbox (Claude Code mailbox model).
 		tools.NewSendMessageTool(agent.ID, func(ctx context.Context, to, summary, message string) (string, error) {

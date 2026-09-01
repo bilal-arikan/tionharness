@@ -5,12 +5,12 @@
 > Yürütme/Aktivite" feed'inde canlı görünür.
 
 > **2026-06-19 güncel durumu:** `spawn_session` native ajan aracı olarak **kaldırıldı**.
-> Yerine geçen: `run_subagent` (tek generic agent-to-agent primitifi; `wait:"async"`
-> modu SpawnSession altyapısını kullanır). `SpawnSession` runtime metodu ve
-> `POST /api/sessions/spawn` HTTP uç noktası **korunuyor** — (a) UI "Başlat" butonu,
-> (b) claude-cli ajanlarının Interaction MCP köprüsü, (c) `run_subagent` async
-> modunun iç motoru olarak aktif. Bu doküman orijinal tasarımı ve CLI köprü
-> wiring'ini tarihsel kayıt olarak tutar.
+> Yerine geçen: `run_subagent` (tek generic agent-to-agent primitifi — **daima
+> senkron**). `SpawnSession` runtime metodu ve `POST /api/sessions/spawn` HTTP uç
+> noktası **korunuyor** — (a) UI "Başlat" butonu, (b) claude-cli ajanlarının
+> Interaction MCP köprüsü, (c) koordinatör modundaki `spawn_worker` ile
+> flow/otomasyon oturumlarının iç motoru olarak aktif. Bu doküman orijinal
+> tasarımı ve CLI köprü wiring'ini tarihsel kayıt olarak tutar.
 
 ## Amaç ve Konum (tarihsel tasarım bağlamı)
 
@@ -22,8 +22,9 @@ Tasarım sırasında elimizde üç tetikleme yolu vardı:
 | `call_agent` | **senkron**, aynı tur (delegasyon) | `delegate.go::withDelegation` |
 | `send_agent_message` | async inbox mesajı (mevcut ajana kuyruk) | `delegate.go::SendAgentMessage` |
 
-> **Sonraki durum:** `call_agent` ve `send_agent_message` kaldırıldı; ikisi de
-> `run_subagent` altında birleşti (sırasıyla `wait:sync` ve `wait:async` modu).
+> **Sonraki durum:** `call_agent` ve `send_agent_message` kaldırıldı. Senkron
+> delegasyon `run_subagent` altında birleşti; "bekleme" ihtiyacı olmayan arka plan
+> işi koordinatör modundaki `spawn_worker`'a taşındı.
 
 **Spawn bunlardan farklıydı:** elle (kullanıcı/ajan) **yeni bağımsız bir oturum**
 açar, ajan turunu **arka planda** koşar ve `sessionID`'yi hemen döndürür —
@@ -108,10 +109,12 @@ Akış:
 
 **b) Ajan aracı — (kaldırıldı)**
 - `spawn_session` built-in tool'u **native ajan yüzeyinden kaldırıldı** (2026-06-19).
-- Yerine geçen: `run_subagent` ile `wait:"async"` — aynı `SpawnSession` altyapısını
-  kullanır; daima kurulu (görünürlük araç-bazlı), profil/agent target destekler.
-- claude-cli ajanları async arka plan çalışması için Interaction MCP köprüsünden
-  `run_subagent` kullanabilir.
+- Senkron delegasyon için yerine geçen: `run_subagent` — daima kurulu (görünürlük
+  araç-bazlı), profil/agent target destekler, ama **beklemeden** koşamaz.
+- Arka planda koşan gerçek bir oturum için yerine geçen: koordinatör modundaki
+  `spawn_worker` (aynı `SpawnSession` altyapısı).
+- claude-cli ajanları arka plan çalışması için Interaction MCP köprüsündeki
+  `spawn_session`'ı kullanmayı sürdürür.
 
 **c) UI**
 - `ExecutionsPanel`: `spawned` kind metadata (✨ "Spawn") + filtre sekmesi;

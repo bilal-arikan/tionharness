@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -25,37 +24,9 @@ func budgetRunnerFor(t *testing.T, rt *Runtime, caller db.Agent, n *int32, paren
 	return func(spec tools.RunAgentSpec) (tools.RunAgentResult, error) { return run(ctx, spec) }
 }
 
-// TestDelegationBudgetRefundedWhenSpawnFails: an async run that never started spent
-// no provider tokens, so it must not shrink the turn's delegation budget. Four
-// refused spawns used to burn half of DefaultMaxDelegationCalls with nothing run.
-func TestDelegationBudgetRefundedWhenSpawnFails(t *testing.T) {
-	rt, _ := newTestRuntime(t, t.TempDir())
-	ctx := context.Background()
-	// claude-cli, not anthropic: newTestRuntime seeds exactly that one provider
-	// instance, and an unresolvable provider would fail BEFORE the spend — leaving
-	// the test passing without ever exercising the refund.
-	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "claude-cli"})
-	target, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Helper", Provider: "claude-cli"})
-	parent, err := rt.db.CreateSession(ctx, db.Session{AgentID: caller.ID, Kind: "chat"})
-	if err != nil {
-		t.Fatalf("create parent session: %v", err)
-	}
-
-	var n int32
-	run := budgetRunnerFor(t, rt, caller, &n, parent.ID)
-	// A blank task reaches SpawnSession trimmed to "" and is refused by its first
-	// statement — no CLI preflight, no filesystem dependency.
-	if _, err := run(tools.RunAgentSpec{Target: target.Name, Task: "   ", Wait: "async"}); err == nil ||
-		!strings.Contains(err.Error(), "prompt is required") {
-		t.Fatalf("expected the spawn to be refused, got %v", err)
-	}
-	if got := atomic.LoadInt32(&n); got != 0 {
-		t.Fatalf("a spawn that never started must refund its budget unit; counter is %d", got)
-	}
-}
-
-// TestDelegationBudgetRefundedWhenChildSessionFails: same asymmetry on the sync
-// path — the child row was never created, so nothing ran.
+// TestDelegationBudgetRefundedWhenChildSessionFails: a run that never started spent
+// no provider tokens, so it must not shrink the turn's delegation budget — the
+// child row was never created, so nothing ran.
 func TestDelegationBudgetRefundedWhenChildSessionFails(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()

@@ -27,10 +27,10 @@ TionHarness primitive, not an aspiration.
 | `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionharness-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
 | Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Hooks** (PreToolUse/PostToolUse) for event triggers |
-| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`run_subagent` async** (detached background run), and **Flows** (graph engine) — all gated by the per-workspace autonomy brake |
+| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_worker`** (background worker, coordinator mode only), and **Flows** (graph engine) — all gated by the per-workspace autonomy brake |
 | Quality gates | **Permission/approval layer** (`auto`/`ask`/`read-only`, arg-patterns) + **Hooks** |
 | Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a flow or schedule |
-| Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers — sync or async) |
+| Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers, each call synchronous) |
 | Git worktrees (avoid conflicts) | **Per-workspace `store/` isolation** (the closest analog; see limits below) |
 | Multimodal (model per task) | **Per-agent provider/model** + a **flow** whose nodes use different agents/models |
 | Flywheel: perfect tests/docs/logs | Recurring **schedules** that sweep docs, tests, and `read_logs` nightly |
@@ -130,10 +130,12 @@ heartbeat ticker; every autonomous run requires an explicit trigger:
 - **`schedule_wake`** — a single-shot self-wake timer inside an interactive chat
   turn; the agent fires once more after the delay. Good for "check back in N
   minutes" within a conversation, not for standing automation.
-- **`run_subagent` (async)** — kick off a detached background run for an existing
-  agent (`wait:"async"`); the current turn proceeds immediately. The subagent runs
-  one autonomous turn; re-invoke with another async call if the loop needs to
-  iterate.
+- **`spawn_worker`** — the only native way to start a run that outlives the
+  current turn. Requires coordinator mode (`set_coordinator_mode`); the worker
+  runs its own session in the background and reports back when done.
+  `run_subagent` is NOT an option here — it always blocks until the subagent
+  replies, so a multi-minute task must instead be split into several smaller
+  self-contained `run_subagent` calls, or handed to a coordinator.
 - **Flows** — the graph engine (`agent`/`branch`/`parallel`/`delay`/`transform`)
   for a *structured* loop with explicit branch conditions and restart-safe state.
 

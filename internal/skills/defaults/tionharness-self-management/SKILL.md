@@ -56,8 +56,8 @@ fields with the compiled defaults.
 **Agent delegation & messaging** —
 - `run_subagent` — launch an isolated worker (a built-in profile or an existing
   agent) and get back only the final result, so the sub-task's tool output never
-  floods the current context. Supports sync (wait for reply, default) and async
-  (detached background run). Persistent execution sessions become `running` only
+  floods the current context. It is always synchronous: the call blocks until the
+  subagent finishes and returns its final reply. Persistent execution sessions become `running` only
   after their opening task is durable; initialization failures are terminal and
   remain inspectable in the Activity feed. Multiple calls in one turn run in parallel.
   For sharper delegation, also pass `objective`, `output_format` and `boundaries`
@@ -209,8 +209,11 @@ Settings → Providers screen — there is no tool for that, so don't look for o
   skill, schedule, hook, MCP server…) without first checking whether one that
   already does the job exists — extend it instead of duplicating. See
   `tionharness-guide` → "Before you build: discover first".
-- **Background work via `run_subagent`:** to start work that runs without
-  blocking the current turn, call `run_subagent` with `wait:"async"` (targets
-  an existing agent, not a profile). This internally starts a new detached
-  session via the same machinery as the old `spawn_session` primitive.
+- **Background work:** `run_subagent` cannot do it — it always blocks until the
+  subagent replies, and there is no tool to cancel a running one. For work that
+  must outlive the current turn, either split it into several smaller
+  self-contained `run_subagent` calls, or become a coordinator
+  (`set_coordinator_mode`) and start background workers with `spawn_worker` —
+  those are stopped with the coordinator's own `stop_worker`, a different tool.
+  Standing automation belongs in a schedule or a flow.
 - For a conceptual overview of TionHarness's pieces, load `tionharness-guide`.

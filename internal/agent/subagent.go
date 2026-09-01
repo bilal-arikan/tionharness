@@ -186,9 +186,7 @@ func (r *Runtime) withRunAgent(ctx context.Context, caller db.Agent, reqPtr *pro
 	fn := func(rctx context.Context, spec tools.RunAgentSpec) (tools.RunAgentResult, error) {
 		return r.runAgent(rctx, caller, reqPtr, autonomous, spec)
 	}
-	// stop_subagent rides the same wiring: the two halves of async delegation are
-	// installed together so a turn can never hold the start switch without the stop.
-	return r.withStopSubagent(tools.WithRunAgent(ctx, fn))
+	return tools.WithRunAgent(ctx, fn)
 }
 
 // RunSubagentRunner returns a run_subagent runner for the CLI Interaction bridge,
@@ -208,9 +206,8 @@ func (r *Runtime) RunSubagentRunner(caller db.Agent, autonomous bool) func(ctx c
 
 // runAgent is the single generic entry point behind run_subagent. It enforces the
 // shared guards (depth / per-turn budget / cycle), resolves the target (an
-// ephemeral profile worker or an existing agent), then runs it in one of two
-// modes: sync (isolated or inherited context, returns the final reply) or async
-// (detached background session via SpawnSession, returns a handle).
+// ephemeral profile worker or an existing agent), then runs it to completion in
+// an isolated or inherited context and returns its final reply.
 func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *providers.Request, autonomous bool, spec tools.RunAgentSpec) (tools.RunAgentResult, error) {
 	cur, _ := delegStateFrom(ctx)
 
@@ -234,15 +231,9 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	if !ephemeral && cur.visited[agent.ID] {
 		return tools.RunAgentResult{}, fmt.Errorf("agent %q is already part of this chain; pick a different target", agent.Name)
 	}
-	// Guard 4 — async needs a persistent session, which an ephemeral profile lacks.
-	// Reject this impossible combination up front (before provider resolution and
-	// budget spend) so the error is deterministic and no budget unit is wasted.
-	if spec.Wait == "async" && ephemeral {
-		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer|validator|config) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
-	}
 	// Every subagent run is persisted as a child of the calling session, so resolve
-	// the parent once here — both modes need it, and failing now keeps a context
-	// without a session from spending budget or resolving a provider first.
+	// the parent once here — failing now keeps a context without a session from
+	// spending budget or resolving a provider first.
 	parentSessionID := SessionIDFrom(ctx)
 	if parentSessionID == "" {
 		return tools.RunAgentResult{}, fmt.Errorf("subagent persistence requires a parent session")
@@ -265,29 +256,6 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// never exceeds the cap; refund and refuse if this call would push us over).
 	if !cur.spend(maxCalls) {
 		return tools.RunAgentResult{}, fmt.Errorf("subagent budget (%d per turn) exhausted; do the rest yourself", maxCalls)
-	}
-
-	// Async mode: detach into a persistent background session (fire-and-forget).
-	// Only real agents reach here (the ephemeral case was rejected by Guard 4).
-	if spec.Wait == "async" {
-		childMeta := subagentSessionMeta(parentSessionID, agent, ephemeral, spec)
-		stampRetryLineage(&childMeta, retryOfID, attempt)
-		// The detached session inherits the caller's turn directory. A sync subagent
-		// already runs in it (it shares this context); an async one used to fall back
-		// to the workspace default and quietly work on the wrong repository.
-		res, err := r.SpawnSession(ctx, agent.ID, strings.TrimSpace(spec.Task), SpawnOptions{
-			ModelOverride: spec.Model,
-			CreatedBy:     caller.ID,
-			WorkingDir:    r.effectiveWorkDir(ctx),
-			NoQueue:       true,
-			ChildSession:  &childMeta,
-		})
-		if err != nil {
-			// The spawn never started: nothing ran, so the budget unit goes back.
-			cur.refund()
-			return tools.RunAgentResult{}, err
-		}
-		return tools.RunAgentResult{AgentName: res.AgentName, SessionID: res.SessionID, Async: true}, nil
 	}
 
 	// Build the child chain position: one level deeper, the target added to the
@@ -491,7 +459,7 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 	// contract. Do not let a persisted agent with the same display name shadow it:
 	// that bypasses the profile allowlist on fresh run_subagent calls. A differently
 	// cased name (for example "Reviewer") remains an explicit workspace-agent
-	// reference for backwards compatibility and async delegation.
+	// reference for backwards compatibility.
 	if target == strings.ToLower(strings.TrimSpace(target)) {
 		if p, ok := r.subagentProfile(target); ok {
 			return r.ephemeralSubagent(caller, p), true, nil

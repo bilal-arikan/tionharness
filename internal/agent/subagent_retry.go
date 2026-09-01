@@ -30,7 +30,7 @@ const (
 //
 // A still-running attempt is refused too. Retrying it would leave two live runs
 // answering the same contract, double-spending budget and racing to report; the
-// caller must stop it first (stop_subagent) or wait for it to finish.
+// caller must wait for it to finish.
 func (r *Runtime) resolveRetryLineage(ctx context.Context, parentSessionID, retryOf string) (prevID string, attempt int, err error) {
 	retryOf = strings.TrimSpace(retryOf)
 	if retryOf == "" {

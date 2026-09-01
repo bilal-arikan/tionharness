@@ -40,13 +40,13 @@ yürütme tetikleyicileri:
 | Primitif | Bugünkü model | Heartbeat sonrası | Karar |
 |----------|---------------|-------------------|-------|
 | `call_agent` | senkron, mevcut ajan, parent bağlamını miras alır | turla çalışır, etkilenmez | **Çekirdeğe katla** (flag kombinasyonu) |
-| `spawn_session` | async detached, yeni kalıcı oturum | `go runSpawn` → etkilenmez | **Çekirdeğe katla** (`wait:async` modu) |
+| `spawn_session` | async detached, yeni kalıcı oturum | `go runSpawn` → etkilenmez | **SİL** (native yüzeyden kaldırıldı; yerine `spawn_worker`) |
 | `send_agent_message` | inbox'a yaz + `Wake` ile işlet | `Wake` gitti → **işleyici yok, ölü mektup** | **SİL** (gereksiz/kırık) |
 
 `send_agent_message` neden silinir: heartbeat olmadan mesaj inbox'a düşer ama
-hiçbir şey onu işlemez. "Bir ajana iş verip beklememe" ihtiyacı zaten
-`wait:async` ile karşılanır (aktif tur başlatır). Yarı-kırık bir primitifi
-generic sistemde taşımak anlamsız.
+hiçbir şey onu işlemez. "Bir ajana iş verip beklememe" ihtiyacı koordinatör
+modundaki `spawn_worker` ile karşılanır (aktif tur başlatır). Yarı-kırık bir
+primitifi generic sistemde taşımak anlamsız.
 
 ## Tasarım: tek generic çekirdek
 
@@ -58,7 +58,6 @@ graph TD
     CORE["runAgent(spec)<br/>resolve · guard · run · trace"]
     CORE --> AX["Ortogonal eksenler"]
     AX --> E1["target: profile | agent"]
-    AX --> E2["wait: sync | async"]
     AX --> E3["context: isolated | inherited"]
     AX --> E4["session: ephemeral | persistent"]
 ```
@@ -66,33 +65,33 @@ graph TD
 | Eksen | Değerler | Anlam |
 |-------|----------|-------|
 | `target` | `profile` (ör. explore/coder/reviewer) **veya** mevcut ajan adı/id | Geçici tip mi, kalıcı ajan mı |
-| `wait` | `sync` (varsayılan) / `async` | Cevabı bekle / detached arka plan |
 | `context` | `isolated` (varsayılan) / `inherited` | Temiz bağlam / parent konuşmasını miras al |
 | `session` | `ephemeral` (varsayılan) / `persistent` | İz parent'a gömülü / kendi oturumu feed'de |
+
+**Bekleme ekseni yoktur: `run_subagent` daima senkrondur.** Çağrı, alt-ajan
+bitene kadar bloklar ve final metnini döndürür; detached/arka plan modu yoktur.
+Şemadaki `wait` alanı tek sürümlük geçiş için hâlâ kabul ediliyor ama
+**kullanımdan kaldırıldı ve etkisiz**: `wait:"sync"` ya da alanın hiç verilmemesi
+aynı senkron davranışı verir, `wait:"async"` hata döndürür. Hiçbir prompt modele
+bu alanı göndermesini söylemez. Turdan uzun sürecek iş için ya görev kendi içinde
+tamamlanan birkaç küçük `run_subagent` çağrısına bölünür ya da koordinatör moduna
+geçilip (`set_coordinator_mode`) `spawn_worker` ile arka plan işçisi başlatılır.
 
 > **Hedef çözümleme sırası (2026-07-03, fix):** `resolveSubagentTarget` **önce
 > mevcut workspace ajanına** bakar, bulamazsa built-in profile (`explore`/`coder`/
 > `reviewer`) düşer. Böylece kullanıcının **kendi adlandırdığı ajanı** aynı isimli
 > bir profille **çakışmaz/gölgelenmez** — ör. gerçek bir "Reviewer" (AGTx) ajanı,
-> built-in `reviewer` profiliyle örtüşse bile isimle çözülür. (Eskiden ters sıraydı;
-> "Reviewer" gibi bir ajan `run_subagent` ile **async** çağrılamıyordu çünkü profil
-> ephemeral'dı → `async subagents require an existing agent target, not a profile`.
-> Regresyon: `TestResolveSubagentAgentBeatsProfile`.)
->
-> **async + profile (ephemeral) geçersiz kombinasyon:** profilin kalıcı oturumu
-> olmadığından `wait:async` bir profile verilemez; provider çözümlemesi/bütçe
-> harcamasından **önce** açıklayıcı hatayla reddedilir (Guard 4). Profili async
-> istiyorsan onu kalıcı bir ajana dönüştür ya da `wait:sync` kullan. Regresyon:
-> `TestAsyncProfileRejected`.
+> built-in `reviewer` profiliyle örtüşse bile isimle çözülür. Regresyon:
+> `TestResolveSubagentAgentBeatsProfile`.
 
 Eski primitifler artık bu eksenlerin birer kombinasyonu:
 
 | Eski | runAgent kombinasyonu |
 |------|------------------------|
-| **Alt-ajan (Task)** | `target:profile, wait:sync, context:isolated, session:ephemeral` |
-| `call_agent` | `target:agent, wait:sync, context:inherited` |
-| `spawn_session` | `target:agent, wait:async, session:persistent` |
-| ~~`send_agent_message`~~ | (silindi — gerekirse `target:agent, wait:async`) |
+| **Alt-ajan (Task)** | `target:profile, context:isolated, session:ephemeral` |
+| `call_agent` | `target:agent, context:inherited` |
+| ~~`spawn_session`~~ | (native yüzeyden silindi — arka plan için `spawn_worker`) |
+| ~~`send_agent_message`~~ | (silindi — arka plan için `spawn_worker`) |
 
 ## Tek araç yüzeyi: `run_subagent`
 
@@ -105,7 +104,6 @@ varsayılanlarla → en yaygın kullanım = izole senkron alt-ajan):
   "input": {
     "target": "explore",          // profil id VEYA mevcut ajan adı/id
     "task": "…",                  // serbest metin görev
-    "wait": "sync",               // "sync" (vars.) | "async"
     "context": "isolated",        // "isolated" (vars.) | "inherited"
     "model": ""                   // opsiyonel model override
   }
@@ -168,9 +166,8 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
   (`run_subagent` daima kurulu muadildir — 2026-07-02'den beri gate yok, görünürlük
   araç-bazlı). `TodoWrite`/`Skill` ile aynı gölgeleme sınıfı (bkz. `_Docs\36` native
   araç gölgeleme notu).
-- **Açık karar (async):** sözleşme şu an yalnız **sync** dalda enjekte edilir (kritik
-  izole-sync subagent senaryosu). `async` dal `SpawnSession`'a gider; istenirse
-  ileride sözleşme `spec.Task` önüne eklenebilir.
+- **Tek dal:** `run_subagent` senkron olduğundan sözleşme enjeksiyonunun tek bir
+  yolu vardır; koşullu/atlanabilir bir dal yoktur.
 
 ## Çekirdek yapılar
 
@@ -191,7 +188,6 @@ type AgentContext struct {
 type RunSpec struct {
     Target   string // profile id or existing agent ref
     Task     string
-    Wait     RunWait    // sync | async
     Context  RunCtx     // isolated | inherited
     Session  RunSession // ephemeral | persistent
     Model    string
@@ -200,12 +196,11 @@ type RunSpec struct {
 
 type RunResult struct {
     AgentName string
-    Reply     string // sync: final text; async: "" (handle in SessionID)
-    SessionID string // persistent/async only
+    Reply     string // the subagent's final text
 }
 
-// runAgent is the single entry point. Sync returns the final text; async detaches
-// (go) and returns a session handle, reusing spawn's slot + feed-event machinery.
+// runAgent is the single entry point. It always runs the subagent to completion
+// and returns its final text; there is no detached mode.
 func (r *Runtime) runAgent(ctx context.Context, spec RunSpec) (RunResult, error)
 ```
 
@@ -249,7 +244,8 @@ ajanın denylist'inde olan bir skill aracı hâlâ engellidir. Katman sırası v
 - **depth** (`DefaultMaxDelegationDepth=3`) — iç içe alt-ajan derinliği
 - **tur-başı bütçe** (`DefaultMaxDelegationCalls=8`) — fan-out freni (atomik sayaç)
 - **visited-set** — cycle/self koruması (yalnız `target:agent` için anlamlı)
-- **eşzamanlılık slotu** (`acquireSpawnSlot`/`SpawnMaxConcurrent`) — `wait:async` için
+- **eşzamanlılık slotu** (`acquireSpawnSlot`/`SpawnMaxConcurrent`) — detached spawn
+  yüzeyi (`spawn_worker`, köprülenen `spawn_session`, flow/otomasyon) için
 
 ## Trace + UI: `subagent` StepKind
 
@@ -299,8 +295,8 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 | `internal/tools/subagent.go` | **yeni** | tek `run_subagent` tool def + `WithRunAgent(ctx, fn)` |
 | `internal/agent/delegate.go` | **düzenle/küçült** | guard'ları ortak helper'a çıkar; `call_agent` runner'ı `runAgent`'a delege (veya kaldır); `SendAgentMessage` **sil** |
 | `internal/tools/delegate.go` | **kaldır/sadeleş** | `call_agent` ya alias ya silinir |
-| `internal/tools/builtin_spawn.go` | **kaldır/alias** | `spawn_session` → `runAgent(wait:async)` |
-| `internal/agent/spawn.go` | **düzenle** | detached koşu + feed-event çekirdeğe taşınır (`wait:async` yolu) |
+| `internal/tools/builtin_spawn.go` | **kaldır** | `spawn_session` native yüzeyden çıkar |
+| `internal/agent/spawn.go` | **düzenle** | detached koşu + feed-event ortak `launchSpawn`'a taşınır (`spawn_worker`/köprü/flow yolu) |
 | `internal/tools/builtin_agentmsg.go` | **SİL** | `send_agent_message` kaldırılır |
 | `internal/agent/callkind.go` + `internal/db/` | düzenle | `KindSubagent` / `UsageKindSubagent` |
 | `internal/agent/trace.go` | düzenle | `StepSubagent` + `TurnStep.SubSteps` |
@@ -325,16 +321,16 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 - **A2.2 ✅ — Paralel fan-out.**
 - **A2.3 ✅ — `subagent` StepKind + iç içe UI.**
 - **A2.4 ✅ — Birleştirme/temizlik:** `call_agent` kaldırıldı; `spawn_session` native
-  tool'dan kaldırıldı (`run_subagent` async moduna taşındı); `send_agent_message`
-  **silindi**; heartbeat dokümanları arındırıldı.
+  tool'dan kaldırıldı; `send_agent_message` **silindi**; heartbeat dokümanları
+  arındırıldı. (Bu adımda `run_subagent`'a eklenen async modu daha sonra tekrar
+  kaldırıldı — aşağıdaki "Senkron-tek mod" bölümü.)
 
 > Her faz ayrı atomik commit + `go build`/`vet`/`test ./...` + frontend `tsc` yeşil.
 
 ## Test planı
 
 - `agent/subagent_test.go`: izolasyon (alt-ajan parent mesajlarını görmez), guard
-  (depth/budget/visited), profil çözümleme, ephemeral ajan kalıcı olmaz, `wait:async`
-  detached + feed-event.
+  (depth/budget/visited), profil çözümleme, ephemeral ajan kalıcı olmaz.
 - `agent/delegate_test.go`: `call_agent` davranışı (alias/inherit) refactor sonrası
   yeşil — geri uyumluluk kanıtı (alias bırakılırsa).
 - `send_agent_message` testleri **kaldırılır**.
@@ -347,13 +343,15 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
    yoksa tamamen `run_subagent`'a mı taşınsın? **Öneri:** generic hedef için ikisini
    de kaldır, tek `run_subagent`; istenirse kısa geçiş dönemi alias'ı.
 2. **`send_agent_message` peer-mesajlaşma:** Silince "ajana not bırak" senaryosu
-   `wait:async` ile karşılanır (aktif tur başlatır). Eğer ileride gerçek bir
+   koordinatör modundaki `spawn_worker` ile karşılanır (aktif tur başlatır).
+   Eğer ileride gerçek bir
    asenkron işleyici (örn. inbox'ı tarayan scheduler job'u) gelirse yeniden
    değerlendirilir.
 3. **Bütçe muhasebesi:** alt-ajan token'ları aynı ajan-kimliğine yazılır
    (paylaşılan altyapı), `KindSubagent` ile ayrıştırılır.
-4. **Ephemeral kalıcılık:** `run_subagent` (sync/ephemeral) ayrı session açmaz;
-   iz parent turunun `SubSteps`'inde gömülü. `wait:async` ise kalıcı session açar.
+4. **Ephemeral kalıcılık:** `run_subagent` (ephemeral) ayrı session açmaz;
+   iz parent turunun `SubSteps`'inde gömülü. Kalıcı ajan hedefi kendi child
+   oturumunu açar.
 5. **İptal yayılımı (A3):** parent iptalinde alt-ajanlara sentetik `cancelled`
    (`toolloop.go fillCancelledResults` zaten var).
 6. **Profil kaynağı:** önce kod sabiti (A2.1), sonra `settings.json`.
@@ -370,8 +368,8 @@ transcript görünürlüğü böylece genişlemez. Legacy session alanları ve h
 bağlantısı korunur.
 
 Child oluşturma ile çalıştırma başlangıcı arasında yarım kalmış `running` satırı
-bırakılmaz. Sync ve async yollar aynı başlangıç kapısını kullanır: önce açılış user
-mesajı kalıcılaşır, sonra `runState="running"` yazılır. İki yazımdan biri başarısızsa
+bırakılmaz. Subagent ve spawn yolları aynı başlangıç kapısını kullanır: önce açılış
+user mesajı kalıcılaşır, sonra `runState="running"` yazılır. İki yazımdan biri başarısızsa
 provider çağrısı/goroutine başlamaz, child `failed` yapılır ve asıl hata ile olası
 terminal-state yazım hatası birlikte çağırana ve loga taşınır. Böylece disk hatası,
 iptal veya spawn başlangıç hatası Activity görünümünde sonsuza dek çalışan child
@@ -379,38 +377,30 @@ iptal veya spawn başlangıç hatası Activity görünümünde sonsuza dek çal�
 iki hata birlikte raporlanır. Depolama bütünüyle yazılamıyorsa son kalıcı durum
 değiştirilemez, fakat hata sessiz kalmaz.
 
-## İptal ve yeniden deneme (TSK597, 2026-08-31)
+## Senkron-tek mod (async ve `stop_subagent` kaldırıldı)
 
-Async delegasyonun iki eksik yarısı tamamlandı: başlatılan bir koşuyu durdurmak ve
-başarısız bir denemeyi yeniden koşmak.
+`run_subagent` artık **her zaman senkron** çalışır ve `stop_subagent` aracı
+silindi. Şemadaki `wait` alanı tek sürümlük geçiş için kabul edilmeye devam
+ediyor, ama **kullanımdan kaldırılmış ve etkisiz** bir alandır: `wait:"sync"`
+(veya alanın hiç verilmemesi) çalışır, `wait:"async"` hata döndürür. Bir sonraki
+sürümde alan tamamen kalkacak.
 
-### `stop_subagent` — async koşunun kapatma anahtarı
+Gerekçe: durdurulabilir bir alt-ajan koşusunun tek üreticisi async daldı. Senkron
+çağıran, çocuğu koşarken araç çağrısının içinde bloklu bekler; o turda ikinci bir
+araç çağrısı — dolayısıyla bir iptal çağrısı — yayınlayamaz. Async gidince
+`stop_subagent`'ın hedefleyebileceği erişilebilir bir koşu kalmadı; araç dar
+değil, ölü hale geldi. (Koordinatör işçileri `Kind="worker"` taşır ve ayrı bir
+araçla — `stop_worker` — durdurulur; bu kaldırmadan etkilenmez.)
 
-`run_subagent` ile `wait:"async"` başlatılan koşunun, insan oturumu açmadan
-kapatılabilir bir yolu yoktu: çağıran işi yazıp geçtikten sonra koşu günlük bütçeyi
-harcamayı sürdürüyor, hedef dosya yazıyorsa depoyu çağıranın altından değiştirmeye
-devam ediyordu. Yeni araç `stop_subagent(session_id)` bunu kapatır
-(`internal/tools/builtin_subagent_stop.go` + `internal/agent/subagent_control.go`).
+Turdan uzun sürebilecek iş için doğru yanıt artık ikiden biridir: işi kendi
+içinde tamamlanan birkaç küçük `run_subagent` çağrısına böl, ya da koordinatör
+moduna geç (`set_coordinator_mode`) ve
+`spawn_worker` ile arka planda koştur. Spawn guard'ları (`SpawnMaxConcurrent`,
+`SpawnQueueMax`, `SpawnMaxPerTurn`, `SpawnTimeoutMin`) ve `launchSpawn`'ın iptal
+kaydı **yerinde kalır** — hâlâ `spawn_worker`'a, köprülenen `spawn_session`'a,
+peer mesajlarına, otomasyonlara ve flow'lara hizmet ederler.
 
-- **Sahiplik zorunlu.** Hedef, **çağıran oturumun** `subagent` çocuğu olmalıdır
-  (`Runtime.StopSubagent`). Session id'leri tahmin edilebilirdir; bu kontrol olmadan
-  bir ajan ağacın başka bir dalını — ya da insanın kendi oturumunu — iptal edebilir
-  ve arıza, koşu kendiliğinden ölmüş gibi görünürdü. `retry_of` doğrulaması da aynı
-  kuralı uygular.
-- **Bitmiş koşuyu durdurmak hata DEĞİLDİR.** Çağıran durdurmaya karar verdiğinde
-  koşunun kendiliğinden bitmesi kazanılamayacak bir yarıştır; bunu araç hatasına
-  çevirmek modeli anlamsız yeniden denemelere iter. Araç `stopped=false` ile
-  "zaten bitmişti" der.
-- **Terminal durum çağrı dönmeden damgalanır** (`runState="killed"`). İptal edilen
-  tur kendi transkriptini geri sarılırken yazar, ama o yazım bu dönüşle yarışır;
-  hemen ardından oturumu okuyan çağıran onu "running" görmemelidir. İki yazım
-  idempotenttir.
-- Araç `withRunAgent` ile **birlikte** kurulur: bir tur başlatma anahtarını
-  durdurma anahtarı olmadan asla tutamaz.
-
-**Kapsam dışı (takip):** CLI köprüsü (`internal/api/mcp_interaction*.go`) yalnız
-`run_subagent`'ı bridge'ler; claude-cli/codex-cli ajanları async koşu başlatabilir
-ama `stop_subagent`'ı henüz göremez. Native tool-loop ajanlarında araç mevcuttur.
+## Yeniden deneme (TSK597, 2026-08-31)
 
 ### `retry_of` — denemeleri zincirleme
 
@@ -429,11 +419,10 @@ tek bir okunur koşul olarak kalsın ve mevcut hiçbir `session.json` sahip olma
 bir alan kazanmasın diye. Lineage doğrulaması bütçe harcanmadan **önce** yapılır —
 hatalı referans çağırana hiçbir şeye mal olmaz. Hâlâ koşan bir deneme reddedilir:
 aynı sözleşmeye yanıt veren iki canlı koşu bütçeyi iki kez harcar ve raporlamada
-yarışır; çağıran önce `stop_subagent` çağırmalı veya bitmesini beklemelidir.
+yarışır; çağıran o denemenin bitmesini beklemelidir.
 
 Testler: `subagent_retry_test.go` (numaralama, zincirin zinciri, sahiplik/canlı/tür/
-eksik reddi, damgasız düz koşu), `subagent_control_test.go` (birlikte kurulum,
-sahiplik reddi, bitmiş koşu, iptal + `killed` damgası).
+eksik reddi, damgasız düz koşu).
 
 ## Artifact çıkışı (TSK599, 2026-08-31)
 
@@ -474,6 +463,6 @@ yolundadır (workspace dışındaki dosya içeri kopyalanır).
 
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
-- `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)
+- `22-SPAWN-SESSION.md` (spawn primitifi — native yüzeyden kaldırıldı)
 - `24-SELF-MANAGEMENT.md` (call_agent/send_agent_message araç yüzeyi — güncellenecek)
 - `20-SCHEDULE-WAKE.md` (heartbeat sonrası kalan otonomi tetikleyicisi)

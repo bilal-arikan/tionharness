@@ -102,7 +102,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
 
       <SubHead icon={Sparkles}>Spawn (arka plan) limitleri</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Ayrık arka plan yüzeyi için sınırlar: <code>run_subagent</code> (async) ve köprülenen{' '}
+        Ayrık arka plan yüzeyi için sınırlar: <code>spawn_worker</code> ve köprülenen{' '}
         <code>spawn_session</code> + UI spawn düğmesi.
       </p>
       <div className="grid grid-cols-2 gap-3">

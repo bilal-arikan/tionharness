@@ -331,11 +331,11 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		go r.runWorkerRegistered(runCtx, cancelRun, agent, session.ID, prompt, coordID, ctl)
 	} else {
 		// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
-		// the session id back to its caller (run_subagent) the moment this returns, and
-		// a caller may stop the run before the goroutine is even scheduled — let alone
-		// before it clears the blocking turn-slot claim. Registering inside the turn
-		// left that whole window uncancellable while the row already read "running", so
-		// stop_subagent answered "already finished" for a run that kept going.
+		// the session id back to its caller the moment this returns, and a caller may
+		// stop the run before the goroutine is even scheduled — let alone before it
+		// clears the blocking turn-slot claim. Registering inside the turn left that
+		// whole window uncancellable while the row already read "running", so a stop
+		// answered "already finished" for a run that kept going.
 		runCtx, cancelRun := context.WithCancel(context.Background())
 		r.trackSession(session.ID, cancelRun)
 		go r.runSpawn(runCtx, cancelRun, agent, session.ID, prompt, opts)
@@ -371,7 +371,7 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 	if slotErr != nil {
 		// Cancelled while waiting for the session's turn slot: the turn never ran, so
 		// record the terminal state instead of starting work nobody is waiting for.
-		// stop_subagent stamps "killed" itself; this covers a plain CancelSession.
+		// This covers a plain CancelSession on a spawn that never got to run.
 		r.logger.Info("spawn: cancelled before its turn started", "session", sessionID)
 		if opts.ChildSession != nil {
 			// context.Background() deliberately: runCtx is already cancelled and the

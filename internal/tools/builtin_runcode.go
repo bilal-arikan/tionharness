@@ -98,7 +98,7 @@ var codeModeExcludedBuiltins = map[string]bool{
 	"Bash": true, "PowerShell": true, "transform_data": true, "run_code": true,
 	"shell_manage": true,
 	// Delegation / recursion / meta tool-loading.
-	"run_subagent": true, "stop_subagent": true, "use_skill": true, "skill_search": true,
+	"run_subagent": true, "use_skill": true, "skill_search": true,
 	"activate_tools": true, "deactivate_tools": true, "tool_search": true,
 	"spawn_session": true,
 	// Coordinator worker controls.

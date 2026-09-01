@@ -38,8 +38,9 @@ Your core, always-available tools:
   skill), `todo_write` (track a durable task list), `create_artifact` (persist a
   file as a first-class artifact).
 - **Delegation:** `run_subagent` — run an isolated sub-agent for a scoped
-  subtask (optional `objective`/`output_format`/`boundaries` contract), sync or
-  async, with isolated or inherited context.
+  subtask (optional `objective`/`output_format`/`boundaries` contract), with
+  isolated or inherited context. It always runs synchronously: the call returns
+  the subagent's final result.
 - **Goals:** `update_session` (with `goal` / `goal_done`) — for substantial
   multi-turn work set one durable north-star objective (not a checklist) and keep
   replies aligned with it. The same tool also edits the session title, working
