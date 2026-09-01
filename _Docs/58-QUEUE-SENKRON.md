@@ -454,8 +454,35 @@ eskiden yalnız `Role=="coordinator"` oturumlarda `coordSlot` ile serileşiyor, 
 oturumda ise **eşzamanlı ikinci bir tur** açabiliyordu (wake↔kullanıcı,
 direct-chat↔inbox-worker yarışı). Artık `coordSlot` **her oturumun** tek tur
 kilidi: `runChatTurn`/`handleChat` `BeginSessionUserTurn` ile, otonom yollar
-`claimSessionTurnSlot` ile **koşulsuz** claim eder → aynı oturumda asla iki tur
+`claimSessionTurnSlot` ile claim eder → aynı oturumda asla iki tur
 paralel koşmaz. Detay + testler: `_Docs/47` §13.
+
+### Claim penceresinde "Durdur" (2026-09-01)
+
+Tur yuvası claim'i **kuyruğa girebilir** ve bekleme süresi üst sınırsızdır
+(öndeki tur ne kadar sürerse). Otonom yolların cancel func kaydı bu claim'den
+SONRA yapıldığı sürece o pencerede oturum "çalışıyor" görünür ama iptal edilecek
+bir şey yoktur: `CancelSession` `false` döner, durdurulan tur sırası gelince
+başlar ve sonuna kadar koşar. Kural artık üç parçalıdır ve her otonom giriş
+yolunda aynıdır:
+
+1. `context.WithCancel` + `trackSession` claim'den **önce**, çağıran goroutine'de
+   yapılır (worker'da `newWorkerRun`, `go` ifadesinden önce).
+2. Claim `claimSessionTurnSlot` değil `claimSessionTurnSlotCtx(runCtx, …)` ile
+   yapılır — iptal beklemeyi keser.
+3. Claim hata dönerse tur **hiç koşmaz**: durum damgalanır, gözlemlenebilir olay
+   yayılır, kendini zincirleyen devam yolları (auto-continue / auto-handoff /
+   coordinator bildirimi) atlanır.
+
+Kapsanan yollar: worker (`coordination.go`), spawn (`spawn.go`), wake +
+scheduled prompt (`scheduler.go`), automation (`automation_deliver.go`), peer
+inbox (`agentmsg.go`). Wake'in claim'i ayrıca fire'ın `ScheduleTimeout` ctx'inden
+türer (önceden bu deadline'ı tamamen yok sayıyordu) ve claim'de durdurulan bir
+wake **failure teslimatı olarak kaydedilmez** (`errWakeCancelledBeforeTurn`) —
+iptal edilmiş bir wake başarısız bir wake değildir.
+
+Testler: `internal/agent/turnslot_race_test.go`,
+`internal/agent/worker_stop_race_test.go`.
 
 ## Legacy `/chat/stream` + `/chat` kuyruğa taşındı (dayanıklı cutover, 2026-07-25)
 

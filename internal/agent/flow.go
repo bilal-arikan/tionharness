@@ -622,7 +622,11 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		// (CancelSession) can stop the flow — it never enters the api chatRuns.
 		runCtx, cancelRun := context.WithCancel(ctx)
 		defer cancelRun()
-		ctx = runCtx
+		// Stamp the run's session id next to the flow call kind (RunFlow adds
+		// WithCallKind): without it every node's turn runs session-less, so
+		// session-scoped tooling — the autonomous Interaction wiring above all —
+		// sees an empty session id and degrades to "unavailable".
+		ctx = WithSessionID(runCtx, sessionID)
 		r.trackSession(sessionID, cancelRun)
 		defer r.untrackSession(sessionID)
 		// Record the user turn AND announce the session up front, so the chat
@@ -636,6 +640,12 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 			Level:  "info",
 			Target: map[string]string{"sessionId": sessionID, "op": "create"},
 		})
+	} else {
+		// The run still executes (recordFlowSessionTurn creates the transcript
+		// afterwards), but with no session id there is nothing to stamp — the nodes
+		// run session-less. Never substitute a placeholder id; say so instead.
+		r.logger.Warn("flow run session not created up front; nodes run session-less",
+			"flow", flow.ID, "error", serr)
 	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
 	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID, inputRecorded); recorded != "" {

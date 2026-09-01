@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -65,11 +66,29 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 		return "", err
 	}
 
+	// Own cancelable context for the delivery turn so a human "Durdur"
+	// (CancelSession) can stop it — it never enters the api server's chatRuns.
+	// Registered BEFORE the turn-slot claim below: the claim can queue behind any
+	// other turn on this session, and a stop landing in that window must find
+	// something to cancel instead of being outlived by a turn that starts afterwards.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	r.trackSession(session.ID, cancelRun)
+	defer r.untrackSession(session.ID)
+
 	// Serialize this fire's turn with any concurrent turn on the same session (a
 	// prior fire still running, a user who opened the maintenance thread) via the
 	// single per-session turn slot.
-	release := r.claimSessionTurnSlot(session.ID, turnqueue.KindAutomation, "otomasyon tetiği")
+	release, slotErr := r.claimSessionTurnSlotCtx(runCtx, session.ID, turnqueue.KindAutomation, "otomasyon tetiği")
 	defer release()
+	if slotErr != nil {
+		// Stopped while waiting for the slot: the turn never ran and the prompt was not
+		// recorded. Return before the auto-continue / auto-handoff chain below — a fire
+		// the user stopped must not resurrect itself as a follow-up turn.
+		r.logger.Info("automation deliver: cancelled before its turn started",
+			"automation", a.ID, "agent", a.TargetAgentID, "session", session.ID)
+		return session.ID, fmt.Errorf("otomasyon turu sırasını beklerken durduruldu: %w", slotErr)
+	}
 
 	// Record the automation prompt as a user turn first so the thread reads as a
 	// real conversation. Origin "automation" lets the UI render it as a triggered
@@ -87,12 +106,6 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// Bridge it to the hub so a window watching this session renders the note live
 	// and in order before the reply (_Docs/58), not only on reload.
 	r.emitInjectedUserNote(session.ID, autoMsg)
-	// Own cancelable context for the delivery turn so a human "Durdur"
-	// (CancelSession) can stop it — it never enters the api server's chatRuns.
-	runCtx, cancelRun := context.WithCancel(ctx)
-	defer cancelRun()
-	r.trackSession(session.ID, cancelRun)
-	defer r.untrackSession(session.ID)
 
 	// Bound the turn with the spawn watchdog: it holds the per-session turn slot, so
 	// a hung turn must not block the session's queue forever (the slot's Cond wait

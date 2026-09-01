@@ -95,6 +95,30 @@ func TestWorkerCancelledWhileQueuedNeverRuns(t *testing.T) {
 			t.Fatalf("a cancelled-while-queued worker must record no assistant turn, got %q", m.Text)
 		}
 	}
+
+	// The coordinator is waiting on this worker whatever happened to it, so the kill
+	// must still be reported: dropping the notification freezes the coordinator on a
+	// worker that will never speak.
+	coordMsgs, err := rt.db.ListMessages(ctx, coord)
+	if err != nil {
+		t.Fatalf("list coordinator messages: %v", err)
+	}
+	found := false
+	for _, m := range coordMsgs {
+		if m.Origin != "worker-note" {
+			continue
+		}
+		if !strings.Contains(m.Text, "<task-id>"+workerID+"</task-id>") {
+			continue
+		}
+		found = true
+		if !strings.Contains(m.Text, "<status>"+turnStatusKilled+"</status>") {
+			t.Fatalf("the coordinator's note for the queued-cancelled worker must report %q, got %q", turnStatusKilled, m.Text)
+		}
+	}
+	if !found {
+		t.Fatalf("the coordinator got no task-notification for worker %s cancelled while queued", workerID)
+	}
 	drainSpawns(t, rt)
 }
 

@@ -220,8 +220,15 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 		return err
 	}
 	r.logger.Info("agent message: delivered", "to", target.ID, "session", inbox.ID)
+	// Own cancelable context for the delivery turn, registered BEFORE the goroutine
+	// starts: send_agent_message returns to the sender's tool loop immediately, and a
+	// "Durdur" on the recipient's inbox in that window must find something to cancel.
+	// Registering it inside the goroutine — after a turn-slot claim that can queue
+	// behind any other turn on the inbox session — left that window uncancellable.
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	r.trackSession(inbox.ID, cancelRun)
 	// Fire-and-forget: process detached from the caller's context.
-	go r.runInboxDelivery(target, inbox.ID, text)
+	go r.runInboxDelivery(runCtx, cancelRun, target, inbox.ID, text)
 	return nil
 }
 
@@ -230,8 +237,13 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 // the new message), records the reply (or failure) as an assistant turn, then
 // releases the concurrency slot and notifies. Mirrors runSpawn but on a durable
 // inbox session.
-func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
+//
+// runCtx/cancelRun are created and registered by the caller (SendAgentMessage)
+// before this goroutine starts, so the delivery is cancellable from the moment the
+// send returns — including while it is still queued for the session's turn slot.
+func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, inboxID, prompt string) {
 	defer r.releaseSpawnSlot()
+	defer cancelRun()
 
 	// Same hard ceiling + idle watchdog as spawn/worker turns: a productive turn
 	// runs up to SpawnTimeout, a hung one is reclaimed after SpawnIdleTimeout.
@@ -240,14 +252,18 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	// Serialize this peer delivery with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.
-	release := r.claimSessionTurnSlot(inboxID, turnqueue.KindPeer, "ajan mesajı")
+	release, slotErr := r.claimSessionTurnSlotCtx(runCtx, inboxID, turnqueue.KindPeer, "ajan mesajı")
 	defer release()
-
-	// Own cancelable context for this delivery turn so a human "Durdur"
-	// (CancelSession) can stop it — it never enters the api server's chatRuns.
-	runCtx, cancelRun := context.WithCancel(context.Background())
-	defer cancelRun()
-	r.trackSession(inboxID, cancelRun)
+	if slotErr != nil {
+		// Stopped while waiting for the slot: the turn never ran, so record nothing and
+		// close the inbox indicator with a failed outcome instead of starting work
+		// nobody is waiting for.
+		r.logger.Info("agent message: cancelled before its turn started",
+			"session", inboxID, "agent", agent.ID)
+		r.untrackSession(inboxID)
+		r.emitInboxEvent(agent, inboxID, false)
+		return
+	}
 
 	// Single-shot idle-resume (FND-708844f8): an idle-cut inbox turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.

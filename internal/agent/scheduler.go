@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -248,6 +249,17 @@ func (s *Scheduler) fireWake(scheduleID string) {
 	s.logger.Info("wake fire: begin", "schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
 
 	if fireErr := s.deliverWake(ctx, sc); fireErr != nil {
+		if errors.Is(fireErr, errWakeCancelledBeforeTurn) {
+			// Stopped before its turn started. The row is already consumed, so retire it
+			// like a delivered wake — recording a "failure" would report a fault for
+			// something the user (or the fire deadline) deliberately cut short.
+			s.logger.Info("wake fire: cancelled before its turn started",
+				"schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
+			if err := s.db.DeleteSchedule(book, scheduleID); err != nil {
+				s.logger.Warn("wake fire: cleanup failed", "schedule", scheduleID, "error", err)
+			}
+			return
+		}
 		s.logger.Error("wake fire: failed",
 			"schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID, "error", fireErr)
 		// Keep the spent (now disabled) row and record why it failed, so the failure
@@ -263,6 +275,13 @@ func (s *Scheduler) fireWake(scheduleID string) {
 		s.logger.Warn("wake fire: cleanup failed", "schedule", scheduleID, "error", err)
 	}
 }
+
+// errWakeCancelledBeforeTurn marks a wake that was stopped (or hit the fire
+// deadline) while it was still waiting for its session's turn slot. It is an error
+// so deliverWake's callers stop, but NOT a delivery failure: nothing ran and
+// nothing was recorded, so fireWake retires the row instead of parking a failure
+// the user caused on purpose.
+var errWakeCancelledBeforeTurn = errors.New("wake cancelled before its turn started")
 
 // deliverWake re-delivers a wake prompt into its originating chat session as a
 // fresh turn: it records the prompt as a user message, runs the agent (tracing
@@ -284,12 +303,35 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	if _, err := s.db.GetSession(ctx, sc.SessionID); err != nil {
 		return fmt.Errorf("wake session %s gone: %w", sc.SessionID, err)
 	}
+	// Own cancelable context + active-session tracking so a wake turn is stoppable
+	// from the UI, exactly like a scheduled or spawned turn. Registered BEFORE the
+	// turn-slot claim below: that claim can queue behind any other turn on this
+	// session for an unbounded time, and a "Durdur" landing in that window must find
+	// something to cancel instead of being outlived by a wake that starts afterwards.
+	// Derived from ctx so the fire's own ScheduleTimeout deadline also cuts a claim
+	// that never comes — the old claim ignored that deadline entirely.
+	wakeRunCtx, cancelWakeRun := context.WithCancel(ctx)
+	defer cancelWakeRun()
+	s.rt.trackSession(sc.SessionID, cancelWakeRun)
+	defer s.rt.untrackSession(sc.SessionID)
+
 	// A wake re-enters a real, human-visible chat session: claim its per-session
 	// turn slot so the wake turn never overlaps a concurrent user turn (inbox
 	// worker / direct chat) or, for a coordinator, an auto turn — worker
 	// notifications arriving meanwhile coalesce and run after release.
-	release := s.rt.claimSessionTurnSlot(sc.SessionID, turnqueue.KindWake, "uyandırma")
+	release, slotErr := s.rt.claimSessionTurnSlotCtx(wakeRunCtx, sc.SessionID, turnqueue.KindWake, "uyandırma")
 	defer release()
+	if slotErr != nil {
+		// Stopped (or timed out) while waiting for the session's turn slot: the turn
+		// never ran and nothing was written into the conversation, so close the UI
+		// bracket and report it as cancelled rather than starting work nobody waits
+		// for. fireWake keeps this out of the failure delivery — a wake the user
+		// stopped is not a wake that failed.
+		s.logger.Info("wake: cancelled before its turn started",
+			"schedule", sc.ID, "session", sc.SessionID)
+		s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma durduruldu")
+		return fmt.Errorf("%w: %v", errWakeCancelledBeforeTurn, slotErr)
+	}
 
 	// Record the wake prompt as a user turn and tell the open screen to refresh +
 	// show a thinking indicator (phase=start). Origin "wake" makes the UI render it
@@ -326,12 +368,6 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// to the prompt-only invoke when no runner is wired.
 	var wakeMeta *turnMeta
 	wakeStart := time.Now()
-	// Own cancelable context + active-session tracking so a wake turn is stoppable
-	// from the UI, exactly like a scheduled or spawned turn.
-	wakeRunCtx, cancelWakeRun := context.WithCancel(ctx)
-	defer cancelWakeRun()
-	s.rt.trackSession(sc.SessionID, cancelWakeRun)
-	defer s.rt.untrackSession(sc.SessionID)
 	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(wakeRunCtx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSchedule), sc.SessionID))
@@ -566,11 +602,31 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		go func() { _ = s.Reload(context.Background()) }()
 		return session.ID, err
 	}
+	// Own cancelable context for this turn so a human "Durdur" (CancelSession) can
+	// stop a scheduled run that never enters the api server's chatRuns. Registered
+	// BEFORE the turn-slot claim below: the claim can queue behind any other turn on
+	// this session, and a stop landing in that window must find something to cancel
+	// instead of being outlived by a turn that starts afterwards.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	s.rt.trackSession(session.ID, cancelRun)
+	// Deferred, not untracked at a single point: every bail below this line (slot
+	// cancellation, prompt-append failure) would otherwise leave the session marked
+	// active forever — permanently "running" in the sessions view, its agent busy,
+	// and isSessionActive stuck true.
+	defer s.rt.untrackSession(session.ID)
 	// Serialize this scheduled turn with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.
-	release := s.rt.claimSessionTurnSlot(session.ID, turnqueue.KindWake, "zamanlanmış tur")
+	release, slotErr := s.rt.claimSessionTurnSlotCtx(runCtx, session.ID, turnqueue.KindWake, "zamanlanmış tur")
 	defer release()
+	if slotErr != nil {
+		// Stopped while waiting for the slot: the turn never ran and the prompt was not
+		// even recorded, so leave the session untouched and report the stop.
+		s.logger.Info("schedule deliver: cancelled before its turn started",
+			"schedule", sc.ID, "agent", sc.AgentID, "session", session.ID)
+		return session.ID, fmt.Errorf("zamanlanmış tur sırasını beklerken durduruldu: %w", slotErr)
+	}
 	// Record the scheduled prompt as a user turn first, so the schedule thread
 	// reads as a real conversation (the UI shows what was asked). Origin "schedule"
 	// renders it as a "⏰ Zamanlanmış görev" note rather than a user bubble.
@@ -586,11 +642,6 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Bridge it to the hub so a window watching this session renders the scheduled
 	// prompt live and in order before the reply (_Docs/58), not only on reload.
 	s.rt.emitInjectedUserNote(session.ID, schedMsg)
-	// Own cancelable context for this turn so a human "Durdur" (CancelSession) can
-	// stop a scheduled run that never enters the api server's chatRuns.
-	runCtx, cancelRun := context.WithCancel(ctx)
-	defer cancelRun()
-	s.rt.trackSession(session.ID, cancelRun)
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
@@ -614,7 +665,6 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 			return s.rt.invokeTraced(turnCtx, agent, p, true) // scheduled = autonomous
 		})
 	defer cancelTurn()
-	s.rt.untrackSession(session.ID)
 	// A watchdog cut (hard/idle) or a self-truncated loop returns salvaged text that
 	// must not be recorded as a finished result: lead it with the outcome note and
 	// suppress the completion signal below. A real fault / human stop is left as an
