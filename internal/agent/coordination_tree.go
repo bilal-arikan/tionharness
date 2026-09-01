@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
@@ -129,10 +130,16 @@ func formatWorkerTree(ws []SubtreeWorker) string {
 	fmt.Fprintf(&b, "%d worker(s) in your subtree (all levels):\n", len(ws))
 	for _, w := range ws {
 		status := "finished"
-		if w.Running {
+		switch {
+		case w.Delegating:
+			// Live only through its branch (or still owing a report): counted with the
+			// running ones, because the coordinator must not conclude on top of it.
+			status = "delegating"
+			running++
+		case w.Running:
 			status = "running"
 			running++
-		} else {
+		default:
 			finished++
 		}
 		indent := strings.Repeat("  ", w.Depth-1)
@@ -159,8 +166,11 @@ func formatWorkerTree(ws []SubtreeWorker) string {
 // Withholding is the whole point: a sub-coordinator's first turn ends as soon as
 // it has spawned its workers, and reporting THAT as "completed" would tell its
 // coordinator the subtask is done while the branch below has not even started
-// producing. Instead the parent gets a "delegating" progress note, and the node
-// closes its task later via report_to_coordinator (or the settle backstop).
+// producing. Nothing at all goes up in that moment — the parent is not woken for a
+// non-result. The state stays visible in the parent's LIVE worker view instead
+// (the pending-report flag makes the node read as "delegating"; see
+// subCoordinatorBusy), and the node closes its task later via
+// report_to_coordinator (or the settle backstop).
 //
 // Only a clean turn is deferred. A failed/killed sub-coordinator reports
 // immediately — its branch is broken and the parent must be able to react — and
@@ -183,7 +193,7 @@ func (r *Runtime) deferWorkerReport(ctx context.Context, sess db.Session, status
 		}
 		if err != nil {
 			// Unknown subtree: withhold the completion notification. A needless
-			// "delegating" note costs the coordinator one wasted wait that the settle
+			// "delegating" state costs the coordinator one wasted wait that the settle
 			// backstop resolves; reporting completed over a live branch is unrecoverable.
 			r.logger.Warn("coordination: withholding worker report, subtree state unknown",
 				"session", sess.ID, "error", err)
@@ -193,22 +203,85 @@ func (r *Runtime) deferWorkerReport(ctx context.Context, sess db.Session, status
 	return true
 }
 
-// notifyDelegating tells a coordinator that one of its workers has fanned the work
-// out further and is NOT finished — the interim signal that replaces the premature
-// completion notification. Deliberately not a <task-notification>: the coordinator
-// prompt teaches that only those close a task.
-func (r *Runtime) notifyDelegating(coordSessionID, workerSessionID, agentName string, subWorkers int) {
-	note := fmt.Sprintf("<task-progress>\n<task-id>%s</task-id>\n<agent>%s</agent>\n<status>delegating</status>\n"+
-		"<detail>This worker is a sub-coordinator and has %d worker(s) of its own running. It is NOT finished — "+
-		"it will send a <task-notification> when its whole branch is done. Do not treat this as a result and do not wait idly on it; "+
-		"work on your other tracks.</detail>\n</task-progress>",
-		workerSessionID, agentName, subWorkers)
-	r.NotifyCoordinator(coordSessionID, note)
+// ---- end-of-turn delivery of the upward report ----
+
+// pendingUpwardReport is the per-turn stash a report_to_coordinator call writes
+// into instead of notifying the parent on the spot.
+//
+// Sending inline woke the parent while the reporting node was still mid-turn: the
+// tool call is rarely the last thing a turn does, so the coordinator started
+// reading a "finished" branch whose final assistant reply had not been persisted
+// yet. The note is therefore held here and flushed from the worker turn's terminal
+// path (runWorkerWithCtl), after the reply is on disk.
+//
+// One stash per WORKER RUN, not per turn attempt: the idle-resume loop builds a
+// fresh context per attempt, and a report made in a cut-short attempt must not be
+// dropped by the retry.
+type pendingUpwardReport struct {
+	mu    sync.Mutex
+	coord string
+	note  string
+	armed bool
+}
+
+// stash records the note to deliver, overwriting any earlier one. Two
+// report_to_coordinator calls in the same turn mean the agent corrected itself:
+// the last one wins and only that one is sent.
+func (p *pendingUpwardReport) stash(coordSessionID, note string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.coord, p.note, p.armed = coordSessionID, note, true
+}
+
+// take hands out the stashed note exactly once, so a second flush (an early return
+// plus the deferred backstop) cannot report the same result twice.
+func (p *pendingUpwardReport) take() (coordSessionID, note string, ok bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.armed {
+		return "", "", false
+	}
+	p.armed = false
+	return p.coord, p.note, true
+}
+
+type upwardReportKey struct{}
+
+// withPendingUpwardReport attaches a run's stash to a turn context.
+func withPendingUpwardReport(ctx context.Context, p *pendingUpwardReport) context.Context {
+	return context.WithValue(ctx, upwardReportKey{}, p)
+}
+
+// pendingUpwardReportFrom returns the stash attached to ctx, or nil when the call
+// is not running inside a worker turn (a chat turn opened directly on the worker
+// session, or a direct runtime call) — those still send immediately, because there
+// is no terminal path that would flush for them.
+func pendingUpwardReportFrom(ctx context.Context) *pendingUpwardReport {
+	p, _ := ctx.Value(upwardReportKey{}).(*pendingUpwardReport)
+	return p
+}
+
+// flushUpwardReport delivers the note a report_to_coordinator call stashed during
+// this run. Called on EVERY terminal path of a worker turn, including failed and
+// killed: the tool already claimed the pending-report flag, so a note dropped here
+// would leave the coordinator above waiting on a report that can never arrive.
+func (r *Runtime) flushUpwardReport(p *pendingUpwardReport, sessionID string) {
+	coord, note, ok := p.take()
+	if !ok {
+		return
+	}
+	r.logger.Info("coordination: delivering sub-coordinator report at end of turn",
+		"session", sessionID, "coordinator", coord)
+	r.NotifyCoordinator(coord, note)
 }
 
 // ReportToCoordinator closes a sub-coordinator's task upstream with its own
 // synthesis (the report_to_coordinator tool). This is the ONLY thing that reports
 // a mid-level node as done — see the file header.
+//
+// The validations run HERE, at call time, so the tool can still refuse a premature
+// "completed" and still win the claim race against the settle backstop. Only the
+// delivery is deferred to the end of the turn (see pendingUpwardReport).
 func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, summary string) error {
 	sess, err := r.db.GetSession(ctx, sessionID)
 	if err != nil {
@@ -239,10 +312,16 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 		return err
 	}
 	note := formatTaskNotification(sessionID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, status, summary, 0, 0)
-	r.NotifyCoordinator(sess.CoordinatorSessionID, note)
+	deferred := false
+	if stash := pendingUpwardReportFrom(ctx); stash != nil {
+		stash.stash(sess.CoordinatorSessionID, note)
+		deferred = true
+	} else {
+		r.NotifyCoordinator(sess.CoordinatorSessionID, note)
+	}
 	r.logger.Info("coordination: sub-coordinator reported up",
 		"session", sessionID, "coordinator", sess.CoordinatorSessionID,
-		"status", status, "closedPendingReport", claimed)
+		"status", status, "closedPendingReport", claimed, "deferredToTurnEnd", deferred)
 	return nil
 }
 

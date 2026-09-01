@@ -1078,13 +1078,23 @@ Bir ara düğümün turu, işini kendi worker'larına dağıttığı anda biter.
 demek** olurdu. Üç parçalı çözüm (`coordination_tree.go`):
 
 1. **Ertelenmiş rapor** — `deferWorkerReport`: düğüm koordinatörse ve kendi
-   worker'ları canlıysa `<task-notification>` gönderilmez; yerine bir kerelik
-   `<task-progress status="delegating">` gider. `slot.owesReport` işaretlenir.
+   worker'ları canlıysa **hiçbir mesaj yukarı gitmez** — ne `<task-notification>`
+   ne de ara bir ilerleme notu. Ebeveyn bir sonuç olmayan şey için tur harcamaz.
+   `CoordinatorReportPending` işaretlenir ve durum yalnızca ebeveynin **canlı
+   worker görünümünde** taşınır: `subCoordinatorBusy` bu bayrağı (veya canlı
+   worker sayacını) okur, düğüm `Delegating` olarak işaretlenir ve durum
+   bloğunda `DELEGATING` görünür — "finished" değil.
    **Başarısız/kill turlarda ertelenmez** (dal bozuk, ebeveyn hemen bilmeli) ve
    alt ağaç cascade durdurulur.
 2. **Açık rapor** — `report_to_coordinator(summary, status)` aracı: sentezini
    bitiren düğüm görevini kendisi kapatır. Kendi worker'ları çalışırken
-   `completed` raporu **reddedilir**.
+   `completed` raporu **reddedilir**. Doğrulamalar çağrı anında koşar, ama not
+   **senkron gönderilmez**: turun `pendingUpwardReport` zulasına yazılır ve
+   `runWorkerWithCtl`'in terminal yolunda — yanıt diske yazıldıktan ve
+   `workerDone()` çağrıldıktan sonra — teslim edilir. Böylece ebeveyn, raporlayan
+   düğüm hâlâ tur ortasındayken uyanmaz. Tur `failed`/`killed` bitse bile zula
+   boşaltılır (claim zaten harcandı); aynı turda iki çağrı olursa **sonuncusu
+   kazanır**, ikisi birden gitmez.
 3. **Settle backstop** — `settleReportBackstop`: dal tamamen sustuğu hâlde
    `CoordinatorSettleGraceSec` (vars. **30 sn**, ayarlanabilir 5–1800) içinde rapor
    gelmezse otomatik rapor gider. Statüsü **daima `incomplete`** — runtime işin
@@ -1250,6 +1260,9 @@ ilan eder → native ve claude-cli turları araç seti konusunda ayrışamaz.
 - **Ertelenmiş rapor sahada çalıştı:** alt-koordinatörün ilk turu `completed`
   olarak yukarı gitmedi, `<task-progress status="delegating">` gitti; ağaçta
   `reportPending` göründü ve kök doğru okudu ("bu bir sonuç değil, bekliyorum").
+  *(Not: o ara ilerleme notu sonradan kaldırıldı — ebeveyni boş yere uyandırıp bir
+  tur harcatıyordu. Durum artık yalnız canlı worker görünümünde taşınıyor; bkz.
+  §14.2 madde 1.)*
 - Alt-koordinatör `report_to_coordinator`'ı **kendisi** çağırdı (backstop
   gerekmedi); kök `ALPHA+BETA` sentezini aldı.
 - Ayrı bir koşuda backstop **kasıtlı tetiklendi** (alt-koordinatöre "asla rapor
@@ -1647,3 +1660,169 @@ ile bölüm adı doğrulaması, en sonunda `debug prompt-input` A/B'si + gerçek
 `SubAgentActivity` kontrolü. **Kabul kanıtı `codex features list` çıktısı değil,
 prompt farkı + gerçek turdur** — bayrağın "set edilmiş" görünmesi davranışın
 değiştiği anlamına gelmez.
+
+## Oturum başlangıç paneli (2026-09-01)
+
+Koordinatör modu ve recipe seçimi artık **ilk mesajdan önce** de görünür: boş bir
+sohbette composer'ın üstünde `SessionStartPanel` kartı çıkar, mesaj gönderildiği
+anda kaybolur. Ayrı bir mekanizma değildir — aynı `PUT /api/sessions/{id}/role`
+ve `PUT /api/sessions/{id}/workflow` uçlarını çağırır, `CoordinatorSection` ile
+aynı `CoordinatorWorkflowPicker`'ı kullanır. Gerekçe ve görünürlük kuralı:
+`_Docs\07-CHAT-UX.md` § "Oturum başlangıç paneli".
+
+## 19. Uzun koordinatör oturumu — SES2570 bulguları ve alınan önlemler (2026-09-01)
+
+Tek bir koordinatör oturumu (`SES2570`, codex-cli `gpt-5.6-sol`) 20.7 saat sürdü,
+81 sağlayıcı çağrısı yaptı, 5 kez fold aldı ve tek satır kod commit etmeden
+kapanmadı. Ölçüm (oturum ağacı = 27 oturum): **8.95M in+out token, 74.7M
+cache-read**, `messages.jsonl` **12.33 MB**. Aşağıdaki altı önlem doğrudan bu
+oturumun ölçülen kayıplarından türetildi.
+
+### 19.1 Oturum-kapsamlı `use_skill` dedupe
+
+`use_skill` 174 kez çağrılmıştı; **167'si aynı oturumda daha önce yüklenmiş bir
+slug**'dı (`tionharness-project` 74×, `orchestrator-doctrine` 47×,
+`tionharness-coordinator` 37×). 2.25 MB ≈ ~560K token saf tekrar — fold'lar
+arasındaki context büyümesinin neredeyse tamamı.
+
+`internal/tools/skillledger.go` oturum başına bir **defter** tutar
+(`SkillLedger`). Aynı slug ikinci kez istendiğinde gövde yerine
+`SkillReloadPointer` döner: "bu oturumda yüklendi (#N), gövde tekrar
+gönderilmedi, gerçekten gerekiyorsa `force: true`".
+
+- **Epoch = `Session.CompactionCount`.** Fold, eski gövdeyi pencereden düşürür;
+  fold sonrası ilk yükleme **gerçek metni** döndürmek zorundadır. Defter kaydı
+  epoch ile eşleşmiyorsa yok sayılır.
+- `force: true` gövdeyi yeniden gönderir **ve** kaydı güncel epoch'a taşır.
+- Gövde okuması başarısız olursa kayıt silinir — geçici bir okuma hatası, o
+  slug'ın sonraki tüm yüklemelerini bastırmamalı.
+- Defter iki sağlayıcı yolunda da aynıdır: native araç ctx'ten
+  (`tools.WithSkillLedger`), CLI köprüsü `chatRun`'dan okur
+  (`internal/api/skillledgers.go`).
+- Bellek-içi: yeniden başlatmada her gövde bir kez daha servis edilir — CLI
+  thread'i de zaten sıfırlandığı için doğru davranış budur.
+
+### 19.2 Spawn-zamanı yetenek kontrolü
+
+18:10–19:21 arası **tek bir markdown dosyası** 5 ardışık denemede üretilemedi.
+Sebep: `Worker: Planner` (`allowedTools: ["Read","LS","Glob","Grep","WebFetch"]`)
+**salt-okunur**; koordinatör ona "dosyayı yaz, satır sayısı + SHA-256 kanıtı ver"
+brief'i verdi. Worker `Write` çağırdı, registry `unknown tool "Write"; use
+tool_search…` döndürdü — yani model bunu **isimlendirme sorunu** sandı.
+
+İki katmanlı düzeltme:
+
+1. **`Registry.unknownToolMessage`** artık `tools.IsKnownBuiltin` ile ayrım
+   yapıyor: ad TionHarness'te var ama bu ajanın setinde yoksa mesaj "izin sınırı,
+   yeniden denemek işe yaramaz, sonucunda bunu belirt" diyor.
+2. **`Runtime.checkWorkerCapability`** (`internal/agent/spawncapability.go`)
+   spawn'ı baştan reddediyor: brief açıkça yazma gerektiriyorsa
+   (`taskNeedsMutation` — dar, iki dilli desenler) ve hedef ajanın allowlist'inde
+   hiç mutasyon aracı yoksa hata döner ve **yolu söyler**. Kontrol hedef
+   çözümlendikten sonra, worker slot rezervasyonundan **önce** koşar.
+
+`agentMutationTools` bozuk bir `allowed_tools` belgesini **hata** sayar: aynı
+belge gerçek filtrede her aracı reddediyor, "yazabilir" demek yalan olurdu.
+
+### 19.3 Worker adım izi bildirimden ayrıldı
+
+`notifyCoordinator`, biten worker'ın **tüm** turn trace'ini koordinatörün
+enjekte edilen user mesajına yazıyordu: 12.33 MB'ın **8.2 MB'ı** buydu (tek
+bildirimde 545 KB shell çıktısı, tek adımda 67 KB `git diff`).
+
+Bu veri **hiç render edilmiyordu**: UI adımları yalnız `notificationChanges()`'e
+veriyor, o da sadece diff/edit adımlarını tutuyor
+(`frontend/src/features/chat/parseTaskNotification.ts`).
+
+`digestWorkerSteps` (`internal/agent/workernotesteps.go`) artık yalnız kartın
+gerçekten okuduğunu saklıyor: dosya değişiklikleri (gerekiyorsa diff sentezi için
+`input` ile) ve todo adımları. Alt-adımlara iniyor ve gürültülü ebeveynin altındaki
+gerçek düzenlemeleri yukarı taşıyor. Tam iz worker'ın kendi oturumunda duruyor;
+bildirim zaten o oturum id'sini taşıyor.
+
+> Not: bu bir **depolama/boot-RAM** düzeltmesidir, token düzeltmesi değil — user
+> rolündeki adımlar hiçbir sağlayıcı yoluna gönderilmiyordu
+> (`EstimatePersistedStepTokens` yalnız assistant mesajlarını sayar). Store açılışta
+> tamamen belleğe yüklendiği için yine de gerçek bir maliyetti.
+
+### 19.4 Durum sorguları push'landı
+
+SES2570, 81 turda **62 `list_workers` + 63 `list_agents` + 69 `get_view`** çağırdı
+— tur başına ~2.4 durum sorgusu, çoğu değişmemiş durumu tekrar okuyor.
+
+Kök neden: fleet bloğu yalnız **headless** yolda (`autonomousDynamicSuffix`)
+enjekte ediliyordu. SES2570 bir **chat** oturumuydu (`composeTurnRequest`), yani
+o bloğu **hiç almadı**.
+
+`coordinatorSituationBlock` (`internal/agent/coordination_situation.go`) üç
+bölümü birleştirir ve **her iki yola** da bağlanır:
+
+| Bölüm | Yerini aldığı çağrı |
+|-------|---------------------|
+| fleet durumu (`ProjectWorkers`) | `list_workers` |
+| `<available-agents>` — her ajan `read+write` / `READ-ONLY` etiketli | `list_agents` |
+| pano (`ProjectBoard`, LevelCard) | `get_view board` |
+| `<review-gate-exhausted>` (bkz. 19.5) | — |
+| `<situation-freshness>` | — |
+
+`<situation-freshness>` notu olmadan model yine sorgular: canlı bir projeksiyonu
+bayat bir kopyadan ayırt edemez. Not, blokların **her tur yeniden üretildiğini**
+söyler ve üç aracın hâlâ ne için geçerli olduğunu (tek kartın detayı, tek ajanın
+konfigürasyonu, worker transcript'i) belirtir.
+
+Ajan roster'ındaki yetenek etiketi 19.2'nin **önleyici** yarısıdır: "READ-ONLY"
+yazısını gören koordinatör o ajana dosya yazma brief'i vermez.
+
+### 19.5 Doğrulama kapısı — turlar sayılıyor
+
+13:04–19:57 arası (~7 saat) tek bir kalıp döndü: kodla → "TAZE, bağımsız
+adversarial reviewer" → FAIL → düzelt → **yeni** taze reviewer → yeni gerekçeyle
+FAIL. Her reviewer sıfırdan başlıyor (150–300K token), önceki turlarda karara
+bağlanmış bulguların kaydı yok, dolayısıyla her seferinde yeni itiraz üretiyor.
+Durma kriteri hiç yoktu.
+
+`Task.ReviewBounces` (`internal/db/models_task.go`) artık kartın `review` →
+çalışma sütununa **kaç kez** düştüğünü sayıyor; `MoveTask` bunu
+`isWorkingBoardState` ile ayırt ediyor (`review → done` bir PASS'tir, tur değil).
+`ReviewRoundBudget` (3) aşıldığında koordinatörün turuna `<review-gate-exhausted>`
+bloğu enjekte edilir: **yeni reviewer spawn etme**, ya kartı daralt ya kullanıcıya
+sor.
+
+Sayaç **her iki yazma yolunda da** artar: `move_task` aracı `MoveTask`'ı,
+kart sürükleme ve kart formu ise `PUT /api/tasks/{id}` → `UpdateTask`'ı çağırır.
+Kural tek bir yardımcıda (`db.countReviewBounce`) ve ikisi de onu çağırır — ilk
+sürümde yalnız `MoveTask` sayıyordu, yani rozet tam olarak insanın kullandığı yola
+görünmezdi (canlı testte yakalandı). `ReviewBounces` **sunucu-sahipli**dir:
+`UpdateTask` istemcinin gönderdiği değeri yok sayar, sayaç yalnız geçişten türer.
+
+Koordinatörün pano ve kapı blokları `ListActiveTasks` okur, `ListTasks` değil —
+arşivlenmiş kart kullanıcının panodan zaten kaldırdığı bitmiş iştir. İlk sürümde
+`ListTasks` kullanılıyordu ve blok 117 kartlık panoyu 270 kart olarak bildiriyordu
+(bu da canlı testte yakalandı).
+
+Sayaç kullanıcıya da görünür: kartta `↻ N/3` rozeti (bütçe dolunca kırmızı),
+kart detayında ne yapılacağını söyleyen bant, panoda `Doğrulama` facet'i, ajan
+tarafındaki `get_view board` projeksiyonunda ise ayrı bir sinyal satırı. Ayrıntı:
+`_Docs\67-BOARD-GORUNUMLERI.md` § "Doğrulama turu rozeti". Bütçe sabiti
+`db.ReviewRoundBudget`'tedir (runtime + view onu okur); frontend'deki
+`REVIEW_ROUND_BUDGET` onun elle senkronlanan aynasıdır.
+
+Bunun tamamlayıcısı olan iki disiplin kuralı — **karar defteri**
+(`<scratchpad>/<KART-ID>-findings.md`) ve **ağaç sabitleme** (validator brief'i
+`git HEAD` + kirli dosya listesi taşır, uyuşmazsa `STALE` deyip çıkar) —
+`orchestrator-doctrine` skill'i §10'da ve `coordinator.md` promptunda.
+
+### 19.6 Kapsam sözleşmesi
+
+Kart "ağ ekranındaki node konumları kaydedilsin" olarak açıldı; 19:50'de
+"backend-authoritative incarnation kaynağı + Windows atomik dosya sözleşmesi +
+per-node CAS + durable outbox" tartışılıyordu. Bir UI persistence görevi dağıtık
+sistem tasarım incelemesine dönüşmüştü ve kimse durdurmadı.
+
+Kural (doktrin + `coordinator.md`): her kart `description` içinde bir **kapsam
+sözleşmesi** taşır ("bu kart şunu yapar / şunu YAPMAZ"); reviewer doğrulamayı ona
+göre yapar; **kapsam dışı bulgu kartı bloklayamaz** — `create_task` ile yeni kart
+açılır. Kapsamı yalnız kullanıcı genişletir.
+
+> Bu madde bilinçli olarak **prompt düzeyinde** bir kuraldır, zorlanan bir mekanizma
+> değil: kapsam kartın serbest metnindedir, runtime onu doğrulamaz.

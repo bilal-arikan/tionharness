@@ -529,7 +529,7 @@ func (ReportToCoordinatorTool) Def() providers.ToolDef {
 		Name: "report_to_coordinator",
 		Description: "Report YOUR finished result to the coordinator that spawned you, closing your task " +
 			"upstream. You are a sub-coordinator: simply ending a turn does NOT report you as done (your " +
-			"coordinator is told you are still delegating while your own workers run). Call this once your " +
+			"coordinator just sees you as still delegating while your own workers run). Call this once your " +
 			"part is genuinely complete — with the synthesis written out in full, because your coordinator " +
 			"cannot read your workers' sessions. If you are blocked or a worker failed, still call it with " +
 			"status \"failed\" or \"incomplete\" and say what is missing; staying silent stalls everything " +

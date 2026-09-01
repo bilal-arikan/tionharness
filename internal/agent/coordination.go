@@ -408,7 +408,12 @@ func formatWorkerList(ws []WorkerInfo) string {
 	fmt.Fprintf(&b, "%d worker(s):\n", len(ws))
 	for _, w := range ws {
 		status := "finished"
-		if w.Running {
+		switch {
+		case w.Delegating:
+			// Not a turn of its own: it is waiting on its branch or owes a report.
+			// "finished" here would read as "its result is in".
+			status = "delegating"
+		case w.Running:
 			status = "running"
 		}
 		fmt.Fprintf(&b, "- %s [%s] (%s)", w.AgentName, status, w.SessionID)
@@ -548,6 +553,19 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	agentRef, err = r.resolveWorkerTarget(ctx, coordSessionID, createdBy, agentRef)
 	if err != nil {
 		return SpawnResult{}, err
+	}
+	// Capability gate: refuse a brief that plainly needs to write when the resolved
+	// agent has no write/exec tool. Checked AFTER target resolution (the profile's
+	// allowlist is only known then) and BEFORE the worker-slot reservation, so a
+	// rejected spawn leaks nothing.
+	if target, terr := r.resolveAgent(ctx, agentRef); terr == nil {
+		if cerr := r.checkWorkerCapability(target, task); cerr != nil {
+			return SpawnResult{}, cerr
+		}
+	} else {
+		// resolveWorkerTarget already returned an id, so a failure here is a real
+		// store problem, not a bad target: surface it instead of spawning blind.
+		return SpawnResult{}, fmt.Errorf("cannot read worker agent %s: %w", agentRef, terr)
 	}
 	slot := r.coordSlotFor(coordSessionID)
 	max := int64(r.tun.CoordinatorMaxWorkers())
@@ -705,10 +723,27 @@ func (r *Runtime) countsAgainstTreeBudget(s db.Session) bool {
 	if r.isSessionActive(s.ID) {
 		return true
 	}
-	if s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
+	if s.IsCoordinator() && r.subCoordinatorBusy(s) {
 		return true
 	}
 	return false
+}
+
+// subCoordinatorBusy reports whether a sub-coordinator with NO turn of its own in
+// flight is nevertheless still occupied. Two independent signals, either of which
+// means "not idle":
+//
+//   - its own workers are running (the in-memory slot counter), or
+//   - it still owes its coordinator a report (the persisted
+//     CoordinatorReportPending flag) — the state a node sits in between the turn
+//     that fanned its work out and the turn that finally synthesizes it.
+//
+// The second one is load-bearing since the interim "delegating" note was removed:
+// with the note gone, a node whose workers have all finished but which has not yet
+// reported would otherwise read as FINISHED in its parent's live view, and the
+// parent would conclude on a branch that has produced no result.
+func (r *Runtime) subCoordinatorBusy(s db.Session) bool {
+	return s.CoordinatorReportPending || r.coordSlotFor(s.ID).workers.Load() > 0
 }
 
 // evalCoordinatorTreeBudget walks the whole tree and counts the workers that are
@@ -1216,6 +1251,11 @@ func hasSessionTag(tags []string, want string) bool {
 // even when it has no turn of its own in flight: between its turns it is waiting
 // on its branch, and reporting it as finished there is exactly how a parent
 // concludes on top of work that is still in progress.
+//
+// This live view is the ONLY channel that carries that state now — the interim
+// "delegating" note the runtime used to push into the parent was removed (it woke
+// the parent for a non-result), so anything reading a sub-coordinator's liveness
+// must read it from here. See subCoordinatorBusy.
 func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 	info := WorkerInfo{
 		SessionID: s.ID,
@@ -1237,7 +1277,7 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 		info.AgentModel = a.Model
 		info.AgentDeleted = a.Deleted
 	}
-	if !info.Running && s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
+	if !info.Running && s.IsCoordinator() && r.subCoordinatorBusy(s) {
 		info.Running = true
 		info.Delegating = true
 	}
@@ -1379,6 +1419,14 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 		turnCtx context.Context
 		meta    *turnMeta
 	)
+	// One stash for the whole run, shared by every idle-resume attempt: a
+	// report_to_coordinator call is held here and delivered from the terminal path
+	// below, so the parent is not woken while this node is still mid-turn.
+	upward := &pendingUpwardReport{}
+	// Backstop for the paths that return before the explicit flushes (a panic, or a
+	// future early return): the claim is already spent, so the note must go out
+	// whatever happens. take() makes the second call a no-op.
+	defer r.flushUpwardReport(upward, workerSessionID)
 	turnStart := time.Now()
 	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(runCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, cancel context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
@@ -1388,6 +1436,7 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 			}
 			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), workerSessionID))
 			turnCtx, meta = WithTurnMeta(turnCtx)
+			turnCtx = withPendingUpwardReport(turnCtx, upward)
 			p := prompt
 			if attempt > 1 {
 				p = resumeContinuationPrompt(prompt, prevOutput)
@@ -1461,16 +1510,18 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// A SUB-COORDINATOR that just fanned its work out is not finished, whatever its
 	// turn returned: reporting this turn as "completed" would tell its coordinator
 	// the subtask is done while the branch below has barely started. Withhold the
-	// completion notification, send an interim "delegating" note instead, and let
-	// the node close its own task later (report_to_coordinator / settle backstop).
+	// completion notification and send NOTHING at all — the parent must not burn a
+	// turn on a non-result. Its live worker view keeps showing this node as
+	// delegating (subCoordinatorBusy reads the pending-report flag set here), and
+	// the node closes its own task later (report_to_coordinator / settle backstop).
 	// See coordination_tree.go for the full contract.
 	if ws, err := r.db.GetSession(ctx, workerSessionID); err == nil && r.deferWorkerReport(ctx, ws, status) {
 		// This node is NOT finished (its own branch is still running), but its worker
-		// turn is: release the slot so the parent's fleet count reflects reality. The
-		// interim "delegating" note deliberately carries no all-idle signal — the
-		// branch below is still working, and the node reports for itself later.
+		// turn is: release the slot so the parent's fleet count reflects reality.
 		workerDone()
-		r.notifyDelegating(coordSessionID, workerSessionID, agent.Name, int(r.coordSlotFor(workerSessionID).workers.Load()))
+		// A report_to_coordinator made during THIS turn still goes out — it is the
+		// node speaking for itself, which is exactly what the deferral waits for.
+		r.flushUpwardReport(upward, workerSessionID)
 		return
 	}
 
@@ -1484,9 +1535,15 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// Release BEFORE notifying: this worker is done, and whether it took the fleet to
 	// zero decides if the all-idle note folds into this very message (saving the
 	// coordinator a separate reconcile turn).
-	if notifyErr := r.notifyCoordinator(coordSessionID, note, workerDone(), steps, workerSessionID); notifyErr != nil {
+	// The coordinator's copy of the trace is DIGESTED to the file changes its
+	// notification card renders. The worker's own session keeps the full trace and
+	// the notification names it, so nothing is lost — see digestWorkerSteps.
+	if notifyErr := r.notifyCoordinator(coordSessionID, note, workerDone(), digestWorkerSteps(steps), workerSessionID); notifyErr != nil {
 		r.logger.Error("worker: terminal notification failed", "session", workerSessionID, "coordinator", coordSessionID, "error", notifyErr)
 	}
+	// After the reply is persisted and the slot released: a report_to_coordinator
+	// made during this turn is delivered now, never mid-turn.
+	r.flushUpwardReport(upward, workerSessionID)
 }
 
 // RecoverOrphanedTurns reclaims autonomous background turns (worker / plain spawn /
@@ -1509,6 +1566,17 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 	sessions, err := r.db.ListSessions(ctx, "")
 	if err != nil {
+		// Nothing is reclaimed on this boot: every session killed mid-turn stays
+		// frozen and each orphaned worker's coordinator waits forever. That must not
+		// be a silent early return.
+		r.logger.Error("coordination: orphan recovery skipped; session list failed", "error", err)
+		r.emitDebug(ctx, db.DebugEvent{
+			Type:   db.DebugError,
+			Name:   "orphan_recovery_failed",
+			Detail: "orphaned-turn recovery skipped: session list failed",
+			Error:  err.Error(),
+			Err:    true,
+		})
 		return
 	}
 	// Shallowest first, so a coordinator TREE is reclaimed from the root down. The
@@ -2202,7 +2270,7 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 		const warning = "⚠️ No worker was actually spawned this turn (no spawn tool call was made)."
 		text = strings.TrimRight(text, "\n") + "\n\n" + warning
 		r.emitDebug(ctx, db.DebugEvent{
-			Type:    "guard",
+			Type:    db.DebugGuardrail,
 			AgentID: agent.ID,
 			Name:    "unbacked_spawn_claim",
 			Detail:  "coordinator claimed worker delegation without a spawn tool call",

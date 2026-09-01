@@ -142,9 +142,10 @@ kendi worker'larına bölebilir. Sınırsız derinlikte iç içe geçebilir.
   taşı", her biri kendi içinde birkaç dosya). **Varsayılan yapma** — her seviye tur,
   token ve gecikme çarpar; işi yapan düz bir worker, işi bir kez daha devreden bir
   alt-koordinatörden daima iyidir.
-- **`<task-progress status="delegating">` bir sonuç DEĞİLDİR.** O worker dağıtım yaptı,
-  hâlâ çalışıyor; gerçek `<task-notification>`'ı dalı bitince gelir. Boş boş bekleme,
-  diğer işlerine bak.
+- **Bir alt-koordinatör dağıtım yaparken sana hiçbir şey göndermez.** Ondan tek bir
+  mesaj alırsın: dalı bittiğinde gelen `<task-notification>`. O ana kadar durum
+  bloğunda **DELEGATING** olarak görünür — bu bir durumdur, sonuç değildir. Boş boş
+  bekleme, diğer işlerine bak.
 - **Sen bir alt-koordinatörsen:** turunun bitmesi işinin bittiği anlamına gelmez.
   Sentezini tamamlayınca `report_to_coordinator(summary, status)` çağır — görevini
   yukarı kapatan tek şey budur. Tıkandıysan da `incomplete`/`failed` ile çağır;
