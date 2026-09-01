@@ -156,6 +156,17 @@ export interface SessionDebugSummary {
   errors: number
   compactions: number
   recoveries: number
+  // Lifecycle-event counts for the remaining journal kinds (omitted when zero).
+  hooks?: number
+  repairs?: number
+  guardrails?: number
+  lessons?: number
+  epochs?: number
+  pressureEvents?: number
+  cliCompactions?: number
+  lifecycleEvents?: number
+  // buildCommit is the commit of the process that created the journal.
+  buildCommit?: string
   // cacheBreaks counts prompt-cache breaks (warm prefix lost + re-written cold);
   // lastCacheBreak is the most recent attributed reason (P4).
   cacheBreaks: number
@@ -202,6 +213,9 @@ export interface SessionDebugEvent {
     | 'lesson'
     | 'epoch'
     | 'pressure'
+    | 'build'
+    | 'cli_compaction'
+    | 'lifecycle'
   sessionId?: string
   turnId?: string
   agentId?: string
@@ -258,6 +272,15 @@ export interface TurnDebug {
   errors: number
   recoveries: number
   compactions: number
+  // Lifecycle-event counts tagged with this turn (omitted when zero).
+  hooks?: number
+  repairs?: number
+  guardrails?: number
+  lessons?: number
+  epochs?: number
+  pressureEvents?: number
+  cliCompactions?: number
+  lifecycleEvents?: number
   // Prompt-cache breaks attributed to THIS turn: the count, the last one's stable
   // machine tag (model-changed / prompt-or-tools-changed / ttl-or-server-eviction)
   // with its human explanation, and the avoidable overpay of re-warming a

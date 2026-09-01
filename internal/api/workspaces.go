@@ -110,6 +110,11 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The store is open only now, so it missed the boot-time applySettings pass.
+	if err := s.applyDebugJournalToStore(wsNew.DB); err != nil {
+		s.logger.Error("apply debug journal policy failed", "workspace", wsNew.ID, "error", err)
+	}
+
 	// Apply the visual identity (icon/color) and the optional project directory.
 	projectDir := strings.TrimSpace(req.ProjectDir)
 	if req.Icon != "" || req.Color != "" || projectDir != "" {
@@ -165,6 +170,10 @@ func (s *Server) handleAttachWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// Same as create: the adopted store opens here, after the last applySettings.
+	if err := s.applyDebugJournalToStore(wsNew.DB); err != nil {
+		s.logger.Error("apply debug journal policy failed", "workspace", wsNew.ID, "error", err)
 	}
 	s.publishWorkspacesChanged("Bir workspace bağlandı: " + wsNew.Name)
 	writeJSON(w, http.StatusCreated, wsNew.Meta)

@@ -88,6 +88,9 @@ type DB struct {
 	// expected to dispatch on its own goroutine, so an append is never blocked.
 	activityHook   ActivityFn
 	activityHookMu sync.RWMutex
+	// activityDeliveryMu serialises durable CLI-reply outbox drains. Delivery is
+	// at-least-once with a stable EventID; consumers must deduplicate that ID.
+	activityDeliveryMu sync.Mutex
 
 	// debugCount tracks the on-disk line count of each session's debug.jsonl so
 	// the append path can cap the file (oldest events pruned) without re-reading
@@ -96,6 +99,20 @@ type DB struct {
 	// file, just like the inflight sidecar.
 	debugMu    sync.Mutex
 	debugCount map[string]int
+	// debugPolicy mirrors the user's debugJournalEnabled/debugJournalCap setting
+	// for the emit points that cannot reach the runtime tunables. Guarded by
+	// debugMu; see debug_journal_policy.go.
+	debugPolicy debugJournalPolicy
+	// debugAtomicWrite is a same-package test seam for crash-window injection.
+	// Production leaves it nil and uses atomicWriteBytes.
+	debugAtomicWrite func(string, []byte) error
+	// cliReplyTxnHook is a same-package crash-phase test seam. Production leaves
+	// it nil; an injected error deliberately leaves the durable WAL for Open to
+	// replay, modelling abrupt process loss without rollback code running.
+	cliReplyTxnHook func(cliReplyTxnPhase) error
+	// cliReplyActivityHook is a crash-window test seam invoked after a durable
+	// activity outbox has been accepted by the hook but before it is retired.
+	cliReplyActivityHook func(ActivitySignal) error
 
 	// lessonsMu guards the workspace-wide lessons.jsonl sidecar (failure
 	// lessons, self-healing) — independent of mu for the same reason as debugMu.

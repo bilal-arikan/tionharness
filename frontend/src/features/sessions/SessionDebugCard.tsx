@@ -294,8 +294,14 @@ export function SessionDebugCard({
                   'compaction',
                   'recovery',
                   'cache_break',
+                  'repair',
+                  'guardrail',
+                  'lesson',
                   'epoch',
                   'pressure',
+                  'build',
+                  'cli_compaction',
+                  'lifecycle',
                 ].map((t) => (
                   <button
                     key={t || 'all'}
@@ -449,6 +455,22 @@ function eventLabel(e: SessionDebugEvent): string {
       }${e.wasteUsd ? ` · israf ${e.wasteEst ? '~' : ''}${fmtUsd(e.wasteUsd)}` : ''}`
     case 'epoch':
       return `${e.name ?? 'epoch'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'repair':
+      return `${e.name ?? 'repair'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'guardrail':
+      return `${e.name ?? 'guardrail'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'lesson':
+      return `${e.name ?? 'lesson'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'pressure':
+      return `${e.name ?? 'pressure'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'build':
+      return `${e.name ?? '(commit)'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'cli_compaction':
+      return `${e.name ?? 'cli-compaction'}${e.detail ? ` · ${e.detail}` : ''}${
+        e.durMs ? ` · ${fmtDur(e.durMs)}` : ''
+      }`
+    case 'lifecycle':
+      return `${e.name ?? 'lifecycle'}${e.detail ? ` · ${e.detail}` : ''}`
     case 'error':
       return e.detail ?? ''
     default:

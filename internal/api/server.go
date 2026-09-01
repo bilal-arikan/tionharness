@@ -279,6 +279,19 @@ func (s *Server) applySettings() {
 	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
 	s.tun.SetAutoTagSessions(cur.AutoTagSessions)
 	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
+	// The debug journal has a second funnel that cannot reach the tunables: the
+	// conversation manager and the queue/summary durability paths emit straight
+	// into the store. Push the same setting onto every live store so both funnels
+	// honour one gate and one cap.
+	if s.workspaces != nil {
+		for _, meta := range s.workspaces.List() {
+			if wsp, err := s.workspaces.Get(meta.ID); err == nil && wsp != nil {
+				if err := s.applyDebugJournalToStore(wsp.DB); err != nil {
+					s.logger.Error("apply debug journal policy failed", "workspace", meta.ID, "error", err)
+				}
+			}
+		}
+	}
 	s.tun.SetShellEnabled(cur.EnableShell)
 	s.tun.SetCLIHooksEnabled(cur.EnableCLIHooks)
 	s.tun.SetCodeMode(cur.EnableCodeMode)
@@ -325,6 +338,21 @@ func (s *Server) applySettings() {
 			Dir:           cur.BackupDir,
 		})
 	}
+}
+
+// applyDebugJournalToStore pushes the current debug-journal gate and cap onto a
+// single store. applySettings walks every live workspace with it, but a
+// workspace created or attached at runtime opens its store afterwards and would
+// otherwise keep the zero-value policy (journal on, default cap) until the next
+// settings update — silently ignoring a user who turned the journal off or
+// narrowed the cap. Create/Attach call this as soon as the store is open.
+func (s *Server) applyDebugJournalToStore(st *db.DB) error {
+	if st == nil {
+		return errors.New("workspace store is not open")
+	}
+	cur := s.settings.Get()
+	st.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
+	return nil
 }
 
 // SetBackupManager wires the process-wide backup manager and immediately pushes

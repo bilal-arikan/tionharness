@@ -4,12 +4,18 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // debugFile is the per-session debug journal that lives next to session.jsonl.
@@ -28,22 +34,351 @@ const debugFile = "debug.jsonl"
 // grows past cap + cap/4, so debug data stays bounded on long-lived sessions.
 const DefaultDebugJournalCap = 5000
 
+// A success mutation must retain its lifecycle and derived legacy event even
+// when a tiny test cap is used. Checkpoints add at most one record per closed
+// provider enum, so physical size is cap + this headroom + provider count.
+const debugSuccessBatchHeadroom = 2
+
+// debugSafeReasons is deliberately closed. Only stable classes and reason
+// enums produced by this codebase survive verbatim; arbitrary short tokens are
+// not evidence of safety and are classified/redacted like all other free text.
+var debugSafeReasons = map[string]struct{}{
+	"authentication error": {}, "cancelled": {}, "error": {},
+	"provider process error": {}, "provider stream parse error": {},
+	"rate limit error": {}, "timeout error": {},
+	"compaction_failed": {}, "context_cancelled": {}, "hard_timeout": {},
+	"idle_timeout": {}, "persist_error": {}, "process_error": {},
+	"process_exit": {}, "provider_error": {}, "provider_retry": {},
+	"authentication": {}, "rate_limit": {}, "resume_missing": {},
+	"startup_error": {}, "startup_timeout": {}, "stream_ended": {}, "stream_error": {},
+	"claude CLI native compaction failed":    {},
+	"claude CLI native compaction cancelled": {},
+	"Claude CLI native compaction completed": {},
+}
+
+type debugStringPolicy uint8
+
+const (
+	debugStringEnum debugStringPolicy = iota + 1
+	debugStringOpaque
+	debugStringFreeText
+	debugStringArgs
+)
+
+// debugStringPolicies is intentionally exhaustive. DebugEvent gains no new
+// persisted string field without choosing a fail-closed policy here; the
+// reflection coverage test enforces that contract.
+var debugStringPolicies = map[string]debugStringPolicy{
+	"Type": debugStringEnum, "SessionID": debugStringOpaque,
+	"TurnID": debugStringOpaque, "AgentID": debugStringOpaque,
+	"Kind": debugStringEnum, "Name": debugStringOpaque,
+	"HookID": debugStringOpaque, "Model": debugStringOpaque,
+	"PromptKey": debugStringOpaque, "PromptHash": debugStringOpaque,
+	"Stop": debugStringEnum, "Error": debugStringFreeText,
+	"Args": debugStringArgs, "Detail": debugStringFreeText,
+	"Phase": debugStringEnum, "Provider": debugStringEnum,
+	"AttemptID": debugStringOpaque, "Signal": debugStringEnum,
+	"CLISessionFingerprintIn":  debugStringOpaque,
+	"CLISessionFingerprintOut": debugStringOpaque,
+	"ErrorKind":                debugStringEnum,
+}
+
+var debugEnumValues = map[string]map[string]struct{}{
+	"Type": {
+		DebugTurn: {}, DebugLLMCall: {}, DebugTool: {}, DebugHook: {}, DebugError: {},
+		DebugCompaction: {}, DebugRecovery: {}, DebugCacheBreak: {}, DebugRepair: {},
+		DebugGuardrail: {}, DebugLesson: {}, DebugEpoch: {}, DebugPressure: {},
+		DebugBuild: {}, DebugCLICompaction: {}, DebugLifecycle: {},
+		debugCLICompactionDedupe: {},
+	},
+	"Kind": {
+		"automation-run": {}, "chat": {}, "command": {}, "flow": {}, "flow-coordinator": {},
+		"btw": {}, "compact": {}, "delegate": {}, "other": {}, "reflect": {},
+		"schedule": {}, "schedule-run": {}, "spawned": {}, "subagent": {}, "summary": {},
+		"system": {}, "task": {}, "title": {}, "worker": {},
+	},
+	"Stop": {
+		"cancelled": {}, "end_turn": {}, "max_tokens": {}, "refusal": {},
+		"stop_sequence": {}, "tool_use": {}, "pause_turn": {},
+		"model_context_window_exceeded": {},
+	},
+	"Phase": {
+		"attempt": {}, "signal": {}, "success": {}, "error": {}, "cancelled": {},
+		"inflight_turn": {}, "mcp_calls": {}, "worker": {},
+		"user_cancel": {}, "queue_cleared": {},
+	},
+	"Provider": {
+		"anthropic": {}, "claude-cli": {}, "codex-cli": {}, "ollama": {}, "openai": {}, "openrouter": {},
+	},
+	"Signal": {
+		"boundary": {}, "compact_boundary": {}, "compact_result": {}, "post": {},
+		"postcompact": {}, "precompact": {}, "status": {},
+	},
+	"ErrorKind": debugSafeReasons,
+}
+
+func debugOpaqueFingerprint(field, value string) string {
+	if value == "" {
+		return ""
+	}
+	// CLI session fingerprints are already irreversible values produced inside
+	// this package. Preserve their wire format; arbitrary values are re-hashed.
+	if (field == "CLISessionFingerprintIn" || field == "CLISessionFingerprintOut") && len(value) == 24 {
+		if _, err := hex.DecodeString(value); err == nil {
+			return value
+		}
+	}
+	sum := sha256.Sum256([]byte("tionharness:debug-field:v1:" + field + "\x00" + value))
+	return "fp:" + hex.EncodeToString(sum[:12])
+}
+
+func sanitizeDebugEnum(field, value string) string {
+	if value == "" {
+		return ""
+	}
+	if field == "Stop" && providers.IsCanonicalStopReason(value) {
+		return value
+	}
+	if allowed, ok := debugEnumValues[field]; ok {
+		if _, ok := allowed[value]; ok {
+			return value
+		}
+	}
+	return "redacted"
+}
+
+func sanitizeDebugName(eventType, value string) string {
+	if value == "" {
+		return ""
+	}
+	if eventType == debugCLICompactionDedupe && len(value) == 64 {
+		if _, err := hex.DecodeString(value); err == nil {
+			return value
+		}
+	}
+	if eventType == DebugBuild && isDebugBuildCommit(value) {
+		return value
+	}
+	if eventType == DebugCacheBreak {
+		switch value {
+		case "model-changed", "prompt-or-tools-changed", "ttl-or-server-eviction":
+			return value
+		}
+	}
+	if eventType == DebugCompaction {
+		switch value {
+		case "auto", "auto-native", "cli-native", "manual", "manual-native", "reactive",
+			"native_skipped", "claim_consumed", "native_fallback_rolling":
+			return value
+		}
+	}
+	if eventType == DebugHook {
+		switch value {
+		case HookPreCompact, HookPreToolUse, HookPostToolUse, HookUserPromptSubmit,
+			HookSessionStart, HookStop, HookSubagentStop, HookNotification, HookSessionEnd:
+			return value
+		}
+	}
+	if eventType == DebugGuardrail {
+		switch value {
+		case "cli_warn", "mcp_args_block", "mcp_prefill", "mcp_repair", "mcp_repair_block", "mcp_repair_index", "mcp_repair_retry", "stuck_gate", "warn":
+			return value
+		}
+	}
+	if eventType == DebugError {
+		switch value {
+		case "/compact", "/compact-custom", "/handoff", "/refresh-context":
+			return value
+		}
+	}
+	if eventType == DebugLifecycle {
+		switch value {
+		case "turn_cancelled_by_teardown", "autonomous_cancelled", "teardown_grace_exceeded", "queued_turn_dropped":
+			return value
+		}
+	}
+	if eventType == DebugPressure {
+		switch value {
+		case "fold_idle_floor":
+			return value
+		}
+	}
+	if eventType == DebugLLMCall {
+		switch value {
+		case debugNameFailedTurnBilled:
+			return value
+		}
+	}
+	return debugOpaqueFingerprint("Name", value)
+}
+
+func isDebugBuildCommit(value string) bool {
+	if value == "unknown" {
+		return true
+	}
+	if len(value) < 7 || len(value) > 40 {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// debugNameFailedTurnBilled marks the llm_call event that records what a FAILED
+// turn still cost. The same tokens are already carried by the generic llm_call
+// event RecordUsage writes for that attempt, so this one is journalled for
+// readability only and is skipped by every call/token aggregate below.
+const debugNameFailedTurnBilled = "failed_turn_billed"
+
+func debugFailureClass(s string) string {
+	lower := strings.ToLower(s)
+	switch {
+	case strings.Contains(lower, "malformed"), strings.Contains(lower, "ndjson"), strings.Contains(lower, "parse"), strings.Contains(lower, "json"):
+		return "provider stream parse error"
+	case strings.Contains(lower, "auth"), strings.Contains(lower, "login"), strings.Contains(lower, "credential"):
+		return "authentication error"
+	case strings.Contains(lower, "rate limit"), strings.Contains(lower, "rate_limit"):
+		return "rate limit error"
+	case strings.Contains(lower, "timeout"), strings.Contains(lower, "timed out"):
+		return "timeout error"
+	case strings.Contains(lower, "cancel"):
+		return "cancelled"
+	case strings.Contains(lower, "stderr"), strings.Contains(lower, "stdout"), strings.Contains(lower, "process"), strings.Contains(lower, "exit"), strings.Contains(lower, "claude cli"):
+		return "provider process error"
+	default:
+		return "error"
+	}
+}
+
+// summarizeDebugFailure deliberately does not preserve provider/process text.
+// Such errors may embed stderr, malformed stream payloads, prompts, tool input,
+// credentials or resume ids. A structural reason prefix and coarse class retain
+// diagnostic value while the provider's user-facing error remains untouched.
+func summarizeDebugFailure(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if _, ok := debugSafeReasons[s]; ok {
+		return s
+	}
+	reason := ""
+	if i := strings.IndexByte(s, ':'); i > 0 {
+		candidate := strings.TrimSpace(s[:i])
+		if _, ok := debugSafeReasons[candidate]; ok {
+			reason = candidate
+		}
+	}
+	class := debugFailureClass(s) + " [redacted]"
+	if reason != "" {
+		return reason + ": " + class
+	}
+	return class
+}
+
+func summarizeDebugDetail(ev DebugEvent) string {
+	if strings.TrimSpace(ev.Detail) == "" {
+		return ""
+	}
+	if _, ok := debugSafeReasons[strings.TrimSpace(ev.Detail)]; ok || ev.Type == DebugError || ev.Type == DebugRecovery {
+		return summarizeDebugFailure(ev.Detail)
+	}
+	switch ev.Type {
+	case DebugBuild:
+		return "build detail [redacted]"
+	case DebugCacheBreak:
+		return "cache break detail [redacted]"
+	case DebugCLICompaction:
+		return "cli compaction detail [redacted]"
+	case DebugCompaction:
+		return "compaction detail [redacted]"
+	case DebugEpoch:
+		return "prompt epoch detail [redacted]"
+	case DebugGuardrail:
+		return "guardrail detail [redacted]"
+	case DebugHook:
+		return "hook detail [redacted]"
+	case DebugLesson:
+		return "lesson detail [redacted]"
+	case DebugLifecycle:
+		return "lifecycle detail [redacted]"
+	case DebugLLMCall:
+		return "llm call detail [redacted]"
+	case DebugPressure:
+		return "context pressure detail [redacted]"
+	case DebugRepair:
+		return "sequence repair detail [redacted]"
+	case DebugTool:
+		return "tool detail [redacted]"
+	case DebugTurn:
+		return "turn detail [redacted]"
+	default:
+		return "detail [redacted]"
+	}
+}
+
+func sanitizeDebugEvent(ev DebugEvent) DebugEvent {
+	v := reflect.ValueOf(&ev).Elem()
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		if field.Type.Kind() != reflect.String {
+			continue
+		}
+		policy, ok := debugStringPolicies[field.Name]
+		if !ok {
+			// Coverage tests prevent this path in released code. Keep runtime
+			// fail-closed if a locally-added field reaches append first.
+			v.Field(i).SetString("redacted")
+			continue
+		}
+		value := v.Field(i).String()
+		switch policy {
+		case debugStringEnum:
+			v.Field(i).SetString(sanitizeDebugEnum(field.Name, value))
+		case debugStringOpaque:
+			if field.Name == "Name" {
+				v.Field(i).SetString(sanitizeDebugName(ev.Type, value))
+				continue
+			}
+			v.Field(i).SetString(debugOpaqueFingerprint(field.Name, value))
+		case debugStringFreeText:
+			if field.Name == "Detail" {
+				v.Field(i).SetString(summarizeDebugDetail(ev))
+			} else {
+				v.Field(i).SetString(summarizeDebugFailure(value))
+			}
+		case debugStringArgs:
+			if value != "" {
+				v.Field(i).SetString("[redacted tool input]")
+			}
+		}
+	}
+	return ev
+}
+
 // Debug event type tags (the "type" field of a DebugEvent).
 const (
-	DebugTurn       = "turn"        // one assistant turn finished (durMs, stop, err)
-	DebugLLMCall    = "llm_call"    // one provider completion (model, in/out/cache tokens)
-	DebugTool       = "tool"        // one tool execution (name, durMs, outBytes, err)
-	DebugHook       = "hook"        // one PreToolUse/PostToolUse hook ran (name, detail)
-	DebugError      = "error"       // a turn-level / permission / budget error
-	DebugCompaction = "compaction"  // in-flight history was compacted (savedBytes)
-	DebugRecovery   = "recovery"    // a turn recovery fired (output resume / compact)
-	DebugCacheBreak = "cache_break" // the prompt-cache warm prefix was lost (attributed reason in Name/Detail)
-	DebugRepair     = "repair"      // message-sequence repair healed the in-flight history (rule in Name)
-	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
-	DebugLesson     = "lesson"      // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
-	DebugEpoch      = "epoch"       // prompt-epoch lifecycle: created/adopted/stale/refreshed (reason in Name/Detail)
-	DebugPressure   = "pressure"    // context budget is close to the fold threshold (ratio in Detail)
-	DebugBuild      = "build"       // backend build running when the session journal was created
+	DebugTurn          = "turn"           // one assistant turn finished (durMs, stop, err)
+	DebugLLMCall       = "llm_call"       // one provider completion (model, in/out/cache tokens)
+	DebugTool          = "tool"           // one tool execution (name, durMs, outBytes, err)
+	DebugHook          = "hook"           // one PreToolUse/PostToolUse hook ran (name, detail)
+	DebugError         = "error"          // a turn-level / permission / budget error
+	DebugCompaction    = "compaction"     // in-flight history was compacted (savedBytes)
+	DebugRecovery      = "recovery"       // a turn recovery fired (output resume / compact)
+	DebugCacheBreak    = "cache_break"    // the prompt-cache warm prefix was lost (attributed reason in Name/Detail)
+	DebugRepair        = "repair"         // message-sequence repair healed the in-flight history (rule in Name)
+	DebugGuardrail     = "guardrail"      // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
+	DebugLesson        = "lesson"         // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
+	DebugEpoch         = "epoch"          // prompt-epoch lifecycle: created/adopted/stale/refreshed (reason in Name/Detail)
+	DebugPressure      = "pressure"       // context budget is close to the fold threshold (ratio in Detail)
+	DebugBuild         = "build"          // backend build running when the session journal was created
+	DebugCLICompaction = "cli_compaction" // Claude CLI native-compaction lifecycle
+	DebugLifecycle     = "lifecycle"      // session lifecycle: turn cancelled at teardown, queued turn dropped before it ran, teardown grace exceeded
 )
 
 var debugBuildInfo struct {
@@ -116,12 +451,23 @@ type DebugEvent struct {
 	// SummaryBytes is the byte length of the rolling summary AFTER the fold. Paired
 	// with FoldIndex it shows whether the summary is growing, holding, or eroding
 	// across folds. Only meaningful for compaction.
-	SummaryBytes int    `json:"summaryBytes"`
-	Stop         string `json:"stop,omitempty"`   // turn stop reason
-	Err          bool   `json:"err,omitempty"`    // tool/turn failed
-	Error        string `json:"error,omitempty"`  // truncated single-line tool error text
-	Args         string `json:"args,omitempty"`   // truncated single-line tool argument summary
-	Detail       string `json:"detail,omitempty"` // free-form (error msg, reason, decision)
+	SummaryBytes             int    `json:"summaryBytes"`
+	Stop                     string `json:"stop,omitempty"`   // turn stop reason
+	Err                      bool   `json:"err,omitempty"`    // tool/turn failed
+	Error                    string `json:"error,omitempty"`  // truncated single-line tool error text
+	Args                     string `json:"args,omitempty"`   // truncated single-line tool argument summary
+	Detail                   string `json:"detail,omitempty"` // free-form (error msg, reason, decision)
+	Phase                    string `json:"phase,omitempty"`
+	Provider                 string `json:"provider,omitempty"`
+	AttemptID                string `json:"attemptId,omitempty"`
+	Attempt                  int    `json:"attempt,omitempty"`
+	Signal                   string `json:"signal,omitempty"`
+	DurationMs               int64  `json:"durationMs,omitempty"`
+	CLISessionFingerprintIn  string `json:"cliSessionFingerprintIn,omitempty"`
+	CLISessionFingerprintOut string `json:"cliSessionFingerprintOut,omitempty"`
+	Retryable                *bool  `json:"retryable,omitempty"`
+	ErrorKind                string `json:"errorKind,omitempty"`
+	ExitCode                 int    `json:"exitCode,omitempty"`
 	// WasteUSD is the avoidable cooling overpay for a cache_break attributed to
 	// TTL expiry / server eviction (a warm prefix a timely turn would have kept):
 	// the re-written prefix billed at the write tier minus the read tier it would
@@ -147,29 +493,40 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 	if sessionID == "" {
 		return nil
 	}
-	if ev.Time == 0 {
-		ev.Time = time.Now().UnixMilli()
-	}
-	ev.SessionID = sessionID
 	if cap <= 0 {
 		cap = DefaultDebugJournalCap
 	}
 
 	d.debugMu.Lock()
 	defer d.debugMu.Unlock()
+	return d.appendDebugEventsLocked(sessionID, []DebugEvent{ev}, cap)
+}
+
+// appendDebugEventsLocked writes related records with one append while debugMu
+// is held. Callers use it when splitting a lifecycle terminal from its derived
+// summary would create a partial observable state.
+func (d *DB) appendDebugEventsLocked(sessionID string, events []DebugEvent, cap int) error {
+	nowMs := time.Now().UnixMilli()
+	for i := range events {
+		if events[i].Time == 0 {
+			events[i].Time = nowMs
+		}
+		events[i].SessionID = sessionID
+		events[i] = sanitizeDebugEvent(events[i])
+	}
 
 	path := d.debugPath(sessionID)
 	// First write for this session in this process: learn the current line count
 	// so the cap is enforced even across restarts.
 	if _, known := d.debugCount[sessionID]; !known {
-		d.debugCount[sessionID] = countFileLines(path)
+		d.debugCount[sessionID] = countDebugEvents(path)
 	}
 
-	events := []DebugEvent{ev}
 	if d.debugCount[sessionID] == 0 {
 		if build, ok := currentDebugBuildEvent(); ok {
-			build.Time = ev.Time
+			build.Time = nowMs
 			build.SessionID = sessionID
+			build = sanitizeDebugEvent(build)
 			events = append([]DebugEvent{build}, events...)
 		}
 	}
@@ -194,7 +551,11 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	d.debugCount[sessionID] += len(events)
+	for _, event := range events {
+		if event.Type != debugCLICompactionDedupe {
+			d.debugCount[sessionID]++
+		}
+	}
 
 	// Prune lazily: rewrite keeping only the newest cap events once we drift past
 	// cap + cap/4, so the rewrite cost is amortised over many appends.
@@ -203,6 +564,78 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 			d.debugCount[sessionID] = n
 		}
 	}
+	return nil
+}
+
+func marshalDebugRecords(records []DebugEvent) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, record := range records {
+		if err := enc.Encode(record); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+// trimDebugRecords keeps newest visible events and only newest checkpoint per
+// provider. Native compactions are serialized per session/provider; an old
+// callback cannot arrive after a later attempt has started, so one latest
+// success checkpoint is sufficient for retry/restart idempotency.
+func trimDebugRecords(records []DebugEvent, visibleKeep int) ([]DebugEvent, int) {
+	if visibleKeep < 0 {
+		visibleKeep = 0
+	}
+	latestCheckpoint := map[string]int{}
+	visible := 0
+	for i, record := range records {
+		if record.Type == debugCLICompactionDedupe {
+			latestCheckpoint[record.Provider] = i
+		} else {
+			visible++
+		}
+	}
+	dropVisible := visible - visibleKeep
+	if dropVisible < 0 {
+		dropVisible = 0
+	}
+	out := make([]DebugEvent, 0, len(records)-dropVisible)
+	keptVisible := 0
+	seenVisible := 0
+	for i, record := range records {
+		if record.Type == debugCLICompactionDedupe {
+			if latestCheckpoint[record.Provider] == i {
+				out = append(out, record)
+			}
+			continue
+		}
+		if seenVisible < dropVisible {
+			seenVisible++
+			continue
+		}
+		out = append(out, record)
+		keptVisible++
+	}
+	return out, keptVisible
+}
+
+func (d *DB) replaceDebugRecordsLocked(sessionID string, records []DebugEvent, visibleKeep int) error {
+	records, visible := trimDebugRecords(records, visibleKeep)
+	data, err := marshalDebugRecords(records)
+	if err != nil {
+		return err
+	}
+	path := d.debugPath(sessionID)
+	if d.debugAtomicWrite != nil {
+		err = d.debugAtomicWrite(path, data)
+	} else {
+		err = atomicWriteBytes(path, data)
+	}
+	if err != nil {
+		return err
+	}
+	d.debugCount[sessionID] = visible
 	return nil
 }
 
@@ -275,7 +708,21 @@ type DebugSummary struct {
 	Errors         int     `json:"errors"`
 	Compactions    int     `json:"compactions"`
 	Recoveries     int     `json:"recoveries"`
-	CacheBreaks    int     `json:"cacheBreaks"`
+	// Lifecycle-event counts for the remaining journal kinds. They are written by
+	// the runtime but were not aggregated before, so the summary (and every reader
+	// built on it) reported them as absent. Sparse: omitted when zero.
+	Hooks           int `json:"hooks,omitempty"`
+	Repairs         int `json:"repairs,omitempty"`
+	Guardrails      int `json:"guardrails,omitempty"`
+	Lessons         int `json:"lessons,omitempty"`
+	Epochs          int `json:"epochs,omitempty"`
+	PressureEvents  int `json:"pressureEvents,omitempty"`
+	CLICompactions  int `json:"cliCompactions,omitempty"`
+	LifecycleEvents int `json:"lifecycleEvents,omitempty"`
+	// BuildCommit is the commit of the process that created the journal (from the
+	// build event written as the first line of a fresh debug.jsonl).
+	BuildCommit string `json:"buildCommit,omitempty"`
+	CacheBreaks int    `json:"cacheBreaks"`
 	// CoolingBreaks counts the subset of CacheBreaks attributed to TTL expiry /
 	// server eviction (a late turn let the warm prefix cool), and CoolingWasteUSD
 	// is the summed avoidable overpay of re-warming those prefixes — the isolated
@@ -326,6 +773,9 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 			sum.TurnDurMs += e.DurMs
 			sum.TurnDurSeries = appendCapped(sum.TurnDurSeries, e.DurMs)
 		case DebugLLMCall:
+			if e.Name == debugNameFailedTurnBilled {
+				break // duplicate of the attempt's own llm_call event
+			}
 			sum.LLMCalls++
 			sum.InputTokens += e.In
 			sum.OutputTokens += e.Out
@@ -356,6 +806,26 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 			sum.SavedBytes += e.SavedBytes
 		case DebugRecovery:
 			sum.Recoveries++
+		case DebugHook:
+			sum.Hooks++
+		case DebugRepair:
+			sum.Repairs++
+		case DebugGuardrail:
+			sum.Guardrails++
+		case DebugLesson:
+			sum.Lessons++
+		case DebugEpoch:
+			sum.Epochs++
+		case DebugPressure:
+			sum.PressureEvents++
+		case DebugCLICompaction:
+			sum.CLICompactions++
+		case DebugLifecycle:
+			sum.LifecycleEvents++
+		case DebugBuild:
+			if e.Name != "" {
+				sum.BuildCommit = e.Name
+			}
 		case DebugCacheBreak:
 			sum.CacheBreaks++
 			if e.Detail != "" {
@@ -431,6 +901,17 @@ type TurnDebug struct {
 	Errors         int            `json:"errors"`
 	Recoveries     int            `json:"recoveries"`
 	Compactions    int            `json:"compactions"`
+	// Lifecycle-event counts for the remaining journal kinds tagged with this turn
+	// (hooks that ran, self-healing decisions, prompt-epoch changes, context
+	// pressure warnings, CLI native compaction steps). Sparse: omitted when zero.
+	Hooks           int `json:"hooks,omitempty"`
+	Repairs         int `json:"repairs,omitempty"`
+	Guardrails      int `json:"guardrails,omitempty"`
+	Lessons         int `json:"lessons,omitempty"`
+	Epochs          int `json:"epochs,omitempty"`
+	PressureEvents  int `json:"pressureEvents,omitempty"`
+	CLICompactions  int `json:"cliCompactions,omitempty"`
+	LifecycleEvents int `json:"lifecycleEvents,omitempty"`
 	// CacheBreaks counts the prompt-cache breaks attributed to THIS turn (warm
 	// prefix lost and re-paid cold); CacheBreakReason is the stable machine tag of
 	// the last one (model-changed / prompt-or-tools-changed / ttl-or-server-eviction)
@@ -462,8 +943,9 @@ func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDe
 	if err != nil {
 		return td, err
 	}
+	persistedTurnID := debugOpaqueFingerprint("TurnID", turnID)
 	for _, e := range evs {
-		if e.TurnID != turnID {
+		if e.TurnID != persistedTurnID {
 			continue
 		}
 		td.Found = true
@@ -480,6 +962,9 @@ func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDe
 				td.Stop = e.Stop
 			}
 		case DebugLLMCall:
+			if e.Name == debugNameFailedTurnBilled {
+				break // duplicate of the attempt's own llm_call event
+			}
 			td.LLMCalls++
 			td.InputTokens += e.In
 			td.OutputTokens += e.Out
@@ -508,6 +993,22 @@ func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDe
 			td.Recoveries++
 		case DebugCompaction:
 			td.Compactions++
+		case DebugHook:
+			td.Hooks++
+		case DebugRepair:
+			td.Repairs++
+		case DebugGuardrail:
+			td.Guardrails++
+		case DebugLesson:
+			td.Lessons++
+		case DebugEpoch:
+			td.Epochs++
+		case DebugPressure:
+			td.PressureEvents++
+		case DebugCLICompaction:
+			td.CLICompactions++
+		case DebugLifecycle:
+			td.LifecycleEvents++
 		case DebugCacheBreak:
 			// The cold/warm split is already visible from CacheRead/CacheWrite; what
 			// the message panel cannot derive is the ATTRIBUTED cause, so carry the
@@ -701,17 +1202,14 @@ func humanDur(ms int64) string {
 
 // countFileLines returns the number of newline-terminated lines in a file, or 0
 // when the file is absent/unreadable.
-func countFileLines(path string) int {
-	f, err := os.Open(path)
+func countDebugEvents(path string) int {
+	evs, err := readDebugRecords(path)
 	if err != nil {
 		return 0
 	}
-	defer f.Close()
 	n := 0
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for sc.Scan() {
-		if len(bytes.TrimSpace(sc.Bytes())) > 0 {
+	for _, ev := range evs {
+		if ev.Type != debugCLICompactionDedupe {
 			n++
 		}
 	}
@@ -722,6 +1220,20 @@ func countFileLines(path string) int {
 // file yields an empty slice. A single unparsable line is skipped (best-effort),
 // mirroring the session.jsonl tolerance for a torn trailing write.
 func readDebugFile(path string) ([]DebugEvent, error) {
+	records, err := readDebugRecords(path)
+	if err != nil {
+		return nil, err
+	}
+	out := records[:0]
+	for _, ev := range records {
+		if ev.Type != debugCLICompactionDedupe {
+			out = append(out, ev)
+		}
+	}
+	return out, nil
+}
+
+func readDebugRecords(path string) ([]DebugEvent, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -751,24 +1263,17 @@ func readDebugFile(path string) ([]DebugEvent, error) {
 // lines, returning the new line count. Atomic (tmp→rename) so a crash never
 // leaves a half-written file.
 func truncateDebugTail(path string, keep int) (int, error) {
-	evs, err := readDebugFile(path)
+	records, err := readDebugRecords(path)
 	if err != nil {
 		return 0, err
 	}
-	if len(evs) <= keep {
-		return len(evs), nil
-	}
-	evs = evs[len(evs)-keep:]
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	for _, e := range evs {
-		if err := enc.Encode(e); err != nil {
-			return 0, err
-		}
-	}
-	if err := atomicWriteBytes(path, buf.Bytes()); err != nil {
+	records, visible := trimDebugRecords(records, keep)
+	data, err := marshalDebugRecords(records)
+	if err != nil {
 		return 0, err
 	}
-	return len(evs), nil
+	if err := atomicWriteBytes(path, data); err != nil {
+		return 0, err
+	}
+	return visible, nil
 }

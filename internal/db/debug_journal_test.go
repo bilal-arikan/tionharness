@@ -3,9 +3,79 @@ package db
 import (
 	"context"
 	"math"
+	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
+
+func TestDebugStringPolicyCoversEveryPersistedStringField(t *testing.T) {
+	typ := reflect.TypeOf(DebugEvent{})
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
+			continue
+		}
+		if _, ok := debugStringPolicies[field.Name]; !ok {
+			t.Errorf("DebugEvent.%s has no debug journal string policy", field.Name)
+		}
+	}
+	for field := range debugStringPolicies {
+		if _, ok := typ.FieldByName(field); !ok {
+			t.Errorf("debug string policy references missing DebugEvent.%s", field)
+		}
+	}
+}
+
+func TestDebugJournalRedactsEveryStringField(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := d.CreateSession(context.Background(), Session{Title: "T"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ := reflect.TypeOf(DebugEvent{})
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
+			continue
+		}
+		for _, raw := range []string{
+			"single" + "TokenSecret", "prefix:" + "colon-secret", "Bearer " + "bearer-secret",
+			strings.Join([]string{"123e4567", "e89b", "12d3", "a456", "426614174000"}, "-"),
+			`{"prompt":"` + `private","tool_input":"secret"}`,
+			strings.Repeat("çokgizli", 128),
+		} {
+			ev := DebugEvent{Type: DebugError, Err: true}
+			reflect.ValueOf(&ev).Elem().FieldByName(field.Name).SetString(raw)
+			if err := d.AppendDebugEvent(session.ID, ev, 0); err != nil {
+				t.Fatalf("append %s: %v", field.Name, err)
+			}
+			journal, err := os.ReadFile(d.debugPath(session.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(journal), raw) {
+				t.Fatalf("DebugEvent.%s leaked %q", field.Name, raw)
+			}
+		}
+	}
+	if err := d.AppendDebugEvent(session.ID, DebugEvent{Type: DebugError, Error: "process_error", Detail: "provider_retry"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(d.debugPath(session.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"error":"process_error"`) || !strings.Contains(string(raw), `"detail":"provider_retry"`) {
+		t.Fatalf("closed allowlist reasons were not preserved: %s", raw)
+	}
+}
 
 // TestDebugJournalRoundTrip verifies append → read-back, type filtering and the
 // aggregate summary (turns, llm-call tokens by model, per-tool rollups, errors).
@@ -59,21 +129,23 @@ func TestDebugJournalRoundTrip(t *testing.T) {
 	if sum.InputTokens != 100 || sum.OutputTokens != 20 || sum.CacheRead != 50 {
 		t.Errorf("tokens: in=%d out=%d cache=%d", sum.InputTokens, sum.OutputTokens, sum.CacheRead)
 	}
-	if sum.ByModel["claude"] != 120 {
-		t.Errorf("byModel[claude] = %d, want 120", sum.ByModel["claude"])
+	modelKey := debugOpaqueFingerprint("Model", "claude")
+	if sum.ByModel[modelKey] != 120 {
+		t.Errorf("byModel[%s] = %d, want 120", modelKey, sum.ByModel[modelKey])
 	}
-	bash := sum.ByTool["Bash"]
+	bashKey := debugOpaqueFingerprint("Name", "Bash")
+	bash := sum.ByTool[bashKey]
 	if bash.Calls != 2 || bash.Errors != 1 || bash.DurMs != 200 {
 		t.Errorf("Bash stat = %+v", bash)
 	}
-	if sum.Errors != 1 || sum.LastError != "boom" {
+	if sum.Errors != 1 || sum.LastError != "error [redacted]" {
 		t.Errorf("errors=%d last=%q", sum.Errors, sum.LastError)
 	}
 	if sum.Compactions != 1 || sum.SavedBytes != 1234 {
 		t.Errorf("compactions=%d saved=%d", sum.Compactions, sum.SavedBytes)
 	}
-	if len(sum.TopTools) == 0 || sum.TopTools[0] != "Bash" {
-		t.Errorf("topTools = %v, want Bash first (slowest)", sum.TopTools)
+	if len(sum.TopTools) == 0 || sum.TopTools[0] != bashKey {
+		t.Errorf("topTools = %v, want %s first (slowest)", sum.TopTools, bashKey)
 	}
 }
 
@@ -108,8 +180,74 @@ func TestDebugJournalStartsWithBuildInfoOnce(t *testing.T) {
 	if len(events) != 3 {
 		t.Fatalf("event count = %d, want 3", len(events))
 	}
-	if events[0].Type != DebugBuild || events[0].Name != "abc1234" || events[0].Detail != "2026-08-25T20:00:00Z" {
+	if events[0].Type != DebugBuild || events[0].Name != "abc1234" || events[0].Detail != "build detail [redacted]" {
 		t.Fatalf("first event = %+v, want build info", events[0])
+	}
+}
+
+func TestDebugBuildCommitOnlyPreservesExpectedWireValues(t *testing.T) {
+	for _, value := range []string{"abc1234", "ABCDEF0123456789", "unknown"} {
+		if !isDebugBuildCommit(value) {
+			t.Errorf("expected safe build commit %q", value)
+		}
+	}
+	for _, value := range []string{"secret", "abc123g", "abc1234-dirty", ""} {
+		if isDebugBuildCommit(value) {
+			t.Errorf("accepted unsafe build commit %q", value)
+		}
+	}
+}
+
+func TestDebugJournalRedactsProviderFailureTextCentrally(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	agent, err := d.CreateAgent(ctx, Agent{Name: "A", Provider: "claude-cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "T"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := strings.Join([]string{"unique", "secret", "TSK731"}, "-")
+	const cliSessionID = "cliSessionId=resume-authority-TSK731"
+	uuidLike := strings.Join([]string{"123e4567", "e89b", "12d3", "a456", "426614174000"}, "-")
+	providerFailure := `claude CLI process stderr Bearer ` + secret + ` malformed NDJSON {"prompt":"private prompt","tool_input":{"token":"` + secret + `"},"` + cliSessionID + `"}`
+	events := []DebugEvent{
+		{Type: DebugRecovery, AgentID: agent.ID, Detail: "provider_retry: " + providerFailure},
+		{Type: DebugError, AgentID: agent.ID, Detail: "provider_error: " + providerFailure, Error: providerFailure, Err: true},
+		{Type: DebugError, AgentID: agent.ID, Detail: "shortSecret", Error: "prefix:colon-secret", Args: `{"tool_input":"private-tool-input"}`, Err: true},
+		{Type: DebugRecovery, AgentID: agent.ID, Detail: "Bearer " + "bearer-secret-value", Error: uuidLike},
+		{Type: DebugError, AgentID: agent.ID, Detail: `{"prompt":"json-private"}`, Error: strings.Repeat("çokgizli", 200), Err: true},
+		{Type: DebugError, AgentID: agent.ID, Detail: "process_error", Error: "process_exit", Err: true},
+	}
+	for _, ev := range events {
+		if err := d.AppendDebugEvent(session.ID, ev, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	raw, err := os.ReadFile(d.debugPath(session.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := string(raw)
+	for _, forbidden := range []string{
+		secret, "resume-authority-TSK731", "private prompt", "tool_input", "malformed NDJSON", "stderr Bearer",
+		"short" + "Secret", "colon-secret", "bearer-secret-value", uuidLike,
+		"json-private", "çokgizli", "private-tool-input",
+	} {
+		if strings.Contains(journal, forbidden) {
+			t.Fatalf("debug journal leaked %q: %s", forbidden, journal)
+		}
+	}
+	for _, safe := range []string{"provider_retry", "provider_error", "provider stream parse error", "process_error", "process_exit", "[redacted]", "[redacted tool input]"} {
+		if !strings.Contains(journal, safe) {
+			t.Fatalf("debug journal lacks safe classification %q: %s", safe, journal)
+		}
 	}
 }
 
@@ -186,8 +324,8 @@ func TestDebugSummaryCacheBreaks(t *testing.T) {
 	s1, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "one"})
 	_ = d.AppendDebugEvent(s1.ID, DebugEvent{Type: DebugCacheBreak, Name: "ttl-or-server-eviction", Detail: "TTL doldu"}, 0)
 	sum1, _ := d.GetDebugSummary(ctx, s1.ID)
-	if sum1.CacheBreaks != 1 || sum1.LastCacheBreak != "TTL doldu" {
-		t.Fatalf("cacheBreaks=%d last=%q, want 1 / TTL doldu", sum1.CacheBreaks, sum1.LastCacheBreak)
+	if sum1.CacheBreaks != 1 || sum1.LastCacheBreak != "cache break detail [redacted]" {
+		t.Fatalf("cacheBreaks=%d last=%q, want redacted cache-break summary", sum1.CacheBreaks, sum1.LastCacheBreak)
 	}
 	if code := anomalyCode(sum1.Anomalies, "cache_break"); code == nil || code.Severity != "info" {
 		t.Errorf("one break should raise an info cache_break anomaly, got %+v", sum1.Anomalies)
@@ -388,5 +526,409 @@ func TestGetTurnDebugCacheBreak(t *testing.T) {
 	td2, _ := d.GetTurnDebug(ctx, s.ID, "MSG3")
 	if td2.CacheBreaks != 0 || td2.CacheBreakReason != "" {
 		t.Errorf("unknown turn should carry no break, got %+v", td2)
+	}
+}
+
+// TestDebugJournalNameAllowListSurvivesRoundTrip locks the per-type Name
+// allow-list in sanitizeDebugName. These names are the only human-readable
+// labels the debug panel has: a compaction row whose trigger is fingerprinted
+// says "something compacted" without saying why (auto vs manual vs reactive),
+// and the same holds for cache-break reasons, hook names, guardrail actions and
+// slash commands. Shrinking the allow-list is therefore a silent regression, so
+// every allowed value is asserted to come back raw here.
+func TestDebugJournalNameAllowListSurvivesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// Mirrors the switch arms of sanitizeDebugName. Keep both in sync.
+	allowed := map[string][]string{
+		DebugCompaction: {
+			"auto", "auto-native", "cli-native", "manual", "manual-native", "reactive",
+			"native_skipped", "claim_consumed", "native_fallback_rolling",
+		},
+		DebugCacheBreak: {"model-changed", "prompt-or-tools-changed", "ttl-or-server-eviction"},
+		DebugHook: {
+			HookPreCompact, HookPreToolUse, HookPostToolUse, HookUserPromptSubmit,
+			HookSessionStart, HookStop, HookSubagentStop, HookNotification, HookSessionEnd,
+		},
+		DebugGuardrail: {
+			"cli_warn", "mcp_args_block", "mcp_prefill", "mcp_repair", "mcp_repair_block",
+			"mcp_repair_index", "mcp_repair_retry", "stuck_gate", "warn",
+		},
+		DebugError: {"/compact", "/compact-custom", "/handoff", "/refresh-context"},
+		DebugLifecycle: {
+			"turn_cancelled_by_teardown", "autonomous_cancelled",
+			"teardown_grace_exceeded", "queued_turn_dropped",
+		},
+		DebugPressure: {"fold_idle_floor"},
+		DebugLLMCall:  {"failed_turn_billed"},
+	}
+
+	for eventType, names := range allowed {
+		for _, name := range names {
+			sess, err := d.CreateSession(ctx, Session{Title: "T"})
+			if err != nil {
+				t.Fatalf("create session: %v", err)
+			}
+			if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: eventType, Name: name}, 0); err != nil {
+				t.Fatalf("append %s/%s: %v", eventType, name, err)
+			}
+			events, err := d.ReadDebugEvents(ctx, sess.ID, eventType, 0)
+			if err != nil {
+				t.Fatalf("read %s/%s: %v", eventType, name, err)
+			}
+			if len(events) != 1 {
+				t.Fatalf("read %s/%s: got %d events, want 1", eventType, name, len(events))
+			}
+			if events[0].Name != name {
+				t.Errorf("%s Name %q came back as %q: the allow-list no longer covers it, "+
+					"so the debug panel can no longer show why this happened",
+					eventType, name, events[0].Name)
+			}
+		}
+	}
+}
+
+func TestDebugJournalStopAllowListSurvivesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	canonical := []string{
+		providers.StopEndTurn,
+		providers.StopToolUse,
+		providers.StopMaxTok,
+		providers.StopPauseTurn,
+		providers.StopRefusal,
+		providers.StopContextWindow,
+	}
+	for _, stop := range canonical {
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugTurn, Stop: stop}, 0); err != nil {
+			t.Fatalf("append %q: %v", stop, err)
+		}
+	}
+	if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugTurn, Stop: "future-secret-stop"}, 0); err != nil {
+		t.Fatalf("append unknown stop: %v", err)
+	}
+	events, err := d.ReadDebugEvents(ctx, sess.ID, DebugTurn, 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != len(canonical)+1 {
+		t.Fatalf("got %d events, want %d", len(events), len(canonical)+1)
+	}
+	for i, want := range canonical {
+		if events[i].Stop != want {
+			t.Errorf("event %d Stop = %q, want %q", i, events[i].Stop, want)
+		}
+	}
+	if got := events[len(events)-1].Stop; got != "redacted" {
+		t.Errorf("unknown Stop = %q, want redacted", got)
+	}
+}
+
+// TestDebugJournalNameOutsideAllowListIsFingerprinted is the other half of the
+// contract locked above: anything not on the allow-list must leave the journal
+// as an opaque, stable fingerprint — never as the caller's raw string, which
+// could carry a prompt, a path or a secret.
+func TestDebugJournalNameOutsideAllowListIsFingerprinted(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	for _, name := range []string{
+		"auto-but-not-really",
+		"compaction triggered by user request",
+		"sk-ant-api03-secret-token-value",
+		"some free text",
+	} {
+		sess, err := d.CreateSession(ctx, Session{Title: "T"})
+		if err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugCompaction, Name: name}, 0); err != nil {
+			t.Fatalf("append %q: %v", name, err)
+		}
+		events, err := d.ReadDebugEvents(ctx, sess.ID, DebugCompaction, 0)
+		if err != nil {
+			t.Fatalf("read %q: %v", name, err)
+		}
+		if len(events) != 1 {
+			t.Fatalf("read %q: got %d events, want 1", name, len(events))
+		}
+		got := events[0].Name
+		if got == name {
+			t.Errorf("Name %q was stored raw; only allow-listed names may bypass redaction", name)
+		}
+		if !strings.HasPrefix(got, "fp:") {
+			t.Errorf("Name %q became %q, want an fp: fingerprint", name, got)
+		}
+	}
+}
+
+// TestDebugJournalNameFingerprintIsStable pins the fingerprint to be
+// deterministic for a given input: the debug panel groups redacted rows by this
+// value, so an unstable hash would scatter one trigger across many buckets.
+func TestDebugJournalNameFingerprintIsStable(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	const name = "unlisted compaction trigger"
+	for i := 0; i < 2; i++ {
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugCompaction, Name: name}, 0); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+	events, err := d.ReadDebugEvents(ctx, sess.ID, DebugCompaction, 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want 2", len(events))
+	}
+	if events[0].Name != events[1].Name {
+		t.Errorf("same input fingerprinted as %q and %q; grouping by fingerprint would break",
+			events[0].Name, events[1].Name)
+	}
+	if want := debugOpaqueFingerprint("Name", name); events[0].Name != want {
+		t.Errorf("fingerprint = %q, want %q", events[0].Name, want)
+	}
+}
+
+// TestDebugJournalPhaseAllowListSurvivesRoundTrip locks the Phase allow-list.
+// Phase is what tells apart the teardown and queue-drop lifecycle events from
+// each other: without it a "queued_turn_dropped" row cannot say whether the user
+// cancelled one turn or cleared the whole queue, and a grace-exceeded row cannot
+// say which teardown step ran out of time. A value missing from the allow-list
+// is stored as "redacted", which loses exactly that distinction.
+func TestDebugJournalPhaseAllowListSurvivesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// Emitted by recordTeardownLifecycle/noteTeardownGrace (internal/api/session_teardown.go)
+	// and recordQueuedTurnDropped (internal/api/inbox.go).
+	allowed := []string{
+		"attempt", "signal", "success", "error", "cancelled",
+		"inflight_turn", "mcp_calls", "worker", "user_cancel", "queue_cleared",
+	}
+	for _, phase := range allowed {
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Phase: phase}, 0); err != nil {
+			t.Fatalf("append %q: %v", phase, err)
+		}
+	}
+	if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Phase: "totally-free-text"}, 0); err != nil {
+		t.Fatalf("append unlisted phase: %v", err)
+	}
+
+	events, err := d.ReadDebugEvents(ctx, sess.ID, DebugLifecycle, 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != len(allowed)+1 {
+		t.Fatalf("got %d events, want %d", len(events), len(allowed)+1)
+	}
+	for i, want := range allowed {
+		if events[i].Phase != want {
+			t.Errorf("event %d Phase = %q, want %q: the allow-list no longer covers it, "+
+				"so the debug panel can no longer say which step this was", i, events[i].Phase, want)
+		}
+	}
+	if got := events[len(events)-1].Phase; got != "redacted" {
+		t.Errorf("unlisted Phase = %q, want redacted", got)
+	}
+}
+
+// TestDebugSummaryIgnoresFailedTurnBilledTokens pins the fix for a double count:
+// a failed turn writes its cost twice — once as the attempt's own llm_call event
+// and once as the readable "failed_turn_billed" marker — so summing every
+// llm_call showed that turn as two calls at twice its real token spend.
+func TestDebugSummaryIgnoresFailedTurnBilledTokens(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	billed := DebugEvent{
+		Type: DebugLLMCall, TurnID: "turn-1", Model: "claude-x",
+		In: 1000, Out: 200, Think: 50, CacheRead: 300, CacheWrite: 400,
+	}
+	for _, ev := range []DebugEvent{billed, func() DebugEvent {
+		dup := billed
+		dup.Name = debugNameFailedTurnBilled
+		return dup
+	}()} {
+		if err := d.AppendDebugEvent(sess.ID, ev, 0); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	sum, err := d.GetDebugSummary(ctx, sess.ID)
+	if err != nil {
+		t.Fatalf("summary: %v", err)
+	}
+	if sum.Events != 2 {
+		t.Errorf("Events = %d, want 2: both events must stay readable in the journal", sum.Events)
+	}
+	if sum.LLMCalls != 1 {
+		t.Errorf("LLMCalls = %d, want 1", sum.LLMCalls)
+	}
+	if sum.InputTokens != 1000 || sum.OutputTokens != 200 || sum.ThinkingTokens != 50 {
+		t.Errorf("tokens = in %d / out %d / think %d, want 1000 / 200 / 50",
+			sum.InputTokens, sum.OutputTokens, sum.ThinkingTokens)
+	}
+	if sum.CacheRead != 300 || sum.CacheWrite != 400 {
+		t.Errorf("cache = read %d / write %d, want 300 / 400", sum.CacheRead, sum.CacheWrite)
+	}
+	// Model is stored as an opaque fingerprint, so the rollup is keyed by that.
+	modelKey := debugOpaqueFingerprint("Model", "claude-x")
+	if got := sum.ByModel[modelKey]; got != 1200 {
+		t.Errorf("ByModel[%s] = %d, want 1200", modelKey, got)
+	}
+
+	td, err := d.GetTurnDebug(ctx, sess.ID, "turn-1")
+	if err != nil {
+		t.Fatalf("turn debug: %v", err)
+	}
+	if !td.Found {
+		t.Fatal("turn debug not found")
+	}
+	if td.LLMCalls != 1 {
+		t.Errorf("turn LLMCalls = %d, want 1", td.LLMCalls)
+	}
+	if td.InputTokens != 1000 || td.OutputTokens != 200 || td.ThinkingTokens != 50 {
+		t.Errorf("turn tokens = in %d / out %d / think %d, want 1000 / 200 / 50",
+			td.InputTokens, td.OutputTokens, td.ThinkingTokens)
+	}
+	if td.CacheRead != 300 || td.CacheWrite != 400 {
+		t.Errorf("turn cache = read %d / write %d, want 300 / 400", td.CacheRead, td.CacheWrite)
+	}
+	st := td.ByModel[modelKey]
+	if st.Calls != 1 || st.InputTokens != 1000 || st.OutputTokens != 200 {
+		t.Errorf("turn ByModel[%s] = %+v, want 1 call / 1000 in / 200 out", modelKey, st)
+	}
+}
+
+// TestDebugJournalProviderAllowListSurvivesRoundTrip locks the Provider allow-list.
+// Provider is the only field that says which backend produced a row, so a value
+// missing from the allow-list turns every event of that provider into an
+// indistinguishable "redacted" — and the CLI compaction checkpoint dedupe keys
+// off Provider (debug_cli_compaction.go), so redaction also collapses distinct
+// providers onto one another.
+func TestDebugJournalProviderAllowListSurvivesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// Mirrors debugEnumValues["Provider"] in debug_journal.go.
+	allowed := []string{
+		"anthropic", "claude-cli", "codex-cli", "ollama", "openai", "openrouter",
+	}
+	for _, provider := range allowed {
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Provider: provider}, 0); err != nil {
+			t.Fatalf("append %q: %v", provider, err)
+		}
+	}
+	if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Provider: "totally-free-text"}, 0); err != nil {
+		t.Fatalf("append unlisted provider: %v", err)
+	}
+
+	events, err := d.ReadDebugEvents(ctx, sess.ID, DebugLifecycle, 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != len(allowed)+1 {
+		t.Fatalf("got %d events, want %d", len(events), len(allowed)+1)
+	}
+	for i, want := range allowed {
+		if events[i].Provider != want {
+			t.Errorf("event %d Provider = %q, want %q: the allow-list no longer covers it, "+
+				"so the debug panel can no longer say which backend produced this row", i, events[i].Provider, want)
+		}
+	}
+	if got := events[len(events)-1].Provider; got != "redacted" {
+		t.Errorf("unlisted Provider = %q, want redacted", got)
+	}
+}
+
+// TestDebugJournalSignalAllowListSurvivesRoundTrip locks the Signal allow-list.
+// Signal carries the native-compaction stream markers (claudecli_stream.go) that
+// tell a pre-compaction boundary apart from the post-compaction result; once a
+// value is stored as "redacted" that ordering is unrecoverable from disk.
+func TestDebugJournalSignalAllowListSurvivesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, Session{Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// Mirrors debugEnumValues["Signal"] in debug_journal.go.
+	allowed := []string{
+		"boundary", "compact_boundary", "compact_result", "post",
+		"postcompact", "precompact", "status",
+	}
+	for _, signal := range allowed {
+		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Signal: signal}, 0); err != nil {
+			t.Fatalf("append %q: %v", signal, err)
+		}
+	}
+	if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugLifecycle, Signal: "totally-free-text"}, 0); err != nil {
+		t.Fatalf("append unlisted signal: %v", err)
+	}
+
+	events, err := d.ReadDebugEvents(ctx, sess.ID, DebugLifecycle, 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != len(allowed)+1 {
+		t.Fatalf("got %d events, want %d", len(events), len(allowed)+1)
+	}
+	for i, want := range allowed {
+		if events[i].Signal != want {
+			t.Errorf("event %d Signal = %q, want %q: the allow-list no longer covers it, "+
+				"so the compaction lifecycle can no longer be reconstructed", i, events[i].Signal, want)
+		}
+	}
+	if got := events[len(events)-1].Signal; got != "redacted" {
+		t.Errorf("unlisted Signal = %q, want redacted", got)
 	}
 }
