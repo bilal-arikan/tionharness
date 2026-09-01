@@ -18,20 +18,35 @@ import { shouldDiscardFreshSession } from './freshSessionCleanup'
 import { pickInitialSession } from './pickInitialSession'
 import { saveDefaultAgent } from './defaultAgentSave'
 import { deleteSessionAndRefresh } from './sessionDelete'
+import {
+  appendSessionPage,
+  chatRouteLookupResolved,
+  createSessionListRequestGuard,
+  initialSessionLookupIDs,
+  mergeSelectedSession,
+  sessionListQueryIdentity,
+} from './sessionListRequests'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
 // maxPageLimit (100) so the server never clamps it silently.
 const SESSIONS_PAGE_SIZE = 100
+const INITIAL_SESSION_LOOKUP_LIMIT = 50
 
 export interface SessionsControllerParams {
   activeWorkspaceId: string | null
+  // The sidebar's chip selection, comma-joined (see useSessionChips). Sent with
+  // every list request so the server pages the FILTERED set: paging a mixed list
+  // client-side meant a page of 100 could hold three visible chats and the
+  // "Daha fazla yükle" button looked broken.
+  chipsParam: string
   setError: (msg: string | null) => void
   setView: (v: View) => void
 }
 
 export function useSessionsController({
   activeWorkspaceId,
+  chipsParam,
   setError,
   setView,
 }: SessionsControllerParams) {
@@ -48,11 +63,36 @@ export function useSessionsController({
   // still returns the legacy array is normalized client-side to the same shape.
   const [sessionsTotal, setSessionsTotal] = useState(0)
   const [sessionsHasMore, setSessionsHasMore] = useState(false)
+  // chipKey → count in the request's non-chip scope, straight from the list
+  // response. The filtered page cannot answer "how many does this unticked chip
+  // hide" by itself, so badges use this map.
+  const [sessionChipCounts, setSessionChipCounts] = useState<Record<string, number>>({})
+  // The chip selection the in-flight/last request used, kept in a ref so the
+  // refresh and load-more callbacks stay stable across chip changes.
+  const chipsParamRef = useRef(chipsParam)
+  chipsParamRef.current = chipsParam
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId)
+  activeWorkspaceIdRef.current = activeWorkspaceId
+  const listQueryIdentityRef = useRef('')
+  listQueryIdentityRef.current = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
+  const listRequestGuardRef = useRef(createSessionListRequestGuard())
+  const listReplacePendingRef = useRef(false)
+  const listRefreshQueuedRef = useRef(false)
+  const refreshSessionsRef = useRef<(() => Promise<boolean>) | null>(null)
+  const runQueuedSessionRefresh = useCallback(() => {
+    if (!listRefreshQueuedRef.current) return
+    listRefreshQueuedRef.current = false
+    void refreshSessionsRef.current?.()
+  }, [])
   // How many sessions have been loaded so far — kept in a ref so refreshSessions
   // can refetch the SAME window (instead of collapsing back to one page) without
   // re-creating the callback on every append.
   const sessionsLimitRef = useRef(SESSIONS_PAGE_SIZE)
   const sessionsRef = useRef<Session[]>([])
+  // How many rows the server has actually returned for the current chip
+  // selection. Distinct from sessions.length, which may also carry the open
+  // session that the filter excludes (see withActiveSession).
+  const loadedPageSizeRef = useRef(0)
   // Post-commit assignment: only read from callbacks/effects, never during render.
   useEffect(() => {
     sessionsRef.current = sessions
@@ -118,35 +158,42 @@ export function useSessionsController({
     messagesRef.current = messages
   })
 
-  // Load agents + ALL sessions whenever the active workspace changes (the chat
-  // is session-based: sessions are listed flat, not nested under an agent).
+  // Keep the OPEN session in the list even when the chip filter excludes it from
+  // the server's page. The header, composer gating and transcript all resolve the
+  // active session out of this array, so dropping it would blank a conversation
+  // the user is reading just because they unticked its chip. The sidebar applies
+  // the same chip predicate client-side, so the row still disappears from the
+  // list — only the app state keeps it.
+  const withActiveSession = useCallback((items: Session[]) => {
+    const id = activeSessionIdRef.current
+    if (!id || items.some((s) => s.id === id)) return items
+    const open = sessionsRef.current.find((s) => s.id === id)
+    return mergeSelectedSession(items, open)
+  }, [])
+
+  // Load workspace metadata independently from the paged session query. Chip
+  // changes only replace the session window and must not reload the roster.
   useEffect(() => {
-    if (!activeWorkspaceId) return
+    if (!activeWorkspaceId) {
+      setBootstrapping(false)
+      return
+    }
     setAllAgents([])
     setSessions([])
     setMessages([])
     setActiveAgentId(null)
     setActiveSessionId(null)
+    activeSessionIdRef.current = null
     // The default agent is per-workspace, so the outgoing workspace's pick must
     // not linger while the new one's settings are in flight.
     setCurrentDefaultAgent(null)
     setDefaultAgentSaveState('idle')
     setWsSettingsLoaded(false)
-    setBootstrapping(true)
     let cancelled = false
-    Promise.all([
-      api.listAgents(),
-      api.listSessions({ limit: SESSIONS_PAGE_SIZE }),
-      api.getWorkspaceSettings().catch(() => null),
-    ])
-      .then(([ag, page, ws]) => {
+    Promise.all([api.listAgents(), api.getWorkspaceSettings().catch(() => null)])
+      .then(([ag, ws]) => {
         if (cancelled) return
-        const ss = page.items
         setAllAgents(ag)
-        setSessions(ss)
-        setSessionsTotal(page.total)
-        setSessionsHasMore(page.hasMore)
-        sessionsLimitRef.current = SESSIONS_PAGE_SIZE
         // Restore the per-workspace default agent from the backend. If it points to an
         // agent that no longer exists in this workspace, the self-heal effect below will
         // pick the first agent and persist the correction.
@@ -159,37 +206,96 @@ export function useSessionsController({
           setCurrentDefaultAgent(ws.defaultAgentId)
         }
         setWsSettingsLoaded(ws !== null)
-        // Default selection: the most recent WRITABLE session. The sidebar now
-        // lists every kind, but landing a returning user on a read-only flow or
-        // schedule log (with no composer) would be a worse default than the last
-        // conversation they can actually continue.
-        // Honor a pending deep link (initial load or cross-workspace nav) once.
-        // A legacy '#executions/<sessionId>' link has already been rewritten to
-        // the chat view by parseRoute, so it lands here as an ordinary session id.
-        const want = pendingRouteRef.current
-        pendingRouteRef.current = null
-        // Default selection: the most recent writable session, unless a session
-        // holds an unsent draft (a returning user should land back on the chat
-        // they were mid-typing) or an explicit deep link overrides both.
-        const { sessionId: sid, agentId: aid } = pickInitialSession({
-          sessions: ss,
-          wantRoute: want,
-          draftedSessionIds: draftSessionIds(),
-          agentExists: (id) => ag.some((a) => a.id === id),
-        })
-        setActiveSessionId(sid)
-        setActiveAgentId(aid)
       })
       .catch((e) => {
         if (!cancelled) setError((e as Error).message)
-      })
-      .finally(() => {
-        if (!cancelled) setBootstrapping(false)
       })
     return () => {
       cancelled = true
     }
   }, [activeWorkspaceId, setCurrentDefaultAgent, setError])
+
+  // Load or replace the filtered first page. Deep-link and draft candidates are
+  // resolved by one bounded exact-ID query so selection is not limited to page
+  // one and does not require loading the whole workspace.
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    setBootstrapping(true)
+    listReplacePendingRef.current = true
+    const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
+    const token = listRequestGuardRef.current.begin(identity)
+    const want = pendingRouteRef.current
+    const drafted = draftSessionIds()
+    const exactIDs = initialSessionLookupIDs(
+      want,
+      activeSessionIdRef.current,
+      drafted,
+      INITIAL_SESSION_LOOKUP_LIMIT,
+    )
+    const exactLookup = api
+      .getSessionsByIds(exactIDs)
+      .then((items) => ({ ok: true as const, items }))
+      .catch(() => ({ ok: false as const, items: [] as Session[] }))
+    const agentLookup =
+      want?.view === 'agents'
+        ? api
+            .listAgents()
+            .then((items) => ({ ok: true as const, items }))
+            .catch(() => ({ ok: false as const, items: [] as Agent[] }))
+        : Promise.resolve({ ok: true as const, items: [] as Agent[] })
+
+    Promise.all([
+      api.listSessions({ limit: SESSIONS_PAGE_SIZE, chips: chipsParam }),
+      exactLookup,
+      agentLookup,
+    ])
+      .then(([page, exact, routeAgents]) => {
+        if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return
+        const routeResolved = chatRouteLookupResolved(want, page.items, exact.ok)
+        const agentRouteResolved = !want || want.view !== 'agents' || routeAgents.ok
+        const effectiveWant = routeResolved && agentRouteResolved ? want : null
+        const candidates = appendSessionPage(page.items, exact.items).sort(
+          (a, b) => b.updatedAt - a.updatedAt,
+        )
+        let sid = activeSessionIdRef.current
+        let aid: string | null = null
+        if (effectiveWant || !sid) {
+          const picked = pickInitialSession({
+            sessions: candidates,
+            wantRoute: effectiveWant,
+            draftedSessionIds: drafted,
+            agentExists: (id) => routeAgents.items.some((agent) => agent.id === id),
+          })
+          sid = picked.sessionId
+          aid = picked.agentId
+          activeSessionIdRef.current = sid
+          setActiveSessionId(sid)
+          setActiveAgentId(aid)
+        }
+        if (effectiveWant && pendingRouteRef.current === want) pendingRouteRef.current = null
+        const selected =
+          candidates.find((session) => session.id === sid) ??
+          sessionsRef.current.find((session) => session.id === sid)
+        setSessions(mergeSelectedSession(page.items, selected))
+        setSessionsTotal(page.total)
+        setSessionsHasMore(page.hasMore)
+        setSessionChipCounts(page.chipCounts ?? {})
+        sessionsLimitRef.current = SESSIONS_PAGE_SIZE
+        loadedPageSizeRef.current = page.items.length
+      })
+      .catch((e) => {
+        if (listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) {
+          setError((e as Error).message)
+        }
+      })
+      .finally(() => {
+        if (listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) {
+          listReplacePendingRef.current = false
+          setBootstrapping(false)
+          runQueuedSessionRefresh()
+        }
+      })
+  }, [activeWorkspaceId, chipsParam, runQueuedSessionRefresh, setError])
 
   // Agent CRUD events refresh only the roster. Re-running the workspace bootstrap
   // would unnecessarily clear the active session and transcript.
@@ -316,32 +422,62 @@ export function useSessionsController({
   // Reload the session list (fresh order, updated times, unread flags) while
   // keeping the already-loaded window: refetch the same limit so a user who has
   // paged deeper does not get collapsed back to the first page on every event.
-  const refreshSessions = useCallback(() => {
-    api
-      .listSessions({ limit: sessionsLimitRef.current })
-      .then((page) => {
-        setSessions(page.items)
-        setSessionsTotal(page.total)
-        setSessionsHasMore(page.hasMore)
+  const refreshSessions = useCallback(async (): Promise<boolean> => {
+    // Do not invalidate the workspace/chip bootstrap request. It owns pending
+    // deep-link resolution; replacing its request token here could leave the
+    // route unresolved and the loading state stuck indefinitely.
+    if (listReplacePendingRef.current) {
+      listRefreshQueuedRef.current = true
+      return false
+    }
+    const identity = listQueryIdentityRef.current
+    const token = listRequestGuardRef.current.begin(identity)
+    listReplacePendingRef.current = true
+    try {
+      const page = await api.listSessions({
+        limit: sessionsLimitRef.current,
+        chips: chipsParamRef.current,
       })
-      .catch(() => {})
-  }, [])
+      if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return false
+      setSessions(withActiveSession(page.items))
+      setSessionsTotal(page.total)
+      setSessionsHasMore(page.hasMore)
+      loadedPageSizeRef.current = page.items.length
+      if (page.chipCounts) setSessionChipCounts(page.chipCounts)
+      return true
+    } catch {
+      return false
+    } finally {
+      if (listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) {
+        listReplacePendingRef.current = false
+        setBootstrapping(false)
+        runQueuedSessionRefresh()
+      }
+    }
+  }, [runQueuedSessionRefresh, withActiveSession])
+  refreshSessionsRef.current = refreshSessions
 
   // Append the next page to the session list (sidebar "Daha fazla yükle").
   const loadMoreSessions = useCallback(() => {
-    const offset = sessionsRef.current.length
+    if (listReplacePendingRef.current) return
+    // The offset is the loaded window's size in the SERVER's filtered ordering,
+    // so an active session merged in behind the filter must not shift it.
+    const offset = loadedPageSizeRef.current
     if (offset === 0) return
+    const identity = listQueryIdentityRef.current
+    const token = listRequestGuardRef.current.begin(identity)
     api
-      .listSessions({ limit: SESSIONS_PAGE_SIZE, offset })
+      .listSessions({ limit: SESSIONS_PAGE_SIZE, offset, chips: chipsParamRef.current })
       .then((page) => {
+        if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return
+        if (page.chipCounts) setSessionChipCounts(page.chipCounts)
         if (page.items.length === 0) {
           setSessionsHasMore(false)
           return
         }
-        const known = new Set(sessionsRef.current.map((s) => s.id))
-        const fresh = page.items.filter((s) => !known.has(s.id))
-        setSessions((prev) => [...prev, ...fresh])
-        sessionsLimitRef.current = offset + fresh.length
+        setSessions((prev) => appendSessionPage(prev, page.items))
+        loadedPageSizeRef.current = offset + page.items.length
+        sessionsLimitRef.current = loadedPageSizeRef.current
         setSessionsTotal(page.total)
         setSessionsHasMore(page.hasMore)
       })
@@ -376,6 +512,9 @@ export function useSessionsController({
   // leaves it (opens another session or a new chat) without ever sending anything,
   // it is auto-deleted on the way out so empty abandoned chats don't pile up.
   const freshEmptyRef = useRef<string | null>(null)
+  // Exact-ID selections can overlap (hash navigation and search results). Only
+  // the newest lookup may change the open transcript.
+  const sessionSelectSeqRef = useRef(0)
 
   // discardEmptyFresh deletes the tracked fresh session when it is the one being
   // left AND neither its transcript nor its active-workspace draft has content.
@@ -400,19 +539,55 @@ export function useSessionsController({
     [messagesRef],
   )
 
-  const selectSession = useCallback(
-    (id: string, messageId?: string) => {
+  const commitSessionSelection = useCallback(
+    (sess: Session, messageId?: string) => {
+      const id = sess.id
       // Leaving the current session: clean it up if it was an unused new chat.
       if (id !== activeSessionIdRef.current) discardEmptyFresh(activeSessionIdRef.current)
+      activeSessionIdRef.current = id
       setActiveSessionId(id)
       setScrollToMsgId(messageId ?? null)
-      const sess = sessions.find((s) => s.id === id)
-      if (sess) setActiveAgentId(sess.agentId)
+      setActiveAgentId(sess.agentId)
       // Optimistically clear unread, then persist on the backend.
       setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, unread: false } : s)))
       api.markSessionRead(id).catch(() => {})
     },
-    [sessions, discardEmptyFresh, activeSessionIdRef],
+    [discardEmptyFresh],
+  )
+
+  const selectSession = useCallback(
+    (id: string, messageId?: string) => {
+      const seq = ++sessionSelectSeqRef.current
+      const known = sessionsRef.current.find((session) => session.id === id)
+      if (known) {
+        commitSessionSelection(known, messageId)
+        return
+      }
+
+      // Hash/back-forward navigation can target a valid session outside the
+      // current filtered page. Resolve it exactly before opening the transcript.
+      const workspaceID = activeWorkspaceIdRef.current
+      if (!workspaceID) return
+      void api
+        .getSessionsByIds([id])
+        .then((items) => {
+          if (sessionSelectSeqRef.current !== seq || activeWorkspaceIdRef.current !== workspaceID)
+            return
+          const session = items.find((item) => item.id === id)
+          if (!session) {
+            setError('Session not found.')
+            return
+          }
+          setSessions((prev) => mergeSelectedSession(prev, session))
+          commitSessionSelection(session, messageId)
+        })
+        .catch((e) => {
+          if (sessionSelectSeqRef.current === seq && activeWorkspaceIdRef.current === workspaceID) {
+            setError((e as Error).message)
+          }
+        })
+    },
+    [commitSessionSelection, setError],
   )
 
   // ---- per-session actions (settings menu) ----
@@ -429,28 +604,27 @@ export function useSessionsController({
   )
 
   // Archive / restore a session (the sidebar Active/Archived filter). Archiving
-  // updates state locally so the row leaves the active list at once; when the
-  // archived session is the open one, fall back to another active session.
+  // changes membership and ordering in the server-filtered set, so refetch the
+  // whole currently loaded window instead of shifting its offset locally.
   const setSessionArchived = useCallback(
     async (id: string, archived: boolean) => {
       try {
         await api.setSessionState(id, archived ? 'archived' : 'active')
-        setSessions((prev) => {
-          const next = prev.map((s) =>
-            s.id === id ? { ...s, state: archived ? 'archived' : 'active' } : s,
+        if (archived && activeSessionIdRef.current === id) {
+          const fallback = sessionsRef.current.find(
+            (session) => session.id !== id && session.state !== 'archived',
           )
-          if (archived && activeSessionId === id) {
-            const fallback = next.find((s) => s.id !== id && s.state !== 'archived')
-            setActiveSessionId(fallback?.id ?? null)
-            setActiveAgentId(fallback?.agentId ?? null)
-          }
-          return next
-        })
+          const fallbackID = fallback?.id ?? null
+          activeSessionIdRef.current = fallbackID
+          setActiveSessionId(fallbackID)
+          setActiveAgentId(fallback?.agentId ?? null)
+        }
+        await refreshSessions()
       } catch (e) {
         setError((e as Error).message)
       }
     },
-    [activeSessionId, setError],
+    [refreshSessions, setError],
   )
 
   // Pin / unpin a session (sidebar). Optimistic; ListSessions floats pinned to top.
@@ -651,23 +825,17 @@ export function useSessionsController({
         )
         // Its sessions survive, but a cascade dropped its schedules/tasks — refresh
         // the session list so any state derived from those is current.
-        try {
-          const fresh = (await api.listSessions({ limit: sessionsLimitRef.current })).items
-          setSessions(fresh)
-          setActiveSessionId((cur) =>
-            cur && fresh.some((s) => s.id === cur) ? cur : (fresh[0]?.id ?? null),
-          )
-        } catch {
-          /* ignore */
-        }
+        await refreshSessions()
       } catch (e) {
         setError((e as Error).message)
       }
     },
-    [setError],
+    [refreshSessions, setError],
   )
 
   const newSession = useCallback(async () => {
+    const workspaceID = activeWorkspaceIdRef.current
+    if (!workspaceID) return
     const aid = defaultAgentId ?? agents[0]?.id
     if (!aid) {
       setError('Create an agent before starting a new session.')
@@ -675,16 +843,25 @@ export function useSessionsController({
     }
     // Discard the previous new chat if it was left empty, before opening another.
     discardEmptyFresh(activeSessionIdRef.current)
-    const s = await api.createSession(aid)
-    setSessions((prev) => [s, ...prev])
-    setActiveSessionId(s.id)
-    setActiveAgentId(s.agentId)
-    setMessages([])
-    // Track it as a fresh, unused chat (cleared once a message is sent / it's left).
-    freshEmptyRef.current = s.id
-    // Mark this new chat as the one that should auto-focus the input (the composer
-    // focuses only when the active session matches this id).
-    setFocusSessionId(s.id)
+    try {
+      const s = await api.createSession(aid)
+      // The request belongs to its originating workspace. A late response must
+      // not inject that session into a workspace the user switched to meanwhile.
+      if (activeWorkspaceIdRef.current !== workspaceID) return
+      sessionSelectSeqRef.current += 1
+      setSessions((prev) => [s, ...prev])
+      activeSessionIdRef.current = s.id
+      setActiveSessionId(s.id)
+      setActiveAgentId(s.agentId)
+      setMessages([])
+      // Track it as a fresh, unused chat (cleared once a message is sent / it's left).
+      freshEmptyRef.current = s.id
+      // Mark this new chat as the one that should auto-focus the input (the composer
+      // focuses only when the active session matches this id).
+      setFocusSessionId(s.id)
+    } catch (e) {
+      if (activeWorkspaceIdRef.current === workspaceID) setError((e as Error).message)
+    }
   }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef, setError])
 
   // Regenerate a session's title from its conversation on demand.
@@ -721,6 +898,7 @@ export function useSessionsController({
     setSessions,
     sessionsTotal,
     sessionsHasMore,
+    sessionChipCounts,
     loadMoreSessions,
     messages,
     setMessages,

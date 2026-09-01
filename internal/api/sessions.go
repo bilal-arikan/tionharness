@@ -76,10 +76,11 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		sessions = []db.Session{}
 	}
 
-	// Filters: kind (legacy producer kind), category, executionType and state
-	// (active|archived). With any of limit/offset/sort present the response is
-	// the standard {items,total,offset,limit,hasMore} envelope; without them it
-	// stays the legacy full unwrapped list so existing UI clients keep working.
+	// Filters: kind (legacy producer kind), category, executionType, state
+	// (active|archived) and chips (the sidebar's chip selection). With any of
+	// limit/offset/sort present the response is the standard
+	// {items,total,offset,limit,hasMore} envelope; without them it stays the
+	// legacy full unwrapped list so existing UI clients keep working.
 	limit, offset, field, asc, listing, err := listQueryParams(q)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -89,7 +90,14 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	category := strings.TrimSpace(q.Get("category"))
 	executionType := strings.TrimSpace(q.Get("executionType"))
 	state := strings.TrimSpace(q.Get("state"))
-	matches := make([]db.Session, 0, len(sessions))
+	ids := parseSessionIDs(q.Get("ids"))
+	rawChips, chipsGiven := q["chips"]
+	chipSel, chipFilter := parseChips(strings.Join(rawChips, ","), chipsGiven)
+	// Build the caller's non-chip scope first. Chip badges describe this scope,
+	// not unrelated kinds/categories/states excluded by the same query. The chip
+	// selection itself is applied afterwards so an unticked badge still reports
+	// how many rows it would reveal.
+	scope := make([]db.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if kind != "" && s.Kind != kind {
 			continue
@@ -101,6 +109,17 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if state != "" && s.State != state {
+			continue
+		}
+		if ids != nil && !ids[s.ID] {
+			continue
+		}
+		scope = append(scope, s)
+	}
+	chipCounts := sessionChipCounts(scope)
+	matches := make([]db.Session, 0, len(scope))
+	for _, s := range scope {
+		if chipFilter && !sessionMatchesChips(s, chipSel) {
 			continue
 		}
 		matches = append(matches, s)
@@ -122,7 +141,21 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.SliceStable(matches, less)
 	page, total := tools.SlicePage(matches, offset, limit)
-	pageJSONResponse(w, page, total, offset, limit)
+	writeJSON(w, http.StatusOK, struct {
+		Items      []db.Session   `json:"items"`
+		Total      int            `json:"total"`
+		Offset     int            `json:"offset"`
+		Limit      int            `json:"limit"`
+		HasMore    bool           `json:"hasMore"`
+		ChipCounts map[string]int `json:"chipCounts"`
+	}{
+		Items:      page,
+		Total:      total,
+		Offset:     offset,
+		Limit:      limit,
+		HasMore:    offset+limit < total,
+		ChipCounts: chipCounts,
+	})
 }
 
 type createSessionReq struct {

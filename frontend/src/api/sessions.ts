@@ -33,6 +33,10 @@ export interface SessionPage {
   offset: number
   limit: number
   hasMore: boolean
+  // chipKey → how many sessions the query's non-chip scope holds for that chip.
+  // Counted before the chips filter, so an unticked badge still reports what it
+  // hides. Absent on the legacy unwrapped response.
+  chipCounts?: Record<string, number>
 }
 
 // asSessionPage normalizes either wire shape (unwrapped legacy array or paged
@@ -45,12 +49,21 @@ export function asSessionPage(r: Session[] | SessionPage): SessionPage {
 
 export interface SessionListParams {
   agentId?: string
+  // Bounded exact lookup used to recover deep-linked/drafted sessions outside
+  // the current filtered page.
+  ids?: string[]
   limit?: number
   offset?: number
   // sort in the tool-layer format, e.g. "updated_desc" | "created_asc" | "title_asc".
   sort?: string
   kind?: string
   state?: string
+  // Comma-separated sidebar chip keys. The server applies the same chip
+  // predicate BEFORE paging, so total/hasMore describe the rows the sidebar can
+  // actually show — without it a page of mixed kinds can be almost entirely
+  // filtered out client-side and "load more" looks broken. An empty string is a
+  // real selection (nothing ticked) and matches nothing.
+  chips?: string
 }
 
 export const sessionApi = {
@@ -62,15 +75,21 @@ export const sessionApi = {
   listSessions: (params?: SessionListParams): Promise<SessionPage> => {
     const p = new URLSearchParams()
     if (params?.agentId) p.set('agentId', params.agentId)
+    if (params?.ids?.length) p.set('ids', params.ids.join(','))
     if (params?.limit !== undefined) p.set('limit', String(params.limit))
     if (params?.offset !== undefined) p.set('offset', String(params.offset))
     if (params?.sort) p.set('sort', params.sort)
     if (params?.kind) p.set('kind', params.kind)
     if (params?.state) p.set('state', params.state)
+    if (params?.chips !== undefined) p.set('chips', params.chips)
     const qs = p.toString()
     return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions').then(
       asSessionPage,
     )
+  },
+  getSessionsByIds: (ids: string[]): Promise<Session[]> => {
+    if (ids.length === 0) return Promise.resolve([])
+    return sessionApi.listSessions({ ids, limit: ids.length }).then((page) => page.items)
   },
   // Session ids with a turn still streaming server-side. Queried after a reload
   // to restore the "thinking" indicator for detached turns still in flight.

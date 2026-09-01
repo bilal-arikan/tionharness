@@ -28,6 +28,7 @@ import { ChatView } from '@/features/chat/ChatView'
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
+import { useSessionChips } from '@/features/sessions/useSessionChips'
 import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
 import { CoordinatorPanel } from '@/features/sessions/CoordinatorPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
@@ -275,9 +276,14 @@ export default function App() {
   // Per-view deep-link targets + cross-view "open X" helpers.
   const links = useDeepLinks(setView)
 
+  // Sidebar chip selection. It lives here (not in the sidebar) because the
+  // session list request carries it: the server applies the chip filter before
+  // paging, so the same selection drives the fetch and the rendered rows.
+  const sessionChips = useSessionChips()
   // Workspace-scoped data model: agents, sessions, transcript + their actions.
   const ctl = useSessionsController({
     activeWorkspaceId,
+    chipsParam: sessionChips.chipsParam,
     setError,
     setView,
   })
@@ -597,6 +603,10 @@ export default function App() {
               totalSessions={ctl.sessionsTotal}
               hasMoreSessions={ctl.sessionsHasMore}
               onLoadMore={ctl.loadMoreSessions}
+              chipsOff={sessionChips.chipsOff}
+              chipSet={sessionChips.chipSet}
+              onClickChip={sessionChips.clickChip}
+              chipCountsFromServer={ctl.sessionChipCounts}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
                 setMobileListOpen(false)

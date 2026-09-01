@@ -31,14 +31,10 @@ import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import { useDraftSessionIds } from '@/shared/hooks/useDraftSessionIds'
 import {
-  ALL_SESSION_CHIPS,
   ARCHIVED_CHIP,
   kindMeta,
-  nextChipsOff,
-  normalizeChipsOff,
   type ChipClickMode,
   SESSION_CHIPS,
-  SESSION_CHIPS_OFF_KEY,
   sessionMatchesChips,
   sessionLiveScope,
   WORKER_CHIP,
@@ -50,6 +46,28 @@ import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
+
+const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
+const MIN_SIDEBAR_WIDTH = 200
+const MAX_SIDEBAR_WIDTH = 560
+const DEFAULT_SIDEBAR_WIDTH = 264
+
+function readSidebarWidth(): number {
+  try {
+    const saved = Number(globalThis.localStorage.getItem(SIDEBAR_WIDTH_KEY))
+    return saved >= MIN_SIDEBAR_WIDTH && saved <= MAX_SIDEBAR_WIDTH ? saved : DEFAULT_SIDEBAR_WIDTH
+  } catch {
+    return DEFAULT_SIDEBAR_WIDTH
+  }
+}
+
+function writeSidebarWidth(width: number): void {
+  try {
+    globalThis.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width))
+  } catch {
+    // Persistence is best-effort when storage is blocked by browser policy.
+  }
+}
 
 interface Props {
   sessions: Session[]
@@ -68,10 +86,21 @@ interface Props {
   newDisabled: boolean
   // TSK68 load-more: total/hasMore from the paged /api/sessions envelope and the
   // callback that appends the next page. When hasMore is true the list renders a
-  // "Daha fazla yükle" row at the bottom.
+  // "Daha fazla yükle" row at the bottom. total counts the CHIP-FILTERED set:
+  // the server applies the same chip predicate before paging, so the footer
+  // count and the button both describe rows this list can actually show.
   totalSessions?: number
   hasMoreSessions?: boolean
   onLoadMore?: () => void
+  // Chip selection, owned above the sidebar because the session list request
+  // carries it (see useSessionChips).
+  chipsOff: string[]
+  chipSet: ReadonlySet<string>
+  onClickChip: (key: string, mode: ChipClickMode) => void
+  // chipKey → workspace-wide count from the list response. Used for every chip
+  // the server can classify; the two live chips stay counted over loaded rows
+  // because liveness is client state.
+  chipCountsFromServer?: Record<string, number>
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
   onSelectSession: (id: string, messageId?: string) => void
@@ -102,6 +131,10 @@ export function SessionsSidebar({
   totalSessions,
   hasMoreSessions,
   onLoadMore,
+  chipsOff,
+  chipSet,
+  onClickChip,
+  chipCountsFromServer,
   onSelectSession,
   onNewSession,
   onRefresh,
@@ -111,25 +144,15 @@ export function SessionsSidebar({
   onSetPinned,
 }: Props) {
   // One flat list filtered by multi-select chips: the kind chips plus a Worker
-  // and an Arşiv chip. All chips start selected (everything visible) and the
-  // selection is persisted locally — it is view state, not a deep-link.
-  // Persisted as the UNTICKED set, so a chip introduced by a later build starts
-  // on instead of hiding rows for anyone with a saved selection.
-  const [chipsOff, setChipsOff] = useState<string[]>(() =>
-    normalizeChipsOff(localStorage.getItem(SESSION_CHIPS_OFF_KEY)),
-  )
-  useEffect(() => {
-    localStorage.setItem(SESSION_CHIPS_OFF_KEY, JSON.stringify(chipsOff))
-  }, [chipsOff])
-  const chipSet = useMemo(
-    () => new Set(ALL_SESSION_CHIPS.filter((k) => !chipsOff.includes(k))),
-    [chipsOff],
-  )
+  // and an Arşiv chip. The selection itself lives in useSessionChips (above this
+  // component) because the session list REQUEST carries it — the server pages
+  // the filtered set, so paging and the chips have to share one source of truth.
+  //
   // Plain click toggles one chip; Ctrl/Cmd-click solos it (everything else off),
   // Shift-click inverts every other chip.
   const clickChip = (key: string, e: ReactMouseEvent) => {
     const mode: ChipClickMode = e.ctrlKey || e.metaKey ? 'solo' : e.shiftKey ? 'invert' : 'toggle'
-    setChipsOff((prev) => nextChipsOff(prev, key, mode))
+    onClickChip(key, mode)
   }
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
@@ -139,18 +162,16 @@ export function SessionsSidebar({
   const [searching, setSearching] = useState(false)
 
   // Draggable width (persisted), matching the old sidebar behaviour.
-  const MIN = 200
-  const MAX = 560
-  const [width, setWidth] = useState(() => {
-    const saved = Number(localStorage.getItem('tionharness.sidebarWidth'))
-    return saved >= MIN && saved <= MAX ? saved : 264
-  })
+  const [width, setWidth] = useState(readSidebarWidth)
   const drag = useRef<{ startX: number; startW: number } | null>(null)
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!drag.current) return
       setWidth(
-        Math.min(MAX, Math.max(MIN, drag.current.startW + (e.clientX - drag.current.startX))),
+        Math.min(
+          MAX_SIDEBAR_WIDTH,
+          Math.max(MIN_SIDEBAR_WIDTH, drag.current.startW + (e.clientX - drag.current.startX)),
+        ),
       )
     }
     const onUp = () => {
@@ -158,7 +179,7 @@ export function SessionsSidebar({
       drag.current = null
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
-      localStorage.setItem('tionharness.sidebarWidth', String(width))
+      writeSidebarWidth(width)
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -212,19 +233,19 @@ export function SessionsSidebar({
     [streamingSessionIds, runtimeById, liveWorkerCounts],
   )
 
+  // Chip badges. The server counts every chip it can classify over the WHOLE
+  // workspace (before the chips filter), which is the only source that still
+  // knows what an unticked chip hides now that its rows never reach this list.
+  // The two live chips are client state, so they stay counted over loaded rows.
   const chipCounts = useMemo(() => {
     const counts = new Map<string, number>()
+    for (const [key, n] of Object.entries(chipCountsFromServer ?? {})) counts.set(key, n)
     for (const s of sessions) {
-      const shape = chipShapeOf(s)
-      const key = sessionChipKey(s)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-      if (shape.isWorker) counts.set(WORKER_CHIP, (counts.get(WORKER_CHIP) ?? 0) + 1)
-      if (shape.isArchived) counts.set(ARCHIVED_CHIP, (counts.get(ARCHIVED_CHIP) ?? 0) + 1)
-      const live = sessionLiveScope(shape)
+      const live = sessionLiveScope(chipShapeOf(s))
       if (live) counts.set(live, (counts.get(live) ?? 0) + 1)
     }
     return counts
-  }, [sessions, chipShapeOf])
+  }, [sessions, chipShapeOf, chipCountsFromServer])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
   // order. The chip selection narrows first, then a title/session ID search. The worker
@@ -383,9 +404,7 @@ export function SessionsSidebar({
 
       {/* Multi-select chips: every session kind plus the Worker and Arşiv scopes.
           All start selected — unticking a chip hides that slice. */}
-      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">
-        Yüklenenlerde
-      </div>
+      <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">Filtreler</div>
       <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
         {SESSION_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
@@ -401,7 +420,7 @@ export function SessionsSidebar({
             <button
               key={f.key}
               onClick={(e) => clickChip(f.key, e)}
-              title={`${f.label}: yüklenen ${sessions.length} oturumda ${chipCounts.get(f.key) ?? 0} — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
+              title={`${f.label}: ${chipCounts.get(f.key) ?? 0} oturum — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
