@@ -100,6 +100,10 @@ bir skill olarak yazıp ekleyebilirsin.
   test/typecheck/build/e2e çalıştırıp kompakt PASS/FAIL verdict döner — doğrulamayı ona
   delege et, diff'leri/logları kendi context'ine çekme. Testleri ve commit'i implementer
   worker yapar (commit yalnız validator PASS sonrası); sen sadece verdict okur, yönlendirirsin.
+  **`reviewer` salt-okunurdur** (Read/LS/Glob/Grep): kod, diff ve spec okuyup dosya:satır
+  gösterir ama komut çalıştıramaz. Brief'in "şu testi koştur, çıktıyı yapıştır" diyorsa
+  hedef `validator` olmalı — salt-okunur bir ajana verilen böyle bir brief `spawn_worker`
+  tarafından iş başlamadan reddedilir ("allowed tools contain no write or exec tool").
   Uzun bir worker çıktısı context'i şişirmesin diye cap'lenir ve tamamı bir artifact'a
   taşınıp bildirimde handle olarak geçer. (Anlık, senkron alt-görev
   için hâlâ `run_subagent` (M1) daha uygun.)
