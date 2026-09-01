@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -346,14 +347,8 @@ func (r *Runtime) recordFailedUsage(ctx context.Context, agent db.Agent, req pro
 }
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
-	// A non-streaming completion emits no incremental step, so the idle watchdog —
-	// fed only by emitted steps — would reclaim a legitimately long completion (long
-	// time-to-first-token, a single big CLI turn) as if it had hung. Heartbeat the
-	// watchdog while the provider call is in flight; the hard ceiling still bounds a
-	// genuinely wedged call. (The streaming path, recordedStream, deliberately skips
-	// this: its deltas already touch, so a stalled stream stays reclaimable.)
-	stopHeartbeat := startActivityHeartbeat(ctx)
-	defer stopHeartbeat()
+	// Opaque completions cannot prove liveness with heartbeat. Give the operation
+	// its own bounded lease; successful completion is semantic progress.
 	req = r.withMaxOutput(agent.Provider, req)
 	// How claude-cli receives its appended system prompt (inline vs temp file). Set
 	// on every path (one-shot + persistent) since both flow through here. Ignored by
@@ -371,13 +366,23 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() {
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
-			if resp, perr := r.cliSessions.Turn(ctx, key, cli, req, req.OnEvent); perr == nil {
+			resp, perr := runProviderOperation(ctx, req.OnEvent == nil, func(opCtx context.Context) (*providers.Response, error) {
+				return r.cliSessions.Turn(opCtx, key, cli, req, req.OnEvent)
+			})
+			if perr == nil {
+				if tracker := ActivityTrackerFrom(ctx); tracker != nil {
+					tracker.Progress("provider_complete")
+				}
 				preserveOrDeriveThinkingTokens(resp)
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 				r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 				return resp, nil
 			} else {
+				if errors.Is(perr, ErrOperationLeaseTimeout) {
+					r.recordFailedUsage(ctx, agent, req, perr)
+					return nil, perr
+				}
 				// The failed persistent turn still spent whatever it spent before dying;
 				// the fallback one-shot below bills separately, so skipping this would
 				// silently drop a whole turn's tokens.
@@ -387,7 +392,9 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 			}
 		}
 	}
-	resp, err := provider.Complete(ctx, req)
+	resp, err := runProviderOperation(ctx, req.OnEvent == nil, func(opCtx context.Context) (*providers.Response, error) {
+		return provider.Complete(opCtx, req)
+	})
 	if err != nil {
 		r.recordFailedUsage(ctx, agent, req, err)
 		r.logger.Warn("provider complete failed",
@@ -395,11 +402,21 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
+	if tracker := ActivityTrackerFrom(ctx); tracker != nil {
+		tracker.Progress("provider_complete")
+	}
 	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
+}
+
+func runProviderOperation(ctx context.Context, leased bool, operation func(context.Context) (*providers.Response, error)) (*providers.Response, error) {
+	if !leased {
+		return operation(ctx)
+	}
+	return RunWithOperationLease(ctx, operation)
 }
 
 // recordedStream streams a completion, forwarding each chunk as a live step, and

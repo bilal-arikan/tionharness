@@ -290,14 +290,12 @@ func (s *Server) handleRunSchedule(w http.ResponseWriter, r *http.Request) {
 	// this POST, and if RunNow ran on r.Context() that abort would cancel the
 	// in-flight turn mid-generation — the schedule would persist a partial reply
 	// and look "cut off". Mirror the chat-stream detach (context.WithoutCancel) so
-	// generation runs to completion regardless of the client; a generous timeout
-	// still bounds a genuinely hung run. Cron fires already detach via Background.
+	// generation runs to completion regardless of the client. Semantic idle tracking
+	// inside scheduler delivery reclaims a genuinely hung run.
 	//
-	// The bound is the SAME configured schedule deadline the cron path uses
-	// (Scheduler.fire → tun.ScheduleTimeout()). It used to be a hard-coded 10
-	// minutes here, which silently ignored scheduleTimeoutMin and killed manual
-	// runs of research-style prompts that the cron tick would have finished.
-	runCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), s.tun.ScheduleTimeout())
+	// This path used to install its own hard-coded deadline. It now only owns a
+	// cancellable detached context; scheduler delivery owns inactivity cancellation.
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
 	runErr := wsp.Scheduler.RunNow(runCtx, id)
 	sc, err := wsp.DB.GetSchedule(r.Context(), id)

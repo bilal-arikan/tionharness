@@ -90,6 +90,10 @@ func TestSpawnSessionQueuedWorkerResultSurfacesToCoordinator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create coordinator: %v", err)
 	}
+	otherCoord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-result-other", Title: "Other Coordinator"})
+	if err != nil {
+		t.Fatalf("create other coordinator: %v", err)
+	}
 	rt.tun.SetSpawnLimits(1, 16, 0)
 	fillSpawnSlots(t, rt, 1)
 
@@ -107,13 +111,25 @@ func TestSpawnSessionQueuedWorkerResultSurfacesToCoordinator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list coordinator messages: %v", err)
 	}
+	matches := 0
 	for _, message := range messages {
 		if strings.Contains(message.Text, "queued worker result surfaced") &&
 			strings.Contains(message.Text, "<status>completed</status>") && message.Origin == "worker-note" {
-			return
+			matches++
 		}
 	}
-	t.Fatalf("queued worker result was not surfaced to coordinator: %+v", messages)
+	if matches != 1 {
+		t.Fatalf("queued worker result count = %d, want exactly 1: %+v", matches, messages)
+	}
+	otherMessages, err := rt.db.ListMessages(ctx, otherCoord.ID)
+	if err != nil {
+		t.Fatalf("list other coordinator messages: %v", err)
+	}
+	for _, message := range otherMessages {
+		if strings.Contains(message.Text, "queued worker result surfaced") {
+			t.Fatalf("queued worker result reached wrong coordinator: %+v", otherMessages)
+		}
+	}
 }
 
 func TestSpawnSessionRejectsWhenQueueFull(t *testing.T) {

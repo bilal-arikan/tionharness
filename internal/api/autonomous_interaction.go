@@ -36,6 +36,9 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// harmless no-op, and satisfies the vet "cancel used on all paths" check).
 		ctx, cancel := context.WithCancel(ctx)
 		run := s.runs.register(runID, sessionID, rt.WorkspaceID(), cancel)
+		// Runtime invokes this setup after autonomous turn admission, so it already
+		// owns the session slot and can activate generation immediately.
+		s.runs.activate(run)
 		run.autonomous = true
 		// Label the run with the agent's provider on autonomous turns too. The chat
 		// path does this for the Session Info panel, but the call-time activation gate

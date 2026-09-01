@@ -21,18 +21,8 @@ import (
 // forever and block the whole queue behind it. See _Docs/58.
 const maxInboxAttempts = 3
 
-// inboxTurnWatchdog bounds how long a single queued turn may run before the serial
-// worker force-cancels it and moves on. Without this, a turn that never returns (a
-// wedged subprocess whose own startup-watchdog failed to fire, a deadlock) holds
-// running=true forever and every later message piles up behind it undrained —
-// exactly the "agent never starts despite repeated sends" wedge.
-//
-// Settings-driven (TurnWatchdogMin, default 120 min), floored at the spawn/schedule
-// ceilings by agent.Tunables.TurnWatchdog. It was a fixed 20 minutes, which was
-// TIGHTER than the deadlines those knobs already grant: a healthy interactive turn
-// running a long build/test loop (heavy Rust/Go compiles, 100+ tool calls) was
-// force-cancelled mid-tool as if it were hung, losing the in-flight step. Only a
-// genuinely stuck turn should ever reach this.
+// inboxTurnWatchdog exposes the deprecated absolute setting for storage/API
+// compatibility. It is not an active queued-turn cancellation source.
 func (s *Server) inboxTurnWatchdog() time.Duration {
 	if s.tun == nil {
 		return agent.DefaultTurnWatchdogMinutes * time.Minute
@@ -40,11 +30,7 @@ func (s *Server) inboxTurnWatchdog() time.Duration {
 	return s.tun.TurnWatchdog()
 }
 
-// inboxTurnIdleWatchdog is the INACTIVITY window that complements the ceiling
-// above: a queued turn that publishes no event at all (no tool step, no thinking,
-// no token delta) for this long is wedged and reclaimed early, rather than holding
-// the queue until the generous wall-clock cap. Together they read as "silent for X,
-// or running for Y" — which is what actually distinguishes a hang from a slow turn.
+// inboxTurnIdleWatchdog is the run-scoped semantic inactivity window.
 func (s *Server) inboxTurnIdleWatchdog() time.Duration {
 	if s.tun == nil {
 		return agent.DefaultTurnIdleWatchdogMinutes * time.Minute
@@ -52,17 +38,13 @@ func (s *Server) inboxTurnIdleWatchdog() time.Duration {
 	return s.tun.TurnIdleWatchdog()
 }
 
-// turnIdleFor reports how long the session has been silent, measuring from the
-// last event published to its hub (falling back to startedAt before the first
-// event lands, so a turn that dies during setup is still reclaimed). ok=false
-// means there is no usable signal and the caller must not judge the turn idle.
+// turnIdleFor reads only the registered run's semantic tracker. Hub traffic is
+// deliberately excluded: heartbeat, duplicate frames and another run's events
+// must not keep this run alive.
 func (s *Server) turnIdleFor(wsID, sessionID string, startedAt time.Time) (time.Duration, bool) {
-	if s.hub == nil {
-		return 0, false
-	}
 	since := startedAt
-	if last, ok := s.hub.LastActivity(wsID, sessionID); ok && last.After(since) {
-		since = last
+	if info, ok := s.runs.sessionRunInfo(wsID, sessionID); ok && info.LastProgressAt.After(since) {
+		since = info.LastProgressAt
 	}
 	if since.IsZero() {
 		return 0, false
@@ -159,8 +141,8 @@ const watchdogPollInterval = 15 * time.Second
 const watchdogDetachGrace = 30 * time.Second
 
 // runQueuedTurn runs one queued turn with a panic barrier (runTurnGuarded) AND a
-// two-part watchdog: a generous wall-clock ceiling plus an INACTIVITY window. The
-// turn runs in its own goroutine; when either bound trips, the worker force-cancels
+// semantic inactivity watchdog. The turn runs in its own goroutine; when it trips,
+// the worker force-cancels
 // the live run so the goroutine unblocks and the queue keeps moving.
 //
 // The idle half is what makes the pair honest. Wall clock alone cannot separate a
@@ -173,7 +155,6 @@ const watchdogDetachGrace = 30 * time.Second
 // refuse to unwind: a cut that unwound quickly used to leave no trace at all in the
 // transcript, so the turn simply stopped mid-sentence with no visible reason.
 func (s *Server) runQueuedTurn(wsp *workspace.Workspace, sessionID string, req chatReq) {
-	hard := s.inboxTurnWatchdog()
 	idleWindow := s.inboxTurnIdleWatchdog()
 	startedAt := time.Now()
 
@@ -182,6 +163,10 @@ func (s *Server) runQueuedTurn(wsp *workspace.Workspace, sessionID string, req c
 		defer close(done)
 		s.runTurnGuarded(wsp, req)
 	}()
+	if idleWindow <= 0 {
+		<-done
+		return
+	}
 
 	ticker := time.NewTicker(watchdogPollInterval)
 	defer ticker.Stop()
@@ -194,11 +179,6 @@ poll:
 			return
 		case <-ticker.C:
 			elapsed = time.Since(startedAt)
-			if elapsed >= hard {
-				reason = "watchdog"
-				detail = fmt.Sprintf("Tur süre sınırını aştı ve iptal edildi (watchdog, %s).", hard)
-				break poll
-			}
 			if idle, ok := s.turnIdleFor(wsp.ID, sessionID, startedAt); ok && idle >= idleWindow {
 				reason = "watchdog-idle"
 				detail = fmt.Sprintf("Tur %s boyunca hiçbir etkinlik üretmedi ve iptal edildi (boşta izleyicisi).", idleWindow)
@@ -210,7 +190,7 @@ poll:
 	if s.logger != nil {
 		s.logger.Error("queued turn exceeded watchdog; force-cancelling",
 			"session", sessionID, "reason", reason, "elapsed", elapsed.String(),
-			"hard", hard.String(), "idle", idleWindow.String())
+			"idle", idleWindow.String())
 	}
 	// Cancel the live run so the turn's context is cancelled and the provider tears
 	// down any subprocess (see chat_stream.go: the run's cancel is the turn ctx).
@@ -263,26 +243,37 @@ func (s *Server) clearInflight(wsID, sessionID string) {
 // here beside runQueuedTurn — the two form one durability unit (panic barrier +
 // watchdog) that keeps a single bad turn from taking down the serial worker.
 func (s *Server) runTurnGuarded(wsp *workspace.Workspace, req chatReq) {
+	var run *chatRun
+	releaseRecoveryRef := func() {}
+	defer func() { releaseRecoveryRef() }()
 	defer func() {
 		if r := recover(); r != nil {
-			if s.logger != nil {
-				s.logger.Error("queued turn panicked", "session", req.SessionID, "panic", r,
-					"stack", string(debug.Stack()))
-			}
-			detail := fmt.Sprintf("Tur beklenmedik bir hatayla çöktü (panic): %v", r)
-			// Persist the crash as a durable error card + debug event BEFORE the hub
-			// toast, so a panic that dies before the turn writes any trace is still
-			// visible in the transcript and the Debug panel — not a silent hang.
-			s.recordQueueTurnFailure(wsp, req.SessionID, "panic", detail)
-			s.publishHub(wsp.ID, req.SessionID, sessionhub.KindTurnError, map[string]any{
-				"error":       detail,
-				"reason":      "panic",
-				"clientMsgId": req.ClientMsgID,
-			}, false)
-			s.hub.Commit(wsp.ID, req.SessionID)
+			s.recoverQueuedTurnPanic(wsp, req, run, r)
 		}
 	}()
-	s.runChatTurn(context.Background(), wsp, req, nil)
+	s.runChatTurnCaptured(context.Background(), wsp, req, nil, func(registered *chatRun) {
+		run = registered
+		releaseRecoveryRef = s.runs.retain(registered)
+	})
+}
+
+func (s *Server) recoverQueuedTurnPanic(wsp *workspace.Workspace, req chatReq, run *chatRun, recovered any) {
+	if s.logger != nil {
+		s.logger.Error("queued turn panicked", "session", req.SessionID, "panic", recovered,
+			"stack", string(debug.Stack()))
+	}
+	detail := fmt.Sprintf("Tur beklenmedik bir hatayla çöktü (panic): %v", recovered)
+	s.runs.withCurrent(run, func() {
+		// Durable card, debug record, terminal event and commit are one fenced
+		// recovery unit. A newer generation makes the entire unit a no-op.
+		s.recordQueueTurnFailure(wsp, req.SessionID, "panic", detail)
+		s.publishHub(wsp.ID, req.SessionID, sessionhub.KindTurnError, map[string]any{
+			"error":       detail,
+			"reason":      "panic",
+			"clientMsgId": req.ClientMsgID,
+		}, false)
+		s.hub.Commit(wsp.ID, req.SessionID)
+	})
 }
 
 // dropPoisonedInflight abandons a turn that has wedged the process too many times

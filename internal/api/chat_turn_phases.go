@@ -52,8 +52,58 @@ type chatTurn struct {
 	freshSession bool
 	// started flips once the user message is persisted (the turn is committed);
 	// emitted flips once a terminal event was published by the success path.
-	started bool
-	emitted bool
+	started    bool
+	emitted    bool
+	inflightID string
+}
+
+func (t *chatTurn) clearInflight() {
+	t.withGeneration(func() {
+		_ = t.database.ClearInflightExpected(t.req.SessionID, t.runID, t.inflightID, t.run.generation)
+	})
+}
+
+// withGeneration is the single fence for run-owned durable, hub and live-sink
+// mutations. Holding this session's gate closes the check/write race with a newer
+// detached run taking ownership without serializing unrelated sessions.
+func (t *chatTurn) withGeneration(write func()) bool {
+	return t.s.runs.withCurrent(t.run, write)
+}
+
+func (t *chatTurn) emitLifecycleSteps(steps []agent.TurnStep) {
+	for _, st := range steps {
+		step := st
+		t.withGeneration(func() { t.sse("step", step) })
+	}
+}
+
+func (t *chatTurn) persistBlockedPrompt(steps []agent.TurnStep, reason string) bool {
+	var persistErr error
+	current := t.withGeneration(func() {
+		blockMsg, err := t.database.AddMessage(t.ctx, db.Message{
+			ID:        uuid.NewString(),
+			SessionID: t.session.ID,
+			Role:      providers.RoleAssistant,
+			AgentID:   t.agents[0].ID,
+			Text:      reason,
+			Steps:     marshalSteps(steps),
+		})
+		if err != nil {
+			persistErr = err
+			return
+		}
+		t.sse("reply", map[string]any{"replyMessage": blockMsg})
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindReply, blockMsg, false)
+		terminal := map[string]any{"sessionTitle": strings.TrimSpace(t.session.Title), "clientMsgId": t.clientMsgID}
+		t.sse("done", terminal)
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindTurnDone, terminal, false)
+		t.s.hub.Commit(t.wsp.ID, t.session.ID)
+		t.emitted = true
+	})
+	if current && persistErr != nil {
+		t.failTurn(t.agents[0].ID, "hook_block_persist", persistErr.Error())
+	}
+	return current
 }
 
 // failPreflight reports a pre-flight failure (before the turn commits) to the
@@ -62,9 +112,16 @@ type chatTurn struct {
 func (t *chatTurn) failPreflight(reason, detail string) {
 	t.s.logger.Error("chat turn preflight failed", "session", t.req.SessionID, "reason", reason, "detail", detail)
 	payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": t.clientMsgID}
-	t.run.emit("error", payload)
-	t.s.publishHub(t.wsp.ID, t.req.SessionID, sessionhub.KindTurnError, payload, false)
-	t.s.hub.Commit(t.wsp.ID, t.req.SessionID)
+	write := func() {
+		t.run.emit("error", payload)
+		t.s.publishHub(t.wsp.ID, t.req.SessionID, sessionhub.KindTurnError, payload, false)
+		t.s.hub.Commit(t.wsp.ID, t.req.SessionID)
+	}
+	if t.run.generation == 0 {
+		write()
+		return
+	}
+	t.withGeneration(write)
 }
 
 // preflight loads the session, claims the per-session turn slot, resolves the
@@ -106,6 +163,9 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 			}
 		}()
 	}
+	// Generation ownership starts only after the session slot is truly ours.
+	// A registered run waiting above cannot invalidate the current slot owner.
+	t.s.runs.activate(t.run)
 	t.firstTurn = t.s.isFirstUntitledTurn(session)
 	t.freshSession = session.MessageCount == 0
 
@@ -140,13 +200,18 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 	// question was directed at — the "@name" in the text is only informational and
 	// does not route. Harmless in a 1:1 session (labelling only kicks in with 2+
 	// agents).
-	userMsg, err := t.database.AddMessage(t.ctx, db.Message{
-		SessionID:   session.ID,
-		Role:        providers.RoleUser,
-		AgentID:     agents[0].ID,
-		Text:        t.req.Message,
-		Attachments: t.req.Attachments,
-	})
+	var userMsg db.Message
+	if !t.withGeneration(func() {
+		userMsg, err = t.database.AddMessage(t.ctx, db.Message{
+			SessionID:   session.ID,
+			Role:        providers.RoleUser,
+			AgentID:     agents[0].ID,
+			Text:        t.req.Message,
+			Attachments: t.req.Attachments,
+		})
+	}) {
+		return release, false
+	}
 	if err != nil {
 		t.failPreflight("persist_error", err.Error())
 		return release, false
@@ -157,10 +222,12 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 	// Every file attached to a chat turn becomes a session artifact (origin chat).
 	t.s.captureAttachmentArtifacts(t.ctx, t.database, session.ID, agents[0].ID, t.req.Attachments)
 
-	t.sse("meta", map[string]any{"userMessage": userMsg, "runId": t.runID})
-	// Put the user message onto the session hub so EVERY window watching this
-	// session (not just the one that submitted) renders it live, in order.
-	t.s.publishHub(t.wsp.ID, session.ID, sessionhub.KindUserMessage, userMsg, false)
+	t.withGeneration(func() {
+		t.sse("meta", map[string]any{"userMessage": userMsg, "runId": t.runID})
+		// Put the user message onto the session hub so EVERY window watching this
+		// session (not just the one that submitted) renders it live, in order.
+		t.s.publishHub(t.wsp.ID, session.ID, sessionhub.KindUserMessage, userMsg, false)
+	})
 	return release, true
 }
 
@@ -218,15 +285,11 @@ func (t *chatTurn) runPromptLifecycle() (lifecycleContext string, stop bool) {
 	// responding agent's dynamic system prompt below. Fail-open by construction.
 	if t.freshSession {
 		ss := t.wsp.Runtime.RunLifecycleHooks(t.ctx, t.session.ID, db.HookSessionStart, agent.LifecycleExtras{Source: "startup"})
-		for _, st := range ss.Steps {
-			t.sse("step", st)
-		}
+		t.emitLifecycleSteps(ss.Steps)
 		lifecycleContext = ss.Context
 	}
 	ups := t.wsp.Runtime.RunLifecycleHooks(t.ctx, t.session.ID, db.HookUserPromptSubmit, agent.LifecycleExtras{Prompt: t.req.Message})
-	for _, st := range ups.Steps {
-		t.sse("step", st)
-	}
+	t.emitLifecycleSteps(ups.Steps)
 	if c := strings.TrimSpace(ups.Context); c != "" {
 		lifecycleContext = strings.TrimSpace(lifecycleContext + "\n\n" + c)
 	}
@@ -240,21 +303,7 @@ func (t *chatTurn) runPromptLifecycle() (lifecycleContext string, stop bool) {
 	if reason == "" {
 		reason = "Prompt bir hook tarafından engellendi."
 	}
-	blockMsg, berr := t.database.AddMessage(t.ctx, db.Message{
-		ID:        uuid.NewString(),
-		SessionID: t.session.ID,
-		Role:      providers.RoleAssistant,
-		AgentID:   t.agents[0].ID,
-		Text:      reason,
-		Steps:     marshalSteps(ups.Steps),
-	})
-	if berr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, t.agents[0].ID, t.clientMsgID, "hook_block_persist", berr.Error())
-		return lifecycleContext, true
-	}
-	t.sse("reply", map[string]any{"replyMessage": blockMsg})
-	t.sse("done", map[string]any{"sessionTitle": strings.TrimSpace(t.session.Title)})
-	t.emitted = true
+	t.persistBlockedPrompt(ups.Steps, reason)
 	return lifecycleContext, true
 }
 
@@ -290,7 +339,8 @@ func (t *chatTurn) runStopPasses(lifecycleContext string) bool {
 		stop := t.wsp.Runtime.RunLifecycleHooks(t.ctx, t.session.ID, db.HookStop,
 			agent.LifecycleExtras{StopHookActive: stopPass > 0})
 		for _, st := range stop.Steps {
-			t.sse("step", st)
+			step := st
+			t.withGeneration(func() { t.sse("step", step) })
 		}
 		if !stop.Block || stopPass >= maxStopPasses {
 			break
@@ -311,7 +361,7 @@ func (t *chatTurn) prepareAgentRuntime(agentRow *db.Agent) (providers.Provider, 
 	// at the stored level would hide that the request had no effect.
 	if t.req.ThinkingLevel != "" {
 		if terr := providers.ValidateThinkingLevelForProvider(agentRow.Provider, agentRow.Model, t.req.ThinkingLevel); terr != nil {
-			t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "invalid_thinking_level", terr.Error())
+			t.failTurn(agentRow.ID, "invalid_thinking_level", terr.Error())
 			return nil, false
 		}
 		agentRow.ThinkingLevel = t.req.ThinkingLevel
@@ -321,7 +371,7 @@ func (t *chatTurn) prepareAgentRuntime(agentRow *db.Agent) (providers.Provider, 
 	}
 	provider, perr := t.s.providers.Get(agentRow.ProviderRef())
 	if perr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "provider_unavailable", perr.Error())
+		t.failTurn(agentRow.ID, "provider_unavailable", perr.Error())
 		return nil, false
 	}
 	// Pin this workspace's claude-home before Prepare's rolling compaction,
@@ -330,7 +380,7 @@ func (t *chatTurn) prepareAgentRuntime(agentRow *db.Agent) (providers.Provider, 
 	// back to the global claude-home and fails auth even when the workspace
 	// is logged in (mirrors the manual /compact path in summary.go).
 	if herr := t.wsp.Runtime.PinCLIHome(provider); herr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "provider_unavailable", herr.Error())
+		t.failTurn(agentRow.ID, "provider_unavailable", herr.Error())
 		return nil, false
 	}
 	return provider, true
@@ -353,7 +403,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	var out agentTurnPrep
 	history, herr := t.database.ListMessages(t.ctx, t.session.ID)
 	if herr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "history_error", herr.Error())
+		t.failTurn(agentRow.ID, "history_error", herr.Error())
 		return out, false
 	}
 	// Re-read the session so this pass sees the freshest metadata (title, CLI
@@ -363,7 +413,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// under no session and publish to a hub scope nobody watches.
 	refreshed, serr := t.database.GetSession(t.ctx, t.session.ID)
 	if serr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "session_not_found", serr.Error())
+		t.failTurn(agentRow.ID, "session_not_found", serr.Error())
 		return out, false
 	}
 	t.session = refreshed
@@ -397,7 +447,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// coordinator case). systemFillers is the same basis the context meter uses.
 	overhead, stepBase, oerr := t.s.contextOverheadTokens(t.ctx, t.wsp, t.session, history, multiAgent)
 	if oerr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "context_overhead_failed", "context overhead: "+oerr.Error())
+		t.failTurn(agentRow.ID, "context_overhead_failed", "context overhead: "+oerr.Error())
 		return out, false
 	}
 	t.ctx = conversation.WithContextOverhead(t.ctx, overhead)
@@ -407,7 +457,8 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	t.ctx = conversation.WithPreCompact(t.ctx, func(trigger string) {
 		pc := t.wsp.Runtime.RunLifecycleHooks(t.ctx, t.session.ID, db.HookPreCompact, agent.LifecycleExtras{Trigger: trigger})
 		for _, st := range pc.Steps {
-			t.sse("step", st)
+			step := st
+			t.withGeneration(func() { t.sse("step", step) })
 		}
 	})
 	// Native-compaction seam: under autoCompactMode native/auto the gate asks
@@ -420,7 +471,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	})
 	prep, cerr := t.s.convo.Prepare(t.ctx, t.database, provider, t.session, agentRow, history)
 	if cerr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())
+		t.failTurn(agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())
 		return out, false
 	}
 	if prep.Compacted {
@@ -429,7 +480,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	if prep.NativeCompacted {
 		t.session, cerr = t.database.GetSession(t.ctx, t.session.ID)
 		if cerr != nil {
-			t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "session_reload_failed", "reload session after native compaction: "+cerr.Error())
+			t.failTurn(agentRow.ID, "session_reload_failed", "reload session after native compaction: "+cerr.Error())
 			return out, false
 		}
 	}
@@ -452,9 +503,12 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 		leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.Fold, provider)}, leadSteps...)
 	}
 	for _, st := range leadSteps {
-		t.sse("step", st)
-		t.wsp.Runtime.EmitSessionStep(t.session.ID, st)
-		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindStep, st, false)
+		step := st
+		t.withGeneration(func() {
+			t.sse("step", step)
+			t.wsp.Runtime.EmitSessionStep(t.session.ID, step)
+			t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindStep, step, false)
+		})
 	}
 	// Safe CLI resume: Claude retains its existing opt-in/persistent-session
 	// gates; Codex additionally requires one participant, the default persona
@@ -618,37 +672,39 @@ func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 func (t *chatTurn) streamSink(turnCtx context.Context, partial *strings.Builder, kept *[]agent.TurnStep, snapshot func()) func(agent.TurnStep) {
 	sessionID := t.session.ID
 	return func(st agent.TurnStep) {
-		agent.TouchActivity(turnCtx)
-		t.sse("step", st)
-		// Mirror the step onto the process-wide bus so OTHER windows viewing
-		// this session render it live too. The originating window ignores the
-		// bus copy (it owns the run and streams over its own per-request SSE);
-		// the emitter drops high-frequency/interactive kinds itself.
-		t.wsp.Runtime.EmitSessionStep(sessionID, st)
-		switch st.Kind {
-		case agent.StepDelta:
-			partial.WriteString(st.Text)
-			// Ephemeral token growth: best-effort live, seq 0, not retained.
-			t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindDelta, st, true)
-		case agent.StepToolDelta:
-			t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindToolDelta, st, true)
-		case agent.StepTombstone:
-			t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindTombstone, st, true)
-		case agent.StepAsk, agent.StepPermission, agent.StepPlan:
-			// Interactive prompts are handled by the Phase 2 interaction CAS
-			// (interaction_open/resolved), not broadcast as plain hub steps —
-			// otherwise a passive window would show a card it cannot resolve.
-		default:
-			if st.Running || st.Append {
-				break
+		t.withGeneration(func() {
+			agent.ObserveActivityStep(turnCtx, st)
+			t.sse("step", st)
+			// Mirror the step onto the process-wide bus so OTHER windows viewing
+			// this session render it live too. The originating window ignores the
+			// bus copy (it owns the run and streams over its own per-request SSE);
+			// the emitter drops high-frequency/interactive kinds itself.
+			t.wsp.Runtime.EmitSessionStep(sessionID, st)
+			switch st.Kind {
+			case agent.StepDelta:
+				partial.WriteString(st.Text)
+				// Ephemeral token growth: best-effort live, seq 0, not retained.
+				t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindDelta, st, true)
+			case agent.StepToolDelta:
+				t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindToolDelta, st, true)
+			case agent.StepTombstone:
+				t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindTombstone, st, true)
+			case agent.StepAsk, agent.StepPermission, agent.StepPlan:
+				// Interactive prompts are handled by the Phase 2 interaction CAS
+				// (interaction_open/resolved), not broadcast as plain hub steps —
+				// otherwise a passive window would show a card it cannot resolve.
+			default:
+				if st.Running || st.Append {
+					break
+				}
+				*kept = append(*kept, st)
+				// Durable activity (thinking/tool/todo/diff/recovery/error/…) →
+				// seq'd on the hub so every window renders it live and a reconnect
+				// gap-fills it from the ring.
+				t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindStep, st, false)
 			}
-			*kept = append(*kept, st)
-			// Durable activity (thinking/tool/todo/diff/recovery/error/…) →
-			// seq'd on the hub so every window renders it live and a reconnect
-			// gap-fills it from the ring.
-			t.s.publishHub(t.wsp.ID, sessionID, sessionhub.KindStep, st, false)
-		}
-		snapshot()
+			snapshot()
+		})
 	}
 }
 
@@ -661,10 +717,12 @@ func (t *chatTurn) runAgentPass(i int, agentRow db.Agent, passContext string) bo
 		return false
 	}
 
-	t.sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
-	// Mirror agent-start onto the hub so late-joining windows know which
-	// agent is answering (multi-agent threads render each turn's author).
-	t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": agentRow.ID, "index": i}, false)
+	t.withGeneration(func() {
+		t.sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
+		// Mirror agent-start onto the hub so late-joining windows know which
+		// agent is answering (multi-agent threads render each turn's author).
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": agentRow.ID, "index": i}, false)
+	})
 
 	prep, ok := t.prepareAgentRequest(agentRow, provider, passContext)
 	if !ok {
@@ -676,6 +734,7 @@ func (t *chatTurn) runAgentPass(i int, agentRow db.Agent, passContext string) bo
 	// Pre-allocate the reply id so the streaming crash sidecar and the final
 	// persisted message share one identity (recovery is then idempotent).
 	replyID := uuid.NewString()
+	t.inflightID = replyID
 	// Tag every debug event emitted during this turn with the reply id, so the
 	// per-message debug panel can fetch exactly this message's spend/latency.
 	turnCtx = agent.WithTurnID(turnCtx, replyID)
@@ -696,13 +755,16 @@ func (t *chatTurn) runAgentPass(i int, agentRow db.Agent, passContext string) bo
 			return
 		}
 		lastSnap = time.Now()
+		// streamSink invokes snapshots while holding the generation fence.
 		_ = t.database.WriteInflight(db.InflightTurn{
-			MessageID: replyID,
-			SessionID: t.session.ID,
-			AgentID:   agentRow.ID,
-			StartedAt: agentStart.Unix(),
-			Text:      partial.String(),
-			Steps:     marshalSteps(kept),
+			MessageID:  replyID,
+			RunID:      t.runID,
+			Generation: t.run.generation,
+			SessionID:  t.session.ID,
+			AgentID:    agentRow.ID,
+			StartedAt:  agentStart.Unix(),
+			Text:       partial.String(),
+			Steps:      marshalSteps(kept),
 		})
 	}
 	resp, steps, cerr := t.wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, prep.llmReq, false,
@@ -724,11 +786,13 @@ func (t *chatTurn) runAgentPass(i int, agentRow db.Agent, passContext string) bo
 			if perr != nil {
 				t.s.logger.Error("durable ask: persist suspend failed", "session", t.session.ID, "error", perr)
 			} else {
-				_ = t.database.ClearInflight(t.session.ID)
-				t.s.openDurableAskCard(t.wsp.ID, t.session.ID, ask, false)
-				t.s.hub.Commit(t.wsp.ID, t.session.ID)
-				t.s.logger.Info("durable ask: turn suspended", "session", t.session.ID, "ask", ask.ID)
-				t.sse("ask_suspended", map[string]any{"askId": ask.ID})
+				t.withGeneration(func() {
+					_ = t.database.ClearInflightExpected(t.req.SessionID, t.runID, t.inflightID, t.run.generation)
+					t.s.openDurableAskCard(t.wsp.ID, t.session.ID, ask, false)
+					t.s.hub.Commit(t.wsp.ID, t.session.ID)
+					t.s.logger.Info("durable ask: turn suspended", "session", t.session.ID, "ask", ask.ID)
+					t.sse("ask_suspended", map[string]any{"askId": ask.ID})
+				})
 				return false
 			}
 		}
@@ -745,132 +809,132 @@ func (t *chatTurn) runAgentPass(i int, agentRow db.Agent, passContext string) bo
 // failed (or the user stopped it) as the assistant reply, then publishes the
 // terminal error to every window.
 func (t *chatTurn) persistInterruptedTurn(agentRow db.Agent, replyID string, agentStart time.Time, leadSteps, kept []agent.TurnStep, partial string, cerr error) {
-	// Distinguish a manual Stop (run.cancel cancelled ctx) from a genuine
-	// provider failure. Either way, PRESERVE the partial trace accumulated so
-	// far (kept) so the tools/text the agent already produced stay visible
-	// instead of vanishing — append an error/stopped step at the end.
-	cause := context.Cause(t.ctx)
-	stopped := errors.Is(cause, context.Canceled)
-	detail, reason := chatTurnFailure(cause, cerr)
-	switch reason {
-	case reasonTurnHardTimeout:
-		t.s.logger.Info("chat turn hit hard timeout", "session", t.session.ID, "agent", agentRow.ID)
-	case reasonTurnIdleTimeout:
-		t.s.logger.Info("chat turn stalled: no step within the inactivity window",
-			"session", t.session.ID, "agent", agentRow.ID, "idle", t.s.chatTurnIdle().String())
-	case reasonStopped:
-		t.s.logger.Info("chat turn stopped by user", "session", t.session.ID, "agent", agentRow.ID)
-	default:
-		t.s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
-	}
-	trace := append(append(leadSteps, kept...), agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
-	// Persist with a detached context so a cancelled (stopped) ctx still saves.
-	persistCtx := context.WithoutCancel(t.ctx)
-	payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": t.clientMsgID}
-	if msg, aerr := t.database.AddMessage(persistCtx, db.Message{
-		ID:        replyID,
-		SessionID: t.session.ID,
-		Role:      providers.RoleAssistant,
-		AgentID:   agentRow.ID,
-		Text:      partial,
-		Steps:     marshalSteps(trace),
-		// A user Stop is Cancelled (clean, intentional); a provider failure
-		// keeps Interrupted (the "cut off" banner) as before.
-		Cancelled:   stopped,
-		Interrupted: !stopped,
-		DurationMs:  time.Since(agentStart).Milliseconds(),
-	}); aerr != nil {
-		t.s.logger.Error("persist interrupted turn failed", "session", t.session.ID, "error", aerr)
-	} else {
-		payload["replyMessage"] = msg
-		// Push the interrupted/stopped reply onto the hub so other windows
-		// render the preserved partial instead of a dangling live bubble.
-		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindReply, msg, false)
+	t.withGeneration(func() {
+		// Distinguish a manual Stop (run.cancel cancelled ctx) from a genuine
+		// provider failure. Preserve the partial trace accumulated so far.
+		cause := context.Cause(t.ctx)
+		stopped := errors.Is(cause, context.Canceled)
+		detail, reason := chatTurnFailure(cause, cerr)
+		switch reason {
+		case reasonTurnHardTimeout:
+			t.s.logger.Info("chat turn hit hard timeout", "session", t.session.ID, "agent", agentRow.ID)
+		case reasonTurnIdleTimeout:
+			t.s.logger.Info("chat turn stalled: no step within the inactivity window",
+				"session", t.session.ID, "agent", agentRow.ID, "idle", t.s.chatTurnIdle().String())
+		case reasonStopped:
+			t.s.logger.Info("chat turn stopped by user", "session", t.session.ID, "agent", agentRow.ID)
+		default:
+			t.s.logger.Error("stream completion failed", "error", cerr, "agent", agentRow.ID)
+		}
+		trace := append(append(leadSteps, kept...), agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
+		persistCtx := context.WithoutCancel(t.ctx)
+		payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": t.clientMsgID}
+		if msg, aerr := t.database.AddMessage(persistCtx, db.Message{
+			ID:        replyID,
+			SessionID: t.session.ID,
+			Role:      providers.RoleAssistant,
+			AgentID:   agentRow.ID,
+			Text:      partial,
+			Steps:     marshalSteps(trace),
+			Cancelled: stopped, Interrupted: !stopped,
+			DurationMs: time.Since(agentStart).Milliseconds(),
+		}); aerr != nil {
+			t.s.logger.Error("persist interrupted turn failed", "session", t.session.ID, "error", aerr)
+		} else {
+			payload["replyMessage"] = msg
+			t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindReply, msg, false)
+			t.s.hub.Commit(t.wsp.ID, t.session.ID)
+		}
+		_ = t.database.ClearInflightExpected(t.req.SessionID, t.runID, t.inflightID, t.run.generation)
+		t.wsp.Runtime.AutoTagTurn(context.WithoutCancel(t.ctx), t.session.ID, trace, reason)
+		t.sse("error", payload)
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindTurnError, payload, false)
 		t.s.hub.Commit(t.wsp.ID, t.session.ID)
-	}
-	_ = t.database.ClearInflight(t.session.ID)
-	// Auto-tag the turn failure (skips a clean user "stopped"), plus any real
-	// tool error captured before the failure.
-	t.wsp.Runtime.AutoTagTurn(context.WithoutCancel(t.ctx), t.session.ID, trace, reason)
-	t.sse("error", payload)
-	// Terminal error onto the hub so every window clears its "thinking"
-	// indicator and shows the failure, not just the submitting window.
-	t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindTurnError, payload, false)
-	t.s.hub.Commit(t.wsp.ID, t.session.ID)
+	})
 }
 
 // persistAgentReply saves the completed answer, carries the CLI resume/compaction
 // state forward and publishes the reply. Returns false when persisting failed and
 // the turn must end.
 func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, replyID string, agentStart time.Time, leadSteps, steps []agent.TurnStep, resp *providers.Response) bool {
-	replyMsg, aerr := t.database.AddMessage(t.ctx, db.Message{
-		ID:         replyID,
-		SessionID:  t.session.ID,
-		AgentID:    agentRow.ID,
-		Role:       providers.RoleAssistant,
-		Text:       resp.Text,
-		Steps:      marshalSteps(append(leadSteps, steps...)),
-		Model:      resp.Model,
-		StopReason: resp.StopReason,
-		Usage:      messageUsage(resp.Usage),
-		DurationMs: time.Since(agentStart).Milliseconds(),
-		// Flag the boundary where the underlying CLI conversation restarted,
-		// so the transcript can draw a divider above this turn (TSK514).
-		CLIColdStart: prep.resumePlan.active && prep.resumePlan.coldStart,
+	var failureReason, failureDetail string
+	current := t.withGeneration(func() {
+		replyMsg, aerr := t.database.AddMessage(t.ctx, db.Message{
+			ID:         replyID,
+			SessionID:  t.session.ID,
+			AgentID:    agentRow.ID,
+			Role:       providers.RoleAssistant,
+			Text:       resp.Text,
+			Steps:      marshalSteps(append(leadSteps, steps...)),
+			Model:      resp.Model,
+			StopReason: resp.StopReason,
+			Usage:      messageUsage(resp.Usage),
+			DurationMs: time.Since(agentStart).Milliseconds(),
+			// Flag the boundary where the underlying CLI conversation restarted,
+			// so the transcript can draw a divider above this turn (TSK514).
+			CLIColdStart: prep.resumePlan.active && prep.resumePlan.coldStart,
+		})
+		if aerr != nil {
+			failureReason, failureDetail = "persist_error", aerr.Error()
+			return
+		}
+		// Persist the CLI session/thread id so the NEXT turn resumes it and sends
+		// only the new delta. sentCount+1 accounts for this turn's assistant
+		// reply, which the CLI already holds server-side (no need to resend it).
+		if prep.resumePlan.active && resp.SessionID != "" {
+			if rerr := t.database.SetSessionCLIResume(t.ctx, t.session.ID, resp.SessionID, prep.resumePlan.sentCount+1); rerr != nil {
+				t.s.logger.Warn("persist cli resume state failed", "session", t.session.ID, "error", rerr)
+			}
+			// P1.4: claude-cli resume model mismatch — the CLI may have served the
+			// response with a different model than the agent's current configuration
+			// (e.g. agent was reconfigured but the warm CLI session still runs the old
+			// model). Log a debug event so the discrepancy is diagnosable.
+			if resp.Model != "" && resp.Model != agentRow.Model {
+				t.s.logger.Info("cli-resume-model-mismatch",
+					"session", t.session.ID, "agent", agentRow.ID,
+					"agent_model", agentRow.Model, "cli_model", resp.Model,
+					"cli_session", resp.SessionID)
+			}
+		}
+		// A CLI that ran out of room compacts its OWN context mid-turn and keeps
+		// serving the turn. It reports that as a completed native-compaction
+		// lifecycle event — the same one /compact produces (nativeCompactSession) —
+		// so re-baseline the compaction boundary here too, or the meter and the fold
+		// gate keep charging a persisted trace the CLI has already thrown away and
+		// fold early for no reason. len(rawHistory), not +1: the compaction happened
+		// BEFORE this turn's reply, whose own trace is still warm.
+		if boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory)); compacted {
+			if berr := t.database.SetSessionCLICompactBoundary(t.ctx, t.session.ID, boundary); berr != nil {
+				failureReason = "persist_cli_compaction_boundary"
+				failureDetail = "reply persisted but CLI compaction boundary failed: " + berr.Error()
+				return
+			}
+		}
+		// P1.1: update the session header's model snapshot when the actual
+		// response model differs — keeps the header's O(1) answer current.
+		if resp.Model != "" && resp.Model != t.session.Model {
+			if merr := t.database.SetSessionModel(t.ctx, t.session.ID, resp.Model); merr != nil {
+				t.s.logger.Warn("set session model failed", "session", t.session.ID, "error", merr)
+			}
+		}
+		// Reply is durable now; drop this agent's sidecar before the next agent
+		// (the top-level defer is the catch-all for early-return paths).
+		_ = t.database.ClearInflightExpected(t.req.SessionID, t.runID, t.inflightID, t.run.generation)
+		t.sse("reply", map[string]any{"replyMessage": replyMsg})
+		// Canonical reply onto the hub: every window replaces its live-accumulated
+		// bubble with this persisted, authoritative message (steps + usage + model).
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindReply, replyMsg, false)
+		// This agent's turn is now in the persisted transcript → a fresh
+		// subscriber need not replay it (only the next agent's in-flight tail).
+		t.s.hub.Commit(t.wsp.ID, t.session.ID)
 	})
-	if aerr != nil {
-		t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "persist_error", aerr.Error())
+	if !current {
 		return false
 	}
-	// Persist the CLI session/thread id so the NEXT turn resumes it and sends
-	// only the new delta. sentCount+1 accounts for this turn's assistant
-	// reply, which the CLI already holds server-side (no need to resend it).
-	if prep.resumePlan.active && resp.SessionID != "" {
-		if rerr := t.database.SetSessionCLIResume(t.ctx, t.session.ID, resp.SessionID, prep.resumePlan.sentCount+1); rerr != nil {
-			t.s.logger.Warn("persist cli resume state failed", "session", t.session.ID, "error", rerr)
-		}
-		// P1.4: claude-cli resume model mismatch — the CLI may have served the
-		// response with a different model than the agent's current configuration
-		// (e.g. agent was reconfigured but the warm CLI session still runs the old
-		// model). Log a debug event so the discrepancy is diagnosable.
-		if resp.Model != "" && resp.Model != agentRow.Model {
-			t.s.logger.Info("cli-resume-model-mismatch",
-				"session", t.session.ID, "agent", agentRow.ID,
-				"agent_model", agentRow.Model, "cli_model", resp.Model,
-				"cli_session", resp.SessionID)
-		}
+	if failureReason != "" {
+		t.failTurn(agentRow.ID, failureReason, failureDetail)
+		return false
 	}
-	// A CLI that ran out of room compacts its OWN context mid-turn and keeps
-	// serving the turn. It reports that as a completed native-compaction
-	// lifecycle event — the same one /compact produces (nativeCompactSession) —
-	// so re-baseline the compaction boundary here too, or the meter and the fold
-	// gate keep charging a persisted trace the CLI has already thrown away and
-	// fold early for no reason. len(rawHistory), not +1: the compaction happened
-	// BEFORE this turn's reply, whose own trace is still warm.
-	if boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory)); compacted {
-		if berr := t.database.SetSessionCLICompactBoundary(t.ctx, t.session.ID, boundary); berr != nil {
-			t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID,
-				"persist_cli_compaction_boundary", "reply persisted but CLI compaction boundary failed: "+berr.Error())
-			return false
-		}
-	}
-	// P1.1: update the session header's model snapshot when the actual
-	// response model differs — keeps the header's O(1) answer current.
-	if resp.Model != "" && resp.Model != t.session.Model {
-		if merr := t.database.SetSessionModel(t.ctx, t.session.ID, resp.Model); merr != nil {
-			t.s.logger.Warn("set session model failed", "session", t.session.ID, "error", merr)
-		}
-	}
-	// Reply is durable now; drop this agent's sidecar before the next agent
-	// (the top-level defer is the catch-all for early-return paths).
-	_ = t.database.ClearInflight(t.session.ID)
-	t.sse("reply", map[string]any{"replyMessage": replyMsg})
-	// Canonical reply onto the hub: every window replaces its live-accumulated
-	// bubble with this persisted, authoritative message (steps + usage + model).
-	t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindReply, replyMsg, false)
-	// This agent's turn is now in the persisted transcript → a fresh
-	// subscriber need not replay it (only the next agent's in-flight tail).
-	t.s.hub.Commit(t.wsp.ID, t.session.ID)
 
 	t.s.logger.Info("chat turn completed",
 		"session", t.session.ID, "agent", agentRow.Name, "provider", agentRow.Provider,
@@ -898,32 +962,36 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 
 // finishTurn auto-titles the session and publishes the terminal success events.
 func (t *chatTurn) finishTurn() {
-	// Auto-title once, after the turn, using the first responding agent.
-	sessionTitle := t.s.maybeAutoTitle(t.ctx, t.wsp, t.firstTurn, t.agents[0].ID, t.session.ID, t.req.Message)
+	// Title generation may invoke a provider. Keep it outside every registry and
+	// session generation lock, then fence its persist with terminal effects.
+	titleCandidate := t.s.autoTitleCandidate(t.ctx, t.wsp, t.firstTurn, t.agents[0].ID, t.session.ID, t.req.Message)
+	t.withGeneration(func() {
+		sessionTitle := t.s.persistAutoTitle(t.ctx, t.wsp, t.session.ID, titleCandidate)
 
-	t.sse("done", map[string]any{"sessionTitle": sessionTitle})
-	// Terminal success onto the hub: every window stops its live indicator and
-	// picks up the (possibly new) session title. clientMsgId lets a queue observer
-	// (legacy /chat + /chat/stream) recognise its own turn's completion.
-	t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle, "clientMsgId": t.clientMsgID}, false)
-	t.s.hub.Commit(t.wsp.ID, t.session.ID)
+		t.sse("done", map[string]any{"sessionTitle": sessionTitle})
+		// Terminal success onto the hub: every window stops its live indicator and
+		// picks up the (possibly new) session title. clientMsgId lets a queue observer
+		// (legacy /chat + /chat/stream) recognise its own turn's completion.
+		t.s.publishHub(t.wsp.ID, t.session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle, "clientMsgId": t.clientMsgID}, false)
+		t.s.hub.Commit(t.wsp.ID, t.session.ID)
 
-	// Publish a chat-completion event so other workspaces can flag activity with
-	// a badge when the user is viewing a different workspace. The frontend uses
-	// chat events only for the badge (not a duplicate desktop notification).
-	title := strings.TrimSpace(t.session.Title)
-	if sessionTitle != "" {
-		title = sessionTitle
-	}
-	if title == "" {
-		title = "Sohbet"
-	}
-	t.emitted = true
-	t.wsp.Runtime.Emit(events.Event{
-		Type:   "chat",
-		Level:  "success",
-		Title:  "Yanıt hazır: " + title,
-		Body:   t.req.Message,
-		Target: map[string]string{"view": "chat", "sessionId": t.session.ID},
+		// Publish a chat-completion event so other workspaces can flag activity with
+		// a badge when the user is viewing a different workspace. The frontend uses
+		// chat events only for the badge (not a duplicate desktop notification).
+		title := strings.TrimSpace(t.session.Title)
+		if sessionTitle != "" {
+			title = sessionTitle
+		}
+		if title == "" {
+			title = "Sohbet"
+		}
+		t.emitted = true
+		t.wsp.Runtime.Emit(events.Event{
+			Type:   "chat",
+			Level:  "success",
+			Title:  "Yanıt hazır: " + title,
+			Body:   t.req.Message,
+			Target: map[string]string{"view": "chat", "sessionId": t.session.ID},
+		})
 	})
 }

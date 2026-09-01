@@ -113,6 +113,9 @@ type DB struct {
 	// cliReplyActivityHook is a crash-window test seam invoked after a durable
 	// activity outbox has been accepted by the hook but before it is retired.
 	cliReplyActivityHook func(ActivitySignal) error
+	// inflightMu serializes generation-aware sidecar writes and CAS clears. A
+	// detached old run must not overwrite or remove a newer run's recovery state.
+	inflightMu sync.Mutex
 
 	// lessonsMu guards the workspace-wide lessons.jsonl sidecar (failure
 	// lessons, self-healing) — independent of mu for the same reason as debugMu.

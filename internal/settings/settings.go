@@ -354,15 +354,14 @@ type Settings struct {
 	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
 	IdleResumeMax      int `json:"idleResumeMax"`      // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
-	// TurnWatchdogMin bounds a single QUEUED turn (chat, coordinator, worker, wake…)
-	// before the serial per-session worker force-cancels it. A wedge breaker, not a
-	// work budget — it is floored at the spawn/schedule ceilings so it can never cut
-	// a turn those knobs still permit (0 = default 120).
+	// TurnWatchdogMin is a deprecated absolute limit retained for storage/API
+	// compatibility. Active queued-turn cancellation is semantic-idle based
+	// (0 = disabled, also the default).
 	TurnWatchdogMin int `json:"turnWatchdogMin"`
 	// TurnIdleWatchdogMin cancels a queued turn that emits NOTHING (no step, no
 	// token) for this long. Wall clock cannot tell a wedged turn from a slow one;
 	// silence can, so this is the measure that reclaims a hang quickly while a
-	// productive turn runs on to TurnWatchdogMin (0 = default 20).
+	// productive turn remains alive regardless of elapsed wall clock (0 = default 20).
 	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
 
 	// Tool execution guards (process-global tool behaviour).
@@ -540,9 +539,9 @@ func Default() Settings {
 		SpawnMaxConcurrent:     16,
 		SpawnQueueMax:          16,
 		SpawnMaxPerTurn:        4,
-		SpawnTimeoutMin:        20,
+		SpawnTimeoutMin:        0,
 		SpawnIdleTimeoutMin:    5,
-		ChatTurnTimeoutMin:     120,
+		ChatTurnTimeoutMin:     0,
 		ChatTurnIdleTimeoutMin: 3,
 		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
 		// that prints nothing while it works), yet comfortably under the 3-minute
@@ -551,8 +550,8 @@ func Default() Settings {
 		// generic turn cancel that would otherwise always fire first.
 		CodexStdoutIdleSec:  90,
 		IdleResumeMax:       1,
-		ScheduleTimeoutMin:  60,
-		TurnWatchdogMin:     120,
+		ScheduleTimeoutMin:  0,
+		TurnWatchdogMin:     0,
 		TurnIdleWatchdogMin: 20,
 
 		ShellDefaultTimeoutSec: 30,

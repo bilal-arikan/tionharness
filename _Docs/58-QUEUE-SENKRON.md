@@ -168,14 +168,14 @@ type PendingInteraction struct {
   dispatch `inboxItem.Attempts++` sayar; `maxInboxAttempts` (3) aşılırsa mesaj
   "poison" olarak düşürülür (görünür `turn_error`) → her boot'ta çöken tur kuyruğu
   sonsuza dek bloklayamaz.
-- **Watchdog süresi ayara bağlandı (2026-08-16):** süre sabit 20 dk idi ve
+- **Tarihsel watchdog süresi (2026-08-16, TSK760 ile geçersiz):** süre sabit 20 dk idi ve
   `spawnTimeoutMin`'i (kullanıcıda 120) hiç okumuyordu → tıkanma freni, izin verilen
   işin tavanından dardı ve **sağlıklı** uzun turları kesiyordu (WS15/SES76: 19m57s'de
   kesilen canlı Rust build döngüsü). Artık `TurnWatchdogMin` ayarı (varsayılan 120,
   Ayarlar → Araçlar) `Tunables.TurnWatchdog()` üzerinden okunur ve değer
   spawn/zamanlama tavanlarının **altına inemez** (hem okuma anında hem
   `settings.normalize`'da tabanlanır) → aynı ters-sıralama tekrar oluşamaz.
-- **Boşta izleyicisi + görünür kesinti (2026-08-16):** watchdog artık tek duvar-saati
+- **Tarihsel hub-etkinliği tasarımı (2026-08-16, TSK760 ile geçersiz):** watchdog tek duvar-saati
   değil, **çift** bağ: `runQueuedTurn` 15 sn'de bir yoklar, turu **ya** tavanda **ya da**
   `TurnIdleWatchdogMin` (varsayılan 20 dk) boyunca **hiç olay üretmemişse** keser.
   Canlılık `Hub.LastActivity()` — `sessionState.lastPublish` her `Publish`'te (ephemeral
@@ -189,6 +189,56 @@ type PendingInteraction struct {
   `lastActivityAt` (mutlak damga — panel yalnız konuşma değişince çektiği için
   hazır süre sessizlikte donardı) + `idleLimitSec`/`hardLimitSec` taşır, kart
   "N sessiz — sınır M" satırını pencerenin %25'inden sonra gösterir.
+- **Run-scope semantic watchdog (TSK760, 2026-09-01):** yukarıdaki
+  Hub.LastActivity() canlılık kaynağı ve 120 dk outer hard cap kaldırıldı. Queue
+  worker yalnız kendi registered run'ının tracker snapshot'ını okur; başka run'ın
+  hub olayı, SSE ping/heartbeat, boş/duplicate delta, tekrar Running/Append ve
+  tombstone süreyi yenilemez. Anlamlı progress idle deadline'ı yeniler; gerçek
+  sessizlik aynı cancel yolunu ve yanıt vermeyen goroutine için mevcut 30 sn detach
+  grace'i tetikler. Opaque non-stream provider/tool, kör heartbeat yerine idle
+  ayarından türetilen ayrı bounded operation lease altında çalışır. Legacy
+  chatTurnTimeoutMin/turnWatchdogMin alanları wire/storage uyumluluğu için kalır
+  fakat normal akışta aktif karar kaynağı değildir; varsayılanları 0 (disabled).
+  Session info artık lastProgressAt, lastProgressKind, progressSequence ve
+  idleLimitSec taşır; lastActivityAt deprecated alias, hardLimitSec deprecated/0'dır.
+  `SpawnTimeout` ve `ScheduleTimeout` da aynı biçimde deprecated/0'dır; spawn,
+  worker, coordinator drain, peer, automation, schedule ve wake yürütme yolları
+  yalnız semantic idle tracker ile kesilir.
+- **Operation lease + generation fence (TSK760 düzeltme turları):** opaque provider
+  ve tool yalnız buffered-result goroutine'de çalışır; önceden iptal edilmiş context
+  operasyonu hiç başlatmaz. Lease/cancel ile result aynı anda hazırsa sınır
+  deterministik kazanır ve geç result uygulanmaz. Context'e uyan CLI/subprocess
+  iptal zinciri çalışmaya devam eder. Go context'i yok sayan in-process üçüncü taraf
+  goroutine'i zorla öldüremez; timeout sonrası admission slotu operasyon gerçekten
+  dönene kadar tutulur. Süreç-geneli 64 slot dolunca yeni operation
+  `ErrOperationLeaseBusy` ile hızlı döner; detached sayaç sınırı görünür kılar.
+  Operation child goroutine'i provider/tool panic'ini value ve stack taşıyan
+  `OperationPanicError` olarak buffered result kanalına yollar. Böylece süreç ayakta
+  kalır; slot/accounting cleanup'ı result yayınından önce çalışır ve cancel/deadline sonucu panic ile
+  yarıştığında mevcut sınır determinismi korunur.
+  Generation run kaydında değil, session turn slotu gerçekten alındığında aktive
+  edilir: B kuyruğa girerken A current kalır; B slotu alınca daha yüksek immutable
+  generation sahibi olur. Eski generation lifecycle/live step, block/reply/error,
+  durable message/inflight ve terminal hub yazısı yapamaz. `inflight.json` temizliği
+  `(runID,generation,messageID)` CAS'tır; A geç dönünce B'nin sidecar/transcript'i
+  korunur.
+  Fence workspace/session anahtarlı kalıcı gate'tir; server-geneli `chatRuns.mu`
+  callback, provider veya I/O boyunca tutulmaz. Aynı session'da activation ve
+  fenced write atomik, farklı session'larda bağımsızdır; son run unregister olunca
+  gate referans sayısıyla registry'den kaldırılır. Auto-title iki fazlıdır:
+  `TitleFor` gate dışında aday üretir; title persist + terminal yan etkiler current
+  generation tekrar doğrulanınca fenced commit olur. Arada supersede edilen run'ın
+  title ve terminal event'i persist edilmez.
+  Panic bariyeri recovery tamamlanana kadar eski run'ın gate ref'ini korur. Slot
+  release/unregister sonrası yeni generation aktive olmuşsa eski recovery'nin
+  durable error/reply, debug, turn_error ve Commit grubu aynı fence kontrolünde
+  bütünüyle düşer. Test, recovery'yi yazı sınırından önce kanal ile durdurup yeni
+  generation'ı aktive ederek stale yan etki yokluğunu deterministik kanıtlar.
+  Semantic watchdog stresinde `runFor > idle > legacyHardLimit`; unique progress
+  aralığı idle'dan anlamlı kısadır ve eş no-progress koşusu idle iptalini kanıtlar.
+  Settings UI'da deprecated `spawnTimeoutMin`/`scheduleTimeoutMin` için değiştirilebilir
+  hard-cap input'u yoktur. Alanlar yalnız wire/storage uyumluluğunda `0 = disabled`
+  kalır; açıklama üretken run'ın toplam süreyle değil semantic idle ile yönetildiğini söyler.
 - **Kuyruk-hatası kalıcılaştırma (2026-07-13):** üç bariyer de (panic/watchdog/
   poison) artık `recordQueueTurnFailure` ile hatayı **kalıcı** yazar: `session.jsonl`'e
   `kind=error` asistan mesajı (hub `KindReply` → yenilemeye dayanıklı kırmızı kart,
@@ -534,8 +584,8 @@ mesajı onu boşaltacak kimse olmadan bekler — sessiz bir stall.
 Kapsanan yollar: worker (`coordination.go`), spawn (`spawn.go`), wake +
 scheduled prompt (`scheduler.go`), automation (`automation_deliver.go`), peer
 inbox (`agentmsg.go`) ve koordinatör drain'i (`drainCoordinator`, aşağıda).
-Wake'in claim'i ayrıca fire'ın `ScheduleTimeout` ctx'inden
-türer (önceden bu deadline'ı tamamen yok sayıyordu) ve claim'de durdurulan bir
+Wake'in claim'i fire'a ait bağımsız cancellable context'ten türer; deprecated
+`ScheduleTimeout` toplam-süre deadline'ı üretmez. Claim'de durdurulan bir
 wake **failure teslimatı olarak kaydedilmez** (`errWakeCancelledBeforeTurn`) —
 iptal edilmiş bir wake başarısız bir wake değildir.
 
@@ -613,8 +663,9 @@ Cutover sonrası adversarial gözden geçirmede 3 nadir boşluk bulunup kapatıl
 - **Asılan wake/scheduled tur → kuyruk head-of-line bloğu:** `deliverWake`/`deliverPrompt`
   artık per-session slotu alıyor ama `withActivityTimeout` (spawn/worker'da var) yoktu →
   sonsuz asılan bir wake, slotun Cond-wait'i ctx'i dinlemediğinden tüm oturum kuyruğunu
-  bloke ederdi. Çözüm: her ikisi de `withActivityTimeout(SpawnTimeout, SpawnIdleTimeout)`
-  ile sarıldı (spawn/worker paritesi).
+  bloke ederdi. Güncel çözüm: her ikisi de `withActivityTimeout(0,
+  SpawnIdleTimeout)` ile semantic progress gözcüsüne sarılır (spawn/worker
+  paritesi); toplam süre tavanı yoktur.
 - **Kuyruktaki mesaj başka pencereden iptal edilirse → gözlemci asılması:** `/chat` +
   `/chat/stream` kendi terminal olayını bekler; mesaj çalışmadan `DELETE .../queue/{id}`
   veya `.../queue` ile silinirse terminal hiç gelmez → gözlemci sonsuza beklerdi. Çözüm:

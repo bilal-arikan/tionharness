@@ -1,74 +1,65 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
-	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
-// TestTurnIdleForFallsBackToStart verifies a turn that has published nothing yet is
-// still measurable: idleness counts from the turn's start, so a turn that wedges
-// during setup (before it can emit a single step) is reclaimed rather than being
-// treated as "no signal, leave it alone".
+func registerTrackedRun(t *testing.T, runs *chatRuns, wsID, sessionID string) (*agent.ActivityTracker, func()) {
+	t.Helper()
+	ctx, stop := agent.WithActivityTimeout(context.Background(), 0, time.Second)
+	tracker := agent.ActivityTrackerFrom(ctx)
+	run := runs.register(sessionID, sessionID, wsID, func() {})
+	run.setActivityTracker(tracker, time.Second)
+	return tracker, func() {
+		runs.unregister(sessionID)
+		stop()
+	}
+}
+
 func TestTurnIdleForFallsBackToStart(t *testing.T) {
-	s := &Server{hub: sessionhub.New("e", 8)}
+	s := &Server{runs: newChatRuns()}
 	started := time.Now().Add(-90 * time.Second)
-
 	idle, ok := s.turnIdleFor("WS1", "SES", started)
-	if !ok {
-		t.Fatal("idle must be measurable from the start time alone")
-	}
-	if idle < 90*time.Second {
-		t.Fatalf("idle = %v, want >= 90s measured from start", idle)
+	if !ok || idle < 90*time.Second {
+		t.Fatalf("idle = %v ok=%v", idle, ok)
 	}
 }
 
-// TestTurnIdleForResetsOnActivity is the core of the idle watchdog: a turn that is
-// emitting is NOT idle, no matter how long it has been running. This is what lets
-// the wall-clock ceiling be generous without a long, productive turn (a build/test
-// loop streaming tool calls) being cut as if it were hung.
-func TestTurnIdleForResetsOnActivity(t *testing.T) {
-	hub := sessionhub.New("e", 8)
-	s := &Server{hub: hub}
-	started := time.Now().Add(-30 * time.Minute)
-
-	hub.Publish("WS1", "SES", sessionhub.KindStep, json.RawMessage(`"tool"`), false)
-
-	idle, ok := s.turnIdleFor("WS1", "SES", started)
-	if !ok {
-		t.Fatal("idle must be measurable after an event")
-	}
-	if idle > time.Second {
-		t.Fatalf("idle = %v, want ~0 — the turn just emitted a step", idle)
+func TestTurnIdleForResetsOnSemanticProgress(t *testing.T) {
+	runs := newChatRuns()
+	s := &Server{runs: runs}
+	tracker, cleanup := registerTrackedRun(t, runs, "WS1", "SES")
+	defer cleanup()
+	tracker.ObserveStep(agent.TurnStep{Kind: agent.StepDelta, Text: "new"})
+	idle, ok := s.turnIdleFor("WS1", "SES", time.Now().Add(-time.Hour))
+	if !ok || idle > time.Second {
+		t.Fatalf("idle = %v ok=%v", idle, ok)
 	}
 }
 
-// TestTurnIdleForIgnoresOtherWorkspace: session ids repeat across stores, so a busy
-// WS2/SES must not keep a silent WS1/SES alive — that would defeat the watchdog for
-// exactly the sessions most likely to collide.
-func TestTurnIdleForIgnoresOtherWorkspace(t *testing.T) {
-	hub := sessionhub.New("e", 8)
-	s := &Server{hub: hub}
-	started := time.Now().Add(-10 * time.Minute)
-
-	hub.Publish("WS2", "SES", sessionhub.KindStep, json.RawMessage(`"tool"`), false)
-
-	idle, _ := s.turnIdleFor("WS1", "SES", started)
-	if idle < 10*time.Minute {
-		t.Fatalf("idle = %v, want >= 10m — WS2's traffic is not WS1's liveness", idle)
+func TestTurnIdleForIgnoresAnotherRunProgress(t *testing.T) {
+	runs := newChatRuns()
+	target, cleanupTarget := registerTrackedRun(t, runs, "WS1", "SES1")
+	defer cleanupTarget()
+	other, cleanupOther := registerTrackedRun(t, runs, "WS1", "SES2")
+	defer cleanupOther()
+	before := target.Snapshot()
+	other.ObserveStep(agent.TurnStep{Kind: agent.StepDelta, Text: "other run"})
+	time.Sleep(10 * time.Millisecond)
+	after := target.Snapshot()
+	if after.Sequence != before.Sequence || !after.LastProgressAt.Equal(before.LastProgressAt) {
+		t.Fatalf("other run advanced target: before=%+v after=%+v", before, after)
 	}
 }
 
-// TestInboxWatchdogDefaultsWithoutTunables verifies the watchdog degrades to the
-// built-in bounds rather than to a zero duration when no Tunables is wired (the
-// shape used by several tests): a zero ceiling would cancel every turn instantly.
 func TestInboxWatchdogDefaultsWithoutTunables(t *testing.T) {
 	s := &Server{}
-	if got, want := s.inboxTurnWatchdog(), agent.DefaultTurnWatchdogMinutes*time.Minute; got != want {
-		t.Fatalf("hard ceiling = %v, want %v", got, want)
+	if got := s.inboxTurnWatchdog(); got != 0 {
+		t.Fatalf("deprecated hard ceiling = %v, want disabled", got)
 	}
 	if got, want := s.inboxTurnIdleWatchdog(), agent.DefaultTurnIdleWatchdogMinutes*time.Minute; got != want {
 		t.Fatalf("idle window = %v, want %v", got, want)

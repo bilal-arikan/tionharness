@@ -18,8 +18,8 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
-// The scheduled-fire deadline is settings-driven (ScheduleTimeoutMinutes, default
-// DefaultScheduleTimeoutMinutes) and read live via s.rt.tun.ScheduleTimeout().
+// Scheduled fires have no total-duration deadline. Delivered turns use the same
+// run-scoped semantic inactivity watchdog as spawn/worker execution.
 
 // Scheduler runs a workspace's enabled schedules on their cron expressions.
 // Cron expressions use the standard 5-field format (minute hour dom month dow).
@@ -137,12 +137,12 @@ func scheduleExpired(sc db.Schedule) bool {
 	return sc.ExpiresAt > 0 && time.Now().Unix() >= sc.ExpiresAt
 }
 
-// fire executes a schedule on its cron tick: it owns its own timeout context so
-// the run survives even if nothing else holds one. A cron tick that lands after
+// fire executes a schedule on its cron tick with an independent cancellable
+// context. A cron tick that lands after
 // the schedule's end date is skipped and the schedule is auto-disabled (a reload
 // then drops it from the cron table).
 func (s *Scheduler) fire(scheduleID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.rt.tun.ScheduleTimeout())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if sc, err := s.db.GetSchedule(ctx, scheduleID); err == nil && scheduleExpired(sc) {
 		if err := s.db.SetScheduleEnabled(ctx, scheduleID, false); err != nil {
@@ -243,7 +243,7 @@ func (s *Scheduler) fireWake(scheduleID string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), s.rt.tun.ScheduleTimeout())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	s.logger.Info("wake fire: begin", "schedule", scheduleID, "agent", sc.AgentID, "session", sc.SessionID)
@@ -364,7 +364,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// now holds the per-session turn slot, so a hung wake (a provider that never
 	// returns) would otherwise block every other turn on the session indefinitely —
 	// the slot's Cond wait ignores ctx, so nothing else could release it.
-	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), s.rt.tun.SpawnIdleTimeout()
 	// Single-shot idle-resume (FND-708844f8): an idle-cut wake turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
 	// Prefer the history-aware runner (installed by the api server) so the woken agent
@@ -652,7 +652,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
-	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), s.rt.tun.SpawnIdleTimeout()
 	// Single-shot idle-resume (FND-708844f8): an idle-cut scheduled turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
 	var (

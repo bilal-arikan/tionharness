@@ -34,7 +34,7 @@ export function SessionProcessCard({
   // growing while the session is silent (a fetched duration would not — the panel
   // refetches on conversation changes, and silence is the absence of those).
   const run = info.running
-  const idleSec = run ? Math.max(0, nowTick - run.lastActivityAt) : 0
+  const idleSec = run ? Math.max(0, nowTick - run.lastProgressAt) : 0
   const idleLimit = run?.idleLimitSec ?? 0
   const showIdle = idleLimit > 0 && idleSec >= idleLimit * IDLE_HINT_RATIO
   // Past half the window the turn is closer to being cancelled than not — say so
@@ -64,7 +64,7 @@ export function SessionProcessCard({
               className={`flex items-center gap-1.5 text-[10px] ${
                 idleUrgent ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-dim)]'
               }`}
-              title={`Tur ${formatElapsed(idleSec)} boyunca hiçbir etkinlik (araç adımı, düşünce, token) üretmedi. ${formatElapsed(idleLimit)} sessizlikte otomatik iptal edilir.`}
+              title={`Tur ${formatElapsed(idleSec)} boyunca anlamlı ilerleme üretmedi. Son ilerleme: ${run?.lastProgressKind ?? 'bilinmiyor'} (#${run?.progressSequence ?? 0}). ${formatElapsed(idleLimit)} sessizlikte otomatik iptal edilir.`}
             >
               <EarOff size={12} className="shrink-0" />
               <span className="font-mono">

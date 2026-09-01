@@ -115,7 +115,7 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// Bound the turn with the spawn watchdog: it holds the per-session turn slot, so
 	// a hung turn must not block the session's queue forever (the slot's Cond wait
 	// ignores ctx).
-	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 	var (
 		overflow *atomic.Bool
 		meta     *turnMeta

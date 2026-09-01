@@ -79,26 +79,26 @@ func TestApplyClampsNumerics(t *testing.T) {
 	}
 }
 
-// TestScheduleTimeoutDefaultIsOneHour pins the scheduled-fire budget. Both the
-// cron path and the manual "Run now" button bound their turn with this value, and
-// research-style prompts (search → fetch → synthesise) were being cut at the old
-// ceiling. TurnWatchdogMin must stay at or above it, otherwise the wedge breaker
-// would kill a legitimately long scheduled run.
-func TestScheduleTimeoutDefaultIsOneHour(t *testing.T) {
+func TestDeprecatedHardTimeoutDefaultsStayDisabled(t *testing.T) {
 	d := Default()
-	if d.ScheduleTimeoutMin != 60 {
-		t.Errorf("ScheduleTimeoutMin = %d, want 60", d.ScheduleTimeoutMin)
+	if d.SpawnTimeoutMin != 0 || d.ScheduleTimeoutMin != 0 {
+		t.Errorf("deprecated hard defaults = spawn %d schedule %d, want disabled", d.SpawnTimeoutMin, d.ScheduleTimeoutMin)
 	}
-	if d.TurnWatchdogMin < d.ScheduleTimeoutMin {
-		t.Errorf("TurnWatchdogMin (%d) must not be below ScheduleTimeoutMin (%d)",
-			d.TurnWatchdogMin, d.ScheduleTimeoutMin)
+	if d.TurnWatchdogMin != 0 {
+		t.Errorf("TurnWatchdogMin = %d, want disabled", d.TurnWatchdogMin)
+	}
+	d.SpawnTimeoutMin = 0
+	d.ScheduleTimeoutMin = 0
+	d = normalize(d)
+	if d.SpawnTimeoutMin != 0 || d.ScheduleTimeoutMin != 0 {
+		t.Errorf("normalize activated deprecated hard limits: spawn %d schedule %d", d.SpawnTimeoutMin, d.ScheduleTimeoutMin)
 	}
 }
 
 func TestChatTurnTimeoutDefaultsAndDisable(t *testing.T) {
 	d := Default()
-	if d.ChatTurnTimeoutMin != 120 || d.ChatTurnIdleTimeoutMin != 3 {
-		t.Fatalf("chat timeout defaults = (%d, %d), want (120, 3)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
+	if d.ChatTurnTimeoutMin != 0 || d.ChatTurnIdleTimeoutMin != 3 {
+		t.Fatalf("chat timeout defaults = (%d, %d), want (0, 3)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
 	}
 	d.ChatTurnTimeoutMin = 0
 	d.ChatTurnIdleTimeoutMin = 0

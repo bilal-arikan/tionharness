@@ -3,187 +3,451 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// ErrTurnHardTimeout / ErrTurnIdleTimeout are the cancellation CAUSES attached by
-// withActivityTimeout. Both a watchdog and a viewer pressing "Durdur" surface as
-// context.Canceled on ctx.Err(), so without a cause the caller cannot tell a turn
-// that RAN OUT OF TIME from one a human stopped — and a truncated turn gets
-// reported as a clean "completed" (the SES17 misreport). Read with context.Cause.
+// Timeout causes are attached with context cancellation causes so callers can
+// distinguish watchdog cuts from an explicit user stop.
 var (
-	ErrTurnHardTimeout = errors.New("turn hit its wall-clock ceiling")
-	ErrTurnIdleTimeout = errors.New("turn emitted no step within the inactivity window")
+	ErrTurnHardTimeout       = errors.New("turn hit its wall-clock ceiling")
+	ErrTurnIdleTimeout       = errors.New("turn made no meaningful progress within the inactivity window")
+	ErrOperationLeaseTimeout = errors.New("provider or tool operation exceeded its progress lease")
+	ErrOperationLeaseBusy    = errors.New("provider or tool operation admission limit reached")
 )
 
-// activityTouchKey keys the idle-watchdog reset func on a turn context.
-type activityTouchKey struct{}
+// ActivitySnapshot is a race-safe view of one run's semantic progress.
+type ActivitySnapshot struct {
+	LastProgressAt time.Time
+	Kind           string
+	Sequence       uint64
+}
 
-// WithActivityTouch attaches an idle-watchdog reset func to ctx. The step emitter
-// (SessionStepEmitter) calls it on every step so live activity keeps the turn
-// alive; nil-safe consumers ignore it when absent.
-func WithActivityTouch(ctx context.Context, touch func()) context.Context {
-	if touch == nil {
-		return ctx
+type activityTrackerKey struct{}
+type operationLeaseKey struct{}
+
+const maxActivitySources = 512
+
+const maxConcurrentOperationLeases = 64
+
+var operationLeaseAdmission = make(chan struct{}, maxConcurrentOperationLeases)
+
+type sourceActivity struct {
+	fingerprint string
+	childCount  int
+	terminal    string
+}
+
+// ActivityTracker owns one run's idle deadline. Only semantic progress advances
+// it; transport heartbeat/keepalive and unrelated hub traffic never reach it.
+type ActivityTracker struct {
+	mu       sync.Mutex
+	last     ActivitySnapshot
+	sources  map[string]sourceActivity
+	order    []string
+	idle     time.Duration
+	wake     chan struct{}
+	stop     chan struct{}
+	done     chan struct{}
+	stopOnce sync.Once
+	cancel   context.CancelCauseFunc
+	ctx      context.Context
+	now      func() time.Time
+}
+
+func newActivityTracker(ctx context.Context, cancel context.CancelCauseFunc, idle time.Duration) *ActivityTracker {
+	now := time.Now
+	t := &ActivityTracker{
+		last:    ActivitySnapshot{LastProgressAt: now(), Kind: "run_started"},
+		sources: make(map[string]sourceActivity),
+		idle:    idle,
+		wake:    make(chan struct{}, 1),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		cancel:  cancel,
+		ctx:     ctx,
+		now:     now,
 	}
-	return context.WithValue(ctx, activityTouchKey{}, touch)
-}
-
-// activityTouchFrom returns the installed idle-watchdog reset func (nil if none).
-func activityTouchFrom(ctx context.Context) func() {
-	fn, _ := ctx.Value(activityTouchKey{}).(func())
-	return fn
-}
-
-// TouchActivity resets the inactivity window attached to ctx, when present.
-// Callers must invoke it only for real model/tool-loop TurnStep activity.
-func TouchActivity(ctx context.Context) {
-	if touch := activityTouchFrom(ctx); touch != nil {
-		touch()
-	}
-}
-
-// activityIntervalKey keys the heartbeat cadence (see startActivityHeartbeat) on a
-// turn context, alongside the touch func.
-type activityIntervalKey struct{}
-
-// withActivityInterval records how often a heartbeat should touch the watchdog for
-// a long, step-less operation. Kept separate from the touch func so the existing
-// step-emitter path (activityTouchFrom) is untouched.
-func withActivityInterval(ctx context.Context, d time.Duration) context.Context {
-	return context.WithValue(ctx, activityIntervalKey{}, d)
-}
-
-func activityIntervalFrom(ctx context.Context) time.Duration {
-	d, _ := ctx.Value(activityIntervalKey{}).(time.Duration)
-	return d
-}
-
-// heartbeatInterval picks a cadence comfortably under the idle window so a
-// heartbeat lands well before the watchdog would fire. Half the window, floored so
-// a tiny (test-sized) idle still yields a positive tick.
-func heartbeatInterval(idle time.Duration) time.Duration {
-	d := idle / 2
-	if d <= 0 {
-		d = idle
-	}
-	return d
-}
-
-// startActivityHeartbeat keeps the idle watchdog satisfied while a single
-// long-running operation that emits NO incremental step of its own is in flight —
-// a non-streaming provider completion, or a one-shot tool execution (a big
-// write_file, a multi-minute shell command). The watchdog is otherwise fed only by
-// emitted steps, so such an operation looks identical to a hung turn and gets
-// reclaimed mid-work (the false "ASILI KALDI" kill).
-//
-// A truly wedged operation is still bounded by the hard wall-clock ceiling; the
-// heartbeat only holds off the FASTER idle window while real work runs. Streaming
-// operations (token/thinking/tool_delta) already touch on every chunk and
-// deliberately get NO heartbeat, so a stalled stream is still reclaimed on idle.
-//
-// Returns a stop func that MUST be called once the operation finishes (call it
-// explicitly — do not defer it inside a loop, or the goroutines accumulate until
-// the function returns). No-op (nil-safe stop) when the turn carries no watchdog
-// (idle disabled, or a turn wrapped by the bare WithActivityTimeout).
-func startActivityHeartbeat(ctx context.Context) func() {
-	touch := activityTouchFrom(ctx)
-	interval := activityIntervalFrom(ctx)
-	if touch == nil || interval <= 0 {
-		return func() {}
-	}
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				touch()
-			}
-		}
-	}()
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			close(stop)
-			<-done
-		})
-	}
-}
-
-// withActivityTimeout bounds a background turn by BOTH an absolute wall-clock
-// ceiling (hard) AND an inactivity window (idle): the returned ctx is cancelled
-// when either the hard deadline passes OR no touch() arrives within idle. The
-// touch func is installed on the ctx (WithActivityTouch) so the step emitter can
-// reset the idle timer on every step — a long-but-productive turn (streaming tool
-// calls) runs up to hard, while a truly hung turn is reclaimed after idle.
-//
-// idle <= 0 disables the inactivity window (hard ceiling only). The returned stop
-// MUST be called (defer it) to release both timers and the context.
-func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
-	ctx, stop := WithActivityTimeout(parent, hard, idle)
 	if idle > 0 {
-		ctx = withActivityInterval(ctx, heartbeatInterval(idle))
+		go t.watch()
+	} else {
+		close(t.done)
 	}
-	return ctx, stop
+	return t
 }
 
-// WithChatActivityTimeout bounds an INTERACTIVE chat turn exactly like a
-// background turn: hard ceiling + inactivity window + the heartbeat interval, so
-// startActivityHeartbeat is live on the chat path too. Without the interval the
-// heartbeat degrades to a no-op and a legitimately long step-less operation (a
-// non-streaming completion, one multi-minute tool call) would be cut by the same
-// short idle window that exists to reclaim a stalled provider stream.
+func (t *ActivityTracker) watch() {
+	defer close(t.done)
+	timer := time.NewTimer(t.idle)
+	defer timer.Stop()
+	for {
+		select {
+		case <-t.ctx.Done():
+			return
+		case <-t.stop:
+			return
+		case <-t.wake:
+			resetTimer(timer, t.remaining())
+		case <-timer.C:
+			remaining, expired := t.expireIfIdle()
+			if expired {
+				// Re-checking last progress after the timer fires prevents a stale
+				// callback racing with a new progress event from cancelling the run.
+				return
+			}
+			resetTimer(timer, remaining)
+		}
+	}
+}
+
+func (t *ActivityTracker) expireIfIdle() (time.Duration, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	remaining := t.idle - t.nowTime().Sub(t.last.LastProgressAt)
+	if remaining > 0 {
+		return remaining, false
+	}
+	// Keep the semantic timestamp check and cancellation linearized with
+	// Progress. Once this lock is released, no stale timer can cancel progress
+	// that won the race and updated the snapshot first.
+	t.cancel(ErrTurnIdleTimeout)
+	return 0, true
+}
+
+func resetTimer(timer *time.Timer, d time.Duration) {
+	if d <= 0 {
+		d = time.Nanosecond
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(d)
+}
+
+func (t *ActivityTracker) remaining() time.Duration {
+	t.mu.Lock()
+	last := t.last.LastProgressAt
+	t.mu.Unlock()
+	return t.idle - t.nowTime().Sub(last)
+}
+
+func (t *ActivityTracker) nowTime() time.Time {
+	if t.now != nil {
+		return t.now()
+	}
+	return time.Now()
+}
+
+// Progress records a verified state transition or newly produced content.
+func (t *ActivityTracker) Progress(kind string) {
+	if t == nil || strings.TrimSpace(kind) == "" {
+		return
+	}
+	t.mu.Lock()
+	t.last.Sequence++
+	t.last.LastProgressAt = t.nowTime()
+	t.last.Kind = kind
+	t.mu.Unlock()
+	select {
+	case t.wake <- struct{}{}:
+	default:
+	}
+}
+
+// ObserveStep applies the semantic activity contract to a TurnStep. Empty and
+// duplicate deltas, repeated running frames and tombstones are intentionally no-op.
+func (t *ActivityTracker) ObserveStep(st TurnStep) bool {
+	if t == nil || st.Kind == StepTombstone {
+		return false
+	}
+	payload := strings.TrimSpace(st.Text)
+	if st.Kind == StepToolDelta {
+		payload = strings.TrimSpace(st.Output)
+	}
+	source := activitySource(st)
+	sig := activityFingerprint(st, payload)
+
+	t.mu.Lock()
+	state, seen := t.sources[source]
+	meaningful := false
+	kind := ""
+	switch st.Kind {
+	case StepDelta, StepText, StepThinking:
+		meaningful = payload != "" && (!seen || sig != state.fingerprint)
+		kind = "assistant_content"
+	case StepToolDelta:
+		meaningful = payload != "" && (!seen || sig != state.fingerprint)
+		kind = "tool_output"
+	case StepSubagent:
+		meaningful = meaningfulSubagentProgress(st, state)
+		kind = "child_progress"
+	case StepTool:
+		if st.Append {
+			meaningful = strings.TrimSpace(st.Output) != "" && (!seen || sig != state.fingerprint)
+			kind = "tool_output"
+		} else if !st.Running {
+			meaningful = source != "" && state.terminal != sig
+			kind = "tool_terminal"
+		}
+	}
+	if meaningful {
+		state.fingerprint = sig
+		state.childCount = len(st.SubSteps)
+		if (st.Kind == StepTool && !st.Running) || subagentTerminal(st) {
+			state.terminal = sig
+		}
+		t.rememberSource(source, state, seen)
+		t.last.Sequence++
+		t.last.LastProgressAt = t.nowTime()
+		t.last.Kind = kind
+	}
+	t.mu.Unlock()
+	if meaningful {
+		select {
+		case t.wake <- struct{}{}:
+		default:
+		}
+	}
+	return meaningful
+}
+
+func activitySource(st TurnStep) string {
+	id := st.ID
+	if id == "" {
+		id = st.Tool
+	}
+	if id == "" {
+		id = string(st.Kind)
+	}
+	return string(st.Kind) + "\x00" + id
+}
+
+func activityFingerprint(st TurnStep, payload string) string {
+	childTail := ""
+	if len(st.SubSteps) > 0 {
+		last := st.SubSteps[len(st.SubSteps)-1]
+		childTail = fmt.Sprintf("%s|%s|%s|%s|%t|%s", last.Kind, last.ID, strings.TrimSpace(last.Text), strings.TrimSpace(last.Output), last.Running, last.Status)
+	}
+	return fmt.Sprintf("%s|%s|%s|%t|%t|%s|%d|%s", st.Kind, payload, strings.TrimSpace(st.Output), st.Running, st.Append, st.Status, len(st.SubSteps), childTail)
+}
+
+func meaningfulSubagentProgress(st TurnStep, previous sourceActivity) bool {
+	if subagentTerminal(st) && previous.terminal != activityFingerprint(st, strings.TrimSpace(st.Text)) {
+		return true
+	}
+	if len(st.SubSteps) <= previous.childCount {
+		return false
+	}
+	for _, child := range st.SubSteps[previous.childCount:] {
+		if strings.TrimSpace(child.Text) != "" || strings.TrimSpace(child.Output) != "" || (!child.Running && child.Status != "") {
+			return true
+		}
+	}
+	return false
+}
+
+func subagentTerminal(st TurnStep) bool {
+	return !st.Running && st.Status != ""
+}
+
+func (t *ActivityTracker) rememberSource(source string, state sourceActivity, seen bool) {
+	if !seen {
+		if len(t.order) >= maxActivitySources {
+			oldest := t.order[0]
+			t.order = t.order[1:]
+			delete(t.sources, oldest)
+		}
+		t.order = append(t.order, source)
+	}
+	t.sources[source] = state
+}
+
+func (t *ActivityTracker) Snapshot() ActivitySnapshot {
+	if t == nil {
+		return ActivitySnapshot{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.last
+}
+
+func (t *ActivityTracker) Stop() {
+	if t == nil {
+		return
+	}
+	t.stopOnce.Do(func() { close(t.stop) })
+	<-t.done
+}
+
+// ActivityTrackerFrom returns the run-scoped tracker, when a watchdog is installed.
+func ActivityTrackerFrom(ctx context.Context) *ActivityTracker {
+	t, _ := ctx.Value(activityTrackerKey{}).(*ActivityTracker)
+	return t
+}
+
+// ObserveActivityStep reports one step to the run-scoped semantic tracker.
+func ObserveActivityStep(ctx context.Context, st TurnStep) bool {
+	t := ActivityTrackerFrom(ctx)
+	return t != nil && t.ObserveStep(st)
+}
+
+// TouchActivity remains for callers that can independently verify real progress.
+// New step paths should use ObserveActivityStep so duplicates are rejected.
+func TouchActivity(ctx context.Context) {
+	if t := ActivityTrackerFrom(ctx); t != nil {
+		t.Progress("verified_progress")
+	}
+}
+
+// WithOperationLease bounds one opaque non-streaming provider/tool operation.
+// Its completion is progress; periodic heartbeat cannot extend this lease.
+func WithOperationLease(ctx context.Context) (context.Context, func()) {
+	d, _ := ctx.Value(operationLeaseKey{}).(time.Duration)
+	if d <= 0 {
+		return ctx, func() {}
+	}
+	leaseCtx, cancel := context.WithTimeoutCause(ctx, d, ErrOperationLeaseTimeout)
+	return leaseCtx, cancel
+}
+
+var detachedOperations atomic.Int64
+
+type operationResult[T any] struct {
+	value T
+	err   error
+}
+
+// OperationPanicError preserves both the recovered value and the child
+// goroutine stack. Opaque provider/tool panics become ordinary lease results
+// without being silently discarded or crashing the process.
+type OperationPanicError struct {
+	Value any
+	Stack []byte
+}
+
+func (e *OperationPanicError) Error() string {
+	return fmt.Sprintf("provider or tool operation panicked: %v\n%s", e.Value, e.Stack)
+}
+
+// RunWithOperationLease releases the caller even when an in-process dependency
+// ignores context cancellation. The buffered channel lets a late result exit;
+// detached work is measured until it eventually returns.
+func RunWithOperationLease[T any](ctx context.Context, operation func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if cause := context.Cause(ctx); cause != nil {
+		return zero, cause
+	}
+	select {
+	case operationLeaseAdmission <- struct{}{}:
+	case <-ctx.Done():
+		return zero, context.Cause(ctx)
+	default:
+		return zero, ErrOperationLeaseBusy
+	}
+	leaseDuration, _ := ctx.Value(operationLeaseKey{}).(time.Duration)
+	startedAt := time.Now()
+	leaseCtx, stop := WithOperationLease(ctx)
+	defer stop()
+	result := make(chan operationResult[T], 1)
+	var state atomic.Int32 // 0 running, 1 detached, 2 finished
+	go func() {
+		outcome := operationResult[T]{}
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					outcome.err = &OperationPanicError{Value: recovered, Stack: debug.Stack()}
+				}
+			}()
+			outcome.value, outcome.err = operation(leaseCtx)
+		}()
+		<-operationLeaseAdmission
+		if state.Swap(2) == 1 {
+			detachedOperations.Add(-1)
+		}
+		result <- outcome
+	}()
+	select {
+	case outcome := <-result:
+		// A result racing with cancellation/deadline is never accepted after the
+		// boundary, even if select happened to choose the buffered result first.
+		if cause := operationLeaseCause(leaseCtx, startedAt, leaseDuration); cause != nil {
+			return zero, cause
+		}
+		return outcome.value, outcome.err
+	case <-leaseCtx.Done():
+		cause := operationLeaseCause(leaseCtx, startedAt, leaseDuration)
+		if state.CompareAndSwap(0, 1) {
+			detachedOperations.Add(1)
+		}
+		return zero, cause
+	}
+}
+
+func operationLeaseCause(ctx context.Context, startedAt time.Time, leaseDuration time.Duration) error {
+	cause := context.Cause(ctx)
+	if cause == nil && leaseDuration > 0 && time.Since(startedAt) >= leaseDuration {
+		cause = ErrOperationLeaseTimeout
+	}
+	if cause == nil {
+		return nil
+	}
+	// The run-idle timer and the shorter operation timer share Go's timer
+	// scheduler. Preserve the earlier typed lease diagnosis once its own logical
+	// deadline has elapsed, regardless of callback scheduling order.
+	if errors.Is(cause, ErrTurnIdleTimeout) && leaseDuration > 0 && time.Since(startedAt) >= leaseDuration {
+		return ErrOperationLeaseTimeout
+	}
+	return cause
+}
+
+func DetachedOperationCount() int64 { return detachedOperations.Load() }
+
+func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
+	return WithActivityTimeout(parent, hard, idle)
+}
+
+// WithChatActivityTimeout installs semantic idle tracking. The legacy hard
+// parameter remains for source compatibility but never limits a chat run.
 func WithChatActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
-	return withActivityTimeout(parent, hard, idle)
+	_ = hard // legacy source compatibility; normal chat has no wall-clock ceiling
+	return WithActivityTimeout(parent, 0, idle)
 }
 
-// WithActivityTimeout bounds a turn by an optional absolute ceiling and an
-// optional inactivity window. Unlike the background-turn wrapper, it installs no
-// heartbeat: only explicit TouchActivity calls extend the idle window. A duration
-// of zero disables the corresponding timeout.
+// WithActivityTimeout installs optional absolute and semantic-idle cancellation.
+// The idle duration also bounds each opaque operation as a separate lease.
 func WithActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(parent)
 	var hardTimer *time.Timer
 	if hard > 0 {
 		hardTimer = time.AfterFunc(hard, func() { cancel(ErrTurnHardTimeout) })
 	}
-
-	if idle <= 0 {
-		return ctx, func() {
+	tracker := newActivityTracker(ctx, cancel, idle)
+	ctx = context.WithValue(ctx, activityTrackerKey{}, tracker)
+	operationLease := idle
+	if idle > 0 {
+		// Fire the operation-specific diagnosis before the enclosing run-idle
+		// deadline. Both remain derived from the same backwards-compatible knob.
+		operationLease = idle * 3 / 4
+		if operationLease <= 0 {
+			operationLease = idle
+		}
+	}
+	ctx = context.WithValue(ctx, operationLeaseKey{}, operationLease)
+	var once sync.Once
+	return ctx, func() {
+		once.Do(func() {
 			if hardTimer != nil {
 				hardTimer.Stop()
 			}
 			cancel(context.Canceled)
-		}
-	}
-
-	idleTimer := time.AfterFunc(idle, func() { cancel(ErrTurnIdleTimeout) })
-	var mu sync.Mutex
-	// Reset the idle timer on every step. Reset is an O(1) reschedule and steps
-	// arrive at most a few hundred/sec, so the churn is negligible; the mutex just
-	// serialises concurrent touches. Once idle has already fired (cancel ran, ctx
-	// permanently Done), a late Reset only schedules a harmless no-op cancel that
-	// stop() later cleans up — it never un-cancels a finished turn.
-	touch := func() {
-		mu.Lock()
-		idleTimer.Reset(idle)
-		mu.Unlock()
-	}
-	ctx = WithActivityTouch(ctx, touch)
-	return ctx, func() {
-		if hardTimer != nil {
-			hardTimer.Stop()
-		}
-		idleTimer.Stop()
-		cancel(context.Canceled)
+			tracker.Stop()
+		})
 	}
 }

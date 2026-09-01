@@ -18,9 +18,8 @@ import (
 // spawnTimeout bounds the turn-finished / failed-turn HOOK firing (a completion
 // side-effect, not a work turn) that shares this package-level default. Every
 // background WORK turn — spawn, worker, coordinator, inbox delivery — instead uses
-// the settings-driven r.tun.SpawnTimeout() hard ceiling PLUS the r.tun.SpawnIdleTimeout()
-// inactivity watchdog (see withActivityTimeout), so a productive long turn is not
-// killed as "hung" and both bounds are tunable from the Settings screen.
+// the run-scoped semantic inactivity watchdog (see withActivityTimeout). Deprecated
+// SpawnTimeout storage no longer bounds productive execution.
 const spawnTimeout = 10 * time.Minute
 
 // SpawnOptions tunes a spawn. ModelOverride swaps just the model (the target
@@ -362,10 +361,9 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 	// and a registration that outlives this goroutine would now leak forever.
 	defer run.release()
 
-	// Hard wall-clock ceiling PLUS an idle watchdog (see withActivityTimeout): a
-	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
-	// long-but-productive one runs up to SpawnTimeout.
-	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	// Spawn lifetime is bounded only by semantic inactivity. Productive work has
+	// no elapsed wall-clock ceiling; SpawnTimeout remains storage/API compatibility.
+	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 
 	// Serialize this detached spawn turn on the session's turn slot so it never
 	// overlaps a user/wake/peer turn opened on the same session (all of which claim

@@ -1016,11 +1016,9 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	if f := b.subFutures[call.ID]; f != nil {
 		// Parallel run_subagent: the runner was launched before the loop; wait
 		// for it and adopt its result + nested trace (promoted to StepSubagent
-		// below via the per-call sink). Heartbeat the watchdog while blocked so a
-		// long-but-productive subagent does not idle-kill this parent turn.
-		stopHeartbeat := startActivityHeartbeat(callCtx)
+		// below via the per-call sink). Verified nested steps feed the parent
+		// tracker; synthetic heartbeat is deliberately absent.
 		<-f.done
-		stopHeartbeat()
 		res = f.res
 		subs.setSteps(f.steps)
 	} else if t.onStep != nil && call.ID != "" && t.reg.CanStream(call.Name) {
@@ -1030,12 +1028,15 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 			card.Chunk(chunk)
 		})
 	} else {
-		// Non-streaming tool: a one-shot big write or a multi-minute shell
-		// command emits no step until it returns, so heartbeat the watchdog
-		// while it runs (else the idle window falsely reclaims the turn).
-		stopHeartbeat := startActivityHeartbeat(callCtx)
-		res = t.reg.Call(callCtx, call)
-		stopHeartbeat()
+		// Non-streaming tool: bound the opaque call with an operation lease.
+		var callErr error
+		res, callErr = RunWithOperationLease(callCtx, func(leaseCtx context.Context) (providers.ToolResult, error) {
+			return t.reg.Call(leaseCtx, call), nil
+		})
+		if callErr != nil {
+			res.IsError = true
+			res.Content = callErr.Error()
+		}
 	}
 	// Debug journal: record this tool's latency, output size and outcome
 	// (pre-compaction size, the true tool output) for optimisation.

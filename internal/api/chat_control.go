@@ -10,14 +10,18 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // chatRun is the live control handle for one in-flight streaming chat turn.
 type chatRun struct {
-	cancel context.CancelFunc
-	steer  chan string
+	id         string
+	generation uint64
+	gate       *sessionGenerationGate
+	cancel     context.CancelFunc
+	steer      chan string
 	// done is closed when the turn finishes (unregister), unblocking any
 	// Interaction MCP tool call still waiting on this run.
 	done chan struct{}
@@ -42,6 +46,8 @@ type chatRun struct {
 	// can show how long the background process has been running. Set once at
 	// register (read-only after) so no lock is needed to read it.
 	startedAt time.Time
+	activity  *agent.ActivityTracker
+	idleLimit time.Duration
 
 	// Delete-only Interaction MCP lifecycle gate. Calls may outlive provider
 	// finalization, so deletion closes this gate and drains admitted calls.
@@ -499,8 +505,9 @@ func (r *chatRun) clearWrite() {
 // chatRuns is the registry of active streaming turns, keyed by run id, so the
 // control endpoint can stop or steer a turn while it is running.
 type chatRuns struct {
-	mu   sync.Mutex
-	runs map[string]*chatRun
+	mu    sync.Mutex
+	runs  map[string]*chatRun
+	gates map[string]*sessionGenerationGate
 	// secrets holds a STABLE Interaction MCP Bearer secret per (session,agent) — the
 	// value a persistent claude-cli process presents across ALL its turns. Minted once,
 	// reused, so the CLI mcp-config (which carries the token in an Authorization header)
@@ -520,9 +527,19 @@ type chatRuns struct {
 	draining map[*chatRun]struct{}
 }
 
+// sessionGenerationGate serializes ownership transfer and fenced writes for one
+// workspace/session. It stays shared while any registered run can reference it,
+// including detached stale runs, then unregister drops the final reference.
+type sessionGenerationGate struct {
+	mu      sync.Mutex
+	current uint64
+	refs    int
+}
+
 func newChatRuns() *chatRuns {
 	return &chatRuns{
 		runs:     make(map[string]*chatRun),
+		gates:    make(map[string]*sessionGenerationGate),
 		secrets:  make(map[string]string),
 		active:   make(map[string]*chatRun),
 		draining: make(map[*chatRun]struct{}),
@@ -563,7 +580,17 @@ func (c *chatRuns) bindActive(token string, run *chatRun) {
 // means unscoped — only test/legacy callers pass that).
 func (c *chatRuns) register(id, sessionID, workspaceID string, cancel context.CancelFunc) *chatRun {
 	teardownCtx, teardownCancel := context.WithCancel(context.Background())
+	c.mu.Lock()
+	key := scopeKey(workspaceID, sessionID)
+	gate := c.gates[key]
+	if gate == nil {
+		gate = &sessionGenerationGate{}
+		c.gates[key] = gate
+	}
+	gate.refs++
 	run := &chatRun{
+		id:             id,
+		gate:           gate,
 		cancel:         cancel,
 		steer:          make(chan string, 16),
 		done:           make(chan struct{}),
@@ -574,10 +601,75 @@ func (c *chatRuns) register(id, sessionID, workspaceID string, cancel context.Ca
 		teardownCtx:    teardownCtx,
 		teardownCancel: teardownCancel,
 	}
-	c.mu.Lock()
 	c.runs[id] = run
 	c.mu.Unlock()
 	return run
+}
+
+// activate transfers session-generation ownership to run. Registration alone
+// never supersedes the slot owner: queued runs call this only after they truly
+// own the session turn slot.
+func (c *chatRuns) activate(run *chatRun) {
+	if run == nil || run.gate == nil {
+		return
+	}
+	run.gate.mu.Lock()
+	defer run.gate.mu.Unlock()
+	if run.generation != 0 {
+		return
+	}
+	run.gate.current++
+	run.generation = run.gate.current
+}
+
+func (c *chatRuns) acquireCurrent(run *chatRun) (func(), bool) {
+	if run == nil || run.gate == nil {
+		return func() {}, false
+	}
+	run.gate.mu.Lock()
+	if run.generation == 0 || run.gate.current != run.generation {
+		run.gate.mu.Unlock()
+		return func() {}, false
+	}
+	return run.gate.mu.Unlock, true
+}
+
+// withCurrent is the shared generation fence for every run-owned write. The
+// callback may perform bounded DB/hub I/O under the session gate, but never holds
+// the server-wide registry mutex.
+func (c *chatRuns) withCurrent(run *chatRun, write func()) bool {
+	release, current := c.acquireCurrent(run)
+	if !current {
+		return false
+	}
+	defer release()
+	write()
+	return true
+}
+
+// retain keeps a run's session gate discoverable after unregister while an outer
+// panic barrier still needs to fence recovery writes against a newer generation.
+func (c *chatRuns) retain(run *chatRun) func() {
+	if run == nil || run.gate == nil {
+		panic("cannot retain nil session generation gate")
+	}
+	c.mu.Lock()
+	key := scopeKey(run.workspaceID, run.sessionID)
+	if c.gates[key] != run.gate {
+		c.mu.Unlock()
+		panic("cannot retain unregistered session generation gate")
+	}
+	run.gate.refs++
+	c.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			c.releaseGateRefLocked(run)
+			c.mu.Unlock()
+		})
+	}
 }
 
 // activeSessionIDs returns the distinct session ids that currently have a turn
@@ -632,10 +724,14 @@ func (c *chatRuns) hasActive(workspaceID string) bool {
 
 // runInfo is a snapshot of one in-flight turn, for the Session Info panel.
 type runInfo struct {
-	RunID      string
-	StartedAt  time.Time
-	Autonomous bool
-	Provider   string
+	RunID            string
+	StartedAt        time.Time
+	Autonomous       bool
+	Provider         string
+	LastProgressAt   time.Time
+	LastProgressKind string
+	ProgressSequence uint64
+	IdleLimit        time.Duration
 }
 
 // sessionRunInfo returns a snapshot of the (first) in-flight turn for a session,
@@ -650,19 +746,59 @@ func (c *chatRuns) sessionRunInfo(wsID, sessionID string) (runInfo, bool) {
 		return runInfo{}, false
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	for id, run := range c.runs {
+	candidates := make([]*chatRun, 0, 1)
+	for _, run := range c.runs {
 		if run.sessionID != sessionID || run.workspaceID != wsID {
 			continue
 		}
-		return runInfo{
-			RunID:      id,
-			StartedAt:  run.startedAt,
-			Autonomous: run.autonomous,
-			Provider:   run.providerOf(),
-		}, true
+		candidates = append(candidates, run)
+	}
+	c.mu.Unlock()
+	for _, run := range candidates {
+		run.gate.mu.Lock()
+		if run.gate.current != run.generation {
+			run.gate.mu.Unlock()
+			continue
+		}
+		activity := run.activitySnapshot()
+		info := runInfo{
+			RunID:            run.id,
+			StartedAt:        run.startedAt,
+			Autonomous:       run.autonomous,
+			Provider:         run.providerOf(),
+			LastProgressAt:   activity.LastProgressAt,
+			LastProgressKind: activity.Kind,
+			ProgressSequence: activity.Sequence,
+			IdleLimit:        run.idleLimitFor(),
+		}
+		run.gate.mu.Unlock()
+		return info, true
 	}
 	return runInfo{}, false
+}
+
+func (r *chatRun) setActivityTracker(tracker *agent.ActivityTracker, idle time.Duration) {
+	r.mu.Lock()
+	r.activity = tracker
+	r.idleLimit = idle
+	r.mu.Unlock()
+}
+
+func (r *chatRun) activitySnapshot() agent.ActivitySnapshot {
+	r.mu.Lock()
+	tracker := r.activity
+	started := r.startedAt
+	r.mu.Unlock()
+	if tracker == nil {
+		return agent.ActivitySnapshot{LastProgressAt: started, Kind: "run_started"}
+	}
+	return tracker.Snapshot()
+}
+
+func (r *chatRun) idleLimitFor() time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.idleLimit
 }
 
 func (c *chatRuns) unregister(id string) {
@@ -673,6 +809,7 @@ func (c *chatRuns) unregister(id string) {
 	// (a CLI process turn that has since ended) no longer resolves to a dead turn.
 	// The (session,agent) secret itself survives in c.secrets for the NEXT turn.
 	if run != nil {
+		c.releaseGateRefLocked(run)
 		for tok, r := range c.active {
 			if r == run {
 				delete(c.active, tok)
@@ -693,6 +830,17 @@ func (c *chatRuns) unregister(id string) {
 	c.mu.Unlock()
 	if run != nil {
 		close(run.done)
+	}
+}
+
+func (c *chatRuns) releaseGateRefLocked(run *chatRun) {
+	key := scopeKey(run.workspaceID, run.sessionID)
+	run.gate.refs--
+	if run.gate.refs < 0 {
+		panic("session generation gate reference count became negative")
+	}
+	if run.gate.refs == 0 && c.gates[key] == run.gate {
+		delete(c.gates, key)
 	}
 }
 

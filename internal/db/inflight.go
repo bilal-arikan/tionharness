@@ -23,10 +23,12 @@ const inflightFile = "inflight.json"
 // the already-marshalled TurnStep[] JSON (the db layer treats it as opaque, just
 // like Message.Steps) so this package never needs to import the agent package.
 type InflightTurn struct {
-	MessageID string `json:"messageId"`
-	SessionID string `json:"sessionId"`
-	AgentID   string `json:"agentId"`
-	StartedAt int64  `json:"startedAt"`
+	MessageID  string `json:"messageId"`
+	RunID      string `json:"runId,omitempty"`
+	Generation uint64 `json:"generation,omitempty"`
+	SessionID  string `json:"sessionId"`
+	AgentID    string `json:"agentId"`
+	StartedAt  int64  `json:"startedAt"`
 	// Text is the partial answer accumulated from streaming deltas so far.
 	Text string `json:"text"`
 	// Steps is the partial activity trace as a JSON array string (may be "[]").
@@ -45,6 +47,13 @@ func (d *DB) WriteInflight(t InflightTurn) error {
 	if t.SessionID == "" {
 		return nil
 	}
+	d.inflightMu.Lock()
+	defer d.inflightMu.Unlock()
+	if current, ok, err := d.readInflight(t.SessionID); err != nil {
+		return err
+	} else if ok && current.Generation > t.Generation {
+		return nil
+	}
 	if t.Steps == "" {
 		t.Steps = "[]"
 	}
@@ -58,6 +67,29 @@ func (d *DB) ClearInflight(sessionID string) error {
 		return nil
 	}
 	err := os.Remove(d.inflightPath(sessionID))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
+// ClearInflightExpected removes only the sidecar owned by the expected run and
+// reply. It is a filesystem CAS: a detached predecessor cannot clear a newer
+// generation's recovery snapshot.
+func (d *DB) ClearInflightExpected(sessionID, runID, messageID string, generation uint64) error {
+	if sessionID == "" {
+		return nil
+	}
+	d.inflightMu.Lock()
+	defer d.inflightMu.Unlock()
+	current, ok, err := d.readInflight(sessionID)
+	if err != nil || !ok {
+		return err
+	}
+	if current.RunID != runID || current.Generation != generation || (messageID != "" && current.MessageID != messageID) {
+		return nil
+	}
+	err = os.Remove(d.inflightPath(sessionID))
 	if os.IsNotExist(err) {
 		return nil
 	}

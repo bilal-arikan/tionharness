@@ -122,14 +122,14 @@ export interface AppSettings {
   spawnMaxConcurrent: number
   spawnQueueMax: number
   spawnMaxPerTurn: number
-  spawnTimeoutMin: number
+  spawnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   spawnIdleTimeoutMin: number
-  chatTurnTimeoutMin: number
+  chatTurnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   chatTurnIdleTimeoutMin: number
   codexStdoutIdleSec: number
   idleResumeMax: number
-  scheduleTimeoutMin: number
-  turnWatchdogMin: number
+  scheduleTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
+  turnWatchdogMin: number // deprecated absolute limit; normal flow ignores it
   turnIdleWatchdogMin: number
 
   // Tool execution guards (process-global tool behaviour).

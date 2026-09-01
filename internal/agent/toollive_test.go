@@ -44,7 +44,7 @@ func TestParallelBatchEmitterIsSerialized(t *testing.T) {
 	}
 }
 
-func TestParallelBatchCancellationTombstonesEveryOpenCard(t *testing.T) {
+func TestPreCancelledBatchDoesNotOpenToolCards(t *testing.T) {
 	rt := loopRuntime(t)
 	agent := db.Agent{ID: "a1", Model: "m", MCPEnabled: true}
 	provider := &toolFakeProvider{script: []scriptedToolResp{{
@@ -72,15 +72,9 @@ func TestParallelBatchCancellationTombstonesEveryOpenCard(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	tombstones := map[string]int{}
 	for _, st := range emitted {
-		if st.Kind == StepTombstone {
-			tombstones[st.Ref]++
-		}
-	}
-	for _, id := range []string{"call-1", "call-2"} {
-		if tombstones[id] != 1 {
-			t.Fatalf("card %q got %d tombstones, want 1; steps=%+v", id, tombstones[id], emitted)
+		if st.Kind == StepTool || st.Kind == StepTombstone {
+			t.Fatalf("pre-cancelled provider opened a tool card: %+v", emitted)
 		}
 	}
 }

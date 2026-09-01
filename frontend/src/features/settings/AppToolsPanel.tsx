@@ -105,6 +105,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         Ayrık arka plan yüzeyi için sınırlar: <code>spawn_worker</code> ve köprülenen{' '}
         <code>spawn_session</code> + UI spawn düğmesi.
       </p>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        Eski <code>spawnTimeoutMin</code> ve <code>scheduleTimeoutMin</code> alanları yalnız wire ve
+        storage uyumluluğu için korunur; deprecated ve etkisizdir (<code>0 = disabled</code>).
+        Üretken işler toplam süreyle kesilmez. Spawn, worker ve zamanlanmış koşular aşağıdaki
+        semantic boşta penceresiyle korunur.
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <NumberField
           label="Maks. eşzamanlı spawn"
@@ -131,28 +137,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           onChange={(v) => set('spawnMaxPerTurn', v)}
         />
         <NumberField
-          label="Spawn süresi — üst sınır (dk)"
-          hint="Bir spawn/worker iş turunun MUTLAK süre tavanı; otomatik-devam turları da bu süreyi paylaşır (varsayılan 20)."
-          min={1}
-          max={1440}
-          value={draft.spawnTimeoutMin}
-          onChange={(v) => set('spawnTimeoutMin', v)}
-        />
-        <NumberField
           label="Spawn boşta süresi (dk)"
-          hint="Etkinlik izleyicisi: bir spawn/worker turu bu kadar süre hiçbir adım (araç/düşünce/token) yaymazsa 'asılı' sayılıp iptal edilir; üretken uzun tur üst sınıra kadar koşar (varsayılan 5)."
+          hint="Etkinlik izleyicisi: spawn, worker veya zamanlanmış koşu bu kadar süre anlamlı ilerleme üretmezse 'asılı' sayılıp iptal edilir; üretken uzun işlerin toplam süre tavanı yoktur (varsayılan 5)."
           min={1}
           max={1440}
           value={draft.spawnIdleTimeoutMin}
           onChange={(v) => set('spawnIdleTimeoutMin', v)}
-        />
-        <NumberField
-          label="Sohbet turu üst sınırı (dk)"
-          hint="İnteraktif sohbet turunun tüm hazırlık, model ve araç döngüsünü kapsayan mutlak süre tavanı (varsayılan 120; 0 = kapalı)."
-          min={0}
-          max={1440}
-          value={draft.chatTurnTimeoutMin}
-          onChange={(v) => set('chatTurnTimeoutMin', v)}
         />
         <NumberField
           label="Sohbet turu boşta süresi (dk)"
@@ -172,31 +162,15 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         />
         <NumberField
           label="Boşta yeniden başlatma (adet)"
-          hint="Boşta izleyicisi bir arka-plan turunu kesince, kaldığı yerden sürmek için taze bir boşta penceresinde kaç kez otomatik yeniden başlatılacağı (varsayılan 1; 0 = kapalı). Sert süre tavanı yeniden başlatılmaz."
+          hint="Boşta izleyicisi bir arka-plan turunu kesince, kaldığı yerden sürmek için taze bir boşta penceresinde kaç kez otomatik yeniden başlatılacağı (varsayılan 1; 0 = kapalı)."
           min={0}
           max={5}
           value={draft.idleResumeMax}
           onChange={(v) => set('idleResumeMax', v)}
         />
         <NumberField
-          label="Zamanlama süresi (dk)"
-          hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) ve elle 'Şimdi çalıştır' koşusunun süre sınırı (varsayılan 60)."
-          min={1}
-          max={1440}
-          value={draft.scheduleTimeoutMin}
-          onChange={(v) => set('scheduleTimeoutMin', v)}
-        />
-        <NumberField
-          label="Tur izleyicisi (dk)"
-          hint="Kuyruktaki bir turun MUTLAK tavanı: bu süreyi aşan tur zorla iptal edilir ki oturum kuyruğu asılı bir turun arkasında tıkanmasın (varsayılan 120). Tıkanma freni olduğu için spawn/zamanlama sürelerinin ALTINA inemez — daha küçük girilirse otomatik yükseltilir."
-          min={1}
-          max={1440}
-          value={draft.turnWatchdogMin}
-          onChange={(v) => set('turnWatchdogMin', v)}
-        />
-        <NumberField
           label="Tur boşta süresi (dk)"
-          hint="Kuyruktaki bir tur bu kadar süre hiçbir etkinlik (araç adımı, düşünce, token) üretmezse asılı sayılıp iptal edilir; üretken tur üst sınıra kadar koşar (varsayılan 20). Üst sınırın üstüne çıkamaz."
+          hint="Kuyruktaki aynı run bu kadar süre anlamlı ilerleme üretmezse asılı sayılıp iptal edilir. Heartbeat, boş/tekrar delta ve başka run event'i süreyi yenilemez (varsayılan 20)."
           min={1}
           max={1440}
           value={draft.turnIdleWatchdogMin}

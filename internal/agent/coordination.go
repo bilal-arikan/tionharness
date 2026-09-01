@@ -1389,7 +1389,7 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
-	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 	// Serialize this worker turn on the WORKER session's own turn slot (keyed by
 	// workerSessionID, distinct from the coordinator slot whose workers counter is
 	// decremented above) so it never overlaps another turn on the same worker
@@ -2380,7 +2380,7 @@ func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID st
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
-	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 
 	// Metadata reads are quick and must not be bound to the turn watchdog (which the
 	// resume loop owns per attempt) — use the background context for them.

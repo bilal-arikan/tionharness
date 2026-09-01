@@ -249,7 +249,7 @@ func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.Can
 
 	// Same hard ceiling + idle watchdog as spawn/worker turns: a productive turn
 	// runs up to SpawnTimeout, a hung one is reclaimed after SpawnIdleTimeout.
-	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	hardCap, idleCap := time.Duration(0), r.tun.SpawnIdleTimeout()
 
 	// Serialize this peer delivery with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —

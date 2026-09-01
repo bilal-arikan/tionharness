@@ -61,10 +61,9 @@ const (
 // Settings-driven (AgentMessageMaxKB) via applySettings; 0 selects this default.
 const DefaultAgentMessageMaxBytes = 64 * 1024
 
-// DefaultSpawnTimeoutMinutes bounds a single background spawn work turn (plus the
-// auto-continue continuations that share its context). Settings-driven
-// (SpawnTimeoutMinutes) via applySettings; 0 selects this default.
-const DefaultSpawnTimeoutMinutes = 20
+// DefaultSpawnTimeoutMinutes is the disabled default for the deprecated absolute
+// spawn limit. Semantic inactivity owns cancellation.
+const DefaultSpawnTimeoutMinutes = 0
 
 // DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn/worker
 // work turn: the idle watchdog cancels a turn that emits no step (tool/thinking/
@@ -74,16 +73,16 @@ const DefaultSpawnTimeoutMinutes = 20
 // 0 selects this default.
 const DefaultSpawnIdleTimeoutMinutes = 5
 
-// Interactive chat turn bounds. The hard ceiling is generous (a chat turn may
-// legitimately run a long tool loop); the idle window is the one that reclaims a
+// Interactive chat turn bounds. The legacy hard ceiling defaults disabled; the
+// semantic idle window reclaims a
 // turn whose PROVIDER STREAM died silently — the socket stays half-open, the CLI
 // subprocess never exits, and without this the session hangs forever and its
 // queued inbox messages are never delivered. 3 minutes (180s) of complete
 // silence is far longer than any real inter-step gap on a streaming provider,
 // and a long-but-step-less operation (non-streaming completion, one big tool
-// call) is held alive by startActivityHeartbeat rather than by a wide window.
+// call) is bounded by a separate operation lease derived from the same window.
 const (
-	DefaultChatTurnTimeoutMinutes     = 120
+	DefaultChatTurnTimeoutMinutes     = 0
 	DefaultChatTurnIdleTimeoutMinutes = 3
 )
 
@@ -96,32 +95,18 @@ const (
 // before the fix). Settings-driven (IdleResumeMax) via applySettings.
 const DefaultIdleResumeMax = 1
 
-// DefaultTurnWatchdogMinutes bounds a single QUEUED turn (the serial per-session
-// inbox worker in internal/api) before it is force-cancelled so the queue keeps
-// moving. It is a wedge breaker, not a work budget: it must stay ABOVE every
-// legitimate turn ceiling (spawn/schedule), else a healthy long turn — a heavy
-// build/test loop streaming tool calls for an hour — is cut as if it were hung.
-// TurnWatchdog() enforces that ordering. Settings-driven (TurnWatchdogMin) via
-// applySettings; 0 selects this default.
-const DefaultTurnWatchdogMinutes = 120
+// DefaultTurnWatchdogMinutes keeps the deprecated absolute queue limit disabled.
+// The field remains settings/API compatible but is not an active decision source.
+const DefaultTurnWatchdogMinutes = 0
 
-// DefaultTurnIdleWatchdogMinutes bounds INACTIVITY inside a queued turn: no event
-// of any kind (tool step, thinking, token delta) reaching the session hub for this
-// long means the turn is wedged, not busy. This is the measure that actually
-// separates the two — wall clock cannot, which is why the hard ceiling above has to
-// be generous and therefore leaves a real wedge running for hours. Sized well above
-// the shell max timeout (a blocking command emits nothing until it returns).
+// DefaultTurnIdleWatchdogMinutes bounds semantic inactivity inside a queued run.
+// Only new assistant/tool output and terminal state transitions advance it.
 // Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
 const DefaultTurnIdleWatchdogMinutes = 20
 
-// DefaultScheduleTimeoutMinutes bounds a single scheduled fire (task run or prompt
-// delivery / wake). Sized for current-generation models: one request can run many
-// minutes and a multi-iteration tool loop longer still. Runaway protection comes
-// from the loop guards (iteration cap, budgets), not this wall clock. Settings-driven
-// (ScheduleTimeoutMinutes) via applySettings; 0 selects this default. Raised from
-// 30 to 60: research-style scheduled prompts (search → fetch → synthesise over many
-// sources) routinely spend that long in the tool loop and were being cut mid-run.
-const DefaultScheduleTimeoutMinutes = 60
+// DefaultScheduleTimeoutMinutes is the disabled default for the deprecated
+// scheduled-fire wall-clock limit. Semantic inactivity owns cancellation.
+const DefaultScheduleTimeoutMinutes = 0
 
 // Default coordinator/worker guards (see internal/agent/coordination.go). They
 // bound the M2 coordination loop so a coordinator can neither fan out unbounded
@@ -568,25 +553,18 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 	return t.spawnMaxPerTurn
 }
 
-// SetSpawnTimeoutMinutes sets the deadline (in minutes) that bounds a single
-// background spawn work turn and the auto-continue continuations sharing its
-// context. A value of 0 selects the built-in default.
+// SetSpawnTimeoutMinutes preserves the deprecated absolute setting.
 func (t *Tunables) SetSpawnTimeoutMinutes(minutes int) {
 	t.mu.Lock()
 	t.spawnTimeoutMin = minutes
 	t.mu.Unlock()
 }
 
-// SpawnTimeout returns the spawn work-turn deadline as a duration (default when
-// unset).
+// SpawnTimeout returns the deprecated absolute setting. Zero is disabled.
 func (t *Tunables) SpawnTimeout() time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	m := t.spawnTimeoutMin
-	if m <= 0 {
-		m = DefaultSpawnTimeoutMinutes
-	}
-	return time.Duration(m) * time.Minute
+	return time.Duration(t.spawnTimeoutMin) * time.Minute
 }
 
 // SetSpawnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
@@ -654,54 +632,33 @@ func (t *Tunables) IdleResumeMax() int {
 	return t.idleResumeMax
 }
 
-// SetScheduleTimeoutMinutes sets the deadline (in minutes) that bounds a single
-// scheduled fire (cron task/prompt delivery + schedule_wake). 0 selects the
-// built-in default.
+// SetScheduleTimeoutMinutes preserves the deprecated absolute setting.
 func (t *Tunables) SetScheduleTimeoutMinutes(minutes int) {
 	t.mu.Lock()
 	t.schedTimeoutMin = minutes
 	t.mu.Unlock()
 }
 
-// ScheduleTimeout returns the scheduled-fire deadline as a duration (default when
-// unset).
+// ScheduleTimeout returns the deprecated absolute setting. Zero is disabled.
 func (t *Tunables) ScheduleTimeout() time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	m := t.schedTimeoutMin
-	if m <= 0 {
-		m = DefaultScheduleTimeoutMinutes
-	}
-	return time.Duration(m) * time.Minute
+	return time.Duration(t.schedTimeoutMin) * time.Minute
 }
 
-// SetTurnWatchdogMinutes sets the wall-clock ceiling (in minutes) after which a
-// queued turn is force-cancelled so the per-session queue cannot stay wedged
-// behind it. 0 selects the built-in default.
+// SetTurnWatchdogMinutes preserves the legacy absolute setting for wire/storage
+// compatibility. Queued-turn cancellation no longer reads it.
 func (t *Tunables) SetTurnWatchdogMinutes(minutes int) {
 	t.mu.Lock()
 	t.turnWatchdogMin = minutes
 	t.mu.Unlock()
 }
 
-// TurnWatchdog returns the queued-turn wedge breaker as a duration. It is floored
-// at the LONGEST legitimate turn ceiling (spawn / schedule) so the safety net can
-// never be tighter than the work it is meant to survive: a spawn turn allowed 120
-// minutes must not be killed by a 20-minute queue watchdog. Configure it above
-// those ceilings; the floor only rescues an inconsistent configuration.
+// TurnWatchdog returns the deprecated configured absolute limit. Zero is disabled.
 func (t *Tunables) TurnWatchdog() time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	m := t.turnWatchdogMin
-	if m <= 0 {
-		m = DefaultTurnWatchdogMinutes
-	}
-	for _, ceiling := range []int{t.spawnTimeoutMin, t.schedTimeoutMin} {
-		if ceiling > m {
-			m = ceiling
-		}
-	}
-	return time.Duration(m) * time.Minute
+	return time.Duration(t.turnWatchdogMin) * time.Minute
 }
 
 // SetTurnIdleWatchdogMinutes sets the inactivity window (in minutes) after which a
@@ -713,21 +670,15 @@ func (t *Tunables) SetTurnIdleWatchdogMinutes(minutes int) {
 	t.mu.Unlock()
 }
 
-// TurnIdleWatchdog returns the queued-turn inactivity window, capped at the hard
-// ceiling: an idle window ABOVE the wall-clock cap could never fire, which would
-// silently give back the very wedge detection it configures.
+// TurnIdleWatchdog returns the semantic inactivity window.
 func (t *Tunables) TurnIdleWatchdog() time.Duration {
-	hard := t.TurnWatchdog()
 	t.mu.RLock()
+	defer t.mu.RUnlock()
 	m := t.turnIdleWatchdogMin
-	t.mu.RUnlock()
 	if m <= 0 {
 		m = DefaultTurnIdleWatchdogMinutes
 	}
-	if idle := time.Duration(m) * time.Minute; idle < hard {
-		return idle
-	}
-	return hard
+	return time.Duration(m) * time.Minute
 }
 
 // SetCoordinatorLimits sets the coordinator/worker guards: the max number of

@@ -10509,3 +10509,58 @@ doğrulama gösterir.
   `priority`, `threshold` ve `interval` `Number(...) || 0` ile yazılıyor; bu
   kalıp geçersiz girdiyi sessizce `0`'a çeviriyor ve `MIN_TOKEN_THRESHOLD` /
   `MIN_COUNTER_INTERVAL` alt sınırlarını atlıyor.
+
+## TSK760 — Run-scope semantic progress watchdog (2026-09-01)
+
+- Normal chat inner ve queue outer 120 dk hard cap aktif karar yolundan çıkarıldı;
+  legacy settings/API alanları 0=disabled uyumluluğuyla korundu.
+- Yarış güvenli tracker yalnız aynı run'ın anlamlı assistant/tool/child/terminal
+  ilerlemesini sayıyor. Heartbeat, empty/duplicate frame, tekrar running/append,
+  tombstone ve başka run event'i idle süresini yenilemiyor.
+- Non-stream opaque provider/tool çağrıları ayrı bounded operation lease kullanıyor;
+  completion tracker progress'i. Session info progress zaman/tür/sequence ve idle
+  limitini yayımlıyor; frontend hard-limit ayar/gösterimini kaldırdı.
+- Kısa-süre testleri progress ile hard sınır ötesi yaşamı, gerçek idle iptalini,
+  noise/duplicate filtrelemeyi, run izolasyonunu, operation lease'i ve timer
+  reset/Stop yarışlarını kapsıyor. Cooperative cancel + 30 sn detach yolu korundu.
+
+### Bağımsız inceleme düzeltmeleri
+
+- Spawn/worker/coordinator/peer/automation ve schedule/wake yollarındaki kalan
+  `SpawnTimeout`/`ScheduleTimeout` toplam-süre contextleri kaldırıldı. Deprecated
+  hard alanlar wire/storage için duruyor; default/disabled 0 ve normal yürütme
+  kararı üretmiyor.
+- Operation lease önceden iptal edilmiş context'te kullanıcı/provider/tool kodunu
+  çağırmıyor; operation daima buffered-result goroutine'de. Deadline/cancel sınırı
+  result yarışını deterministik kazanıyor ve geç sonuç uygulanmıyor. Go in-process
+  üçüncü taraf goroutine'ini zorla öldüremez; 64-slot admission timeout sonrası çağrı
+  gerçekten dönene kadar slotu tutuyor, doluluk typed `ErrOperationLeaseBusy` ile
+  hızlı reddediliyor ve detached sayaç sınırı görünür kılıyor. Child goroutine'deki
+  provider/tool panic'i value + stack taşıyan `OperationPanicError` sonucuna çevrilir;
+  süreç çökmez, admission/detached accounting temizlenir ve deadline/cancel yarışı
+  yine sınır nedenini deterministik döndürür.
+- Session-generation kayıtta değil gerçek turn-slot sahipliğinde aktive ediliyor;
+  kuyruğa giren B çalışan A'yı stale yapmıyor. B slotu alınca eski A'nın lifecycle,
+  block/fail, live step, durable reply/error, inflight ve terminal hub yazıları aynı
+  generation primitive'iyle no-op. Inflight clear `(runID,generation,messageID)` CAS;
+  yeni run'ın recovery kaydı korunuyor.
+- Fence server-geneli `chatRuns.mu` değil, workspace/session anahtarlı kalıcı
+  gate'tir. Global mutex yalnız run/gate metadata lookup-create için kısa tutulur;
+  aynı session activation + fenced write atomik, farklı session'lar bağımsızdır.
+  Gate tüm registered/detached run referansları bitince registry'den kaldırılır.
+  Auto-title provider çağrısı gate dışında aday üretir; title persist ve terminal
+  yan etkiler current generation yeniden doğrulanınca fenced commit'te çalışır.
+  Arada generation değişirse stale title ve terminal event düşürülür.
+  Queue panic bariyeri de orijinal run/generation gate referansını recovery bitene
+  kadar taşır; unregister sonrası yeni generation aktive olmuşsa eski panic'in
+  durable error/reply, debug, turn_error ve hub commit yan etkileri topluca no-op.
+- Legacy hard-limit regresyonu `runFor > idle > legacyHardLimit` düzeninde, idle'dan
+  belirgin kısa aralıklı benzersiz semantic progress ile gerçek idle penceresini
+  aşar. Eş no-progress kontrolü aynı idle eşiğinde iptali ayrıca kanıtlar.
+- Settings UI deprecated `spawnTimeoutMin`/`scheduleTimeoutMin` alanlarını değiştirilebilir
+  hard-cap kontrolleri olarak sunmaz. Alanlar wire/storage uyumluluğunda kalır ve
+  `0 = disabled`; UI yalnız semantic progress/idle kararını açıklar.
+- Semantic dedup source/step kimliği başına tutuluyor; alternating A/B duplicate,
+  repeated Running ve boş/running subagent snapshot ilerleme değil. Yeni child
+  output, meaningful substep artışı ve terminal geçiş sayılır. State 512 kaynakla
+  sınırlı.

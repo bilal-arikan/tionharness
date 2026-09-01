@@ -82,17 +82,69 @@
   (fixer çözdü → otonomi geri açılır).
 
 ### Faz E — Etkinlik gözcüsü + kesinti kurtarma (idle watchdog)
+> **TSK760 güncel sözleşmesi (2026-09-01):** aşağıdaki tarihsel heartbeat +
+> hard-cap tasarımı run-scope semantic tracker ile değiştirildi. Normal chat ve
+> queued-turn yolunda 120 dk mutlak tavan aktif değildir. Tracker yalnız aynı
+> run'a ait yeni boş-olmayan assistant içeriği, yeni tool output chunk'ı, ilk
+> terminal provider/tool geçişi ve doğrulanmış child progress ile ilerler;
+> heartbeat/keepalive, boş veya duplicate delta, tekrar Running/Append,
+> tombstone ve başka run event'i ilerleme sayılmaz.
+>
+> Tracker lastProgressAt, lastProgressKind ve artan progressSequence snapshot'ı
+> üretir. Timer tek goroutine tarafından yönetilir; timeout anında son damga
+> tekrar okunarak stale callback'in yeni ilerlemeyi iptal etmesi engellenir. Stop
+> idempotenttir. Streaming olmayan opaque provider/tool çağrısı heartbeat ile
+> yaşatılmaz; semantic idle penceresinden türeyen, ondan daha kısa ayrı operation
+> lease kullanır. Önceden iptal edilmiş context operation'ı başlatmaz; çağrı yalnız
+> buffered-result goroutine'de yürür. Lease/cancel ile result aynı anda hazırsa
+> sınır deterministik kazanır, ana run typed hata ile ilerler ve geç sonuç
+> transcript/state'e uygulanmaz. Context'e uyan CLI/subprocess kill zinciri korunur.
+> Go, context'i yok sayan in-process üçüncü taraf goroutine'ini zorla öldüremez;
+> timeout sonrası süreç-geneli 64-slot admission kaydı operation gerçekten dönene
+> kadar tutulur. Slotlar doluysa yeni çağrı `ErrOperationLeaseBusy` ile hızlı döner;
+> böylece detached goroutine/bellek büyümesi sınırlıdır. Detached operasyon sayacı,
+> kullanıcı cancel akışı ve 30 sn watchdog detach grace korunur.
+>
+> Spawn/worker/coordinator/peer/automation ile schedule/wake yolları da aynı
+> semantic idle tracker'ı kullanır; `SpawnTimeout`, `ScheduleTimeout`,
+> `ChatTurnTimeout` ve `TurnWatchdog` normal yürütmede deadline/elapsed hard-stop
+> üretmez. Deprecated alanların varsayılanı ve kapalı değeri 0'dır.
+>
+> Detached run yazıları server-geneli registry mutex'iyle değil,
+> workspace/session anahtarlı kalıcı generation gate'iyle fence edilir. Global
+> mutex yalnız metadata lookup/create süresince tutulur; aynı session'da activation
+> fenced callback'in bitmesini beklerken farklı session'lar bağımsız ilerler.
+> Gate son registered/detached run unregister olduğunda referans sayısıyla kaldırılır.
+> Auto-title `TitleFor`/provider çağrısını generation gate tutmadan yapar; aday
+> title persist'i ve terminal event'ler current generation yeniden doğrulanarak
+> fenced commit'te uygulanır. Provider dönüşünden önce generation değişmişse stale
+> title ve terminal yan etkiler no-op olur.
+> Queue panic recovery, unregister boyunca orijinal run/generation gate'ini retained
+> ref ile canlı tutar. Recovery logundan sonra durable error/reply, debug kaydı,
+> turn_error ve hub Commit tek current-generation fence içinde uygulanır; session
+> slotu serbest kaldıktan sonra yeni run aktive olmuşsa eski panic hiçbirini yazmaz.
+> Watchdog stres kanıtında çalışma süresi idle penceresinden, idle penceresi
+> adlandırılmış legacy hard-limit'ten uzundur; benzersiz semantic progress idle'dan
+> belirgin kısa aralıkla gelir. Ayrı silent-run kontrolü gerçek idle iptalini doğrular.
+> Opaque operation child goroutine'inde oluşan provider/tool panic'i stack bağlamlı
+> `OperationPanicError` olarak result kanalına aktarılır. Admission slotu ve detached
+> accounting result yayınından önce aynı cleanup yolunda temizlenir; cancel/deadline
+> sınırı panic sonucu ile yarışsa da mevcut deterministik sınır nedeni kazanır.
+> Settings UI deprecated `spawnTimeoutMin`/`scheduleTimeoutMin` alanlarını düzenlenebilir
+> hard cap olarak göstermez; wire/storage alanları `0 = disabled` uyumluluğunda kalır.
+
+#### Tarihsel tasarım (TSK760 öncesi)
 - `internal/agent/activity_timeout.go`: her arka-plan turu HEM mutlak süre tavanı
   (`SpawnTimeout`) HEM boşta penceresi (`SpawnIdleTimeout`) ile sınırlıdır; step
   emitter her adımda `touch()` ile boşta sayacını sıfırlar.
-- **Heartbeat** (`startActivityHeartbeat`, interval = idle/2): streaming OLMAYAN
+- **Heartbeat** (startActivityHeartbeat, interval = idle/2; **kaldırıldı**): streaming OLMAYAN
   provider tamamlaması ve tek-seferlik araç çağrısı (büyük `write_file`, uzun
   shell, alt-ajan beklemesi) adım üretmez — bunlar sırasında gözcü periyodik
   touch'lanır, böylece meşru uzun-ama-sessiz iş "asılı" sanılıp kesilmez. Streaming
   yollar (token/düşünce/tool_delta) zaten her parçada touch ettiğinden heartbeat
   ALMAZ; böylece takılan bir akış hâlâ idle ile geri alınır. Wedge olan tek işlem
   yine sert tavanla sınırlıdır.
-- **İnteraktif sohbet turu da gözcü altında** (TSK440): `runChatTurn`
+- **İnteraktif sohbet turu da gözcü altında** (TSK440 tarihsel tasarım): runChatTurn
   (`internal/api/chat_stream.go`) turu `agent.WithChatActivityTimeout` ile sarar —
   arka-plan turuyla AYNI sarmalayıcı, yani hem sert tavan (`ChatTurnTimeout`,
   varsayılan 120 dk) hem boşta penceresi (`ChatTurnIdleTimeout`, varsayılan **3 dk

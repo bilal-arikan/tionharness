@@ -392,7 +392,7 @@ func marshalSteps(steps []agent.TurnStep) string {
 // instant the user message lands — a short snippet of the prompt — so the UI drops
 // its "new chat" placeholder immediately instead of waiting on the LLM auto-title
 // round-trip that runs during the first turn. It only names an as-yet-untitled
-// session; the later LLM auto-title (maybeAutoTitle) refines this snippet into a
+// session; the later LLM auto-title candidate refines this snippet into a
 // cleaner title. Best-effort throughout: any failure just leaves the title
 // untouched and never disturbs the enqueue/reply path.
 func (s *Server) maybeSnippetTitle(ctx context.Context, wsp *workspace.Workspace, sessionID, message string) {
@@ -443,10 +443,10 @@ func titleSnippet(msg string) string {
 	return msg
 }
 
-// maybeAutoTitle generates and persists a session title from the opening message
-// when firstTurn is set. Best-effort: a failure never breaks the reply. Returns
-// the new title, or "" when none was generated.
-func (s *Server) maybeAutoTitle(ctx context.Context, wsp *workspace.Workspace, firstTurn bool, agentID, sessionID, message string) string {
+// autoTitleCandidate generates a title from the opening message without mutating
+// session state. The provider call intentionally runs outside the session
+// generation gate; the caller fences the later persist and terminal events.
+func (s *Server) autoTitleCandidate(ctx context.Context, wsp *workspace.Workspace, firstTurn bool, agentID, sessionID, message string) string {
 	if !firstTurn {
 		return ""
 	}
@@ -455,6 +455,15 @@ func (s *Server) maybeAutoTitle(ctx context.Context, wsp *workspace.Workspace, f
 		s.logger.Warn("auto title failed", "session", sessionID, "error", err)
 		return ""
 	}
+	if title == "" {
+		return ""
+	}
+	return title
+}
+
+// persistAutoTitle commits a previously generated title. Callers hold the
+// session generation gate so a stale run cannot rename the session.
+func (s *Server) persistAutoTitle(ctx context.Context, wsp *workspace.Workspace, sessionID, title string) string {
 	if title == "" {
 		return ""
 	}

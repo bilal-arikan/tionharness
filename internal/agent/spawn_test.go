@@ -58,7 +58,16 @@ func drainSpawns(t *testing.T, rt *Runtime) {
 // the store is still in flight: a spawn/worker turn, a queued spawn, or a coordinator
 // drain loop (which outlives the worker that armed it).
 func (r *Runtime) backgroundWorkPending() bool {
-	if r.spawnActive.Load() > 0 || r.spawnQueueLen() > 0 {
+	// Linearize the queued -> active hand-off with takeQueuedSpawn. Reading
+	// spawnActive before spawnQueueLen can observe active=0 from before dispatch
+	// and queued=0 from after dispatch, even though one worker is live. The queue
+	// mutex covers both the slot reservation and queue removal in takeQueuedSpawn,
+	// so sampling both values under it closes that impossible mixed snapshot.
+	r.spawnQueue.mu.Lock()
+	queued := len(r.spawnQueue.shallow) + len(r.spawnQueue.deep)
+	active := r.spawnActive.Load()
+	r.spawnQueue.mu.Unlock()
+	if active > 0 || queued > 0 {
 		return true
 	}
 	pending := false

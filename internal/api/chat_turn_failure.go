@@ -14,6 +14,7 @@ const (
 	reasonProviderError   = "provider_error"
 	reasonTurnHardTimeout = "turn_hard_timeout"
 	reasonTurnIdleTimeout = "turn_idle_timeout"
+	reasonOperationLease  = "operation_lease_timeout"
 	reasonStopped         = "stopped"
 )
 
@@ -32,6 +33,8 @@ func chatTurnFailure(cause, err error) (detail, reason string) {
 		return "Sohbet turu mutlak süre sınırına ulaştı. O ana kadarki yanıt korundu.", reasonTurnHardTimeout
 	case errors.Is(cause, agent.ErrTurnIdleTimeout):
 		return "Sağlayıcı akışı takıldı: tur, etkinlik penceresi boyunca hiçbir adım üretmedi ve geri alındı. O ana kadarki yanıt korundu.", reasonTurnIdleTimeout
+	case errors.Is(err, agent.ErrOperationLeaseTimeout):
+		return "Sağlayıcı veya araç işlemi ilerleme lease süresini aştı ve durduruldu. O ana kadarki yanıt korundu.", reasonOperationLease
 	case errors.Is(cause, context.Canceled):
 		return "Tur manuel olarak durduruldu. O ana kadarki adımlar korundu.", reasonStopped
 	default:

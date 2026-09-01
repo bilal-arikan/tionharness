@@ -477,20 +477,16 @@ func normalize(v Settings) Settings {
 	if v.SpawnMaxPerTurn > 64 {
 		v.SpawnMaxPerTurn = 64
 	}
-	// Turn deadlines (minutes): at least one minute, at most a day — same bounds the
-	// settings UI enforces. The idle watchdog must stay BELOW the hard ceiling, else
-	// it never fires and a hung turn burns the full wall clock.
-	if v.SpawnTimeoutMin < 1 {
-		v.SpawnTimeoutMin = 1
+	// Deprecated absolute turn limits stay wire/storage compatible. Zero means
+	// disabled and must not be rewritten into an active one-minute ceiling.
+	if v.SpawnTimeoutMin < 0 {
+		v.SpawnTimeoutMin = 0
 	}
 	if v.SpawnTimeoutMin > 1440 {
 		v.SpawnTimeoutMin = 1440
 	}
 	if v.SpawnIdleTimeoutMin < 1 {
 		v.SpawnIdleTimeoutMin = 1
-	}
-	if v.SpawnIdleTimeoutMin > v.SpawnTimeoutMin {
-		v.SpawnIdleTimeoutMin = v.SpawnTimeoutMin
 	}
 	// Interactive chat timeouts use 0 as an explicit disabled value.
 	if v.ChatTurnTimeoutMin < 0 {
@@ -504,9 +500,6 @@ func normalize(v Settings) Settings {
 	}
 	if v.ChatTurnIdleTimeoutMin > 1440 {
 		v.ChatTurnIdleTimeoutMin = 1440
-	}
-	if v.ChatTurnTimeoutMin > 0 && v.ChatTurnIdleTimeoutMin > v.ChatTurnTimeoutMin {
-		v.ChatTurnIdleTimeoutMin = v.ChatTurnTimeoutMin
 	}
 	// Codex stdout-silence watchdog: 0 disables it entirely; a negative value is a
 	// typo, not an intent, so it falls back to the default. The value is in seconds;
@@ -525,36 +518,23 @@ func normalize(v Settings) Settings {
 	if v.IdleResumeMax > 5 {
 		v.IdleResumeMax = 5
 	}
-	if v.ScheduleTimeoutMin < 1 {
-		v.ScheduleTimeoutMin = 1
+	if v.ScheduleTimeoutMin < 0 {
+		v.ScheduleTimeoutMin = 0
 	}
 	if v.ScheduleTimeoutMin > 1440 {
 		v.ScheduleTimeoutMin = 1440
 	}
-	// Queued-turn watchdog: same day-long bound, but it must stay ABOVE the deadlines
-	// above — it exists to break a wedged queue, not to cut a turn those knobs still
-	// permit. Raising it here (rather than rejecting) keeps an inconsistent config
-	// working; agent.Tunables.TurnWatchdog applies the same floor at read time.
-	if v.TurnWatchdogMin < 1 {
-		v.TurnWatchdogMin = 1
-	}
-	if v.TurnWatchdogMin < v.SpawnTimeoutMin {
-		v.TurnWatchdogMin = v.SpawnTimeoutMin
-	}
-	if v.TurnWatchdogMin < v.ScheduleTimeoutMin {
-		v.TurnWatchdogMin = v.ScheduleTimeoutMin
+	// Legacy absolute watchdog is retained for storage/API compatibility only.
+	// Zero consistently means disabled; active cancellation uses semantic idle.
+	if v.TurnWatchdogMin < 0 {
+		v.TurnWatchdogMin = 0
 	}
 	if v.TurnWatchdogMin > 1440 {
 		v.TurnWatchdogMin = 1440
 	}
-	// The inactivity window must stay BELOW the hard ceiling, else it can never fire
-	// and a wedged turn burns the full wall clock — the same ordering rule the
-	// spawn idle watchdog above follows.
+	// Semantic inactivity is independent from the deprecated absolute setting.
 	if v.TurnIdleWatchdogMin < 1 {
 		v.TurnIdleWatchdogMin = 1
-	}
-	if v.TurnIdleWatchdogMin > v.TurnWatchdogMin {
-		v.TurnIdleWatchdogMin = v.TurnWatchdogMin
 	}
 	// Coordinator guards: workers ≥ 1 (≤ 64).
 	if v.CoordinatorMaxWorkers < 1 {

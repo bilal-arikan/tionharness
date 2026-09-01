@@ -33,6 +33,12 @@ import (
 // pinning the detached turn; pass a never-done context for a server-driven queued
 // turn that has no single owning client.
 func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspace, req chatReq, write func(event string, data any)) {
+	s.runChatTurnCaptured(clientGone, wsp, req, write, nil)
+}
+
+// runChatTurnCaptured exposes the registered run to the queue's outer panic
+// barrier. The callback retains only generation identity; it must not do I/O.
+func (s *Server) runChatTurnCaptured(clientGone context.Context, wsp *workspace.Workspace, req chatReq, write func(event string, data any), registered func(*chatRun)) {
 	// Register this turn so it can be stopped or steered while running.
 	runID := uuid.NewString()
 	// clientMsgID keys this turn's terminal hub events (turn_done / turn_error) so a
@@ -49,10 +55,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// this session forever and its queued inbox messages are never delivered. The
 	// chat wrapper installs the heartbeat interval too, so a long step-less
 	// operation is kept alive while a truly stalled stream is still reclaimed.
-	ctx, stopTimeout := agent.WithChatActivityTimeout(runCtx, s.tun.ChatTurnTimeout(), s.chatTurnIdle())
+	ctx, stopTimeout := agent.WithChatActivityTimeout(runCtx, 0, s.chatTurnIdle())
 	defer stopTimeout()
 	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)
+	if registered != nil {
+		registered(run)
+	}
+	run.setActivityTracker(agent.ActivityTrackerFrom(ctx), s.chatTurnIdle())
 	// steer_undelivered fallback (Doc 59): a claude-cli steer is delivered at the
 	// next tool boundary via the Interaction MCP permission tool's additionalContext.
 	// If the turn ends (any path) with a steer message that never reached a tool
@@ -99,7 +109,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// Drop any crash-recovery sidecar when the turn returns by any normal path
 	// (success, handled failure, client abort): only a true mid-turn process
 	// death must leave it behind for the next boot to reclaim.
-	defer database.ClearInflight(req.SessionID)
+	defer t.clearInflight()
 
 	// Ensure a terminal chat event fires even when generation fails after the
 	// turn has begun: the frontend uses it to clear the post-reload "thinking"
@@ -109,6 +119,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 		if !t.started || t.emitted {
 			return
 		}
+		releaseGeneration, current := s.runs.acquireCurrent(run)
+		if !current {
+			return
+		}
+		defer releaseGeneration()
 		wsp.Runtime.Emit(events.Event{
 			Type:   "chat",
 			Level:  "error",
@@ -172,29 +187,30 @@ func (s *Server) resolveTurnAgents(ctx context.Context, database *db.DB, session
 // agentID is the responding agent (may be "" if none was selected yet); reason
 // is a stable machine tag (provider_error, compaction_failed, …) shown as a
 // badge; detail is the human-readable message.
-func (s *Server) failTurn(ctx context.Context, wsp *workspace.Workspace, sse func(string, any), sessionID, agentID, clientMsgID, reason, detail string) {
-	database := wsp.DB
+func (t *chatTurn) failTurn(agentID, reason, detail string) {
+	s := t.s
+	sessionID := t.req.SessionID
 	// Surface the failure in the server log too — without this a turn that dies
 	// before producing output (provider unavailable, compaction failure, …) is
 	// invisible server-side and only visible as a red card in the UI.
 	s.logger.Error("turn failed", "session", sessionID, "agent", agentID, "reason", reason, "detail", detail)
 	step := agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason}
-	payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": clientMsgID}
-	if msg, err := database.AddMessage(ctx, db.Message{
-		SessionID: sessionID,
-		Role:      providers.RoleAssistant,
-		AgentID:   agentID,
-		Steps:     marshalSteps([]agent.TurnStep{step}),
-	}); err != nil {
-		s.logger.Error("persist turn error failed", "session", sessionID, "error", err)
-	} else {
-		payload["replyMessage"] = msg
-	}
-	sse("error", payload)
-	// Terminal error onto the hub too, so every window (and a queue observer waiting
-	// on this turn) clears its "thinking" state and sees the failure — previously
-	// failTurn only wrote the legacy SSE sink, leaving hub clients to discover it on
-	// reload and the /chat + /chat/stream queue observers hanging.
-	s.publishHub(wsp.ID, sessionID, sessionhub.KindTurnError, payload, false)
-	s.hub.Commit(wsp.ID, sessionID)
+	payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": t.clientMsgID}
+	t.withGeneration(func() {
+		if msg, err := t.database.AddMessage(t.ctx, db.Message{
+			SessionID: sessionID,
+			Role:      providers.RoleAssistant,
+			AgentID:   agentID,
+			Steps:     marshalSteps([]agent.TurnStep{step}),
+		}); err != nil {
+			s.logger.Error("persist turn error failed", "session", sessionID, "error", err)
+		} else {
+			payload["replyMessage"] = msg
+		}
+		t.sse("error", payload)
+		// Terminal error reaches every window and queue observer atomically with
+		// the durable error under the same generation fence.
+		s.publishHub(t.wsp.ID, sessionID, sessionhub.KindTurnError, payload, false)
+		s.hub.Commit(t.wsp.ID, sessionID)
+	})
 }
