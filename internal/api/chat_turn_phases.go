@@ -91,6 +91,20 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 	// turnSlotHeld; claiming again here would deadlock the turn behind itself.
 	if !t.req.turnSlotHeld {
 		release = t.wsp.Runtime.BeginSessionUserTurn(session.ID)
+		// From the claim above until this function returns, the slot is covered by
+		// NOBODY's defer: the caller only arms its own `defer release()` once
+		// preflight returns. A panic in the rest of this body would therefore leak
+		// the slot permanently — runTurnGuarded recovers, so the process survives
+		// and every later turn on this session blocks forever. Release it here on
+		// the panic path ONLY (recover() is nil on every normal return, so the
+		// caller's defer stays the single, unchanged release point) and re-panic so
+		// the failure is still reported.
+		defer func() {
+			if r := recover(); r != nil {
+				release()
+				panic(r)
+			}
+		}()
 	}
 	t.firstTurn = t.s.isFirstUntitledTurn(session)
 	t.freshSession = session.MessageCount == 0
@@ -296,7 +310,7 @@ func (t *chatTurn) prepareAgentRuntime(agentRow *db.Agent) (providers.Provider, 
 	// supports, exactly as on the agent write path. Silently running the turn
 	// at the stored level would hide that the request had no effect.
 	if t.req.ThinkingLevel != "" {
-		if terr := providers.ValidateThinkingLevel(agentRow.Model, t.req.ThinkingLevel); terr != nil {
+		if terr := providers.ValidateThinkingLevelForProvider(agentRow.Provider, agentRow.Model, t.req.ThinkingLevel); terr != nil {
 			t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID, "invalid_thinking_level", terr.Error())
 			return nil, false
 		}
@@ -835,7 +849,9 @@ func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, repl
 	// BEFORE this turn's reply, whose own trace is still warm.
 	if boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory)); compacted {
 		if berr := t.database.SetSessionCLICompactBoundary(t.ctx, t.session.ID, boundary); berr != nil {
-			t.s.logger.Error("persist cli compaction boundary failed", "session", t.session.ID, "error", berr)
+			t.s.failTurn(t.ctx, t.wsp, t.sse, t.session.ID, agentRow.ID, t.clientMsgID,
+				"persist_cli_compaction_boundary", "reply persisted but CLI compaction boundary failed: "+berr.Error())
+			return false
 		}
 	}
 	// P1.1: update the session header's model snapshot when the actual
