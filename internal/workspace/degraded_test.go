@@ -157,6 +157,81 @@ func TestDeleteDegradedRollbackIsNotObservable(t *testing.T) {
 	}
 }
 
+// TestRenameRollsBackOnPersistFailure: a rename that could not be written must
+// leave the in-memory name untouched. Reporting the error while keeping the new
+// name in RAM desyncs the app from workspaces.json — the UI shows a name the
+// registry never got, and the next successful persist (a Create, say) writes it
+// out although the rename was reported as failed. The persist failure is forced
+// the same way as in TestPersistRemovesTempOnFailure.
+func TestRenameRollsBackOnPersistFailure(t *testing.T) {
+	m := testManager(t)
+	m.workspaces["WS1"] = &Workspace{Meta: Meta{ID: "WS1", Name: "old", CreatedAt: 1}}
+	m.order = append(m.order, "WS1")
+
+	if err := os.MkdirAll(m.metaPath(), 0o755); err != nil {
+		t.Fatalf("seed blocking dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(m.metaPath(), "blocker"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed blocking file: %v", err)
+	}
+
+	if err := m.Rename("WS1", "new"); err == nil {
+		t.Fatal("rename must fail when the registry cannot be persisted")
+	}
+	if got := m.List(); len(got) != 1 || got[0].Name != "old" {
+		t.Fatalf("workspace name after a failed rename = %+v, want the old name kept", got)
+	}
+}
+
+// TestAttachRejectsDegradedWorkspaceFolder: Attach deduplicates on the data
+// directory, but only looked at the live map. A degraded workspace is registered
+// all the same, so its folder could be attached a second time and the same
+// directory would end up with two registry entries.
+func TestAttachRejectsDegradedWorkspaceFolder(t *testing.T) {
+	m := testManager(t)
+	dir := filepath.Join(t.TempDir(), "ws2")
+	if err := os.MkdirAll(filepath.Join(dir, "store"), 0o755); err != nil {
+		t.Fatalf("seed workspace dir: %v", err)
+	}
+	m.markDegraded(Meta{ID: "WS2", Name: "broken", CreatedAt: 50, Path: dir}, errors.New("store is corrupt"))
+
+	if _, err := m.Attach(dir); err == nil {
+		t.Fatal("attaching a degraded workspace's folder must fail")
+	}
+	if len(m.degraded) != 1 || len(m.workspaces) != 0 {
+		t.Fatalf("registry changed by the rejected attach: degraded=%+v live=%d", m.degraded, len(m.workspaces))
+	}
+}
+
+// TestAttachRejectsFolderBeingRemoved: deleteDegraded drops the registry entry
+// under the lock and erases the directory outside it. In that window nothing
+// points at the folder any more, so an Attach would adopt it — and the in-flight
+// os.RemoveAll would then delete the new workspace's data. The pendingRemoval
+// mark closes that window.
+func TestAttachRejectsFolderBeingRemoved(t *testing.T) {
+	m := testManager(t)
+	dir := filepath.Join(t.TempDir(), "ws2")
+	if err := os.MkdirAll(filepath.Join(dir, "store"), 0o755); err != nil {
+		t.Fatalf("seed workspace dir: %v", err)
+	}
+
+	m.mu.Lock()
+	m.beginRemovalLocked(dir)
+	m.mu.Unlock()
+
+	if _, err := m.Attach(dir); err == nil {
+		t.Fatal("attaching a folder that is being erased must fail")
+	}
+
+	m.endRemoval(dir)
+	m.mu.RLock()
+	pending := len(m.pendingRemoval)
+	m.mu.RUnlock()
+	if pending != 0 {
+		t.Fatalf("pendingRemoval = %d entries after endRemoval, want 0", pending)
+	}
+}
+
 // TestListWithDegradedFlagsBrokenWorkspaces: a degraded workspace is invisible in
 // List() (every caller pairs a Meta with a live handle), so the registry view the
 // user sees must come from ListWithDegraded and must say WHY it is broken.

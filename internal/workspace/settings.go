@@ -336,22 +336,31 @@ func (w *Workspace) saveSettings() error {
 }
 
 // Rename changes a workspace's display name and persists the registry.
+//
+// The write, the persist and the rollback all happen in ONE lock hold, exactly
+// like deleteDegraded: a failed persist must leave NOTHING changed, or memory
+// would hold the new name while workspaces.json still holds the old one and the
+// caller was told the rename failed. Renaming touches nothing but this string —
+// no directory is moved and no runtime handle carries the name — so restoring
+// the previous value is a complete rollback. persist is a short atomic
+// temp+rename write, so holding m.mu across it is cheap.
 func (m *Manager) Rename(id, name string) error {
 	if name == "" {
 		return nil
 	}
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	ws, ok := m.workspaces[id]
 	if !ok {
-		m.mu.Unlock()
 		return errors.New("workspace not found")
 	}
+	prev := ws.Meta.Name
 	ws.Meta.Name = name
-	// Snapshot in the SAME hold as the rename, so two concurrent renames cannot
-	// interleave "set name" and "read registry" and write the older name last.
-	metas := m.registryMetasLocked()
-	m.mu.Unlock()
-	return m.persist(metas)
+	if err := m.persist(m.registryMetasLocked()); err != nil {
+		ws.Meta.Name = prev
+		return err
+	}
+	return nil
 }
 
 // UpdateSettings applies a settings patch to a workspace, persists it, and

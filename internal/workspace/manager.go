@@ -101,6 +101,15 @@ type Manager struct {
 	// of its data is still on disk. Guarded by mu.
 	degraded []DegradedWorkspace
 
+	// pendingRemoval holds the data directories that a Delete/deleteDegraded is
+	// erasing RIGHT NOW. The registry record is already gone at that point, but
+	// os.RemoveAll deliberately runs outside m.mu (slow, destructive IO), so
+	// without this list Attach could adopt the very folder that is about to be
+	// wiped and the removal would take the freshly attached workspace's data with
+	// it. A path is added in the same hold that drops the registry record and
+	// removed once the deletion has returned. Guarded by mu.
+	pendingRemoval []string
+
 	// wsCounter is the monotonic sequence behind human-readable workspace ids
 	// ("WS1", "WS2"), persisted to ws-counter.json so a number is never reused
 	// across deletions or restarts. Guarded by mu.
@@ -675,13 +684,31 @@ func (m *Manager) Attach(path string) (*Workspace, error) {
 	}
 
 	// Reject a folder that is already an attached workspace (same data dir), so the
-	// same content is never registered under two ids.
+	// same content is never registered under two ids. Degraded workspaces count:
+	// they are registered too, just not open, so attaching one's folder again would
+	// give the same directory two registry entries.
 	m.mu.RLock()
 	for _, ws := range m.workspaces {
 		if sameDir(ws.DataDir, abs) {
 			name := ws.Meta.Name
 			m.mu.RUnlock()
 			return nil, fmt.Errorf("bu klasör zaten '%s' workspace'i olarak ekli", name)
+		}
+	}
+	for _, d := range m.degraded {
+		if sameDir(m.workspaceDir(d.Meta), abs) {
+			name := d.Name
+			m.mu.RUnlock()
+			return nil, fmt.Errorf("bu klasör zaten '%s' workspace'i olarak ekli", name)
+		}
+	}
+	// A directory whose files are being erased right now must not be adopted: the
+	// registry record is already gone, so the loops above cannot see it, and the
+	// in-flight os.RemoveAll would delete the newly attached workspace's data.
+	for _, dir := range m.pendingRemoval {
+		if sameDir(dir, abs) {
+			m.mu.RUnlock()
+			return nil, errors.New("bu klasör şu anda siliniyor, yeniden eklenemez")
 		}
 	}
 	m.mu.RUnlock()
@@ -694,6 +721,37 @@ func (m *Manager) Attach(path string) (*Workspace, error) {
 		return nil, err
 	}
 	return m.Get(meta.ID)
+}
+
+// workspaceDir returns the data directory a registry entry lives in: the
+// user-chosen Path when it has one, otherwise the default per-workspace location
+// under rootDir. Same rule as open(), so a degraded entry (which has no live
+// DataDir) resolves to the directory it would have been opened from.
+func (m *Manager) workspaceDir(meta Meta) string {
+	if meta.Path != "" {
+		return meta.Path
+	}
+	return filepath.Join(m.rootDir, "workspaces", meta.ID)
+}
+
+// beginRemovalLocked marks dir as being erased. The caller must hold m.mu for
+// writing, in the same hold that drops the directory's registry entry.
+func (m *Manager) beginRemovalLocked(dir string) {
+	m.pendingRemoval = append(m.pendingRemoval, dir)
+}
+
+// endRemoval clears the mark set by beginRemovalLocked, whether the removal
+// succeeded or not: once the delete has returned, nothing is writing to the
+// directory any more.
+func (m *Manager) endRemoval(dir string) {
+	m.mu.Lock()
+	for i, p := range m.pendingRemoval {
+		if p == dir {
+			m.pendingRemoval = append(m.pendingRemoval[:i], m.pendingRemoval[i+1:]...)
+			break
+		}
+	}
+	m.mu.Unlock()
 }
 
 // isWorkspaceDir reports whether dir is a plausible TionHarness workspace data
@@ -739,7 +797,9 @@ func (m *Manager) Delete(id string) error {
 	}
 	delete(m.workspaces, id)
 	m.order = removeString(m.order, id)
+	m.beginRemovalLocked(ws.DataDir)
 	m.mu.Unlock()
+	defer m.endRemoval(ws.DataDir)
 
 	ws.Scheduler.Stop()
 	if ws.InsightCron != nil {
@@ -798,12 +858,14 @@ func (m *Manager) deleteDegraded(id string) error {
 		m.mu.Unlock()
 		return err
 	}
+	// Claim the directory before the lock goes: from here on no registry entry
+	// points at it, so only pendingRemoval can stop an Attach from adopting a
+	// folder this call is about to erase.
+	dir := m.workspaceDir(entry.Meta)
+	m.beginRemovalLocked(dir)
 	m.mu.Unlock()
+	defer m.endRemoval(dir)
 
-	dir := entry.Path
-	if dir == "" {
-		dir = filepath.Join(m.rootDir, "workspaces", entry.ID)
-	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("remove degraded workspace dir %s: %w", dir, err)
 	}
