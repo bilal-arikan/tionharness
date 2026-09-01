@@ -895,7 +895,15 @@ func (m *Manager) RestoreFromArchive(id, archivePath string, extract func(src, d
 	// Detach from the registry while we rewrite its files.
 	delete(m.workspaces, id)
 	m.order = removeString(m.order, id)
+	// Same window as Delete/deleteDegraded: from here until the workspace is
+	// reopened no registry entry points at dataDir, while the swap below erases
+	// its live content (os.RemoveAll per top-level entry) outside the lock. Only
+	// pendingRemoval can stop an Attach from adopting a folder whose files are
+	// being torn out from under it — and from giving that directory a second
+	// registry entry once open() re-registers the original id.
+	m.beginRemovalLocked(dataDir)
 	m.mu.Unlock()
+	defer m.endRemoval(dataDir)
 
 	// Release all live handles so the files can be replaced (Windows locks open
 	// files). The scheduler/runtime/DB are recreated by open() at the end.
