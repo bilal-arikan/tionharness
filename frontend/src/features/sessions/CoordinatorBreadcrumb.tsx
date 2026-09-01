@@ -9,10 +9,10 @@ interface Props {
   // Opens another session. Without it the chain is rendered as plain text (there
   // is nowhere to navigate to).
   onSelectSession?: (id: string) => void
-  // Floating variant for the read-only chat stack: wrap in a ComposerCard so the
-  // panel gets the same opaque surface + shadow as its siblings (todo/wake), since
-  // it overlays the transcript. Default (side panel) keeps the flat bordered box,
-  // which already sits on a solid panel background.
+  // Floating variant for the chat stack: wrap in a ComposerCard with the running-
+  // worker tone so its relationship to coordinator work stays visually clear.
+  // Default (side panel) keeps the flat bordered box, which already sits on a
+  // solid panel background.
   floating?: boolean
 }
 
@@ -77,11 +77,11 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: 
     </>
   )
 
-  // Floating: same opaque surface + shadow as the sibling ComposerCards it stacks
-  // with. Default: the flat bordered box, for the (solid) side panel.
+  // Floating: same accent-soft surface and border as the running-worker card.
+  // Default: the flat bordered box, for the (solid) side panel.
   if (floating)
     return (
-      <ComposerCard tone="plain" className="px-2.5 py-2">
+      <ComposerCard tone="worker" className="px-2.5 py-2">
         {inner}
       </ComposerCard>
     )

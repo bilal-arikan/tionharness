@@ -194,6 +194,8 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
   composer'ın hemen üstünde kompakt yüzen kart olarak kökten doğrudan parent'a kadar
   koordinatör zincirini gösterir; çipler ilgili parent oturumunu açar. Sıradan sohbetler
   ve root koordinatörler etkilenmez. Salt-okunur worker görünümü aynı kartı paylaşır.
+  Cache sıcaklık rozeti kartın üstünde kalır; kart çalışan-worker paneliyle aynı
+  `worker` tonunu (`--color-accent-soft`) kullanır.
 - **Gradient + opak input:** composer sarmalayıcısı tema-uyumlu
   `bg-gradient-to-t from-[var(--color-bg)]
 via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent`; iç input

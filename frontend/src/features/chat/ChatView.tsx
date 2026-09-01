@@ -362,6 +362,14 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
         >
+          {/* Prompt-cache warmth: the one cache surface that can still change the
+              outcome — it counts down the warm window BEFORE the next turn is sent.
+              Sits at the TOP of the bottom stack so it stays visible above the
+              worker parent chain and any transient panel (todo checklist, pending
+              tray, ask/permission prompts). Hidden while a turn streams (the
+              countdown is about to reset anyway) and on an empty session (nothing
+              is cached yet). */}
+          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
           {/* A worker's parent chain belongs next to its input: it explains where
               replies are reported and gives a one-click route back to the parent.
               Root coordinators and ordinary chats stay unchanged. */}
@@ -372,13 +380,6 @@ export function ChatView({
               floating
             />
           )}
-          {/* Prompt-cache warmth: the one cache surface that can still change the
-              outcome — it counts down the warm window BEFORE the next turn is sent.
-              Sits at the TOP of the bottom stack so it stays visible above any
-              transient panel (todo checklist, pending tray, ask/permission
-              prompts). Hidden while a turn streams (the countdown is about to
-              reset anyway) and on an empty session (nothing is cached yet). */}
-          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
           {(chat.activePresence > 1 || chat.activeTyping) && (
             <div className="flex justify-center pb-1">
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
