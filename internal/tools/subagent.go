@@ -20,6 +20,12 @@ type RunAgentResult struct {
 	// context, and a large document would do exactly that. The caller reads one by
 	// id with read_artifact when it actually needs the body.
 	Artifacts []SubagentArtifact
+
+	// FanOut carries one outcome per task when the call was a fan-out, in input
+	// order. Non-empty FanOut means AgentName/Reply/Artifacts above are unused —
+	// there is no single reply to put there.
+	FanOut   []FanOutOutcome
+	Strategy string
 }
 
 // SubagentArtifact is one artifact reference returned to the delegating caller.
@@ -53,6 +59,14 @@ type RunAgentSpec struct {
 	// with a different target/model/context — retrying the same task a different
 	// way is the point.
 	RetryOf string
+
+	// Fan-out. When Tasks is non-empty this call runs SEVERAL subagents and the
+	// single-task fields above act as the per-leg defaults. Strategy decides how
+	// the legs are aggregated; MaxConcurrency caps how many run at once (0 =
+	// DefaultFanOutConcurrency). Tasks and Task are mutually exclusive.
+	Tasks          []RunAgentTask
+	Strategy       string
+	MaxConcurrency int
 }
 
 // RunAgentFunc executes one (sub)agent run. It is implemented in the agent
@@ -97,6 +111,12 @@ type runSubagentInput struct {
 	// accepted and ignored; the removed "async" value is refused loudly rather
 	// than silently downgraded to a blocking run.
 	Wait string `json:"wait"`
+
+	// Fan-out axes. Tasks is the multi-task form; the single-task fields above
+	// become its per-leg defaults.
+	Tasks          []fanOutTaskInput `json:"tasks"`
+	Strategy       string            `json:"strategy"`
+	MaxConcurrency int               `json:"max_concurrency"`
 }
 
 // RunSubagentTool launches an isolated subagent to carry out a self-contained
@@ -141,9 +161,29 @@ func (RunSubagentTool) Def() providers.ToolDef {
     "output_format": { "type": "string", "description": "Optional reply structure (e.g. \"bulleted file:line list\")." },
     "boundaries": { "type": "string", "description": "Optional scope limits — what to exclude / NOT touch." },
     "retry_of": { "type": "string", "description": "Session id of a FINISHED subagent run of yours that this call retries. The failed transcript is kept and linked; pair it with a different target/model/context to retry the task a different way." },
-    "wait": { "type": "string", "enum": ["sync"], "description": "Deprecated and ignored — run_subagent is always synchronous." }
+    "wait": { "type": "string", "enum": ["sync"], "description": "Deprecated and ignored — run_subagent is always synchronous." },
+    "tasks": {
+      "type": "array",
+      "description": "Fan-out: run SEVERAL subagents from one call. Mutually exclusive with \"task\". The top-level target/context/model/objective/output_format/boundaries become the per-task defaults, so the common shape — one target, several tasks — needs no repetition.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": { "type": "string", "description": "Overrides the top-level target for this task." },
+          "task": { "type": "string", "description": "This task's self-contained instruction." },
+          "context": { "type": "string", "enum": ["isolated", "inherited"] },
+          "model": { "type": "string" },
+          "objective": { "type": "string" },
+          "output_format": { "type": "string" },
+          "boundaries": { "type": "string" }
+        },
+        "required": ["task"],
+        "additionalProperties": false
+      }
+    },
+    "strategy": { "type": "string", "enum": ["all", "first-success"], "description": "How a \"tasks\" fan-out is aggregated. \"all\" (default): wait for every task, report each in input order (a failed task is reported, it does not fail the call). \"first-success\": return as soon as one task succeeds and cancel the rest — use it when the tasks are alternative routes to the SAME answer." },
+    "max_concurrency": { "type": "integer", "minimum": 1, "description": "How many fan-out tasks run at once (default 4). The per-turn delegation budget still applies on top." }
   },
-  "required": ["target", "task"],
+  "required": ["target"],
   "additionalProperties": false
 }`),
 		Examples: []json.RawMessage{
@@ -167,8 +207,11 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 		Boundaries:   strings.TrimSpace(in.Boundaries),
 		RetryOf:      strings.TrimSpace(in.RetryOf),
 	}
-	if spec.Target == "" || spec.Task == "" {
-		return "", fmt.Errorf("both \"target\" and \"task\" are required")
+	if spec.Target == "" && len(in.Tasks) == 0 {
+		return "", fmt.Errorf("\"target\" is required")
+	}
+	if spec.Task == "" && len(in.Tasks) == 0 {
+		return "", fmt.Errorf("either \"task\" (one subagent) or \"tasks\" (a fan-out) is required")
 	}
 	// An out-of-enum axis is refused, never defaulted: context="inherit" would run
 	// ISOLATED silently — the caller would get the exact opposite of what it asked
@@ -182,6 +225,10 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 	// blocking one.
 	if w := strings.ToLower(strings.TrimSpace(in.Wait)); w != "" && w != "sync" {
 		return "", fmt.Errorf(`"wait":"async" is no longer supported — run_subagent is always synchronous; break the work into smaller sync calls or hand long-running work to a coordinator worker`)
+	}
+	spec, err = buildFanOutSpec(in, spec)
+	if err != nil {
+		return "", err
 	}
 	run := RunAgentFrom(ctx)
 	if run == nil {
@@ -198,6 +245,9 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 // Call so the wording — which is the entire interface the caller sees — can be
 // asserted without standing up a runtime.
 func FormatRunAgentResult(res RunAgentResult) (string, error) {
+	if len(res.FanOut) > 0 {
+		return formatFanOut(res), nil
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Result from subagent %q:\n\n%s", res.AgentName, res.Reply)
 	if len(res.Artifacts) > 0 {
