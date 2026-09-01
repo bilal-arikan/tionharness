@@ -11,6 +11,22 @@ const (
 	BoardCancelled  = "iptal"
 )
 
+// ReviewRoundBudget is how many FAILED verification rounds a card may take
+// before the coordinator must stop spawning reviewers and escalate to the user
+// (see Task.ReviewBounces).
+//
+// Three is not arbitrary: rounds one and two are ordinary (a real defect found,
+// then a real defect in the fix). By round four the pattern in SES2570 was that
+// each new "fresh, independent" reviewer raised objections the previous rounds
+// had already litigated — the loop was no longer converging on a defect, it was
+// sampling opinions. That run took 7 hours and never produced a commit.
+//
+// It lives here, next to the field it bounds, because three layers read it and
+// none may import another: the runtime (which injects the escalation block), the
+// view projection (which flags the cards on the board), and — mirrored, not
+// imported — the frontend badge (frontend/src/features/tasks/reviewGate.ts).
+const ReviewRoundBudget = 3
+
 const (
 	WorktreeNone        = "none"
 	WorktreeProvisioned = "provisioned"
@@ -78,6 +94,15 @@ type Task struct {
 	// files without them decode to zero values.
 	Priority string   `json:"priority,omitempty"` // critical|high|medium|low ("" = unset)
 	Tags     []string `json:"tags,omitempty"`     // free-form labels
+	// ReviewBounces counts how many times this card has returned from the review
+	// column to a working column — i.e. how many verification rounds it has FAILED.
+	// Maintained by MoveTask; it is the only durable record that a card is on a
+	// verification treadmill, because each round is otherwise indistinguishable from
+	// the first. A coordinator run (SES2570) spent seven hours cycling one card
+	// through fresh reviewers, each finding new objections, with nothing counting
+	// the rounds. Surfaced to coordinators as a hard escalation once it exceeds the
+	// round budget (agent.ReviewRoundBudget).
+	ReviewBounces int `json:"reviewBounces,omitempty"`
 	// ArtifactIDs references workspace artifacts attached to this card (files
 	// dropped onto the card become artifacts, or existing artifacts linked from
 	// the editor). Order is user-meaningful; ids that no longer resolve are

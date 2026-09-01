@@ -123,6 +123,11 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 		return ErrNotFound
 	}
 	oldBoard := cur.BoardState
+	// ReviewBounces is server-owned: it is derived from the transition, never
+	// taken from the caller's payload (which carries whatever the client last
+	// read, or nothing at all). cur is the stored record, so leaving the field
+	// untouched here preserves it; the counter below is the only writer.
+	countReviewBounce(&cur, oldBoard, t.BoardState)
 	cur.Title = t.Title
 	cur.Description = t.Description
 	cur.Prompt = t.Prompt
@@ -164,6 +169,11 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 		return ErrNotFound
 	}
 	oldBoard := t.BoardState
+	// A card leaving review for a working column is a FAILED verification round.
+	// Counting it here (rather than inferring it from board events later) is what
+	// lets a coordinator be told "this is round 4" instead of re-running the same
+	// review-fix loop indefinitely.
+	countReviewBounce(&t, oldBoard, boardState)
 	t.BoardState = boardState
 	t.UpdatedAt = now()
 	err := d.persistTaskLocked(t)
