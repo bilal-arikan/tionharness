@@ -56,6 +56,20 @@ func TestValidateThinkingLevel(t *testing.T) {
 	}
 }
 
+func TestValidateThinkingLevelForCodexGPT5(t *testing.T) {
+	for _, level := range []string{"xhigh", "max", "ultra"} {
+		if err := ValidateThinkingLevelForProvider("codex-cli", "gpt-5.6-sol", level); err != nil {
+			t.Fatalf("codex gpt-5.6-sol %s: %v", level, err)
+		}
+	}
+	if err := ValidateThinkingLevelForProvider("claude-cli", "gpt-5.6-sol", "ultra"); err == nil {
+		t.Fatal("non-Codex concrete model must retain legacy validation")
+	}
+	if err := ValidateThinkingLevelForProvider("codex-cli", "gpt-5.6-sol", "turbo"); err == nil {
+		t.Fatal("unknown Codex tier must be rejected")
+	}
+}
+
 // TestValidateThinkingLevelErrorNamesTheAlternatives: the message has to tell the
 // caller what it could have sent instead, otherwise a 400 is a dead end.
 func TestValidateThinkingLevelErrorNamesTheAlternatives(t *testing.T) {

@@ -89,6 +89,19 @@ func TestThinkingTiersFor(t *testing.T) {
 	}
 }
 
+func TestCodexGPT5ThinkingTiersAreProviderAware(t *testing.T) {
+	want := []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
+	if got := ThinkingTiersForProvider("codex-cli", "gpt-5.6-sol"); !slices.Equal(got, want) {
+		t.Fatalf("codex gpt-5.6-sol tiers = %v, want %v", got, want)
+	}
+	if got := ThinkingClassForProvider("codex-cli", "gpt-5.6-sol"); got != "adaptive" {
+		t.Fatalf("codex gpt-5.6-sol class = %q, want adaptive", got)
+	}
+	if got := ThinkingTiersForProvider("claude-cli", "gpt-5.6-sol"); slices.Contains(got, "ultra") {
+		t.Fatalf("non-Codex concrete model unexpectedly got full ramp: %v", got)
+	}
+}
+
 func TestThinkingClass(t *testing.T) {
 	cases := map[string]string{
 		"claude-fable-5":             "always-on",

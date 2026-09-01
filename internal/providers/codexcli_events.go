@@ -44,7 +44,7 @@ type codexUsage struct {
 	OutputTokens          int `json:"output_tokens"`
 	// ReasoningOutputTokens is MEASURED by Codex (not derived like the Anthropic
 	// path), so it maps straight onto Usage.ThinkingTokens.
-	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
+	ReasoningOutputTokens *int `json:"reasoning_output_tokens"`
 }
 
 // freshInput is the prompt tokens actually billed at the full input rate: the
@@ -272,8 +272,10 @@ func (p *codexStreamParser) feed(line string) {
 			p.resp.Usage.OutputTokens = u.OutputTokens
 			// Measured, not estimated — the codex path must never overwrite this
 			// with deriveThinkingTokens' guess.
-			p.resp.Usage.ThinkingTokens = u.ReasoningOutputTokens
-			p.resp.Usage.ThinkingTokensMeasured = true
+			if u.ReasoningOutputTokens != nil {
+				p.resp.Usage.ThinkingTokens = *u.ReasoningOutputTokens
+				p.resp.Usage.ThinkingTokensMeasured = true
+			}
 		}
 	case "turn.failed":
 		p.sawTurn = true

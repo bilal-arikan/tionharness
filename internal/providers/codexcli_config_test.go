@@ -16,6 +16,19 @@ func TestCodexConfigMinimal(t *testing.T) {
 	}
 }
 
+func TestCodexConfigReasoningEffortRamp(t *testing.T) {
+	c := &CodexCLI{}
+	for _, effort := range []string{"xhigh", "max", "ultra"} {
+		t.Run(effort, func(t *testing.T) {
+			got := renderCodexConfig(c.buildConfig(Request{CLIEffortLevel: effort}))
+			want := `model_reasoning_effort = "` + effort + `"`
+			if !strings.Contains(got, want) {
+				t.Fatalf("config missing %q:\n%s", want, got)
+			}
+		})
+	}
+}
+
 func TestCodexConfigEmptyRendersNothing(t *testing.T) {
 	if got := renderCodexConfig(codexConfig{}); got != "" {
 		t.Fatalf("empty config should render nothing, got %q", got)

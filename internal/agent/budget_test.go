@@ -5,12 +5,59 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
+
+type measuredThinkingProvider struct{}
+
+func (measuredThinkingProvider) Name() string { return "measured-thinking-test" }
+func (measuredThinkingProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
+	return measuredThinkingResponse(), nil
+}
+func (measuredThinkingProvider) Stream(_ context.Context, _ providers.Request, onDelta func(providers.StreamDelta)) (*providers.Response, error) {
+	onDelta(providers.StreamDelta{Kind: providers.DeltaText, Text: "OK"})
+	return measuredThinkingResponse(), nil
+}
+
+func measuredThinkingResponse() *providers.Response {
+	return &providers.Response{
+		Text:          "OK",
+		Model:         "test-model",
+		Usage:         providers.Usage{OutputTokens: 100, ThinkingTokens: 33, ThinkingTokensMeasured: true},
+		ProviderCalls: 3,
+	}
+}
+
+type fixedThinkingProvider struct {
+	usage providers.Usage
+}
+
+func (fixedThinkingProvider) Name() string { return "fixed-thinking-test" }
+func (p fixedThinkingProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
+	return &providers.Response{Text: strings.Repeat("word ", 20), Model: "test-model", Usage: p.usage}, nil
+}
+func (p fixedThinkingProvider) Stream(_ context.Context, _ providers.Request, onDelta func(providers.StreamDelta)) (*providers.Response, error) {
+	onDelta(providers.StreamDelta{Kind: providers.DeltaText, Text: "OK"})
+	return p.Complete(context.Background(), providers.Request{})
+}
+
+var registerMeasuredThinkingProvider sync.Once
+
+func configureMeasuredThinkingProvider(rt *Runtime) {
+	registerMeasuredThinkingProvider.Do(func() {
+		providers.RegisterKind(providers.NewBuiltinKind(
+			providers.Manifest{Kind: "measured-thinking-test", Transport: providers.TransportAPI},
+			func(providers.ResolvedConfig) bool { return true },
+			func(providers.ResolvedConfig) (providers.Provider, error) { return measuredThinkingProvider{}, nil },
+		))
+	})
+	rt.providers.SetInstances([]providers.Instance{{ID: "measured-thinking-test", KindID: "measured-thinking-test"}})
+}
 
 // TestGuardedComplete_LogsProviderResolveFailure guards the logging-consistency
 // fix: the utility funnel used by reflect/summary/title must record a provider
@@ -90,5 +137,81 @@ func TestDeriveThinkingTokens(t *testing.T) {
 	// nil is safe.
 	if got := deriveThinkingTokens(nil); got != 0 {
 		t.Fatalf("nil = %d, want 0", got)
+	}
+}
+
+func TestPreserveOrDeriveThinkingTokens(t *testing.T) {
+	measured := &providers.Response{
+		Text:          "OK",
+		Usage:         providers.Usage{OutputTokens: 100, ThinkingTokens: 33, ThinkingTokensMeasured: true},
+		ProviderCalls: 3,
+	}
+	preserveOrDeriveThinkingTokens(measured)
+	if measured.Usage.ThinkingTokens != 33 {
+		t.Fatalf("measured thinking = %d, want 33", measured.Usage.ThinkingTokens)
+	}
+	measuredZero := &providers.Response{
+		Text:  strings.Repeat("word ", 20),
+		Usage: providers.Usage{OutputTokens: 100, ThinkingTokensMeasured: true},
+	}
+	preserveOrDeriveThinkingTokens(measuredZero)
+	if measuredZero.Usage.ThinkingTokens != 0 {
+		t.Fatalf("measured zero thinking = %d, want 0", measuredZero.Usage.ThinkingTokens)
+	}
+
+	text := strings.Repeat("word ", 20)
+	visible := conversation.EstimateText(text)
+	estimated := &providers.Response{Text: text, Usage: providers.Usage{OutputTokens: visible + 17}}
+	preserveOrDeriveThinkingTokens(estimated)
+	if estimated.Usage.ThinkingTokens != 17 {
+		t.Fatalf("estimated thinking = %d, want 17", estimated.Usage.ThinkingTokens)
+	}
+}
+
+func TestMeasuredThinkingSurvivesCompletionStreamingAndGuardedPaths(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	agent := db.Agent{ID: "thinking-agent", Provider: "measured-thinking-test", Model: "test-model"}
+	assertMeasured := func(path string, resp *providers.Response, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if resp.Usage.ThinkingTokens != 33 {
+			t.Fatalf("%s thinking = %d, want 33", path, resp.Usage.ThinkingTokens)
+		}
+	}
+
+	resp, err := rt.recordedComplete(context.Background(), agent, measuredThinkingProvider{}, providers.Request{})
+	assertMeasured("completion", resp, err)
+	resp, err = rt.recordedStream(context.Background(), agent, measuredThinkingProvider{}, providers.Request{}, func(TurnStep) {})
+	assertMeasured("streaming", resp, err)
+
+	configureMeasuredThinkingProvider(rt)
+	resp, err = rt.guardedComplete(context.Background(), agent, providers.Request{}, false)
+	assertMeasured("guarded", resp, err)
+}
+
+func TestMeasuredZeroAndAbsentThinkingAcrossCompletionAndStreaming(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	agent := db.Agent{ID: "thinking-agent", Provider: "fixed-thinking-test", Model: "test-model"}
+	for _, tc := range []struct {
+		name  string
+		usage providers.Usage
+		want  int
+	}{
+		{"measured-zero", providers.Usage{OutputTokens: 100, ThinkingTokensMeasured: true}, 0},
+		{"unmeasured", providers.Usage{OutputTokens: 100}, 100 - conversation.EstimateText(strings.Repeat("word ", 20))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := fixedThinkingProvider{usage: tc.usage}
+			resp, err := rt.recordedComplete(context.Background(), agent, provider, providers.Request{})
+			if err != nil || resp.Usage.ThinkingTokens != tc.want {
+				t.Fatalf("completion: thinking=%d err=%v, want %d", resp.Usage.ThinkingTokens, err, tc.want)
+			}
+			resp, err = rt.recordedStream(context.Background(), agent, provider, providers.Request{}, func(TurnStep) {})
+			if err != nil || resp.Usage.ThinkingTokens != tc.want {
+				t.Fatalf("streaming: thinking=%d err=%v, want %d", resp.Usage.ThinkingTokens, err, tc.want)
+			}
+		})
 	}
 }

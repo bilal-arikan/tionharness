@@ -13,7 +13,7 @@ import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
-import { useCatalog, thinkingInfoForModel, thinkingTierDisabledReason } from '@/shared/lib/catalog'
+import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 
@@ -108,16 +108,10 @@ export function AgentSettingsForm({
   // → all enabled. Every pill value is already a backend token; the
   // currently-stored level stays selectable even if outside the set.
   const catalog = useCatalog()
-  const thinkingOptions = useMemo(() => {
-    const { tiers, cls } = thinkingInfoForModel(catalog, provider, model)
-    if (tiers == null) return THINKING_OPTIONS
-    return THINKING_OPTIONS.map((o) => {
-      const supported = o.value === thinkingLevel || tiers.includes(o.value)
-      return supported
-        ? o
-        : { ...o, disabled: true, hint: thinkingTierDisabledReason(cls, o.value) }
-    })
-  }, [catalog, provider, model, thinkingLevel])
+  const thinkingOptions = useMemo(
+    () => thinkingOptionsForModel(THINKING_OPTIONS, catalog, provider, model, thinkingLevel),
+    [catalog, provider, model, thinkingLevel],
+  )
 
   // Unsaved-edits flag: current form fields vs the agent's persisted values.
   // (The tools section saves instantly on its own, so it is not part of this.)

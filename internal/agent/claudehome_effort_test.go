@@ -72,16 +72,18 @@ func TestEnsureClaudeHomeEffortLevel(t *testing.T) {
 }
 
 // TestCLIEffortLevel: ThinkingLevel → effortLevel mapping. Empty ("Kapalı"),
-// "off" and unknown pin "high" — thinking is disabled separately for those
+// "off" pin "high" — thinking is disabled separately for that
 // levels (Request.DisableThinking) and high effort keeps simple-task batching.
-// xhigh/max pass through so the deep-reasoning tiers reach the CLI.
+// xhigh/max/ultra pass through so the deep-reasoning tiers reach the CLI;
+// unknown values remain visible instead of silently becoming high.
 func TestCLIEffortLevel(t *testing.T) {
 	cases := map[string]string{
 		"":        "high",
 		"high":    "high",
 		"xhigh":   "xhigh",
 		"max":     "max",
-		"unknown": "high",
+		"ultra":   "ultra",
+		"unknown": "unknown",
 		"off":     "high",
 		"medium":  "medium",
 		"low":     "low",

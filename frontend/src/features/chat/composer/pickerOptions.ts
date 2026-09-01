@@ -27,6 +27,7 @@ export const THINKING_OPTIONS: PickerOption[] = [
     icon: '◉',
   },
   { value: 'max', label: 'Maks', hint: 'effort max — en zor işler (güncel modeller)', icon: '✦' },
+  { value: 'ultra', label: 'Ultra', hint: 'effort ultra — Codex GPT-5 ailesi', icon: '✹' },
 ]
 
 // Permission modes offered in the composer picker / Shift+Tab cycle. '' defers

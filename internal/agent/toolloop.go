@@ -59,6 +59,8 @@ func thinkingBudgetForLevel(level string) int {
 		return 32768
 	case "max":
 		return 65536
+	case "ultra":
+		return 131072
 	default:
 		return 0
 	}
@@ -166,6 +168,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	req.PermissionMode = effectivePermissionMode(agent.PermissionMode, autonomous)
+	if agent.ThinkingLevel != "" {
+		if err := providers.ValidateThinkingLevelForProvider(agent.Provider, agent.Model, agent.ThinkingLevel); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	// Thinking parity for provider-driven loops: a ThinkingLevel that resolves to
 	// no budget ("Kapalı"/"off") now reaches the claude-cli subprocess as
@@ -175,7 +182,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// calls while thinking is active ("think XOR batch" — the AlgoBench cost
 	// regression, _Docs/05 2026-07-10). Native providers ignore the flag
 	// (ThinkingBudget==0 already means off there).
-	req.DisableThinking = thinkingBudgetForLevel(agent.ThinkingLevel) == 0
+	req.DisableThinking = agent.ThinkingLevel == "off"
 
 	// Provider-native web search is opt-OUT per agent: on unless the agent stores
 	// an explicit false (NativeWebSearchEnabled resolves the nil = enabled
@@ -240,16 +247,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// every workspace. No-op when the data dir is unknown (keeps the provider's
 	// own default). This is the single per-turn seam every CLI turn passes through.
 	if isCLI {
+		// Both CLI transports consume the product's resolved reasoning tier.
+		// Provider-specific encoding stays below the Request boundary.
+		req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
 		// The config home and the credential heal below are claude-specific: both
 		// name a claude-home and the CLI's own .credentials.json. A second
 		// CLI transport must NOT inherit them, so they stay behind a narrow concrete
 		// assertion while the generic wiring (MCP delegation) goes through the
 		// interface.
 		if cc, ok := provider.(*providers.ClaudeCLI); ok {
-			// Carry the resolved effort into the provider so a "max" turn can be lifted
-			// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
-			// levels ride the settings file and the provider ignores this field.
-			req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
 			home, err := r.PinClaudeHome(cc)
 			if err != nil {
 				return nil, nil, err
@@ -1398,7 +1404,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
 			if resp, perr := r.cliSessions.Turn(ctx, key, cli, req, req.OnEvent); perr == nil {
-				resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
+				preserveOrDeriveThinkingTokens(resp)
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 				r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
@@ -1421,7 +1427,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
-	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
+	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
@@ -1451,7 +1457,7 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 		r.recordFailedUsage(ctx, agent, req, err)
 		return nil, err
 	}
-	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
+	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)

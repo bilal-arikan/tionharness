@@ -105,6 +105,18 @@ type CreateAgentTool struct {
 	skillExists func(slug string) bool
 }
 
+const thinkingLevelEnumPlaceholder = `"__THINKING_LEVELS__"`
+
+// agentManagementInputSchema keeps create_agent and update_agent's advertised
+// thinkingLevel enum aligned with the provider validation contract.
+func agentManagementInputSchema(schema string) json.RawMessage {
+	levels, err := json.Marshal(providers.ValidThinkingLevels())
+	if err != nil {
+		panic(fmt.Sprintf("marshal thinking levels: %v", err))
+	}
+	return json.RawMessage(strings.Replace(schema, thinkingLevelEnumPlaceholder, string(levels), 1))
+}
+
 // NewCreateAgentTool constructs create_agent. defaultSkills seeds new agents when
 // the caller passes none; skillExists validates caller-supplied slugs (nil = allow
 // all). resolveProvider resolves a provider instance id to (kind, instanceID)
@@ -118,7 +130,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_agent",
 		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default TionHarness skill set. Returns the new agent's id.",
-		InputSchema: json.RawMessage(`{
+		InputSchema: agentManagementInputSchema(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Display name for the agent"},
@@ -126,7 +138,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"identity":{"type":"string","description":"Short identity/role description"},
 				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). If omitted, inherits the creating agent's provider (together with its model), falling back to claude-cli."},
 				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
-				"thinkingLevel":{"type":"string","enum":["off","low","medium","high","xhigh","max"],"description":"Extended-reasoning tier. Must be supported by the chosen model. Omit to get the tier the provider historically behaved as: high for the CLI providers, off for everything else."},
+				"thinkingLevel":{"type":"string","enum":"__THINKING_LEVELS__","description":"Extended-reasoning tier. Must be supported by the chosen model. Omit to get the tier the provider historically behaved as: high for the CLI providers, off for everything else."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
 				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionHarness skill set; unknown slugs are skipped."},
@@ -224,7 +236,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	in.ThinkingLevel = strings.TrimSpace(in.ThinkingLevel)
 	if in.ThinkingLevel == "" {
 		in.ThinkingLevel = db.LegacyThinkingLevelFor(providerKind)
-	} else if err := providers.ValidateThinkingLevel(in.Model, in.ThinkingLevel); err != nil {
+	} else if err := providers.ValidateThinkingLevelForProvider(providerKind, in.Model, in.ThinkingLevel); err != nil {
 		return "", err
 	}
 
@@ -302,7 +314,7 @@ func (UpdateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_agent",
 		Description: "Edit an existing agent (user- or agent-created). Pass the agent id and only the fields you want to change. Returns the updated agent id.",
-		InputSchema: json.RawMessage(`{
+		InputSchema: agentManagementInputSchema(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The agent id to update (see list_agents)"},
@@ -311,7 +323,7 @@ func (UpdateAgentTool) Def() providers.ToolDef {
 				"identity":{"type":"string"},
 				"provider":{"type":"string"},
 				"model":{"type":"string"},
-				"thinkingLevel":{"type":"string","enum":["off","low","medium","high","xhigh","max"],"description":"Extended-reasoning tier. Must be supported by the model this patch lands on. Omit to keep the agent's current tier; \"\" is not a valid value."},
+				"thinkingLevel":{"type":"string","enum":"__THINKING_LEVELS__","description":"Extended-reasoning tier. Must be supported by the model this patch lands on. Omit to keep the agent's current tier; \"\" is not a valid value."},
 				"avatar":{"type":"string"},
 				"color":{"type":"string"},
 				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Pass \"\" to clear it."}
@@ -355,6 +367,14 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 			*p = repairMojibake(*p)
 		}
 	}
+	providerKind := previous.Provider
+	providerInstanceID := previous.ProviderInstanceID
+	if in.Provider != nil {
+		providerKind, providerInstanceID, err = t.d.syncProvider(*in.Provider)
+		if err != nil {
+			return "", err
+		}
+	}
 	// Same guard the HTTP update path applies (api/agents.go): a patch that names
 	// a reasoning tier must name a real one — "" would restore the ambiguous
 	// legacy state — and it is judged against the model THIS patch lands on, so
@@ -372,7 +392,7 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 			*in.ThinkingLevel = strings.TrimSpace(*in.ThinkingLevel)
 			level = *in.ThinkingLevel
 		}
-		if err := providers.ValidateThinkingLevel(model, level); err != nil {
+		if err := providers.ValidateThinkingLevelForProvider(providerKind, model, level); err != nil {
 			return "", err
 		}
 	}
@@ -393,10 +413,6 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	// not just ids that happen to equal their kind. Only sync when the request
 	// actually touches it (nil = "not in this patch").
 	if in.Provider != nil {
-		providerKind, providerInstanceID, err := t.d.syncProvider(*in.Provider)
-		if err != nil {
-			return "", err
-		}
 		patch.Provider = &providerKind
 		patch.ProviderInstanceID = &providerInstanceID
 	}

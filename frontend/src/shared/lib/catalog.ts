@@ -54,8 +54,34 @@ export function thinkingInfoForModel(
 export function thinkingTierDisabledReason(cls: string, tier: string): string {
   if (cls === 'always-on' && tier === 'off') return 'Bu model her zaman düşünür — kapatılamaz'
   if (cls === 'non-thinking') return 'Bu model düşünmez (akıl yürütme yok)'
-  if (tier === 'xhigh' || tier === 'max') return 'Bu modelde "Yüksek"e (high) düşer'
+  if (tier === 'xhigh' || tier === 'max' || tier === 'ultra')
+    return 'Bu modelde "Yüksek"e (high) düşer'
   return 'Bu model bu seviyeyi desteklemez'
+}
+
+// thinkingOptionsForModel is the shared provider-aware enablement rule used by
+// both the persisted agent setting and the per-turn composer picker. Keeping it
+// here prevents either UI from drifting away from the backend catalog contract.
+// The empty value is the composer's "Auto" option and is always selectable;
+// selectedValue stays selectable so an existing setting can still be changed.
+export function thinkingOptionsForModel<
+  T extends { value: string; disabled?: boolean; hint?: string },
+>(
+  options: T[],
+  catalog: CatalogEntry[],
+  provider: string,
+  model: string,
+  selectedValue: string,
+): T[] {
+  const { tiers, cls } = thinkingInfoForModel(catalog, provider, model)
+  if (tiers == null) return options
+  return options.map((option) => {
+    const supported =
+      option.value === '' || option.value === selectedValue || tiers.includes(option.value)
+    return supported
+      ? option
+      : { ...option, disabled: true, hint: thinkingTierDisabledReason(cls, option.value) }
+  })
 }
 
 // useCatalog returns the cached catalog, loading it on first use. Starts as the

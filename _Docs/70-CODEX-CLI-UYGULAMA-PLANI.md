@@ -252,8 +252,17 @@ kartı doluyor.
 4. Cache muhasebesi: `cached_input_tokens` → `CacheReadTokens`,
    `cache_write_input_tokens` → `CacheWriteTokens`.
 5. `reasoning_output_tokens` → `Usage.ThinkingTokens` (**türetme yok**;
-   `deriveThinkingTokens` codex yolunda çağrılmamalı).
+ ortak koruma alan provenance'ı bulunan ölçümü (`0` dahil) aynen tutar, yalnız alan yoksa
+   `deriveThinkingTokens` tahminini uygular; `ProviderCalls > 1` ölçümü silmez).
 6. `pricing.go`: OpenAI gpt-5.x fiyatları.
+
+Effort probe kanıtı (2026-09-01, gerçek `codex-cli 0.148.0`): ayrı izole
+`CODEX_HOME` evlerinde `--json --ephemeral --strict-config` ile `xhigh`, `max`
+ve `ultra` değerlerinin tümü exit 0 + `OK` + `turn.completed` verdi. Mapping
+`low`, `medium`, `high`, `xhigh`, `max`, `ultra` ürün seviyelerini aynı wire değerine
+taşır; `max` bu sürümde `xhigh`'a düşürülmez. Geçersiz dahili değer boş stringe
+çevrilip CLI varsayılanına sessizce bırakılmaz; mevcut ürün/API validasyonu ana
+kapıdır, alt sınır değeri görünür biçimde downstream doğrulamaya taşır.
 
 **Kabul kriteri:** ikinci turda `cached_input_tokens > 0`; Tasarruf Merkezi'nde
 prompt-cache kazancı görünüyor.

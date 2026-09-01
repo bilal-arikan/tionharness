@@ -71,13 +71,14 @@ func (m *turnMeta) apply(msg *db.Message, durMs int64) {
 // assistant bubble matches what RecordUsage summed into the daily/session rollups.
 func sumUsage(a, b providers.Usage) providers.Usage {
 	return providers.Usage{
-		InputTokens:        a.InputTokens + b.InputTokens,
-		OutputTokens:       a.OutputTokens + b.OutputTokens,
-		CacheReadTokens:    a.CacheReadTokens + b.CacheReadTokens,
-		CacheWriteTokens:   a.CacheWriteTokens + b.CacheWriteTokens,
-		CacheWrite5mTokens: a.CacheWrite5mTokens + b.CacheWrite5mTokens,
-		CacheWrite1hTokens: a.CacheWrite1hTokens + b.CacheWrite1hTokens,
-		ThinkingTokens:     a.ThinkingTokens + b.ThinkingTokens,
+		InputTokens:            a.InputTokens + b.InputTokens,
+		OutputTokens:           a.OutputTokens + b.OutputTokens,
+		CacheReadTokens:        a.CacheReadTokens + b.CacheReadTokens,
+		CacheWriteTokens:       a.CacheWriteTokens + b.CacheWriteTokens,
+		CacheWrite5mTokens:     a.CacheWrite5mTokens + b.CacheWrite5mTokens,
+		CacheWrite1hTokens:     a.CacheWrite1hTokens + b.CacheWrite1hTokens,
+		ThinkingTokens:         a.ThinkingTokens + b.ThinkingTokens,
+		ThinkingTokensMeasured: a.ThinkingTokensMeasured || b.ThinkingTokensMeasured,
 	}
 }
 

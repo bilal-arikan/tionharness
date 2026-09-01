@@ -9,7 +9,7 @@ import type { PillOption } from '@/shared/components/OptionPills'
 // "off" included. The empty string is NOT one of them: the backend rejects a
 // blank level on the agent write path, because it used to mean "no thinking" on
 // the native API but "high effort" on the CLI path.
-// Icons form an intensity ramp: ○ off · ◔ low · ◑ medium · ● high · ◉ xhigh · ✦ max.
+// Icons form an intensity ramp: ○ off · ◔ low · ◑ medium · ● high · ◉ xhigh · ✦ max · ✹ ultra.
 // xhigh/max map to the effort tiers of adaptive-class models (Opus 4.7/4.8,
 // Sonnet 5, Fable 5); on older models they clamp down to high.
 export const THINKING_OPTIONS: PillOption[] = [
@@ -24,6 +24,7 @@ export const THINKING_OPTIONS: PillOption[] = [
     icon: '◉',
   },
   { value: 'max', label: 'Maks', hint: 'effort max — en zor işler (güncel modeller)', icon: '✦' },
+  { value: 'ultra', label: 'Ultra', hint: 'effort ultra — Codex GPT-5 ailesi', icon: '✹' },
 ]
 
 // Tool-use permission mode (the agent's own default).

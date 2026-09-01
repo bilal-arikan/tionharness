@@ -1,6 +1,9 @@
 package providers
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // instanceOf builds a minimal registry Instance for a built-in kind id (kind
 // id == instance id, mirroring the default migrated instances, _Docs/71 §3).
@@ -24,6 +27,24 @@ func TestCatalogDerivedFromKinds(t *testing.T) {
 	if len(cat[0].Models) == 0 {
 		t.Error("claude-cli entry has no models")
 	}
+}
+
+func TestCatalogCodexGPT5HasFullThinkingRamp(t *testing.T) {
+	for _, entry := range Catalog() {
+		if entry.ID != "codex-cli" {
+			continue
+		}
+		for _, model := range entry.Models {
+			if model.ID == "gpt-5.6-sol" {
+				want := []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
+				if !slices.Equal(model.ThinkingTiers, want) || model.ThinkingClass != "adaptive" {
+					t.Fatalf("gpt-5.6-sol metadata = tiers %v class %q", model.ThinkingTiers, model.ThinkingClass)
+				}
+				return
+			}
+		}
+	}
+	t.Fatal("codex-cli/gpt-5.6-sol missing from catalog")
 }
 
 // TestRegistryGetDispatchesByKind checks Get builds the right concrete provider

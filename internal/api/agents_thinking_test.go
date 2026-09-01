@@ -36,6 +36,35 @@ func putAgent(t *testing.T, s *Server, wsp *workspace.Workspace, id, body string
 	return rec
 }
 
+func TestCodexGPT5CreateAndUpdateAcceptFullThinkingRamp(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	for _, level := range []string{"xhigh", "max", "ultra"} {
+		rec := postAgent(t, s, wsp,
+			`{"name":"Codex-`+level+`","provider":"codex-cli","model":"gpt-5.6-sol","thinkingLevel":"`+level+`"}`)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create %s: got %d: %s", level, rec.Code, rec.Body.String())
+		}
+	}
+
+	created := postAgent(t, s, wsp,
+		`{"name":"Codex-update","provider":"codex-cli","model":"gpt-5.6-sol","thinkingLevel":"high"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("setup: got %d: %s", created.Code, created.Body.String())
+	}
+	var agent db.Agent
+	if err := json.Unmarshal(created.Body.Bytes(), &agent); err != nil {
+		t.Fatal(err)
+	}
+	updated := putAgent(t, s, wsp, agent.ID, `{"thinkingLevel":"ultra"}`)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("update ultra: got %d: %s", updated.Code, updated.Body.String())
+	}
+	invalid := putAgent(t, s, wsp, agent.ID, `{"thinkingLevel":"turbo"}`)
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "unknown thinkingLevel") {
+		t.Fatalf("invalid level: got %d: %s", invalid.Code, invalid.Body.String())
+	}
+}
+
 // TestCreateAgentRequiresThinkingLevel: a blank level is the ambiguous legacy
 // state, so it must come back as a 400 rather than being defaulted silently.
 func TestCreateAgentRequiresThinkingLevel(t *testing.T) {
@@ -151,5 +180,37 @@ func TestUpdateAgentValidatesStoredLevelOnModelOnlyPatch(t *testing.T) {
 	if back.Code != http.StatusOK {
 		t.Fatalf("model-only patch with a compatible level: expected 200, got %d: %s",
 			back.Code, back.Body.String())
+	}
+}
+
+func TestUpdateAgentValidatesStoredLevelOnProviderOnlyPatch(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+
+	created := postAgent(t, s, wsp,
+		`{"name":"Codex","provider":"codex-cli","model":"gpt-5.6-sol","thinkingLevel":"ultra"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("setup: expected 201, got %d: %s", created.Code, created.Body.String())
+	}
+	var agent db.Agent
+	if err := json.Unmarshal(created.Body.Bytes(), &agent); err != nil {
+		t.Fatalf("decode created agent: %v", err)
+	}
+
+	legacy := putAgent(t, s, wsp, agent.ID, `{"provider":"claude-cli"}`)
+	if legacy.Code != http.StatusBadRequest {
+		t.Fatalf("provider-only patch stranding ultra on legacy provider: expected 400, got %d: %s",
+			legacy.Code, legacy.Body.String())
+	}
+	if !strings.Contains(legacy.Body.String(), "gpt-5.6-sol") {
+		t.Fatalf("error should name the effective model: %s", legacy.Body.String())
+	}
+
+	valid := putAgent(t, s, wsp, agent.ID, `{"thinkingLevel":"high"}`)
+	if valid.Code != http.StatusOK {
+		t.Fatalf("prepare compatible stored level: expected 200, got %d: %s", valid.Code, valid.Body.String())
+	}
+	valid = putAgent(t, s, wsp, agent.ID, `{"provider":"claude-cli"}`)
+	if valid.Code != http.StatusOK {
+		t.Fatalf("compatible provider-only patch: expected 200, got %d: %s", valid.Code, valid.Body.String())
 	}
 }

@@ -112,6 +112,32 @@ func TestCodexParserHappyTurn(t *testing.T) {
 	if u.ThinkingTokens != 33 {
 		t.Errorf("ThinkingTokens = %d, want 33", u.ThinkingTokens)
 	}
+	if !u.ThinkingTokensMeasured {
+		t.Error("ThinkingTokensMeasured = false, want true")
+	}
+}
+
+func TestCodexParserReasoningTokenPresence(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		usage    string
+		measured bool
+	}{
+		{"measured-zero", `{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":0,"reasoning_output_tokens":0}}`, true},
+		{"absent", `{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":0}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newCodexParser("gpt-5.6-sol", nil)
+			feedAll(p, fxTurnStarted, fxAgentMessage, tc.usage)
+			resp, err := p.finish()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.Usage.ThinkingTokensMeasured != tc.measured {
+				t.Fatalf("ThinkingTokensMeasured = %v, want %v", resp.Usage.ThinkingTokensMeasured, tc.measured)
+			}
+		})
+	}
 }
 
 // A turn that also WRITES cache: cache_write_input_tokens is a subset of

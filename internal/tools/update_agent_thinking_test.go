@@ -55,6 +55,19 @@ func TestUpdateAgentToolThinkingLevel(t *testing.T) {
 	if got.ThinkingLevel != "high" {
 		t.Fatalf("explicit level: got %q, want %q", got.ThinkingLevel, "high")
 	}
+
+	// Codex's highest supported tier must survive the tool and persistence path.
+	codexID := newThinkingAgent(t, d, `{"name":"Codex","provider":"codex-cli","model":"gpt-5.6-sol","thinkingLevel":"high"}`)
+	if _, err := update.Call(ctx, json.RawMessage(`{"id":"`+codexID+`","thinkingLevel":"ultra"}`)); err != nil {
+		t.Fatalf("update codex with ultra thinkingLevel: %v", err)
+	}
+	codex, err := d.GetAgent(ctx, codexID)
+	if err != nil {
+		t.Fatalf("get codex agent: %v", err)
+	}
+	if codex.ThinkingLevel != "ultra" {
+		t.Fatalf("codex ultra level: got %q, want %q", codex.ThinkingLevel, "ultra")
+	}
 }
 
 // TestUpdateAgentToolRejectsBadThinkingLevel covers the three ways a patch can

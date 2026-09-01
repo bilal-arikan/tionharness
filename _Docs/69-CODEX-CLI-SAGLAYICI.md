@@ -1032,6 +1032,16 @@ yalnız aktive edilen araçlar kadar büyür).
 Reasoning effort değerleri: `none` \| `minimal` \| `low` \| `medium` (varsayılan)
 \| `high` \| `xhigh` \| `max` \| `ultra`.
 
+Gerçek CLI probe'u (2026-09-01, `codex-cli 0.148.0`): izole ve ayrı
+`CODEX_HOME/config.toml` dosyalarıyla `codex exec --json --ephemeral
+--strict-config` çağrıları `xhigh`, `max` ve `ultra` için ayrı ayrı exit 0 verdi
+ve `agent_message: OK` + `turn.completed` üretti. Bu nedenle ürünün `max`
+seviyesi wire'da `max` kalır; `xhigh`'a normalizasyon gerekmez. Codex'in
+`reasoning_output_tokens` alanının varlığı açık provenance bilgisiyle taşınır;
+ölçülen değer `0` veya pozitif olsa da runtime tahmini tarafından ezilmez. Tahmin
+yalnız alan hiç raporlanmadığında uygulanır. Bu koruma çoklu iç provider
+çağrılarında (`ProviderCalls > 1`) da ölçümü saklar.
+
 ---
 
 ## Proses ağacı yıkımı — torun proses stdout pipe'ı tutarsa (SES953)

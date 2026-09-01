@@ -43,6 +43,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
 		return
 	}
+	if req.ThinkingLevel != "" && !providers.IsValidThinkingLevel(req.ThinkingLevel) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown thinkingLevel %q", req.ThinkingLevel))
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "streaming unsupported")
@@ -141,6 +145,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {
 		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
+		return
+	}
+	if req.ThinkingLevel != "" && !providers.IsValidThinkingLevel(req.ThinkingLevel) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown thinkingLevel %q", req.ThinkingLevel))
 		return
 	}
 	if s.hub == nil {

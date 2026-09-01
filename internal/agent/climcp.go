@@ -415,7 +415,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 // "high": thinking is already disabled for those levels, and high effort keeps
 // simple-task batching (a low effort risks re-serialising it).
 //
-// xhigh/max pass through so the deep-reasoning tiers actually reach the CLI (the
+// xhigh/max/ultra pass through so the deep-reasoning tiers actually reach the CLI (the
 // deliberate deep-work path); the caller accepts that thinking-on serialises tool
 // calls at those tiers ("think XOR batch"). "max" cannot ride the --settings file
 // (Claude Code's enum rejects it) — writeCLISettings clamps it to xhigh there and
@@ -430,7 +430,14 @@ func cliEffortLevel(thinkingLevel string) string {
 		return "xhigh"
 	case "max":
 		return "max"
-	default: // "", "off", "high", unknown
+	case "ultra":
+		return "ultra"
+	case "", "off", "high":
 		return "high"
+	default:
+		// Preserve invalid values. prepare validates stored agent levels before any
+		// CLI call; retaining the token here also prevents a lower-level caller from
+		// silently turning an invalid value into high effort.
+		return thinkingLevel
 	}
 }

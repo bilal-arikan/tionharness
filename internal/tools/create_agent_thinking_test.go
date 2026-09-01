@@ -3,10 +3,12 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // createdAgentLevel runs create_agent with the given raw arguments and returns
@@ -46,6 +48,40 @@ func TestCreateAgentToolCarriesThinkingLevel(t *testing.T) {
 	// Any other provider historically ran with reasoning off.
 	if got := createdAgentLevel(t, d, "actor", `{"name":"NativeDefault","provider":"anthropic"}`); got != db.LegacyThinkingLevelFor("anthropic") {
 		t.Fatalf("omitted level on anthropic: got %q, want %q", got, db.LegacyThinkingLevelFor("anthropic"))
+	}
+	if got := createdAgentLevel(t, d, "actor", `{"name":"Ultra","provider":"codex-cli","model":"gpt-5.6-sol","thinkingLevel":"ultra"}`); got != "ultra" {
+		t.Fatalf("codex ultra level: got %q, want %q", got, "ultra")
+	}
+}
+
+func thinkingLevelEnum(t *testing.T, def providers.ToolDef) []string {
+	t.Helper()
+	var schema struct {
+		Properties map[string]struct {
+			Enum []string `json:"enum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(def.InputSchema, &schema); err != nil {
+		t.Fatalf("unmarshal %s schema: %v", def.Name, err)
+	}
+	return schema.Properties["thinkingLevel"].Enum
+}
+
+// TestAgentManagementThinkingLevelSchemas pins both exposed contracts to the
+// provider-owned tier list, preventing create_agent and update_agent drift.
+func TestAgentManagementThinkingLevelSchemas(t *testing.T) {
+	d := openTestDB(t)
+	want := providers.ValidThinkingLevels()
+	defs := []providers.ToolDef{
+		NewCreateAgentTool(d, "actor", nil, nil, nil).Def(),
+		NewUpdateAgentTool(d, "actor", nil).Def(),
+	}
+	for _, def := range defs {
+		t.Run(def.Name, func(t *testing.T) {
+			if got := thinkingLevelEnum(t, def); !reflect.DeepEqual(got, want) {
+				t.Fatalf("thinkingLevel enum: got %v, want %v", got, want)
+			}
+		})
 	}
 }
 

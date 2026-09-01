@@ -32,6 +32,16 @@ func deriveThinkingTokens(resp *providers.Response) int {
 	return 0
 }
 
+// preserveOrDeriveThinkingTokens keeps provider-measured reasoning usage,
+// including a measured zero, and only estimates when provenance says no
+// measurement was reported.
+func preserveOrDeriveThinkingTokens(resp *providers.Response) {
+	if resp == nil || resp.Usage.ThinkingTokensMeasured {
+		return
+	}
+	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
+}
+
 // ErrAutonomyPaused is returned when the workspace autonomy brake is engaged and an
 // autonomous call is attempted. Manual calls are unaffected.
 var ErrAutonomyPaused = errors.New("autonomy paused")
@@ -151,7 +161,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
-	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
+	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil

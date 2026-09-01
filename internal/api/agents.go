@@ -140,6 +140,13 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Provider == "" {
 		req.Provider = "claude-cli" // last-resort: local Claude Code login, no API key
 	}
+	// Resolve the instance before model-tier validation: Codex GPT-5 models have
+	// a wider CLI effort ramp than versioned models on legacy transports.
+	providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, req.Provider)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Model is NOT filled in from another agent. The UI now always sends an
 	// explicit choice, and a blank model is one of those choices: the catalog
 	// carries an ID:"" entry ("claude/codex oturum modeli") which makes the CLI
@@ -151,7 +158,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	// db.Agent.ThinkingLevel) and a tier the model does not support would be a
 	// silent no-op. Neither is quietly rewritten to a default here — the caller
 	// has to say what it wants.
-	if err := providers.ValidateThinkingLevel(req.Model, req.ThinkingLevel); err != nil {
+	if err := providers.ValidateThinkingLevelForProvider(providerKind, req.Model, req.ThinkingLevel); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -180,12 +187,6 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	// default (migrated) instance the id equals its kind id, so this is
 	// byte-for-byte the historical request shape. SyncProviderFields resolves the
 	// kind and keeps Agent.Provider/ProviderInstanceID in lockstep (K3).
-	providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, req.Provider)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	newAgent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
 		Name:                req.Name,
 		Soul:                req.Soul,
@@ -420,16 +421,26 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "systemKey cannot be changed")
 		return
 	}
-	// A patch that touches the reasoning level must name a real tier — clearing it
+	providerKind := prev.Provider
+	providerInstanceID := prev.ProviderInstanceID
+	if req.Provider != nil {
+		providerKind, providerInstanceID, err = agentpkg.SyncProviderFields(s.providers, *req.Provider)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	// A patch that touches the provider, model, or reasoning level must leave the
+	// resulting triple valid. A level change must name a real tier — clearing it
 	// back to "" would restore the ambiguous legacy state. Validate against the
 	// model this same patch lands on, so switching model and tier together is
 	// judged as one result rather than against the stale stored model.
 	//
-	// A model-only patch is judged the same way: the tier it leaves in place is
-	// still the tier the agent runs with, and ThinkingTiersFor differs per model,
+	// A provider- or model-only patch is judged the same way: the tier it leaves
+	// in place is still the tier the agent runs with, and ThinkingTiersFor differs per model,
 	// so a swap can strand the stored level outside the new model's set. Without
 	// this the level would survive the write and be silently dropped at turn time.
-	if req.ThinkingLevel != nil || req.Model != nil {
+	if req.Provider != nil || req.ThinkingLevel != nil || req.Model != nil {
 		model := prev.Model
 		if req.Model != nil {
 			model = *req.Model
@@ -438,7 +449,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		if req.ThinkingLevel != nil {
 			level = *req.ThinkingLevel
 		}
-		if err := providers.ValidateThinkingLevel(model, level); err != nil {
+		if err := providers.ValidateThinkingLevelForProvider(providerKind, model, level); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -464,11 +475,6 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); only sync
 	// when the request actually touches it (nil = "not in this patch").
 	if req.Provider != nil {
-		providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, *req.Provider)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		patch.Provider = &providerKind
 		patch.ProviderInstanceID = &providerInstanceID
 	}
