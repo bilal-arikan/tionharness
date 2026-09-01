@@ -22,7 +22,8 @@ type ModelInfo struct {
 	ResolvedModel string `json:"resolvedModel,omitempty"`
 	// ThinkingTiers is the set of reasoning levels this model meaningfully
 	// supports, as the stable tokens the UI pickers use ("off"/"low"/"medium"/
-	// "high"/"xhigh"/"max"). Filled at Catalog() build time from ThinkingTiersFor
+	// "high"/"xhigh"/"max"/"ultra"). Filled at Catalog() build time from
+	// ThinkingTiersForProvider
 	// so the composer/agent pickers can grey out tiers that would be a no-op on
 	// the selected model (e.g. "off" on the always-on Fable class, or "xhigh"/
 	// "max" on legacy models that clamp them down). Never set in manifests.
@@ -66,10 +67,10 @@ func enrichModels(kind string, models []ModelInfo) []ModelInfo {
 			out[i].MaxOutput = MaxOutputFor(kind, out[i].ID)
 		}
 		if out[i].ThinkingTiers == nil {
-			out[i].ThinkingTiers = ThinkingTiersFor(out[i].ID)
+			out[i].ThinkingTiers = ThinkingTiersForProvider(kind, out[i].ID)
 		}
 		if out[i].ThinkingClass == "" {
-			out[i].ThinkingClass = ThinkingClass(out[i].ID)
+			out[i].ThinkingClass = ThinkingClassForProvider(kind, out[i].ID)
 		}
 	}
 	return out

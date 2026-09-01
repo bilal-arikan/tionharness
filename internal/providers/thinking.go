@@ -15,7 +15,7 @@ import (
 // thinking on the native API path, but "high" effort on the CLI path — so it is
 // now rejected at write time and backfilled for legacy rows (see
 // db.BackfillThinkingLevels).
-var validThinkingLevels = []string{"off", "low", "medium", "high", "xhigh", "max"}
+var validThinkingLevels = []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
 
 // ValidThinkingLevels returns the accepted reasoning-tier tokens in ramp order.
 func ValidThinkingLevels() []string {
@@ -52,6 +52,18 @@ func StorableThinkingLevels(model string) []string {
 	return append([]string{"off"}, tiers...)
 }
 
+// StorableThinkingLevelsFor applies provider-aware model classification before
+// deciding which tiers may be stored. Codex's GPT-5 family supports the full
+// CLI effort ramp even though its versioned model ids would otherwise look like
+// legacy models to the provider-neutral classifier.
+func StorableThinkingLevelsFor(providerKind, model string) []string {
+	tiers := ThinkingTiersForProvider(providerKind, model)
+	if ThinkingClassForProvider(providerKind, model) != "always-on" {
+		return tiers
+	}
+	return append([]string{"off"}, tiers...)
+}
+
 // ValidateThinkingLevel checks a requested reasoning level twice: that the token
 // itself is known, and that it is a legal stored value on the given model per
 // StorableThinkingLevels. A tier outside that set would be a silent no-op, so it
@@ -59,13 +71,20 @@ func StorableThinkingLevels(model string) []string {
 // and an empty model id land in the "alias" class, which offers the full ramp —
 // nothing is rejected there.
 func ValidateThinkingLevel(model, level string) error {
+	return ValidateThinkingLevelForProvider("", model, level)
+}
+
+// ValidateThinkingLevelForProvider validates a reasoning tier with transport
+// context. Provider-neutral callers retain the historical model-only behavior;
+// Codex callers can distinguish versioned GPT-5 models from legacy transports.
+func ValidateThinkingLevelForProvider(providerKind, model, level string) error {
 	if level == "" {
 		return fmt.Errorf("thinkingLevel is required (one of: %s)", strings.Join(validThinkingLevels, ", "))
 	}
 	if !IsValidThinkingLevel(level) {
 		return fmt.Errorf("unknown thinkingLevel %q (one of: %s)", level, strings.Join(validThinkingLevels, ", "))
 	}
-	tiers := StorableThinkingLevels(model)
+	tiers := StorableThinkingLevelsFor(providerKind, model)
 	for _, t := range tiers {
 		if t == level {
 			return nil
@@ -214,6 +233,16 @@ func ThinkingClass(model string) string {
 	}
 }
 
+// ThinkingClassForProvider adds transport knowledge where a model id alone is
+// ambiguous. Codex GPT-5 models expose xhigh/max/ultra as real CLI effort
+// values; other providers keep the existing adaptive/legacy classification.
+func ThinkingClassForProvider(providerKind, model string) string {
+	if providerKind == "codex-cli" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-5") {
+		return "adaptive"
+	}
+	return ThinkingClass(model)
+}
+
 // isNonThinking reports whether the model has no extended-reasoning mode at all,
 // so every tier but "off" is a no-op. DeepSeek's V4 Flash tier is the sole
 // current case; its Pro sibling reasons and is left in the "legacy" class.
@@ -224,15 +253,25 @@ func isNonThinking(model string) bool {
 
 // ThinkingTiersFor returns the reasoning tiers a model meaningfully supports, as
 // the stable tokens the UI pickers use: "off","low","medium","high","xhigh",
-// "max". The set is derived from ThinkingClass so the composer / agent pickers
-// can grey out tiers that would be a silent no-op on the selected model (they
-// are shown disabled with a reason, not hidden).
+// "max","ultra". The set is derived from ThinkingClass so the composer / agent
+// pickers can grey out tiers that would be a silent no-op on the selected model
+// (they are shown disabled with a reason, not hidden).
 func ThinkingTiersFor(model string) []string {
-	switch ThinkingClass(model) {
+	return thinkingTiersForClass(ThinkingClass(model))
+}
+
+// ThinkingTiersForProvider returns the effective tier ramp for one provider
+// transport and model pair.
+func ThinkingTiersForProvider(providerKind, model string) []string {
+	return thinkingTiersForClass(ThinkingClassForProvider(providerKind, model))
+}
+
+func thinkingTiersForClass(class string) []string {
+	switch class {
 	case "always-on":
-		return []string{"low", "medium", "high", "xhigh", "max"}
+		return []string{"low", "medium", "high", "xhigh", "max", "ultra"}
 	case "adaptive", "alias":
-		return []string{"off", "low", "medium", "high", "xhigh", "max"}
+		return []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
 	case "non-thinking":
 		return []string{"off"}
 	default: // legacy

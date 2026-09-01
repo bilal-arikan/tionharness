@@ -462,6 +462,13 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 
 	args = append(args, c.mcpArgs()...)
 
+	return c.completeWithArgs(ctx, args, prompt, model, req)
+}
+
+// completeWithArgs runs the assembled invocation and owns the retry policy. args
+// and prompt are parameters rather than derived here so tests can drive the
+// retry path with a fake CLI binary, mirroring the codex transport.
+func (c *ClaudeCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
 	// The claude CLI occasionally exits non-zero RIGHT AFTER init — before any
 	// assistant output or tool call — with empty stderr (an intermittent crash on
 	// the MCP-delegation path, seen on parallel flow nodes). That failure produced
@@ -469,18 +476,21 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	// retry only that "clean crash" once; any failure that produced output, ran a
 	// tool (possible side effects), or came from context cancellation is returned
 	// as-is.
-	var lastErr error
+	// A discarded attempt still spent tokens (see foldFailedAttempts): keep its
+	// error so the usage it carries can be folded into whatever finally succeeds.
+	var failed []error
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
 		if err == nil {
+			foldFailedAttempts(resp, failed)
 			return resp, nil
 		}
-		lastErr = err
+		failed = append(failed, err)
 		if !retryable || ctx.Err() != nil {
 			return nil, err
 		}
 	}
-	return nil, lastErr
+	return nil, failed[len(failed)-1]
 }
 
 // CompactNative sends Claude Code's built-in /compact command as the complete

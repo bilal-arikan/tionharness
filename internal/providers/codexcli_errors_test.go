@@ -191,10 +191,16 @@ func TestCodexReasoningEffort(t *testing.T) {
 	if got := codexReasoningEffort(Request{CLIEffortLevel: "MAX"}); got != "max" {
 		t.Fatalf("max effort must pass through, got %q", got)
 	}
-	// An effort level codex does not accept must yield "" (use the CLI default)
-	// rather than being passed on — --strict-config would reject it.
-	if got := codexReasoningEffort(Request{CLIEffortLevel: "ultra-turbo"}); got != "" {
-		t.Fatalf("unknown effort must fall back to the CLI default, got %q", got)
+	if got := codexReasoningEffort(Request{CLIEffortLevel: "XHIGH"}); got != "xhigh" {
+		t.Fatalf("xhigh effort must pass through, got %q", got)
+	}
+	if got := codexReasoningEffort(Request{CLIEffortLevel: "ULTRA"}); got != "ultra" {
+		t.Fatalf("ultra effort must pass through, got %q", got)
+	}
+	// Invalid values must remain visible to strict downstream validation rather
+	// than silently selecting the CLI default.
+	if got := codexReasoningEffort(Request{CLIEffortLevel: "ultra-turbo"}); got != "ultra-turbo" {
+		t.Fatalf("unknown effort must remain visible, got %q", got)
 	}
 }
 

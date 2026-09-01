@@ -239,7 +239,10 @@ func codexReasoningEffort(req Request) string {
 	if req.DisableThinking {
 		return "none"
 	}
-	switch strings.ToLower(strings.TrimSpace(req.CLIEffortLevel)) {
+	effort := strings.ToLower(strings.TrimSpace(req.CLIEffortLevel))
+	switch effort {
+	case "":
+		return ""
 	case "minimal":
 		return "minimal"
 	case "low":
@@ -252,8 +255,13 @@ func codexReasoningEffort(req Request) string {
 		return "xhigh"
 	case "max":
 		return "max"
+	case "ultra":
+		return "ultra"
 	}
-	return "" // let codex use its own default
+	// Do not silently replace an invalid product value with the CLI default.
+	// Product/API validation is the primary gate; preserving a value that reaches
+	// this lower boundary lets --strict-config/the service reject it visibly.
+	return effort
 }
 
 // buildPrompt renders the conversation for stdin. The volatile per-turn context
@@ -335,7 +343,9 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	// turn/item event, ran no tool) has no side effects and is safe to re-run.
 	// Everything classified — auth, quota, model — is terminal and returns at once.
 	// The extra attempt is the MCP fallback below, which only runs once.
-	var lastErr error
+	// A discarded attempt still spent tokens (see foldFailedAttempts): keep its
+	// error so the usage it carries can be folded into whatever finally succeeds.
+	var failed []error
 	mcpFallbackUsed := false
 	for attempt := 0; attempt < 3; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, home)
@@ -343,9 +353,10 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 			if len(mcpNotes) > 0 {
 				resp.Trace = append(append([]TraceStep{}, mcpNotes...), resp.Trace...)
 			}
+			foldFailedAttempts(resp, failed)
 			return resp, nil
 		}
-		lastErr = err
+		failed = append(failed, err)
 		if ctx.Err() != nil {
 			return nil, err
 		}
@@ -374,7 +385,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 			return nil, err
 		}
 	}
-	return nil, lastErr
+	return nil, failed[len(failed)-1]
 }
 
 // ProbeAuth implements AuthProber for the codex-cli transport: the cheapest
@@ -504,8 +515,9 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 	startup := time.NewTimer(codexStartupTimeout)
 	defer startup.Stop()
 	// Resolved once per attempt so a settings change mid-turn cannot move the
-	// deadline underneath a running read loop.
-	idleWindow := codexIdleOutputWindow()
+	// deadline underneath a running read loop. A single-shot fold (/handoff,
+	// /compact) raises the floor on ctx — see WithMinIdleOutputTimeout.
+	idleWindow := resolveIdleOutputWindow(ctx, codexIdleOutputWindow())
 	idle := time.NewTimer(idleWindow)
 	if !idle.Stop() {
 		<-idle.C
@@ -593,10 +605,16 @@ readLoop:
 	}
 	runErr := cmd.Wait()
 
+	// Every failure from here on happens AFTER the subprocess ran, so the request
+	// may have reached the provider and spent tokens: each one goes out through
+	// p.usageError so the parsed usage rides along (see UsageError). The returns
+	// above — no config, an unusable CODEX_HOME, a pipe or Start failure — are
+	// pre-request and deliberately left bare: nothing was sent, nothing was spent.
+
 	// A terminal failure detected mid-stream short-circuits everything below: the
 	// classification, not the exit code, is the real diagnosis.
 	if failClass != codexFailureNone {
-		return nil, false, newCodexFailureError(failClass, strings.TrimSpace(p.errText), home)
+		return nil, false, p.usageError(newCodexFailureError(failClass, strings.TrimSpace(p.errText), home))
 	}
 
 	out, parseErr := p.finish()
@@ -608,30 +626,30 @@ readLoop:
 	// it here too so a late 401 is still non-retryable and actionable.
 	if p.hadError {
 		if cls := classifyCodexError(p.errText); cls != codexFailureNone {
-			return nil, false, newCodexFailureError(cls, strings.TrimSpace(p.errText), home)
+			return nil, false, p.usageError(newCodexFailureError(cls, strings.TrimSpace(p.errText), home))
 		}
 		// An unclassified reported error: real and terminal as far as we can tell,
 		// but the turn may already have run tools, so never retry it blindly.
-		return nil, false, parseErr
+		return nil, false, p.usageError(parseErr)
 	}
 	// Preserve any content parsed before either a normal exit or watchdog kill.
 	if partial := p.salvage(); partial != nil {
 		return partial, false, nil
 	}
 	if startupHang {
-		return nil, true, fmt.Errorf(
+		return nil, true, p.usageError(fmt.Errorf(
 			"codex CLI produced no output within %s and was killed as a likely MCP startup hang (retryable) — check the interaction MCP bridge (exit: %v)",
-			codexStartupTimeout, runErr)
+			codexStartupTimeout, runErr))
 	}
 	if idleHang {
-		return nil, false, fmt.Errorf(
+		return nil, false, p.usageError(fmt.Errorf(
 			"codex CLI produced no output for %s and was killed after the idle output timeout (non-retryable) (exit: %v) %s",
-			idleWindow, runErr, stdoutCrashTail(tail))
+			idleWindow, runErr, stdoutCrashTail(tail)))
 	}
 	if runErr == nil {
 		// The process exited cleanly yet produced no turn.completed — a truncated
 		// or empty stream.
-		return nil, false, parseErr
+		return nil, false, p.usageError(parseErr)
 	}
 	detail := strings.TrimSpace(stderr.String())
 	if detail == "" {
@@ -640,15 +658,15 @@ readLoop:
 	if killedEarly {
 		// Unreachable in practice (failClass returns above); kept so a future edit
 		// that kills for another reason cannot report our own kill as a CLI crash.
-		return nil, false, fmt.Errorf("codex CLI was terminated after a terminal error: %s", detail)
+		return nil, false, p.usageError(fmt.Errorf("codex CLI was terminated after a terminal error: %s", detail))
 	}
 	// Never saw a single turn/item event: the process died during startup. Nothing
 	// ran, so it is safe to retry once.
 	if !p.sawTurn {
-		return nil, true, fmt.Errorf("codex CLI exited before producing any turn output (likely login, config, or MCP startup failure): %v %s", runErr, detail)
+		return nil, true, p.usageError(fmt.Errorf("codex CLI exited before producing any turn output (likely login, config, or MCP startup failure): %v %s", runErr, detail))
 	}
 	retryable = !p.ranTool()
-	return nil, retryable, fmt.Errorf("codex CLI failed: %v %s", runErr, detail)
+	return nil, retryable, p.usageError(fmt.Errorf("codex CLI failed: %v %s", runErr, detail))
 }
 
 // codexBaseEnv returns the parent environment hardened the same way the native

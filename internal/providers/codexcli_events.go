@@ -273,6 +273,7 @@ func (p *codexStreamParser) feed(line string) {
 			// Measured, not estimated — the codex path must never overwrite this
 			// with deriveThinkingTokens' guess.
 			p.resp.Usage.ThinkingTokens = u.ReasoningOutputTokens
+			p.resp.Usage.ThinkingTokensMeasured = true
 		}
 	case "turn.failed":
 		p.sawTurn = true
@@ -479,6 +480,17 @@ func (p *codexStreamParser) finish() (*Response, error) {
 	}
 	p.resp.Text = p.finalText
 	return p.resp, nil
+}
+
+// usageError attaches whatever usage this turn accumulated to a failure, so the
+// tokens a failed codex turn actually spent reach the caller's accounting
+// instead of dying with the (nil, err) return. Codex reports its counters on
+// turn.completed, so this is non-empty whenever the turn was measured and then
+// failed (a late error line, an unusable stream); before that point the usage is
+// zero and WithUsage returns the error untouched. The result stays an error —
+// see UsageError.
+func (p *codexStreamParser) usageError(err error) error {
+	return WithUsage(err, p.resp.Model, p.resp.Usage, p.resp.ProviderCalls)
 }
 
 // salvage recovers whatever the parser accumulated when the stream was cut off

@@ -1,6 +1,9 @@
 package providers
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestUsesAdaptiveThinking(t *testing.T) {
 	adaptive := []string{
@@ -72,10 +75,11 @@ func TestThinkingTiersFor(t *testing.T) {
 		t.Errorf("legacy should offer off..high: %v", legacy)
 	}
 	// Bare alias / custom / empty: full ramp (provider clamps).
+	fullRamp := []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
 	for _, m := range []string{"opus", "sonnet", ""} {
 		full := ThinkingTiersFor(m)
-		if len(full) != 6 || !has(full, "max") {
-			t.Errorf("alias %q should get full ramp: %v", m, full)
+		if !slices.Equal(full, fullRamp) {
+			t.Errorf("alias %q should get full ramp %v: %v", m, fullRamp, full)
 		}
 	}
 	// Non-thinking (DeepSeek Flash): only "off".

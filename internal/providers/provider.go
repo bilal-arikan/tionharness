@@ -237,13 +237,10 @@ type Request struct {
 	// turn wires MCP servers, so an MCP-less agent would silently lose the
 	// setting. HTTP providers ignore it (their web tools are request-level).
 	NativeWebSearch bool
-	// CLIEffortLevel is the resolved Claude Code effortLevel for a claude-cli turn
-	// (low/medium/high/xhigh/max). Levels up to xhigh flow through the --settings
-	// file; "max" is the exception — Claude Code's settings.json effortLevel enum
-	// rejects it and silently downgrades to high, so the provider lifts a max turn
-	// via the CLAUDE_CODE_EFFORT_LEVEL env var instead (the only channel the CLI
-	// honours for max reasoning). Empty on non-max turns and for HTTP providers,
-	// which ignore it.
+	// CLIEffortLevel is the product's resolved reasoning tier for CLI transports.
+	// Claude Code consumes low..xhigh through settings.json and lifts max through
+	// CLAUDE_CODE_EFFORT_LEVEL. Codex maps it to model_reasoning_effort; 0.148.0
+	// accepts xhigh, max and ultra. HTTP providers ignore it.
 	CLIEffortLevel string
 }
 
@@ -262,12 +259,13 @@ type Usage struct {
 	// Providers that do not report this breakdown leave both fields at 0.
 	CacheWrite5mTokens int `json:"cacheWrite5mTokens,omitempty"`
 	CacheWrite1hTokens int `json:"cacheWrite1hTokens,omitempty"`
-	// ThinkingTokens is the ESTIMATED share of OutputTokens spent on hidden
-	// extended reasoning. The API bills thinking inside OutputTokens without
-	// breaking it out, so this is derived (output − visible) in the agent layer
-	// (deriveThinkingTokens); providers leave it 0. Attribution/visibility only —
-	// it is ALREADY part of OutputTokens, so billing must NOT add it again.
-	ThinkingTokens int `json:"thinkingTokens,omitempty"`
+	// ThinkingTokens is the measured or estimated share of OutputTokens spent on
+	// hidden extended reasoning. ThinkingTokensMeasured distinguishes a real zero
+	// reported by a provider from an absent measurement; only the latter may be
+	// estimated in the agent layer. Attribution/visibility only — it is ALREADY
+	// part of OutputTokens, so billing must NOT add it again.
+	ThinkingTokens         int  `json:"thinkingTokens,omitempty"`
+	ThinkingTokensMeasured bool `json:"thinkingTokensMeasured,omitempty"`
 }
 
 // TraceStep is one entry in a provider-produced activity trace (intermediate
