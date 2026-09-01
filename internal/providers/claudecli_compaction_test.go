@@ -1,9 +1,16 @@
 package providers
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func lifecycleParser(onTrace func(TraceStep), onLifecycle func(CLICompactionEvent)) *cliStreamParser {
+	p := newCLIParser("", onTrace)
+	p.onCompaction = newCLICompactionEmitter(Request{ResumeSessionID: "session-in", OnCLICompaction: onLifecycle})
+	return p
+}
 
 func TestClaudeParserNativeCompactionLifecycle(t *testing.T) {
 	var events []TraceStep
@@ -60,8 +67,8 @@ func TestClaudeParserConsecutiveBoundaryOnlyCompactions(t *testing.T) {
 	p := newCLIParser("", nil)
 	p.feed(`{"type":"system","subtype":"compact_boundary"}`)
 	p.feed(`{"type":"system","subtype":"compact_boundary"}`)
-	if len(p.resp.Trace) != 2 {
-		t.Fatalf("trace = %+v, want two boundary-only completions", p.resp.Trace)
+	if len(p.resp.Trace) != 1 {
+		t.Fatalf("trace = %+v, want duplicate boundary deduplicated", p.resp.Trace)
 	}
 }
 
@@ -173,5 +180,115 @@ func TestClaudeParserStatusOnlyCompactionTimeout(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("missing status-only compaction timeout tombstone")
+	}
+}
+
+func TestClaudeParserDuplicateBoundaryDoesNotDoubleComplete(t *testing.T) {
+	var lifecycle []CLICompactionEvent
+	p := lifecycleParser(nil, func(ev CLICompactionEvent) { lifecycle = append(lifecycle, ev) })
+	p.feed(`{"type":"system","subtype":"hook_started","hook_id":"pre-1","hook_event":"PreCompact"}`)
+	p.feed(`{"type":"system","subtype":"compact_boundary","session_id":"session-out"}`)
+	p.feed(`{"type":"system","subtype":"hook_response","hook_id":"post-1","hook_event":"PostCompact"}`)
+
+	var successes int
+	for _, ev := range lifecycle {
+		if ev.Phase == CLICompactionSuccess {
+			successes++
+			if ev.CLISessionIDIn != "session-in" || ev.CLISessionIDOut != "session-out" || ev.DurationMs < 0 {
+				t.Fatalf("success event = %+v", ev)
+			}
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successes = %d, lifecycle=%+v", successes, lifecycle)
+	}
+}
+
+func TestClaudeParserTwoCorrelatedCompactionsCompleteTwice(t *testing.T) {
+	var lifecycle []CLICompactionEvent
+	p := lifecycleParser(nil, func(ev CLICompactionEvent) { lifecycle = append(lifecycle, ev) })
+	for _, id := range []string{"pre-1", "pre-2"} {
+		p.feed(`{"type":"system","subtype":"hook_started","hook_id":"` + id + `","hook_event":"PreCompact"}`)
+		p.feed(`{"type":"system","subtype":"compact_boundary"}`)
+	}
+	var ids []string
+	for _, ev := range lifecycle {
+		if ev.Phase == CLICompactionSuccess {
+			ids = append(ids, ev.AttemptID)
+		}
+	}
+	if len(ids) != 2 || ids[0] == ids[1] {
+		t.Fatalf("success attempt IDs = %v; lifecycle=%+v", ids, lifecycle)
+	}
+}
+
+func TestClaudeParserTimeoutSerializesOnEvent(t *testing.T) {
+	var active atomic.Int32
+	var overlap atomic.Bool
+	callback := func() {
+		if active.Add(1) != 1 {
+			overlap.Store(true)
+		}
+		time.Sleep(10 * time.Millisecond)
+		active.Add(-1)
+	}
+	p := lifecycleParser(func(TraceStep) { callback() }, func(CLICompactionEvent) { callback() })
+	p.nativeCompactionTimeout = time.Millisecond
+	done := make(chan struct{})
+	go func() {
+		p.feed(`{"type":"system","subtype":"hook_started","hook_id":"timeout","hook_event":"PreCompact"}`)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("feed blocked")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if overlap.Load() {
+		t.Fatal("OnEvent and lifecycle callback overlapped")
+	}
+}
+
+func TestClaudeParserCancellationClosesOpenAttemptImmediately(t *testing.T) {
+	events := make(chan CLICompactionEvent, 4)
+	p := lifecycleParser(nil, func(ev CLICompactionEvent) { events <- ev })
+	p.startNativeCompaction("cancel-me", "precompact")
+	p.terminateOpenNativeCompaction(CLICompactionCancelled, "cancelled", false, 0)
+	select {
+	case ev := <-events:
+		if ev.Phase != CLICompactionAttempt {
+			t.Fatalf("first = %+v", ev)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("attempt not emitted")
+	}
+	var terminal CLICompactionEvent
+	for i := 0; i < 2; i++ {
+		select {
+		case terminal = <-events:
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("cancel terminal not emitted immediately")
+		}
+	}
+	if terminal.Phase != CLICompactionCancelled || terminal.ErrorKind != "cancelled" {
+		t.Fatalf("terminal = %+v", terminal)
+	}
+}
+
+func TestClaudeParserFinishClosesOpenAttempt(t *testing.T) {
+	var events []CLICompactionEvent
+	p := lifecycleParser(nil, func(ev CLICompactionEvent) { events = append(events, ev) })
+	p.feed(`{"type":"system","subtype":"hook_started","hook_id":"open","hook_event":"PreCompact"}`)
+	p.feed(`{"type":"result","subtype":"success","result":"done"}`)
+	if _, err := p.finish(); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("events = %+v, want attempt/signal/error", events)
+	}
+	terminal := events[len(events)-1]
+	if terminal.Phase != CLICompactionError || terminal.ErrorKind != "stream_ended" || terminal.AttemptID == "" {
+		t.Fatalf("terminal = %+v", terminal)
 	}
 }

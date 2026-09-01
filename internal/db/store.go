@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -372,11 +374,58 @@ func (d *DB) persistSessionLocked(s Session) error {
 	return d.writeSessionHeaderLocked(s)
 }
 
+// persistSessionAfterWriteLocked is reserved for mutations whose in-memory
+// state must not become visible unless the atomic header replacement succeeds.
+// General session mutations intentionally retain persistSessionLocked's legacy
+// publish-before-write semantics, including terminal run-state recovery.
+func (d *DB) persistSessionAfterWriteLocked(s Session) error {
+	if err := d.writeSessionHeaderLocked(s); err != nil {
+		return err
+	}
+	d.sessions[s.ID] = s
+	return nil
+}
+
+func (d *DB) mutateSessionAfterWriteLocked(id string, fn func(*Session) error) error {
+	tl := d.transcriptLock(id)
+	tl.Lock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(id)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, id)
+	}()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if err := fn(&s); err != nil {
+		return err
+	}
+	return d.persistSessionAfterWriteLocked(s)
+}
+
 // mutateSessionLocked loads a session under the write lock, applies fn, and
 // persists it. Unlike the agent variant it does not touch UpdatedAt, leaving
 // that to fn — some session mutations (e.g. rolling summary) are not "edits".
 // Returns ErrNotFound when the session is absent.
 func (d *DB) mutateSessionLocked(id string, fn func(*Session)) error {
+	tl := d.transcriptLock(id)
+	tl.Lock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(id)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, id)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[id]
@@ -717,7 +766,15 @@ func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string
 	// transcript_lock.go), so it can never interleave with a concurrent append.
 	tl := d.transcriptLock(sessionID)
 	tl.Lock()
-	defer tl.Unlock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -755,16 +812,68 @@ func (d *DB) SetSessionCLIResume(ctx context.Context, sessionID, cliSessionID st
 	})
 }
 
+// BeginSessionCLINativeCompaction durably marks the external CLI state as
+// potentially changing. The CLI must not be invoked if this write fails.
+func (d *DB) BeginSessionCLINativeCompaction(ctx context.Context, sessionID string) error {
+	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
+		if s.CLINativeCompactionPending {
+			return errors.New("CLI native compaction recovery is pending")
+		}
+		s.CLINativeCompactionPending = true
+		return nil
+	})
+}
+
+// SetSessionCLICompactionState atomically commits the CLI's rotated resume
+// target, both transcript counters and recovery-marker clearance. A failed temp
+// write or rename leaves the durable and in-memory marker set, forcing a cold
+// next turn rather than reusing the old resume id and delta cursor.
+func (d *DB) SetSessionCLICompactionState(ctx context.Context, sessionID, cliSessionID string, msgCount int) error {
+	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
+		s.CLISessionID = cliSessionID
+		s.CLISentMsgCount = msgCount
+		if msgCount > s.CLICompactMsgCount {
+			s.CLICompactMsgCount = msgCount
+		}
+		s.CLINativeCompactionPending = false
+		return nil
+	})
+}
+
+// ClearSessionCLINativeCompactionPending closes a failed or cancelled attempt.
+// If this write fails the marker deliberately remains set and recovery stays
+// fail-closed.
+func (d *DB) ClearSessionCLINativeCompactionPending(ctx context.Context, sessionID string) error {
+	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
+		s.CLINativeCompactionPending = false
+		return nil
+	})
+}
+
+// RetireSessionCLINativeCompactionRecovery atomically discards stale external
+// resume authority when the pending recovery cannot run through a compatible
+// resumer. A failed write leaves the old state and marker untouched.
+func (d *DB) RetireSessionCLINativeCompactionRecovery(ctx context.Context, sessionID string) error {
+	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
+		s.CLISessionID = ""
+		s.CLISentMsgCount = 0
+		s.CLICompactMsgCount = 0
+		s.CLINativeCompactionPending = false
+		return nil
+	})
+}
+
 // SetSessionCLICompactBoundary records the transcript length the provider's own
 // context was compacted at (see Session.CLICompactMsgCount). Monotonic: a later
 // compaction always moves the boundary forward, and a stale/smaller value is
 // ignored rather than rewinding the baseline. Does not bump UpdatedAt —
 // bookkeeping must not reorder the session list.
 func (d *DB) SetSessionCLICompactBoundary(ctx context.Context, sessionID string, msgCount int) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
+	return d.mutateSessionAfterWriteLocked(sessionID, func(s *Session) error {
 		if msgCount > s.CLICompactMsgCount {
 			s.CLICompactMsgCount = msgCount
 		}
+		return nil
 	})
 }
 
@@ -840,6 +949,17 @@ func (d *DB) SetCoordinatorReportPending(ctx context.Context, sessionID string, 
 // check and send, so the coordinator above would receive the same task reported
 // twice, with different statuses. The store lock makes the flip indivisible.
 func (d *DB) ClaimCoordinatorReport(ctx context.Context, sessionID string) (bool, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return false, err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -995,7 +1115,15 @@ func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func
 	// messages.jsonl underneath a delete that is already in progress.
 	tl := d.transcriptLock(sessionID)
 	tl.Lock()
-	defer tl.Unlock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.sessions[sessionID]; !ok {
@@ -1104,6 +1232,11 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// the order of lines in the file is the order of messages in RAM.
 	tl := d.transcriptLock(m.SessionID)
 	tl.Lock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(m.SessionID)
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
 
 	d.mu.RLock()
 	_, ok := d.sessions[m.SessionID]
@@ -1175,6 +1308,137 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	d.mu.Unlock()
 	tl.Unlock()
 	d.fireActivityHook(sig)
+	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
+	return m, nil
+}
+
+// CLIReplyState is session bookkeeping committed with an assistant reply.
+// Update flags distinguish an absent update from a deliberate zero value.
+type CLIReplyState struct {
+	UpdateResume                 bool
+	RetireResume                 bool
+	ResumeSessionID              string
+	ResumeSentMsgCount           int
+	UpdateCompactBoundary        bool
+	CompactMsgCount              int
+	ClearNativeCompactionPending bool
+}
+
+// AddMessageWithCLIState persists a reply and its CLI resume/compaction state
+// through a session-scoped WAL. Open replays any interrupted transaction, so
+// every crash phase converges to exactly one reply and its matching CLI state.
+func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIReplyState) (Message, error) {
+	if m.ID == "" {
+		m.ID = newID()
+	}
+	m.CreatedAt = now()
+	if m.ToolCalls == "" {
+		m.ToolCalls = "[]"
+	}
+	if m.Steps == "" {
+		m.Steps = "[]"
+	}
+	m.NormalizeParticipants()
+
+	tl := d.transcriptLock(m.SessionID)
+	tl.Lock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(m.SessionID)
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	d.mu.RLock()
+	s, ok := d.sessions[m.SessionID]
+	msgs := append([]Message(nil), d.messages[m.SessionID]...)
+	d.mu.RUnlock()
+	if !ok {
+		tl.Unlock()
+		return m, ErrNotFound
+	}
+	if err := validateCLIReplyState(state); err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	dir := d.dir(dirSessions, m.SessionID)
+	walPath := filepath.Join(dir, cliReplyWALFile)
+	if _, err := os.Stat(walPath); err == nil {
+		tl.Unlock()
+		return m, errors.New("CLI reply recovery transaction remains pending")
+	} else if !os.IsNotExist(err) {
+		tl.Unlock()
+		return m, err
+	}
+	target, targetMsgs, _, err := prepareCLIReplyTarget(s, msgs, m, state)
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	wal := cliReplyWAL{Version: cliReplyWALVersion, TxnID: m.ID, Message: m, State: state}
+	walData, err := json.Marshal(wal)
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	if err := durableAtomicWriteBytes(walPath, walData, 0o600); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("prepare CLI reply recovery: %w", err)
+	}
+	if d.cliReplyTxnHook != nil {
+		if err := d.cliReplyTxnHook(cliReplyTxnPrepared); err != nil {
+			tl.Unlock()
+			return m, err
+		}
+	}
+	if err := writeDurableMessages(dir, targetMsgs); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("persist CLI reply transcript: %w", err)
+	}
+	if d.cliReplyTxnHook != nil {
+		if err := d.cliReplyTxnHook(cliReplyTxnMessage); err != nil {
+			tl.Unlock()
+			return m, err
+		}
+	}
+	if err := writeDurableSessionHeader(dir, target); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("persist CLI reply state: %w", err)
+	}
+	if d.cliReplyTxnHook != nil {
+		if err := d.cliReplyTxnHook(cliReplyTxnHeader); err != nil {
+			tl.Unlock()
+			return m, err
+		}
+	}
+	sig := cliReplyActivitySignal(wal, target)
+	if err := persistCLIReplyActivity(dir, sig); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("persist CLI reply activity: %w", err)
+	}
+	if d.cliReplyTxnHook != nil {
+		if err := d.cliReplyTxnHook(cliReplyTxnActivity); err != nil {
+			tl.Unlock()
+			return m, err
+		}
+	}
+	if err := durableRemove(walPath); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("retire CLI reply recovery: %w", err)
+	}
+	if d.cliReplyTxnHook != nil {
+		if err := d.cliReplyTxnHook(cliReplyTxnRetired); err != nil {
+			tl.Unlock()
+			return m, err
+		}
+	}
+	d.mu.Lock()
+	d.messages[m.SessionID] = targetMsgs
+	d.sessions[target.ID] = target
+	d.mu.Unlock()
+	tl.Unlock()
+	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
+	if err := d.deliverPendingCLIReplyActivities(); err != nil {
+		slog.Error("durable CLI reply activity delivery deferred", "component", "db", "session", m.SessionID, "event", sig.EventID, "error", err)
+	}
 	return m, nil
 }
 
@@ -1224,7 +1488,15 @@ func (d *DB) appendMessageLine(sessionID string, m Message) error {
 func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) error {
 	tl := d.transcriptLock(sessionID)
 	tl.Lock()
-	defer tl.Unlock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -1258,7 +1530,15 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string) (int, error) {
 	tl := d.transcriptLock(sessionID)
 	tl.Lock()
-	defer tl.Unlock()
+	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return 0, err
+	}
+	defer func() {
+		tl.Unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.sessions[sessionID]
@@ -1342,6 +1622,9 @@ func (d *DB) loadSessions() error {
 		skip bool // absent or headerless directory — not an error
 	}
 	loaded, err := parallelLoad(dirs, func(dir string) (loadedSession, error) {
+		if err := recoverCLIReplyTransaction(dir); err != nil {
+			return loadedSession{}, err
+		}
 		s, msgs, err := readSessionDir(dir)
 		if err != nil {
 			// A directory that vanished between ReadDir and the open is skipped, as

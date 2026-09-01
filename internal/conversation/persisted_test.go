@@ -166,7 +166,7 @@ func TestPrepareJournalsContextPressure(t *testing.T) {
 	if len(evs) != 1 {
 		t.Fatalf("pressure events = %d, want 1", len(evs))
 	}
-	if !strings.Contains(evs[0].Detail, "of budget") {
-		t.Fatalf("pressure detail = %q, want the budget ratio", evs[0].Detail)
+	if evs[0].Detail != "context pressure detail [redacted]" {
+		t.Fatalf("pressure detail = %q, want fail-closed pressure summary", evs[0].Detail)
 	}
 }

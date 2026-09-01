@@ -1,6 +1,10 @@
 package db
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+)
 
 // ActivitySignal describes one message append's effect on a session's monotonic
 // activity counters. It is delivered to the activity hook (see SetActivityHook)
@@ -9,6 +13,7 @@ import "encoding/json"
 // per-call delta. One signal carries BOTH metrics; a user message moves only the
 // message counter (ToolDelta == 0), an assistant turn may move both.
 type ActivitySignal struct {
+	EventID      string // stable id for at-least-once durable delivery dedupe
 	SessionID    string
 	MessageTotal int // session lifetime message count AFTER this append
 	MessageDelta int // messages this append added (always 1)
@@ -17,14 +22,21 @@ type ActivitySignal struct {
 }
 
 // ActivityFn observes a message-append activity signal.
-type ActivityFn func(sig ActivitySignal)
+type ActivityFn func(sig ActivitySignal) error
 
 // SetActivityHook registers (or clears, with nil) the activity observer. Wired
 // once at workspace boot by the manager to the AutomationEngine.
-func (d *DB) SetActivityHook(fn ActivityFn) {
+func (d *DB) SetActivityHook(fn ActivityFn) error {
 	d.activityHookMu.Lock()
 	d.activityHook = fn
 	d.activityHookMu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	if err := d.deliverPendingCLIReplyActivities(); err != nil {
+		return fmt.Errorf("deliver pending CLI reply activity: %w", err)
+	}
+	return nil
 }
 
 // fireActivityHook dispatches an activity signal to the registered observer (if
@@ -34,7 +46,9 @@ func (d *DB) fireActivityHook(sig ActivitySignal) {
 	fn := d.activityHook
 	d.activityHookMu.RUnlock()
 	if fn != nil {
-		fn(sig)
+		if err := fn(sig); err != nil {
+			slog.Error("activity hook failed", "component", "db", "session", sig.SessionID, "error", err)
+		}
 	}
 }
 

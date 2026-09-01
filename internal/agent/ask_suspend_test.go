@@ -110,8 +110,8 @@ func TestDurableAsk_DisabledDoesNotSuspend(t *testing.T) {
 	if len(events) != 1 || !events[0].Err || events[0].Error == "" {
 		t.Fatalf("failed tool debug event missing error text: %+v", events)
 	}
-	if !strings.Contains(events[0].Args, "Proceed?") {
-		t.Fatalf("failed tool debug event missing argument summary: %+v", events[0])
+	if events[0].Args != "[redacted tool input]" || strings.Contains(events[0].Args, "Proceed?") {
+		t.Fatalf("failed tool debug event leaked raw arguments: %+v", events[0])
 	}
 }
 

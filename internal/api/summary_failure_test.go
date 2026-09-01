@@ -81,7 +81,9 @@ func TestSessionSummaryFailureIsDurable(t *testing.T) {
 		t.Fatalf("failure message must name the command, got:\n%s", failure.Text)
 	}
 
-	// …and the debug journal records it like any other turn/tool failure.
+	// …and the debug journal records a safe classified summary. The caller and
+	// durable assistant message above keep the actionable provider diagnostic;
+	// debug.jsonl must not duplicate arbitrary provider text.
 	evs, err := database.ReadDebugEvents(ctx, sess.ID, db.DebugError, 0)
 	if err != nil {
 		t.Fatalf("read debug events: %v", err)
@@ -90,7 +92,7 @@ func TestSessionSummaryFailureIsDurable(t *testing.T) {
 		t.Fatal("failed command wrote no debug.jsonl error record")
 	}
 	last := evs[len(evs)-1]
-	if !last.Err || last.Name != "/compact" || !strings.Contains(last.Detail, "no-such-provider") {
+	if !last.Err || last.Name != "/compact" || !strings.Contains(last.Detail, "[redacted]") || strings.Contains(last.Detail, "no-such-provider") {
 		t.Fatalf("unexpected debug record: %+v", last)
 	}
 }

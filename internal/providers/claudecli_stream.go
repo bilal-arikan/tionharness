@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 // flexString is a string that also decodes from a JSON number, boolean or null.
@@ -91,6 +93,8 @@ func containsField(dropped []string, name string) bool {
 type cliStreamParser struct {
 	resp           *Response
 	onEvent        func(TraceStep)
+	onCompaction   *cliCompactionEmitter
+	callbackMu     sync.Mutex
 	toolIdx        map[string]int // tool_use id → index in resp.Trace
 	emitted        map[int]bool   // trace index → already delivered via onEvent
 	pending        strings.Builder
@@ -128,6 +132,27 @@ type cliStreamParser struct {
 	nativeCompactionMu          sync.Mutex
 	nativeCompactionTimer       *time.Timer
 	nativeCompactionTimeout     time.Duration
+	nativeCompactionAttemptID   string
+	nativeCompactionAttempt     int
+	nativeCompactionStartedAt   time.Time
+}
+
+type cliCompactionEmitter struct {
+	mu          sync.Mutex
+	seq         int
+	onEvent     func(CLICompactionEvent)
+	sessionIDIn string
+}
+
+func newCLICompactionEmitter(req Request) *cliCompactionEmitter {
+	return &cliCompactionEmitter{onEvent: req.OnCLICompaction, sessionIDIn: req.ResumeSessionID}
+}
+
+func (e *cliCompactionEmitter) next() (string, int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.seq++
+	return "claude-compact-" + uuid.NewString(), e.seq
 }
 
 // primaryModelUsage returns the model key that consumed the most tokens in a
@@ -172,7 +197,25 @@ func (p *cliStreamParser) emit(i int) {
 		return
 	}
 	p.emitted[i] = true
-	p.onEvent(p.resp.Trace[i])
+	p.dispatchTrace(p.resp.Trace[i])
+}
+
+func (p *cliStreamParser) dispatchTrace(step TraceStep) {
+	if p.onEvent == nil {
+		return
+	}
+	p.callbackMu.Lock()
+	defer p.callbackMu.Unlock()
+	p.onEvent(step)
+}
+
+func (p *cliStreamParser) dispatchCompaction(ev CLICompactionEvent) {
+	if p.onCompaction == nil || p.onCompaction.onEvent == nil {
+		return
+	}
+	p.callbackMu.Lock()
+	defer p.callbackMu.Unlock()
+	p.onCompaction.onEvent(ev)
 }
 
 // note appends an out-of-band parser note to the trace as a plain "text" step.
@@ -206,15 +249,32 @@ func (p *cliStreamParser) noteUnknownBlock(blockType string) {
 }
 
 // noteParseDrop reports the first malformed JSON event in a turn. The bounded
-// payload keeps a broken stream from flooding the activity trace while retaining
-// the line length and parser error needed to diagnose a lost tool call.
+// Only safe metadata is retained: malformed payloads can contain prompts,
+// credentials, tool inputs, or file contents.
 func (p *cliStreamParser) noteParseDrop(line string, err error) {
 	p.parseDropCount++
 	if p.notedParseDrop {
 		return
 	}
 	p.notedParseDrop = true
-	p.note(boundedNote(fmt.Sprintf("[claude-cli parse drop] line bytes=%d: %v; payload=%s", len(line), err, line)))
+	p.note(fmt.Sprintf("[claude-cli parse drop] line bytes=%d errorClass=%s", len(line), parseErrorClass(err)))
+}
+
+func parseErrorClass(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+	s := err.Error()
+	switch {
+	case strings.Contains(s, "invalid character"):
+		return "invalid_json"
+	case strings.Contains(s, "unexpected end"):
+		return "truncated_json"
+	case strings.Contains(s, "cannot unmarshal"):
+		return "type_mismatch"
+	default:
+		return "decode_error"
+	}
 }
 
 // noteFieldDrop reports the first event that survived only partially — strict
@@ -420,7 +480,12 @@ func (p *cliStreamParser) feed(line string) {
 	// last). The result event's id is the one to resume from next turn, so letting
 	// later events overwrite is correct.
 	if ev.SessionID != "" {
+		// The compaction timeout goroutine includes the latest session id in its
+		// terminal event. Keep that read and this parser-thread write under the same
+		// lock so a timeout racing a result envelope is data-race free.
+		p.nativeCompactionMu.Lock()
 		p.resp.SessionID = ev.SessionID
+		p.nativeCompactionMu.Unlock()
 	}
 	// A login lapse surfaces first as a standalone {"error":"authentication_failed"}
 	// line (before the result envelope). Catch it here so the failure is classified
@@ -436,18 +501,18 @@ func (p *cliStreamParser) feed(line string) {
 	case "system":
 		if ev.Subtype == "status" {
 			if ev.Status != nil && *ev.Status == "compacting" {
-				p.startNativeCompaction("")
+				p.startNativeCompaction("", "status")
 			}
 			switch ev.CompactResult {
 			case "success":
 				p.completeNativeCompaction(ev, "status")
 			case "failed":
 				p.resp.NativeCompactionError = strings.TrimSpace(ev.CompactError)
-				p.failNativeCompaction()
+				p.failNativeCompaction("status")
 			}
 		}
 		if ev.Subtype == "hook_started" && ev.HookEvent == "PreCompact" {
-			p.startNativeCompaction(ev.HookID)
+			p.startNativeCompaction(ev.HookID, "precompact")
 		}
 		if ev.Subtype == "compact_boundary" {
 			p.completeNativeCompaction(ev, "boundary")
@@ -677,7 +742,7 @@ func (p *cliStreamParser) feed(line string) {
 	}
 }
 
-func (p *cliStreamParser) startNativeCompaction(id string) {
+func (p *cliStreamParser) startNativeCompaction(id, signal string) {
 	p.nativeCompactionMu.Lock()
 	defer p.nativeCompactionMu.Unlock()
 	statusStart := id == ""
@@ -688,12 +753,19 @@ func (p *cliStreamParser) startNativeCompaction(id string) {
 		p.nativeCompactionTimer.Stop()
 		p.nativeCompactionTimer = nil
 	}
-	if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
-		p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+	if !p.nativeCompactionDone && p.nativeCompactionID != "" {
+		p.dispatchTrace(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+		p.terminateNativeCompactionLocked(CLICompactionCancelled, "superseded", false, 0)
+	}
+	p.nativeCompactionSeq++
+	if p.onCompaction != nil {
+		p.nativeCompactionAttemptID, p.nativeCompactionAttempt = p.onCompaction.next()
+	} else {
+		p.nativeCompactionAttempt = p.nativeCompactionSeq
+		p.nativeCompactionAttemptID = fmt.Sprintf("claude-compact-%d", p.nativeCompactionSeq)
 	}
 	if id == "" {
-		p.nativeCompactionSeq++
-		id = fmt.Sprintf("claude-compact-%d", p.nativeCompactionSeq)
+		id = p.nativeCompactionAttemptID
 	}
 	p.nativeCompactionID = id
 	p.nativeCompactionHasStart = true
@@ -702,8 +774,13 @@ func (p *cliStreamParser) startNativeCompaction(id string) {
 	p.nativeCompactionStatusStart = statusStart
 	p.nativeCompactionSignal = ""
 	p.nativeCompactionHookID = ""
+	p.nativeCompactionStartedAt = time.Now()
+	p.emitNativeCompactionLocked(CLICompactionAttempt, signal, false, "", "", 0)
+	p.emitNativeCompactionLocked(CLICompactionSignal, signal, false, "", "", 0)
 	if p.onEvent != nil {
-		p.onEvent(TraceStep{ID: id, Running: true, Kind: "compaction", Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact"})
+		p.dispatchTrace(TraceStep{ID: id, Running: true, Kind: "compaction", Source: "cli-native", Provider: "claude-cli", SessionAction: "native-compact"})
+	}
+	if p.onEvent != nil || (p.onCompaction != nil && p.onCompaction.onEvent != nil) {
 		timeout := p.nativeCompactionTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Minute
@@ -712,7 +789,8 @@ func (p *cliStreamParser) startNativeCompaction(id string) {
 			p.nativeCompactionMu.Lock()
 			defer p.nativeCompactionMu.Unlock()
 			if !p.nativeCompactionDone && p.nativeCompactionID == id {
-				p.onEvent(TraceStep{Kind: "tombstone", Ref: id})
+				p.dispatchTrace(TraceStep{Kind: "tombstone", Ref: id})
+				p.terminateNativeCompactionLocked(CLICompactionError, "signal_timeout", true, 0)
 				p.nativeCompactionID = ""
 				p.nativeCompactionHasStart = false
 				p.nativeCompactionTimer = nil
@@ -721,15 +799,17 @@ func (p *cliStreamParser) startNativeCompaction(id string) {
 	}
 }
 
-func (p *cliStreamParser) failNativeCompaction() {
+func (p *cliStreamParser) failNativeCompaction(signal string) {
 	p.nativeCompactionMu.Lock()
 	defer p.nativeCompactionMu.Unlock()
 	if p.nativeCompactionTimer != nil {
 		p.nativeCompactionTimer.Stop()
 		p.nativeCompactionTimer = nil
 	}
-	if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
-		p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+	if !p.nativeCompactionDone && p.nativeCompactionID != "" {
+		p.emitNativeCompactionLocked(CLICompactionSignal, signal, false, "", "", 0)
+		p.dispatchTrace(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+		p.terminateNativeCompactionLocked(CLICompactionError, "native_rejected", false, 0)
 	}
 	p.nativeCompactionFailed = true
 	p.nativeCompactionDone = false
@@ -742,14 +822,15 @@ func (p *cliStreamParser) completeNativeCompaction(ev cliEvent, signal string) {
 		return
 	}
 	if p.nativeCompactionDone {
-		// With a PreCompact start, every completion signal belongs to that one
-		// correlated cycle. Without hooks, consecutive boundary events are distinct
-		// compactions; a boundary+PostCompact pair is duplicate evidence for one.
-		if p.nativeCompactionHasStart || signal != p.nativeCompactionSignal || (signal == "post" && ev.HookID == p.nativeCompactionHookID) {
-			return
-		}
-		p.nativeCompactionID = ""
-		p.nativeCompactionDone = false
+		// Completion evidence cannot start another lifecycle. A real second
+		// compaction must announce a new status/PreCompact start first; otherwise
+		// duplicate identity-less compact_boundary lines double-count one cycle.
+		return
+	}
+	if p.nativeCompactionID == "" {
+		p.startNativeCompactionLocked(ev.HookID, signal)
+	} else {
+		p.emitNativeCompactionLocked(CLICompactionSignal, signal, false, "", "", 0)
 	}
 	p.nativeCompactionDone = true
 	p.nativeCompactionSignal = signal
@@ -768,18 +849,99 @@ func (p *cliStreamParser) completeNativeCompaction(ev cliEvent, signal string) {
 	}
 	p.resp.Trace = append(p.resp.Trace, step)
 	p.emit(len(p.resp.Trace) - 1)
+	p.terminateNativeCompactionLocked(CLICompactionSuccess, "", false, 0)
+}
+
+func (p *cliStreamParser) startNativeCompactionLocked(id, signal string) {
+	p.nativeCompactionSeq++
+	if p.onCompaction != nil {
+		p.nativeCompactionAttemptID, p.nativeCompactionAttempt = p.onCompaction.next()
+	} else {
+		p.nativeCompactionAttempt = p.nativeCompactionSeq
+		p.nativeCompactionAttemptID = fmt.Sprintf("claude-compact-%d", p.nativeCompactionSeq)
+	}
+	if id == "" {
+		id = p.nativeCompactionAttemptID
+	}
+	p.nativeCompactionID = id
+	p.nativeCompactionStartedAt = time.Now()
+	p.nativeCompactionHasStart = false
+	p.nativeCompactionFailed = false
+	p.emitNativeCompactionLocked(CLICompactionAttempt, signal, false, "", "", 0)
+	p.emitNativeCompactionLocked(CLICompactionSignal, signal, false, "", "", 0)
+}
+
+func (p *cliStreamParser) emitNativeCompactionLocked(phase CLICompactionPhase, signal string, retryable bool, errorKind, summary string, exitCode int) {
+	out := p.resp.SessionID
+	p.dispatchCompaction(CLICompactionEvent{
+		Phase: phase, Provider: "claude-cli", AttemptID: p.nativeCompactionAttemptID,
+		Attempt: p.nativeCompactionAttempt, Signal: signal,
+		CLISessionIDIn: p.onCompactionSessionIn(), CLISessionIDOut: out,
+		Retryable: retryable, ErrorKind: errorKind, Error: summary, ExitCode: exitCode,
+	})
+}
+
+func (p *cliStreamParser) onCompactionSessionIn() string {
+	if p.onCompaction == nil {
+		return ""
+	}
+	return p.onCompaction.sessionIDIn
+}
+
+func (p *cliStreamParser) terminateNativeCompactionLocked(phase CLICompactionPhase, errorKind string, retryable bool, exitCode int) {
+	if p.nativeCompactionAttemptID == "" {
+		return
+	}
+	dur := time.Since(p.nativeCompactionStartedAt).Milliseconds()
+	if dur < 1 {
+		dur = 1
+	}
+	summary := ""
+	if phase == CLICompactionError {
+		summary = "claude CLI native compaction failed"
+	} else if phase == CLICompactionCancelled {
+		summary = "claude CLI native compaction cancelled"
+	}
+	ev := CLICompactionEvent{
+		Phase: phase, Provider: "claude-cli", AttemptID: p.nativeCompactionAttemptID,
+		Attempt: p.nativeCompactionAttempt, DurationMs: dur,
+		CLISessionIDIn: p.onCompactionSessionIn(), CLISessionIDOut: p.resp.SessionID,
+		Retryable: retryable, ErrorKind: errorKind, Error: summary, ExitCode: exitCode,
+	}
+	p.dispatchCompaction(ev)
+	p.nativeCompactionAttemptID = ""
+	p.nativeCompactionAttempt = 0
+}
+
+func (p *cliStreamParser) terminateOpenNativeCompaction(phase CLICompactionPhase, errorKind string, retryable bool, exitCode int) {
+	p.nativeCompactionMu.Lock()
+	defer p.nativeCompactionMu.Unlock()
+	p.terminateNativeCompactionLocked(phase, errorKind, retryable, exitCode)
 }
 
 // finish resolves the final answer and emits any tool steps whose result never
 // arrived (so the UI still sees them).
 func (p *cliStreamParser) finish() (*Response, error) {
+	return p.finishWithLifecycle(true)
+}
+
+// finishAfterProcess leaves an open compaction to runAttempt, which has the
+// process exit/cancellation context needed to classify its terminal accurately.
+func (p *cliStreamParser) finishAfterProcess() (*Response, error) {
+	return p.finishWithLifecycle(false)
+}
+
+func (p *cliStreamParser) finishWithLifecycle(closeOpen bool) (*Response, error) {
 	p.nativeCompactionMu.Lock()
 	if p.nativeCompactionTimer != nil {
 		p.nativeCompactionTimer.Stop()
 		p.nativeCompactionTimer = nil
-		if !p.nativeCompactionDone && p.nativeCompactionID != "" && p.onEvent != nil {
-			p.onEvent(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
+	}
+	if closeOpen && !p.nativeCompactionDone && p.nativeCompactionAttemptID != "" {
+		if p.nativeCompactionID != "" && p.onEvent != nil {
+			p.dispatchTrace(TraceStep{Kind: "tombstone", Ref: p.nativeCompactionID})
 		}
+		p.terminateNativeCompactionLocked(CLICompactionError, "stream_ended", false, 0)
 	}
 	p.nativeCompactionMu.Unlock()
 	p.summarizeDrops()

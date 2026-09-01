@@ -131,6 +131,7 @@ func TestSpawnSessionRejectsWhenQueueFull(t *testing.T) {
 
 	rt.CloseMCP()
 	rt.releaseSpawnSlot()
+	drainSpawns(t, rt)
 }
 
 func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
@@ -169,6 +170,9 @@ func TestSpawnQueueShutdownDropsAndNotifiesCoordinator(t *testing.T) {
 	default:
 		t.Fatal("queued spawn was not dropped")
 	}
+	// The drop notifies the coordinator, which wakes a drain goroutine that keeps
+	// writing under t.TempDir() after the test body returns.
+	drainSpawns(t, rt)
 	messages, err := rt.db.ListMessages(context.Background(), coord.ID)
 	if err != nil {
 		t.Fatalf("list coordinator messages: %v", err)
@@ -212,6 +216,9 @@ func TestSpawnQueueDropCarriesIdleStatusWhenLastWorker(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 	rt.CloseMCP()
+	// The drop notifies the coordinator, which wakes a drain goroutine that keeps
+	// writing under t.TempDir() after the test body returns.
+	drainSpawns(t, rt)
 
 	messages, err := rt.db.ListMessages(context.Background(), coord.ID)
 	if err != nil {

@@ -480,7 +480,7 @@ func (m *Manager) open(meta Meta) error {
 	// worker, or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
 	// Counter-triggered automations consume the same signal on a detached goroutine.
-	database.SetActivityHook(func(sig db.ActivitySignal) {
+	if err := database.SetActivityHook(func(sig db.ActivitySignal) error {
 		rt.Emit(events.Event{
 			Type:   events.TypeSession,
 			Level:  "info",
@@ -493,7 +493,10 @@ func (m *Manager) open(meta Meta) error {
 			ToolTotal:    sig.ToolTotal,
 			ToolDelta:    sig.ToolDelta,
 		})
-	})
+		return nil
+	}); err != nil {
+		return fmt.Errorf("register activity hook: %w", err)
+	}
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())

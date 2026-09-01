@@ -20,7 +20,7 @@ func TestCLIParserReportsMalformedJSONOnceAndContinues(t *testing.T) {
 			if len(step.Text) > 500 {
 				t.Fatalf("parse-drop note is %d bytes, want at most 500", len(step.Text))
 			}
-			if !strings.Contains(step.Text, "line bytes=") || !strings.Contains(step.Text, "unexpected end of JSON input") {
+			if !strings.Contains(step.Text, "line bytes=") || !strings.Contains(step.Text, "errorClass=truncated_json") {
 				t.Fatalf("parse-drop note lacks length or error: %q", step.Text)
 			}
 		}
@@ -31,6 +31,20 @@ func TestCLIParserReportsMalformedJSONOnceAndContinues(t *testing.T) {
 	p.flushText()
 	if got := p.resp.Trace[len(p.resp.Trace)-1].Text; got != "after" {
 		t.Fatalf("parser did not continue after malformed JSON: final text step = %q", got)
+	}
+}
+
+func TestCLIParserParseDropDoesNotLeakPayload(t *testing.T) {
+	const secret = "sk-secret-token-value"
+	p := newCLIParser("", nil)
+	p.feed(`{"type":"assistant","token":"` + secret)
+	for _, step := range p.resp.Trace {
+		if strings.Contains(step.Text, secret) || strings.Contains(step.Text, `"token"`) {
+			t.Fatalf("parse-drop leaked payload: %q", step.Text)
+		}
+	}
+	if len(p.resp.Trace) != 1 || !strings.Contains(p.resp.Trace[0].Text, "line bytes=") {
+		t.Fatalf("safe parse-drop metadata missing: %+v", p.resp.Trace)
 	}
 }
 

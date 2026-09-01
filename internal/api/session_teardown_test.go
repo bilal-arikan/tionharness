@@ -99,10 +99,15 @@ func TestStopInflightTurn_Stops(t *testing.T) {
 // it stays active until CancelSession is called, like a turn whose context cancel
 // makes its goroutine release the registration.
 type fakeAutonomousRuns struct {
-	mu        sync.Mutex
-	active    bool
-	stubborn  bool // ignores cancellation, like a turn that never unwinds
-	cancelled int
+	mu       sync.Mutex
+	active   bool
+	stubborn bool // ignores cancellation, like a turn that never unwinds
+	// settleAfter is how many cancel sweeps the registration survives before it is
+	// released: 0/1 means it goes quiet on the first one (a turn that unwinds
+	// instantly), higher values model a turn that keeps the registration for a few
+	// more polls while its goroutine actually returns.
+	settleAfter int
+	cancelled   int
 }
 
 func (f *fakeAutonomousRuns) CancelSession(id string) bool {
@@ -112,7 +117,7 @@ func (f *fakeAutonomousRuns) CancelSession(id string) bool {
 	if !f.active {
 		return false
 	}
-	if !f.stubborn {
+	if !f.stubborn && f.cancelled >= f.settleAfter {
 		f.active = false
 	}
 	return true
@@ -145,6 +150,35 @@ func TestStopInflightTurn_CancelsAutonomousRun(t *testing.T) {
 	}
 	if auto.IsSessionActive("SES") {
 		t.Fatal("autonomous run must not be active after teardown")
+	}
+}
+
+// TestStopInflightTurn_WaitsForDelayedAutonomousQuiet: an autonomous registration is
+// not released the instant its context is cancelled — the turn goroutine still has to
+// return. There is no completion channel to wait on, so teardown must POLL until the
+// registry actually goes quiet. Without that loop it would declare the session stopped
+// while the turn was still alive, and the delete would proceed under it.
+func TestStopInflightTurn_WaitsForDelayedAutonomousQuiet(t *testing.T) {
+	s := &Server{runs: newChatRuns()}
+	const sweeps = 4
+	auto := &fakeAutonomousRuns{active: true, settleAfter: sweeps}
+
+	start := time.Now()
+	if err := s.stopInflightTurn("WS", "SES", auto, 2*time.Second); err != nil {
+		t.Fatalf("want stopped once the turn goes quiet, got error: %v", err)
+	}
+	elapsed := time.Since(start)
+
+	if auto.IsSessionActive("SES") {
+		t.Fatal("stop must not return while the autonomous registration is still held")
+	}
+	if got := auto.calls(); got < sweeps {
+		t.Fatalf("want at least %d cancel sweeps while waiting, got %d", sweeps, got)
+	}
+	// Each extra sweep costs one poll interval, so the wait is observable: a stop that
+	// returned without polling would come back in ~0.
+	if wantMin := time.Duration(sweeps-1) * sessionTeardownPoll; elapsed < wantMin {
+		t.Fatalf("stop returned after %s, want at least %s of polling", elapsed, wantMin)
 	}
 }
 

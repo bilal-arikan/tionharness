@@ -66,7 +66,7 @@ type Agent struct {
 	ProviderInstanceID string `json:"providerInstanceId"`
 	Model              string `json:"model"`
 	// ThinkingLevel requests extended reasoning. Valid values are exactly
-	// "off" | "low" | "medium" | "high" | "xhigh" | "max" (providers.
+	// "off" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" (providers.
 	// ValidThinkingLevels) — the empty string is NO LONGER valid. It used to be
 	// a third state next to "off" that meant two different things depending on
 	// the path (no thinking natively, "high" effort on the CLI); writes are now
@@ -570,6 +570,11 @@ type Session struct {
 	// warm CLI session yet (next turn starts cold and captures a fresh id).
 	CLISessionID    string `json:"cliSessionId,omitempty"`
 	CLISentMsgCount int    `json:"cliSentMsgCount,omitempty"`
+	// CLINativeCompactionPending is durably set before invoking a CLI native
+	// compactor and cleared only when its rotated resume state and boundary are
+	// committed together. A surviving marker forces the next turn cold so an
+	// externally-mutated CLI thread is never resumed with the old delta cursor.
+	CLINativeCompactionPending bool `json:"cliNativeCompactionPending,omitempty"`
 
 	// CLICompactMsgCount is the transcript boundary the PROVIDER compacted its own
 	// context at — recorded whenever a CLI reports a completed native compaction,

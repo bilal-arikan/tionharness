@@ -2,7 +2,6 @@ package conversation
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -203,11 +202,11 @@ func TestPrepareJournalsCompaction(t *testing.T) {
 	if e.SavedBytes <= 0 {
 		t.Errorf("SavedBytes = %d, want > 0", e.SavedBytes)
 	}
-	if !strings.Contains(e.Detail, "folded") || !strings.Contains(e.Detail, "tokens") {
-		t.Errorf("Detail = %q, want folded/tokens summary", e.Detail)
+	if e.Detail != "compaction detail [redacted]" {
+		t.Errorf("Detail = %q, want fail-closed compaction summary", e.Detail)
 	}
-	if e.AgentID != agent.ID {
-		t.Errorf("AgentID = %q, want %q", e.AgentID, agent.ID)
+	if !strings.HasPrefix(e.AgentID, "fp:") || e.AgentID == agent.ID {
+		t.Errorf("AgentID = %q, want irreversible fingerprint of %q", e.AgentID, agent.ID)
 	}
 }
 
@@ -282,8 +281,8 @@ func TestCompactionJournalRecordsFoldOrdinalAndSummaryBytes(t *testing.T) {
 		if e.SummaryBytes != w.summaryBytes {
 			t.Errorf("event %d SummaryBytes = %d, want %d", i, e.SummaryBytes, w.summaryBytes)
 		}
-		if !strings.Contains(e.Detail, fmt.Sprintf("fold #%d", w.foldIndex)) {
-			t.Errorf("event %d Detail = %q, want it to mention fold #%d", i, e.Detail, w.foldIndex)
+		if e.Detail != "compaction detail [redacted]" {
+			t.Errorf("event %d Detail = %q, want fail-closed compaction summary", i, e.Detail)
 		}
 	}
 

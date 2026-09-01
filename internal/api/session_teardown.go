@@ -145,6 +145,13 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	// Phase 3: cancel the in-flight turn and WAIT for it to fully unwind (tears down the
 	// subprocess). If it will not stop in time, abort: unfreeze + resume, keep the session.
 	//
+	// The wait gets what is LEFT of the shared deadline, not a fresh grace window, and a
+	// slow turn here can spend all of it — leaving phases 4 and 6 to fail immediately.
+	// That is deliberate: grace bounds the TOTAL teardown, because this runs inside a
+	// synchronous DELETE handler holding the session lock. A per-phase budget would let
+	// one delete hang for a multiple of grace, and the outcome would be the same anyway —
+	// whichever phase runs out, teardown fails closed and the session survives intact.
+	//
 	// Snapshot both registries FIRST: once stopInflightTurn returns they are empty
 	// either way, so "there WAS a live turn here" is only knowable from before the
 	// call. A cancelled turn simply stops emitting, so the journal is the one place

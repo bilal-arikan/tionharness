@@ -464,7 +464,11 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	prepared, err := s.prepareSessionRuntimeLocked(wsp, id, sessionTeardownGrace)
 	if err != nil {
 		s.logger.Error("session delete aborted: could not tear down live runtime", "session", id, "error", err)
-		writeError(w, http.StatusConflict, "session has live processes that could not be stopped; not deleted: "+err.Error())
+		// Say what to DO about it: a turn that ignored its cancellation will not
+		// release on its own, so the only remaining escape from a permanently
+		// undeletable session is restarting the app.
+		writeError(w, http.StatusConflict, "session has live processes that could not be stopped; not deleted: "+err.Error()+
+			" — retry the delete; if it keeps failing, restart the app to clear the stuck registration")
 		return
 	}
 	runtimeCommitted := false

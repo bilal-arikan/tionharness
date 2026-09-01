@@ -67,7 +67,12 @@ func TestActivityHookCarriesDeltas(t *testing.T) {
 	sess, _ := d.CreateSession(ctx, Session{AgentID: agent.ID})
 
 	var got []ActivitySignal
-	d.SetActivityHook(func(sig ActivitySignal) { got = append(got, sig) })
+	if err := d.SetActivityHook(func(sig ActivitySignal) error {
+		got = append(got, sig)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := d.AddMessage(ctx, Message{SessionID: sess.ID, Role: "user", Text: "hi"}); err != nil {
 		t.Fatalf("add user: %v", err)

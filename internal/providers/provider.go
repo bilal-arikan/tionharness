@@ -34,6 +34,18 @@ const (
 	StopContextWindow = "model_context_window_exceeded"
 )
 
+// IsCanonicalStopReason reports whether reason is one of the stable stop
+// values exposed by providers. Consumers that persist stop reasons use this
+// as the single allow-list source instead of duplicating provider constants.
+func IsCanonicalStopReason(reason string) bool {
+	switch reason {
+	case StopEndTurn, StopToolUse, StopMaxTok, StopPauseTurn, StopRefusal, StopContextWindow:
+		return true
+	default:
+		return false
+	}
+}
+
 // StopDetails classifies a refusal (populated ONLY when StopReason ==
 // StopRefusal): Category names the policy area ("cyber", "bio", … or ""),
 // Explanation is an optional human-readable reason.
@@ -195,6 +207,10 @@ type Request struct {
 	// enabling step-by-step streaming to the UI. Ignored by non-streaming
 	// providers. Must be safe to call from the provider's goroutine.
 	OnEvent func(TraceStep)
+	// OnCLICompaction receives machine-readable Claude CLI native-compaction
+	// lifecycle events. Calls are serialized with OnEvent, including timeout and
+	// cancellation paths. HTTP providers ignore it.
+	OnCLICompaction func(CLICompactionEvent)
 	// OnWatchdog, when set, is called by CLI providers when one of their stdout
 	// watchdogs kills a wedged subprocess, so the caller can record the kill in its
 	// observability stream (debug.jsonl). Diagnostic only — the turn error is still
@@ -241,7 +257,36 @@ type Request struct {
 	// Claude Code consumes low..xhigh through settings.json and lifts max through
 	// CLAUDE_CODE_EFFORT_LEVEL. Codex maps it to model_reasoning_effort; 0.148.0
 	// accepts xhigh, max and ultra. HTTP providers ignore it.
-	CLIEffortLevel string
+	CLIEffortLevel  string
+	cliCompaction   *cliCompactionEmitter
+	forceCLICompact bool
+}
+
+type CLICompactionPhase string
+
+const (
+	CLICompactionAttempt   CLICompactionPhase = "attempt"
+	CLICompactionSignal    CLICompactionPhase = "signal"
+	CLICompactionSuccess   CLICompactionPhase = "success"
+	CLICompactionError     CLICompactionPhase = "error"
+	CLICompactionCancelled CLICompactionPhase = "cancelled"
+)
+
+// CLICompactionEvent is one safe, correlation-ready native-compaction event.
+// Error contains a bounded generic summary; raw CLI output is never included.
+type CLICompactionEvent struct {
+	Phase           CLICompactionPhase
+	Provider        string
+	AttemptID       string
+	Attempt         int
+	Signal          string
+	DurationMs      int64
+	CLISessionIDIn  string
+	CLISessionIDOut string
+	Retryable       bool
+	ErrorKind       string
+	Error           string
+	ExitCode        int
 }
 
 // Usage reports token consumption. For providers with prompt caching, the cache
