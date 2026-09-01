@@ -9,6 +9,8 @@ import { MessageList } from './MessageList'
 import { Composer } from './Composer'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatSkeleton } from './ChatSkeleton'
+import { SessionStartPanel } from './SessionStartPanel'
+import { shouldShowStartPanel } from './sessionStartGate'
 import { RewindDialog } from './RewindDialog'
 import { AskPrompt } from './AskPrompt'
 import { PermissionPrompt } from './PermissionPrompt'
@@ -62,6 +64,14 @@ export interface ChatViewProps {
   sessionCoordination?: CoordinationFields
   // Opens another session's transcript (used to jump into a running worker).
   onSelectSession?: (id: string) => void
+  // Re-fetches the session list after the start panel changed coordinator mode /
+  // workflow, so the sidebar chip and the coordination UI follow immediately.
+  onCoordinationChanged?: () => void
+  // Opens the Skills screen on a slug — the start panel's recipe rows link to the
+  // coordinator-workflow skill they select. Optional; the link hides when absent.
+  onOpenSkill?: (slug: string) => void
+  // Surfaces an API failure from the start panel in the shell's error banner.
+  onError: (msg: string) => void
   // For a read-only flow run log: opens the Flows screen on this flow's run
   // history. Undefined for any non-flow session, so the link is shown only when
   // it resolves.
@@ -101,6 +111,9 @@ export function ChatView({
   readOnly,
   sessionCoordination,
   onSelectSession,
+  onCoordinationChanged,
+  onOpenSkill,
+  onError,
   onOpenRunHistory,
   defaultAgentId,
   defaultAgentDeleted,
@@ -184,6 +197,24 @@ export function ChatView({
   // now to see their message land (or its chip appear in the pending tray).
   const [sendTick, setSendTick] = useState(0)
   const jumpToBottom = () => setSendTick((n) => n + 1)
+
+  // The pre-first-message setup card (coordinator mode + recipe). Dismissal is
+  // per-session and in-memory: the card is only ever shown before the first turn,
+  // so there is nothing to persist beyond this page's view of that session.
+  const [startPanelDismissed, setStartPanelDismissed] = useState<string | null>(null)
+  // Shown only while the session is genuinely un-started — see shouldShowStartPanel
+  // for the exact rule.
+  const showStartPanel = shouldShowStartPanel({
+    readOnly,
+    activeSessionId,
+    dismissedSessionId: startPanelDismissed,
+    messageCount: messages.length,
+    messagesLoading,
+    streaming: chat.activeStreaming,
+    pending: chat.activePending,
+    queuedCount: chat.activeQueued.length,
+    isWorker: isWorkerSession(sessionCoordination),
+  })
 
   // Coordinator sessions: the live worker roster, so the chat can show that it is
   // waiting on background workers rather than looking idle. Disabled (and never
@@ -370,6 +401,18 @@ export function ChatView({
               countdown is about to reset anyway) and on an empty session (nothing
               is cached yet). */}
           {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
+          {/* Pre-first-message setup: coordinator mode + recipe, decided here
+              instead of hidden in the session info panel. Self-closes on send
+              (showStartPanel). */}
+          {showStartPanel && activeSessionId && (
+            <SessionStartPanel
+              sessionId={activeSessionId}
+              onError={onError}
+              onChanged={onCoordinationChanged}
+              onDismiss={() => setStartPanelDismissed(activeSessionId)}
+              onOpenSkill={onOpenSkill}
+            />
+          )}
           {/* A worker's parent chain belongs next to its input: it explains where
               replies are reported and gives a one-click route back to the parent.
               Root coordinators and ordinary chats stay unchanged. */}
