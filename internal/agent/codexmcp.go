@@ -57,7 +57,23 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		}
 		// Codex has no --disallowedTools, so NOT mounting the server is the only
 		// enforceable per-agent restriction on this path (see mcpservergate.go).
-		gate := mcpServerGate(ag, r.allowlistExemptServer(ctx))
+		gate, gateErr := mcpServerGate(ag, r.allowlistExemptServer(ctx))
+		if gateErr != nil {
+			// Fail CLOSED (see writeCLIMCPConfig): an unreadable restriction means the
+			// only enforceable limit on this path cannot be computed, so nothing is
+			// mounted and the caller is told why.
+			r.logger.Error("codex mcp spec: agent tool restriction is malformed; refusing to mount MCP servers",
+				"agent", ag.ID, "error", gateErr)
+			r.emitDebug(ctx, db.DebugEvent{
+				Type:    db.DebugError,
+				AgentID: ag.ID,
+				Name:    "mcp_server_gate_malformed",
+				Detail:  "agent tool restriction is malformed; no MCP server mounted",
+				Error:   gateErr.Error(),
+				Err:     true,
+			})
+			return providers.CLIMCPSpec{}, gateErr
+		}
 		for _, m := range list {
 			sc := toServerConfig(m)
 			key, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(sc.Name, "x"))

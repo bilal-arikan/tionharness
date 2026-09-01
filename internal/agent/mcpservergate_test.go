@@ -162,13 +162,56 @@ func TestCLIMCPConfigUnconstrainedAgentMountsEverything(t *testing.T) {
 // group: keys classify BUILT-INS. A group-only allowlist must not be read as
 // "targets some MCP server", and a group-only denylist must not unmount one.
 func TestMCPServerGateIgnoresGroupKeys(t *testing.T) {
-	deny := mcpServerGate(db.Agent{ToolOverrides: `{"group:files":"blocked"}`}, "")
+	deny, err := mcpServerGate(db.Agent{ToolOverrides: `{"group:files":"blocked"}`}, "")
+	if err != nil {
+		t.Fatalf("well-formed denylist: %v", err)
+	}
 	if deny == nil || !deny("playwright") {
 		t.Error("a built-in group denylist unmounted an MCP server")
 	}
-	allow := mcpServerGate(db.Agent{AllowedTools: `["group:files"]`}, "")
+	allow, err := mcpServerGate(db.Agent{AllowedTools: `["group:files"]`}, "")
+	if err != nil {
+		t.Fatalf("well-formed allowlist: %v", err)
+	}
 	if allow == nil || allow("playwright") {
 		t.Error("a built-in group allowlist was read as targeting an MCP server")
+	}
+}
+
+// A permission document that cannot be parsed must FAIL CLOSED: the error is
+// surfaced and the gate mounts nothing. Swallowing it left both lists empty,
+// which reads as "unconstrained" and mounted every MCP server into the CLI.
+func TestMCPServerGateFailsClosedOnMalformedJSON(t *testing.T) {
+	for _, ag := range []db.Agent{
+		{ID: "A1", AllowedTools: `["playwright__`},
+		{ID: "A2", ToolOverrides: `{"playwright*":`},
+		{ID: "A3", BlockedTools: `["Bash"`},
+		{ID: "A4", ToolOverrides: `{"Bash":"blokced"}`},
+	} {
+		gate, err := mcpServerGate(ag, "")
+		if err == nil {
+			t.Fatalf("agent %s: malformed permission JSON accepted", ag.ID)
+		}
+		if gate == nil || gate("playwright") {
+			t.Fatalf("agent %s: gate must mount nothing after a parse failure", ag.ID)
+		}
+	}
+}
+
+func TestMalformedPermissionsFailClosedAcrossNativeAndCLIPaths(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	ag := db.Agent{ID: "AGT1", MCPEnabled: true, AllowedTools: `["Read"`}
+
+	filter := rt.toolFilter(ctx, ag)
+	if filter == nil || filter("Read") {
+		t.Fatal("native tool filter allowed a tool after permission parsing failed")
+	}
+	if _, _, _, _, err := rt.writeCLIMCPConfig(ctx, true, ag, tools.InteractionEndpoint{}, "auto"); err == nil {
+		t.Fatal("Claude CLI MCP setup accepted malformed permissions")
+	}
+	if _, err := rt.codexMCPSpec(ctx, true, ag, tools.InteractionEndpoint{}); err == nil {
+		t.Fatal("Codex CLI MCP setup accepted malformed permissions")
 	}
 }
 
@@ -184,7 +227,11 @@ func TestMCPServerGateIgnoresGroupKeys(t *testing.T) {
 // TestCodebaseMemoryIsExemptFromAllowlist. Everything else still needs a pattern.
 func TestProfileAllowlistsReachOnlyValidatorUnityMCP(t *testing.T) {
 	for id, prof := range defaultSubagentProfiles {
-		gate := mcpServerGate(db.Agent{AllowedTools: mustJSON(t, prof.AllowedTools)}, "")
+		gate, err := mcpServerGate(db.Agent{AllowedTools: mustJSON(t, prof.AllowedTools)}, "")
+		if err != nil {
+			t.Errorf("profile %q allowlist did not parse: %v", id, err)
+			continue
+		}
 		if gate == nil {
 			t.Errorf("profile %q has an empty allowlist — it constrains nothing", id)
 			continue

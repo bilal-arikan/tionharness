@@ -2,6 +2,8 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -39,28 +41,53 @@ func ValidAgentTier(tier string) bool {
 // in ToolOverrides always wins — so an agent whose override map deliberately
 // UNBLOCKS a tool the stale mirror still lists is honoured.
 //
-// Malformed JSON in either field is ignored rather than fatal: a corrupt
-// override file must not make an agent unrunnable, it must fall back to "no
-// overrides" (its tools then follow the workspace-effective tiers).
+// This is the LENIENT reader, for DISPLAY surfaces only (the agent tools screen,
+// the tier diff): malformed JSON is dropped rather than fatal, so a corrupt
+// override document does not make an agent unrenderable. Every PERMISSION path
+// (blockFunc, mcpServerGate) must call ParseToolOverridesErr instead — silently
+// degrading an unreadable denylist into "nothing blocked" is a fail-OPEN.
 func ParseToolOverrides(agent db.Agent) map[string]string {
-	out := map[string]string{}
-	var overrides map[string]string
-	if err := json.Unmarshal([]byte(agent.ToolOverrides), &overrides); err == nil {
-		for name, tier := range overrides {
-			if ValidAgentTier(tier) {
-				out[name] = tier
-			}
-		}
-	}
-	var legacy []string
-	if err := json.Unmarshal([]byte(agent.BlockedTools), &legacy); err == nil {
-		for _, name := range legacy {
-			if _, explicit := out[name]; !explicit {
-				out[name] = TierBlocked
-			}
-		}
-	}
+	out, _ := ParseToolOverridesErr(agent)
 	return out
+}
+
+// ParseToolOverridesErr is ParseToolOverrides plus the parse error, so a caller
+// that enforces permissions can refuse to run on a document it could not read.
+// The map it returns alongside an error holds only the fields that DID parse; a
+// caller must treat a non-nil error as "this agent's overrides are unknown" and
+// fail closed, never as "no overrides".
+//
+// A blank field is not an error — it means the agent set nothing.
+func ParseToolOverridesErr(agent db.Agent) (map[string]string, error) {
+	out := map[string]string{}
+	var errs []error
+	if raw := strings.TrimSpace(agent.ToolOverrides); raw != "" {
+		var overrides map[string]string
+		if err := json.Unmarshal([]byte(raw), &overrides); err != nil {
+			errs = append(errs, fmt.Errorf("tool_overrides: %w", err))
+		} else {
+			for name, tier := range overrides {
+				if ValidAgentTier(tier) {
+					out[name] = tier
+				} else {
+					errs = append(errs, fmt.Errorf("tool_overrides: tool %q has unknown tier %q", name, tier))
+				}
+			}
+		}
+	}
+	if raw := strings.TrimSpace(agent.BlockedTools); raw != "" {
+		var legacy []string
+		if err := json.Unmarshal([]byte(raw), &legacy); err != nil {
+			errs = append(errs, fmt.Errorf("blocked_tools: %w", err))
+		} else {
+			for _, name := range legacy {
+				if _, explicit := out[name]; !explicit {
+					out[name] = TierBlocked
+				}
+			}
+		}
+	}
+	return out, errors.Join(errs...)
 }
 
 // blockedPatterns returns the sorted name/pattern keys carrying the "blocked"

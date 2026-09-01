@@ -87,7 +87,23 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
-		gate := mcpServerGate(ag, r.allowlistExemptServer(ctx))
+		gate, gateErr := mcpServerGate(ag, r.allowlistExemptServer(ctx))
+		if gateErr != nil {
+			// Fail CLOSED: the agent's permission document is unreadable, so no MCP
+			// server may be mounted into the CLI process — and the turn stops here
+			// rather than starting with an unenforced tool surface.
+			r.logger.Error("cli mcp config: agent tool restriction is malformed; refusing to mount MCP servers",
+				"agent", ag.ID, "error", gateErr)
+			r.emitDebug(ctx, db.DebugEvent{
+				Type:    db.DebugError,
+				AgentID: ag.ID,
+				Name:    "mcp_server_gate_malformed",
+				Detail:  "agent tool restriction is malformed; no MCP server mounted",
+				Error:   gateErr.Error(),
+				Err:     true,
+			})
+			return "", nil, nil, nil, gateErr
+		}
 		for _, m := range servers {
 			sc := toServerConfig(m)
 			key, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(sc.Name, "x"))

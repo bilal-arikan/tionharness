@@ -10,7 +10,10 @@ import (
 // A "group:" override at the blocked tier bans every built-in of that category,
 // and nothing else — MCP tools group by server, not by category.
 func TestBlockFuncGroupKeyBlocksWholeCategory(t *testing.T) {
-	blocked := blockFunc(db.Agent{ToolOverrides: `{"group:files":"blocked"}`})
+	blocked, err := blockFunc(db.Agent{ToolOverrides: `{"group:files":"blocked"}`})
+	if err != nil {
+		t.Fatalf("well-formed overrides: %v", err)
+	}
 	if blocked == nil {
 		t.Fatal("group key must produce a predicate")
 	}
@@ -29,7 +32,10 @@ func TestBlockFuncGroupKeyBlocksWholeCategory(t *testing.T) {
 // An EXACT override beats the group it falls into: banning group:files while
 // pinning Read to a visibility tier keeps Read usable.
 func TestBlockFuncExactNameBeatsGroup(t *testing.T) {
-	blocked := blockFunc(db.Agent{ToolOverrides: `{"group:files":"blocked","Read":"summary"}`})
+	blocked, err := blockFunc(db.Agent{ToolOverrides: `{"group:files":"blocked","Read":"summary"}`})
+	if err != nil {
+		t.Fatalf("well-formed overrides: %v", err)
+	}
 	if blocked("Read") {
 		t.Fatal("explicit non-blocked override must beat the group ban")
 	}

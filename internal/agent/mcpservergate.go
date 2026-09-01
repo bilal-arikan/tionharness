@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -44,12 +45,27 @@ import (
 // not gate — see allowlistExemptServer. The explicit denylist still applies to it.
 //
 // Returns nil when the agent constrains nothing (mount everything, as before).
-func mcpServerGate(agent db.Agent, exemptServer string) func(serverKey string) bool {
-	blocked := blockedPatterns(ParseToolOverrides(agent))
+//
+// A malformed permission document is an ERROR and the gate returned with it
+// denies EVERY server. The unmarshal error used to be discarded, which left both
+// lists empty — and empty lists mean "unconstrained", so a corrupt allowlist
+// mounted every MCP server into the CLI process: the exact hole this gate exists
+// to close. The caller must surface the error, not fall back to the nil gate.
+func mcpServerGate(agent db.Agent, exemptServer string) (func(serverKey string) bool, error) {
+	denyAll := func(string) bool { return false }
+	overrides, err := ParseToolOverridesErr(agent)
+	if err != nil {
+		return denyAll, fmt.Errorf("agent %s: %w", agent.ID, err)
+	}
+	blocked := blockedPatterns(overrides)
 	var allowed []string
-	_ = json.Unmarshal([]byte(agent.AllowedTools), &allowed)
+	if raw := strings.TrimSpace(agent.AllowedTools); raw != "" {
+		if uerr := json.Unmarshal([]byte(raw), &allowed); uerr != nil {
+			return denyAll, fmt.Errorf("agent %s: allowed_tools: %w", agent.ID, uerr)
+		}
+	}
 	if len(blocked) == 0 && len(allowed) == 0 {
-		return nil
+		return nil, nil
 	}
 	return func(serverKey string) bool {
 		if serverKey == "" {
@@ -72,7 +88,7 @@ func mcpServerGate(agent db.Agent, exemptServer string) func(serverKey string) b
 			}
 		}
 		return false
-	}
+	}, nil
 }
 
 // patternCoversServer reports whether a BLOCKED pattern bans the server as a

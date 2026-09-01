@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -82,10 +83,21 @@ func patternPredicate(patterns []string) func(string) bool {
 // allowlist. An empty list means "allow everything" (nil predicate). This is the
 // legacy allowlist used by built-in subagent profiles; user-facing agents leave
 // it empty and rely on the denylist (blockFunc) instead.
-func allowFunc(agent db.Agent) func(string) bool {
+//
+// A malformed allowlist is an ERROR, and the predicate returned with it denies
+// EVERY tool. The unmarshal error used to be discarded, which left patterns nil —
+// and a nil pattern list is "no constraint", i.e. every tool allowed. A permission
+// document that cannot be read must never widen the permission.
+func allowFunc(agent db.Agent) (func(string) bool, error) {
+	raw := strings.TrimSpace(agent.AllowedTools)
+	if raw == "" {
+		return nil, nil
+	}
 	var patterns []string
-	_ = json.Unmarshal([]byte(agent.AllowedTools), &patterns)
-	return patternPredicate(patterns)
+	if err := json.Unmarshal([]byte(raw), &patterns); err != nil {
+		return func(string) bool { return false }, fmt.Errorf("allowed_tools: %w", err)
+	}
+	return patternPredicate(patterns), nil
 }
 
 // blockFunc builds a tool-name predicate reporting whether a tool is BLOCKED for
@@ -98,11 +110,18 @@ func allowFunc(agent db.Agent) func(string) bool {
 // "group:files" while pinning "Read" to a visibility tier keeps Read usable.
 // The exemption is deliberately limited to exact names — the same specificity
 // rule applyVisibilityOverrides enforces.
-func blockFunc(agent db.Agent) func(string) bool {
-	overrides := ParseToolOverrides(agent)
+//
+// A malformed override document is an ERROR, and the predicate returned with it
+// reports every tool BLOCKED: an unreadable denylist must not degrade into
+// "nothing is blocked".
+func blockFunc(agent db.Agent) (func(string) bool, error) {
+	overrides, err := ParseToolOverridesErr(agent)
+	if err != nil {
+		return func(string) bool { return true }, err
+	}
 	pred := patternPredicate(blockedPatterns(overrides))
 	if pred == nil {
-		return nil
+		return nil, nil
 	}
 	exempt := map[string]bool{}
 	for key, tier := range overrides {
@@ -111,14 +130,14 @@ func blockFunc(agent db.Agent) func(string) bool {
 		}
 	}
 	if len(exempt) == 0 {
-		return pred
+		return pred, nil
 	}
 	return func(name string) bool {
 		if exempt[name] {
 			return false
 		}
 		return pred(name)
-	}
+	}, nil
 }
 
 // readTrackerFor returns the freshness read-tracker for a session, creating it on
@@ -736,8 +755,25 @@ func (r *Runtime) workspaceDisabledSet(ctx context.Context) map[string]bool {
 // that cannot delegate and never says so" failure SpawnWorker refuses elsewhere.
 func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) bool {
 	disabled := r.workspaceDisabledSet(ctx)
-	agentAllow := allowFunc(agent) // nil => agent allows all
-	agentBlock := blockFunc(agent) // nil => agent blocks nothing
+	agentAllow, allowErr := allowFunc(agent) // nil => agent allows all
+	agentBlock, blockErr := blockFunc(agent) // nil => agent blocks nothing
+	// A permission document that cannot be parsed leaves the agent's real limits
+	// UNKNOWN, so the only safe answer is "no tool at all" — loudly, on both the
+	// server log and the session's debug journal. Degrading to the permissive
+	// default is how a malformed allowlist used to hand an agent every tool.
+	if err := errors.Join(allowErr, blockErr); err != nil {
+		r.logger.Error("agent tool permission config is malformed; denying every tool",
+			"agent", agent.ID, "error", err)
+		r.emitDebug(ctx, db.DebugEvent{
+			Type:    db.DebugError,
+			AgentID: agent.ID,
+			Name:    "tool_permission_config_malformed",
+			Detail:  "agent tool permission config is malformed; every tool denied",
+			Error:   err.Error(),
+			Err:     true,
+		})
+		return func(string) bool { return false }
+	}
 	if disabled == nil && agentAllow == nil && agentBlock == nil {
 		return nil
 	}
