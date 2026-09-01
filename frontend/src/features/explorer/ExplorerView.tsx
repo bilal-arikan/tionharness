@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
@@ -56,15 +56,20 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     fallbackToRoot,
     refreshFocused,
   } = useExplorerGraph({ search, onError, initialFocus: focusNode, onFocus: onFocusNode })
-  const searchResults = search.trim()
-    ? nodes.filter(
-        (node) =>
-          !node.data.overflow &&
-          (node.data.label.toLowerCase().includes(search.trim().toLowerCase()) ||
-            refToString(node.data.ref).toLowerCase().includes(search.trim().toLowerCase())),
-      )
-    : []
-  const focusedNode = nodes.find((node) => node.data.focus)
+  // Both of these scan every node, and the graph re-renders on unrelated state
+  // (drawer open, overflow list, hover) — memoize on the inputs that can change
+  // the answer so a keystroke elsewhere doesn't re-scan the whole neighborhood.
+  const searchResults = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    if (!needle) return []
+    return nodes.filter(
+      (node) =>
+        !node.data.overflow &&
+        (node.data.label.toLowerCase().includes(needle) ||
+          refToString(node.data.ref).toLowerCase().includes(needle)),
+    )
+  }, [nodes, search])
+  const focusedNode = useMemo(() => nodes.find((node) => node.data.focus), [nodes])
   const focusAnnouncement = focusedNode
     ? `Harita odağı ${focusedNode.data.label}. ${focusedNode.data.childCount ?? 0} alt bağlantı.`
     : ''
@@ -95,15 +100,17 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     focus(ref)
   }
 
-  const closeOverflow = () => {
+  // useCallback: both are dependencies of the keydown effect below, which would
+  // otherwise detach and re-attach its document listener on every render.
+  const closeOverflow = useCallback(() => {
     setOverflow(null)
     window.setTimeout(() => overflowTriggerRef.current?.focus())
-  }
+  }, [])
 
-  const closeDetail = () => {
+  const closeDetail = useCallback(() => {
     setDetailOpen(false)
     window.setTimeout(() => detailTriggerRef.current?.focus())
-  }
+  }, [])
 
   // Live update refreshes only the current focus neighborhood.
   const tick = useRefreshTrigger('explorer')
@@ -153,7 +160,9 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
     }
     document.addEventListener('keydown', escape)
     return () => document.removeEventListener('keydown', escape)
-  })
+    // Only the dialog state decides what the handler does; without this list the
+    // effect re-subscribed the document listener on every single render.
+  }, [overflow, detailOpen, closeOverflow, closeDetail])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

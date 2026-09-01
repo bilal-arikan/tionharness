@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
-  useNodesInitialized,
   useReactFlow,
+  useStore,
   type Edge,
   type NodeTypes,
 } from '@xyflow/react'
@@ -29,31 +29,75 @@ interface Props {
 
 const SINGLE_CLICK_DELAY_MS = 250
 
-function FocusedNodeCenter({ nodes }: { nodes: ExplorerRFNode[] }) {
-  const { getNode, getViewport, setCenter } = useReactFlow()
-  const nodesInitialized = useNodesInitialized()
-  const focusNodeId = nodes.find((node) => node.data.focus)?.id
+function FocusedNodeCenter({
+  nodes,
+  viewportInteraction,
+}: {
+  nodes: ExplorerRFNode[]
+  viewportInteraction: { current: number }
+}) {
+  const { getInternalNode, getViewport, setCenter } = useReactFlow()
+  const focusNode = nodes.find((node) => node.data.focus)
+  const focusNodeId = focusNode?.id
+  const focusLoading = focusNode?.data.loading
+  const focusedNodeVersion = useStore((state) => {
+    const node = focusNodeId ? state.nodeLookup.get(focusNodeId) : undefined
+    if (!node) return ''
+    const { positionAbsolute, userNode } = node.internals
+    return `${positionAbsolute.x}:${positionAbsolute.y}:${userNode.position.x}:${userNode.position.y}:${node.measured.width ?? ''}:${node.measured.height ?? ''}`
+  })
   const focusSequence = useRef(0)
+  const activeFocusId = useRef<string | undefined>(undefined)
+  const centeredActiveFocus = useRef(false)
+  const initialViewportInteraction = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (!nodesInitialized || !focusNodeId) return
+  useLayoutEffect(() => {
+    if (activeFocusId.current !== focusNodeId) {
+      activeFocusId.current = focusNodeId
+      centeredActiveFocus.current = false
+      initialViewportInteraction.current = null
+    }
+    if (!focusNodeId || focusLoading || centeredActiveFocus.current || !focusedNodeVersion) return
+    initialViewportInteraction.current ??= viewportInteraction.current
     const sequence = ++focusSequence.current
-    const frame = requestAnimationFrame(() => {
-      if (focusSequence.current !== sequence) return
-      const node = getNode(focusNodeId)
-      if (!node?.measured?.width || !node.measured.height) return
-      const zoom = getViewport().zoom
-      void setCenter(
-        node.position.x + node.measured.width / 2,
-        node.position.y + node.measured.height / 2,
-        { zoom },
-      )
-    })
+    let frame = 0
+    let framesUntilCenter = 4
+    const settle = () => {
+      frame = requestAnimationFrame(() => {
+        if (focusSequence.current !== sequence || activeFocusId.current !== focusNodeId) return
+        framesUntilCenter -= 1
+        if (framesUntilCenter > 0) {
+          settle()
+          return
+        }
+        if (centeredActiveFocus.current) return
+        const focusedNode = getInternalNode(focusNodeId)
+        const width = focusedNode?.measured.width
+        const height = focusedNode?.measured.height
+        if (!focusedNode || !width || !height) return
+        if (initialViewportInteraction.current !== viewportInteraction.current) return
+        centeredActiveFocus.current = true
+        const { positionAbsolute } = focusedNode.internals
+        const zoom = getViewport().zoom
+        void setCenter(positionAbsolute.x + width / 2, positionAbsolute.y + height / 2, {
+          zoom,
+        })
+      })
+    }
+    settle()
     return () => {
       focusSequence.current += 1
       cancelAnimationFrame(frame)
     }
-  }, [focusNodeId, getNode, getViewport, nodesInitialized, setCenter])
+  }, [
+    focusedNodeVersion,
+    focusLoading,
+    focusNodeId,
+    getInternalNode,
+    getViewport,
+    setCenter,
+    viewportInteraction,
+  ])
 
   return null
 }
@@ -68,6 +112,7 @@ export function ExplorerGraph({
 }: Props) {
   const nodeTypes = useMemo<NodeTypes>(() => ({ explorer: ExplorerNode }), [])
   const pendingNodeClick = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const viewportInteraction = useRef(0)
 
   const cancelPendingNodeClick = () => {
     if (pendingNodeClick.current === null) return
@@ -111,7 +156,7 @@ export function ExplorerGraph({
 
   return (
     <ReactFlowProvider>
-      <FocusedNodeCenter nodes={nodes} />
+      <FocusedNodeCenter nodes={nodes} viewportInteraction={viewportInteraction} />
       <div
         className="h-full w-full"
         role="region"
@@ -123,6 +168,9 @@ export function ExplorerGraph({
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          onMoveStart={() => {
+            viewportInteraction.current += 1
+          }}
           onNodeClick={(event, n) => {
             const data = (n as ExplorerRFNode).data
             if (data.overflow) onOverflowClick(data.overflow.side, data.overflow.handles)
