@@ -461,6 +461,69 @@ yolundadır (workspace dışındaki dosya içeri kopyalanır).
 
 **Kapsam dışı (takip):** artifact'ı bir board task'ına otomatik bağlama.
 
+## Tek çağrıdan fan-out / fan-in (TSK598, 2026-09-01)
+
+Model zaten tek turda birden çok `run_subagent` çağırıp `launchParallelSubagents`
+ile paralel koşturabiliyordu — eksik olan **fan-in**'di: sonuçları toplama kuralı
+yoktu, birleştirmeyi modelin kendisi yapıyordu. Artık tek çağrı N alt-ajan koşturup
+sonuçları adı konmuş bir stratejiyle döndürüyor.
+
+**API: ayrı araç değil, mevcut aracın alanı.** `run_subagent` üç eksen kazandı:
+
+| Alan | Anlam |
+|------|-------|
+| `tasks[]` | Çoklu biçim. `task` ile **birlikte kullanılamaz**. Her eleman `{task}` zorunlu, `{target,context,model,objective,output_format,boundaries}` isteğe bağlı |
+| `strategy` | `all` (varsayılan) \| `first-success` |
+| `max_concurrency` | Aynı anda koşacak bacak sayısı (varsayılan `DefaultFanOutConcurrency` = 4) |
+
+Üst düzey `target/context/model/objective/output_format/boundaries` bacakların
+**varsayılanı** olur; yaygın kalıp — tek hedef, birkaç farklı görev — tekrar
+gerektirmez. Bacak kendi değerini verirse o kazanır, vermediği eksenleri yine
+miras alır. `required` artık yalnız `target`; `task`/`tasks` seçimi çalışma
+zamanında doğrulanır.
+
+**Her çakışma hata, öncelik kuralı değil.** `task`+`tasks` birlikte gelirse iki
+okuma vardır ve birini sessizce seçmek çağıranın istemediği işi koşturur; tekil
+çağrıya iliştirilen `strategy`/`max_concurrency` kabul edilmiş görünüp hiçbir şey
+yapmazdı. `retry_of` + `tasks` de reddedilir: retry **tek** bitmiş koşuyu hedefler.
+Bilinmeyen `strategy`, boş `task`, hiçbir yerde `target` olmaması ve bacaktaki
+geçersiz `context` de aynı şekilde reddedilir (`buildFanOutSpec`).
+
+**Stratejiler**
+
+- **`all`** — her bacağı bekler, hepsini **girdi sırasında** raporlar. Başarısız
+  bacak raporlanır ama çağrıyı düşürmez; **hepsi** başarısızsa çağrı hata döner
+  (elde kısmi cevap yoktur ve hata listesini "başarı" diye döndürmek modele onları
+  bulgu gibi okutur).
+- **`first-success`** — ilk başarılı bacakta kalanları iptal eder. İptal için
+  çağıranın ctx'i değil **ayrı bir alt-context** kullanılır; çağıranın turunu
+  düşürmek fan-out'un işi değildir.
+
+**Sıra girdi sırasıdır, bitiş sırası değil.** Bacakları çağıran numaraladı; koşudan
+koşuya kendini yeniden dizen bir liste ne "ikincisi" diye atıfla anılabilir ne de
+turlar arasında karşılaştırılabilir.
+
+**İptal edilen bacak `SKIPPED`, `FAILED` değil.** Kazanan çıktığı için sıraya
+giremeyen ya da koşarken kesilen bacak bir hüküm üretmemiştir; onu başarısız diye
+raporlamak çağırana "bu rota denendi ve olmadı" demek olurdu — ki yanlıştır.
+
+**Bütçe ve guard'lar tek yerde.** Her bacak sıradan `runAgent`'a girer: derinlik,
+döngü, tur başına paylaşılan delegasyon sayacı, child session yaratımı ve artifact
+sahipliği aynen uygulanır, fan-out bunları kopyalamaz. Dispatcher'ın **kendisi**
+guard'lardan geçmez — kendi başına alt-ajan koşturmadığı için turu bir çağrıyla
+borçlandırmak yanlış olurdu. `legSpec` fan-out eksenlerini düşürür, böylece bir
+bacak aynı çağrı üzerinden yeni bir fan-out'a giremez. `max_concurrency` bir
+verimlilik ayarıdır; toplam harcamayı sınırlayan hâlâ `DelegationMaxCalls`'tır.
+
+**Kapsam dışı (ayrı kart):** `majority` ve `reviewer-selects`. İkisi de serbest
+metin yanıtlarda "aynı cevap" tanımı gerektirir; bu bir yargıç turu (ek LLM çağrısı)
+ya da zorunlu yapılandırılmış çıktı demektir — ürün kararı olarak ayrıldı.
+
+Testler: `internal/tools/subagent_fanout_test.go` (varsayılan miras, dokuz reddetme
+vakası, tekil çağrının dokunulmadan kalması, sıra + SKIPPED render'ı),
+`internal/agent/subagent_fanout_test.go` (hepsi-başarısız, bütçe paylaşımı,
+dispatcher'ın guard'lanmaması, `legSpec`, `firstError`).
+
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — native yüzeyden kaldırıldı)

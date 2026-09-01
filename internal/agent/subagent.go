@@ -209,6 +209,12 @@ func (r *Runtime) RunSubagentRunner(caller db.Agent, autonomous bool) func(ctx c
 // ephemeral profile worker or an existing agent), then runs it to completion in
 // an isolated or inherited context and returns its final reply.
 func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *providers.Request, autonomous bool, spec tools.RunAgentSpec) (tools.RunAgentResult, error) {
+	// Fan-out is dispatched before any single-task guard: each leg re-enters this
+	// function and is guarded there, so checking depth/budget for the fan-out call
+	// itself would charge the turn for a call that runs no subagent of its own.
+	if len(spec.Tasks) > 0 {
+		return r.runAgentFanOut(ctx, caller, parentReq, autonomous, spec)
+	}
 	cur, _ := delegStateFrom(ctx)
 
 	// Guard 1 — depth.

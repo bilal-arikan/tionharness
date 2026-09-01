@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -75,7 +76,9 @@ func TestRunSubagentWaitSyncIsIgnored(t *testing.T) {
 	}
 	withWait := call(`{"target":"explore","task":"x","wait":"sync"}`)
 	without := call(`{"target":"explore","task":"x"}`)
-	if withWait != without {
+	// DeepEqual rather than ==: RunAgentSpec carries the fan-out task slice and is
+	// no longer a comparable struct.
+	if !reflect.DeepEqual(withWait, without) {
 		t.Fatalf("wait:\"sync\" changed the spec: %+v vs %+v", withWait, without)
 	}
 }
