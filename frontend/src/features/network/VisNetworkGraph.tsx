@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { Network, type Options, type Node, type Edge } from 'vis-network'
 import { DataSet } from 'vis-data'
 import {
-  pruneNetworkPositions,
   readNetworkPositions,
   writeNetworkPositions,
   type NetworkPositions,
@@ -18,7 +17,7 @@ const MAX_FIT_SCALE = 1
 
 // fitAndCap frames the whole graph, then clamps the zoom so sparse graphs don't
 // end up over-magnified. The initial framing is instant; later refits animate.
-function fitAndCap(net: Network, animated: boolean) {
+function fitAndCap(net: Network, animated: boolean): () => void {
   const cap = () => {
     if (net.getScale() > MAX_FIT_SCALE) {
       net.moveTo({ scale: MAX_FIT_SCALE, position: net.getViewPosition() })
@@ -27,10 +26,12 @@ function fitAndCap(net: Network, animated: boolean) {
   if (animated) {
     net.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } })
     // Cap after the fit animation settles (getScale is mid-flight during it).
-    setTimeout(cap, 440)
+    const timer = setTimeout(cap, 440)
+    return () => clearTimeout(timer)
   } else {
     net.fit({ animation: false })
     cap()
+    return () => {}
   }
 }
 
@@ -38,6 +39,8 @@ interface Props {
   workspaceId: string
   nodes: Node[]
   edges: Edge[]
+  canonicalNodeIds: readonly string[]
+  canonicalReady: boolean
   // 'relation' = free force cloud; 'live' = board-column flow (fixed anchors at
   // top, low central gravity so columns spread horizontally).
   mode?: VisMode
@@ -85,6 +88,8 @@ function buildOptions(
   density = 1,
   mode: VisMode = 'relation',
   lite = false,
+  physicsEnabled = false,
+  improvedLayoutEnabled = !lite,
 ): Options {
   const d = Math.min(2, Math.max(0.4, density))
   return {
@@ -104,7 +109,7 @@ function buildOptions(
       width: 1,
     },
     physics: {
-      enabled: true,
+      enabled: physicsEnabled,
       solver: 'forceAtlas2Based',
       forceAtlas2Based: {
         // Stronger repulsion in live mode so the many nodes sharing one anchor
@@ -126,9 +131,8 @@ function buildOptions(
       // Fewer settle iterations on mobile so the initial simulation burst is short.
       stabilization: { enabled: true, iterations: lite ? 120 : 300, fit: true },
     },
-    // improvedLayout runs an expensive pre-layout pass that can freeze the main
-    // thread on load; skip it on mobile.
-    layout: { improvedLayout: !lite },
+    // improvedLayout is constructor-only. Restored and low-power layouts skip it.
+    layout: { improvedLayout: improvedLayoutEnabled },
     interaction: {
       // Touch devices have no hover; disabling it drops the neighbour-dim repaint.
       hover: !lite,
@@ -148,6 +152,8 @@ export function VisNetworkGraph({
   workspaceId,
   nodes,
   edges,
+  canonicalNodeIds,
+  canonicalReady,
   mode = 'relation',
   density = 1,
   onSelect,
@@ -162,9 +168,15 @@ export function VisNetworkGraph({
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
   const populatedRef = useRef(false)
-  const initialOptionsAppliedRef = useRef(false)
-  const savedPositionsRef = useRef<NetworkPositions>(readNetworkPositions(workspaceId))
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistedPositionsRef = useRef<NetworkPositions>(readNetworkPositions(workspaceId))
+  const runtimePositionsRef = useRef<NetworkPositions>({})
+  const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
+  const canonicalNodeIdsRef = useRef(canonicalNodeIds)
+  const canonicalReadyRef = useRef(canonicalReady)
+  const setupGenerationByWorkspaceRef = useRef(new Map<string, number>())
+  const stabilizationCleanupRef = useRef<() => void>(() => {})
+  const fitCleanupRef = useRef<() => void>(() => {})
   const onSelectRef = useRef(onSelect)
   // Original edge colors, kept so blurNode can restore exactly what the mapper
   // set (per-edge opacity/width) after a hover dim.
@@ -175,6 +187,10 @@ export function VisNetworkGraph({
   // once, outside React) always see the latest props. Handlers fire after commit.
   useEffect(() => {
     liteRef.current = lite
+    nodesRef.current = nodes
+    edgesRef.current = edges
+    canonicalNodeIdsRef.current = canonicalNodeIds
+    canonicalReadyRef.current = canonicalReady
     onSelectRef.current = onSelect
     highlightRef.current = highlightNeighbors
   })
@@ -182,32 +198,73 @@ export function VisNetworkGraph({
   // Create the network once.
   useEffect(() => {
     if (!containerRef.current) return
+    const setupGenerations = setupGenerationByWorkspaceRef.current
+    const generation = (setupGenerations.get(workspaceId) ?? 0) + 1
+    setupGenerations.set(workspaceId, generation)
+    persistedPositionsRef.current = readNetworkPositions(workspaceId)
+    runtimePositionsRef.current = {}
+    const baseEdgeColors = baseEdgeColorRef.current
     const colors = resolveThemeColors()
     dimmedEdgeColorRef.current = colors.border
-    const nodesDS = new DataSet<Node>([])
-    const edgesDS = new DataSet<Edge>([])
+    // Seed the DataSet before constructing Network. Adding restored x/y only in
+    // the later sync effect lets vis-network initialize its internal body at
+    // unrelated coordinates even when physics is disabled.
+    const initialNodes = (canonicalReadyRef.current ? nodesRef.current : []).map((node) => {
+      const saved = persistedPositionsRef.current[node.id as string]
+      return saved ? { ...node, ...saved } : node
+    })
+    const hasRestoredVisibleNode = initialNodes.some(
+      (node) => persistedPositionsRef.current[node.id as string] !== undefined,
+    )
+    const nodesDS = new DataSet<Node>(initialNodes)
+    const edgesDS = new DataSet<Edge>(canonicalReadyRef.current ? edgesRef.current : [])
     nodesDSRef.current = nodesDS
     edgesDSRef.current = edgesDS
     const network = new Network(
       containerRef.current,
       { nodes: nodesDS, edges: edgesDS },
-      buildOptions(colors, densityRef.current, modeRef.current, liteRef.current),
+      buildOptions(
+        colors,
+        densityRef.current,
+        modeRef.current,
+        liteRef.current,
+        false,
+        !liteRef.current && !hasRestoredVisibleNode,
+      ),
     )
     networkRef.current = network
+    // improvedLayout can shift predefined coordinates inside the constructor.
+    // Reapply persisted positions through vis-network's public world-space API.
+    for (const node of initialNodes) {
+      const saved = persistedPositionsRef.current[node.id as string]
+      if (saved) network.moveNode(node.id as string, saved.x, saved.y)
+    }
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
     network.on('deselectNode', () => onSelectRef.current?.(null))
-    const savePositions = () => {
+    const capturePositions = (): NetworkPositions => {
       const ids = nodesDS.getIds() as string[]
-      if (ids.length === 0) return
-      const positions = network.getPositions(ids) as NetworkPositions
-      savedPositionsRef.current = positions
-      writeNetworkPositions(workspaceId, positions)
+      return ids.length === 0 ? {} : (network.getPositions(ids) as NetworkPositions)
     }
-    const scheduleSave = () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(savePositions, 250)
+    const persistPositions = (positions: NetworkPositions, nodeIds: readonly string[]) => {
+      persistedPositionsRef.current = writeNetworkPositions(
+        workspaceId,
+        positions,
+        localStorage,
+        nodeIds,
+      )
     }
-    network.on('dragEnd', scheduleSave)
+    const handlePageHide = () => {
+      if (!canonicalReadyRef.current) return
+      persistPositions(
+        {
+          ...persistedPositionsRef.current,
+          ...runtimePositionsRef.current,
+          ...capturePositions(),
+        },
+        canonicalNodeIdsRef.current,
+      )
+    }
+    window.addEventListener('pagehide', handlePageHide)
 
     // Hover neighbour highlight: dim everything but the hovered node, its
     // direct neighbours and the edges between them. Restores on blur.
@@ -238,10 +295,31 @@ export function VisNetworkGraph({
       )
     })
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      // Capture before tearing down vis-network. Deferring only the storage write
+      // lets React StrictMode's immediate setup-cleanup-setup replay invalidate
+      // its seed snapshot, while a real unmount/workspace change still persists.
+      const ready = canonicalReadyRef.current
+      const positions = {
+        ...persistedPositionsRef.current,
+        ...runtimePositionsRef.current,
+        ...capturePositions(),
+      }
+      const nodeIds = [...canonicalNodeIdsRef.current]
+      window.removeEventListener('pagehide', handlePageHide)
+      stabilizationCleanupRef.current()
+      stabilizationCleanupRef.current = () => {}
+      fitCleanupRef.current()
+      fitCleanupRef.current = () => {}
       network.destroy()
       networkRef.current = null
+      nodesDSRef.current = null
+      edgesDSRef.current = null
       populatedRef.current = false
+      baseEdgeColors.clear()
+      queueMicrotask(() => {
+        if (!ready || setupGenerations.get(workspaceId) !== generation) return
+        writeNetworkPositions(workspaceId, positions, localStorage, nodeIds)
+      })
     }
   }, [workspaceId])
 
@@ -254,7 +332,9 @@ export function VisNetworkGraph({
       if (!net) return
       const colors = resolveThemeColors()
       dimmedEdgeColorRef.current = colors.border
-      net.setOptions(buildOptions(colors, densityRef.current, modeRef.current, liteRef.current))
+      net.setOptions(
+        buildOptions(colors, densityRef.current, modeRef.current, liteRef.current, false, false),
+      )
     })
     observer.observe(root, { attributes: true, attributeFilter: ['style', 'data-theme'] })
     return () => observer.disconnect()
@@ -269,13 +349,22 @@ export function VisNetworkGraph({
     const eds = edgesDSRef.current
     const net = networkRef.current
     if (!nds || !eds || !net) return
+    if (!canonicalReady) return
 
-    const nodeIds = new Set(nodes.map((n) => n.id as string))
-    const prunedPositions = pruneNetworkPositions(savedPositionsRef.current, nodeIds)
-    if (Object.keys(prunedPositions).length !== Object.keys(savedPositionsRef.current).length) {
-      savedPositionsRef.current = prunedPositions
-      writeNetworkPositions(workspaceId, prunedPositions)
+    const existingIds = nds.getIds() as string[]
+    // Constructor-seeded nodes are not persisted positions. Capture runtime
+    // coordinates only after the initial restore/new-node decision has run.
+    if (populatedRef.current && existingIds.length > 0) {
+      runtimePositionsRef.current = {
+        ...runtimePositionsRef.current,
+        ...(net.getPositions(existingIds) as NetworkPositions),
+      }
     }
+    const knownPositions = {
+      ...persistedPositionsRef.current,
+      ...runtimePositionsRef.current,
+    }
+    const nodeIds = new Set(nodes.map((n) => n.id as string))
     ;(nds.getIds() as string[]).forEach((id) => {
       if (!nodeIds.has(id)) nds.remove(id)
     })
@@ -288,12 +377,16 @@ export function VisNetworkGraph({
         const { x: _x, y: _y, ...rest } = n as Node & { x?: number; y?: number }
         toUpdate.push(rest as Node)
       } else {
-        const saved = savedPositionsRef.current[n.id as string]
+        const saved = knownPositions[n.id as string]
         toAdd.push(saved ? { ...n, ...saved } : n)
       }
     }
     if (toAdd.length) nds.add(toAdd)
     if (toUpdate.length) nds.update(toUpdate)
+    for (const node of toAdd) {
+      const saved = knownPositions[node.id as string]
+      if (saved) net.moveNode(node.id as string, saved.x, saved.y)
+    }
 
     const edgeIds = new Set(edges.map((e) => e.id as string))
     ;(eds.getIds() as string[]).forEach((id) => {
@@ -306,54 +399,93 @@ export function VisNetworkGraph({
     // Remember each edge's mapper-set color so hover-dim can restore it.
     for (const e of edges) baseEdgeColorRef.current.set(e.id as string, e.color)
 
-    const settleAndSave = (animated: boolean) => {
-      net.setOptions({ physics: { enabled: true } })
-      net.once('stabilizationIterationsDone', () => {
+    const settleNewNodes = (newNodeIds: string[], animated: boolean) => {
+      stabilizationCleanupRef.current()
+      fitCleanupRef.current()
+      const newIds = new Set(newNodeIds)
+      const fixedBefore = new Map<string, Node['fixed']>()
+      for (const id of nds.getIds() as string[]) {
+        if (newIds.has(id)) continue
+        const node = nds.get(id) as Node | null
+        fixedBefore.set(id, node?.fixed)
+        nds.update({ id, fixed: { x: true, y: true } })
+      }
+
+      let completed = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const restoreTemporaryFixed = () => {
+        const currentIds = new Set(nds.getIds() as string[])
+        nds.update(
+          [...fixedBefore]
+            .filter(([id]) => currentIds.has(id))
+            .map(([id, fixed]) => ({ id, fixed: fixed ?? false })),
+        )
+      }
+      const complete = () => {
+        if (completed) return
+        completed = true
+        if (timer) clearTimeout(timer)
+        net.off('stabilizationIterationsDone', complete)
         net.stopSimulation()
+        net.setOptions({ physics: { enabled: false } })
+        // Unpin only after physics is disabled. DataSet fixed updates schedule a
+        // redraw and must not expose restored anchors to a final physics tick.
+        restoreTemporaryFixed()
         const ids = nds.getIds() as string[]
-        const positions = net.getPositions(ids) as NetworkPositions
-        savedPositionsRef.current = positions
-        writeNetworkPositions(workspaceId, positions)
-        fitAndCap(net, animated)
-      })
+        runtimePositionsRef.current = {
+          ...runtimePositionsRef.current,
+          ...(net.getPositions(ids) as NetworkPositions),
+        }
+        fitCleanupRef.current = fitAndCap(net, animated)
+      }
+      stabilizationCleanupRef.current = () => {
+        if (timer) clearTimeout(timer)
+        net.off('stabilizationIterationsDone', complete)
+        if (!completed) {
+          net.stopSimulation()
+          net.setOptions({ physics: { enabled: false } })
+          restoreTemporaryFixed()
+        }
+        completed = true
+      }
+      net.setOptions({ physics: { enabled: true } })
+      net.once('stabilizationIterationsDone', complete)
+      timer = setTimeout(complete, 1600)
       net.startSimulation()
     }
 
     if (!populatedRef.current && nodes.length > 0) {
       populatedRef.current = true
       const hasSavedPositionForEveryNode = nodes.every(
-        (node) => savedPositionsRef.current[node.id as string] !== undefined,
+        (node) => knownPositions[node.id as string] !== undefined,
       )
       if (hasSavedPositionForEveryNode) {
         net.stopSimulation()
         net.setOptions({ physics: { enabled: false } })
-        fitAndCap(net, false)
+        fitCleanupRef.current = fitAndCap(net, false)
       } else {
-        settleAndSave(false)
+        settleNewNodes(
+          nodes
+            .filter((node) => knownPositions[node.id as string] === undefined)
+            .map((node) => node.id as string),
+          false,
+        )
       }
-    } else if (toAdd.length > 0) {
-      settleAndSave(true)
+    } else {
+      const newNodeIds = toAdd
+        .filter((node) => knownPositions[node.id as string] === undefined)
+        .map((node) => node.id as string)
+      if (newNodeIds.length > 0) settleNewNodes(newNodeIds, true)
     }
-  }, [nodes, edges, workspaceId])
+  }, [nodes, edges, workspaceId, canonicalNodeIds, canonicalReady])
 
-  // Apply mode / density changes to the live instance (re-runs physics + refits).
-  // Fit AFTER stabilization (not immediately) so the layout — especially live
-  // mode's fixed column anchors at the top — is fully formed before framing; a
-  // timeout fallback covers cases where the stabilization event doesn't fire.
+  // Visual option changes must not restart physics or move a restored layout.
   useEffect(() => {
     modeRef.current = mode
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
-    if (!initialOptionsAppliedRef.current) {
-      initialOptionsAppliedRef.current = true
-      return
-    }
-    net.setOptions(buildOptions(resolveThemeColors(), density, mode, lite))
-    const fit = () => fitAndCap(net, true)
-    net.once('stabilizationIterationsDone', fit)
-    const t = setTimeout(fit, 1600)
-    return () => clearTimeout(t)
+    net.setOptions(buildOptions(resolveThemeColors(), density, mode, lite, false, false))
   }, [mode, density, lite])
 
   return <div ref={containerRef} className="h-full w-full" />

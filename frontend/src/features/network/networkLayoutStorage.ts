@@ -50,15 +50,19 @@ export function writeNetworkPositions(
   workspaceId: string,
   positions: NetworkPositions,
   storage: Storage = localStorage,
-): void {
+  canonicalNodeIds?: Iterable<string>,
+): NetworkPositions {
+  const merged = { ...readNetworkPositions(workspaceId, storage), ...positions }
+  const next = canonicalNodeIds ? pruneNetworkPositions(merged, canonicalNodeIds) : merged
   try {
     storage.setItem(
       networkLayoutKey(workspaceId),
-      JSON.stringify({ v: NETWORK_LAYOUT_VERSION, positions } satisfies StoredNetworkLayout),
+      JSON.stringify({ v: NETWORK_LAYOUT_VERSION, positions: next } satisfies StoredNetworkLayout),
     )
   } catch {
     // Persistence is optional; storage can be unavailable or over quota.
   }
+  return next
 }
 
 export function pruneNetworkPositions(

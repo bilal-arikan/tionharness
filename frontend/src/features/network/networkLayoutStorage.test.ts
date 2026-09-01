@@ -57,13 +57,33 @@ describe('network layout storage', () => {
     expect(positions).toHaveProperty('stale')
   })
 
+  it('merges a snapshot with latest storage and prunes only canonical deletions', () => {
+    const storage = memoryStorage()
+    writeNetworkPositions(
+      'workspace',
+      { visible: { x: 1, y: 2 }, hidden: { x: 3, y: 4 }, deleted: { x: 5, y: 6 } },
+      storage,
+    )
+
+    expect(
+      writeNetworkPositions('workspace', { visible: { x: 10, y: 20 } }, storage, [
+        'visible',
+        'hidden',
+      ]),
+    ).toEqual({ visible: { x: 10, y: 20 }, hidden: { x: 3, y: 4 } })
+    expect(readNetworkPositions('workspace', storage)).toEqual({
+      visible: { x: 10, y: 20 },
+      hidden: { x: 3, y: 4 },
+    })
+  })
+
   it('swallows storage quota errors', () => {
     const storage = memoryStorage()
     storage.setItem = () => {
       throw new DOMException('quota', 'QuotaExceededError')
     }
-    expect(() =>
-      writeNetworkPositions('workspace', { node: { x: 1, y: 2 } }, storage),
-    ).not.toThrow()
+    expect(writeNetworkPositions('workspace', { node: { x: 1, y: 2 } }, storage)).toEqual({
+      node: { x: 1, y: 2 },
+    })
   })
 })

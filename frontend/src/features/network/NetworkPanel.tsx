@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -43,7 +43,14 @@ function sessionIdFromNodeId(id: string): string | null {
 // busy agent appears once per run and an idle agent does not appear at all.
 export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
+  const [graphWorkspaceId, setGraphWorkspaceId] = useState<string | null>(null)
+  const [graphReady, setGraphReady] = useState(false)
   const [loading, setLoading] = useState(false)
+  const loadSequenceRef = useRef(0)
+  const activeWorkspaceRef = useRef(workspaceId)
+  useEffect(() => {
+    activeWorkspaceRef.current = workspaceId
+  }, [workspaceId])
   // User-defined Kanban columns (mirrors the Board column editor). When set,
   // the live-mode column anchors in the network are taken from here instead of
   // the built-in five-status defaults.
@@ -85,15 +92,42 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
     })
 
   const load = useCallback(() => {
+    const sequence = ++loadSequenceRef.current
+    const requestedWorkspaceId = workspaceId
+    setGraphReady(false)
     setLoading(true)
     Promise.all([api.workspaceGraph(), api.getWorkspaceSettings()])
       .then(([g, s]: [WorkspaceGraph, { boardColumns?: BoardColumnDef[] }]) => {
+        if (
+          loadSequenceRef.current !== sequence ||
+          activeWorkspaceRef.current !== requestedWorkspaceId
+        ) {
+          return
+        }
         setGraph(g)
+        setGraphWorkspaceId(requestedWorkspaceId)
+        setGraphReady(true)
         if (s && Array.isArray(s.boardColumns)) setBoardColumns(s.boardColumns)
       })
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }, [onError])
+      .catch((e) => {
+        if (
+          loadSequenceRef.current === sequence &&
+          activeWorkspaceRef.current === requestedWorkspaceId
+        ) {
+          onError((e as Error).message)
+        }
+      })
+      .finally(() => {
+        if (
+          loadSequenceRef.current === sequence &&
+          activeWorkspaceRef.current === requestedWorkspaceId
+        ) {
+          setLoading(false)
+        }
+      })
+  }, [onError, workspaceId])
+
+  const canonicalReady = graphReady && graphWorkspaceId === workspaceId
 
   useEffect(() => {
     load()
@@ -137,6 +171,21 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
         ? workspaceToVis(filteredGraph, visible, mode, boardColumns)
         : { nodes: [], edges: [] },
     [filteredGraph, visible, mode, boardColumns],
+  )
+
+  // Persistence GC follows the unfiltered graph with every layer enabled.
+  // Facet/layer visibility is temporary and must not be mistaken for deletion.
+  const canonicalNodeIds = useMemo(
+    () =>
+      graph
+        ? workspaceToVis(
+            graph,
+            new Set<WorkspaceNodeType>(NODE_LAYERS.map((layer) => layer.type)),
+            mode,
+            boardColumns,
+          ).nodes.map((node) => node.id as string)
+        : [],
+    [graph, mode, boardColumns],
   )
 
   // In live mode tasks/columns are intrinsic; the flow/skill/MCP layers stay
@@ -254,6 +303,8 @@ export function NetworkPanel({ workspaceId, onError, onOpenSession }: Props) {
             workspaceId={workspaceId}
             nodes={nodes}
             edges={edges}
+            canonicalNodeIds={canonicalNodeIds}
+            canonicalReady={canonicalReady}
             mode={mode}
             density={density}
             onSelect={handleSelect}
