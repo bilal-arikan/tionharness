@@ -316,17 +316,31 @@ type Runtime struct {
 	epochCache map[string]map[string]*promptEpochEntry
 }
 
+// sessionRun is one turn's registration in activeSessions. It exists for its
+// POINTER IDENTITY: activeSessions holds a single entry per session, and the
+// autonomous callers register their cancel func BEFORE queueing for the session's
+// turn slot — so while turn A runs, a queued turn B has already overwritten A's
+// entry with its own. A plain Delete on A's exit would drop B's registration and
+// leave a live turn unstoppable ("Durdur" answers 404). Untracking through the
+// handle deletes only the registration the caller itself made.
+type sessionRun struct{ cancel context.CancelFunc }
+
 // trackSession marks a session as actively running an autonomous invoke and
 // stores the cancel func of that turn's context, so the run can be stopped from
 // the API ("Durdur") even though it was never registered in the api server's
 // chatRuns. cancel is REQUIRED — callers must wrap the turn in their own
 // cancelable context; a nil cancel would leave the session untoppable, so it
 // fails loudly here instead of being silently swallowed.
-func (r *Runtime) trackSession(id string, cancel context.CancelFunc) {
+//
+// The returned handle identifies THIS registration; pass it to untrackSessionRun
+// so the cleanup cannot evict a later turn's registration.
+func (r *Runtime) trackSession(id string, cancel context.CancelFunc) *sessionRun {
 	if cancel == nil {
 		panic("agent: trackSession requires a non-nil cancel func for session " + id)
 	}
-	r.activeSessions.Store(id, cancel)
+	run := &sessionRun{cancel: cancel}
+	r.activeSessions.Store(id, run)
+	return run
 }
 
 // CancelSession cancels the in-flight autonomous turn of a session, if any.
@@ -336,16 +350,29 @@ func (r *Runtime) CancelSession(id string) bool {
 	if !ok {
 		return false
 	}
-	cancel, ok := v.(context.CancelFunc)
+	run, ok := v.(*sessionRun)
 	if !ok {
 		return false
 	}
-	cancel()
+	run.cancel()
 	return true
 }
 
-// untrackSession removes the running marker when an invoke finishes.
+// untrackSession removes the running marker when an invoke finishes, whoever put
+// it there. Use it only where the caller provably owns the session's registration
+// for the whole window (a session it just created, or a turn that still holds the
+// turn slot); otherwise prefer untrackSessionRun.
 func (r *Runtime) untrackSession(id string) { r.activeSessions.Delete(id) }
+
+// untrackSessionRun removes the marker only if it is still the one run registered,
+// so a turn that finished cannot evict the registration of a turn queued behind it.
+func (r *Runtime) untrackSessionRun(id string, run *sessionRun) {
+	if run == nil {
+		r.activeSessions.Delete(id)
+		return
+	}
+	r.activeSessions.CompareAndDelete(id, run)
+}
 
 // ActiveSessionIDs returns the session ids currently running autonomous invokes.
 func (r *Runtime) ActiveSessionIDs() []string {

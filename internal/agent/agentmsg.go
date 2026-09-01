@@ -226,9 +226,9 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 	// Registering it inside the goroutine — after a turn-slot claim that can queue
 	// behind any other turn on the inbox session — left that window uncancellable.
 	runCtx, cancelRun := context.WithCancel(context.Background())
-	r.trackSession(inbox.ID, cancelRun)
+	run := r.trackSession(inbox.ID, cancelRun)
 	// Fire-and-forget: process detached from the caller's context.
-	go r.runInboxDelivery(runCtx, cancelRun, target, inbox.ID, text)
+	go r.runInboxDelivery(runCtx, cancelRun, run, target, inbox.ID, text)
 	return nil
 }
 
@@ -241,7 +241,9 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 // runCtx/cancelRun are created and registered by the caller (SendAgentMessage)
 // before this goroutine starts, so the delivery is cancellable from the moment the
 // send returns — including while it is still queued for the session's turn slot.
-func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.CancelFunc, agent db.Agent, inboxID, prompt string) {
+// run is that registration's handle: the untracks below must remove OUR marker
+// only, since a turn queued behind us registers its own cancel before it waits.
+func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.CancelFunc, run *sessionRun, agent db.Agent, inboxID, prompt string) {
 	defer r.releaseSpawnSlot()
 	defer cancelRun()
 
@@ -260,7 +262,7 @@ func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.Can
 		// nobody is waiting for.
 		r.logger.Info("agent message: cancelled before its turn started",
 			"session", inboxID, "agent", agent.ID)
-		r.untrackSession(inboxID)
+		r.untrackSessionRun(inboxID, run)
 		r.emitInboxEvent(agent, inboxID, false)
 		return
 	}
@@ -285,7 +287,7 @@ func (r *Runtime) runInboxDelivery(runCtx context.Context, cancelRun context.Can
 			return r.runSessionTurn(turnCtx, agent, inboxID, p, true)
 		})
 	defer cancel()
-	r.untrackSession(inboxID)
+	r.untrackSessionRun(inboxID, run)
 
 	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;
 	// lead it with the outcome note (nil error) so it records as an explaining reply,

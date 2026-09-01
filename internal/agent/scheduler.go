@@ -312,8 +312,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// that never comes — the old claim ignored that deadline entirely.
 	wakeRunCtx, cancelWakeRun := context.WithCancel(ctx)
 	defer cancelWakeRun()
-	s.rt.trackSession(sc.SessionID, cancelWakeRun)
-	defer s.rt.untrackSession(sc.SessionID)
+	wakeRun := s.rt.trackSession(sc.SessionID, cancelWakeRun)
 
 	// A wake re-enters a real, human-visible chat session: claim its per-session
 	// turn slot so the wake turn never overlaps a concurrent user turn (inbox
@@ -321,6 +320,12 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// notifications arriving meanwhile coalesce and run after release.
 	release, slotErr := s.rt.claimSessionTurnSlotCtx(wakeRunCtx, sc.SessionID, turnqueue.KindWake, "uyandırma")
 	defer release()
+	// Declared AFTER the slot release so it runs BEFORE it: in the gap between a
+	// release and this cleanup the next queued turn takes the slot, and an untrack
+	// landing there would drop a registration that is no longer ours. Scoped to
+	// wakeRun for the same reason — a turn queued behind us registered its cancel
+	// before it started waiting, so it already owns the session's marker.
+	defer s.rt.untrackSessionRun(sc.SessionID, wakeRun)
 	if slotErr != nil {
 		// Stopped (or timed out) while waiting for the session's turn slot: the turn
 		// never ran and nothing was written into the conversation, so close the UI
@@ -609,17 +614,19 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// instead of being outlived by a turn that starts afterwards.
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
-	s.rt.trackSession(session.ID, cancelRun)
-	// Deferred, not untracked at a single point: every bail below this line (slot
-	// cancellation, prompt-append failure) would otherwise leave the session marked
-	// active forever — permanently "running" in the sessions view, its agent busy,
-	// and isSessionActive stuck true.
-	defer s.rt.untrackSession(session.ID)
+	run := s.rt.trackSession(session.ID, cancelRun)
 	// Serialize this scheduled turn with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.
 	release, slotErr := s.rt.claimSessionTurnSlotCtx(runCtx, session.ID, turnqueue.KindWake, "zamanlanmış tur")
 	defer release()
+	// Deferred, not untracked at a single point: every bail below this line (slot
+	// cancellation, prompt-append failure) would otherwise leave the session marked
+	// active forever — permanently "running" in the sessions view, its agent busy,
+	// and isSessionActive stuck true. Declared AFTER the slot release so it runs
+	// BEFORE it (the next queued turn must not inherit an untrack landing after it
+	// took the slot), and scoped to run so it can only remove our own registration.
+	defer s.rt.untrackSessionRun(session.ID, run)
 	if slotErr != nil {
 		// Stopped while waiting for the slot: the turn never ran and the prompt was not
 		// even recorded, so leave the session untouched and report the stop.

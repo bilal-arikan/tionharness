@@ -473,6 +473,23 @@ yolunda aynıdır:
 3. Claim hata dönerse tur **hiç koşmaz**: durum damgalanır, gözlemlenebilir olay
    yayılır, kendini zincirleyen devam yolları (auto-continue / auto-handoff /
    coordinator bildirimi) atlanır.
+4. Turun çıkışta yaptığı untrack **kendi kaydına** dairdir ve slot bırakılmadan
+   **önce** çalışır (bkz. aşağıdaki "Kaydın sahipliği").
+
+**Kaydın sahipliği (2026-09-01).** Kural 1'in doğrudan sonucu: `activeSessions`
+oturum başına **tek** kayıt tutar, ama her yol cancel'ını claim'den önce
+kaydettiği için A turu koşarken arkasında bekleyen B turu A'nın kaydını çoktan
+kendi kaydıyla **ezmiş** olur. A'nın çıkışta koşulsuz `Delete` yapması B'nin
+kaydını siler: B takipsiz koşar, `isSessionActive` `false` okur, "Durdur" ise
+"çalışmıyor" der. Bu yüzden `trackSession` artık kaydın **kimliğini** temsil eden
+bir `*sessionRun` tutamacı döndürür ve temizlik `untrackSessionRun(id, run)` ile
+yapılır — `sync.Map.CompareAndDelete`, yani yalnız kayıt hâlâ bizimken siler.
+Ayrıca untrack, slot `release`'inden **önce** çalışacak şekilde (yani `defer`
+sırasında release'den **sonra** ilan edilerek) konumlandırılır: release ile
+untrack arasındaki boşlukta slotu kapan tur da aynı şekilde mağdur olurdu.
+`untrackSession(id)` (koşulsuz) yalnız çağıranın kaydın sahipliğini pencerenin
+tamamı boyunca kanıtlayabildiği yerlerde kalır — az önce kendi yarattığı bir
+oturum, veya slotu hâlâ elinde tutan bir tur.
 
 Kapsanan yollar: worker (`coordination.go`), spawn (`spawn.go`), wake +
 scheduled prompt (`scheduler.go`), automation (`automation_deliver.go`), peer

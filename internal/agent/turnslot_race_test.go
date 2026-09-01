@@ -484,3 +484,93 @@ func TestCoordinatorDrainBailUntracksSession(t *testing.T) {
 		t.Fatal("the bailed drain must untrack the session, not leave its cancel registered")
 	}
 }
+
+// waitForQueuedTurns blocks until at least n turns of kind are waiting in
+// sessionID's queue, and reports whether they appeared before the deadline.
+func waitForQueuedTurns(rt *Runtime, sessionID string, kind turnqueue.Kind, n int) bool {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		seen := 0
+		for _, w := range rt.TurnQueue().Snapshot(sessionID).Waiting {
+			if w.Kind == kind {
+				seen++
+			}
+		}
+		if seen >= n {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return false
+}
+
+// TestFinishedTurnKeepsTheQueuedTurnsRegistration: the flip side of the four tests
+// above. Every autonomous entry path registers its cancel BEFORE it queues for the
+// session's turn slot, and activeSessions holds ONE entry per session — so while
+// turn A runs, turn B waiting behind it has already replaced A's registration with
+// its own. A's exit must therefore leave the marker alone: an unconditional untrack
+// (or one that lands after A released the slot) drops B's registration, and B then
+// runs untracked — isSessionActive reads false and "Durdur" answers "not running"
+// for a turn that is very much alive.
+func TestFinishedTurnKeepsTheQueuedTurnsRegistration(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	sched := NewScheduler(rt.db, rt, slog.New(slog.NewTextHandler(discardWriter{}, nil)))
+	ctx := context.Background()
+	agent := turnSlotTestAgent(t, rt, "Sıralı")
+
+	// Open the shared schedule thread up front so the test knows which session's slot
+	// to occupy; both deliverPrompt calls below reuse the very same one.
+	session, err := rt.db.GetOrCreateKindSession(ctx, agent.ID, "schedule", "⏰ Schedule")
+	if err != nil {
+		t.Fatalf("open schedule session: %v", err)
+	}
+	// Hold the slot so both turns queue instead of running.
+	releaseHolder := rt.claimSessionTurnSlot(session.ID, turnqueue.KindUser, "test holder")
+	defer releaseHolder()
+
+	// Turn A gets its own parent context: CancelSession is session-wide and would
+	// only ever reach the LAST registration, so the test ends A through its own ctx.
+	ctxA, cancelA := context.WithCancel(ctx)
+	defer cancelA()
+	aDone := make(chan struct{})
+	go func() {
+		defer close(aDone)
+		_, _ = sched.deliverPrompt(ctxA, db.Schedule{ID: "SCHA", AgentID: agent.ID, Prompt: "A"})
+	}()
+	if !waitForQueuedTurns(rt, session.ID, turnqueue.KindWake, 1) {
+		t.Fatal("turn A never entered the session's turn queue")
+	}
+
+	// Turn B queues behind A, registering its own cancel on the way in.
+	bErr := make(chan error, 1)
+	go func() {
+		_, derr := sched.deliverPrompt(ctx, db.Schedule{ID: "SCHB", AgentID: agent.ID, Prompt: "B"})
+		bErr <- derr
+	}()
+	if !waitForQueuedTurns(rt, session.ID, turnqueue.KindWake, 2) {
+		t.Fatal("turn B never entered the session's turn queue")
+	}
+
+	// A ends. Everything below is about what its cleanup did to B's registration.
+	cancelA()
+	select {
+	case <-aDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("turn A outlived its own cancellation")
+	}
+
+	if !rt.isSessionActive(session.ID) {
+		t.Fatal("the finished turn evicted the queued turn's registration: the session reads idle while a turn is still queued")
+	}
+	if !rt.CancelSession(session.ID) {
+		t.Fatal("the queued turn was no longer cancellable after the turn ahead of it finished")
+	}
+	select {
+	case err := <-bErr:
+		if err == nil {
+			t.Fatal("the cancelled queued turn must report the stop")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("turn B outlived its cancellation")
+	}
+}

@@ -73,14 +73,19 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// something to cancel instead of being outlived by a turn that starts afterwards.
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
-	r.trackSession(session.ID, cancelRun)
-	defer r.untrackSession(session.ID)
+	run := r.trackSession(session.ID, cancelRun)
 
 	// Serialize this fire's turn with any concurrent turn on the same session (a
 	// prior fire still running, a user who opened the maintenance thread) via the
 	// single per-session turn slot.
 	release, slotErr := r.claimSessionTurnSlotCtx(runCtx, session.ID, turnqueue.KindAutomation, "otomasyon tetiği")
 	defer release()
+	// Declared AFTER the slot release so it runs BEFORE it: the next queued turn
+	// takes the slot the instant we release it, and an untrack landing after that
+	// would drop a registration that is no longer ours. Scoped to run for the same
+	// reason — a turn queued behind us registered its cancel before it started
+	// waiting, so the session's marker is already its own.
+	defer r.untrackSessionRun(session.ID, run)
 	if slotErr != nil {
 		// Stopped while waiting for the slot: the turn never ran and the prompt was not
 		// recorded. Return before the auto-continue / auto-handoff chain below — a fire
