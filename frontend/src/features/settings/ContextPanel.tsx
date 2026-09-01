@@ -333,7 +333,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
         />
         <NumberField
           label="Çıktı token tavanı"
-          hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax 32K, haiku 16K, deepseek/gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."
+          hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax/deepseek/gpt/glm 32K, haiku 16K, gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."
           min={0}
           value={draft.maxOutputTokens}
           onChange={(v) => set('maxOutputTokens', v)}
