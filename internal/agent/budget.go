@@ -153,6 +153,9 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	req = r.withMaxOutput(agent.Provider, req)
 	resp, err := provider.Complete(ctx, req)
 	if err != nil {
+		// A failed turn still burns tokens; providers.WithUsage attaches what the
+		// call actually spent to the error, so bill it before propagating.
+		r.recordFailedUsage(ctx, agent, req, err)
 		// Mirror recordedComplete's logging: guardedComplete is the funnel for the
 		// non-tool autonomous calls (reflect/summary/title), so a provider failure
 		// here must surface in the logs too — not just propagate up silently.
