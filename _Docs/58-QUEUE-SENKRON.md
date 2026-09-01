@@ -476,10 +476,35 @@ yolunda aynıdır:
 
 Kapsanan yollar: worker (`coordination.go`), spawn (`spawn.go`), wake +
 scheduled prompt (`scheduler.go`), automation (`automation_deliver.go`), peer
-inbox (`agentmsg.go`). Wake'in claim'i ayrıca fire'ın `ScheduleTimeout` ctx'inden
+inbox (`agentmsg.go`) ve koordinatör drain'i (`drainCoordinator`, aşağıda).
+Wake'in claim'i ayrıca fire'ın `ScheduleTimeout` ctx'inden
 türer (önceden bu deadline'ı tamamen yok sayıyordu) ve claim'de durdurulan bir
 wake **failure teslimatı olarak kaydedilmez** (`errWakeCancelledBeforeTurn`) —
 iptal edilmiş bir wake başarısız bir wake değildir.
+
+**Koordinatör drain'i (2026-09-01, bu sınıfın son sitesi).** Tur ctx'i eskiden
+`runCoordinatorTurn` içinde, yani claim döndükten SONRA açılıyordu; kuyrukta
+beklerken gelen "Durdur" `false` alıp yutuluyor, `stopRequested` hiç set
+edilmiyor ve döngü oto-turlarına devam ediyordu. Artık ctx `go
+r.drainCoordinator(...)`'dan önce mint edilip `trackSession`'a kaydedilir ve
+drain'e parametre olarak geçer; `runCoordinatorTurn` onu dışarıdan alır.
+Drain **döngü** olduğu için ctx **iterasyon başına**dır: her tur sonunda
+`endTurnCtx()` + `release()` **açıkça** (defer DEĞİL — defer edilseydi slot tüm
+drain boyunca tutulur ve aşağıdaki adalet özelliği ölürdü) çağrılır, sonraki
+iterasyon kendi ctx'ini mint eder. Tek ctx tüm drain'e yayılamaz: bir Stop
+sonraki iterasyonun claim'ini de öldürür ve "gerçek worker bildirimi önceki
+insan Stop'unu geçersizler" kuralı bozulurdu. `endTurnCtx` `release`'den
+**önce** çağrılır; ters sırada boşluğa giren başka bir tur kendi cancel'ını
+kaydeder ve geç kalan `untrackSession` onu siler → canlı tur durdurulamaz olur.
+
+Claim'de durdurulan drain'in bail'i: `turns++` **atlanır** (koşmayan tur bütçe
+harcamaz), `pending` **korunur** (bildirimi tüketmez; sonraki
+`enqueueCoordinatorTurn` taze bir drain başlatıp görür), `driving` **temizlenir**
+(yoksa her yeni bildirim "zaten sürüyor" dalına düşer ve **hiçbir zaman** yeni
+drain başlamaz — kalıcı donma), `stopRequested` parite için set edilir.
+`markCoordinatorBlocked` **çağrılmaz** — koordinatör sıkışmadı, insan durdurdu.
+`scheduleSettleBackstop` yalnız `!pending` iken çağrılır (pending varken zaten
+uyandırma yolu var ve backstop'un kendi guard'ı no-op yapardı).
 
 Testler: `internal/agent/turnslot_race_test.go`,
 `internal/agent/worker_stop_race_test.go`.
@@ -730,7 +755,9 @@ döngüsü var mı — bildirimlerin **tek** döngüde birleşmesi için), `pend
 **yeniden kuyruğa giriyor** → kullanıcı mesajı zaten FIFO'da olduğu için mevcut
 turdan sonra koşar, tüm drain'in sonunda değil. Adalet bir özel-durum kontrolü
 değil, **yapısal**. `turns` sayacı artık slot alındıktan sonra artar (bekleyen ama
-hiç koşmamış tur bütçe harcamaz).
+hiç koşmamış tur bütçe harcamaz). Claim iptal edilebilir
+(`claimSessionTurnSlotCtx`) ve iterasyonun cancel func'ı kuyruğa girmeden önce
+kaydedilir — ayrıntı yukarıdaki "Claim penceresinde Durdur" bölümünde.
 
 Dışarıdan `running` okuyan üç yer artık kuyruğa soruyor: stall süpürücüsü
 (`slotIsStallCandidate`), flow-koordinatör sükûnet kontrolü (`coordSlotIdle`) ve

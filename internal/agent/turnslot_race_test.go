@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -324,5 +325,162 @@ func TestPeerInboxDeliveryIsCancellableWhileQueued(t *testing.T) {
 		if m.Role == "assistant" {
 			t.Fatalf("a cancelled-while-queued inbox delivery must record no reply, got %q", m.Text)
 		}
+	}
+}
+
+// The four tests below cover the last site of the same class: the coordinator drain
+// loop. Its turn context was minted inside runCoordinatorTurn — i.e. AFTER the
+// (uninterruptible) turn-slot claim had already returned — so a Stop landing while
+// the drain waited in the admission queue found nothing to cancel, was swallowed,
+// and the coordinator kept auto-turning.
+
+// waitDrainStopped blocks until the drain loop has left the slot (driving cleared),
+// so the assertions below observe the bail's final state and not the window before it.
+func waitDrainStopped(t *testing.T, slot *coordSlot) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		slot.mu.Lock()
+		driving := slot.driving
+		slot.mu.Unlock()
+		if !driving {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the bailed drain never cleared driving")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestCoordinatorDrainCancelledWhileQueuedNeverRuns: a drain turn stopped while it
+// waits for the coordinator session's turn slot must be findable by CancelSession,
+// must never run, and must leave the slot released.
+func TestCoordinatorDrainCancelledWhileQueuedNeverRuns(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+
+	// Occupy the coordinator's slot so the drain has to queue behind it.
+	releaseHolder := rt.claimSessionTurnSlot("COORD", turnqueue.KindUser, "test holder")
+
+	rt.enqueueCoordinatorTurn("COORD")
+	if !waitForQueuedKind(rt, "COORD", turnqueue.KindCoordinator) {
+		t.Fatal("the drain turn never entered the coordinator's turn queue")
+	}
+	if !rt.CancelSession("COORD") {
+		t.Fatal("a queued coordinator drain turn must still be cancellable")
+	}
+	releaseHolder()
+
+	// Give the (bailed) drain every chance to start the turn it must not start.
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	got := turns
+	mu.Unlock()
+	if got != 0 {
+		t.Fatalf("a drain cancelled while queued must not run its turn; got %d turns", got)
+	}
+	if rt.sessionTurnBusy("COORD") {
+		t.Fatal("the bailed drain must release the session's turn slot")
+	}
+}
+
+// TestCoordinatorDrainBailDoesNotSpendBudgetOrEatTheNote: the bail must leave the
+// auto-turn budget untouched (the turn never ran) and preserve slot.pending — the
+// worker notification that armed the drain is still owed a turn.
+func TestCoordinatorDrainBailDoesNotSpendBudgetOrEatTheNote(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.coordRunFn = func(string) {}
+	slot := rt.coordSlotFor("COORD")
+	// The preserved note is exactly what this test asserts, and it is also what
+	// drainSpawns counts as unsettled background work — consume it after the
+	// assertions so the cleanup sees an idle coordinator.
+	defer func() {
+		slot.mu.Lock()
+		slot.pending = false
+		slot.mu.Unlock()
+		drainSpawns(t, rt)
+	}()
+
+	releaseHolder := rt.claimSessionTurnSlot("COORD", turnqueue.KindUser, "test holder")
+
+	rt.enqueueCoordinatorTurn("COORD")
+	if !waitForQueuedKind(rt, "COORD", turnqueue.KindCoordinator) {
+		t.Fatal("the drain turn never entered the coordinator's turn queue")
+	}
+	// A second notification while the first is queued: this is the note that must
+	// survive the stop.
+	rt.enqueueCoordinatorTurn("COORD")
+	if !rt.CancelSession("COORD") {
+		t.Fatal("a queued coordinator drain turn must still be cancellable")
+	}
+	releaseHolder()
+	waitDrainStopped(t, slot)
+
+	slot.mu.Lock()
+	spent, pending := slot.turns, slot.pending
+	slot.mu.Unlock()
+	if spent != 0 {
+		t.Fatalf("a turn that never ran must not spend the auto-turn budget; slot.turns = %d", spent)
+	}
+	if !pending {
+		t.Fatal("the bail must preserve the pending worker notification, not consume it")
+	}
+}
+
+// TestCoordinatorDrainReArmsAfterQueuedStop: the bail must clear slot.driving, or
+// every later notification takes the "already driving" branch and no drain ever
+// starts again — a permanent, silent freeze.
+func TestCoordinatorDrainReArmsAfterQueuedStop(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+
+	releaseHolder := rt.claimSessionTurnSlot("COORD", turnqueue.KindUser, "test holder")
+	rt.enqueueCoordinatorTurn("COORD")
+	if !waitForQueuedKind(rt, "COORD", turnqueue.KindCoordinator) {
+		t.Fatal("the drain turn never entered the coordinator's turn queue")
+	}
+	if !rt.CancelSession("COORD") {
+		t.Fatal("a queued coordinator drain turn must still be cancellable")
+	}
+	releaseHolder()
+	waitDrainStopped(t, rt.coordSlotFor("COORD"))
+
+	// A fresh worker notification after the stop must start a new drain and get its turn.
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 1, "re-arm after a queued stop")
+}
+
+// TestCoordinatorDrainBailUntracksSession: the bail must drop the cancel func it
+// registered before queueing. A leaked entry pins HasActiveSessions true forever —
+// the workspace reads as permanently busy and a dead session stays "running".
+func TestCoordinatorDrainBailUntracksSession(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	defer drainSpawns(t, rt)
+
+	rt.coordRunFn = func(string) {}
+	slot := rt.coordSlotFor("COORD")
+
+	releaseHolder := rt.claimSessionTurnSlot("COORD", turnqueue.KindUser, "test holder")
+	rt.enqueueCoordinatorTurn("COORD")
+	if !waitForQueuedKind(rt, "COORD", turnqueue.KindCoordinator) {
+		t.Fatal("the drain turn never entered the coordinator's turn queue")
+	}
+	if !rt.CancelSession("COORD") {
+		t.Fatal("a queued coordinator drain turn must still be cancellable")
+	}
+	releaseHolder()
+	waitDrainStopped(t, slot)
+
+	if rt.CancelSession("COORD") {
+		t.Fatal("the bailed drain must untrack the session, not leave its cancel registered")
 	}
 }

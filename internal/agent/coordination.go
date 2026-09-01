@@ -82,12 +82,17 @@ type coordSlot struct {
 	// to false by any turn that actually calls a coordination tool (genuine recovery).
 	// See guardCoordinatorStall / escalateCoordinatorStallHalt (coordination_stall.go).
 	stallHalted bool
-	// stopRequested is set by runCoordinatorTurn when the live coordinator turn ended
-	// on a human Stop (plain context.Canceled, distinct from a watchdog cut). The drain
-	// loop consumes it right after the turn returns and EXITS without running the
-	// idle-reconcile turn — otherwise a manual Stop on a coordinator whose workers had
-	// all finished would inject a fresh <coordination-status> note and run one more
-	// turn, so the session looked like it "kept going" after the user stopped it.
+	// stopRequested records that this coordinator's turn ended on a human Stop (plain
+	// context.Canceled, distinct from a watchdog cut). Set in two places:
+	// runCoordinatorTurn, when the LIVE turn was cancelled, and drainCoordinator's bail,
+	// when the stop landed while the turn was still queued for the session's turn slot.
+	// Both are followed by the drain loop returning immediately — the flag itself has no
+	// reader today; it is kept so the slot's state still says WHY the loop stopped, and
+	// so the three clears below (`stallHalted` exit, pending re-arm, idle exit) keep a
+	// consistent meaning. The exit is what suppresses the idle-reconcile turn: without
+	// it a manual Stop on a coordinator whose workers had all finished would inject a
+	// fresh <coordination-status> note and run once more, so the session looked like it
+	// "kept going" after the user stopped it.
 	// One-shot: a later worker notification re-arms the loop via enqueueCoordinatorTurn.
 	stopRequested bool
 	// lastTurnUnix is the wall-clock (unix seconds) at which this coordinator's last
@@ -1826,7 +1831,13 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 	}
 	slot.driving = true
 	slot.mu.Unlock()
-	go r.drainCoordinator(coordSessionID, slot)
+	// Registered BEFORE the goroutine starts: NotifyCoordinator returns into the worker
+	// path immediately, so a "Durdur" in the very next instant must already find this
+	// drain's cancel — not a nil map entry (the same defect closed for spawn, worker,
+	// wake, scheduled, automation and peer inbox turns).
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	r.trackSession(coordSessionID, cancelRun)
+	go r.drainCoordinator(coordSessionID, slot, runCtx, cancelRun)
 }
 
 // drainCoordinator runs coordinator turns until no more notifications are pending,
@@ -1838,7 +1849,25 @@ func (r *Runtime) enqueueCoordinatorTurnKeepingIdleAck(coordSessionID string, ke
 // user queued mid-drain is already in the FIFO, so it runs after the current turn —
 // not after the whole drain. Nothing is lost by yielding; the notification that
 // re-armed us is persisted in history and slot.pending carries the intent.
-func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
+//
+// runCtx/cancelRun are the FIRST iteration's turn context, minted by the caller before
+// the `go` so a stop issued in the instant after enqueue still finds something to
+// cancel. Each later iteration mints its own; the drain owns the cleanup of whichever
+// pair it currently holds.
+func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot, runCtx context.Context, cancelRun context.CancelFunc) {
+	// Ends the iteration's turn context and its cancel registration. Called on EVERY
+	// exit path and at the end of every iteration; nil-safe so the loop can re-arm.
+	// untrackSession runs BEFORE the slot is released: in the gap after a release
+	// another queued turn can take the slot and register its own cancel, and a late
+	// Delete would drop THAT registration, making a live turn unstoppable.
+	endTurnCtx := func() {
+		if cancelRun == nil {
+			return
+		}
+		r.untrackSession(coordSessionID)
+		cancelRun()
+		runCtx, cancelRun = nil, nil
+	}
 	for {
 		slot.mu.Lock()
 		// A selected recipe (M5) may lower/raise the notify-loop cap for just this
@@ -1853,6 +1882,9 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 			slot.pending = false
 			slot.driving = false
 			slot.mu.Unlock()
+			// The first iteration inherits a live ctx from the caller; leaving it tracked
+			// would keep the session listed as active forever.
+			endTurnCtx()
 			if warn {
 				r.warnCoordinatorCap(coordSessionID, slot.turns)
 			}
@@ -1860,9 +1892,44 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		}
 		slot.mu.Unlock()
 
+		// Adopt the caller's ctx on the first iteration, mint a fresh one on every later
+		// one. Per-iteration, never hoisted over the whole drain: a stop must not also
+		// kill the next iteration's claim, because a real worker notification supersedes
+		// an earlier human Stop (see the pending branch below).
+		if cancelRun == nil {
+			var c context.Context
+			c, cancelRun = context.WithCancel(context.Background())
+			runCtx = c
+			r.trackSession(coordSessionID, cancelRun)
+		}
+
 		// Queue for the slot like everyone else. Whatever is ahead of us — a user
 		// message, a /compact, a peer delivery — runs first.
-		release := r.claimSessionTurnSlot(coordSessionID, turnqueue.KindCoordinator, "worker bildirimi")
+		release, slotErr := r.claimSessionTurnSlotCtx(runCtx, coordSessionID, turnqueue.KindCoordinator, "worker bildirimi")
+		if slotErr != nil {
+			// Stopped while queued behind another turn on this session. The turn never
+			// ran, so it must not spend the auto-turn budget (turns++ is deliberately
+			// skipped) and must not consume the notification that armed it (pending is
+			// left as-is: a worker note is still owed a turn once the loop is re-armed).
+			// No markCoordinatorBlocked — a human stopped this, the coordinator is not
+			// wedged — and no settle backstop while a note is still pending.
+			release()
+			r.logger.Info("coordination: drain turn cancelled before it started", "coordinator", coordSessionID)
+			slot.mu.Lock()
+			slot.stopRequested = true // parity with runCoordinatorTurn's stop path
+			// driving MUST be cleared: otherwise every later notification takes the
+			// "already driving" branch and no drain ever starts again — a permanent freeze.
+			slot.driving = false
+			owed := !slot.pending
+			slot.mu.Unlock()
+			endTurnCtx()
+			if owed {
+				// Nothing pending can wake this node again: if it is a mid-level node that
+				// still owes report_to_coordinator, the branch above it would wait forever.
+				r.scheduleSettleBackstop(coordSessionID)
+			}
+			return
+		}
 		slot.mu.Lock()
 		// Count the auto-turn HERE, not before the wait: while we were queued a user
 		// turn may have reset the cap (a human is back in the loop), and a turn that
@@ -1877,8 +1944,12 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		if r.coordRunFn != nil {
 			r.coordRunFn(coordSessionID)
 		} else {
-			r.runCoordinatorTurn(coordSessionID)
+			r.runCoordinatorTurn(runCtx, coordSessionID)
 		}
+		// Neither call is deferred: this is a loop body that can iterate up to
+		// CoordinatorMaxTurns times, and a deferred release would hold the slot across
+		// the whole drain, destroying the fairness property documented above.
+		endTurnCtx()
 		release()
 
 		slot.mu.Lock()
@@ -2030,7 +2101,10 @@ func toViewWorkers(ws []WorkerInfo) []view.Worker {
 // runCoordinatorTurn runs one history-aware turn for the coordinator session so it
 // synthesizes the worker notifications now sitting in its history, then records the
 // reply and fires the turn-finished hook (for tags/automations on the coordinator).
-func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
+// drainCtx is the drain iteration's cancellable context: created and registered with
+// trackSession by drainCoordinator BEFORE it queued for the turn slot, so a stop
+// issued while this turn was still waiting is not outlived by it.
+func (r *Runtime) runCoordinatorTurn(drainCtx context.Context, coordSessionID string) {
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
@@ -2061,11 +2135,6 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 		meta    *turnMeta
 	)
 	turnStart := time.Now()
-	// Own cancelable context for the drain turn so a human "Durdur"
-	// (CancelSession) can stop the coordinator mid-drain.
-	drainCtx, cancelDrain := context.WithCancel(context.Background())
-	defer cancelDrain()
-	r.trackSession(coordSessionID, cancelDrain)
 	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(drainCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), coordSessionID))
@@ -2077,6 +2146,10 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 			return r.runSessionTurn(turnCtx, agent, coordSessionID, p, true)
 		})
 	defer cancel()
+	// Untracked HERE, not only by the drain loop afterwards: it is what keeps the
+	// record/publish tail below uncancellable. The drain's own endTurnCtx repeats it,
+	// which is safe (sync.Map.Delete is idempotent and the turn slot is still held, so
+	// no other turn can have registered its cancel in between).
 	r.untrackSession(coordSessionID)
 
 	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;
