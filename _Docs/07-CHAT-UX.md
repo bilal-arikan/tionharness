@@ -1404,3 +1404,10 @@ sağdaki durum etiketinin hemen altında sağ hizalı gösterilir.
   kayıtlarda alanlar yoksa işlem adı `collab_tool_call` olarak kalır.
 - Güvenli özet yalnız işlem + alıcılar + durumdan üretilir; delegasyon prompt'u
   kullanıcı sunumuna veya debug günlüğüne yazılmaz.
+
+### Coordinator Başlangıç Paneli
+
+Panel yalnız yeni/boş normal coordinator oturumunda, ilk mesaj gönderilmeden önce
+görünür. Coordinator modunu açıp kapatma kontrolü ile coordinator workflow seçimi
+sunar. `messageCount > 0`, streaming, pending mesaj veya `queuedCount > 0`
+olduğunda gizlenir; read-only run log ve worker oturumlarında hiç gösterilmez.
