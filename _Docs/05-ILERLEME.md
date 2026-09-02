@@ -1,5 +1,31 @@
 # TionHarness — İlerleme Takibi
 
+## Asılı MCP sunucusu tüm turları donduruyordu: dial zaman aşımı + devre kesici (2026-09-02) 🐛✅
+
+**Belirti.** `codebase-memory-mcp` initialize'a cevap vermiyordu (aynı store
+üzerinde 9 kopya + reindex). Pool'da dial zaman aşımı olmadığından her registry
+kurulumu — her tur, Araçlar paneli, bağlam önizlemesi — çağıranın context'i
+iptal olana kadar bekliyordu; logda 4 sn'de bir `mcp pool: dial failed …
+context canceled`, kullanıcıya "UI çalışmayı bıraktı" olarak yansıyordu.
+Frontend'de yenileme fırtınası yoktu (ws:* olayları global SSE'ye sızmıyor).
+
+**Düzeltme.** (1) `mcp.Pool` her (re)dial'ı `DefaultDialTimeout` (20 sn) ile
+sınırlar; `SetDialTimeout(0)` kapatır. Zaman aşımı yalnız el sıkışmayı kapsar,
+bağlantı ömrünü değil (`DialStdio`/`DialHTTP` ctx'i sadece initialize'da
+kullanır). (2) `mcpFailStreaks` devre kesici oldu: `mcpFailStreakThreshold` (3)
+ardışık başarısızlıktan sonra sunucu `mcpBreakerCooldown` (45 sn) boyunca hiç
+aranmaz, tur kartına "skipped after N consecutive failures; next probe in Xs"
+diye düşer, soğuma bitince tek bir kurulum sondalar; başarısız sonda kesiciyi
+yeniden açar, başarı streak'i sıfırlar. Atlanan sunucu streak'ini korur
+(sıfırlama döngüsü yalnız gerçekten aranan `live` listesinde döner).
+
+**Test.** `internal/mcp/pool_dialtimeout_test.go` (asılı dial deadline ile
+kesilir; 0 = sınırsız), `internal/agent/mcpbreaker_test.go` (eşikte açılır,
+soğuma boyunca açık, sonra tek sonda, başarısız sonda yeniden açar, clear
+kapatır). Ortam notu: sunucunun kendisi hâlâ asılıysa Ayarlar → MCP'den
+devre dışı bırakmak veya fazla kopyaları kapatmak gerekir; bu düzeltme yalnız
+uygulamanın onunla birlikte donmasını engeller.
+
 ## Kenar çubuğu boşaldı: canlı chip'ler daraltıcı yazılmıştı (2026-09-02) 🐛✅
 
 **Belirti.** R2 (`589fda4e`) sonrası kenar çubuğunda yalnız o an çalışan oturumlar

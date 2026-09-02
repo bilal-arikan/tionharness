@@ -61,16 +61,25 @@ func scopedEntryKey(scopeKey, server string) string {
 // A server whose config (command/args/url/env) changes is transparently
 // re-dialed; a dead connection is re-dialed on next use. The zero value is not
 // usable — call NewPool.
+// DefaultDialTimeout bounds one (re)dial: process start plus the initialize
+// handshake. A server that never answers initialize used to hold the catalog
+// build for as long as the CALLER's context lived (a whole turn, a tools-panel
+// request), so a single hung server stalled every registry build in the
+// workspace (2026-09-02, codebase-memory-mcp). The connection itself is not
+// bound by this: DialStdio/DialHTTP use ctx for the handshake only.
+const DefaultDialTimeout = 20 * time.Second
+
 type Pool struct {
-	mu       sync.Mutex
-	entries  map[string]*poolEntry
-	ttl      time.Duration
-	idleTTL  time.Duration    // scoped-connection idle eviction window (0 = disabled)
-	now      func() time.Time // injectable clock for tests; nil => time.Now
-	onChange func()           // optional: fired (async) when any server's tools change
-	logger   *slog.Logger     // optional: lifecycle logs to the in-app Logs ring buffer
-	stop     chan struct{}    // closed by Close to stop the reaper goroutine
-	stopOnce sync.Once
+	mu          sync.Mutex
+	entries     map[string]*poolEntry
+	ttl         time.Duration
+	dialTimeout time.Duration    // per-(re)dial deadline; 0 = caller's ctx only
+	idleTTL     time.Duration    // scoped-connection idle eviction window (0 = disabled)
+	now         func() time.Time // injectable clock for tests; nil => time.Now
+	onChange    func()           // optional: fired (async) when any server's tools change
+	logger      *slog.Logger     // optional: lifecycle logs to the in-app Logs ring buffer
+	stop        chan struct{}    // closed by Close to stop the reaper goroutine
+	stopOnce    sync.Once
 }
 
 type poolEntry struct {
@@ -95,13 +104,27 @@ type poolEntry struct {
 // terminate connections and stop the reaper.
 func NewPool() *Pool {
 	p := &Pool{
-		entries: map[string]*poolEntry{},
-		ttl:     poolTTLFromEnv(),
-		idleTTL: scopedIdleFromEnv(),
-		stop:    make(chan struct{}),
+		entries:     map[string]*poolEntry{},
+		ttl:         poolTTLFromEnv(),
+		dialTimeout: DefaultDialTimeout,
+		idleTTL:     scopedIdleFromEnv(),
+		stop:        make(chan struct{}),
 	}
 	go p.reapLoop()
 	return p
+}
+
+// SetDialTimeout overrides the per-dial deadline (0 disables it).
+func (p *Pool) SetDialTimeout(d time.Duration) {
+	p.mu.Lock()
+	p.dialTimeout = d
+	p.mu.Unlock()
+}
+
+func (p *Pool) dialDeadline() time.Duration {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.dialTimeout
 }
 
 // SetOnToolsChanged registers a callback fired (in its own goroutine) whenever
@@ -174,7 +197,15 @@ func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (Clie
 		e.client = nil
 		e.listed = false
 	}
-	client, err := cfg.dial(ctx)
+	// Bound the handshake (DefaultDialTimeout): the dial ctx governs process
+	// start + initialize only, never the connection's lifetime.
+	dctx := ctx
+	if d := p.dialDeadline(); d > 0 {
+		var cancel context.CancelFunc
+		dctx, cancel = context.WithTimeout(ctx, d)
+		defer cancel()
+	}
+	client, err := cfg.dial(dctx)
 	if err != nil {
 		p.log(slog.LevelWarn, "mcp pool: dial failed", "server", cfg.Name, "reason", redial, "error", err.Error())
 		return nil, err

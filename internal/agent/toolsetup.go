@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/codemode"
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -528,11 +529,27 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			cfg = r.applyMCPScratchpadRoot(ctx, cfg, m, mcpScopeKey)
 			cfgs = append(cfgs, cfg)
 		}
-		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, cfgs)
 		// A failed server silently loses ALL of its tools for the turn, so the log
 		// line is not enough: hand the failures to the turn's collector (when one is
 		// wired) so the tool loop can card them once. See mcpnotice.go.
 		failures := mcpFailuresFrom(ctx)
+		// Circuit breaker (mcpescalate.go): a server that failed the last
+		// mcpFailStreakThreshold builds in a row is not dialed again until its
+		// cooldown passes. It is carded as skipped, exactly like a failed one, and
+		// probed once per cooldown. Without this a hung server stalled EVERY
+		// registry build — every turn, the tools panel, the context preview — for
+		// as long as the caller's context lived (2026-09-02, codebase-memory-mcp).
+		live := make([]mcp.ServerConfig, 0, len(cfgs))
+		for _, cfg := range cfgs {
+			if isOpen, retryIn, streak := r.mcpFailStreaks.open(cfg.Name); isOpen {
+				retry := retryIn.Round(time.Second)
+				failures.record(cfg.Name, fmt.Sprintf("skipped after %d consecutive failures; next probe in %s", streak, retry))
+				r.logger.Debug("mcp catalog: breaker open, server skipped", "server", cfg.Name, "consecutive", streak, "retry_in", retry)
+				continue
+			}
+			live = append(live, cfg)
+		}
+		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, live)
 		for name, e := range errs {
 			// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
 			// same WARN forever made a workspace where no turn could start look normal.
@@ -547,8 +564,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			failures.record(name, e)
 		}
 		// Reset the streak for every server that catalogued fine this turn, so the
-		// threshold measures the current outage rather than a lifetime total.
-		for _, cfg := range cfgs {
+		// threshold measures the current outage rather than a lifetime total. Only
+		// the servers actually dialed count: a skipped one must keep its streak.
+		for _, cfg := range live {
 			if _, bad := errs[cfg.Name]; !bad {
 				r.mcpFailStreaks.clear(cfg.Name)
 			}

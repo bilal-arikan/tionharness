@@ -2,7 +2,7 @@ package agent
 
 import (
 	"sync"
-	"sync/atomic"
+	"time"
 )
 
 // An MCP server whose catalog build fails is logged at WARN, once per turn. That
@@ -19,24 +19,90 @@ import (
 // standing outage is visible at a glance without the transient case becoming noise.
 const mcpFailStreakThreshold = 3
 
-// mcpFailStreaks tracks consecutive catalog-build failures per server name.
-// Process-local and reset on success, like anomalyNotified: this is an operational
-// signal, not persisted state.
+// mcpBreakerCooldown is how long a server that crossed the threshold is skipped
+// before the next build probes it again.
+//
+// On 2026-09-02 codebase-memory-mcp hung in initialize (nine instances plus a
+// reindex fighting over one store). The pool has no dial deadline of its own, so
+// every registry build -- every turn, the tools panel, the context preview --
+// blocked on that handshake until the caller's context died; from the UI it
+// looked like the app had stopped. The breaker turns a hung server into a
+// missing server: after the threshold it is skipped for this long, recorded on
+// the turn's failure card as "skipped", and probed once per cooldown.
+const mcpBreakerCooldown = 45 * time.Second
+
+// mcpFailStreaks tracks consecutive catalog-build failures per server name and
+// the breaker window they open. Process-local and reset on success, like
+// anomalyNotified: this is an operational signal, not persisted state.
 type mcpFailStreaks struct {
-	m sync.Map // server name -> *atomic.Int64
+	mu  sync.Mutex
+	m   map[string]*mcpFailState
+	now func() time.Time // injectable clock for tests; nil => time.Now
 }
 
-// note increments the server's streak and returns the new value.
-func (s *mcpFailStreaks) note(name string) int64 {
-	v, _ := s.m.LoadOrStore(name, new(atomic.Int64))
-	return v.(*atomic.Int64).Add(1)
+type mcpFailState struct {
+	streak    int64
+	openUntil time.Time
 }
 
-// clear resets the server's streak after a successful catalog build. A server that
-// recovers and fails again must escalate again -- the threshold measures a CURRENT
-// outage, not a lifetime failure count.
-func (s *mcpFailStreaks) clear(name string) {
-	if v, ok := s.m.Load(name); ok {
-		v.(*atomic.Int64).Store(0)
+func (s *mcpFailStreaks) clock() time.Time {
+	if s.now != nil {
+		return s.now()
 	}
+	return time.Now()
+}
+
+func (s *mcpFailStreaks) state(name string) *mcpFailState {
+	if s.m == nil {
+		s.m = map[string]*mcpFailState{}
+	}
+	st := s.m[name]
+	if st == nil {
+		st = &mcpFailState{}
+		s.m[name] = st
+	}
+	return st
+}
+
+// note increments the server's streak and returns the new value. At and past
+// the threshold it (re)opens the breaker for one cooldown.
+func (s *mcpFailStreaks) note(name string) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.state(name)
+	st.streak++
+	if st.streak >= mcpFailStreakThreshold {
+		st.openUntil = s.clock().Add(mcpBreakerCooldown)
+	}
+	return st.streak
+}
+
+// clear resets the server's streak (and closes its breaker) after a successful
+// catalog build. A server that recovers and fails again must escalate again --
+// the threshold measures a CURRENT outage, not a lifetime failure count.
+func (s *mcpFailStreaks) clear(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st := s.m[name]; st != nil {
+		st.streak = 0
+		st.openUntil = time.Time{}
+	}
+}
+
+// open reports whether the server's breaker is open (skip the dial), how long
+// until the next probe, and the current streak. Once the cooldown has passed
+// the breaker reads closed so exactly one build probes the server; a failed
+// probe re-opens it through note.
+func (s *mcpFailStreaks) open(name string) (isOpen bool, retryIn time.Duration, streak int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.m[name]
+	if st == nil {
+		return false, 0, 0
+	}
+	rem := st.openUntil.Sub(s.clock())
+	if rem <= 0 {
+		return false, 0, st.streak
+	}
+	return true, rem, st.streak
 }
