@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Edge, Node, Options } from 'vis-network'
 import {
   networkLayoutKey,
+  readNetworkLayout,
   readNetworkPositions,
   writeNetworkPositions,
 } from './networkLayoutStorage'
@@ -56,6 +57,11 @@ const vis = vi.hoisted(() => {
     readonly onceHandlers = new Map<string, Set<Handler>>()
     readonly setOptionsCalls: Options[] = []
     readonly positions = new Map<string, { x: number; y: number }>()
+    readonly physics = {
+      physicsBody: {
+        velocities: {} as Record<string, { x: number; y: number }>,
+      },
+    }
     startSimulationCalls = 0
     stopSimulationCalls = 0
     fitCalls = 0
@@ -74,10 +80,12 @@ const vis = vi.hoisted(() => {
       this.initialOptions = initialOptions
       this.initialNodes = data.nodes.getIds().map((id) => ({ ...data.nodes.get(id) }))
       for (const item of this.initialNodes) {
-        this.positions.set(item.id as string, {
+        const id = item.id as string
+        this.positions.set(id, {
           x: (item.x as number | undefined) ?? 0,
           y: (item.y as number | undefined) ?? 0,
         })
+        this.physics.physicsBody.velocities[id] = { x: 0, y: 0 }
       }
       MockNetwork.instances.push(this)
     }
@@ -144,9 +152,10 @@ const vis = vi.hoisted(() => {
         const fixedX = fixed === true || (typeof fixed === 'object' && fixed.x === true)
         const fixedY = fixed === true || (typeof fixed === 'object' && fixed.y === true)
         const position = this.getPositions([id])[id]
+        const velocity = this.physics.physicsBody.velocities[id] ?? { x: 0, y: 0 }
         this.positions.set(id, {
-          x: fixedX ? position.x : position.x + 100,
-          y: fixedY ? position.y : position.y + 100,
+          x: fixedX ? position.x : position.x + velocity.x,
+          y: fixedY ? position.y : position.y + velocity.y,
         })
       }
     }
@@ -356,6 +365,34 @@ describe('VisNetworkGraph layout lifecycle', () => {
 
     expect(readNetworkPositions('workspace')).toEqual({ a: { x: 7, y: 8 } })
     await unmount(root)
+  })
+
+  it('resumes an active simulation from its saved positions and velocities', async () => {
+    const first = await mount(graph('workspace', [node('a')]))
+    const firstNetwork = latestNetwork()
+    firstNetwork.setPosition('a', { x: 10, y: 20 })
+    firstNetwork.physics.physicsBody.velocities.a = { x: 3, y: 4 }
+
+    window.dispatchEvent(new Event('pagehide'))
+    expect(readNetworkLayout('workspace')).toEqual({
+      physicsActive: true,
+      positions: { a: { x: 10, y: 20, vx: 3, vy: 4 } },
+    })
+    await unmount(first.root)
+
+    const resumed = await mount(graph('workspace', [node('a')]))
+    const resumedNetwork = latestNetwork()
+    expect(resumedNetwork.startSimulationCalls).toBe(1)
+    expect(resumedNetwork.physics.physicsBody.velocities.a).toEqual({ x: 3, y: 4 })
+    expect(resumedNetwork.getPositions(['a']).a).toEqual({ x: 13, y: 24 })
+
+    resumedNetwork.emit('stabilizationIterationsDone')
+    window.dispatchEvent(new Event('pagehide'))
+    expect(readNetworkLayout('workspace')).toEqual({
+      physicsActive: false,
+      positions: { a: { x: 13, y: 24 } },
+    })
+    await unmount(resumed.root)
   })
 
   it('persists pagehide and unmount snapshots while a later refresh remains ready', async () => {

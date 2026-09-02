@@ -1,5 +1,27 @@
 # TionHarness — İlerleme Takibi
 
+## Ağ fiziği yeniden açılışta kaldığı yerden sürüyor (2026-09-02) ✅
+
+**Sorun:** Ağ yerleşimi düğümlerin `x/y` koordinatlarını saklıyordu; ekran hareket
+hâlindeyken kapatılsa bile yeniden açılış bütün kayıtlı düğümleri durağan kabul edip
+fiziği kapatıyordu. Görsel konum korunuyor, hareketin hızı ve aktif simülasyon bilgisi
+kayboluyordu.
+
+**Fix:** Yerleşim snapshot'ı artık `physicsActive` ile düğüm başına `vx/vy` hızlarını
+da taşıyor. Aktif snapshot açıldığında koordinatlar constructor öncesi uygulanıyor,
+vis-network velocity tablosu geri yükleniyor ve stabilization aynı fizik durumundan
+devam ediyor. Durağan snapshot davranışı değişmedi. Tema, yoğunluk ve lite değişimleri
+simülasyonu zorla kapatmak yerine mevcut aktiflik durumunu koruyor. Eski, hız içermeyen
+v1 kayıtları geriye uyumlu okunuyor; bozuk hızlar atılıp geçerli konum korunuyor.
+
+**Dosyalar:** `frontend/src/features/network/networkLayoutStorage.ts`,
+`networkPhysicsState.ts`, `VisNetworkGraph.tsx` ve testleri; ayrıntı `_Docs/23`.
+
+**Doğrulama:** `npm test` 93 dosya / 670 test ✅, `npm run format:check` ✅,
+`npm run build` ✅. Canlı Playwright testinde aktif çıkış 88 düğüm kaydetti; 79
+düğümde finite `vx/vy` bulundu ve yeniden açılış sonrası aynı 79 düğüm kayıtlı
+koordinatından ilerledi. Konsol hatası yok, test öncesi kullanıcı snapshot'ı geri yüklendi.
+
 ## Workspace arka plan işleri Close'da drenaj ediliyor — `activity-inbox` yarışı kapandı (2026-09-02) ✅
 
 **Doğrulama:** `go test ./internal/api -count=3` ✅ (111s, üç koşu da temiz),

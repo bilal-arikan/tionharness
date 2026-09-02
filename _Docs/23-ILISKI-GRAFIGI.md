@@ -72,8 +72,8 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   oturumlar gizli, açılınca görünür (arşiv run kartları kesik-kenar + 🗄 rozetiyle işaretli).
 - **Yoğunluk kaydırıcısı (0.4×–2×):** sonraki yeni-düğüm stabilizasyonunda fizik
   itme + yay uzunluğunu ölçekler — yüksek değer = daha sıkı paketleme, düşük = daha
-  geniş yayılım. Yoğunluk, tema ve lite değişiklikleri mevcut fiziği yeniden başlatmaz
-  veya restore edilmiş düğümleri hareket ettirmez.
+  geniş yayılım. Yoğunluk, tema ve lite değişiklikleri mevcut fiziği yeniden başlatmaz;
+  simülasyon çalışıyorsa çalışır, durmuşsa durmuş kalır.
 - **Yerleşim — fizik (forceAtlas2):** vis-network `forceAtlas2Based` çözücüsü.
   Bağsız/seyrek graflarda bile düğümleri **eşit/organik (homojen)** bir buluta
   yayar (barnesHut'ın aksine kümeye çökmez/dağılıp uçmaz). `avoidOverlap` geniş
@@ -87,12 +87,15 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   > yüzden ağ yalnız fizik düzeni kullanır.
 - **Kalıcı yerleşim:** Düğüm koordinatları workspace kapsamı ve yerleşim sürümü
   içeren `localStorage` anahtarında saklanır. Okuma sırasında kayıt şeması ile tüm
-  `x`/`y` değerlerinin finite sayı olduğu doğrulanır; bozuk veya eski sürümlü kayıt
-  kullanılmaz. Açılışta bütün düğümlerin kayıtlı konumu varsa fizik kapalı başlar.
-  Yeni düğüm geldiğinde kayıtlı düğümler geçici sabitlenir ve yalnız yeni düğüm için
-  kısa bir stabilization çalışır. Sürükleme ve fizik hareketleri açık sayfa boyunca
-  storage'a yazılmaz; görünür düğümlerin son koordinatları ağ ekranından çıkışta,
-  workspace değişiminde veya `pagehide` sırasında tek snapshot olarak kaydedilir.
+  `x`/`y` ve varsa `vx`/`vy` değerlerinin finite sayı olduğu doğrulanır; bozuk veya eski
+  sürümlü kayıt kullanılmaz. Snapshot ayrıca fizik simülasyonunun aktif olup olmadığını
+  taşır. Ağ hareket hâlindeyken ekran kapanırsa açılışta kayıtlı koordinatlar ve hız
+  vektörleri fizik motoruna geri verilir; kısa stabilization kaldığı yerden sürer.
+  Snapshot durağansa bütün düğümlerin kayıtlı konumu fizik kapalı açılır. Yeni düğüm
+  geldiğinde kayıtlı düğümler geçici sabitlenir ve yalnız yeni düğüm için kısa bir
+  stabilization çalışır. Sürükleme ve fizik hareketleri açık sayfa boyunca storage'a
+  yazılmaz; görünür düğümlerin son fizik durumu ağ ekranından çıkışta, workspace
+  değişiminde veya `pagehide` sırasında tek snapshot olarak kaydedilir.
   Geçici filtre/katman gizleme kayıtları silmez; stale koordinatlar yalnız kanonik,
   filtrelenmemiş workspace düğüm kümesine göre budanır. Writer'ın son okumasında
   gözlenen diğer-tab ekleme, güncelleme ve silmeleri three-way merge ile korunur.
@@ -191,11 +194,15 @@ Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
   (hover'da komşu-dışı düğüm/kenarları soldurur),
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
   konumlarını korur), stabilize sonrası `fit`; workspace/sürüm anahtarlı kalıcı
-  koordinatları uygular, tam kayıtlı açılışta fiziği kapatır ve yeni düğümlerde kısa
-  stabilization çalıştırır. Kalıcı snapshot yalnız unmount/workspace değişimi/`pagehide`
-  çıkışlarında yazılır; tema ve yoğunluk seçenekleri fiziği yeniden açmaz.
-- `features/network/networkLayoutStorage.ts` — yerleşim anahtarı, şema/finite sayı
-  doğrulamalı okuma-yazma ve stale düğüm koordinatlarını budama yardımcıları.
+  koordinatları uygular; durağan tam kayıtta fiziği kapatır, aktif kayıtta hızları geri
+  yükleyip stabilization'ı sürdürür ve yeni düğümlerde kısa stabilization çalıştırır.
+  Kalıcı snapshot yalnız unmount/workspace değişimi/`pagehide` çıkışlarında yazılır;
+  tema ve yoğunluk seçenekleri mevcut fizik durumunu korur.
+- `features/network/networkLayoutStorage.ts` — yerleşim anahtarı, aktiflik + `x/y/vx/vy`
+  şema/finite sayı doğrulamalı okuma-yazma ve stale düğüm durumlarını budama yardımcıları.
+- `features/network/networkPhysicsState.ts` — vis-network fizik motorundaki hızları
+  snapshot koordinatlarıyla birleştirir ve yeniden açılışta motorun velocity tablosuna
+  geri yükler; beklenen fizik iç durumu yoksa sessizce yutmak yerine hata verir.
 - `features/network/networkFilter.ts` — **saf facet filtresi**: `NetworkFilter` modeli
   (`text/agentIds/runKinds/statuses/tags/showArchived`) + `filterGraph(graph,f)` (düğüm
   eleme → kenar/kenarsız-attachment budama) + `isNetworkFilterActive`/

@@ -5,28 +5,40 @@ const KEY_PREFIX = 'tionharness.network-layout'
 export interface NetworkPosition {
   x: number
   y: number
+  vx?: number
+  vy?: number
 }
 
 export type NetworkPositions = Record<string, NetworkPosition>
 
-interface StoredNetworkLayout {
-  v: number
+export interface NetworkLayout {
   positions: NetworkPositions
+  physicsActive: boolean
+}
+
+interface StoredNetworkLayout extends NetworkLayout {
+  v: number
 }
 
 export function networkLayoutKey(workspaceId: string): string {
   return `${KEY_PREFIX}.v${NETWORK_LAYOUT_VERSION}.${encodeURIComponent(workspaceId)}`
 }
 
-export function readNetworkPositions(
+export function readNetworkLayout(
   workspaceId: string,
   storage: Storage = localStorage,
-): NetworkPositions {
+): NetworkLayout {
   try {
     const raw = storage.getItem(networkLayoutKey(workspaceId))
-    if (!raw) return {}
+    if (!raw) return { positions: {}, physicsActive: false }
     const parsed = JSON.parse(raw) as Partial<StoredNetworkLayout>
-    if (parsed.v !== NETWORK_LAYOUT_VERSION || !isRecord(parsed.positions)) return {}
+    if (
+      parsed.v !== NETWORK_LAYOUT_VERSION ||
+      !isRecord(parsed.positions) ||
+      (parsed.physicsActive !== undefined && typeof parsed.physicsActive !== 'boolean')
+    ) {
+      return { positions: {}, physicsActive: false }
+    }
 
     const positions: NetworkPositions = {}
     for (const [id, position] of Object.entries(parsed.positions)) {
@@ -37,13 +49,32 @@ export function readNetworkPositions(
         typeof position.y === 'number' &&
         Number.isFinite(position.y)
       ) {
-        positions[id] = { x: position.x, y: position.y }
+        const velocityIsValid =
+          typeof position.vx === 'number' &&
+          Number.isFinite(position.vx) &&
+          typeof position.vy === 'number' &&
+          Number.isFinite(position.vy)
+        positions[id] = velocityIsValid
+          ? { x: position.x, y: position.y, vx: position.vx, vy: position.vy }
+          : { x: position.x, y: position.y }
       }
     }
-    return positions
+    return { positions, physicsActive: parsed.physicsActive === true }
   } catch {
-    return {}
+    return { positions: {}, physicsActive: false }
   }
+}
+
+export function readNetworkPositions(
+  workspaceId: string,
+  storage: Storage = localStorage,
+): NetworkPositions {
+  return Object.fromEntries(
+    Object.entries(readNetworkLayout(workspaceId, storage).positions).map(([id, position]) => [
+      id,
+      { x: position.x, y: position.y },
+    ]),
+  )
 }
 
 export function writeNetworkPositions(
@@ -53,9 +84,28 @@ export function writeNetworkPositions(
   canonicalNodeIds?: Iterable<string>,
   knownPositions?: NetworkPositions,
 ): NetworkPositions {
-  const latest = readNetworkPositions(workspaceId, storage)
+  const latestLayout = readNetworkLayout(workspaceId, storage)
+  return writeNetworkLayout(
+    workspaceId,
+    { positions, physicsActive: latestLayout.physicsActive },
+    storage,
+    canonicalNodeIds,
+    knownPositions,
+    latestLayout,
+  ).positions
+}
+
+export function writeNetworkLayout(
+  workspaceId: string,
+  layout: NetworkLayout,
+  storage: Storage = localStorage,
+  canonicalNodeIds?: Iterable<string>,
+  knownPositions?: NetworkPositions,
+  latestLayout: NetworkLayout = readNetworkLayout(workspaceId, storage),
+): NetworkLayout {
+  const latest = latestLayout.positions
   const merged = { ...latest }
-  for (const [id, position] of Object.entries(positions)) {
+  for (const [id, position] of Object.entries(layout.positions)) {
     const known = knownPositions?.[id]
     const current = latest[id]
     // A missing current value that existed in this writer's baseline is an
@@ -75,13 +125,17 @@ export function writeNetworkPositions(
   try {
     storage.setItem(
       networkLayoutKey(workspaceId),
-      JSON.stringify({ v: NETWORK_LAYOUT_VERSION, positions: next } satisfies StoredNetworkLayout),
+      JSON.stringify({
+        v: NETWORK_LAYOUT_VERSION,
+        positions: next,
+        physicsActive: layout.physicsActive,
+      } satisfies StoredNetworkLayout),
     )
   } catch {
     // Persistence is optional; storage can be unavailable or over quota.
-    return latest
+    return latestLayout
   }
-  return next
+  return { positions: next, physicsActive: layout.physicsActive }
 }
 
 function pruneKnownNetworkPositions(
@@ -104,7 +158,7 @@ function pruneKnownNetworkPositions(
 }
 
 function samePosition(a: NetworkPosition, b: NetworkPosition): boolean {
-  return a.x === b.x && a.y === b.y
+  return a.x === b.x && a.y === b.y && a.vx === b.vx && a.vy === b.vy
 }
 
 export function pruneNetworkPositions(

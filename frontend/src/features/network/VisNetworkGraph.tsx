@@ -2,10 +2,15 @@ import { useEffect, useRef } from 'react'
 import { Network, type Options, type Node, type Edge } from 'vis-network'
 import { DataSet } from 'vis-data'
 import {
-  readNetworkPositions,
-  writeNetworkPositions,
+  readNetworkLayout,
+  writeNetworkLayout,
   type NetworkPositions,
 } from './networkLayoutStorage'
+import {
+  captureNetworkPositions,
+  positionCoordinates,
+  restoreNetworkVelocities,
+} from './networkPhysicsState'
 
 export type VisMode = 'relation' | 'live'
 
@@ -168,7 +173,10 @@ export function VisNetworkGraph({
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
   const populatedRef = useRef(false)
-  const persistedPositionsRef = useRef<NetworkPositions>(readNetworkPositions(workspaceId))
+  const initialLayoutRef = useRef(readNetworkLayout(workspaceId))
+  const persistedPositionsRef = useRef<NetworkPositions>(initialLayoutRef.current.positions)
+  const resumePhysicsRef = useRef(initialLayoutRef.current.physicsActive)
+  const physicsActiveRef = useRef(false)
   const runtimePositionsRef = useRef<NetworkPositions>({})
   const nodesRef = useRef(nodes)
   const edgesRef = useRef(edges)
@@ -202,7 +210,10 @@ export function VisNetworkGraph({
     const setupGenerations = setupGenerationByWorkspaceRef.current
     const generation = (setupGenerations.get(workspaceId) ?? 0) + 1
     setupGenerations.set(workspaceId, generation)
-    persistedPositionsRef.current = readNetworkPositions(workspaceId)
+    const persistedLayout = readNetworkLayout(workspaceId)
+    persistedPositionsRef.current = persistedLayout.positions
+    resumePhysicsRef.current = persistedLayout.physicsActive
+    physicsActiveRef.current = false
     let knownPositions = persistedPositionsRef.current
     runtimePositionsRef.current = {}
     const baseEdgeColors = baseEdgeColorRef.current
@@ -213,7 +224,7 @@ export function VisNetworkGraph({
     // unrelated coordinates even when physics is disabled.
     const initialNodes = (canonicalReadyRef.current ? nodesRef.current : []).map((node) => {
       const saved = persistedPositionsRef.current[node.id as string]
-      return saved ? { ...node, ...saved } : node
+      return saved ? { ...node, ...positionCoordinates(saved) } : node
     })
     const hasRestoredVisibleNode = initialNodes.some(
       (node) => persistedPositionsRef.current[node.id as string] !== undefined,
@@ -245,16 +256,21 @@ export function VisNetworkGraph({
     network.on('deselectNode', () => onSelectRef.current?.(null))
     const capturePositions = (): NetworkPositions => {
       const ids = nodesDS.getIds() as string[]
-      return ids.length === 0 ? {} : (network.getPositions(ids) as NetworkPositions)
+      return ids.length === 0 ? {} : captureNetworkPositions(network, ids, physicsActiveRef.current)
     }
-    const persistPositions = (positions: NetworkPositions, nodeIds: readonly string[]) => {
-      persistedPositionsRef.current = writeNetworkPositions(
+    const persistPositions = (
+      positions: NetworkPositions,
+      nodeIds: readonly string[],
+      physicsActive: boolean,
+    ) => {
+      const layout = writeNetworkLayout(
         workspaceId,
-        positions,
+        { positions, physicsActive },
         localStorage,
         nodeIds,
         knownPositions,
       )
+      persistedPositionsRef.current = layout.positions
       knownPositions = Object.fromEntries(
         nodeIds.flatMap((id) => {
           const position = persistedPositionsRef.current[id]
@@ -271,6 +287,7 @@ export function VisNetworkGraph({
           ...capturePositions(),
         },
         canonicalNodeIdsRef.current,
+        physicsActiveRef.current,
       )
     }
     window.addEventListener('pagehide', handlePageHide)
@@ -308,6 +325,7 @@ export function VisNetworkGraph({
       // lets React StrictMode's immediate setup-cleanup-setup replay invalidate
       // its seed snapshot, while a real unmount/workspace change still persists.
       const ready = canonicalReadyRef.current
+      const physicsActive = physicsActiveRef.current
       const positions = {
         ...persistedPositionsRef.current,
         ...runtimePositionsRef.current,
@@ -328,7 +346,13 @@ export function VisNetworkGraph({
       baseEdgeColors.clear()
       queueMicrotask(() => {
         if (!ready || setupGenerations.get(workspaceId) !== generation) return
-        writeNetworkPositions(workspaceId, positions, localStorage, nodeIds, knownPositions)
+        writeNetworkLayout(
+          workspaceId,
+          { positions, physicsActive },
+          localStorage,
+          nodeIds,
+          knownPositions,
+        )
       })
     }
   }, [workspaceId])
@@ -343,7 +367,14 @@ export function VisNetworkGraph({
       const colors = resolveThemeColors()
       dimmedEdgeColorRef.current = colors.border
       net.setOptions(
-        buildOptions(colors, densityRef.current, modeRef.current, liteRef.current, false, false),
+        buildOptions(
+          colors,
+          densityRef.current,
+          modeRef.current,
+          liteRef.current,
+          physicsActiveRef.current,
+          false,
+        ),
       )
     })
     observer.observe(root, { attributes: true, attributeFilter: ['style', 'data-theme'] })
@@ -367,7 +398,7 @@ export function VisNetworkGraph({
     if (populatedRef.current && existingIds.length > 0) {
       runtimePositionsRef.current = {
         ...runtimePositionsRef.current,
-        ...(net.getPositions(existingIds) as NetworkPositions),
+        ...captureNetworkPositions(net, existingIds, physicsActiveRef.current),
       }
     }
     const knownPositions = {
@@ -392,7 +423,7 @@ export function VisNetworkGraph({
         )
       } else {
         const saved = knownPositions[n.id as string]
-        toAdd.push(saved ? { ...n, ...saved } : n)
+        toAdd.push(saved ? { ...n, ...positionCoordinates(saved) } : n)
       }
     }
     if (toAdd.length) nds.add(toAdd)
@@ -413,7 +444,11 @@ export function VisNetworkGraph({
     // Remember each edge's mapper-set color so hover-dim can restore it.
     for (const e of edges) baseEdgeColorRef.current.set(e.id as string, e.color)
 
-    const settleNewNodes = (newNodeIds: string[], animated: boolean) => {
+    const settleNewNodes = (
+      newNodeIds: string[],
+      animated: boolean,
+      resumedPositions?: NetworkPositions,
+    ) => {
       stabilizationCleanupRef.current()
       fitCleanupRef.current()
       const newIds = new Set(newNodeIds)
@@ -444,6 +479,7 @@ export function VisNetworkGraph({
         net.off('stabilizationIterationsDone', complete)
         net.stopSimulation()
         net.setOptions({ physics: { enabled: false } })
+        physicsActiveRef.current = false
         // Unpin only after physics is disabled. DataSet fixed updates schedule a
         // redraw and must not expose restored anchors to a final physics tick.
         restoreTemporaryFixed()
@@ -460,13 +496,16 @@ export function VisNetworkGraph({
         if (!completed) {
           net.stopSimulation()
           net.setOptions({ physics: { enabled: false } })
+          physicsActiveRef.current = false
           restoreTemporaryFixed()
         }
         completed = true
       }
       net.setOptions({ physics: { enabled: true } })
+      if (resumedPositions) restoreNetworkVelocities(net, resumedPositions)
       net.once('stabilizationIterationsDone', complete)
       timer = setTimeout(complete, 1600)
+      physicsActiveRef.current = true
       net.startSimulation()
     }
 
@@ -475,7 +514,14 @@ export function VisNetworkGraph({
       const hasSavedPositionForEveryNode = nodes.every(
         (node) => knownPositions[node.id as string] !== undefined,
       )
-      if (hasSavedPositionForEveryNode) {
+      if (resumePhysicsRef.current) {
+        resumePhysicsRef.current = false
+        settleNewNodes(
+          nodes.map((node) => node.id as string),
+          false,
+          knownPositions,
+        )
+      } else if (hasSavedPositionForEveryNode) {
         net.stopSimulation()
         net.setOptions({ physics: { enabled: false } })
         fitCleanupRef.current = fitAndCap(net, false)
@@ -495,13 +541,15 @@ export function VisNetworkGraph({
     }
   }, [nodes, edges, workspaceId, canonicalNodeIds, canonicalReady])
 
-  // Visual option changes must not restart physics or move a restored layout.
+  // Visual option changes preserve the current physics state and restored layout.
   useEffect(() => {
     modeRef.current = mode
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
-    net.setOptions(buildOptions(resolveThemeColors(), density, mode, lite, false, false))
+    net.setOptions(
+      buildOptions(resolveThemeColors(), density, mode, lite, physicsActiveRef.current, false),
+    )
   }, [mode, density, lite])
 
   return <div ref={containerRef} className="h-full w-full" />

@@ -3,7 +3,9 @@ import {
   NETWORK_LAYOUT_VERSION,
   networkLayoutKey,
   pruneNetworkPositions,
+  readNetworkLayout,
   readNetworkPositions,
+  writeNetworkLayout,
   writeNetworkPositions,
 } from './networkLayoutStorage'
 
@@ -49,6 +51,30 @@ describe('network layout storage', () => {
     expect(readNetworkPositions('broken', storage)).toEqual({})
     expect(readNetworkPositions('old', storage)).toEqual({})
     expect(readNetworkPositions('mixed', storage)).toEqual({ good: { x: 3, y: 4 } })
+  })
+
+  it('round-trips active physics state and finite node velocities', () => {
+    const storage = memoryStorage()
+
+    writeNetworkLayout(
+      'workspace',
+      {
+        physicsActive: true,
+        positions: {
+          moving: { x: 1, y: 2, vx: 3, vy: 4 },
+          invalidVelocity: { x: 5, y: 6, vx: Number.POSITIVE_INFINITY, vy: 7 },
+        },
+      },
+      storage,
+    )
+
+    expect(readNetworkLayout('workspace', storage)).toEqual({
+      physicsActive: true,
+      positions: {
+        moving: { x: 1, y: 2, vx: 3, vy: 4 },
+        invalidVelocity: { x: 5, y: 6 },
+      },
+    })
   })
 
   it('prunes stale node ids without mutating input', () => {
