@@ -42,7 +42,7 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 
 	// Every session working right now — see runningSessionIDs for the sources and
 	// why each is scoped. ANY entry lights the unified executions ("Aktivite") view.
-	active := s.runningSessionIDs(wsp)
+	active := s.liveSessions(wsp).RunningSet()
 	for sid := range active {
 		sess, err := wsp.DB.GetSession(ctx, sid)
 		if err != nil {

@@ -116,10 +116,14 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 		scope = append(scope, s)
 	}
-	chipCounts := sessionChipCounts(scope)
+	// Liveness is server state now (_Docs/77 R2): the two live chips filter and
+	// count here like every other chip, so total/hasMore describe what the list
+	// can actually show when "running" is ticked.
+	live := s.liveSessions(ws(r))
+	chipCounts := sessionChipCounts(scope, live)
 	matches := make([]db.Session, 0, len(scope))
 	for _, s := range scope {
-		if chipFilter && !sessionMatchesChips(s, chipSel) {
+		if chipFilter && !sessionMatchesChips(s, chipSel, live) {
 			continue
 		}
 		matches = append(matches, s)
@@ -345,7 +349,7 @@ func (s *Server) handleMessageSteps(w http.ResponseWriter, r *http.Request) {
 // to (nor restored by) this one. Sorted for a stable reply.
 func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
-	running := s.runningSessionIDs(wsp)
+	running := s.liveSessions(wsp).RunningSet()
 	ids := make([]string, 0, len(running))
 	for id := range running {
 		ids = append(ids, id)

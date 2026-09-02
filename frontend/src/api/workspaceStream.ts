@@ -23,7 +23,19 @@ export const WorkspaceStreamKind = {
   AutomationFire: 'automation_fire',
   Spawn: 'spawn',
   Report: 'report',
+  Liveness: 'liveness',
 } as const
+
+// One session's turn-admission state right after it changed (ws:liveness).
+// The full picture is GET /api/workspace/liveness (LivenessSnapshot).
+export interface LivenessData {
+  sessionId: string
+  busy: boolean
+  kind?: string
+  label?: string
+  since?: number
+  waiting: number
+}
 
 export type WorkspaceStreamKindValue =
   (typeof WorkspaceStreamKind)[keyof typeof WorkspaceStreamKind]

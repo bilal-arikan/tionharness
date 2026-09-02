@@ -162,6 +162,35 @@ eşitliği (mevcut `TestListSessionsChip*` genişler); köprü kaldırıldıktan
 
 **Boyut:** M-L. **Açar:** workspace şeritleri, kapasite şeridi, gelecek ekseni.
 
+**Gerçekleşen (2026-09-02, dal `rota/r2-liveness`).** Plan "her giriş noktası yazan
+bir registry" istiyordu; uygulanan, **aynı tek-kaynak sonucunu veren hesaplanmış
+anlık görüntü** oldu — yeni bir mutable registry ve giriş noktalarına yayılmış yazımlar
+yerine, zaten otoriter olan kaynakların tek yerde katlanması:
+
+- `internal/liveness` (`State`, `Entry{SessionID, State, Reason, Since, Waiting}`,
+  `Capacity`, `Snapshot`, `Builder` — bir oturum en aktif durumuyla bir kez görünür).
+- `Runtime.Liveness(ctx)` (`internal/agent/liveness.go`): tur slotları (turnqueue,
+  kind + since), izlenen otonom invoke'lar, api chat-run probe'u, koordinatör slotları
+  (owed drain → `queued`; canlı worker'lı boşta koordinatör → `awaiting_workers`),
+  Durable Ask (`waiting_ask`), bekleyen flow koşuları (`waiting_input`); kapasite =
+  spawn aktif/maks, kuyruk derinliği/maks, meşgul tur sayısı, otonomi freni.
+- API: `running_sessions.go` **silindi**; dört tüketici `s.liveSessions(wsp).RunningSet()`
+  okur (RunningSet = running ∪ awaiting_workers, eski kapsam sözleşmesi korunur).
+  Yeni uç `GET /api/workspace/liveness`. `sessions_chips.go`'daki "canlılık çipleri
+  istemcide kalır" istisnası kalktı: `running`/`awaiting-workers` sunucuda sayfalar
+  ve sayar.
+- `SetExternalActiveSessions` köprüsü **kaldırılmadı**: chat turları slot claim ettiği
+  için büyük ölçüde gereksiz ama istek gelişi ile slot arası pencereyi kapatıyor;
+  ayrıca `liveSessions` `s.runs`'ı doğrudan da katlıyor (manager wiring'i olmayan
+  test/araç sunucuları için).
+- `ws:liveness` olayı: tur slotu claim/release/kuyruk değişiminde
+  (`publishTurnQueue` → `emitLiveness`) workspace akışına `{sessionId, busy, kind,
+  since, waiting}`.
+- Frontend: `types/liveness.ts`, `workspaceStream.ts` `LivenessData`; sidebar'ın
+  istemci tarafı canlılık daraltması **korundu** (anlık tepki), sunucu artık aynı
+  yüklemi sayfalamadan önce uyguluyor. `liveness_mismatch` debug olayı eklenmedi.
+- Testler: `internal/liveness/liveness_test.go`, `internal/agent/liveness_test.go`.
+
 ### R3 — Workspace olay günlüğü (sıralı, epoch'lu, replay'li)
 
 **Neden.** Boşluk 3. `SessionHub` oturum başına seq + ring + epoch + `since`

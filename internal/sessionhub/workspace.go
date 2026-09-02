@@ -44,6 +44,7 @@ const (
 	KindWSAutomationFire   = "automation_fire"
 	KindWSSpawn            = "spawn"
 	KindWSReport           = "report"
+	KindWSLiveness         = "liveness"
 )
 
 // PublishWorkspace appends one durable event to the workspace stream and fans

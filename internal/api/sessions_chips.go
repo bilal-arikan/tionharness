@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/liveness"
 )
 
 // Server-side twin of the sidebar's chip filter
@@ -14,9 +15,15 @@ import (
 // nothing. total/hasMore are then counted over the filtered set too, so the
 // footer count matches what the list can actually show.
 //
-// The two live-activity chips (running / awaiting-workers) are deliberately NOT
-// mirrored here: liveness is client state (streaming turns + the executions
-// poll), unknown to this handler. They stay a client-side narrowing of the page.
+// The two live-activity chips (running / awaiting-workers) are served here too
+// since liveness became server state (agent.Runtime.Liveness, _Docs/77 R2): when
+// ticked they NARROW the page to sessions in that state, and their badges count
+// the scope's live rows, so the footer count is right for them as well.
+
+const (
+	chipRunning         = "running"
+	chipAwaitingWorkers = "awaiting-workers"
+)
 
 const (
 	chipWorker          = "worker"
@@ -122,22 +129,31 @@ func parseChips(raw string, given bool) (map[string]bool, bool) {
 }
 
 // sessionMatchesChips mirrors the sidebar predicate: an archived or worker
-// session additionally needs its scope chip, and the kind chip must be on.
-func sessionMatchesChips(s db.Session, sel map[string]bool) bool {
+// session additionally needs its scope chip, the kind chip must be on, and a
+// ticked live chip narrows to sessions in that liveness state (both ticked =
+// either state).
+func sessionMatchesChips(s db.Session, sel map[string]bool, live liveness.Snapshot) bool {
 	if s.State == "archived" && !sel[chipArchived] {
 		return false
 	}
 	if sessionIsWorker(s) && !sel[chipWorker] {
 		return false
 	}
-	return sel[sessionChipKey(s)]
+	if !sel[sessionChipKey(s)] {
+		return false
+	}
+	if sel[chipRunning] || sel[chipAwaitingWorkers] {
+		return (sel[chipRunning] && live.Is(s.ID, liveness.Running)) ||
+			(sel[chipAwaitingWorkers] && live.Is(s.ID, liveness.AwaitingWorkers))
+	}
+	return true
 }
 
 // sessionChipCounts counts the supplied non-chip scope per chip so the sidebar
 // badges keep reporting what a chip WOULD reveal even while the chip selection
-// filters it out of the page. The live chips are absent by construction and stay
-// client-computed.
-func sessionChipCounts(sessions []db.Session) map[string]int {
+// filters it out of the page. The live chips count the scope's rows in that
+// liveness state.
+func sessionChipCounts(sessions []db.Session, live liveness.Snapshot) map[string]int {
 	counts := make(map[string]int, len(sessionChipKeys))
 	for _, s := range sessions {
 		key := sessionChipKey(s)
@@ -149,6 +165,12 @@ func sessionChipCounts(sessions []db.Session) map[string]int {
 		}
 		if s.State == "archived" {
 			counts[chipArchived]++
+		}
+		if live.Is(s.ID, liveness.Running) {
+			counts[chipRunning]++
+		}
+		if live.Is(s.ID, liveness.AwaitingWorkers) {
+			counts[chipAwaitingWorkers]++
 		}
 	}
 	return counts

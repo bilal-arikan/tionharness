@@ -113,7 +113,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 
 	// Which sessions are in flight right now, derived from the process-wide
 	// running session set joined to this workspace's sessions.
-	running := s.runningSessionIDs(wsp)
+	running := s.liveSessions(wsp).RunningSet()
 	// The graph's session and agent-instance nodes are both derived from this
 	// authoritative live scope. A coordinator waiting between turns remains live
 	// while one of its direct workers runs.

@@ -103,6 +103,8 @@ func (r *Runtime) publishTurnQueue(sessionID string) {
 		Type:   events.TypeSessionTurnQueue,
 		Target: map[string]string{"view": "chat", "sessionId": sessionID},
 	})
+	// The same transition is the workspace stream's live "running" edge.
+	r.emitLiveness(sessionID)
 }
 
 // BusyTurnSessionIDs lists the sessions that currently hold their admission slot.

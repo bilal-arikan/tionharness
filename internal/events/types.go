@@ -97,6 +97,11 @@ const (
 	// back. Reserved for the coordination observer (_Docs/77 R7).
 	TypeWSSpawn  = WorkspaceStreamPrefix + "spawn"
 	TypeWSReport = WorkspaceStreamPrefix + "report"
+	// TypeWSLiveness: a session's turn-admission state changed (a turn took the
+	// slot, released it, or queued behind it) — the live "running" edge of the
+	// workspace picture. Payload-light: sessionId + busy + waiting depth; the
+	// full picture is GET /api/workspace/liveness (_Docs/77 R2).
+	TypeWSLiveness = WorkspaceStreamPrefix + "liveness"
 )
 
 // WorkspaceStreamPrefix marks the event types that ride the per-workspace hub

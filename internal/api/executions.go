@@ -47,7 +47,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 
 	// Every session working right now (chat stream, autonomous invoke, or any turn
 	// holding the admission slot — slash commands included).
-	running := s.runningSessionIDs(wsp)
+	running := s.liveSessions(wsp).RunningSet()
 
 	// Cache agent names so a large feed doesn't re-fetch the same agent.
 	names := map[string]string{}

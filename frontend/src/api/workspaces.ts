@@ -7,6 +7,7 @@ import type {
   WorkspaceSettingsPatch,
   WorkspaceConfig,
   WorkspaceConfigPatch,
+  LivenessSnapshot,
 } from '@/types'
 import { req } from './client'
 
@@ -16,6 +17,9 @@ export const workspaceApi = {
   // any run in flight. Powers the switcher's per-row "çalışıyor" pulse for
   // non-active workspaces (the active one's per-view busy comes from /api/activity).
   listWorkspacesActivity: () => req<{ id: string; running: boolean }[]>('/api/workspaces/activity'),
+  // The active workspace's composed liveness picture (running / queued / waiting
+  // sessions with reasons + spawn capacity) — _Docs/77 R2.
+  workspaceLiveness: () => req<LivenessSnapshot>('/api/workspace/liveness'),
   // Available workspace templates (agents/flow blueprints) for the create dialog.
   listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
   createWorkspace: (data: {

@@ -1073,6 +1073,7 @@ yayın noktasından, `events.WorkspaceStreamPrefix` (`ws:`) ön ekli türlerle v
 | `ws:flow_run` | `RunFlow`/`spawnChildFlow` (running), `driveFlow` (waiting/success/failure), `prepareResume` (waiting→running), await sweeper (timeout) | `FlowRunPayload` |
 | `ws:schedule_armed` | `Scheduler.syncNextRunLocked` (cron) ve `armWakeLocked` (one-shot wake) | `ScheduleArmedPayload` — `fireAt` |
 | `ws:automation_fire` | `AutomationEngine.notifyFired` | `AutomationFirePayload` — `outcome: fired` (R5 `skipped` + sebep ekler) |
+| `ws:liveness` | `Runtime.publishTurnQueue` → `emitLiveness` (tur slotu claim/release/kuyruk değişimi; R2) | `LivenessPayload` — `sessionId`, `busy`, tur `kind`, `since`, `waiting` |
 | `ws:spawn`, `ws:report` | **R7'ye ayrılmış** (koordinasyon gözlemcisi) | — |
 
 `api.bridgeBusToHub` döngüsünün başında `ws:` türleri yakalanıp

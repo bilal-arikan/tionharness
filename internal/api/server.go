@@ -435,6 +435,8 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// schedules, automations, trajectories) — the workspace-level twin of
 	// /api/sessions/{id}/stream (_Docs/77 R3).
 	mux.HandleFunc("GET /api/workspace/stream", s.handleWorkspaceStream)
+	// The composed "what is running right now" snapshot + spawn capacity (_Docs/77 R2).
+	mux.HandleFunc("GET /api/workspace/liveness", s.handleWorkspaceLiveness)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
 	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)

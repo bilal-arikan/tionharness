@@ -1,5 +1,36 @@
 # TionHarness — İlerleme Takibi
 
+## Canlılık tek kaynağa bağlandı — Rota altyapısı R2 (2026-09-02) ✅
+
+**Belirti.** "Şu an ne koşuyor" üç registry'nin API katmanında elle birleşimiydi
+(`runningSessionIDs`: chat run'ları + `ActiveSessionIDs` + `BusyTurnSessionIDs`);
+kuyruk, Durable Ask'ta park etmiş tur, await-input'ta bekleyen flow ve worker
+bekleyen koordinatör ayrı yerlerdeydi; `running`/`awaiting-workers` çipleri
+"sunucu bilmez" diye istemcide kalıyor, `total`/`hasMore` bunlar için yanlış
+sayıyordu; kapasite (spawn slot/kuyruk/fren) hiçbir uçta yoktu.
+
+**Ne.** `internal/liveness` paketi (`Snapshot{Entries, Capacity}`, durumlar
+`running`/`queued`/`waiting_ask`/`waiting_input`/`awaiting_workers`, `Builder` en
+aktif durumu tutar) ve `Runtime.Liveness(ctx)`: tur slotları (kind + since), izlenen
+invoke'lar, api probe'u, koordinatör slotları, Durable Ask, bekleyen flow koşuları,
+kapasite. API'de `running_sessions.go` silindi; activity/executions/graph/
+sessions-active `s.liveSessions(wsp).RunningSet()` okur. Yeni uç
+`GET /api/workspace/liveness`. Çipler: `running`/`awaiting-workers` artık sunucuda
+sayfalanıp sayılıyor. `ws:liveness` olayı tur slotu değişiminde workspace akışına
+düşüyor. Frontend: `types/liveness.ts`, `LivenessData`. Sapmalar (`_Docs/77` R2):
+mutable registry yerine hesaplanmış anlık görüntü; `SetExternalActiveSessions`
+köprüsü korundu.
+
+**Dosyalar.** `internal/liveness/liveness.go` (yeni), `internal/agent/liveness.go`
+(yeni), `turnslot.go`; `internal/api/liveness.go` (yeni), `running_sessions.go`
+(silindi), `sessions_chips.go`, `sessions.go`, `activity.go`, `executions.go`,
+`graph.go`, `server.go`; `internal/events/types.go`, `internal/sessionhub/workspace.go`;
+`frontend/src/types/liveness.ts` (yeni), `api/workspaceStream.ts`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` liveness/api/agent/workspace ✅ (yeni:
+`TestBuilderKeepsMostActiveState`, `TestRunningSetIncludesAwaitingWorkers`,
+`TestLivenessComposesSources`, `TestTurnSlotEmitsLivenessEvent`); `npx tsc --noEmit` ✅.
+
 ## Workspace olay akışı — Rota altyapısı R3 (2026-09-02) ✅
 
 **Belirti.** `/api/events` bus'ında sıra, cursor ve replay yok; kopuşta her panel
