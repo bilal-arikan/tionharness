@@ -616,6 +616,7 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 		},
 	})
 	if err != nil {
+		recordFailedCompaction(ctx, database, agent, err)
 		return "", err
 	}
 	recordCompaction(ctx, database, agent, resp.Usage)
@@ -712,6 +713,36 @@ func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u pr
 		return
 	}
 	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, agent.Model, db.DeltaFromUsage(1, u))
+}
+
+// recordFailedCompaction bills a fold whose provider call ENDED IN AN ERROR.
+//
+// A fold sends the whole pending transcript, so a call that dies after the
+// prompt was accepted has already been paid for in full. These two call sites
+// (summarizeRendered, BuildHandoff) issue provider.Complete directly — outside
+// guardedComplete and outside the tool loop — so the agent layer's
+// recordFailedUsage never sees them, and returning the error bare made the most
+// expensive request of the session cost zero on the books.
+//
+// Only an error CARRYING usage is billed: providers attach a UsageError when
+// they know what the attempt spent. An error without one spent nothing we can
+// attribute, and inventing a number would be worse than the gap. Nil-safe and
+// non-fatal for the same reason as recordCompaction — the caller is already
+// returning a failure and must not have it replaced by a counting error.
+func recordFailedCompaction(ctx context.Context, database *db.DB, agent db.Agent, err error) {
+	ue, ok := providers.UsageFromError(err)
+	if !ok || database == nil {
+		return
+	}
+	calls := ue.ProviderCalls
+	if calls <= 0 {
+		calls = 1
+	}
+	model := ue.Model
+	if model == "" {
+		model = agent.Model
+	}
+	_ = database.AddUsageKind(ctx, agent.ID, db.UsageKindCompact, agent.Provider, model, db.DeltaFromUsage(calls, ue.Usage))
 }
 
 // ToProviderMessages maps a tail of stored turns to provider messages (same

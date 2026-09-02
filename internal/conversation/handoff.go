@@ -92,6 +92,7 @@ func BuildHandoff(ctx context.Context, database *db.DB, provider providers.Provi
 		},
 	})
 	if err != nil {
+		recordFailedCompaction(ctx, database, agent, err)
 		return "", err
 	}
 	recordCompaction(ctx, database, agent, resp.Usage)

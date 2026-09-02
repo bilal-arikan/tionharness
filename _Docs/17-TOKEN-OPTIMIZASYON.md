@@ -880,25 +880,40 @@ başarılı tur ile aynı yoldan işlenir.
 | Tool-loop içi | `recordedStream` | Akış (`Stream`) hatası |
 | Tool-loop dışı | `guardedComplete` (`budget.go:145-159`) | Yardımcı turlar: reflect (`coordination_stall.go`, `insightanalyzer.go`, `lessons.go`), summary (`summarizer.go`), title (`titler.go`), btw (`btw.go`) |
 
+**Fold yolunun kendi kaydı var (2026-09-02).** `internal/conversation` iki yerde
+sağlayıcıya **doğrudan** gider — `summarizeRendered` (rolling fold) ve
+`BuildHandoff` — yani ne `guardedComplete`'ten ne de tool-loop'tan geçer;
+`recordFailedUsage` bu ikisini hiç görmez. Bir fold **tüm bekleyen transkripti
+tek istekte** gönderdiği için, prompt kabul edildikten sonra düşen bir deneme
+oturumun en pahalı isteğidir ve hatayı çıplak döndürmek onu defterde $0
+yapıyordu. Artık iki yer de hata dalında `recordFailedCompaction`
+(`manager.go`) çağırır: usage **taşıyan** hata `UsageKindCompact` altına,
+sağlayıcının bildirdiği model (`ue.Model`) ve `ue.ProviderCalls` ile yazılır;
+usage taşımayan hata hiçbir şey yazmaz — uydurulmuş bir rakam, kapattığı
+boşluktan kötüdür. Çift faturalandırma yoktur: bu iki çağrı noktası başka hiçbir
+kayıt hunisinden geçmez. Testler:
+`internal/conversation/foldfailedusage_test.go`.
+
 **Çift faturalandırma yok:** `guardedComplete`'e gelen çağıranlar sağlayıcıya
 yalnız bu huniden erişir, hiçbiri `recordedComplete`/`recordedStream`'den
 geçmez. `guardedComplete` ayrıca `recordedComplete` ile aynı `Warn` logunu atar
 (`provider complete failed`), böylece yardımcı tur hatası sessizce yukarı
 sızmaz.
 
-**Bilinen açıklar** (bilerek belgeleniyor, henüz kapatılmadı):
+**Kapanan açıklar** (yukarıdaki liste 2026-08-31'de üç açıkla yazılmıştı;
+üçü de kapandı, kayıt burada tutuluyor çünkü aynı hatalar kolayca geri gelir):
 
-- **Üretici taraf tek sağlayıcıda bağlı.** `WithUsage`'ı çağıran tek üretim
-  yolu `providers/claudecli_stream.go`'daki `usageError` yardımcısıdır.
-  `internal/providers/codexcli.go` hiçbir hata dönüşünde usage sarmaz — yani
-  **codex-cli hata turunda harcanan token hâlâ düşer**. Kayıt tarafı hazır;
-  eksik olan sağlayıcı sarmalaması.
-- **claude-cli retry'ında ilk denemenin usage'ı kaybolur.** `ClaudeCLI.Complete`
-  içindeki `for attempt := 0; attempt < 2` döngüsünde attempt 0 *retryable*
-  düşüp attempt 1 başarılı olursa fonksiyon `return resp, nil` yapar; attempt
-  0'ın `UsageError`'ı hiçbir yere ulaşmaz. Yalnız **son** hata (`lastErr`) ya da
-  başarı yukarı çıktığı için, başarılı retry'ın önündeki ölü denemenin tokenları
-  faturalanmaz.
+- ~~**Üretici taraf tek sağlayıcıda bağlı.**~~ **Kapandı.**
+  `internal/providers/codexcli.go` artık her hata dönüşünü `p.usageError` ile
+  sarar (`runAttempt` içindeki tüm `return nil, …, p.usageError(...)` yolları),
+  yani codex-cli hata turunda harcanan token da faturalanır.
+- ~~**claude-cli retry'ında ilk denemenin usage'ı kaybolur.**~~ **Kapandı.**
+  `ClaudeCLI.completeWithArgs` düşen denemelerin hatalarını `failed` dilimde
+  biriktirir ve başarı hâlinde `foldFailedAttempts(resp, failed)` ile onların
+  usage'ını başarılı yanıta katar — attempt 0 retryable düşüp attempt 1
+  başarılı olsa bile ölü denemenin tokenları defterde kalır.
+- ~~**Fold yolu hiç faturalanmıyor.**~~ **Kapandı** (2026-09-02) —
+  `recordFailedCompaction`, yukarıda.
 
 ### Hesaplama düzeltmeleri (2026-07-08)
 Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
