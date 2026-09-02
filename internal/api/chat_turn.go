@@ -201,6 +201,27 @@ func compactionLeadStep(fold conversation.Compaction, provider providers.Provide
 	return step
 }
 
+// foldFailedLeadStep announces a fold that was needed but could not be produced:
+// the turn is over budget and runs with its full, uncompacted history.
+//
+// It reuses StepCompaction rather than StepError on purpose — this is a
+// compaction event, and StepError reads as "the turn failed", which is exactly
+// the impression to avoid: the turn continues normally. FoldedMsgs 0 is what
+// distinguishes it from a successful fold for clients that only read the
+// structured fields.
+func foldFailedLeadStep(reason string) agent.TurnStep {
+	text := "⚠ Bağlam sıkıştırılamadı — bu tur tam geçmişle çalışıyor."
+	if reason != "" {
+		text += " (" + reason + ")"
+	}
+	return agent.TurnStep{
+		Kind:    agent.StepCompaction,
+		Text:    text,
+		Trigger: conversation.TriggerAuto,
+		Source:  "tionharness",
+	}
+}
+
 // consumeContextChangeLead returns a one-element lead trace (a context_change
 // step) when the session's frozen static context drifted this episode, else
 // nil. Consumes the one-shot so it fires once per drift episode. Lives here (not

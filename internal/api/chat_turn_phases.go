@@ -509,6 +509,15 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	if prep.Compacted {
 		leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.Fold, provider)}, leadSteps...)
 	}
+	// The mirror case: the turn was over budget, the fold was attempted, and its
+	// summarizer call failed. Prepare no longer kills the turn for that (one
+	// transient 429 on the fold provider used to destroy the user's turn), so the
+	// turn continues with an UNCOMPACTED context. That has to be on screen — an
+	// oversized context that nobody announced is the failure this step exists to
+	// prevent.
+	if prep.FoldFailed {
+		leadSteps = append([]agent.TurnStep{foldFailedLeadStep(prep.FoldError)}, leadSteps...)
+	}
 	for _, st := range leadSteps {
 		step := st
 		t.withGeneration(func() {

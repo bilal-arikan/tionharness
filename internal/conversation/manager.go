@@ -6,12 +6,14 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/prompts"
@@ -199,6 +201,10 @@ type Manager struct {
 	// the anti-loop guard for the native path (see claimNativeAttempt in
 	// nativecompact.go). Keyed by session because one Manager serves every session.
 	lastNativeCompactAt map[string]int
+	// Per-session deadline until which the AUTOMATIC rolling fold stands down
+	// after its summarizer call failed (see foldfailure.go). Same keying rationale
+	// as lastNativeCompactAt.
+	foldFailedUntil map[string]time.Time
 }
 
 // SetLogger attaches a logger so the routine budgeted fold (and manual /compact)
@@ -318,6 +324,16 @@ type Prepared struct {
 	NativeCompacted bool
 	Fold            Compaction // the compaction this call performed (zero value unless Compacted or NativeCompacted)
 	Pressure        float64    // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
+	// FoldFailed reports that this turn was over budget, a rolling fold was
+	// attempted, and its summarizer call failed — so the turn runs UNCOMPACTED.
+	// It is not an error: the turn is still valid, just larger than intended, and
+	// a mid-turn overflow is still caught by the reactive fold
+	// (CompactInFlightMessages). Callers MUST surface it; a silently oversized
+	// context is exactly the failure this flag exists to prevent.
+	FoldFailed bool
+	// FoldError is the provider's message for the failed summarizer call, for the
+	// on-screen warning. Empty unless FoldFailed.
+	FoldError string
 }
 
 // Prepare returns the messages to send for a turn, compacting older history
@@ -346,6 +362,8 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	overhead := contextOverheadFrom(ctx)
 	compacted := false
 	nativeCompacted := false
+	foldFailed := false
+	foldError := ""
 	var foldStat Compaction
 	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
 		// Native-first strategies: ask the CLI provider to compact its own window
@@ -392,57 +410,43 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			}
 		}
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok && !nativeCompacted {
-			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
-			// parity). "auto" = the routine budgeted fold (manual /compact passes
-			// "manual" via its own path).
-			firePreCompact(ctx, TriggerAuto)
-			newSummary, err := m.summarizeTimed(ctx, database, provider, agent, session.ID, summary, fold)
-			if err != nil {
-				return Prepared{}, err
+			if until, cooling := m.foldCoolingDown(session.ID); cooling {
+				// A fold failed for this session moments ago and nothing has changed
+				// since, so retrying now would just lose another summarizer call. Skip
+				// it; compacted stays false, so the pressure warning below still fires
+				// and the over-budget state remains visible. See foldfailure.go.
+				m.recordFoldCooldownDebug(database, session.ID, agent.ID, until)
+			} else if res, err := m.applyRollingFold(ctx, rollingFoldInput{
+				database: database, provider: provider, session: session, agent: agent,
+				history: history, summary: summary, fold: fold, keepTail: keepTail,
+				newCount: newCount, before: before, overhead: overhead, maxTokens: maxTokens,
+			}); err != nil {
+				// Only the summarizer call is recoverable. A failed summary means the
+				// turn runs uncompacted — larger than intended, but alive; killing the
+				// turn instead would let one transient 429 on the fold provider destroy
+				// a user's turn, and the mid-turn overflow it risks is already caught by
+				// the reactive fold (reactive.go). Everything else applyRollingFold can
+				// fail at (writing the summary, re-measuring the step overhead) is local
+				// state this turn depends on, so those stay fatal.
+				if !errors.Is(err, errFoldSummary) {
+					return Prepared{}, err
+				}
+				foldFailed = true
+				foldError = err.Error()
+				until := m.noteFoldFailure(session.ID)
+				m.recordFoldFailureDebug(database, session.ID, agent.ID, until)
+				m.log(slog.LevelWarn, "context fold failed; turn continues uncompacted",
+					"session", session.ID, "agent", agent.ID,
+					"before_tokens", before, "overhead_tokens", overhead, "budget", maxTokens,
+					"error", err)
+			} else {
+				m.clearFoldCooldown(session.ID)
+				summary = res.summary
+				pending = res.pending
+				overhead = res.overhead
+				foldStat = res.stat
+				compacted = true
 			}
-			summary = newSummary
-			foldIndex, err := database.SetSessionSummary(ctx, session.ID, summary, newCount)
-			if err != nil {
-				return Prepared{}, err
-			}
-			pending = keepTail
-			compacted = true
-			// The overhead was measured BEFORE the fold, so its persisted-Steps term
-			// still charges the trace of the messages just folded away. Drop that part
-			// (an error here is propagated, never counted as zero) so the reported
-			// footprint — and the pressure ratio below — describe the post-fold turn.
-			foldedSteps, err := foldedStepOverhead(ctx, history, newCount)
-			if err != nil {
-				return Prepared{}, fmt.Errorf("post-fold overhead: %w", err)
-			}
-			// Keep the pre-deduction figure: "before" must describe the footprint as
-			// it stood when the gate fired, which still carried the folded trace.
-			// Reporting both sides off the reduced overhead hides exactly the part the
-			// fold removed, understating the "X→Y" ratio by foldedSteps.
-			overheadBefore := overhead
-			if overhead -= foldedSteps; overhead < 0 {
-				overhead = 0 // a step term larger than the whole overhead is nonsense; floor it
-			}
-			afterTokens := EstimateTokens(summary, pending) + overhead
-			// The on-screen compaction step and the debug journal share one formula:
-			// messages + the non-message overhead as it stands AT THAT MOMENT — the
-			// pre-fold overhead on the before side, the post-deduction one after.
-			foldStat = Compaction{
-				FoldedMsgs:   len(fold),
-				BeforeTokens: before + overheadBefore,
-				AfterTokens:  afterTokens,
-				Trigger:      TriggerAuto,
-				Mode:         ModeRolling,
-			}
-			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
-				"session", session.ID, "agent", agent.ID,
-				"folded_msgs", len(fold), "before_tokens", before, "overhead_tokens", overhead,
-				"after_tokens", afterTokens, "budget", maxTokens)
-			// Journal the fold to debug.jsonl (true footprint = messages + overhead,
-			// the same basis the fold gate above uses).
-			m.recordCompactionDebug(database, session.ID, agent.ID, foldStat.Trigger,
-				foldStat.FoldedMsgs, foldStat.BeforeTokens, foldStat.AfterTokens, maxTokens, len(renderDBMessages(fold)),
-				foldIndex, len(summary))
 		}
 	}
 
@@ -474,6 +478,8 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		NativeCompacted: nativeCompacted,
 		Fold:            foldStat,
 		Pressure:        pressure,
+		FoldFailed:      foldFailed,
+		FoldError:       foldError,
 	}, nil
 }
 

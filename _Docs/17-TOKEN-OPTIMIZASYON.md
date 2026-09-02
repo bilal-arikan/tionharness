@@ -894,6 +894,32 @@ boşluktan kötüdür. Çift faturalandırma yoktur: bu iki çağrı noktası ba
 kayıt hunisinden geçmez. Testler:
 `internal/conversation/foldfailedusage_test.go`.
 
+**Başarısız fold artık turu öldürmüyor (2026-09-02).** Önceden `Prepare`
+özetleyici hatasını yukarı taşıyordu ve `chat_turn_phases.go` bunu
+`failTurn("compaction_failed")` yapıyordu — yani fold sağlayıcısındaki tek bir
+geçici 429 kullanıcının turunu yok ediyordu. Artık fold gövdesi
+`applyRollingFold` (`internal/conversation/fold.go`) içindedir ve **yalnız
+özetleyici LLM çağrısının** hatası `errFoldSummary` ile işaretlenir; `Prepare` bu
+sınıfı yutup turu **sıkıştırılmamış** sürdürür, geri kalan her hata (özetin
+oturuma yazılması, persisted-step yükünün yeniden ölçülmesi) ölümcül kalır.
+
+Sessizlik yok — ikisi de zorunlu: (1) `Prepared.FoldFailed` + `FoldError`,
+ekranda `foldFailedLeadStep` ile ("⚠ Bağlam sıkıştırılamadı — bu tur tam
+geçmişle çalışıyor"), başarılı fold'un kullandığı hub kanalının aynısından;
+(2) `debug.jsonl`'e `fold_failed` olayı (`ErrorKind: compaction_failed`).
+Sağlayıcının serbest metni journal'a yazılmaz, yalnız ekrana çıkar.
+
+Başarısız fold ayak izini değiştirmediği için kapı bir sonraki turda yine
+açıktır; bu yüzden oturum başına **45 sn stand-down** vardır
+(`foldFailureCooldown`, `internal/conversation/foldfailure.go`). Stand-down
+süresince fold denenmez ve `fold_cooldown` olayı düşer; `compacted` false
+kaldığından basınç uyarısı da normal şekilde ateşler. Manuel `/compact`
+(`ForceCompact`) stand-down'a **hiç bakmaz** — açık kullanıcı isteği her zaman
+gerçek bir deneme hak eder. Sıkıştırmasız devam eden turun tur-içi taşma riski
+zaten reactive fold (`CompactInFlightMessages`) tarafından yakalanır. Testler:
+`internal/conversation/foldfailure_test.go`. Karşılaştırma ve gerekçe:
+`_Docs/analiz-hermes-baglam-yonetimi.md` §6, §11-Ö2.
+
 **Çift faturalandırma yok:** `guardedComplete`'e gelen çağıranlar sağlayıcıya
 yalnız bu huniden erişir, hiçbiri `recordedComplete`/`recordedStream`'den
 geçmez. `guardedComplete` ayrıca `recordedComplete` ile aynı `Warn` logunu atar
