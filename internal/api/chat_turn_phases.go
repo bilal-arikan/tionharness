@@ -472,9 +472,9 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// the CLI to compact its own window before folding history ourselves. The
 	// error travels back unwrapped — conversation treats any non-nil result as
 	// "not compacted" and falls back to the rolling fold.
-	t.ctx = conversation.WithNativeCompact(t.ctx, func(ctx context.Context) error {
-		_, err := t.s.runNativeCompact(ctx, t.wsp, t.session, rawHistory, nativeCompactAuto)
-		return err
+	t.ctx = conversation.WithNativeCompact(t.ctx, func(ctx context.Context) (conversation.NativeCompactResult, error) {
+		result, err := t.s.runNativeCompact(ctx, t.wsp, t.session, rawHistory, nativeCompactAuto)
+		return conversation.NativeCompactResult{SuccessDebugPersisted: result.SuccessDebugPersisted}, err
 	})
 	prep, cerr := t.s.convo.Prepare(t.ctx, t.database, provider, t.session, agentRow, history)
 	if cerr != nil {

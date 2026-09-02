@@ -85,6 +85,17 @@ Komut sözleşmesi ikiye ayrılır:
   summary'ye katlar, CLI resume durumunu temizler ve sonraki turu özet + son mesaj
   kuyruğuyla fresh CLI session olarak başlatır.
 
+**Zaman aşımı (her iki yol da 10 dakika).** İkisi de tek atışlık bir model
+çağrısıdır: istek gider, sonra modelin ilk token'ına kadar hiçbir çıktı gelmez ve
+dolmaya yakın bir bağlamda bu sessizlik dakikalarca sürebilir. `/compact-custom`
+(ve aynı çekirdeği kullanan auto/wake/reaktif fold ile `/handoff`) CLI
+sağlayıcısının stdout-sessizlik watchdog'unu `conversation.FoldIdleOutputFloor`
+= 10 dk tabanına yükseltir (`providers.WithMinIdleOutputTimeout`; yalnız
+yükseltir, global ayar daha büyükse o kazanır, kapalı watchdog kapalı kalır).
+`/compact` native yolu ayrı bir mekanizma kullanır — codex App Server RPC adım
+zaman aşımı `codexCompactStepTimeout` — o da aynı gerekçeyle 10 dakikadır.
+Detay: `_Docs/69-CODEX-CLI-SAGLAYICI.md`, `_Docs/35-CONTEXT-RESET-HANDOFF.md`.
+
 Her iki manuel komutun başarı mesajı aynı yapısal `compaction` adımını kendi
 `steps` alanında kalıcı taşır. `/compact`: `trigger=manual`, `source=cli-native`,
 `sessionAction=native-compact`; `/compact-custom`: `source=tionharness`, CLI ise
@@ -275,6 +286,14 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
 - `internal/api/chat_stream.go` — `POST /api/chat/stream` (SSE):
   `meta` (userMessage) → `step` (her TurnStep) → `done` (replyMessage + sessionTitle).
   Tur sonunda mesaj + tam iz kalıcılaştırılır (yeniden yüklemede aynı görünür).
+  `runChatTurn` yalnız kurulum + defer'leri tutar ve turu fazlara devreder;
+  fazlar `internal/api/chat_turn_phases.go` içindeki `chatTurn` metodlarıdır
+  (`preflight` → `wireInteractive` → `runPromptLifecycle` → `runStopPasses`
+  [`runAgentPass` → `prepareAgentRequest` / `installAgentSinks` / `streamSink` /
+  `persistInterruptedTurn` / `persistAgentReply`] → `finishTurn`). Tur ctx'i
+  `chatTurn.ctx` alanında yaşar: ajan geçişinde eklenen ctx sarmalayıcıları
+  (compaction prompt, context overhead, PreCompact, native compact) bir sonraki
+  ajanı ve bir sonraki stop-pass'i de etkiler.
 - Frontend `api.ts:streamChat` — `fetch` + `ReadableStream` ile SSE çerçevelerini
   ayrıştırır. `App.tsx` canlı bir asistan balonu ekler; `onStep`'te `kind:"delta"`
   parçaları **balon metnine eklenir** (token token büyür), diğer adımlar ize
@@ -1122,21 +1141,46 @@ sonraki bir sürümde eklenen çip kimsede sessizce gizli başlamaz.
 - **Tür çipleri** — `Session.Kind`'in tamamını kapsar (`chat`, `task`, `flow`, `spawned`,
   `subagent`, `automation`, `insight`, `flow-coordinator`, `inbox`) + bu sürümün tanımadığı
   bir tür için `Diğer` yakalayıcısı. Hiçbir oturum görünmez kalamaz.
-- **Kapsam çipleri** — türden bağımsız dört adet: `Çalışan`, `Worker Bekleyen`, `Worker`,
+- **Kapsam çipleri** — türden bağımsız dört adet: `Çalışan`, `Bekleyen`, `Worker`,
   `Arşiv`. Eskiden yalnız son ikisi vardı (aktif/worker/arşiv üçlüsü); canlı eksen TSK513
   ile eklendi.
 
 Canlı eksen `sessionLiveScope()` ile hesaplanır ve **iki değeri karşılıklı dışlayıcıdır**:
 
 - `Çalışan` — oturumun **kendi** turu akıyor (`streamingSessionIds` ya da runtime `running`).
-- `Worker Bekleyen` — oturum kendisi boşta ama **altındaki** en az bir doğrudan worker canlı
-  (`liveWorkerCounts`). Koordinatör şeklidir; kendi turu da akıyorsa `Çalışan` kazanır.
+- `Bekleyen` — oturum kendisi boşta ama koordinatör ağacında **herhangi bir derinlikte**
+  en az bir descendant worker canlı (`liveWorkerCounts`). `/api/executions` her oturumun
+  `coordinatorSessionId` + `rootCoordinatorSessionId` lineage'ını taşıdığı için worker
+  satırları filtrelenmiş veya henüz sayfalanmamış olsa da kök satır doğru kalır.
+  Feed 20 saniyelik poll ve çalışma olaylarındaki SSE refresh ile güncellenir; yüklü
+  session satırları + `streamingSessionIds` yerel fallback'tir. Kendi turu da akıyorsa
+  `Çalışan` kazanır.
 
-Sidebar'da tek bir `chipShapeOf()` yardımcısı hem çip **sayaçlarını** hem görünür listeyi
-sınıflandırır; bu yüzden bir çipin rozet sayısı ile o çipin gerçekten tuttuğu satır sayısı
-ayrışamaz. `sessionMatchesChips` içinde canlı alanlar **opsiyoneldir** — runtime anlık
-görüntüsü olmayan çağıranlar (testler, toplu genel bakış tablosu) canlı ekseni tümden
-yok sayar, eski davranışı korur.
+Sidebar'da tek bir `chipShapeOf()` yardımcısı görünür listeyi sınıflandırır.
+`sessionMatchesChips` içinde canlı alanlar **opsiyoneldir** — runtime anlık görüntüsü
+olmayan çağıranlar (testler, toplu genel bakış tablosu) canlı ekseni tümden yok sayar,
+eski davranışı korur.
+
+**Seçim sunucuya gider (2026-09-01).** Çip seçimi artık yalnız görünüm değil, liste
+isteğinin parçasıdır: `useSessionChips` (sidebar'ın üstünde, `App`'te) seçimi tutar,
+`useSessionsController` her `/api/sessions` çağrısına `chips=<seçili,çipler>` ekler ve
+sunucu (`internal/api/sessions_chips.go`) aynı yüklemi **sayfalamadan önce** uygular.
+Neden: sayfalama tüm türler üzerinde yapıldığında 100'lük bir sayfa neredeyse tamamen
+worker/subagent satırı olabiliyor, kullanıcı sohbetlerinin yalnız birkaçını görüyor ve
+`total`/`hasMore` göremediği satırları sayıyordu — "Daha fazla yükle" bozuk görünüyordu.
+
+Sonuçlar:
+
+- Rozet sayıları zarftaki `chipCounts` alanından gelir: sunucu bunları **filtre
+  uygulanmadan önce** tüm workspace üzerinde sayar, yani işaretsiz bir çip hâlâ kaç
+  satır sakladığını söyler. İki canlı çip istemci durumu olduğu için yüklü satırlardan
+  sayılmaya devam eder (sunucu canlılığı bilmez, o iki çipi filtrede de yok sayar).
+- Seçim değişince ilk sayfa yeniden çekilir; eski pencereye ekleme yapılmaz.
+- Açık oturum çip filtresine takılsa bile controller onu state'te tutar
+  (`withActiveSession`) — başlık, composer ve transkript oturumu bu listeden çözer.
+  Satır yine de listede görünmez: istemci aynı yüklemi tekrar uygular.
+- `chips` parametresinin **verilmemesi** "filtre yok" demektir; **boş** verilmesi
+  gerçek bir seçimdir (hiçbir çip açık değil) ve hiçbir şeyle eşleşmez.
 
 ### Prompt-cache görünürlüğü (2026-08-11)
 
@@ -1404,6 +1448,30 @@ sağdaki durum etiketinin hemen altında sağ hizalı gösterilir.
   kayıtlarda alanlar yoksa işlem adı `collab_tool_call` olarak kalır.
 - Güvenli özet yalnız işlem + alıcılar + durumdan üretilir; delegasyon prompt'u
   kullanıcı sunumuna veya debug günlüğüne yazılmaz.
+
+### Oturum başlangıç paneli (2026-09-01)
+
+Yeni ve **henüz hiç mesaj gönderilmemiş** bir sohbette composer'ın hemen üstünde
+"Başlangıç ayarları" kartı çıkar (`features/chat/SessionStartPanel.tsx`):
+koordinatör modunu aç/kapa + açıkken workflow (recipe) seçimi. İkisi de zaten
+oturum bilgi panelindeki **Koordinasyon** bölümünde vardı; buradaki kart yalnız
+kararın gerçekten verildiği ana taşır — mod, oturum çalışmaya başladığında
+prompt epoch'una donuyor, yani ilk turdan sonra değiştirmek çalışan bir sohbetin
+araç setini yeniden yazmak demek.
+
+- Kart aynı API'leri kullanır: `PUT /api/sessions/{id}/role` ve
+  `PUT /api/sessions/{id}/workflow`. Ayrı bir kalıcılık yolu yoktur.
+- Başlangıç değerleri `GET /api/sessions/{id}/info`'dan okunur — koordinatör
+  olarak ayarlanmış bir ajan (Ajanlar ▸ Koordinatör) oturumu zaten koordinatör
+  modda açar (`db.createSessionLocked`), kart bunu "kapalı" göstermez.
+- Mod kapatılınca seçili recipe de yerel olarak temizlenir; backend zaten
+  koordinatör olmayan oturumda workflow'u reddeder.
+- Görünürlük kuralı `features/chat/sessionStartGate.ts` içinde saf fonksiyon
+  (`shouldShowStartPanel`) olarak durur ve testlidir: read-only koşu logu,
+  worker oturumu, dolu/yüklenmekte olan transkript, akan tur, **kuyruğa alınmış
+  veya gönderilmiş tur** ve kullanıcının kapattığı oturum → kart yok. Gönder'e
+  basıldığı anda `activePending` true olduğu için kart yanıt beklemeden kaybolur.
+- Sağ üstteki ✕ kartı yalnız o oturum için (bellek içi, kalıcı değil) gizler.
 
 ### Coordinator Başlangıç Paneli
 

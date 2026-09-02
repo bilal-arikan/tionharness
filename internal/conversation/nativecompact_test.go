@@ -43,9 +43,9 @@ func nativeCompactFixture(t *testing.T) (*db.DB, *Manager, db.Agent, db.Session,
 func TestPrepareRollingModeIgnoresNativeCallback(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	calls := 0
-	ctx := WithNativeCompact(context.Background(), func(context.Context) error {
+	ctx := WithNativeCompact(context.Background(), func(context.Context) (NativeCompactResult, error) {
 		calls++
-		return nil
+		return NativeCompactResult{}, nil
 	})
 	prep, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {
@@ -71,9 +71,9 @@ func TestPrepareNativeModeSkipsRollingFold(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactNative)
 	calls := 0
-	ctx := WithNativeCompact(context.Background(), func(context.Context) error {
+	ctx := WithNativeCompact(context.Background(), func(context.Context) (NativeCompactResult, error) {
 		calls++
-		return nil
+		return NativeCompactResult{}, nil
 	})
 	prep, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {
@@ -108,6 +108,37 @@ func TestPrepareNativeModeSkipsRollingFold(t *testing.T) {
 	}
 }
 
+func TestPrepareNativeSuccessUsesInvocationDebugResultAfterJournalPrune(t *testing.T) {
+	d, m, agent, sess, history := nativeCompactFixture(t)
+	m.SetAutoCompactMode(AutoCompactNative)
+	for i := 0; i < 6; i++ {
+		if err := d.AppendDebugEvent(sess.ID, db.DebugEvent{Type: db.DebugTurn, DurMs: int64(i)}, 4); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := WithNativeCompact(context.Background(), func(context.Context) (NativeCompactResult, error) {
+		err := d.AppendCLICompactionEvent(sess.ID, agent.ID, providers.CLICompactionEvent{
+			Phase: providers.CLICompactionSuccess, Provider: "claude-cli",
+			AttemptID: "pruned-journal-attempt", Attempt: 1,
+		})
+		return NativeCompactResult{SuccessDebugPersisted: err == nil}, err
+	})
+	prep, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if !prep.NativeCompacted || prep.Compacted {
+		t.Fatalf("native result = native %v rolling %v", prep.NativeCompacted, prep.Compacted)
+	}
+	events, err := d.ReadDebugEvents(context.Background(), sess.ID, db.DebugCompaction, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Name != "cli-native" {
+		t.Fatalf("native compaction events = %+v, want one lifecycle-produced event", events)
+	}
+}
+
 // TestPrepareNativeFailureFallsBackToRolling covers the fallback: any non-nil
 // error from the callback means native compaction did not happen, so the ordinary
 // rolling fold must still run on that same turn.
@@ -115,9 +146,9 @@ func TestPrepareNativeFailureFallsBackToRolling(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactAuto)
 	calls := 0
-	ctx := WithNativeCompact(context.Background(), func(context.Context) error {
+	ctx := WithNativeCompact(context.Background(), func(context.Context) (NativeCompactResult, error) {
 		calls++
-		return errors.New("provider does not support native compaction")
+		return NativeCompactResult{}, errors.New("provider does not support native compaction")
 	})
 	prep, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {
@@ -148,9 +179,9 @@ func TestPrepareNativeAntiLoop(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactNative)
 	calls := 0
-	ctx := WithNativeCompact(context.Background(), func(context.Context) error {
+	ctx := WithNativeCompact(context.Background(), func(context.Context) (NativeCompactResult, error) {
 		calls++
-		return nil
+		return NativeCompactResult{}, nil
 	})
 	first, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
 	if err != nil {

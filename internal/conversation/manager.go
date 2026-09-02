@@ -357,20 +357,38 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			// claimNativeAttempt is the anti-loop guard: native compaction does not
 			// shrink OUR transcript, so without it the same over-budget footprint would
 			// re-trigger it every turn. See nativecompact.go.
-			if m.claimNativeAttempt(session.ID, start) && fireNativeCompact(ctx) == nil {
-				nativeCompacted = true
-				// The transcript is untouched, so both sides report the same footprint;
-				// Mode is what tells this apart from a rolling fold downstream.
-				foldStat = Compaction{
-					BeforeTokens: before + overhead,
-					AfterTokens:  before + overhead,
-					Trigger:      TriggerAuto,
-					Mode:         ModeNative,
+			if m.claimNativeAttempt(session.ID, start) {
+				nativeResult, nativeErr := fireNativeCompact(ctx)
+				if nativeErr == nil {
+					nativeCompacted = true
+					// The transcript is untouched, so both sides report the same footprint;
+					// Mode is what tells this apart from a rolling fold downstream.
+					foldStat = Compaction{
+						BeforeTokens: before + overhead,
+						AfterTokens:  before + overhead,
+						Trigger:      TriggerAuto,
+						Mode:         ModeNative,
+					}
+					m.log(slog.LevelInfo, "context compacted (CLI native)",
+						"session", session.ID, "agent", agent.ID,
+						"before_tokens", before, "overhead_tokens", overhead, "budget", maxTokens)
+					if !nativeResult.SuccessDebugPersisted {
+						m.recordNativeCompactionDebug(database, session.ID, agent.ID, before+overhead, maxTokens)
+					}
+				} else {
+					// The claim is spent whether or not the attempt worked, so record what
+					// consumed it — otherwise the NEXT over-budget turn's native_skipped
+					// has no visible cause.
+					m.recordNativeCompactDebug(database, session.ID, agent.ID,
+						"claim_consumed", nativeCompactErrorKind(nativeErr))
 				}
-				m.log(slog.LevelInfo, "context compacted (CLI native)",
-					"session", session.ID, "agent", agent.ID,
-					"before_tokens", before, "overhead_tokens", overhead, "budget", maxTokens)
-				recordNativeCompactionDebug(database, session.ID, agent.ID, before+overhead, maxTokens)
+			} else {
+				m.recordNativeCompactDebug(database, session.ID, agent.ID, "native_skipped", "")
+			}
+			// "auto" promises native-first with a rolling safety net; when native did
+			// not happen the fold below IS that net, and nothing else says so.
+			if mode == AutoCompactAuto && !nativeCompacted {
+				m.recordNativeCompactDebug(database, session.ID, agent.ID, "native_fallback_rolling", "")
 			}
 		}
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok && !nativeCompacted {
@@ -378,7 +396,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			// parity). "auto" = the routine budgeted fold (manual /compact passes
 			// "manual" via its own path).
 			firePreCompact(ctx, TriggerAuto)
-			newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
+			newSummary, err := m.summarizeTimed(ctx, database, provider, agent, session.ID, summary, fold)
 			if err != nil {
 				return Prepared{}, err
 			}
@@ -422,7 +440,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 				"after_tokens", afterTokens, "budget", maxTokens)
 			// Journal the fold to debug.jsonl (true footprint = messages + overhead,
 			// the same basis the fold gate above uses).
-			recordCompactionDebug(database, session.ID, agent.ID, foldStat.Trigger,
+			m.recordCompactionDebug(database, session.ID, agent.ID, foldStat.Trigger,
 				foldStat.FoldedMsgs, foldStat.BeforeTokens, foldStat.AfterTokens, maxTokens, len(renderDBMessages(fold)),
 				foldIndex, len(summary))
 		}
@@ -444,7 +462,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		// through. A turn that actually folded already has its compaction event, so
 		// it needs no second warning.
 		if !compacted && !nativeCompacted && pressure >= pressureWarnRatio {
-			recordPressureDebug(database, session.ID, agent.ID, contextTokens+overhead, maxTokens, pressure)
+			m.recordPressureDebug(database, session.ID, agent.ID, contextTokens+overhead, maxTokens, pressure)
 		}
 	}
 
@@ -457,6 +475,23 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		Fold:            foldStat,
 		Pressure:        pressure,
 	}, nil
+}
+
+func (m *Manager) recordNativeCompactionDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int) {
+	if database == nil || sessionID == "" {
+		return
+	}
+	detail := fmt.Sprintf("CLI native compaction · %d tokens over budget basis", usedTokens)
+	if budget > 0 {
+		detail += fmt.Sprintf(" · budget %d", budget)
+	}
+	detail += " · transcript unchanged (rolling fold skipped)"
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
+		Type: db.DebugCompaction, AgentID: agentID,
+		Name: TriggerAuto + "-" + ModeNative, Detail: detail,
+	}); err != nil {
+		m.log(slog.LevelError, "native compaction journal append failed", "session", sessionID, "error", err)
+	}
 }
 
 // ForceCompact folds all but the most recent keepRecent messages into the
@@ -474,7 +509,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	}
 	firePreCompact(ctx, TriggerManual)
 	beforeTokens := EstimateTokens(summary, history[start:])
-	newSummary, err := m.summarize(ctx, database, provider, agent, summary, foldMsgs)
+	newSummary, err := m.summarizeTimed(ctx, database, provider, agent, session.ID, summary, foldMsgs)
 	if err != nil {
 		return Compaction{}, "", err
 	}
@@ -493,7 +528,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 		"session", session.ID, "agent", agent.ID, "folded_msgs", fold.FoldedMsgs)
 	// Journal the manual fold too; budget 0 → omitted from Detail (manual is
 	// budget-independent).
-	recordCompactionDebug(database, session.ID, agent.ID, fold.Trigger,
+	m.recordCompactionDebug(database, session.ID, agent.ID, fold.Trigger,
 		fold.FoldedMsgs, fold.BeforeTokens, fold.AfterTokens, 0, len(renderDBMessages(foldMsgs)),
 		foldIndex, len(newSummary))
 	return fold, newSummary, nil
@@ -570,7 +605,7 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 	// claude-cli provider uses its global-default config dir and fails auth. The
 	// home is carried on ctx via WithClaudeHome by every fold entry point.
 	pinClaudeHome(ctx, provider)
-	resp, err := provider.Complete(ctx, providers.Request{
+	resp, err := provider.Complete(foldCtx(ctx), providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{
@@ -595,8 +630,10 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 // can't see where it ran" gap: the fold happens in this layer regardless of the
 // turn kind, so journaling it here covers every path in one choke point.
 //
-// Best-effort and side-effect-only: a journal write failure is swallowed so
-// observability can never break a turn (AppendDebugEvent takes only its own lock).
+// Side-effect-only: a journal write failure never breaks a turn
+// (AppendDebugEventGated takes only its own lock), but it is logged rather than
+// discarded. The emit obeys the user's debugJournalEnabled/debugJournalCap
+// setting — the same gate the runtime's emitDebug applies.
 // Token figures ride Detail (not In/Out) because the debug summary sums In/Out for
 // llm_call events only — keeping them off the compaction event leaves the token
 // series clean while SavedBytes feeds the summary's existing compaction rollup.
@@ -610,44 +647,23 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 const pressureWarnRatio = 0.85
 
 // recordPressureDebug journals a "context budget nearly full" warning for a turn
-// that did NOT fold. Best-effort, same as recordCompactionDebug.
-func recordPressureDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int, pressure float64) {
+// that did NOT fold. Same gating and failure handling as recordCompactionDebug.
+func (m *Manager) recordPressureDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int, pressure float64) {
 	if database == nil || sessionID == "" {
 		return
 	}
-	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
 		Type:    db.DebugPressure,
 		AgentID: agentID,
 		Name:    "context_pressure",
 		Detail: fmt.Sprintf("context %d/%d tokens · %.0f%% of budget · fold at 100%%",
 			usedTokens, budget, pressure*100),
-	}, 0)
+	}); err != nil {
+		m.log(slog.LevelError, "context pressure journal append failed", "session", sessionID, "error", err)
+	}
 }
 
-// recordNativeCompactionDebug journals an automatic compaction that the CLI
-// provider performed on its OWN window instead of the rolling fold. It shares the
-// DebugCompaction type so the Debug modal lists both in one series, but carries a
-// distinct name ("auto-native") and no fold figures — no message left the
-// transcript, so folded/after counts would be misleading. Best-effort, same as
-// recordCompactionDebug.
-func recordNativeCompactionDebug(database *db.DB, sessionID, agentID string, usedTokens, budget int) {
-	if database == nil || sessionID == "" {
-		return
-	}
-	detail := fmt.Sprintf("CLI native compaction · %d tokens over budget basis", usedTokens)
-	if budget > 0 {
-		detail += fmt.Sprintf(" · budget %d", budget)
-	}
-	detail += " · transcript unchanged (rolling fold skipped)"
-	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
-		Type:    db.DebugCompaction,
-		AgentID: agentID,
-		Name:    TriggerAuto + "-" + ModeNative,
-		Detail:  detail,
-	}, 0)
-}
-
-func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes, foldIndex, summaryBytes int) {
+func (m *Manager) recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes, foldIndex, summaryBytes int) {
 	if database == nil || sessionID == "" {
 		return
 	}
@@ -661,7 +677,7 @@ func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, 
 		detail += " · fold # unknown"
 	}
 	detail += fmt.Sprintf(" · summary %dB", summaryBytes)
-	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
 		Type:         db.DebugCompaction,
 		AgentID:      agentID,
 		Name:         trigger,
@@ -669,7 +685,9 @@ func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, 
 		FoldIndex:    foldIndex,
 		SummaryBytes: summaryBytes,
 		Detail:       detail,
-	}, 0)
+	}); err != nil {
+		m.log(slog.LevelError, "compaction journal append failed", "session", sessionID, "error", err)
+	}
 }
 
 // renderDBMessages flattens stored turns to the "role: text" transcript the

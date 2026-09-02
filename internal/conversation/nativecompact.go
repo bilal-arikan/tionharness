@@ -3,6 +3,9 @@ package conversation
 import (
 	"context"
 	"errors"
+	"log/slog"
+
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // nativeCompactCtxKey carries a callback that asks the ACTIVE CLI provider to
@@ -10,6 +13,13 @@ import (
 // compaction from inside Prepare without conversation importing api (which would
 // cycle). Modelled on preCompactCtxKey above it.
 type nativeCompactCtxKey struct{}
+
+// NativeCompactResult reports whether the invocation's native-success debug
+// record was durably appended. The automatic gate uses this exact invocation
+// result instead of counting a prunable, concurrently-written journal.
+type NativeCompactResult struct {
+	SuccessDebugPersisted bool
+}
 
 // errNoNativeCompactor is what fireNativeCompact reports when nobody installed a
 // callback (every direct/test caller of Prepare, and every non-CLI turn path).
@@ -25,7 +35,7 @@ var errNoNativeCompactor = errors.New("no native compaction callback on context"
 // unavailability sentinel lives in the api package — so the rule here is simply
 // nil = native happened, non-nil = fall back to the rolling fold.
 // nil fn is a no-op.
-func WithNativeCompact(ctx context.Context, fn func(context.Context) error) context.Context {
+func WithNativeCompact(ctx context.Context, fn func(context.Context) (NativeCompactResult, error)) context.Context {
 	if fn == nil {
 		return ctx
 	}
@@ -34,10 +44,10 @@ func WithNativeCompact(ctx context.Context, fn func(context.Context) error) cont
 
 // fireNativeCompact invokes the ctx-carried native-compaction callback, or reports
 // errNoNativeCompactor when there is none.
-func fireNativeCompact(ctx context.Context) error {
-	fn, ok := ctx.Value(nativeCompactCtxKey{}).(func(context.Context) error)
+func fireNativeCompact(ctx context.Context) (NativeCompactResult, error) {
+	fn, ok := ctx.Value(nativeCompactCtxKey{}).(func(context.Context) (NativeCompactResult, error))
 	if !ok || fn == nil {
-		return errNoNativeCompactor
+		return NativeCompactResult{}, errNoNativeCompactor
 	}
 	return fn(ctx)
 }
@@ -69,4 +79,39 @@ func (m *Manager) claimNativeAttempt(sessionID string, summaryMsgCount int) bool
 	}
 	m.lastNativeCompactAt[sessionID] = summaryMsgCount
 	return true
+}
+
+// nativeCompactErrorKind classifies why native compaction did not happen, using
+// only reason enums the debug journal keeps verbatim. errNoNativeCompactor is
+// absence rather than failure — no CLI callback was installed for this turn — so
+// it carries no kind at all.
+func nativeCompactErrorKind(err error) string {
+	if err == nil || errors.Is(err, errNoNativeCompactor) {
+		return ""
+	}
+	return "compaction_failed"
+}
+
+// recordNativeCompactDebug journals the native-compaction decisions that leave no
+// other trace: the attempt claimNativeAttempt refused because the claim for this
+// rolling-summary boundary was already spent (native_skipped), the claim a failed
+// attempt consumed (claim_consumed), and the automatic mode's fall-through to the
+// rolling fold (native_fallback_rolling). Only the SUCCESSFUL native path had a
+// record before, so the journal showed a rolling fold with no explanation of why
+// native had not run. Same gating and failure handling as the other recorders
+// here: a blank session id or a nil store writes nothing, an append error is
+// logged rather than swallowed.
+func (m *Manager) recordNativeCompactDebug(database *db.DB, sessionID, agentID, name, errorKind string) {
+	if database == nil || sessionID == "" {
+		return
+	}
+	if err := database.AppendDebugEventGated(sessionID, db.DebugEvent{
+		Type:      db.DebugCompaction,
+		AgentID:   agentID,
+		Name:      name,
+		ErrorKind: errorKind,
+	}); err != nil {
+		m.log(slog.LevelError, "native compaction decision journal append failed",
+			"session", sessionID, "name", name, "error", err)
+	}
 }

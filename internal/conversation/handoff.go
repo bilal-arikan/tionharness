@@ -80,7 +80,7 @@ func BuildHandoff(ctx context.Context, database *db.DB, provider providers.Provi
 	// as summarizeRendered: this runs outside guardedComplete). Carried on ctx via
 	// WithClaudeHome; no-op when the caller already pinned via PinClaudeHome.
 	pinClaudeHome(ctx, provider)
-	resp, err := provider.Complete(ctx, providers.Request{
+	resp, err := provider.Complete(foldCtx(ctx), providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{

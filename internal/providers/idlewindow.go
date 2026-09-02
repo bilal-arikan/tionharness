@@ -35,6 +35,15 @@ func IdleOutputFloor(ctx context.Context) time.Duration {
 	return d
 }
 
+// StdoutIdleWindow reports the globally configured stdout-silence watchdog
+// window (codexStdoutIdleSec), or 0 when the operator disabled it. Exported so a
+// fold caller can tell whether its FoldIdleOutputFloor is what kept a slow call
+// alive: a fold that outlives this window would have been reclaimed as a wedged
+// process without the floor.
+func StdoutIdleWindow() time.Duration {
+	return codexIdleOutputWindow()
+}
+
 // resolveIdleOutputWindow combines the globally configured watchdog window with
 // any per-call floor on ctx. A globally DISABLED watchdog (<= 0) stays disabled:
 // the floor exists to give a slow call more room, not to re-arm a watchdog the

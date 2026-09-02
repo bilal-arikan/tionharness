@@ -112,9 +112,9 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// so it must compact the session the same way the next real turn would — a side
 	// chat that quietly used a different strategy would leave the session in a state
 	// the turn path never produces.
-	ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) error {
-		_, nerr := s.runNativeCompact(ctx, ws(r), session, history, nativeCompactAuto)
-		return nerr
+	ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) (conversation.NativeCompactResult, error) {
+		result, nerr := s.runNativeCompact(ctx, ws(r), session, history, nativeCompactAuto)
+		return conversation.NativeCompactResult{SuccessDebugPersisted: result.SuccessDebugPersisted}, nerr
 	})
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
@@ -20,10 +21,11 @@ type summaryReq struct {
 }
 
 type summaryResult struct {
-	Body     string
-	Fold     conversation.Compaction
-	Provider providers.Provider
-	Steps    []agent.TurnStep
+	Body                  string
+	Fold                  conversation.Compaction
+	Provider              providers.Provider
+	Steps                 []agent.TurnStep
+	SuccessDebugPersisted bool
 }
 
 func (r summaryResult) stepsJSON() string {
@@ -207,7 +209,7 @@ func (s *Server) writeTurnClaimError(ctx context.Context, w http.ResponseWriter,
 func (s *Server) recordSummaryFailure(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, cause error) {
 	ctx = context.WithoutCancel(ctx)
 
-	if err := wsp.DB.AppendDebugEvent(session.ID, db.DebugEvent{
+	if err := wsp.DB.AppendDebugEventGated(session.ID, db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: session.AgentID,
 		Kind:    "command",
@@ -215,7 +217,7 @@ func (s *Server) recordSummaryFailure(ctx context.Context, wsp *workspace.Worksp
 		Err:     true,
 		Error:   cause.Error(),
 		Detail:  "slash command failed: /" + kind + ": " + cause.Error(),
-	}, 0); err != nil {
+	}); err != nil {
 		s.logger.Error("summary failure journal append failed", "session", session.ID, "kind", kind, "error", err)
 	}
 
@@ -497,9 +499,20 @@ func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace,
 	system := wsp.Runtime.EpochStaticSystemPeek(session.ID, agentRow, func() string {
 		return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
 	})
+	if err := wsp.DB.BeginSessionCLINativeCompaction(ctx, session.ID); err != nil {
+		return summaryResult{}, fmt.Errorf("persist CLI native compaction recovery marker: %w", err)
+	}
+	var successDebugPersisted atomic.Bool
 	resp, err := native.CompactNative(ctx, session.CLISessionID, providers.Request{
 		Model: agentRow.Model, PermissionMode: agentRow.PermissionMode,
 		WorkDir: wsp.SandboxRoot(), CLIResumeScope: cliResumeScope(session, agentRow, system),
+		OnCLICompaction: func(ev providers.CLICompactionEvent) {
+			if jerr := wsp.DB.AppendCLICompactionEvent(session.ID, agentRow.ID, ev); jerr != nil {
+				s.logger.Error("persist cli compaction lifecycle failed", "session", session.ID, "error", jerr)
+			} else if ev.Phase == providers.CLICompactionSuccess {
+				successDebugPersisted.Store(true)
+			}
+		},
 		OnEvent: func(trace providers.TraceStep) {
 			step := nativeCompactionStep(trace)
 			wsp.Runtime.EmitSessionStep(session.ID, step)
@@ -511,6 +524,9 @@ func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace,
 		},
 	})
 	if err != nil {
+		// Once the preflight marker is durable, a provider error is not evidence
+		// that the external CLI thread stayed unchanged. Keep the marker so the
+		// next turn retires the old resume authority and starts cold.
 		return summaryResult{}, err
 	}
 	var steps []agent.TurnStep
@@ -535,20 +551,16 @@ func (s *Server) runNativeCompact(ctx context.Context, wsp *workspace.Workspace,
 		resumeID = session.CLISessionID
 	}
 	boundary := nativeCompactBoundary(mode, len(history))
-	if err := wsp.DB.SetSessionCLIResume(ctx, session.ID, resumeID, boundary); err != nil {
-		return summaryResult{}, fmt.Errorf("persist CLI resume after native compaction: %w", err)
-	}
-	// Same boundary, second bookkeeping axis: the CLI's window now holds a summary
-	// of those messages instead of their tool trace, so the meter and the fold gate
-	// must stop charging the persisted Steps for them. Deliberately the same value
-	// as the resume boundary above — nativeCompactBoundary owns the per-mode offset
-	// so the two axes cannot drift apart.
-	if err := wsp.DB.SetSessionCLICompactBoundary(ctx, session.ID, boundary); err != nil {
-		return summaryResult{}, fmt.Errorf("persist CLI compaction boundary after native compaction: %w", err)
+	// The rotated resume target and both bookkeeping axes describe one CLI state.
+	// Persist them in one atomic header replacement so a failed write cannot leave
+	// later turns resuming the new thread against the old transcript boundary.
+	if err := wsp.DB.SetSessionCLICompactionState(ctx, session.ID, resumeID, boundary); err != nil {
+		return summaryResult{}, fmt.Errorf("persist CLI state after native compaction: %w", err)
 	}
 	return summaryResult{
-		Body:  fmt.Sprintf("%s yerel oturumu sıkıştırıldı; TionHarness rolling summary sınırı değiştirilmedi.", provider.Name()),
-		Steps: steps,
+		Body:                  fmt.Sprintf("%s yerel oturumu sıkıştırıldı; TionHarness rolling summary sınırı değiştirilmedi.", provider.Name()),
+		Steps:                 steps,
+		SuccessDebugPersisted: successDebugPersisted.Load(),
 	}, nil
 }
 

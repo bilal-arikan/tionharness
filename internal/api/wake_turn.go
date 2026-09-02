@@ -76,9 +76,9 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// Native-compaction seam (autoCompactMode native/auto): let the CLI compact
 		// its own window before the rolling fold. Any error means "not compacted" and
 		// conversation falls back to the fold, so it is returned as-is.
-		ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) error {
-			_, nerr := s.runNativeCompact(ctx, wsp, session, history, nativeCompactAuto)
-			return nerr
+		ctx = conversation.WithNativeCompact(ctx, func(ctx context.Context) (conversation.NativeCompactResult, error) {
+			result, nerr := s.runNativeCompact(ctx, wsp, session, history, nativeCompactAuto)
+			return conversation.NativeCompactResult{SuccessDebugPersisted: result.SuccessDebugPersisted}, nerr
 		})
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {

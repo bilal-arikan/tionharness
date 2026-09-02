@@ -1,6 +1,6 @@
 # TionHarness — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
-> Son güncelleme: **2026-07-10**
+> Son güncelleme: **2026-09-01**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
 > debug akışı (`debug.jsonl`) yazılır. Amaç: debug, token/gecikme optimizasyonu
 > ve ajanın **kendi kendini geliştirebilmesi** için okuyabileceği veri.
@@ -51,12 +51,50 @@ alanı taşır:
 {"ts":1719..., "type":"pressure",   "name":"context_pressure", "detail":"context 176000/200000 tokens · 88% of budget · fold at 100%"}
 ```
 
-Tip sabitleri (`internal/db/debug_journal.go`): `turn`, `llm_call`, `tool`,
-`hook`, `error`, `compaction`, `recovery`, `cache_break`, `pressure`, ve self-healing/epoch
-katmanlarıyla gelenler: `repair` (mesaj-dizisi onarımı), `guardrail` (tool-loop
-guardrail kararı), `lesson` (hata→ders damıtıldı), `epoch` (prompt-epoch yaşam
-döngüsü: created/adopted/stale/refreshed). Detay: `56-SELF-HEALING.md`,
+Tip sabitleri (`internal/db/debug_journal.go`) — **16 tanesi vardır ve hepsi
+okunabilir**: `turn`, `llm_call`, `tool`, `hook`, `error`, `compaction`,
+`recovery`, `cache_break`, `pressure`, `build` (journal'ı yaratan sürecin
+commit'i, taze `debug.jsonl`'in ilk satırı), `cli_compaction` (Claude CLI native
+compaction yaşam döngüsü), `lifecycle` (oturum yaşam döngüsü: teardown sırasında
+iptal edilen tur, kuyrukta hiç çalışmadan düşen tur, teardown grace süresinin
+aşılması), ve self-healing/epoch katmanlarıyla gelenler:
+`repair` (mesaj-dizisi onarımı), `guardrail` (tool-loop guardrail kararı),
+`lesson` (hata→ders damıtıldı), `epoch` (prompt-epoch yaşam döngüsü:
+created/adopted/stale/refreshed). Detay: `56-SELF-HEALING.md`,
 `57-PROMPT-EPOCH.md`.
+
+Ayrıca dahili bir işaretçi vardır: `_cli_compaction_dedupe`. Bu bir olay **tipi
+değildir** — sayımdan, okumadan ve budamadan bilinçli olarak dışlanır
+(`readDebugFile`, `countDebugEvents`, `truncateDebugTail`), UI'da ve araçta hiç
+görünmez.
+
+**Tip → okuyucu tablosu (2026-09-01 hizalaması).** Her tip diskten okunur, özette
+sayılır ve ham olay log'unda filtrelenebilir:
+
+| Tip | `GetDebugSummary` alanı | `GetTurnDebug` alanı | Araç `type` enum | UI filtre çipi |
+|-----|-------------------------|----------------------|------------------|----------------|
+| `turn` | `turns`, `turnDurMs` | `durMs`, `stop` | ✅ | ✅ |
+| `llm_call` | `llmCalls`, token alanları | aynı | ✅ | ✅ |
+| `tool` | `toolCalls`, `byTool` | `tools[]` | ✅ | ✅ |
+| `hook` | `hooks` | `hooks` | ✅ | ✅ |
+| `error` | `errors`, `lastError` | `errors`, `lastError` | ✅ | ✅ |
+| `compaction` | `compactions`, `savedBytes` | `compactions` | ✅ | ✅ |
+| `recovery` | `recoveries` | `recoveries` | ✅ | ✅ |
+| `cache_break` | `cacheBreaks`, `coolingWasteUsd`… | `cacheBreaks`, `cacheBreakReason`… | ✅ | ✅ |
+| `repair` | `repairs` | `repairs` | ✅ | ✅ |
+| `guardrail` | `guardrails` | `guardrails` | ✅ | ✅ |
+| `lesson` | `lessons` | `lessons` | ✅ | ✅ |
+| `epoch` | `epochs` | `epochs` | ✅ | ✅ |
+| `pressure` | `pressureEvents` | `pressureEvents` | ✅ | ✅ |
+| `build` | `buildCommit` | — (turId taşımaz) | ✅ | ✅ |
+| `cli_compaction` | `cliCompactions` | `cliCompactions` | ✅ | ✅ |
+| `lifecycle` | `lifecycleEvents` | `lifecycleEvents` | ✅ | ✅ |
+
+Sayaç alanları `omitempty` taşır: sıfırsa JSON'a hiç yazılmaz.
+
+`summarizeDebugDetail` de her tip için ayrı bir redaksiyon etiketi döndürür
+(ör. `guardrail detail [redacted]`, `cli compaction detail [redacted]`); serbest
+metin hiçbir tipte olduğu gibi saklanmaz.
 
 Ek alanlar (2026-07-10): `HookID` — `type=hook` olayında ateşleyen hook'un id'si
 (rtk/sqz gibi token-optimizer hook aktivitesinin hook-başına atfı için);
@@ -95,6 +133,20 @@ yazılır (sıfır burada gerçek bir sinyaldir, eksik veri değil).
 oturum id + çağrı kökenini (`callKind`) ctx'ten çözer, `DebugJournalEnabled`
 kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 
+Runtime'a erişemeyen katmanlar (`internal/conversation` — import döngüsü olurdu —
+ve `internal/api`'nin kuyruk/özet dayanıklılık yolları) doğrudan store'a yazar.
+Bunlar `DB.AppendDebugEventGated` kullanır: aynı ayarı store üzerinde tutan ikinci
+kapı (`internal/db/debug_journal_policy.go`, `DB.SetDebugJournal`). Ayar hem
+tunables'a hem her canlı store'a `Server.applySettings` içinde tek noktadan
+basılır, böylece iki huni de aynı `debugJournalEnabled` bayrağına ve aynı
+`debugJournalCap` değerine uyar. Runtime'da **oluşturulan veya attach edilen**
+workspace'ler store'larını `applySettings`'ten sonra açtığı için aynı politikayı
+açılış anında devralır (`api/workspaces.go` → `Server.applyDebugJournalToStore`);
+aksi hâlde bir sonraki ayar güncellemesine kadar sıfır-değer politikayla
+(journal açık, varsayılan cap) kalırlardı. Ham `AppendDebugEvent` (cap argümanı alan, her
+zaman yazan biçim) yalnız bu iki kapının içinden çağrılmalıdır. Yazma hatası
+sessizce yutulmaz; ilgili katmanın logger'ıyla `Error` seviyesinde loglanır.
+
 | Olay | Kaynak |
 |------|--------|
 | `turn` | `toolloop.go` — `completeTraced` wrapper'ı turu zamanlar (native+cli+plain hepsi buradan geçer) |
@@ -106,6 +158,60 @@ kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 | `pressure` | `conversation/manager.go recordPressureDebug` — tur **fold'a girmedi** ama bağlam kullanımı etkin bütçenin `pressureWarnRatio`=**%85**'ini geçti; fold'un kendisi değil, fold'dan önceki erken uyarıdır (`Name="context_pressure"`, `Detail`: "context kullanılan/bütçe tokens · %N of budget · fold at 100%") |
 | `recovery` | `toolloop.go` — çıktı-cap resume kurtarması |
 | `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler. **Soğuma israfı:** yalnız `ttl-or-server-eviction` (geç gelen tur öneki soğuttu — model/prompt değişimi meşru geçersizleşmedir, israf değil) durumunda olay `wasteUsd`/`wasteEst` taşır = yeniden yazılan öneğin (native Anthropic `cache_creation`) yazma-tier'ı eksi zamanında okunsa ödenecek okuma-tier'ı (`providers.CoolingWaste`; abonelik sağlayıcıda tahmini). OpenRouter soğuk öneği input'a katıp write saymadığı için orada ~0 |
+
+### Adlandırılmış `error` olayları — fail-closed konfigürasyon (2026-09-01)
+
+`type=error` olaylarının bir kısmı `Name` alanı taşır: bunlar tur akışının
+kendisinden değil, **bozuk bir konfigürasyon belgesinin fail-closed
+karşılanmasından** doğar. Hepsi `Err=true`'dur ve `Error` alanında altta yatan
+çözümleme hatasını birebir taşır.
+
+| `name` | Kaynak | Koşul | Görüldüğünde ne anlama gelir |
+|--------|--------|-------|------------------------------|
+| `mcp_server_gate_malformed` | `climcp.go` (`writeCLIMCPConfig`), `codexmcp.go` — `mcpServerGate` | Ajanın `AllowedTools`/`ToolOverrides`/`BlockedTools` belgesi çözülemedi | **Hiçbir MCP sunucusu mount edilmedi** ve CLI turu başlamadan durdu. Ajanın araç kısıtı hesaplanamadığı için kapı deny-all'a düştü; MCP araçlarının "kaybolması" ajan konfigürasyonunun bozuk olmasındandır, sunucunun düşmesinden değil. Detay: `52-MCP-GATEWAY.md` |
+| `tool_permission_config_malformed` | `toolsetup.go` — `toolFilter` | Ajanın araç izin belgesi çözülemedi | Filtre **her aracı reddediyor**. Ajan araçsız kalır; düzeltme yeri ajanın izin konfigürasyonudur. Detay: `19-LAZY-TOOL-LOADING.md` |
+| `inbox_corrupt` | `api/inbox_durability.go` — `quarantineInbox` | `inbox.json` okunamadı/çözülemedi | Sidecar `inbox.json.corrupt-<unix>` olarak karantinaya alındı; **kuyruktaki mesajlar dağıtılmadı ve kaybedildi**. Bekleyen bir mesajın hiç işlenmemiş görünmesinin sebebi budur; karantina dosyası incelenebilir. Detay: `58-QUEUE-SENKRON.md` |
+| `orphan_recovery_failed` | `coordination.go` — `RecoverOrphanedTurns` | Açılışta `ListSessions` hata verdi | Öksüz (yarım kalmış) turların kurtarma taraması **hiç çalışmadı**. Çöküş sonrası yeniden dispatch edilmesi beklenen turlar `running` takılı kalmış olabilir |
+
+### Adlandırılmış yaşam döngüsü / sıkışma olayları (2026-09-01)
+
+Aşağıdaki olaylar bozuk konfigürasyondan değil, **normal akışın sessiz
+dallarından** doğar: iptal edilen bir tur yalnızca yayın yapmayı bırakır, kuyruktan
+düşen bir mesaj hiç çalışmaz, atlanan bir native compaction geride yalnız rolling
+fold bırakır. Hiçbirinin başka bir izi yoktur; `debug.jsonl` tek kayıt yeridir.
+
+| `name` | `type` | Kaynak | Koşul | Görüldüğünde ne anlama gelir |
+|--------|--------|--------|-------|------------------------------|
+| `turn_cancelled_by_teardown` | `lifecycle` | `api/session_teardown.go:162` (`recordTeardownLifecycle`) | Oturum silinirken **canlı bir chat turu** vardı ve `stopInflightTurn` onu iptal etti | Turun yarıda kesilme sebebi sağlayıcı/model değil, kullanıcının silme isteğidir. `Phase="inflight_turn"`, `DurationMs` = turun tamamen sönmesi için geçen süre |
+| `autonomous_cancelled` | `lifecycle` | `api/session_teardown.go:165` (`recordTeardownLifecycle`) | Silme anında oturumda **aktif bir otonom çalışma** vardı (`autonomousRunsOf(wsp).IsSessionActive`) | Otonom döngü kendi kararıyla değil, teardown tarafından durduruldu. Aynı `Phase`/`DurationMs` alanları |
+| `teardown_grace_exceeded` | `lifecycle` | `api/session_teardown.go:333` (`noteTeardownGrace` → `recordTeardownLifecycle`) | Teardown fazlarından biri grace penceresini doldurdu; silme **iptal edildi**, oturum yaşamaya devam ediyor | Hangi fazın takıldığını `Phase` söyler: `inflight_turn` (tur sönmedi), `mcp_calls` (admitted MCP çağrıları drenaj olmadı), `worker` (oturum worker'ı durmadı). `DurationMs` = grace penceresinin kendisi. Kullanıcının gördüğü HTTP hatasının makine-okunur karşılığıdır |
+| `queued_turn_dropped` | `lifecycle` | `api/inbox_debug.go:24` (`recordQueuedTurnDropped`); çağrı yerleri `api/inbox.go:589`, `api/inbox.go:603` | Kuyruktaki bir mesaj **hiç çalışmadan** silindi | `Phase` hangi yolun sildiğini verir: `user_cancel` (tek mesajın iptali) veya `queue_cleared` (kuyruğun tamamen boşaltılması). Kendi kendini boşaltan bir kuyruk ile kullanıcının bilinçli budamasını ayırt etmeyi sağlar |
+| `native_skipped` | `compaction` | `conversation/manager.go:386` → `nativecompact.go:104` (`recordNativeCompactDebug`) | `claimNativeAttempt` reddetti — bu rolling-summary sınırı için native denemesi zaten harcanmıştı | Native compaction denenmedi bile; bütçe aşımı bir sonraki adımda rolling fold ile karşılanır. Sebep bir hata değil, tek-deneme kuralıdır |
+| `claim_consumed` | `compaction` | `conversation/manager.go:383` | Native denemesi çalıştı ve **hata verdi**; deneme hakkı bu hatayla tükendi | Sonraki turun `native_skipped`'ının görünür sebebidir. `ErrorKind` = `nativeCompactErrorKind(nativeErr)` (ör. `compaction_failed`) |
+| `native_fallback_rolling` | `compaction` | `conversation/manager.go:391` | Mod `auto` (native-önce + rolling emniyet ağı) ve native **gerçekleşmedi** | Aşağıdaki rolling fold, `auto` modunun emniyet ağıdır — ayrı/beklenmedik bir davranış değil |
+| `fold_idle_floor` | `pressure` | `conversation/foldtimeout.go:63` (`recordFoldIdleFloorDebug`, `summarizeTimed` üzerinden) | Fold'un duvar-saati süresi normal stdout-sessizlik penceresini (`providers.StdoutIdleWindow()`) aştı; pencere kapalıysa (`<=0`) veya zaten `FoldIdleOutputFloor`'dan büyükse olay yazılmaz | Bu fold, **yalnızca `FoldIdleOutputFloor` sayesinde** hayatta kaldı: taban olmasaydı watchdog onu öldürecekti. `DurationMs` = fold'un toplam süresi |
+| `failed_turn_billed` | `llm_call` | `agent/toolloop.go:336` (`recordFailedUsage`) | Tur hata ile bitti ama sağlayıcı hatanın üzerinde kullanım taşıyor (`providers.UsageError`); `OutputTokens == 0` ve input+cache toplamı `> 0` | Çıktı üretmeyen bir tur **yine de faturalandı**. Olay `Model`/`In`/`Out`/`CacheRead`/`CacheWrite`/`Calls` alanlarını ve `Err=true` taşır |
+
+**`fold_idle_floor` bir ÜST SINIRDIR.** Ölçüt fold'un duvar-saati süresidir, gerçek
+sessizlik boşluğu değil: bir fold yayın yaparken de pencereyi aşabilir, yani
+**yanlış pozitif mümkündür**. Buna karşılık taban sayesinde kurtulan her fold
+mutlaka ölçütü tetikler — **yanlış negatif yoktur**. Watchdog'un kendisi
+`internal/providers` içinde yaşar ve store'a erişmez, bu yüzden ölçüm bir üst
+katmandan yapılır. `BuildHandoff` yolundaki fold'lar **kapsam dışıdır**: o imza
+session id taşımaz, dolayısıyla yazılacak journal de yoktur.
+
+**`queued_turn_dropped` yalnız iki yolu kaydeder.** Kullanıcı iptali
+(`Phase="user_cancel"`) ve kuyruk temizleme (`Phase="queue_cleared"`). Poison-guard
+düşüşü buraya girmez; o `recordQueueTurnFailure` üzerinden `error` tipinde ayrıca
+journal'lanır (ve kalıcı bir hata kartı yazar). Wake / scheduled / automation /
+peer / coordinator-drain turları `sessionInbox`'a **hiç girmez** — o kuyruk yalnız
+chat turlarını taşır — dolayısıyla "kuyrukta düşen otonom tur" diye bir durum yoktur.
+
+**`failed_turn_billed` aggregate'lere girmez.** Aynı token'lar, o denemenin
+`RecordUsage` tarafından yazılan olağan `llm_call` olayında zaten sayılıdır; bu
+olay okunabilirlik için yazılır ve `GetDebugSummary`/`GetTurnDebug` içindeki çağrı
+ve token toplamlarında **atlanır** (`debugNameFailedTurnBilled`, çift sayımı
+önlemek için). Ham olay log'unda ise normal şekilde görünür.
 
 ## Dosya yönetimi (cap + budama)
 
@@ -134,7 +240,9 @@ verilmezse mevcut oturumu okur (ctx'teki `tools.CurrentSessionID`).
 
 Özet (`db.DebugSummary`): turlar, llm çağrıları, token toplamları, `byTool`
 (çağrı/hata/süre/bayt), `byModel` (token), `topTools` (en yavaş araçlar), hata
-sayısı + `lastError`, compaction/recovery sayıları.
+sayısı + `lastError`, compaction/recovery sayıları ve yukarıdaki tabloda listelenen
+yaşam döngüsü sayaçları (`hooks`/`repairs`/`guardrails`/`lessons`/`epochs`/
+`pressureEvents`/`cliCompactions` + `buildCommit`).
 
 ### 2) API — `GET /api/sessions/{id}/debug`
 

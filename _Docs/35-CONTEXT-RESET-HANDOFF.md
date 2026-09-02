@@ -61,6 +61,14 @@ graph LR
 2. **Handoff üret:** `conversation.BuildHandoff(...)` — compaction çekirdeğiyle aynı
    provider çağrısı (usage `KindCompact`), ama **devam-odaklı** `handoffPrompt` ile
    (9 bölüm, aşağıda). Env snapshot enjekte edilir.
+   **Zaman aşımı:** bu tek atışlık çağrı, CLI sağlayıcılarının stdout-sessizlik
+   watchdog'unu `conversation.FoldIdleOutputFloor` (10 dakika) tabanına yükseltir
+   (`providers.WithMinIdleOutputTimeout`). Tur içi 90 saniyelik pencere burada
+   yanlış tanı koyuyordu: fold tüm transkripti tek istekte gönderir ve modelin ilk
+   token'ına kadar hiçbir satır yayınlamaz, dolmaya yakın bir bağlamda bu gerçekten
+   dakikalar sürer — pencere aşılınca `/handoff` reset yapmak yerine 500 dönüyordu.
+   Taban yalnız yükseltir; global ayar daha büyükse o kazanır. Aynı taban
+   `/compact` yolunda da geçerlidir.
 3. **Artifact yaz:** eski oturuma first-class markdown artifact (`Handoff — <başlık>`).
    `db.SetSessionHandoffArtifact` ile eski oturuma id'si işlenir.
 4. **(Ops.) Dosya yaz:** `HandoffWriteFile` açıksa `<workdir>/.tionharness/handoff.md`
@@ -162,6 +170,8 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 ## Dosyalar
 
 - `internal/conversation/handoff.go` — `handoffPrompt`, `HandoffEnv`, `BuildHandoff`, `RenderTranscript`.
+- `internal/conversation/foldtimeout.go` — `FoldIdleOutputFloor` (10 dk) + `foldCtx`; handoff ve compaction fold çağrılarının watchdog tabanı.
+- `internal/providers/idlewindow.go` — `WithMinIdleOutputTimeout`, `IdleOutputFloor`, `resolveIdleOutputWindow` (yalnız yükseltir; kapalı watchdog kapalı kalır).
 - `internal/agent/handoff.go` — `HandoffSession`, `maybeAutoHandoff`, `handoffChainDepth`, `handoffEnv`, `buildContinuationPrompt`, git snapshot.
 - `internal/agent/callkind.go` — `withOverflowFlag`/`markContextOverflow` overflow sinyali.
 - `internal/agent/toolloop.go` — reactive compaction'da `markContextOverflow`.
