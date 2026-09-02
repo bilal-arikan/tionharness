@@ -88,6 +88,8 @@ type OptimizerResult struct {
 	Skipped   string            `json:"skipped,omitempty"`
 	Proposals []insight.Finding `json:"proposals"`
 	Dropped   int               `json:"dropped"` // proposals refused by the invariants
+	// Applied counts pruning proposals applied to the recipe (auto_prune: true).
+	Applied int `json:"applied"`
 }
 
 // rawProposal is the model's output shape.
@@ -255,6 +257,22 @@ func (r *Runtime) RunRecipeOptimizer(ctx context.Context, slug, trigger string) 
 		if err != nil {
 			r.logger.Warn("optimizer: finding upsert failed", "slug", slug, "error", err)
 			continue
+		}
+		// F4-v2: a recipe that opted in (auto_prune: true) gets its PRUNING
+		// proposals applied on the spot; the finding closes as applied with the
+		// recipe as evidence, and the recipe version moves up.
+		if sk.Recipe != nil && sk.Recipe.AutoPrune && skills.PruneActions[f.Proposal.Action] && !insight.ClosedStatus(stored.Status) {
+			if v, aerr := skills.ApplyRecipeProposal(r.skills, slug, f.Proposal.Action, f.Proposal.Target, f.Proposal.Value); aerr != nil {
+				r.logger.Warn("optimizer: auto-prune failed", "slug", slug, "action", f.Proposal.Action, "target", f.Proposal.Target, "error", aerr)
+			} else {
+				if _, serr := store.SetStatus(stored.ID, insight.StatusApplied, now, &insight.AppliedEntity{EntityType: "skill", EntityID: slug}); serr != nil {
+					r.logger.Warn("optimizer: mark applied failed", "finding", stored.ID, "error", serr)
+				} else {
+					stored.Status = insight.StatusApplied
+					res.Applied++
+					r.logger.Info("optimizer: auto-pruned", "slug", slug, "action", f.Proposal.Action, "target", f.Proposal.Target, "version", v)
+				}
+			}
 		}
 		res.Proposals = append(res.Proposals, stored)
 	}

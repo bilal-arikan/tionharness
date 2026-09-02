@@ -22,8 +22,11 @@ func TestTrajectoryToolDispatch(t *testing.T) {
 			got = append(got, "plan:"+phases[0].ID+"/"+phases[0].Gate.Kind)
 			return "planned", nil
 		},
-		Phase: func(_ context.Context, id, state, reason string) (string, error) {
+		Phase: func(_ context.Context, id, state, reason string, force bool) (string, error) {
 			got = append(got, "phase:"+id+"/"+state+"/"+reason)
+			if force {
+				got = append(got, "forced")
+			}
 			return "moved", nil
 		},
 		Finish: func(_ context.Context, status, reason string) (string, error) {
@@ -37,6 +40,7 @@ func TestTrajectoryToolDispatch(t *testing.T) {
 		`{}`,
 		`{"action":"plan","phases":[{"id":"plan","gate":{"kind":"artifact","value":"plan"}}]}`,
 		`{"action":"phase","id":"plan","state":"Active","reason":"go"}`,
+		`{"action":"phase","id":"plan","state":"done","force":true}`,
 		`{"action":"finish"}`,
 		`{"action":"finish","status":"failed"}`,
 	}
@@ -45,7 +49,7 @@ func TestTrajectoryToolDispatch(t *testing.T) {
 			t.Fatalf("%s: %v", c, err)
 		}
 	}
-	want := "get,get,plan:plan/artifact,phase:plan/active/go,finish:done,finish:failed"
+	want := "get,get,plan:plan/artifact,phase:plan/active/go,phase:plan/done/,forced,finish:done,finish:failed"
 	if strings.Join(got, ",") != want {
 		t.Fatalf("dispatch = %v", got)
 	}

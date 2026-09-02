@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { X, Loader2, Copy, Check, ChevronRight, ChevronDown, ArrowRight } from 'lucide-react'
+import {
+  X,
+  Loader2,
+  Copy,
+  Check,
+  ChevronRight,
+  ChevronDown,
+  ArrowRight,
+  Waypoints,
+} from 'lucide-react'
+import { getActiveWorkspace } from '@/api/client'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import type { Agent, FlowMsg, FlowNode, FlowRun, FlowTraceEntry, TurnStep } from '@/types'
@@ -321,6 +331,25 @@ export function RunNodeInspector({
           {node.type}
         </span>
         <span className="truncate font-medium">{node.title || node.id}</span>
+        {node.type === 'coordinator' && (
+          <button
+            type="button"
+            onClick={() => {
+              api
+                .trajectoryByNode(run.id, node.id)
+                .then((r) => {
+                  const ws = getActiveWorkspace()
+                  window.location.hash = `#/w/${ws ?? ''}/rota/${r.trajectoryId}`
+                })
+                .catch(() => toast.info('Bu koordinatör düğümünün henüz rotası yok'))
+            }}
+            title="Bu koordinatörün rotasını Rota ekranında aç"
+            className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            data-testid="run-node-rota"
+          >
+            <Waypoints size={12} /> Rota
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

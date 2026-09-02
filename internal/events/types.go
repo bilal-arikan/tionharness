@@ -105,6 +105,9 @@ const (
 	// workspace picture. Payload-light: sessionId + busy + waiting depth; the
 	// full picture is GET /api/workspace/liveness (_Docs/77 R2).
 	TypeWSLiveness = WorkspaceStreamPrefix + "liveness"
+	// TypeWSAsk: a durable ask was parked outside a turn (a phase gate, Rota F5)
+	// — the API opens the card on the session hub when it sees op=open.
+	TypeWSAsk = WorkspaceStreamPrefix + "ask"
 )
 
 // WorkspaceStreamPrefix marks the event types that ride the per-workspace hub

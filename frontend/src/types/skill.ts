@@ -30,6 +30,8 @@ export interface RecipeSpec {
   phases: PhaseSpec[]
   watchers?: string[]
   optimizer?: string
+  // auto_prune: true — the optimizer's pruning proposals are applied automatically (F4-v2).
+  autoPrune?: boolean
 }
 
 export interface Skill {

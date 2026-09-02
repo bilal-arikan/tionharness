@@ -1,7 +1,10 @@
 // Trajectory ("Rota") reads — GET /api/trajectories and /api/trajectories/{id}.
 import { req } from './client'
 import type {
+  FinishTrajectoryReq,
   OptimizerResult,
+  PlanTrajectoryReq,
+  SetPhaseReq,
   OptimizerStateRow,
   RecipeStats,
   Trajectory,
@@ -38,6 +41,35 @@ export const trajectoryApi = {
     req<OptimizerResult>(`/api/recipes/${encodeURIComponent(slug)}/optimize`, { method: 'POST' }),
   recipeOptimizerState: (slug: string): Promise<OptimizerStateRow> =>
     req<OptimizerStateRow>(`/api/recipes/${encodeURIComponent(slug)}/optimizer`),
+  // Rota F5 canvas actions: the same graph edits the agent's trajectory tool
+  // makes, with the revision the screen rendered (409 on a stale one). A phase
+  // gate that does not hold is 422; a human gate opens a card (202 + pending).
+  planTrajectory: (id: string, body: PlanTrajectoryReq): Promise<Trajectory> =>
+    req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}/plan`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  setTrajectoryPhase: (
+    id: string,
+    body: SetPhaseReq,
+  ): Promise<Trajectory | { pending: true; message: string; trajectory: Trajectory }> =>
+    req(`/api/trajectories/${encodeURIComponent(id)}/phase`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  finishTrajectory: (id: string, body: FinishTrajectoryReq): Promise<Trajectory> =>
+    req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}/finish`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  // The trajectory behind a flow's coordinator node (RunView → Rota).
+  trajectoryByNode: (
+    run: string,
+    node: string,
+  ): Promise<{ sessionId: string; trajectoryId: string }> =>
+    req(
+      `/api/trajectories/by-node?run=${encodeURIComponent(run)}&node=${encodeURIComponent(node)}`,
+    ),
   // Per-recipe-version rollup of the index (optionally one slug).
   recipeStats: (slug?: string): Promise<RecipeStats[]> =>
     req<RecipeStats[]>(

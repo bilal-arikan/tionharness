@@ -101,6 +101,32 @@ export interface RecipeStats {
   latestId?: string
 }
 
+// Canvas actions (Rota F5).
+export interface PlanTrajectoryReq {
+  phases: {
+    id: string
+    label?: string
+    profile?: string
+    optional?: boolean
+    gate?: TrajectoryGate
+  }[]
+  expectedRev: number
+}
+
+export interface SetPhaseReq {
+  id: string
+  state: 'active' | 'done' | 'skipped' | 'failed'
+  reason?: string
+  force?: boolean
+  expectedRev: number
+}
+
+export interface FinishTrajectoryReq {
+  status: 'done' | 'failed'
+  reason?: string
+  expectedRev: number
+}
+
 // Recipe optimizer (Rota F4).
 export interface OptimizerResult {
   slug: string
@@ -109,6 +135,7 @@ export interface OptimizerResult {
   skipped?: string
   proposals: { id: string; title: string }[]
   dropped: number
+  applied?: number
 }
 
 export interface OptimizerStateRow {

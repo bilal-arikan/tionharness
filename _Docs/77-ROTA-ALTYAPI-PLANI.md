@@ -574,6 +574,13 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > kodda zorlanan değişmezler (kanıt, olumsuz yargı yasağı, büyüme bütçesi
 > `RecipeGrowthBudget=9` — yüklemede de), öneriler `recipe-opt` içgörü kanalında
 > (`insight.RecipeProposal`); v1 uygulamaz. Ayrıntı: `78-ROTA-EKRANI.md` §9.
+>
+> **F5 + F4-v2 uygulandı (2026-09-03, dal `rota/f5-gates-canvas`):** faz kapıları
+> (artifact/verdict/human — insan kapısı Durable Ask kartı, `ws:ask` köprüsü,
+> `ResolvePhaseGate`), ortak `SetTrajectoryPhase/PlanTrajectory/FinishTrajectory`
+> (CAS), kanvas API'leri + PhaseActions/ForkModal, RunView → Rota, `auto_prune`
+> ile budama önerilerinin otomatik uygulanması (`skills.ApplyRecipeProposal`).
+> Brif §11 yol haritası tamam. Ayrıntı: `78-ROTA-EKRANI.md` §10.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

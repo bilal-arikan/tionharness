@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,6 +45,15 @@ func (s *Server) bridgeWorkspaceEvent(e events.Event) {
 	}
 	payload := mustJSON(workspaceStreamPayload{Target: e.Target, Data: e.Data, Level: e.Level})
 	s.hub.PublishWorkspace(e.WorkspaceID, events.WorkspaceStreamKind(e.Type), payload)
+	// A durable ask parked outside a turn (a phase gate, Rota F5): open its card
+	// on the session hub exactly as a suspended turn's ask would be.
+	if e.Type == events.TypeWSAsk && e.Target["op"] == "open" {
+		if wsp := s.workspaceByID(e.WorkspaceID); wsp != nil && wsp.DB != nil {
+			if ask, err := wsp.DB.GetSessionAsk(context.Background(), e.Target["askId"]); err == nil {
+				s.openDurableAskCard(e.WorkspaceID, ask.SessionID, ask, false)
+			}
+		}
+	}
 }
 
 // handleWorkspaceStream serves the workspace's ordered event stream (SSE).

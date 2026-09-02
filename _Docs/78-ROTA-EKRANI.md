@@ -1,4 +1,4 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör) + F4 (optimizer)
+# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör) + F4 (optimizer) + F5 (kapılar + kanvastan müdahale)
 
 **Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
 uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
@@ -7,9 +7,10 @@ yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
 Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
 ateşlenmedi") uygulandı (2026-09-02, §7); F3 (deterministik metrik + reçete
 istatistikleri + LLM'siz küratör + pin) uygulandı (2026-09-02, §8); F4 (LLM
-reçete optimizer, yalnız öneri) uygulandı (2026-09-03, §9). Sonraki faz F5
-(kapılar / kanvastan müdahale); optimizer önerilerinin opt-in oto-uygulaması
-(budama sınıfı) F4-v2.
+reçete optimizer, yalnız öneri) uygulandı (2026-09-03, §9); F5 (faz kapıları
+Durable Ask üstünden, kanvastan müdahale, RunView → Rota) ve F4-v2 (reçete
+başına opt-in oto-budama) uygulandı (2026-09-03, §10). Brifin §11 yol
+haritası bununla **tamamlandı**; kalanlar §10 sonunda.
 
 ## 1. Ne gösterir
 
@@ -419,3 +420,67 @@ beklentisi); F4 pakete yalnız kanal sabiti + `Proposal` alanı ekler.
 `applier` benzeri, yalnız `prune_*`/`make_optional`); "oku-sonra-yaz" reçete
 düzenleme aracı; regresyonda otomatik sürüm geri alma; F5 kapılar ve
 kanvastan müdahale.
+
+## 10. F5 — Kapılar ve kanvastan müdahale + F4-v2 oto-budama (2026-09-03)
+
+Dal `rota/f5-gates-canvas` (F4'ün üstüne).
+
+**Faz kapıları** (`internal/agent/trajectory_gate.go`). Bir faz `done`'a
+taşınırken (ajanın `trajectory{phase}` aracı ya da kanvas) fazın ilan edilmiş
+kapısı çalışır; `force` atlar:
+
+| Kapı | Koşul | Geçmezse |
+|------|-------|----------|
+| `artifact` | ağaçtaki oturumlardan birinde başlığı değeri içeren (ya da türü değere eşit) artifact var | `ErrGateBlocked` — araç hata döner, kanvas 422 + "zorla?" onayı |
+| `verdict` | kök transkriptin son 60 mesajında değer geçiyor ("VERDICT: PASS") | aynı |
+| `human` | kök oturuma **Durable Ask** parklanır ("Rota RTA · plan fazı bitti sayılsın mı?" Onayla / Reddet); faz aktif kalır, rota **waiting**, grafta `g:<ask>` düğümü fazın altında (`kapı: plan`) | `ErrGatePending` — araç "kart açıldı, turunu bitir" der, kanvas 202 |
+| `schema` | v1'de doğrulanmaz, notla geçer | — |
+
+İnsan kapısı: `openPhaseGateAsk` `SessionAsk{Kind: ask, Payload: {question,
+options, gate:{trajectoryId, phase, kind, value}}}` yaratır (faz başına tek
+açık kapı), `ws:ask` (yeni tür, `sessionhub.KindWSAsk`) yayınlar; API köprüsü
+(`bridgeWorkspaceEvent`) kartı oturum hub'ında açar (`openDurableAskCard`) —
+yeniden bağlanan pencere `restoreWaitingAsks` ile aynı kartı görür. Yanıt
+mevcut `answerDurableAsk` yolundan gelir; `agent.GateAskRef` ile kapı olduğu
+anlaşılınca tur yeniden sürülmez, `ResolvePhaseGate` fazı kapatır (onay →
+done, "kapı onaylandı") ya da aktif bırakır ("kapı reddedildi: …"), kök
+transkripte `<gate …>` notu düşer, ask satırı silinir.
+
+**Ortak graf düzenleyiciler.** `Runtime.SetTrajectoryPhase / PlanTrajectory /
+FinishTrajectory` (CAS `expectedRev`, 0 = ajan aracı) — araç ve kanvas aynı
+yolu kullanır; `trajectory` aracına `force` alanı eklendi.
+
+**Kanvas API'leri** (`internal/api/trajectory_actions.go`): `POST
+/api/trajectories/{id}/plan|phase|finish` (409 eski revizyon, 422 kapı, 202
+insan kapısı), `POST /api/sessions/{id}/workers` (**buradan çatalla**:
+`SpawnWorker`, koordinatör olmayan oturuma 400), `GET
+/api/trajectories/by-node?run=&node=` (akış koordinatör düğümü → rota).
+İstemci hataları artık `status` taşır (`api/client.ts`).
+
+**Ekran.** Rota-içi görünümde faz sütununa tıklayınca **PhaseActions** çubuğu
+(aktif yap / tamamlandı (kapı) / atla; "faz ekle" mini formu; "bitir"); seçili
+oturum için **"buradan çatalla"** → `ForkModal` (profil/ajan, görev,
+alt-koordinatör); RunView'da koordinatör düğümünün başlığında **"Rota"**
+düğmesi (`#/w/WS/rota/RTA` hash'i ile derin bağlantı, prop zinciri yok).
+
+**F4-v2 oto-budama.** Reçete frontmatter'ında `auto_prune: true`
+(`RecipeSpec.AutoPrune`) varsa optimizer'ın **budama sınıfı** önerileri
+(`prune_watcher`, `prune_phase`, `make_optional`) `skills.ApplyRecipeProposal`
+ile anında uygulanır: yalnız `phases:` / `watchers:` / `version:` /
+`optimizer:` satırları yeniden yazılır (diğer frontmatter ve gövde bayt bayt
+korunur), sürüm artar, yazmadan önce yeniden ayrıştırılıp doğrulanır; bulgu
+`applied` + kanıt `skill/<slug>` ile kapanır (`OptimizerResult.applied`).
+Eklemeler (`add_gate`, `bind_watcher`, `split/merge`, `rollback`) hep insan
+onayı bekler. Beceriler'de `✂ oto-budama` çipi.
+
+**Testler.** `trajectory_gate_test.go` (artifact/verdict kapıları, force, CAS
+409, insan kapısı: tek ask, waiting graf, red → aktif + sebep, onay → done,
+transkript notu), `skills/recipe_edit_test.go` (budama/profil değişimi, sürüm
+artışı, korunan satırlar, ret durumları, render), araç testi `force`.
+
+**Kalanlar (brif dışı / sonraki).** Faz ↔ todo bağı (faz düğümüne tıklayınca
+todo listesi), worker alt-ağacı katlama, maliyet/süre alt şeridi, `schema`
+kapısının gerçek doğrulaması, reçete sürüm geçmişinin seed ledger'ında
+tutulması, küratör önerisini tek tıkla uygulama, zamanlama/hook kartlarında
+pin düğmesi, faz kuralı modalında faz kimliği seçici, `rollback_version`
+uygulaması.

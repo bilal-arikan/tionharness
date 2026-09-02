@@ -3,8 +3,8 @@
 // sessions / runs / gates that actually happened under them (the facts), ghost
 // nodes are dashed. Plain SVG like the workspace canvas; the graph is re-read
 // whenever the stream announces a new revision (useTrajectory).
-import { useMemo } from 'react'
-import { ArrowLeft, MessageSquare, Sparkles } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowLeft, GitFork, MessageSquare, Sparkles } from 'lucide-react'
 import { api } from '@/api'
 import { Badge, toast } from '@/shared/components'
 import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
@@ -20,6 +20,8 @@ import {
 import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
 import { fmtDurationSec, fmtTokens } from './trajectoryFormat'
 import { useTrajectory } from './useTrajectory'
+import { PhaseActions } from './PhaseActions'
+import { ForkModal } from './ForkModal'
 
 interface Props {
   trajectoryId: string
@@ -128,6 +130,13 @@ export function RotaTrajectoryView({
 }: Props) {
   const { trajectory: t, loading, error } = useTrajectory({ id: trajectoryId })
   const layout = useMemo(() => (t ? layoutTrajectory(t) : null), [t])
+  // Canvas actions (F5): the phase column the user picked, and the fork modal.
+  const [pickedPhase, setPickedPhase] = useState<string | null>(null)
+  const [fork, setFork] = useState<{ id: string; title?: string } | null>(null)
+  const selectedSession =
+    selected?.kind === 'session' && t
+      ? t.nodes.find((n) => n.kind === 'session' && n.refId === selected.id)
+      : undefined
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -179,6 +188,17 @@ export function RotaTrajectoryView({
                   <Sparkles size={12} /> optimize et
                 </button>
               )}
+              {selected?.kind === 'session' && (
+                <button
+                  type="button"
+                  onClick={() => setFork({ id: selected.id, title: selectedSession?.label })}
+                  className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                  title="Seçili oturumun altında worker aç (buradan çatalla)"
+                  data-testid="fork-here"
+                >
+                  <GitFork size={12} /> buradan çatalla
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onOpenSession?.(t.rootSessionId)}
@@ -193,6 +213,10 @@ export function RotaTrajectoryView({
         {loading && !t && <span className="text-[var(--color-text-dim)]">yükleniyor…</span>}
         {error && <span className="text-[var(--color-danger)]">{error}</span>}
       </div>
+      {t && <PhaseActions trajectory={t} phase={pickedPhase} />}
+      {fork && (
+        <ForkModal sessionId={fork.id} sessionTitle={fork.title} onClose={() => setFork(null)} />
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
         {t && layout && (
           <TrajectorySvg
@@ -204,6 +228,7 @@ export function RotaTrajectoryView({
             onOpenSession={onOpenSession}
             onOpenFlowRun={onOpenFlowRun}
             trajectoryId={trajectoryId}
+            onPickPhase={setPickedPhase}
           />
         )}
       </div>
@@ -286,6 +311,7 @@ interface SvgProps {
   onOpenSession?: (sessionId: string) => void
   onOpenFlowRun?: (flowId: string) => void
   trajectoryId: string
+  onPickPhase: (phase: string | null) => void
 }
 
 function TrajectorySvg({
@@ -297,6 +323,7 @@ function TrajectorySvg({
   onOpenSession,
   onOpenFlowRun,
   trajectoryId,
+  onPickPhase,
 }: SvgProps) {
   const { columns, lanes, nodes, edges, root, rootToCol, activeCol } = layout
   const colW = Math.max(COL_W, Math.floor((width - LABEL_W - PAD) / Math.max(1, columns.length)))
@@ -392,6 +419,7 @@ function TrajectorySvg({
             onClick={(ev) => {
               ev.stopPropagation()
               onSelect({ kind: 'trajectory', id: trajectoryId })
+              onPickPhase(c.phase ? phaseId(c.id) : null)
             }}
           >
             <title>

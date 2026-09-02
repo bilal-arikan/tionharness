@@ -332,6 +332,7 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `sidecar.go` | `Sidecar[T]` — varlığın yanında yaşayan tipli JSON dosyası: atomik yazım, "yok" ≠ hata, bozuk dosya → `.corrupt-<unix>` karantina + `sidecar_corrupt` debug olayı + `SidecarCorruptError`. Kilit çağıranındır (sidecar kilidi → `mu`) |
 | `models_trajectory.go` | `Trajectory` (Rota) modeli: faz/oturum/otomasyon/flowrun/gate/optimizer düğümleri, `declared`/`observed` kökeni, kenar türleri, `Validate()` |
 | `store_curator.go` | Küratör raporu (`curator/last.json`): `SaveCuratorReport` / `GetCuratorReport`, `CuratorAction`/`CuratorReport` modelleri (Rota F3) |
+| `store_session_ask.go` | Durable Ask — oturuma sorulan ve yanıt bekleyen sorular; Rota F5 faz kapıları da buraya `Kind: ask` + payload `gate` ile parklanır (`agent.GateAskRef`) |
 | `store_optimizer.go` | Reçete optimizer bookkeeping (`optimizer/state.json`): slug başına son geçiş / görülen koşu sayısı (Rota F4) |
 | `store_pin.go` | `SetAutomationPinned` / `SetSchedulePinned` / `SetHookPinned` — küratörden muafiyet bayrağı (Rota F3) |
 | `store_hook_testhooks.go` | Yalnız test: `SetHookCreatedAtForTest` (küratörün "N gündür sessiz" kuralı) |

@@ -1,5 +1,27 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F5 + F4-v2: faz kapıları, kanvastan müdahale, oto-budama (2026-09-03) ✅
+
+Faz `done`'a taşınırken ilan edilmiş kapı çalışır (`trajectory_gate.go`):
+`artifact` ağaçta başlık/tür eşleşmesi, `verdict` kök transkriptte satır,
+`human` kök oturuma Durable Ask kartı (`ws:ask` → API köprüsü `openDurableAskCard`;
+yanıt `answerDurableAsk` → `ResolvePhaseGate`: onay → done, red → aktif + sebep,
+transkripte `<gate>` notu); geçmezse araç hata / kanvas 422 + zorla, insan
+kapısında araç "kart açıldı" / kanvas 202. Ortak `SetTrajectoryPhase /
+PlanTrajectory / FinishTrajectory` (CAS `expectedRev`), araca `force`. Kanvas
+uçları `POST /api/trajectories/{id}/plan|phase|finish`, **buradan çatalla**
+`POST /api/sessions/{id}/workers`, `GET /api/trajectories/by-node`. UI:
+PhaseActions çubuğu (aktif/tamamlandı/atla/faz ekle/bitir), ForkModal, RunView
+koordinatör düğümünde "Rota" düğmesi; istemci hataları `status` taşır. F4-v2:
+`auto_prune: true` reçetelerde optimizer'ın budama önerileri
+`skills.ApplyRecipeProposal` ile (yalnız `phases/watchers/version/optimizer`
+satırları yeniden yazılır, round-trip doğrulaması, sürüm artışı) anında
+uygulanır ve bulgu `applied` kapanır; `✂ oto-budama` çipi. Testler:
+`trajectory_gate_test.go`, `skills/recipe_edit_test.go`. Brif §11 yol haritası
+(F0–F5) tamamlandı. Dallar `rota/f3-metrics-curator → f4-optimizer →
+f5-gates-canvas` ana ağaçtaki commitlenmemiş auth işi yüzünden henüz main'e
+alınmadı. Ayrıntı: `78-ROTA-EKRANI.md` §10.
+
 ## Rota F4: LLM reçete optimizer — yalnız öneri (2026-09-03) ✅
 
 Yeni sistem ajanı `recipe-optimizer` (araçsız, prompt `recipe-optimizer.md`).

@@ -443,8 +443,14 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// Rota F3: per-recipe rollup of the index (registered before the {id}
 	// route so "recipes" is never read as an id), on-demand summary, curator.
 	mux.HandleFunc("GET /api/trajectories/recipes", s.handleRecipeStats)
+	mux.HandleFunc("GET /api/trajectories/by-node", s.handleTrajectoryByNode)
 	mux.HandleFunc("GET /api/trajectories/{id}", s.handleGetTrajectory)
 	mux.HandleFunc("POST /api/trajectories/{id}/summarize", s.handleSummarizeTrajectory)
+	// Rota F5: canvas actions (CAS on expectedRev) + fork-here.
+	mux.HandleFunc("POST /api/trajectories/{id}/plan", s.handlePlanTrajectory)
+	mux.HandleFunc("POST /api/trajectories/{id}/phase", s.handleSetTrajectoryPhase)
+	mux.HandleFunc("POST /api/trajectories/{id}/finish", s.handleFinishTrajectory)
+	mux.HandleFunc("POST /api/sessions/{id}/workers", s.handleSpawnWorker)
 	mux.HandleFunc("GET /api/recipes/{slug}/optimizer", s.handleRecipeOptimizerState)
 	mux.HandleFunc("POST /api/recipes/{slug}/optimize", s.handleOptimizeRecipe)
 	mux.HandleFunc("GET /api/curator/report", s.handleCuratorReport)

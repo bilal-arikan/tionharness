@@ -48,6 +48,10 @@ type RecipeSpec struct {
 	Watchers []string `json:"watchers,omitempty"`
 	// Optimizer names the system agent (or automation) to run at trajectory end.
 	Optimizer string `json:"optimizer,omitempty"`
+	// AutoPrune opts the recipe into applying the optimizer's PRUNING proposals
+	// (prune_watcher / prune_phase / make_optional) automatically (F4-v2).
+	// Additions always wait for a human.
+	AutoPrune bool `json:"autoPrune,omitempty"`
 }
 
 // PhaseSpec is one declared phase.
@@ -145,6 +149,7 @@ func parseRecipeSpec(fm frontmatter, version string) (spec *RecipeSpec, err erro
 		return nil, nil
 	}
 	spec = &RecipeSpec{Version: strings.TrimSpace(version), Watchers: watchers, Optimizer: optimizer, Phases: []PhaseSpec{}}
+	spec.AutoPrune = strings.EqualFold(strings.TrimSpace(fm.scalar("auto_prune")), "true")
 	if hasPhases {
 		phases, perr := parsePhaseBlock(block)
 		if perr != nil {

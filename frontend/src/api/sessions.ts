@@ -214,6 +214,16 @@ export const sessionApi = {
   // List the workers spawned under a coordinator session (for the coordination panel).
   listWorkers: (sessionId: string) =>
     req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),
+  // "Buradan çatalla" (Rota F5): spawn a worker under a coordinator session
+  // from the canvas, as spawn_worker would from inside its turn.
+  spawnWorker: (
+    sessionId: string,
+    body: { agent: string; task: string; coordinator?: boolean; workflow?: string; cwd?: string },
+  ) =>
+    req<{ sessionId: string; agentName: string; queued: boolean; queuePosition: number }>(
+      `/api/sessions/${sessionId}/workers`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   // The whole coordinator TREE a session belongs to, breadth-first from its root.
   // Callable with ANY member's id (root, mid-level node, or leaf) — the server
   // normalizes to the root — so the panel can pass whatever session is open.

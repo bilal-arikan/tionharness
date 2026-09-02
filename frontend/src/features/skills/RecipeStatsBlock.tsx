@@ -60,7 +60,10 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
     setOptimizing(true)
     try {
       const r = await api.optimizeRecipe(slug)
-      if (r.ran) toast.info(`✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi)`)
+      if (r.ran)
+        toast.info(
+          `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi${r.applied ? `, ${r.applied} oto-uygulandı` : ''})`,
+        )
       else toast.info(`Optimizer çalışmadı: ${r.skipped ?? '—'}`)
       setNonce((n) => n + 1)
     } catch (e) {
