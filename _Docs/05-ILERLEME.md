@@ -1,5 +1,22 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F2: otomasyonlar grafikte — `phase` / `trajectory_end` tetikleri (2026-09-02) ✅
+
+Reçetenin `watchers:` hayaletleri artık ateşleniyor. İki yeni tetik türü
+(`internal/db/automation_trigger_traj.go`; süzgeçler faz id / olay exit|enter /
+reçete slug / bitiş durumu), rota hook'undan geçiş üreten `trajTransitionDiffer`
+(`trajectory_transitions.go`, boot'ta taban çizgisi, rota iş kuyruğunda
+yol-dışı), motor işleyicisi `OnTrajectoryTransition` (`automation_trajectory.go`:
+açık kurallar + graf hayaletlerinin id/ad ile çözümü, aynı geçişte tek
+ateşleme). Her deneme grafa yazılır: `done` + `fired` kenarı, `skipped` + sebep
+(`cooldown`, `disabled`, `archived`, `max_iterations`, yeni `not_found`) ya da
+`failed` + hata — Rota ekranı hayalet düğümde sebebi gösterir ("neden
+ateşlenmedi"). API alanları, prompt değişkenleri (`{{trajectoryId}} {{phase}}
+{{phaseState}} {{event}} {{status}} {{phases}} …`), otomasyon panosunda "Rota
+fazı" ve "Rota sonu" şeritleri + modal alanları + kart çipleri. Testler:
+`trajectory_transitions_test.go`, `automation_trajectory_test.go`,
+`db/automation_core_test.go` güncellendi. Ayrıntı: `78-ROTA-EKRANI.md` §7.
+
 ## Rota F1b: backend yeniliklerinin ekran karşılıkları (2026-09-02) ✅
 
 Kullanıcı isteği: "bu zamana kadar eklediklerinin UI/UX'te de karşılığı olsun,

@@ -6,7 +6,42 @@ import type {
   CounterMetric,
   CounterScope,
   TokenScope,
+  TrajEndStatus,
+  TrajEvent,
 } from '@/types'
+
+// Rota (F2) trigger options.
+export const TRAJ_EVENTS: { value: TrajEvent; label: string }[] = [
+  { value: 'exit', label: 'faz bitince (done/skipped/failed)' },
+  { value: 'enter', label: 'faz başlayınca (active)' },
+]
+
+export const TRAJ_END_STATUSES: { value: TrajEndStatus; label: string }[] = [
+  { value: '', label: 'her bitiş' },
+  { value: 'done', label: 'tamamlandı' },
+  { value: 'failed', label: 'başarısız' },
+  { value: 'abandoned', label: 'terk edildi' },
+]
+
+// Trajectory-trigger prompt placeholders (kept in sync with
+// agent/automation_trajectory.go trajectoryVars).
+export const TRAJ_PROMPT_VARS: { name: string; desc: string }[] = [
+  { name: '{{trajectoryId}}', desc: 'Rota kimliği (RTA…)' },
+  { name: '{{rootSessionId}}', desc: 'Rotanın kök (koordinatör) oturumu' },
+  { name: '{{sessionId}}', desc: 'Kök oturum (aynı)' },
+  { name: '{{recipe}}', desc: 'Reçete slug’ı (plansız rotada boş)' },
+  { name: '{{phase}}', desc: 'Geçiş yapan faz (faz tetiklerinde)' },
+  { name: '{{phaseState}}', desc: 'Fazın yeni durumu (done/skipped/failed/active)' },
+  { name: '{{event}}', desc: 'exit | enter' },
+  { name: '{{status}}', desc: 'Rota durumu (bitişte done/failed/abandoned)' },
+  { name: '{{phases}}', desc: 'Faz satırı: plan ✓ → kod ● → inceleme ○' },
+  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
+  { name: '{{automation}}', desc: 'Otomasyonun adı' },
+  { name: '{{date}}', desc: 'Geçerli tarih' },
+  { name: '{{time}}', desc: 'Geçerli saat' },
+  { name: '{{datetime}}', desc: 'Tarih + saat' },
+]
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -149,6 +184,12 @@ export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   counter:
     'Bu oturum {{count}} {{metric}} sayısına ulaştı (her {{interval}}). Kısa bir ara ver: ' +
     'ilerlemeyi özetle, gereksiz bağlamı temizle, bir sonraki adımı netleştir. Oturum: {{sessionId}}',
+  phase:
+    'Rota {{trajectoryId}} ({{recipe}}) "{{phase}}" fazını {{phaseState}} ile bitirdi. ' +
+    'Fazlar: {{phases}}. Kök oturum {{rootSessionId}}. Bu fazın çıktısını gözden geçir ve gerekeni yap.',
+  trajectory_end:
+    'Rota {{trajectoryId}} ({{recipe}}) {{status}} ile bitti. Fazlar: {{phases}}. Kök oturum ' +
+    '{{rootSessionId}}. Koşuyu özetle, dersleri çıkar ve dokümanları/panoyu güncelle.',
 }
 
 // Prefill body for the "stuck session repairer" template (self-healing, _Docs/56):
@@ -179,6 +220,8 @@ export const COLUMN_ACCENT = {
   board: '#0ea5e9',
   token: '#f59e0b',
   counter: '#10b981',
+  phase: '#a855f7',
+  trajectory_end: '#ec4899',
 } as const
 
 // MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.

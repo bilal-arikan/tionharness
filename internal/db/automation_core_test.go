@@ -42,7 +42,13 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 		{"counter interval floor", func(a *Automation) {
 			a.TriggerKind, a.CounterMetric, a.CounterScope, a.CounterInterval = TriggerCounter, "message", "session", 1
 		}, "interval"},
-		{"unknown kind", func(a *Automation) { a.TriggerKind = "phase"; a.TriggerTag = "x" }, "unknown triggerKind"},
+		{"unknown kind", func(a *Automation) { a.TriggerKind = "teleport"; a.TriggerTag = "x" }, "unknown triggerKind"},
+		// Rota (F2) kinds: registered like the others, with their own filters.
+		{"phase rule ok", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "code" }, ""},
+		{"phase rule bad event", func(a *Automation) { a.TriggerKind, a.TrajEvent = TriggerPhase, "during" }, "trajEvent"},
+		{"phase rule multi-word phase", func(a *Automation) { a.TriggerKind, a.TrajPhase = TriggerPhase, "plan code" }, "trajPhase"},
+		{"end rule ok", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, TrajStatusFailed }, ""},
+		{"end rule bad status", func(a *Automation) { a.TriggerKind, a.TrajStatus = TriggerTrajectoryEnd, "running" }, "trajStatus"},
 		{"common: target required", func(a *Automation) { a.TriggerTag = "x"; a.TargetAgentID = "" }, "targetAgentId or flowId"},
 	}
 	for _, tc := range cases {
@@ -61,7 +67,7 @@ func TestTriggerRegistryValidatesEveryKind(t *testing.T) {
 			}
 		})
 	}
-	if ValidTriggerKind("phase") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) {
+	if ValidTriggerKind("teleport") || !ValidTriggerKind("") || !ValidTriggerKind(TriggerBoard) || !ValidTriggerKind(TriggerPhase) || !ValidTriggerKind(TriggerTrajectoryEnd) {
 		t.Fatal("ValidTriggerKind mismatch")
 	}
 }

@@ -123,6 +123,10 @@ type automationReq struct {
 	CounterMetric    string   `json:"counterMetric"`
 	CounterScope     string   `json:"counterScope"`
 	CounterInterval  *int     `json:"counterInterval"`
+	TrajPhase        string   `json:"trajPhase"`
+	TrajRecipe       string   `json:"trajRecipe"`
+	TrajEvent        string   `json:"trajEvent"`
+	TrajStatus       string   `json:"trajStatus"`
 	SessionMode      string   `json:"sessionMode"`
 	TargetAgentID    string   `json:"targetAgentId"`
 	FlowID           string   `json:"flowId"`
@@ -249,6 +253,10 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		CounterMetric:    req.CounterMetric,
 		CounterScope:     req.CounterScope,
 		CounterInterval:  counterInterval,
+		TrajPhase:        strings.TrimSpace(req.TrajPhase),
+		TrajRecipe:       strings.TrimSpace(req.TrajRecipe),
+		TrajEvent:        strings.TrimSpace(req.TrajEvent),
+		TrajStatus:       strings.TrimSpace(req.TrajStatus),
 		SessionMode:      req.SessionMode,
 		TargetAgentID:    req.TargetAgentID,
 		FlowID:           req.FlowID,
@@ -311,6 +319,12 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		if k == db.TriggerCounter {
 			cur.CounterMetric = strings.TrimSpace(req.CounterMetric)
 			cur.CounterScope = strings.TrimSpace(req.CounterScope)
+		}
+		if k == db.TriggerPhase || k == db.TriggerTrajectoryEnd {
+			cur.TrajPhase = strings.TrimSpace(req.TrajPhase)
+			cur.TrajRecipe = strings.TrimSpace(req.TrajRecipe)
+			cur.TrajEvent = strings.TrimSpace(req.TrajEvent)
+			cur.TrajStatus = strings.TrimSpace(req.TrajStatus)
 		}
 	}
 	// Interval fields are pointers: absent in a partial patch means "leave as

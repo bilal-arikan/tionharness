@@ -169,6 +169,11 @@ type Runtime struct {
 	coordObservers coordObserverRegistry
 	// trajWork is the ordered off-path queue for trajectory binder writes (Rota F1).
 	trajWork trajectoryQueue
+	// trajTransitions diffs trajectory snapshots into phase / end transitions
+	// for the automation engine (Rota F2); the hook is wired by the manager.
+	trajTransitions    trajTransitionDiffer
+	trajTransitionHook func(context.Context, TrajectoryTransition)
+	trajTransitionMu   sync.RWMutex
 
 	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
 	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised

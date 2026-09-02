@@ -232,6 +232,15 @@ type Automation struct {
 	// the session whose activity crossed the boundary. Must be >= MinCounterInterval.
 	// Ignored unless TriggerKind == TriggerCounter.
 	CounterInterval int `json:"counterInterval,omitempty"`
+	// Trajectory (Rota) trigger fields, F2. TrajPhase narrows a phase rule to
+	// one declared phase id ("" = every phase); TrajRecipe narrows phase and
+	// trajectory_end rules to trajectories seeded from that recipe slug ("" =
+	// any); TrajEvent picks the phase transition (exit default | enter);
+	// TrajStatus narrows a trajectory_end rule to one terminal status ("" = any).
+	TrajPhase  string `json:"trajPhase,omitempty"`
+	TrajRecipe string `json:"trajRecipe,omitempty"`
+	TrajEvent  string `json:"trajEvent,omitempty"`
+	TrajStatus string `json:"trajStatus,omitempty"`
 	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
 	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`

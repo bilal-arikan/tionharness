@@ -1,12 +1,12 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük)
+# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte)
 
 **Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
 uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
 yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
 `77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
-Tasarım Brifi" (§8 ekran, §11 fazlar). Sonraki fazlar F2 (otomasyonlar
-grafikte, "neden ateşlenmedi"), F3 (metrik + küratör), F4 (optimizer), F5
-(kapılar / kanvastan müdahale).
+Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
+ateşlenmedi") uygulandı (2026-09-02, §7). Sonraki fazlar F3 (metrik +
+küratör), F4 (optimizer), F5 (kapılar / kanvastan müdahale).
 
 ## 1. Ne gösterir
 
@@ -211,3 +211,70 @@ fazsız graf, özet/ilerleme), `shared/lib/sessionOrigin.test.ts`,
 başlangıç + terminal geçişler + susturma, stall/akış hatası). Doğrulama:
 `tsc`, `vitest` 100 dosya / 703 test, `vite build`, prettier; eslint'teki 13
 hata önceden vardı (main ile aynı sayı, dokunulan dosyalarda değil).
+
+## 7. F2 — Otomasyonlar grafikte (2026-09-02)
+
+Dal `rota/f2-automations-on-graph`. F1a'da reçetenin `watchers:` listesi
+grafa **hayalet** `a:<izleyici>[@faz]` düğümleri olarak düşüyordu ama hiçbir
+şey onları ateşlemiyordu. F2 bunu ve iki yeni tetik türünü ekler.
+
+**Yeni tetik türleri** (`internal/db/automation_trigger_traj.go`, R5
+registry'sine iki `RegisterTrigger`):
+
+| Tür | Ne zaman | Süzgeçler (boş = hepsi) |
+|-----|----------|-------------------------|
+| `phase` (Rota fazı) | ilan edilmiş bir faz **bitince** (`exit`: done/skipped/failed, varsayılan) ya da **başlayınca** (`enter`: active) | `trajPhase` (faz id), `trajEvent`, `trajRecipe` (reçete slug'ı, sürümsüz) |
+| `trajectory_end` (Rota sonu) | rota terminal duruma gelince | `trajStatus` (done/failed/abandoned), `trajRecipe` |
+
+Her ikisi de otomasyon modelinde `trajPhase/trajRecipe/trajEvent/trajStatus`
+alanlarını kullanır; API create/update bunları kabul eder; `SessionMode`
+varsayılanı spawn (kendi kendini döngülemez, `spawnTags` nil = etiket yok).
+Prompt değişkenleri: `{{trajectoryId}} {{rootSessionId}} {{sessionId}}
+{{recipe}} {{phase}} {{phaseState}} {{event}} {{status}} {{phases}}` + ortak
+olanlar. Üretilen oturumun `Origin.TriggerSessionID` = kök oturum, yani F1a
+bağlayıcısı onu `fired` kenarıyla grafa asar.
+
+**Geçiş algılama** (`internal/agent/trajectory_transitions.go`). Rota hook'u
+yalnız sonraki anlık görüntüyü verir; `trajTransitionDiffer` rota başına faz
+durumlarını ve statüyü hatırlar, ardışık görüntülerden `enter`/`exit`/`end`
+geçişleri üretir ve bunları `Runtime.SetTrajectoryTransitionHook` ile bağlı
+motora **rota iş kuyruğunda** (sıralı, yol-dışı) iletir. Boot'ta hafıza
+boştur: var olan bir rotanın ilk görüntüsü taban çizgisidir (süreç kapalıyken
+biten faz yeniden duyurulmaz — bilinçli).
+
+**Ateşleme** (`internal/agent/automation_trajectory.go`,
+`AutomationEngine.OnTrajectoryTransition`):
+
+1. **Açık kurallar**: etkin + arşivsiz `phase`/`trajectory_end` otomasyonları
+   süzgeçleriyle eşleşince ateşlenir.
+2. **Reçete izleyicileri**: graftaki hayalet düğümler — faz çıkışında
+   `PhaseID`'si o faz olanlar, rota sonunda rota-geneli olanlar — `RefID`
+   (otomasyon id **veya** adı, büyük/küçük harf duyarsız) ile çözülür ve
+   süzgeçsiz ateşlenir. Aynı geçişte hem kuralla hem izleyiciyle eşleşen
+   otomasyon **bir kez** ateşlenir; izleyici düğümü o sonuca bağlanır.
+
+Her deneme grafa yazılır (**"neden ateşlenmedi"**): düğüm `done` + `a:… →
+s:<yeni oturum>` `fired` kenarı; ya da `skipped` + sebep (`cooldown`,
+`disabled`, `archived`, `max_iterations`, `not_found` = izleyici adı hiçbir
+otomasyonu bulmadı …); ya da `failed` + hata (hedef ajan yok, boş prompt).
+Açık kural için düğüm yoksa `a:<id>[@faz]` gözlemlenmiş düğümü oluşturulur.
+Defter (`/fires`) ve `ws:automation_fire` aynı `notifyFired`/`recordSkip`/
+`recordFailure` yollarından beslenir; kart defteri ile graf birbirini tutar.
+
+**Ekran karşılıkları.** Otomasyon panosunda iki yeni şerit ("Rota fazı",
+"Rota sonu") ve modalda `TrajectoryTriggerFields` (faz, olay/bitiş, reçete);
+kartta `◈ faz code · bitince · plan-dev` / `⚑ rota sonu · başarısız` çipi;
+rota-içi görünümde otomasyon düğümü hücresinde `docs · bekleme süresi`,
+`nobody · otomasyon bulunamadı` gibi sebep metni (`fireMeta.SKIP_REASON_LABEL`),
+hayaletlerde `· bekliyor`; ateşlenen düğümden yeni oturuma `fired` kenarı.
+
+**Testler.** `trajectory_transitions_test.go` (taban çizgisi, enter/exit,
+tek bitiş, silme, boot), `automation_trajectory_test.go` (kural süzgeçleri,
+prompt değişkenleri, gerçek depo üzerinde faz çıkışı → izleyici + açık kural
+düğümleri failed+sebep, defter kaydı, rota sonu → not_found / disabled),
+`db/automation_core_test.go` (yeni türlerin doğrulaması).
+
+**Kalanlar.** Optimizer düğümü hâlâ hayalet (F4); `phase` kuralı için faz
+kimliği seçici (reçete fazlarından açılır liste) yok — metin alanı; hayalet
+düğüme tıklayınca kural kartı (ViewPanel `automation` projeksiyonu zaten
+açılıyor, ama `not_found` için bir "otomasyon oluştur" kısayolu yok).

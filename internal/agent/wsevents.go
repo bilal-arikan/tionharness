@@ -89,6 +89,7 @@ func (r *Runtime) OnTrajectoryChange(ev db.TrajectoryChangeEvent) {
 			TemplateRef: t.TemplateRef, Status: t.Status, Revision: t.Revision,
 			NodeCount: len(t.Nodes), UpdatedAt: t.UpdatedAt,
 		})
+	r.observeTrajectoryTransitions(ev)
 }
 
 // FlowRunPayload is the Data shape of a ws:flow_run event.

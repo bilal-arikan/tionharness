@@ -7,6 +7,8 @@ import {
   Hash,
   Archive,
   MoveRight,
+  Waypoints,
+  Flag,
 } from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -80,7 +82,11 @@ export function AutomationCard({
             ? COLUMN_ACCENT.token
             : isCounterKind
               ? COLUMN_ACCENT.counter
-              : COLUMN_ACCENT.tag,
+              : kind === 'phase'
+                ? COLUMN_ACCENT.phase
+                : kind === 'trajectory_end'
+                  ? COLUMN_ACCENT.trajectory_end
+                  : COLUMN_ACCENT.tag,
       }}
     >
       <div className="flex items-start gap-2">
@@ -176,6 +182,24 @@ export function AutomationCard({
                 <Hash size={11} />
                 {a.counterScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
                 {a.counterInterval ?? 0} {a.counterMetric === 'tool' ? 'tool' : 'mesaj'}
+              </span>
+            ) : kind === 'phase' ? (
+              <span
+                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                title="Rota fazı tetikleyicili otomasyon — ilan edilmiş bir faz bitince/başlayınca çalışır"
+              >
+                <Waypoints size={11} />
+                faz {a.trajPhase || '∗'} · {a.trajEvent === 'enter' ? 'başlayınca' : 'bitince'}
+                {a.trajRecipe && <span className="opacity-80">· {a.trajRecipe}</span>}
+              </span>
+            ) : kind === 'trajectory_end' ? (
+              <span
+                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                title="Rota sonu tetikleyicili otomasyon — rota terminal duruma gelince çalışır"
+              >
+                <Flag size={11} />
+                rota sonu · {a.trajStatus || 'her bitiş'}
+                {a.trajRecipe && <span className="opacity-80">· {a.trajRecipe}</span>}
               </span>
             ) : (
               <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">

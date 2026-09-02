@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Clock, Hash, LayoutGrid, Repeat, Zap } from 'lucide-react'
+import { Clock, Flag, Hash, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -325,6 +325,24 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: 'Yeni sayaç otomasyonu',
       emptyLabel: 'Henüz sayaç otomasyonu yok.',
     },
+    phase: {
+      title: 'Rota fazı otomasyonları',
+      icon: Waypoints,
+      accent: COLUMN_ACCENT.phase,
+      description:
+        'Bir rotanın ilan edilmiş fazı bitince (ya da başlayınca) çalışır; reçete watchers: ile de bağlanır.',
+      addLabel: 'Yeni faz otomasyonu',
+      emptyLabel: 'Henüz faz otomasyonu yok.',
+    },
+    trajectory_end: {
+      title: 'Rota sonu otomasyonları',
+      icon: Flag,
+      accent: COLUMN_ACCENT.trajectory_end,
+      description:
+        'Bir rota bitince (tamamlandı / başarısız / terk) çalışır — özet, ders, doküman.',
+      addLabel: 'Yeni rota sonu otomasyonu',
+      emptyLabel: 'Henüz rota sonu otomasyonu yok.',
+    },
   }
 
   // Live lane stat: shown only for token/counter lanes that actually hold a
@@ -461,6 +479,8 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         {renderAutomationLane('board')}
         {renderAutomationLane('token')}
         {renderAutomationLane('counter')}
+        {renderAutomationLane('phase')}
+        {renderAutomationLane('trajectory_end')}
       </div>
 
       {editor?.lane === 'schedules' && (

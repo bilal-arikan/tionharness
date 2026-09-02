@@ -488,6 +488,9 @@ func (m *Manager) open(meta Meta) error {
 	// Token-triggered automations: every recorded provider call signals cumulative
 	// spend so the engine can fire when a session/workspace crosses a threshold.
 	rt.AddUsageHook(autoEngine.OnUsageRecorded)
+	// Rota (F2): phase / trajectory_end automations and recipe watchers fire on
+	// trajectory transitions, delivered off-path on the trajectory work queue.
+	rt.SetTrajectoryTransitionHook(autoEngine.OnTrajectoryTransition)
 	// Every message append is session activity regardless of author (user, agent,
 	// worker, or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.

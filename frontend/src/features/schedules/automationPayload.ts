@@ -6,6 +6,8 @@ import type {
   CounterScope,
   SessionMode,
   TokenScope,
+  TrajEndStatus,
+  TrajEvent,
 } from '@/types'
 import { DEFAULT_MAX_ITERATIONS } from './automationMeta'
 import { localInputToUnix } from './timeUtils'
@@ -26,6 +28,10 @@ export interface AutomationPayloadInput {
   counterMetric: CounterMetric
   counterScope: CounterScope
   counterInterval: number
+  trajPhase: string
+  trajRecipe: string
+  trajEvent: TrajEvent
+  trajStatus: TrajEndStatus
   targetMode: 'agent' | 'flow'
   targetAgentId: string
   flowId: string
@@ -58,7 +64,15 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
             counterScope: input.counterScope,
             counterInterval: input.counterInterval,
           }
-        : { triggerTag: input.triggerTag.trim() }
+        : input.kind === 'phase'
+          ? {
+              trajPhase: input.trajPhase.trim(),
+              trajRecipe: input.trajRecipe.trim(),
+              trajEvent: input.trajEvent,
+            }
+          : input.kind === 'trajectory_end'
+            ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
+            : { triggerTag: input.triggerTag.trim() }
   const target = isTargetlessAction
     ? { targetAgentId: '', flowId: '' }
     : input.targetMode === 'flow'

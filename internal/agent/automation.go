@@ -751,6 +751,18 @@ func automationTrigger(a db.Automation) string {
 			scope = db.TokenScopeSession
 		}
 		return "token:" + scope
+	case db.TriggerPhase:
+		phase := a.TrajPhase
+		if phase == "" {
+			phase = "*"
+		}
+		return "phase:" + phase + ":" + a.EffectiveTrajEvent()
+	case db.TriggerTrajectoryEnd:
+		st := a.TrajStatus
+		if st == "" {
+			st = "*"
+		}
+		return "trajectory_end:" + st
 	}
 	return "tag:" + a.TriggerTag
 }

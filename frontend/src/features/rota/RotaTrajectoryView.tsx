@@ -6,6 +6,7 @@
 import { useMemo } from 'react'
 import { ArrowLeft, MessageSquare } from 'lucide-react'
 import { Badge } from '@/shared/components'
+import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
 import type { Trajectory, TrajectoryEdge, TrajectoryNode } from '@/types/trajectory'
 import type { RotaSelection } from './RotaCanvas'
 import {
@@ -81,6 +82,17 @@ function nodeLabel(n: TrajectoryNode): string {
   if (n.label) return n.label
   if (n.refId) return n.refId
   return n.id
+}
+
+// nodeText is the in-cell caption: the label, plus — for an automation that
+// did not fire — the reason ("neden ateşlenmedi") in the user's words.
+function nodeText(n: TrajectoryNode): string {
+  const label = nodeLabel(n)
+  if (n.kind === 'automation' && (n.state === 'skipped' || n.state === 'failed') && n.reason) {
+    return `${label} · ${SKIP_REASON_LABEL[n.reason] ?? n.reason}`
+  }
+  if (n.kind === 'automation' && n.state === 'ghost') return `${label} · bekliyor`
+  return label
 }
 
 // selectionFor maps a graph node to what the side panel can project: a gate
@@ -485,7 +497,7 @@ function TrajectorySvg({
               }
               clipPath={`inset(0 0 0 0)`}
             >
-              {nodeGlyph(n)} {nodeLabel(n).slice(0, Math.max(4, Math.floor(b.w / 7) - 2))}
+              {nodeGlyph(n)} {nodeText(n).slice(0, Math.max(4, Math.floor(b.w / 7) - 2))}
             </text>
             {n.state === 'active' && n.kind === 'session' && (
               <circle cx={b.x + b.w - 8} cy={b.cy} r={3} fill="#fff" opacity={0.9}>

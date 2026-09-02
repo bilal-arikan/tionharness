@@ -554,6 +554,13 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > (`KindTrajectory`) yeniliklerinin ekran karşılıkları — rota-içi faz görünümü,
 > derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme
 > listesi, `ws:*` → toast köprüsü. Ayrıntı: `78-ROTA-EKRANI.md` §6.
+>
+> **F2 uygulandı (2026-09-02, dal `rota/f2-automations-on-graph`):** `phase` ve
+> `trajectory_end` tetik türleri (R5 registry'sine kayıt, `trajPhase/trajRecipe/
+> trajEvent/trajStatus`), rota geçiş algılayıcısı + `SetTrajectoryTransitionHook`,
+> reçete `watchers:` hayaletlerinin gerçekten ateşlenmesi ve her denemenin grafa
+> "neden ateşlenmedi" sebebiyle yazılması; otomasyon panosunda iki yeni şerit.
+> Ayrıntı: `78-ROTA-EKRANI.md` §7.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

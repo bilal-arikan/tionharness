@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import type {
+  TrajEndStatus,
+  TrajEvent,
   AutomationTriggerKind,
   BoardAction,
   BoardColumnDef,
@@ -15,6 +17,9 @@ import {
   BOARD_PROMPT_VARS,
   COUNTER_METRICS,
   COUNTER_PROMPT_VARS,
+  TRAJ_END_STATUSES,
+  TRAJ_EVENTS,
+  TRAJ_PROMPT_VARS,
   COUNTER_SCOPES,
   MIN_COUNTER_INTERVAL,
   MIN_TOKEN_THRESHOLD,
@@ -283,7 +288,9 @@ export function PromptVarsField({
         ? TOKEN_PROMPT_VARS
         : kind === 'counter'
           ? COUNTER_PROMPT_VARS
-          : PROMPT_VARS
+          : kind === 'phase' || kind === 'trajectory_end'
+            ? TRAJ_PROMPT_VARS
+            : PROMPT_VARS
   return (
     <div className="relative">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -334,6 +341,95 @@ export function PromptVarsField({
         placeholder="Prompt şablonu — ℹ️ ile değişkenleri gör."
         className={`${inputCls} resize-y`}
       />
+    </div>
+  )
+}
+
+// TrajectoryTriggerFields renders the filters of a Rota trigger (F2): a phase
+// rule may narrow to one phase id and pick the transition (exit / enter); a
+// trajectory_end rule may narrow to one terminal status; both may narrow to
+// the recipe the trajectory was seeded from. Empty = any. Recipe watchers
+// declared in a coordinator recipe (`watchers:`) fire the rule regardless of
+// these filters — the recipe is the binding then.
+export function TrajectoryTriggerFields({
+  kind,
+  phase,
+  recipe,
+  event,
+  status,
+  onChange,
+}: {
+  kind: 'phase' | 'trajectory_end'
+  phase: string
+  recipe: string
+  event: TrajEvent
+  status: TrajEndStatus
+  onChange: (patch: {
+    phase?: string
+    recipe?: string
+    event?: TrajEvent
+    status?: TrajEndStatus
+  }) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {kind === 'phase' ? (
+        <>
+          <label
+            className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+            title="Reçetedeki faz kimliği (plan, code, review…). Boş = her faz."
+          >
+            Faz
+            <input
+              value={phase}
+              onChange={(e) => onChange({ phase: e.target.value })}
+              placeholder="her faz"
+              className={`${inputCls} w-28 font-mono`}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+            Olay
+            <select
+              value={event}
+              onChange={(e) => onChange({ event: e.target.value as TrajEvent })}
+              className={selCls}
+            >
+              {TRAJ_EVENTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      ) : (
+        <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+          Bitiş
+          <select
+            value={status}
+            onChange={(e) => onChange({ status: e.target.value as TrajEndStatus })}
+            className={selCls}
+          >
+            {TRAJ_END_STATUSES.map((o) => (
+              <option key={o.value || 'any'} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title="Yalnız bu reçeteden tohumlanan rotalar (slug, sürümsüz). Boş = her rota."
+      >
+        Reçete
+        <input
+          value={recipe}
+          onChange={(e) => onChange({ recipe: e.target.value })}
+          placeholder="her reçete"
+          className={`${inputCls} w-36 font-mono`}
+        />
+      </label>
     </div>
   )
 }

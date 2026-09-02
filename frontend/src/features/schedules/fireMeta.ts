@@ -12,6 +12,8 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   autonomy_paused: 'otonomi duraklatıldı',
   target_missing: 'hedef yok',
   empty_prompt: 'boş prompt',
+  // Rota watcher that names no automation (agent/automation_trajectory.go).
+  not_found: 'otomasyon bulunamadı',
 }
 
 export function fireGlyph(outcome: AutomationFireRecord['outcome']): string {

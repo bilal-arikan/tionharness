@@ -102,7 +102,12 @@ export interface Schedule {
 // (a kanban card change), 'token' (cumulative token spend crossing a threshold),
 // or 'counter' (a session's message/tool count crossing an interval). '' from
 // older files is treated as 'tag'.
-export type AutomationTriggerKind = 'tag' | 'board' | 'token' | 'counter'
+export type AutomationTriggerKind =
+  'tag' | 'board' | 'token' | 'counter' | 'phase' | 'trajectory_end'
+// Phase transition a phase automation watches (Rota F2).
+export type TrajEvent = 'exit' | 'enter'
+// Terminal status filter of a trajectory_end automation ('' = any).
+export type TrajEndStatus = '' | 'done' | 'failed' | 'abandoned'
 // Board card operation a board automation reacts to.
 export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
 // Token automation scope: one session's lifetime spend, or the whole workspace's
@@ -172,6 +177,14 @@ export interface Automation {
   // Count interval: fires each time the watched counter crosses another multiple
   // (e.g. 10 → at 10, 20…). Min 2.
   counterInterval?: number
+  // Trajectory-trigger fields (Rota F2; triggerKind 'phase' | 'trajectory_end').
+  // trajPhase narrows a phase rule to one phase id ('' = every phase);
+  // trajRecipe narrows to trajectories seeded from that recipe slug ('' = any);
+  // trajEvent picks exit (default) or enter; trajStatus narrows an end rule.
+  trajPhase?: string
+  trajRecipe?: string
+  trajEvent?: TrajEvent
+  trajStatus?: TrajEndStatus
   // Session strategy for an agent-backed automation (default resolves per kind).
   sessionMode?: SessionMode
   targetAgentId: string

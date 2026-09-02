@@ -20,6 +20,9 @@ const (
 	TriggerAutomationBoard   RunTrigger = "automation:board"
 	TriggerAutomationToken   RunTrigger = "automation:token"
 	TriggerAutomationCounter RunTrigger = "automation:counter"
+	// Rota (F2): a declared phase finished / was entered, a trajectory ended.
+	TriggerAutomationPhase         RunTrigger = "automation:phase"
+	TriggerAutomationTrajectoryEnd RunTrigger = "automation:trajectory_end"
 )
 
 // RunSpec describes a run to launch by exactly one driver: a flow (FlowID set,

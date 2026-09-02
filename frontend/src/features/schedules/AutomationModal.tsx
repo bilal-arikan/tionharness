@@ -13,6 +13,8 @@ import type {
   Flow,
   SessionMode,
   TokenScope,
+  TrajEndStatus,
+  TrajEvent,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
@@ -30,6 +32,7 @@ import {
 import {
   BoardTriggerFields,
   CounterTriggerFields,
+  TrajectoryTriggerFields,
   PromptVarsField,
   TokenTriggerFields,
 } from './AutomationFields'
@@ -70,6 +73,7 @@ export function AutomationModal({
   const isBoardKind = kind === 'board'
   const isTokenKind = kind === 'token'
   const isCounterKind = kind === 'counter'
+  const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
 
   const [name, setName] = useState(editing?.name ?? '')
   const [triggerTag, setTriggerTag] = useState(editing?.triggerTag ?? '')
@@ -91,6 +95,10 @@ export function AutomationModal({
   const [counterInterval, setCounterInterval] = useState(
     editing?.counterInterval ?? DEFAULT_COUNTER_INTERVAL,
   )
+  const [trajPhase, setTrajPhase] = useState(editing?.trajPhase ?? '')
+  const [trajRecipe, setTrajRecipe] = useState(editing?.trajRecipe ?? '')
+  const [trajEvent, setTrajEvent] = useState<TrajEvent>(editing?.trajEvent ?? 'exit')
+  const [trajStatus, setTrajStatus] = useState<TrajEndStatus>(editing?.trajStatus ?? '')
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
@@ -183,6 +191,10 @@ export function AutomationModal({
       counterMetric,
       counterScope,
       counterInterval,
+      trajPhase,
+      trajRecipe,
+      trajEvent,
+      trajStatus,
       targetMode,
       targetAgentId,
       flowId,
@@ -312,6 +324,20 @@ export function AutomationModal({
               if (p.metric !== undefined) setCounterMetric(p.metric)
               if (p.scope !== undefined) setCounterScope(p.scope)
               if (p.interval !== undefined) setCounterInterval(p.interval)
+            }}
+          />
+        ) : isTrajKind ? (
+          <TrajectoryTriggerFields
+            kind={kind}
+            phase={trajPhase}
+            recipe={trajRecipe}
+            event={trajEvent}
+            status={trajStatus}
+            onChange={(p) => {
+              if (p.phase !== undefined) setTrajPhase(p.phase)
+              if (p.recipe !== undefined) setTrajRecipe(p.recipe)
+              if (p.event !== undefined) setTrajEvent(p.event)
+              if (p.status !== undefined) setTrajStatus(p.status)
             }}
           />
         ) : (
