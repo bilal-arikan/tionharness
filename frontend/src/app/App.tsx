@@ -687,6 +687,9 @@ export default function App() {
             messagesLoading={ctl.messagesLoading}
             readOnly={!ctl.activeSessionWritable}
             sessionCoordination={activeSession}
+            onCoordinationChanged={ctl.refreshSessions}
+            onOpenSkill={openSkill}
+            onError={setError}
             onOpenRunHistory={openRunHistory}
             onSelectSession={ctl.selectSession}
             defaultAgentId={ctl.defaultAgentId}
