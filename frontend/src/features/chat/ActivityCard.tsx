@@ -10,6 +10,31 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { PathText } from './PathText'
 import { CommandProgramTag } from './CommandProgramTag'
 import { OptimizerChip } from './OptimizerChip'
+import { agentActionTone, type AgentActionTone } from './agentActionTone'
+
+const AGENT_ACTION_STYLES: Record<
+  AgentActionTone,
+  { container: string; button: string; icon: string }
+> = {
+  create: {
+    container:
+      'border border-[color-mix(in_srgb,var(--color-success)_28%,transparent)] bg-[color-mix(in_srgb,var(--color-success)_7%,var(--color-bg))]',
+    button: 'hover:bg-[color-mix(in_srgb,var(--color-success)_11%,transparent)]',
+    icon: 'text-[var(--color-success)]',
+  },
+  stop: {
+    container:
+      'border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_7%,var(--color-bg))]',
+    button: 'hover:bg-[color-mix(in_srgb,var(--color-warning)_11%,transparent)]',
+    icon: 'text-[var(--color-warning)]',
+  },
+  message: {
+    container:
+      'border border-[color-mix(in_srgb,var(--color-info)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-info)_7%,var(--color-bg))]',
+    button: 'hover:bg-[color-mix(in_srgb,var(--color-info)_11%,transparent)]',
+    icon: 'text-[var(--color-info)]',
+  },
+}
 
 interface Props {
   step: TurnStep
@@ -106,14 +131,26 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
   const collabTarget = step.target?.join(', ') || ''
   const collabSummary =
     step.summary || [collabOperation, collabTarget, step.status].filter(Boolean).join(' · ')
+  const actionTone = agentActionTone(step.tool || '', isCollab ? collabOperation : undefined)
+  const actionStyle = actionTone ? AGENT_ACTION_STYLES[actionTone] : undefined
 
   return (
-    <div className="overflow-hidden rounded-md bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
+    <div
+      data-agent-action-tone={actionTone}
+      className={`overflow-hidden rounded-md shadow-[var(--shadow-lg)] ${
+        actionStyle?.container || 'bg-[var(--color-bg)]'
+      }`}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
+        className={`flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs ${
+          actionStyle?.button || 'hover:bg-[var(--color-surface-2)]'
+        }`}
       >
-        <meta.icon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
+        <meta.icon
+          size={14}
+          className={`shrink-0 ${actionStyle?.icon || 'text-[var(--color-text-dim)]'}`}
+        />
         {progHint && <CommandProgramTag command={progHint} />}
         <span className="shrink-0 font-medium text-[var(--color-text)]">
           {isCollab ? collabOperation : meta.label}

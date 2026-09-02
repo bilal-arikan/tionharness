@@ -1,0 +1,707 @@
+{
+  "version": "0.8.4",
+  "pages": [
+    {
+      "id": "page1",
+      "name": "Explore",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n1",
+          "name": "Chat — agent action step colors",
+          "x": 0.0,
+          "y": 0.0,
+          "width": 980.0,
+          "height": 660.0,
+          "layout": "vertical",
+          "gap": 22.0,
+          "padding": 32.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#0F0F12"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n2",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 6.0,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n3",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Chat aktivite adımları — ajan aksiyon renkleri",
+                  "fontFamily": "Inter",
+                  "fontSize": 24.0,
+                  "fontWeight": 700,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#E7E7EA"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n4",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Düşük yoğunluklu yüzey rengi ve ince kenarlık; etiketler erişilebilirlik için anlamı taşımaya devam eder.",
+                  "fontFamily": "Inter",
+                  "fontSize": 13.0,
+                  "fontWeight": 400,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#9A9AA6"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n5",
+              "name": "Assistant response",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 14.0,
+              "padding": 24.0,
+              "cornerRadius": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#18181C"
+                }
+              ],
+              "stroke": {
+                "thickness": 1.0,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#2B2B30"
+                  }
+                ]
+              },
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n6",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 10.0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "n7",
+                      "width": 28.0,
+                      "height": 28.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#8B5CF6"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n8",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Developer",
+                      "fontFamily": "Inter",
+                      "fontSize": 13.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#E7E7EA"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n9",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "ajan iş akışı",
+                      "fontFamily": "Inter",
+                      "fontSize": 12.0,
+                      "fontWeight": 400,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#9A9AA6"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n10",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Ajan ekibini hazırlayıp görevi başlatıyorum.",
+                  "fontFamily": "Inter",
+                  "fontSize": 14.0,
+                  "fontWeight": 400,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#E7E7EA"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n11",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 6.0,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n12",
+                      "width": "fill_container",
+                      "height": 36.0,
+                      "layout": "horizontal",
+                      "gap": 10.0,
+                      "padding": [
+                        0.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 7.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#10221C"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#246348"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n13",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "+",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#34D399"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n14",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Ajan oluştur",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#E7E7EA"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n15",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Frontend Reviewer",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 400,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n16",
+                          "width": "fill_container",
+                          "height": 1.0,
+                          "children": []
+                        },
+                        {
+                          "type": "text",
+                          "id": "n17",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "›",
+                          "fontFamily": "Inter",
+                          "fontSize": 16.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n18",
+                      "width": "fill_container",
+                      "height": 36.0,
+                      "layout": "horizontal",
+                      "gap": 10.0,
+                      "padding": [
+                        0.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 7.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#211C10"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#66501A"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n19",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "■",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#FBBF24"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n20",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Worker durdur",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#E7E7EA"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n21",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "AGT-reviewer",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 400,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n22",
+                          "width": "fill_container",
+                          "height": 1.0,
+                          "children": []
+                        },
+                        {
+                          "type": "text",
+                          "id": "n23",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "›",
+                          "fontFamily": "Inter",
+                          "fontSize": 16.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n24",
+                      "width": "fill_container",
+                      "height": 36.0,
+                      "layout": "horizontal",
+                      "gap": 10.0,
+                      "padding": [
+                        0.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 7.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#101D24"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#24566B"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n25",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "↗",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#38BDF8"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n26",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Mesaj gönder",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#E7E7EA"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n27",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "@Frontend Reviewer · Sonuçları paylaş",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 400,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n28",
+                          "width": "fill_container",
+                          "height": 1.0,
+                          "children": []
+                        },
+                        {
+                          "type": "text",
+                          "id": "n29",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "›",
+                          "fontFamily": "Inter",
+                          "fontSize": 16.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n30",
+                      "width": "fill_container",
+                      "height": 36.0,
+                      "layout": "horizontal",
+                      "gap": 10.0,
+                      "padding": [
+                        0.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 7.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#111114"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#111114"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n31",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "⌘",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 700,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n32",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Bash",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#E7E7EA"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n33",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "npm test",
+                          "fontFamily": "Inter",
+                          "fontSize": 12.0,
+                          "fontWeight": 400,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n34",
+                          "width": "fill_container",
+                          "height": 1.0,
+                          "children": []
+                        },
+                        {
+                          "type": "text",
+                          "id": "n35",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "›",
+                          "fontFamily": "Inter",
+                          "fontSize": 16.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#9A9AA6"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n36",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 10.0,
+                  "padding": [
+                    12.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n37",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "YEŞİL",
+                      "fontFamily": "Inter",
+                      "fontSize": 10.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#34D399"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n38",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "oluştur / başlat",
+                      "fontFamily": "Inter",
+                      "fontSize": 11.0,
+                      "fontWeight": 400,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#9A9AA6"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n39",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "AMBER",
+                      "fontFamily": "Inter",
+                      "fontSize": 10.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#FBBF24"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n40",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "durdur / kapat",
+                      "fontFamily": "Inter",
+                      "fontSize": 11.0,
+                      "fontWeight": 400,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#9A9AA6"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n41",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "MAVİ",
+                      "fontFamily": "Inter",
+                      "fontSize": 10.0,
+                      "fontWeight": 700,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#38BDF8"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n42",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "mesaj / girdi gönder",
+                      "fontFamily": "Inter",
+                      "fontSize": 11.0,
+                      "fontWeight": 400,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#9A9AA6"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "editorMeta": {
+    "activePageIndex": 0,
+    "preserveAuthoredGeometry": false
+  }
+}

@@ -146,6 +146,24 @@ Araçlar ve düşünme akışı tek generic canlı kart mekanizmasını kullanı
 - `tombstone`, yalnız iptal veya panic nedeniyle final kartı gelemeyen canlı kartı
   `Ref` ile geri çeker.
 
+#### Ajan aksiyonu renkleri (2026-09-02)
+
+Genel araç kartları nötr yüzeyini korur. Ajan yaşam döngüsü ve iletişim adımları,
+chat izinde daha hızlı ayırt edilebilmesi için düşük yoğunluklu semantik ton kullanır:
+
+- oluşturma/başlatma (`create_agent`, `run_subagent`, `spawn_agent`, `spawn_session`,
+  `spawn_worker`) yeşil vurgu;
+- durdurma/kapatma (`close_agent`, `delete_agent`, `interrupt_session`, `stop_worker`)
+  amber vurgu;
+- mesaj/girdi gönderme (`send_input`, `send_message`, `send_to_worker`) mavi vurgu.
+
+Ton; ince kenarlık, hafif yüzey rengi ve ikon renginde uygulanır. Etiket ve ikon
+değişmediği için anlam yalnız renge bağlı değildir. Codex native işbirliği olaylarında
+generic `collab_tool_call` adı yerine yapısal `operation` alanı sınıflandırılır.
+Kart kökü test ve otomasyon için `data-agent-action-tone` (`create | stop | message`)
+işaretini taşır. Görsel kaynak ve çıktı `_Docs/design/chat-agent-step-colors.*`
+dosyalarındadır.
+
 `tool_delta` kind sabiti ve frontend okuma dalı yalnız daha önce kalıcılaştırılmış
 eski oturumlar için korunur; yeni üretim yolu değildir.
 

@@ -1,0 +1,171 @@
+const colors = {
+  canvas: '#0F0F12',
+  surface: '#18181C',
+  card: '#111114',
+  border: '#2B2B30',
+  text: '#E7E7EA',
+  dim: '#9A9AA6',
+  accent: '#8B5CF6',
+  success: '#34D399',
+  successSoft: '#10221C',
+  warning: '#FBBF24',
+  warningSoft: '#211C10',
+  info: '#38BDF8',
+  infoSoft: '#101D24',
+}
+
+const solid = (color) => [{ type: 'solid', color }]
+const stroke = (color) => ({ thickness: 1, fill: solid(color) })
+
+const text = (content, fontSize, color = colors.text, fontWeight = 400) => ({
+  type: 'text',
+  content,
+  fontFamily: 'Inter',
+  fontSize,
+  fontWeight,
+  fill: solid(color),
+})
+
+const stepCard = ({ marker, label, summary, color, background, border }) => ({
+  type: 'frame',
+  layout: 'horizontal',
+  alignItems: 'center',
+  width: 'fill_container',
+  height: 36,
+  gap: 10,
+  padding: [0, 12],
+  cornerRadius: 7,
+  fill: solid(background),
+  stroke: stroke(border),
+  children: [
+    text(marker, 15, color, 700),
+    text(label, 12, colors.text, 600),
+    text(summary, 12, colors.dim),
+    {
+      type: 'frame',
+      width: 'fill_container',
+      height: 1,
+    },
+    text('›', 16, colors.dim, 500),
+  ],
+})
+
+I(null, {
+  type: 'frame',
+  name: 'Chat — agent action step colors',
+  x: 0,
+  y: 0,
+  width: 980,
+  height: 660,
+  layout: 'vertical',
+  gap: 22,
+  padding: 32,
+  fill: solid(colors.canvas),
+  children: [
+    {
+      type: 'frame',
+      layout: 'vertical',
+      width: 'fill_container',
+      height: 'fit_content',
+      gap: 6,
+      children: [
+        text('Chat aktivite adımları — ajan aksiyon renkleri', 24, colors.text, 700),
+        text(
+          'Düşük yoğunluklu yüzey rengi ve ince kenarlık; etiketler erişilebilirlik için anlamı taşımaya devam eder.',
+          13,
+          colors.dim,
+        ),
+      ],
+    },
+    {
+      type: 'frame',
+      name: 'Assistant response',
+      layout: 'vertical',
+      width: 'fill_container',
+      height: 'fill_container',
+      gap: 14,
+      padding: 24,
+      cornerRadius: 14,
+      fill: solid(colors.surface),
+      stroke: stroke(colors.border),
+      children: [
+        {
+          type: 'frame',
+          layout: 'horizontal',
+          alignItems: 'center',
+          width: 'fill_container',
+          height: 'fit_content',
+          gap: 10,
+          children: [
+            {
+              type: 'ellipse',
+              width: 28,
+              height: 28,
+              fill: solid(colors.accent),
+            },
+            text('Developer', 13, colors.text, 700),
+            text('ajan iş akışı', 12, colors.dim),
+          ],
+        },
+        text('Ajan ekibini hazırlayıp görevi başlatıyorum.', 14, colors.text),
+        {
+          type: 'frame',
+          layout: 'vertical',
+          width: 'fill_container',
+          height: 'fit_content',
+          gap: 6,
+          children: [
+            stepCard({
+              marker: '+',
+              label: 'Ajan oluştur',
+              summary: 'Frontend Reviewer',
+              color: colors.success,
+              background: colors.successSoft,
+              border: '#246348',
+            }),
+            stepCard({
+              marker: '■',
+              label: 'Worker durdur',
+              summary: 'AGT-reviewer',
+              color: colors.warning,
+              background: colors.warningSoft,
+              border: '#66501A',
+            }),
+            stepCard({
+              marker: '↗',
+              label: 'Mesaj gönder',
+              summary: '@Frontend Reviewer · Sonuçları paylaş',
+              color: colors.info,
+              background: colors.infoSoft,
+              border: '#24566B',
+            }),
+            stepCard({
+              marker: '⌘',
+              label: 'Bash',
+              summary: 'npm test',
+              color: colors.dim,
+              background: colors.card,
+              border: colors.card,
+            }),
+          ],
+        },
+        {
+          type: 'frame',
+          layout: 'horizontal',
+          width: 'fill_container',
+          height: 'fit_content',
+          gap: 10,
+          padding: [12, 0, 0, 0],
+          children: [
+            text('YEŞİL', 10, colors.success, 700),
+            text('oluştur / başlat', 11, colors.dim),
+            text('AMBER', 10, colors.warning, 700),
+            text('durdur / kapat', 11, colors.dim),
+            text('MAVİ', 10, colors.info, 700),
+            text('mesaj / girdi gönder', 11, colors.dim),
+          ],
+        },
+      ],
+    },
+  ],
+})

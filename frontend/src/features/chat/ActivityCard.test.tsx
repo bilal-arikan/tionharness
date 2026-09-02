@@ -54,3 +54,50 @@ describe('ActivityCard collab metadata', () => {
     expect(container.textContent).not.toContain('TOP SECRET PROMPT')
   })
 })
+
+describe('ActivityCard agent action tones', () => {
+  const cases = [
+    ['create_agent', 'create'],
+    ['stop_worker', 'stop'],
+    ['send_message', 'message'],
+  ] as const
+
+  for (const [tool, tone] of cases) {
+    it(`marks ${tool} as ${tone}`, () => {
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      roots.push(root)
+      act(() => root.render(<ActivityCard step={{ kind: 'tool', tool }} />))
+
+      const card = container.firstElementChild
+      expect(card?.getAttribute('data-agent-action-tone')).toBe(tone)
+    })
+  }
+
+  it('uses the native collaboration operation when the tool name is generic', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    act(() =>
+      root.render(
+        <ActivityCard step={{ kind: 'tool', tool: 'collab_tool_call', operation: 'send_input' }} />,
+      ),
+    )
+
+    expect(container.firstElementChild?.getAttribute('data-agent-action-tone')).toBe('message')
+  })
+
+  it('keeps unrelated tools on the neutral card style', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    act(() => root.render(<ActivityCard step={{ kind: 'tool', tool: 'Bash' }} />))
+
+    const card = container.firstElementChild
+    expect(card?.hasAttribute('data-agent-action-tone')).toBe(false)
+    expect(card?.className).toContain('bg-[var(--color-bg)]')
+  })
+})
