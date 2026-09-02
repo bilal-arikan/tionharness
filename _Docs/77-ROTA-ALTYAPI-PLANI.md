@@ -421,6 +421,23 @@ oturumu `Origin{Kind: flow, RunID, NodeID}` alır (Kind'a dokunulmaz).
 
 **Boyut:** S-M. **Açar:** F1 flowrun düğümleri.
 
+**Gerçekleşen (2026-09-02, dal `rota/r8-flow-linkage`).** Sapmalar:
+
+- `SessionID` yaratmada ve koordinatör düğümü kökeni R1'de yapılmıştı; burada
+  `lastStatusFor` `Origin.RunID` → koşu durumu (`flowRunStatusByID` indeksi) +
+  eski oturumlar için akışın en yeni koşusuna düşüş.
+- `DELETE /api/flow-runs/{id}` **ağaç** siler (üye adı yeter), canlı üyede 409
+  (`db.ErrConflict`); adım sidecar'ları runtime'da (`Runtime.DeleteFlowRun`),
+  `ws:flow_run status=deleted` yayını.
+- Saklama uygulama ayarı olarak (`Settings.FlowRunRetention`, 0 = sınırsız,
+  0..1000 clamp), `Tunables.FlowRunRetention`, süpürücü aynı 10 dk kadansında.
+  Insight'ın oturum retention deseni gibi ayrı bir "run session" saklaması
+  **eklenmedi**; koşu transkript oturumlarına dokunulmuyor.
+- `run_flow` child run'ının `ParentNodeID`'si test edilmedi (araç çağrısı
+  üreten sahte sağlayıcı gerektiriyor); `runLineage` düğüm id'sini ctx'ten okuyor.
+- Testler: `db/store_flow_gc_test.go`, `agent/flow_gc_test.go`,
+  `api/executions_originrun_test.go`.
+
 ### R9 — View katmanı + Graph API
 
 **Ne.** `view.KindTrajectory`, `ProjectTrajectory` (tiny/card/full, `Elided`),

@@ -162,6 +162,7 @@ type Tunables struct {
 	agentMsgMaxBytes    int // 0 → DefaultAgentMessageMaxBytes (per-message body cap)
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
 	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
+	flowRunRetention    int // finished root runs kept per flow; 0 → unlimited
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
 	spawnTimeoutMin     int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
@@ -501,6 +502,24 @@ func (t *Tunables) SetSpawnLimits(maxConcurrent, queueMax, maxPerTurn int) {
 	t.spawnQueueMax = queueMax
 	t.spawnMaxPerTurn = maxPerTurn
 	t.mu.Unlock()
+}
+
+// SetFlowRunRetention sets how many finished ROOT runs to keep per flow; older
+// trees are pruned by the flow sweeper. <= 0 keeps everything (_Docs/77 R8).
+func (t *Tunables) SetFlowRunRetention(keep int) {
+	t.mu.Lock()
+	t.flowRunRetention = keep
+	t.mu.Unlock()
+}
+
+// FlowRunRetention returns the per-flow finished-run retention (0 = unlimited).
+func (t *Tunables) FlowRunRetention() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.flowRunRetention < 0 {
+		return 0
+	}
+	return t.flowRunRetention
 }
 
 // SetAgentMessageMaxBytes sets the per-message body cap for agent messaging.

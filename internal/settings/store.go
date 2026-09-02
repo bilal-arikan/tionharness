@@ -250,6 +250,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
 	applyInt(&next.SpawnTimeoutMin, p.SpawnTimeoutMin)
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
+	applyInt(&next.FlowRunRetention, p.FlowRunRetention)
 	applyInt(&next.ChatTurnTimeoutMin, p.ChatTurnTimeoutMin)
 	applyInt(&next.ChatTurnIdleTimeoutMin, p.ChatTurnIdleTimeoutMin)
 	applyInt(&next.CodexStdoutIdleSec, p.CodexStdoutIdleSec)
@@ -488,6 +489,13 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnIdleTimeoutMin < 1 {
 		v.SpawnIdleTimeoutMin = 1
+	}
+	// Flow run retention: 0 = unlimited; a hard ceiling keeps the sweeper cheap.
+	if v.FlowRunRetention < 0 {
+		v.FlowRunRetention = 0
+	}
+	if v.FlowRunRetention > 1000 {
+		v.FlowRunRetention = 1000
 	}
 	// Interactive chat timeouts use 0 as an explicit disabled value.
 	if v.ChatTurnTimeoutMin < 0 {

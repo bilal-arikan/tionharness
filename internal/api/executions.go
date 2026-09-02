@@ -70,6 +70,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 	// flow-kind session is actually in the feed — a workspace with no flows pays
 	// nothing.
 	var flowStatus map[string]string
+	var runStatus map[string]string
 	for _, sess := range sessions {
 		if sess.Kind != "flow" || (kindFilter != "" && kindFilter != "flow") {
 			continue
@@ -79,6 +80,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		flowStatus = newestFlowRunStatus(runs)
+		runStatus = flowRunStatusByID(runs)
 		break
 	}
 
@@ -97,7 +99,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			MessageCount:             sess.MessageCount,
 			Unread:                   sess.Unread,
 			Running:                  running[sess.ID],
-			LastStatus:               s.lastStatusFor(ctx, wsp, sess, flowStatus),
+			LastStatus:               s.lastStatusFor(ctx, wsp, sess, flowStatus, runStatus),
 			CoordinatorSessionID:     sess.CoordinatorSessionID,
 			RootCoordinatorSessionID: sess.RootCoordinator(),
 			CreatedAt:                sess.CreatedAt,
@@ -150,7 +152,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 // rather than a lookup because this is called once per session on a poll that
 // runs every few seconds: resolving the flow status per session meant a full
 // flowRuns scan plus a sort EACH TIME, i.e. O(sessions × flowRuns).
-func (s *Server) lastStatusFor(ctx context.Context, wsp *workspace.Workspace, sess db.Session, flowStatus map[string]string) string {
+func (s *Server) lastStatusFor(ctx context.Context, wsp *workspace.Workspace, sess db.Session, flowStatus, runStatus map[string]string) string {
 	if sess.SourceID == "" {
 		return ""
 	}
@@ -160,9 +162,27 @@ func (s *Server) lastStatusFor(ctx context.Context, wsp *workspace.Workspace, se
 			return t.LastRunStatus
 		}
 	case "flow":
+		// A flow session is ONE run's transcript: answer with that run's status
+		// (Origin.RunID, stamped at run creation since R1). Only a session that
+		// predates the link falls back to the flow's newest run — the old
+		// behaviour, which showed a newer run's chip on an older transcript.
+		if rid := sess.Lineage().RunID; rid != "" {
+			if st, ok := runStatus[rid]; ok {
+				return st
+			}
+		}
 		return flowStatus[sess.SourceID]
 	}
 	return ""
+}
+
+// flowRunStatusByID indexes runID → status in one pass.
+func flowRunStatusByID(runs []db.FlowRun) map[string]string {
+	out := make(map[string]string, len(runs))
+	for _, r := range runs {
+		out[r.ID] = r.Status
+	}
+	return out
 }
 
 // newestFlowRunStatus indexes flowID → the status of that flow's newest run, in

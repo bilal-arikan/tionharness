@@ -1,5 +1,31 @@
 # TionHarness — İlerleme Takibi
 
+## Flow koşusu silme, saklama ve oturum→koşu durumu — Rota altyapısı R8 (2026-09-02) ✅
+
+**Belirti.** Flow koşuları sonsuza kadar birikiyordu (silme ucu ve saklama yok);
+executions akışı bir flow oturumu için akışın **en yeni** koşusunun durumunu
+gösteriyordu, eski transkriptte yeni koşunun çipi çıkıyordu.
+
+**Ne.** `lastStatusFor` oturumun kendi koşusunu (`Origin.RunID`) okuyor, link
+öncesi oturumlar eski davranışa düşüyor. `DELETE /api/flow-runs/{id}` bitmiş
+koşuyu ağacıyla siler (canlı üyede 409), adım sidecar'larını kaldırır,
+`ws:flow_run deleted` yayar. `Settings.FlowRunRetention` (0 = sınırsız) akış
+başına en yeni N bitmiş kök ağacı tutar; süpürücü 10 dk'da bir budar. Frontend:
+ayar alanı, `api.deleteFlowRun`. Detay: `_Docs/15` son bölüm, `_Docs/77` R8.
+
+**Dosyalar.** `internal/db/store_flow_gc.go`, `store_flow_gc_test.go`,
+`store_flow_testhooks.go` (yeni); `internal/agent/flow_gc.go`, `flow_gc_test.go`
+(yeni), `flow.go`, `tunables.go`; `internal/api/flows.go`, `executions.go`,
+`executions_originrun_test.go` (yeni), `server.go`; `internal/settings/settings.go`,
+`store.go`; frontend `types/settings.ts`, `api/flows.ts`,
+`features/settings/AppToolsPanel.tsx`, `SettingsPanel.tsx`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` db/agent/api/settings/workspace ✅
+(yeni: `TestDeleteFlowRunTreeRefusesLiveMembers`,
+`TestPruneFlowRunsKeepsNewestTerminalRoots`,
+`TestDeleteFlowRunRemovesSidecarsAndAnnounces`, `TestLastStatusForUsesTheSessionsOwnRun`);
+`npx tsc --noEmit` ✅.
+
 ## Reçete frontmatter şeması ve sürümlü referans — Rota altyapısı R6 (2026-09-02) ✅
 
 **Belirti.** Koordinatör reçeteleri yalnız düzyazıydı; Rota'nın tohumlanacağı faz

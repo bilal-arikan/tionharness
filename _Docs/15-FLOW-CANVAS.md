@@ -831,3 +831,21 @@ reçetenin oturum açmadan reddi**).
 Not: reçete doğrulama mantığı `internal/api`'den leaf `internal/skills` paketine taşındı
 (`ResolveCoordinatorWorkflow`) — `internal/agent` `internal/api`'yi import edemez (döngü).
 `api.ResolveCoordinatorRecipe` artık ince bir alias.
+
+## Koşu silme, saklama ve oturum→koşu durumu (2026-09-02, `_Docs/77` R8)
+
+- **Oturumun kendi koşusu.** Executions akışındaki `lastStatusFor` bir flow
+  oturumu için artık akışın **en yeni** koşusunu değil, oturumun **kendi**
+  koşusunu (`Session.Origin.RunID`, R1'de koşu satırı oluşurken damgalanır)
+  gösterir; yalnız link öncesi oturumlar eski "en yeni koşu" davranışına düşer.
+  Eski bir koşu transkriptinde yeni koşunun çipinin görünmesi sorunu kapandı.
+- **`DELETE /api/flow-runs/{id}`.** Bitmiş bir koşuyu **ağacıyla** (subflow/spawn
+  torunları, state-delta günlükleri, düğüm adım sidecar'ları) siler; herhangi bir
+  üye `running`/`waiting` ise **409** (durdur ya da devam ettir, sonra sil).
+  Ağacın her üyesi için `ws:flow_run` olayı `status: deleted` ile yayınlanır.
+  Frontend: `api.deleteFlowRun(id)`; RunView'da düğme henüz yok.
+- **Saklama.** Ayarlar → "Akış koşusu saklama" (`flowRunRetention`, 0 = sınırsız,
+  varsayılan 0): akış başına en yeni N **bitmiş kök** koşu ağacı kalır, eskileri
+  bekleyen-akış süpürücüsünün 10 dakikalık döngüsünde (`sweepFlowRunRetention`)
+  silinir. Canlı ağaçlar sayılmaz ve silinmez. Kod: `db.DeleteFlowRunTree`,
+  `db.PruneFlowRuns` (`store_flow_gc.go`), `Runtime.DeleteFlowRun` (`flow_gc.go`).

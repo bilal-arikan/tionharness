@@ -222,6 +222,7 @@ export function SettingsPanel({
       spawnMaxPerTurn: draft.spawnMaxPerTurn,
       spawnTimeoutMin: draft.spawnTimeoutMin,
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
+      flowRunRetention: draft.flowRunRetention,
       chatTurnTimeoutMin: draft.chatTurnTimeoutMin,
       chatTurnIdleTimeoutMin: draft.chatTurnIdleTimeoutMin,
       codexStdoutIdleSec: draft.codexStdoutIdleSec,

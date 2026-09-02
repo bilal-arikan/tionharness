@@ -105,6 +105,9 @@ export const flowApi = {
       body: JSON.stringify({ name, graph }),
     }),
   deleteFlow: (id: string) => req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
+  // Removes a FINISHED run and its whole tree (409 while any member is live).
+  deleteFlowRun: (id: string) =>
+    req<{ deleted: string[] }>(`/api/flow-runs/${id}`, { method: 'DELETE' }),
   // Replace a flow's free-form tags (organizational).
   setFlowTags: (id: string, tags: string[]) =>
     req<{ id: string; tags: string[] }>(`/api/flows/${id}/tags`, {

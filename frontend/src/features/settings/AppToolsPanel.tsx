@@ -129,6 +129,14 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           onChange={(v) => set('spawnQueueMax', v)}
         />
         <NumberField
+          label="Akış koşusu saklama"
+          hint="Akış başına saklanacak bitmiş koşu ağacı sayısı; 0 = sınırsız. Eskiler 10 dakikada bir silinir (0–1000)."
+          min={0}
+          max={1000}
+          value={draft.flowRunRetention}
+          onChange={(v) => set('flowRunRetention', v)}
+        />
+        <NumberField
           label="Tur başına maks. spawn"
           hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64)."
           min={1}

@@ -341,6 +341,7 @@ type Settings struct {
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)
 	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`        // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
+	FlowRunRetention       int `json:"flowRunRetention"`       // finished flow run TREES kept per flow (0 = unlimited); older ones are pruned every 10 min (_Docs/77 R8)
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 3); reclaims a turn whose provider stream stalled
 	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
@@ -547,6 +548,7 @@ func Default() Settings {
 		SpawnMaxPerTurn:        4,
 		SpawnTimeoutMin:        0,
 		SpawnIdleTimeoutMin:    5,
+		FlowRunRetention:       0,
 		ChatTurnTimeoutMin:     0,
 		ChatTurnIdleTimeoutMin: 3,
 		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
@@ -694,6 +696,7 @@ type DTO struct {
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`
 	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`
+	FlowRunRetention       int `json:"flowRunRetention"`
 	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"`
 	CodexStdoutIdleSec     int `json:"codexStdoutIdleSec"`
@@ -816,6 +819,7 @@ func (s Settings) ToDTO() DTO {
 		SpawnMaxPerTurn:        s.SpawnMaxPerTurn,
 		SpawnTimeoutMin:        s.SpawnTimeoutMin,
 		SpawnIdleTimeoutMin:    s.SpawnIdleTimeoutMin,
+		FlowRunRetention:       s.FlowRunRetention,
 		ChatTurnTimeoutMin:     s.ChatTurnTimeoutMin,
 		ChatTurnIdleTimeoutMin: s.ChatTurnIdleTimeoutMin,
 		CodexStdoutIdleSec:     s.CodexStdoutIdleSec,
@@ -940,6 +944,7 @@ type Patch struct {
 	SpawnMaxPerTurn        *int `json:"spawnMaxPerTurn"`
 	SpawnTimeoutMin        *int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin    *int `json:"spawnIdleTimeoutMin"`
+	FlowRunRetention       *int `json:"flowRunRetention"`
 	ChatTurnTimeoutMin     *int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin *int `json:"chatTurnIdleTimeoutMin"`
 	CodexStdoutIdleSec     *int `json:"codexStdoutIdleSec"`

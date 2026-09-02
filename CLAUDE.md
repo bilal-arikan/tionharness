@@ -308,6 +308,8 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `store_task.go` | Kanban board görevleri (task kartları) ve board değişiklik olayları |
 | `store_flow.go` | Flows ve flow run'ları |
 | `store_runcount.go` | Running flow-run sayacının drift koruması (`ReconcileRunCounters`) |
+| `store_flow_gc.go` | Flow koşusu GC: `DeleteFlowRunTree` (ağaç, canlı üyede `ErrConflict`), `PruneFlowRuns` (akış başına en yeni N bitmiş kök) |
+| `store_flow_testhooks.go` | Yalnız test: `SetFlowRunCreatedAtForTest` (saklama sıralamasını deterministik yapar) |
 | `store_schedule.go` | Schedules (zamanlanmış çalıştırmalar) |
 | `store_hook.go` | Hook yapılandırmaları |
 | `store_mcp.go` | MCP sunucu yapılandırmaları |

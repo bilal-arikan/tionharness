@@ -124,6 +124,8 @@ export interface AppSettings {
   spawnMaxPerTurn: number
   spawnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   spawnIdleTimeoutMin: number
+  // Finished flow run trees kept per flow; 0 = unlimited (_Docs/77 R8).
+  flowRunRetention: number
   chatTurnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   chatTurnIdleTimeoutMin: number
   codexStdoutIdleSec: number

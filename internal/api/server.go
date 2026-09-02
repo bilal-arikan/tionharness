@@ -303,6 +303,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnQueueMax, cur.SpawnMaxPerTurn)
 	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
+	s.tun.SetFlowRunRetention(cur.FlowRunRetention)
 	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
 	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
@@ -728,6 +729,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+	// Remove a finished run tree (409 while live) — _Docs/77 R8.
+	mux.HandleFunc("DELETE /api/flow-runs/{id}", s.handleDeleteFlowRun)
 	mux.HandleFunc("GET /api/flow-runs/{id}/nodes/{nodeId}/steps", s.handleFlowRunNodeSteps)
 	// The whole tree a composed run belongs to (root + subflow/spawn descendants).
 	mux.HandleFunc("GET /api/flow-runs/{id}/tree", s.handleFlowRunTree)

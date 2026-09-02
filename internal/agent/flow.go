@@ -365,6 +365,8 @@ func (r *Runtime) StartWaitingFlowSweeper(ctx context.Context) {
 				ticks++
 				if ticks%runCounterCheckEvery == 0 {
 					r.checkRunCounterDrift()
+					// Same cadence (every 10 min): retention over finished run trees.
+					r.sweepFlowRunRetention(ctx)
 				}
 			}
 		}

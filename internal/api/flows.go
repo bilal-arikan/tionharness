@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -322,6 +323,26 @@ func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+// handleDeleteFlowRun removes a finished run and its whole tree (subflow/spawn
+// descendants, state deltas, per-node step sidecars). 404 for an unknown id,
+// 409 while any member of the tree is still running or waiting (_Docs/77 R8).
+func (s *Server) handleDeleteFlowRun(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	deleted, err := wsp.Runtime.DeleteFlowRun(r.Context(), r.PathValue("id"))
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		writeError(w, http.StatusNotFound, "flow run not found")
+		return
+	case errors.Is(err, db.ErrConflict):
+		writeError(w, http.StatusConflict, "flow run tree is still running or waiting; stop or resume it first")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
 
 // handleFlowRunTree returns every run in one composed flow's tree — the root run
