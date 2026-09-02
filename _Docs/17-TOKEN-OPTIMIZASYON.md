@@ -920,6 +920,32 @@ zaten reactive fold (`CompactInFlightMessages`) tarafından yakalanır. Testler:
 `internal/conversation/foldfailure_test.go`. Karşılaştırma ve gerekçe:
 `_Docs/analiz-hermes-baglam-yonetimi.md` §6, §11-Ö2.
 
+**Taşma kurtarmasında önce bedava geçiş: araç sonucu budaması (2026-09-02).**
+Tur ortasında pencere taştığında `compactAndRetry` artık doğrudan özetleyiciyi
+çağırmaz. Önce `PruneInFlightToolResults` (`internal/conversation/prune.go`)
+koşar: koruma kuyruğunun (`ReactiveKeepRecent`) dışındaki **4 KB'den büyük**
+`ToolResult.Content` gövdelerini tek satırlık bir işaretçiyle değiştirir. Model
+çağrısı yoktur — kazanç bedavadır. Budanmış geçmiş model penceresinin **%70**'i
+altına iniyorsa (`PruneSufficient`) tur doğrudan yeniden denenir ve özetleyici
+hiç çağrılmaz; pencere bilinmiyorsa budama yeterli sayılır. Yetmezse eski fold
+yolu aynen koşar.
+
+Değişmezler: yalnız `Content` değişir — `CallID`/`IsError` ve mesaj yapısı
+korunur, böylece `RepairSequence`'in `tool_use`↔`tool_result` eşleşmesi bozulmaz;
+`RawContent` taşıyan mesaj atlanır (o mesaj sağlayıcıya birebir echo edilir,
+`ToolResults`'ı tele çıkmaz); girdi dilimi mutasyona uğratılmaz; işaretçi kendi
+çıktısını tanır, ikinci geçiş no-op'tur. CLI-wrapper sağlayıcıda budama
+**atlanır** — taşan transkript CLI'ın kendi thread'idir, `req.Messages` yalnız
+delta'dır.
+
+`ls.compacted` bilerek işaretlenmez: fold'un tur başına tek atışlık bütçesi
+pahalı olan için ayrılmıştır, budama bedavadır. İkinci bir taşmada budanacak şey
+kalmadığı için akış doğrudan fold'a düşer. Görünürlük: `StepCompaction` kartı
+(`Trigger: "prune"`, `FoldedMsgs` 0, frontend etiketi "araç çıktısı budaması") +
+`debug.jsonl` olayı — budama yetersiz kalsa bile kart basılır. Testler:
+`internal/conversation/prune_test.go`, `internal/agent/recovery_prune_test.go`.
+Karşılaştırma: `_Docs/analiz-hermes-baglam-yonetimi.md` §5, §11-Ö1.
+
 **Çift faturalandırma yok:** `guardedComplete`'e gelen çağıranlar sağlayıcıya
 yalnız bu huniden erişir, hiçbiri `recordedComplete`/`recordedStream`'den
 geçmez. `guardedComplete` ayrıca `recordedComplete` ile aynı `Warn` logunu atar

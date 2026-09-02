@@ -532,10 +532,15 @@ func (t *toolLoopTurn) fail(reason string, err error) {
 	t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugError, AgentID: t.agent.ID, Detail: reason + ": " + err.Error(), Err: true})
 }
 
-// compactAndRetry folds the in-flight history once per turn and reports it as a
-// recovery + compaction step pair. ok=false means the fold did not happen and
-// the caller must fall through to its normal (terminal) handling.
+// compactAndRetry reduces the in-flight history and reports it as a recovery +
+// compaction step pair. It tries the free pass first — pruning old oversized
+// tool-result bodies — and only pays for a summarizer fold when that is not
+// enough. ok=false means neither happened and the caller must fall through to
+// its normal (terminal) handling.
 func (t *toolLoopTurn) compactAndRetry(reason contReason) bool {
+	if t.pruneAndRetry(reason) {
+		return true
+	}
 	cctx := conversation.WithCompactPrompt(t.ctx, t.r.CompactPromptTemplate())
 	folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, t.r.db, t.provider, t.agent, t.req.Messages, t.keepRecent)
 	if cerr != nil || !ok {

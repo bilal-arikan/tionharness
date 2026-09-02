@@ -288,6 +288,12 @@ const (
 	TriggerAuto     = "auto"     // routine budgeted fold in Prepare
 	TriggerManual   = "manual"   // explicit /compact (ForceCompact)
 	TriggerReactive = "reactive" // mid-turn overflow recovery (CompactInFlightMessages)
+	// TriggerPrune names a context reduction that is NOT a fold: the LLM-less
+	// phase-1 pass that drops old oversized tool-result bodies before the
+	// reactive fold is attempted (prune.go). It travels the same step/journal
+	// field as the fold triggers so one card renders every context reduction,
+	// but nothing is summarized and no message is folded (FoldedMsgs stays 0).
+	TriggerPrune = "prune"
 )
 
 // Compaction modes. They name WHO compacted: the built-in rolling-summary fold,

@@ -15,6 +15,7 @@ const TRIGGER_LABEL: Record<string, string> = {
   auto: 'bütçe eşiği',
   manual: 'manuel',
   reactive: 'taşma kurtarması',
+  prune: 'araç çıktısı budaması',
 }
 
 const SOURCE_LABEL: Record<string, string> = {

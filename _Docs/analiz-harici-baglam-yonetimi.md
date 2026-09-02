@@ -32,15 +32,17 @@ katmandır; her iki projede de üç katman var ama katmanların *rolleri* farkl�
 |---|--------|-------|----------|------------|
 | 1 | **Native (CLI sağlayıcı taraflı)** | `internal/conversation/nativecompact.go` (117 satır) | Aktif CLI sağlayıcısından kendi penceresini sıkıştırmasını ister (`WithNativeCompact` ctx callback'i); TionHarness transkripti dokunulmadan kalır | **kapalı** (`AutoCompactMode: "rolling"`) |
 | 2 | **Rolling fold** | `internal/conversation/manager.go` → `Manager.Prepare()` | Bütçe aşıldığında eski geçmişi `session.Summary` içine katlar, `SummaryMsgCount` filigranını ilerletir; **DB'ye kalıcı yazılır** | **açık** |
-| 3 | **Reactive fold** | `internal/conversation/reactive.go` → `CompactInFlightMessages()` | Tur ortasında pencere taşarsa uçuş hâlindeki mesaj dizisini katlar; DB'ye hiç dokunmaz | tur taşmasında otomatik |
+| 3 | **In-flight budama** | `internal/conversation/prune.go` → `PruneInFlightToolResults()` | Tur ortasında pencere taşarsa **önce** eski/büyük araç sonucu gövdelerini işaretçiye indirger; LLM çağrısı yok | tur taşmasında otomatik (2026-09-02) |
+| 4 | **Reactive fold** | `internal/conversation/reactive.go` → `CompactInFlightMessages()` | Budama yetmezse uçuş hâlindeki mesaj dizisini özete katlar; DB'ye hiç dokunmaz | budama yetersizse |
 
 **Yapısal eşleme:**
 
 ```
-hermes native_compaction   ↔  TionHarness AutoCompactNative
-hermes compress()          ↔  TionHarness Manager.Prepare() rolling fold
-hermes _micro_compact()    ↔  (karşılığı YOK)
-(karşılığı YOK)            ↔  TionHarness CompactInFlightMessages() reactive fold
+hermes native_compaction        ↔  TionHarness AutoCompactNative
+hermes compress()               ↔  TionHarness Manager.Prepare() rolling fold
+hermes _prune_old_tool_results  ↔  TionHarness PruneInFlightToolResults (tur içi)
+hermes _micro_compact()         ↔  (karşılığı YOK)
+(karşılığı YOK)                 ↔  TionHarness CompactInFlightMessages() reactive fold
 ```
 
 İki asimetri var: hermes'te turdan sonra çalışan artımlı bir emme katmanı,
@@ -215,13 +217,20 @@ kalır. Reactive fold ayrıca kesimi bir **assistant mesajında** yapar, böylec
 rol dönüşümü (user→assistant) korunur ve bir `tool_use` kendi `tool_result`'ından
 ayrılmaz.
 
-Araç çıktısı kontrolü **yazma anında**dır, geriye dönük değil:
-`MaxToolOutputKB = 100` (`internal/tools/registry.go`,
-`SetMaxToolOutputBytes`). Yani 100 KB'lık bir araç çıktısı transkripte girdikten
-sonra oturum boyunca o boyutta kalır; TionHarness onu asla özete indirgemez.
+Araç çıktısında iki ayrı kontrol vardır ve ikisi de fold'un dışındadır:
 
-**Bu en büyük somut boşluk.** harici ajanin Faz 1'i model çağrısı olmadan token
-kazandırır — TionHarness'te ücretsiz kazanç masada duruyor.
+1. **Yazma anında sınır** — `MaxToolOutputKB = 100`
+   (`internal/tools/registry.go`, `SetMaxToolOutputBytes`).
+2. **Turlar arasında tam düşürme** — araç sonuçları yalnız `db.Message.Steps`
+   içinde ekran için saklanır; `toProviderMessages` sağlayıcıya yalnız `Text`
+   gönderir. Bir sonraki tur araç çıktısını hiç görmez. Bu, hermes'in
+   budamasından daha agresiftir: hermes özet satırını korur, TionHarness gövdeyi
+   tamamen bırakır.
+
+Geriye kalan gerçek şişme **tur içidir**: bir araç döngüsünün `req.Messages`
+içinde biriken sonuçları. harici ajanin Faz-1 budaması buraya karşılık gelir ve
+2026-09-02'de oraya uygulanmıştır (§11-Ö1): `PruneInFlightToolResults`, reactive
+fold'dan önce çalışan LLM'siz geçiş.
 
 ---
 
@@ -400,18 +409,48 @@ CLI sağlayıcısına delege ediyor (`AutoCompactNative` = "sen hallet").
 
 Değer/maliyet sırasına göre:
 
-### Ö1 — Geriye dönük araç sonucu budaması (LLM'siz)
+### Ö1 — Geriye dönük araç sonucu budaması (LLM'siz) ✅ UYGULANDI (2026-09-02)
 
-the external agent Faz 1'in muadili. TionHarness bugün araç çıktısını yalnız yazma anında
-(`MaxToolOutputKB = 100`) sınırlıyor; transkripte giren çıktı oturum boyunca o
-boyutta kalıyor. `Prepare` kapısında, LLM çağrısından **önce**, koruma kuyruğunun
-dışındaki `db.Message` araç adımlarının `Output` alanını tek satırlık bir
-özete indirgemek:
+the external agent Faz 1'in muadili.
 
-- model çağrısı gerektirmez → maliyeti sıfır,
-- katlamayı geciktirir → daha az fold, daha az prompt-cache kırılması,
-- `EstimatePersistedSteps` zaten araç çıktısını ayrı ayrı sayıyor, yani ölçüm
-  altyapısı hazır.
+**Uygulama sırasında düzeltilen tespit.** Bu bölümün ilk hâli budamanın yeri
+olarak `Prepare` kapısını gösteriyor ve "transkripte giren araç çıktısı oturum
+boyunca o boyutta kalıyor" diyordu. Kod bunu doğrulamadı: `toProviderMessages`
+yalnız `db.Message.Text` gönderir (`manager.go:764`), `Steps` alanı yalnız ekran
+için saklanır. Yani TionHarness araç sonucunu **bir sonraki tura hiç taşımaz** —
+bu noktada hermes'ten zaten daha agresiftir. Şişme her zaman **tur içindedir**:
+uzun bir araç döngüsünün `t.req.Messages` içinde biriken sonuçları
+(`internal/agent/toolloop_phases.go`). Budama da oraya kondu.
+
+Uygulanan kapsam:
+
+- `conversation.PruneInFlightToolResults` (`internal/conversation/prune.go`):
+  koruma kuyruğunun (`ReactiveKeepRecent`) dışındaki, 4 KB'den büyük
+  `ToolResult.Content` gövdelerini tek satırlık bir işaretçiyle değiştirir
+  (`[tool result pruned … N lines dropped …]`). `CallID`/`IsError` ve mesaj
+  yapısı korunur → `RepairSequence`'in `tool_use`↔`tool_result` eşleşme
+  değişmezi bozulmaz. Girdi dilimi mutasyona uğratılmaz; işaretçi kendi çıktısını
+  tanır (idempotent).
+- `RawContent` taşıyan mesaj atlanır: o mesaj sağlayıcıya birebir echo edilir,
+  `ToolResults` tele hiç çıkmaz — budamak hayali bir kazanç raporlamak olurdu.
+- Devreye giriş noktası `compactAndRetry`'nin **önü**
+  (`internal/agent/toolloop_prune.go`): önce bedava budama, yetmezse LLM fold.
+  `PruneSufficient` kararı model penceresinin %70'ine göre verilir; pencere
+  bilinmiyorsa budama yeterli sayılır (fold bir sonraki taşmada hâlâ elde,
+  çünkü `ls.compacted` işaretlenmez).
+- CLI-wrapper sağlayıcıda budama **atlanır**: taşan transkript CLI'ın kendi
+  thread'idir, `req.Messages` yalnız delta'dır — bizim tarafı budamak pencereyi
+  küçültmez. Doğrudan fold'a gider (o da CLI oturumunu özetle yeniden başlatır).
+- Görünürlük: `StepCompaction` kartı (`Trigger: "prune"`, `FoldedMsgs` 0) +
+  `debug.jsonl` olayı. Budama yetersiz kalsa bile kart basılır — sessiz yeniden
+  yazma yasak.
+- Testler: `internal/conversation/prune_test.go` (8), agent döngüsünde
+  `internal/agent/recovery_prune_test.go` (2: budama tek başına yettiğinde
+  özetleyici hiç çağrılmıyor; budanacak şey yoksa eski fold yolu aynen koşuyor).
+
+**Kapsam dışı:** `EstimatePersistedSteps`'in ölçtüğü CLI persisted-thread yükü.
+Orası TionHarness'in yazamadığı bir transkript; küçültmesi ancak CLI'ın kendi
+native compact'iyle olur (§7).
 
 ### Ö2 — Fold başarısızlığında turu düşürmemek ✅ UYGULANDI (2026-09-02)
 
