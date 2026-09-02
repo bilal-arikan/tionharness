@@ -287,6 +287,7 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 			r.logger.Warn("stamp session origin run failed", "run", run.ID, "session", sid, "error", oerr)
 		}
 	}
+	r.emitFlowRunEvent(run)
 	r.logger.Info("flow run started", "flow", flowID, "run", run.ID, "parent", parentRunID)
 	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
 }
@@ -326,6 +327,7 @@ func (r *Runtime) spawnChildFlow(ctx context.Context, flowID, input string, auto
 	if err != nil {
 		return "", err
 	}
+	r.emitFlowRunEvent(run)
 	childCtx := context.WithValue(WithCallKind(ctx, KindFlow), subflowDepthKey{}, depth+1)
 	go r.driveFlow(context.WithoutCancel(childCtx), run, g, input, orchestration.NewState(g), autonomous, nil)
 	return run.ID, nil
@@ -423,6 +425,9 @@ func (r *Runtime) sweepWaitingFlowsAt(ctx context.Context, now int64) {
 			r.logger.Warn("fail timed-out await run", "run", run.ID, "error", err)
 			continue
 		}
+		if failed, gerr := r.db.GetFlowRun(ctx, run.ID); gerr == nil {
+			r.emitFlowRunEvent(failed)
+		}
 		r.logger.Info("await-input timed out", "run", run.ID, "flow", run.FlowID, "node", st.WaitingAt, "timeoutSec", node.TimeoutSec)
 	}
 }
@@ -465,6 +470,7 @@ func (r *Runtime) prepareResume(ctx context.Context, runID, input string) (db.Fl
 	if err != nil {
 		return db.FlowRun{}, orchestration.Graph{}, orchestration.State{}, err
 	}
+	r.emitFlowRunEvent(run) // waiting → running
 	flow, err := r.db.GetFlow(ctx, run.FlowID)
 	if err != nil {
 		// Flow deleted while waiting: fail the run cleanly.
@@ -578,6 +584,8 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 		} else {
 			run.Status = db.FlowWaiting
 			run.State = string(data)
+			run.UpdatedAt = time.Now().Unix()
+			r.emitFlowRunEvent(run)
 			r.logger.Info("flow run waiting for input", "flow", run.FlowID, "run", run.ID, "node", final.WaitingAt)
 			return run
 		}
@@ -600,6 +608,8 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	run.Status = status
 	run.Output = final.Last
 	run.Error = errText
+	run.UpdatedAt = time.Now().Unix()
+	r.emitFlowRunEvent(run)
 	r.logger.Info("flow run finished", "flow", run.FlowID, "run", run.ID, "status", status, "steps", final.Steps)
 	return run
 }

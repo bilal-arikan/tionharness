@@ -1043,3 +1043,51 @@ kuyruk sanıp replay ediyordu. Artık marshal hatasında `ClearInbox` çağrıl�
 `ClearInbox`/`WriteInbox` hataları da loglanır — eskiden `_ =` ile yutuluyordu.
 
 Testler: `internal/api/inbox_durability_test.go`.
+
+## Workspace olay akışı — `GET /api/workspace/stream` (2026-09-02, `_Docs/77` R3)
+
+Oturum hub'ının (seq + ring + epoch + `since` cursor'ı) **workspace kapsamlı
+ikizi**. Tek bir transkripte ait olmayan yapısal yaşam döngüsü olayları — oturum
+oluştu/durum değişti/silindi, flow koşusu başladı/bekliyor/bitti, schedule
+gelecekteki bir ateşleme için kuruldu, otomasyon ateşlendi, rota revizyonu — bu
+akışta sıralı ve replay'li olarak yayınlanır. Canlı workspace görünümü (Rota kök
+ekranı) resmi REST'ten yükler, sonra bu akıştan artımlı olarak günceller; kopuşta
+`since` ile boşluğu kapatır, epoch değişince `reset` alır.
+
+**Aynı hub, ayrılmış kapsam.** `sessionhub.Hub` içinde workspace akışı,
+`"\x00workspace"` rezerve kapsam id'siyle (hiçbir oturum id'si NUL içeremez)
+`PublishWorkspace`/`SubscribeWorkspace`/`ReplayWorkspace` üzerinden aynı ring/seq
+mekanizmasını kullanır. İki bilinçli fark: **taze abone hiçbir şey replay etmez**
+(her yayın anında commit edilir — "uçuştaki kuyruk" kavramı yok) ve ring oturum
+kapasitesinin **4 katıdır** (`workspaceRingFactor`), çünkü tek akış bütün
+oturumların yaşam döngüsünü çoğullar.
+
+**Kaynak → köprü.** Olaylar runtime'dan `internal/agent/wsevents.go` içindeki tek
+yayın noktasından, `events.WorkspaceStreamPrefix` (`ws:`) ön ekli türlerle ve
+`Event.Data` yapısal payload'ıyla process bus'ına düşer:
+
+| Tür | Kaynak | Payload |
+|-----|--------|---------|
+| `ws:session_lifecycle` | `db.SetSessionHook` → `Runtime.OnSessionChange` (create/state/runstate/origin/delete) | `SessionLifecyclePayload` — oturum, op, önceki/yeni durum, `origin`, kök oturum |
+| `ws:trajectory` | `db.SetTrajectoryHook` → `Runtime.OnTrajectoryChange` | `TrajectoryPayload` — indeks satırı (id, kök, revizyon, durum, düğüm sayısı) |
+| `ws:flow_run` | `RunFlow`/`spawnChildFlow` (running), `driveFlow` (waiting/success/failure), `prepareResume` (waiting→running), await sweeper (timeout) | `FlowRunPayload` |
+| `ws:schedule_armed` | `Scheduler.syncNextRunLocked` (cron) ve `armWakeLocked` (one-shot wake) | `ScheduleArmedPayload` — `fireAt` |
+| `ws:automation_fire` | `AutomationEngine.notifyFired` | `AutomationFirePayload` — `outcome: fired` (R5 `skipped` + sebep ekler) |
+| `ws:spawn`, `ws:report` | **R7'ye ayrılmış** (koordinasyon gözlemcisi) | — |
+
+`api.bridgeBusToHub` döngüsünün başında `ws:` türleri yakalanıp
+`bridgeWorkspaceEvent` ile hub'ın workspace kapsamına yazılır (hub kind = ön eksiz
+tür; payload `{target, data, level}`). `/api/events` bildirim akışı bu türleri
+**hiç görmez** (`sseEventName` atlar) — aksi halde her bilinmeyen tür toast
+olurdu. Workspace id'si olmayan bir olay tahminle bir workspace'e yazılmaz,
+düşürülüp loglanır.
+
+**Frontend.** `api/hubStream.ts` iki akışın ortak SSE döngüsüdür (cursor, epoch,
+boşluk tespiti, reset, backoff, sunucu saati); `sessionStream.ts` yalnız uç ve
+kind'leri adlandırır, `workspaceStream.ts` `subscribeWorkspaceStream` +
+payload tipleri (`SessionLifecycleData`, `FlowRunData`, `ScheduleArmedData`,
+`AutomationFireData`, `TrajectoryData`) ve `dataOf(ev, kind)` daraltıcısını verir.
+Henüz bir ekran abone değildir; Rota F0 bu akışı tüketen ilk ekran olacak.
+
+Testler: `internal/sessionhub/workspace_test.go`, `internal/events/workspace_stream_test.go`,
+`internal/api/workspace_stream_test.go`, `internal/agent/wsevents_test.go`.

@@ -193,6 +193,27 @@ düşürme, ring'in uçuştaki olayı asla evict etmemesi (mevcut test genişler
 
 **Boyut:** L. **Açar:** workspace canlı görünüm, çoklu pencere tutarlılığı.
 
+**Gerçekleşen (2026-09-02, dal `rota/r3-workspace-eventlog`).** Sapmalar:
+
+- `sessionhub` **genelleştirilmedi**, rezerve kapsam id'siyle (`"\x00workspace"`)
+  aynı ring/seq/epoch üzerinden `PublishWorkspace`/`SubscribeWorkspace`/
+  `ReplayWorkspace` eklendi; `Publish` gövdesi `publish(key, ev, ephemeral,
+  ringCap, autoCommit)` çekirdeğine çekildi. Workspace yayınları anında commit
+  (taze abone hiçbir şey replay etmez), ring 4×.
+- Runtime → API köprüsü yeni bir arayüz yerine **mevcut bus** üzerinden:
+  `events.Event.Data` alanı + `ws:` ön ekli türler (`events.TypeWS*`),
+  `Runtime.emitWorkspaceEvent` tek yayın noktası (`wsevents.go`); `api.bridgeBusToHub`
+  bunları workspace kapsamına köprüler, `/api/events` (`sseEventName`) atlar.
+- Uç: `GET /api/workspace/stream` (`workspace_stream.go`), oturum akışıyla aynı
+  hello/reset/hub sözleşmesi.
+- Kaynaklar: `db.SetSessionHook` + `SetTrajectoryHook` → `Runtime.OnSessionChange`/
+  `OnTrajectoryChange` (manager'da wire), flow koşusu (start/waiting/resume/finish/
+  timeout), schedule arm (cron + wake), otomasyon `fired`. `spawn`/`report` R7'ye
+  bırakıldı; `automation_fire skipped` R5'e.
+- Frontend: `api/hubStream.ts` ortak döngü (sessionStream refactor edildi, dış API
+  aynı), `api/workspaceStream.ts`. `refreshSignals` geçişi yapılmadı (yeni ekran
+  gelince). Detay: `58-QUEUE-SENKRON.md` son bölüm.
+
 ### R4 — Oturum sidecar soyutlaması + Rota deposu iskeleti
 
 **Neden.** Boşluk 4. `inbox_durability.go`'daki karantina deseni

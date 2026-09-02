@@ -73,7 +73,49 @@ const (
 	TypeFlowNode = "flow_node"
 	// TypeLog carries one captured log record for the live Logs tail (Event.Log).
 	TypeLog = "log"
+
+	// --- Workspace stream types (structured; never toasts; never on /api/events) ---
+	//
+	// Every type below carries WorkspaceStreamPrefix. The API layer does NOT put
+	// them on the fire-and-forget /api/events feed; it bridges them onto the
+	// ordered, replayable per-workspace hub stream (GET /api/workspace/stream) so a
+	// live workspace view can keep an incremental picture and gap-fill after a
+	// reconnect instead of re-fetching everything. Payload rides Event.Data.
+
+	// TypeWSSessionLifecycle: a session was created / changed state or run-state /
+	// gained its origin run id / was deleted (db.SetSessionHook).
+	TypeWSSessionLifecycle = WorkspaceStreamPrefix + "session_lifecycle"
+	// TypeWSTrajectory: a trajectory ("Rota") was created / updated / deleted.
+	TypeWSTrajectory = WorkspaceStreamPrefix + "trajectory"
+	// TypeWSFlowRun: a flow run started, suspended (waiting) or finished.
+	TypeWSFlowRun = WorkspaceStreamPrefix + "flow_run"
+	// TypeWSScheduleArmed: a schedule's next fire time (or a one-shot wake) was armed.
+	TypeWSScheduleArmed = WorkspaceStreamPrefix + "schedule_armed"
+	// TypeWSAutomationFire: an automation fired (or, later, was skipped with a reason).
+	TypeWSAutomationFire = WorkspaceStreamPrefix + "automation_fire"
+	// TypeWSSpawn / TypeWSReport: coordinator spawned a worker / a worker reported
+	// back. Reserved for the coordination observer (_Docs/77 R7).
+	TypeWSSpawn  = WorkspaceStreamPrefix + "spawn"
+	TypeWSReport = WorkspaceStreamPrefix + "report"
 )
+
+// WorkspaceStreamPrefix marks the event types that ride the per-workspace hub
+// stream instead of the global notification feed.
+const WorkspaceStreamPrefix = "ws:"
+
+// IsWorkspaceStream reports whether t is a workspace-stream type.
+func IsWorkspaceStream(t string) bool {
+	return len(t) > len(WorkspaceStreamPrefix) && t[:len(WorkspaceStreamPrefix)] == WorkspaceStreamPrefix
+}
+
+// WorkspaceStreamKind strips the prefix: the hub event kind the client sees
+// ("session_lifecycle", "flow_run", …). Returns t unchanged when it has no prefix.
+func WorkspaceStreamKind(t string) string {
+	if IsWorkspaceStream(t) {
+		return t[len(WorkspaceStreamPrefix):]
+	}
+	return t
+}
 
 // NotifyKinds is the set of backend-emitted event types that may surface as a
 // desktop toast. The frontend notification-type registry mirrors this list (adding

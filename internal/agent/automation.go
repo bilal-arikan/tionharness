@@ -266,6 +266,7 @@ func (e *AutomationEngine) notifyFired(ctx context.Context, a db.Automation, ses
 	if err := e.db.RecordAutomationFire(ctx, a.ID, sessionID, ""); err != nil {
 		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
 	}
+	e.rt.emitAutomationFire(a, "fired", "", sessionID, "")
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",

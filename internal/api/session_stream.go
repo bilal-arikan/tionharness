@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
@@ -227,6 +228,12 @@ func (s *Server) bridgeBusToHub() {
 	}
 	_, ch := s.bus.Subscribe()
 	for e := range ch {
+		// Workspace-stream events are not about one session's transcript: they go
+		// to the per-workspace ordered log (handleWorkspaceStream) and nowhere else.
+		if events.IsWorkspaceStream(e.Type) {
+			s.bridgeWorkspaceEvent(e)
+			continue
+		}
 		sid := e.Target["sessionId"]
 		if sid == "" {
 			continue

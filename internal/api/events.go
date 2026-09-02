@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/events"
 )
 
 // eventsPingInterval keeps the SSE connection (and any proxies) alive between
@@ -58,30 +60,43 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			b, _ := json.Marshal(e)
-			// Live turn-activity steps ride the same feed but under a distinct SSE
-			// event name so the frontend routes them to the transcript renderer
-			// instead of the notification/badge path (which reacts to `notify`).
-			name := "notify"
-			switch e.Type {
-			case "session_step":
-				name = "step"
-			case "flow_node":
-				// Per-node flow progress rides its own SSE event name so the
-				// frontend routes it to the run viewer, not the notify/badge path.
-				name = "flownode"
-			case "flow_node_step":
-				// One agent node's live tool/thinking step (mid-execution), so the
-				// run viewer's node inspector renders steps as they happen — the
-				// flow counterpart of "step" (session_step). Keyed by flowRunId+nodeId.
-				name = "flownodestep"
-			case "log":
-				// Captured log records ride their own SSE event name so the Logs
-				// screen tails live without polling (and the notify path ignores them).
-				name = "log"
+			name, skip := sseEventName(e.Type)
+			if skip {
+				continue
 			}
+			b, _ := json.Marshal(e)
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, b)
 			flusher.Flush()
 		}
 	}
+}
+
+// sseEventName maps a bus event type to the SSE event name the global feed
+// uses, or reports that the event must not ride this feed at all.
+//
+// Live turn-activity steps, per-node flow progress and log records ride the
+// same feed under distinct names so the frontend routes them to the transcript
+// renderer / run viewer / Logs tail instead of the notification/badge path
+// (which reacts to `notify`). Workspace-stream types (events.WorkspaceStreamPrefix)
+// are skipped: they are bridged onto the ordered per-workspace hub stream
+// instead (handleWorkspaceStream), and putting them here would have every
+// unknown type toast as a notification.
+func sseEventName(typ string) (name string, skip bool) {
+	if events.IsWorkspaceStream(typ) {
+		return "", true
+	}
+	switch typ {
+	case "session_step":
+		return "step", false
+	case "flow_node":
+		return "flownode", false
+	case "flow_node_step":
+		// One agent node's live tool/thinking step (mid-execution), so the run
+		// viewer's node inspector renders steps as they happen — the flow
+		// counterpart of "step" (session_step). Keyed by flowRunId+nodeId.
+		return "flownodestep", false
+	case "log":
+		return "log", false
+	}
+	return "notify", false
 }

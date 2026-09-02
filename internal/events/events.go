@@ -50,6 +50,14 @@ type Event struct {
 	// live over SSE instead of polling. Opaque JSON here (this package never
 	// imports logbuf). Empty for everything else.
 	Log json.RawMessage `json:"log,omitempty"`
+	// Data carries the structured payload of a WORKSPACE-STREAM event (a type
+	// with the WorkspaceStreamPrefix, see types.go): a session lifecycle change,
+	// a trajectory revision, a flow-run status, an armed schedule, an automation
+	// fire. Such events never reach the fire-and-forget /api/events feed; the API
+	// bridges them onto the ordered, replayable per-workspace hub stream
+	// (GET /api/workspace/stream, _Docs/77 R3). Opaque JSON here so this package
+	// keeps importing nothing. Empty for every other event.
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 // Bus fans out events to every live subscriber. Sends are non-blocking: a slow

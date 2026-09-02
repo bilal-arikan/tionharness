@@ -492,6 +492,12 @@ func (m *Manager) open(meta Meta) error {
 	// worker, or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
 	// Counter-triggered automations consume the same signal on a detached goroutine.
+	// Workspace event stream (_Docs/77 R3): session lifecycle and trajectory
+	// changes leave the store through these hooks (fired after the store's locks
+	// are released) and land on the bus as structured ws:* events, which the API
+	// bridges onto the ordered per-workspace stream.
+	database.SetSessionHook(rt.OnSessionChange)
+	database.SetTrajectoryHook(rt.OnTrajectoryChange)
 	if err := database.SetActivityHook(func(sig db.ActivitySignal) error {
 		if sig.EventID != "" {
 			accepted, err := database.AcceptActivitySignal(sig)

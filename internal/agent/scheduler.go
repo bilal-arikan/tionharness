@@ -127,6 +127,11 @@ func (s *Scheduler) syncNextRunLocked(ctx context.Context) {
 		entry := s.cron.Entry(entryID)
 		if entry.Valid() && !entry.Next.IsZero() {
 			_ = s.db.SetScheduleDelivery(ctx, id, "", "", entry.Next.Unix())
+			// The workspace stream's "future" edge: announce when this schedule is
+			// next expected to fire, so a live workspace view can plot it.
+			if sc, err := s.db.GetSchedule(ctx, id); err == nil {
+				s.rt.emitScheduleArmed(sc, entry.Next.Unix())
+			}
 		}
 	}
 }
@@ -212,6 +217,7 @@ func (s *Scheduler) armWakeLocked(sc db.Schedule) {
 	}
 	id := sc.ID
 	s.wakeTimers[id] = time.AfterFunc(delay, func() { s.fireWake(id) })
+	s.rt.emitScheduleArmed(sc, time.Now().Add(delay).Unix())
 }
 
 // fireWake runs a one-shot wake on its timer: it consumes the schedule row (a

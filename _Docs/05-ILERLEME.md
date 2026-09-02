@@ -1,5 +1,39 @@
 # TionHarness — İlerleme Takibi
 
+## Workspace olay akışı — Rota altyapısı R3 (2026-09-02) ✅
+
+**Belirti.** `/api/events` bus'ında sıra, cursor ve replay yok; kopuşta her panel
+"resync" ile yeniden çekiyor. Workspace canlı görünümü (Rota kök ekranı) 50
+şeritlik bir resmi her kopuşta sıfırdan yükleyemez; ayrıca oturum yaşam döngüsü,
+flow koşusu durumu, kurulu schedule'lar ve otomasyon ateşlemeleri yapısal payload
+ile hiçbir yerde yayınlanmıyordu.
+
+**Ne.** `sessionhub`'a rezerve kapsam id'li workspace akışı
+(`PublishWorkspace`/`SubscribeWorkspace`/`ReplayWorkspace`; taze abone replay
+etmez, ring 4×). `events.Event.Data` + `ws:` ön ekli türler
+(`session_lifecycle`, `trajectory`, `flow_run`, `schedule_armed`,
+`automation_fire`; `spawn`/`report` R7'ye ayrıldı). Runtime tek yayın noktası
+`internal/agent/wsevents.go`: `OnSessionChange`/`OnTrajectoryChange` store hook'ları
+(manager'da wire), flow koşusu start/waiting/resume/finish/timeout, schedule cron +
+wake arm, otomasyon `fired`. API: `bridgeBusToHub` `ws:` olaylarını workspace
+kapsamına köprüler, `/api/events` atlar (`sseEventName`); yeni uç
+`GET /api/workspace/stream` (hello/reset/hub, `since`/`epoch`). Frontend:
+`api/hubStream.ts` ortak SSE döngüsü (sessionStream dış API'si aynı),
+`api/workspaceStream.ts` + payload tipleri. Detay: `_Docs/58` son bölüm, `_Docs/77` R3.
+
+**Dosyalar.** `internal/sessionhub/workspace.go` (yeni), `hub.go`;
+`internal/events/events.go`, `types.go`; `internal/api/workspace_stream.go` (yeni),
+`events.go`, `session_stream.go`, `server.go`; `internal/agent/wsevents.go` (yeni),
+`flow.go`, `scheduler.go`, `automation.go`; `internal/workspace/manager.go`;
+`frontend/src/api/hubStream.ts` (yeni), `sessionStream.ts`, `workspaceStream.ts` (yeni).
+
+**Doğrulama.** `go build ./...` ✅; `go test` sessionhub/events/api/agent/workspace/db
+✅ (yeni: `TestWorkspacePublishAndReplay`, `TestWorkspaceRingIsLargerAndResetsWhenExceeded`,
+`TestWorkspaceSubscribeReceivesLive`, `TestWorkspaceStreamTypes`,
+`TestSSEEventNameSkipsWorkspaceStream`, `TestBridgeWorkspaceEvent`,
+`TestSessionHookEmitsLifecycleEvents`, `TestFlowRunEmitsStatusEvents`,
+`TestScheduleArmedEmitsFireAt`); `npx tsc --noEmit` ✅; vitest chat+api ✅.
+
 ## Ağ zoom ve kamera merkezi yeniden açılışta korunuyor (2026-09-02) ✅
 
 **Fix:** Workspace kapsamlı ağ snapshot'ı artık node konumları ve fizik durumuna ek

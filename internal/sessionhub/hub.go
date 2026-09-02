@@ -142,19 +142,30 @@ func (h *Hub) Publish(wsID, sessionID, kind string, payload json.RawMessage, eph
 		return 0
 	}
 	ev := Event{SessionID: sessionID, Kind: kind, Payload: payload, Time: time.Now().Unix()}
+	return h.publish(scopeKey(wsID, sessionID), ev, ephemeral, h.ringCap, false)
+}
+
+// publish is the scope-agnostic core behind Publish and PublishWorkspace. key is
+// the already-namespaced scope; ringCap bounds this scope's retained window;
+// autoCommit marks the appended event as committed at once (the workspace
+// stream has no turn boundary, so nothing is ever "in flight" there).
+func (h *Hub) publish(key string, ev Event, ephemeral bool, ringCap int, autoCommit bool) int64 {
 	h.mu.Lock()
-	st := h.stateLocked(scopeKey(wsID, sessionID))
+	st := h.stateLocked(key)
 	st.lastPublish = time.Now()
 	if !ephemeral {
 		st.seq++
 		ev.Seq = st.seq
 		st.ring = append(st.ring, ev)
-		if len(st.ring) > h.ringCap {
+		if autoCommit {
+			st.committed = st.seq
+		}
+		if len(st.ring) > ringCap {
 			// Trim the oldest to bound the window, but NEVER evict an uncommitted
 			// (in-flight) event — a fresh subscriber replays exactly those. So only
 			// committed events (seq <= committed) are dropped; a single turn emitting
 			// more than ringCap events keeps them all until it commits.
-			excess := len(st.ring) - h.ringCap
+			excess := len(st.ring) - ringCap
 			drop := 0
 			for drop < excess && st.ring[drop].Seq <= st.committed {
 				drop++

@@ -431,6 +431,10 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 	// Cross-workspace live-run flags (switcher pulse for non-active workspaces).
 	mux.HandleFunc("GET /api/workspaces/activity", s.handleWorkspacesActivity)
+	// Ordered, replayable per-workspace lifecycle stream (sessions, flow runs,
+	// schedules, automations, trajectories) — the workspace-level twin of
+	// /api/sessions/{id}/stream (_Docs/77 R3).
+	mux.HandleFunc("GET /api/workspace/stream", s.handleWorkspaceStream)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
 	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)
