@@ -46,6 +46,7 @@ import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
+import { countLiveDescendantWorkers } from './liveWorkerCounts'
 
 const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
@@ -198,23 +199,13 @@ export function SessionsSidebar({
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
 
-  // coordinatorSessionId → how many of its DIRECT workers have a live turn. A
-  // coordinator usually sits idle while its branch works, so without this the row
-  // looks finished while the tree is still busy. Counting direct children only
-  // keeps the number meaningful ("2 worker çalışıyor"); a deep branch still shows
-  // up because every mid-level node is itself a worker of the node above it.
-  const liveWorkerCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const s of sessions) {
-      const parent = s.coordinatorSessionId
-      if (!parent) continue
-      const live =
-        (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false)
-      if (!live) continue
-      counts.set(parent, (counts.get(parent) ?? 0) + 1)
-    }
-    return counts
-  }, [sessions, streamingSessionIds, runtimeById])
+  // coordinatorSessionId → how many workers anywhere below it have a live turn.
+  // The executions feed carries the complete workspace lineage, so a deep worker
+  // remains visible at the root even when worker rows are filtered or not paged in.
+  const liveWorkerCounts = useMemo(
+    () => countLiveDescendantWorkers(sessions, runtimeById, streamingSessionIds),
+    [sessions, streamingSessionIds, runtimeById],
+  )
 
   // chipShapeOf builds the one shape both the chip counters and the visible-list
   // filter classify a session with, so a chip's badge count can never disagree

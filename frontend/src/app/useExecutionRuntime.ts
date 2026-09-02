@@ -22,6 +22,8 @@ const POLL_MS = 20000
 export interface ExecutionRuntime {
   running: boolean
   lastStatus: string
+  coordinatorSessionId?: string
+  rootCoordinatorSessionId?: string
 }
 
 export interface ExecutionRuntimeState {
@@ -47,7 +49,12 @@ export function useExecutionRuntime(activeWorkspaceId: string | null): Execution
   const runtimeById = useMemo(() => {
     const m = new Map<string, ExecutionRuntime>()
     for (const e of executions) {
-      m.set(e.sessionId, { running: e.running, lastStatus: e.lastStatus ?? '' })
+      m.set(e.sessionId, {
+        running: e.running,
+        lastStatus: e.lastStatus ?? '',
+        coordinatorSessionId: e.coordinatorSessionId,
+        rootCoordinatorSessionId: e.rootCoordinatorSessionId,
+      })
     }
     return m
   }, [executions])

@@ -167,6 +167,8 @@ export interface Execution {
   unread: boolean
   running: boolean
   lastStatus?: string
+  coordinatorSessionId?: string
+  rootCoordinatorSessionId?: string
   createdAt: number
   updatedAt: number
 }
