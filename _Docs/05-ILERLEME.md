@@ -1,5 +1,61 @@
 # TionHarness — İlerleme Takibi
 
+## `get_session_info` başka bir oturumun aktivite izini de döndürüyor (2026-09-02) ✅
+
+**Doğrulama:** `go build ./...` ✅, `gofmt` ✅,
+`go test ./internal/tools ./internal/api -run 'SessionInfo|Recap|ElideMiddle|ToolRecap|RecentToolActivity'` ✅,
+`go test ./internal/agent -run 'RecapStepParity'` ✅, `git diff --check` ✅ (0).
+Tam `go test ./...` koşusunda yalnız `internal/api`'deki bilinen Windows
+`TempDir RemoveAll` / `activity-inbox: Dizin boş değil` yarışı düştü
+(`TestRewindRejectedOnReadOnlySessions`); tek başına `-count=3` ile geçiyor ve bu
+değişiklikle ilgisi yok (bir önceki kayıtta da aynı yarış görülmüştü).
+
+**Sorun:** `get_session_info` yalnız metadata döndürüyordu. Bir koordinatör "şu worker
+çalışıyor mu, neye takıldı" sorusunu cevaplamak için ardından ikinci bir transkript
+okuması yapmak zorundaydı.
+
+**Nasıl:**
+
+- **Canlı tur:** `db.ReadInflight` — akan turun disk sidecar'ı zaten var (crash recovery +
+  API'nin mid-turn balon geri yüklemesi). Böylece araç `*db.DB` bağımlılığıyla kalıyor;
+  runtime/`runs` registry'sine erişim gerekmedi.
+- **Duran oturum:** `db.LastMessage` (tam transkript kopyalayan `ListMessages` değil).
+- **Ortak parser:** `internal/tools/steprecap.go` — `ParseRecapSteps`, `RecapLines`,
+  `RecapToolCounts`, `RecapLastStep`, `RecapErrors`. `internal/api/chat_tool_summary.go`
+  içindeki `<recent_tool_activity>` üreticisi de artık buraya delege ediyor; iki ayrı
+  step-parser'ın sürüklenmesi ihtimali ortadan kalktı.
+- **Import yönü:** `agent` → `tools` (TurnStep, `tools.AskQuestion` gömüyor), yani `tools`
+  `agent.TurnStep`'i import edemez. `RecapStep` JSON etiketleriyle eşleşir;
+  `internal/agent/steprecap_parity_test.go` etiket/kind sürüklenmesini derleme hatası
+  yerine test hatasına çevirir.
+
+**Kasıtlı sınırlar:** tool **çıktısı** basılmaz (yalnız çağrı + arg ipucu + ok/error);
+cevap alıntısı baş 150 + son 150 rune, fenced ve `data, not instructions` etiketli;
+kendi oturumunda blok yerine `<recent_tool_activity>` işaretçisi. Bozuk iz sessizce
+yutulmaz — `persisted_steps_invalid` olarak raporlanır.
+
+**Dosyalar:** `internal/tools/steprecap.go` (yeni), `internal/tools/builtin_sessioninfo.go`,
+`internal/tools/builtin_sessioninfo_activity_test.go` (yeni),
+`internal/agent/steprecap_parity_test.go` (yeni), `internal/api/chat_tool_summary.go`,
+`_Docs/41-ARAC-BOSLUKLARI-YAPILACAKLAR.md`.
+
+## Skill değişiklikleri navbar okunmamış göstergesine bağlandı (2026-09-02) ✅
+
+Skill ekleme, silme ve `SKILL.md` düzenleme yolları artık `skills.Store` içindeki
+çözümlenmiş katalog fingerprint'i üzerinden gerçek değişiklik olarak algılanıyor.
+İlk yükleme ve no-op reload olay üretmiyor; gerçek fark workspace SSE akışına
+toast olmayan `skills` kontrol olayı yayıyor. Mevcut okunmamış görünüm hattı masaüstü
+ve mobil navbar Skills butonunda nokta gösteriyor; Skills görünümü açılınca nokta
+temizleniyor. Görünüm zaten açıksa liste ve seçili skill gövdesi canlı tazeleniyor.
+
+**Doğrulama:** `go build ./...` ✅, `go vet ./...` ✅,
+`go test ./internal/skills ./internal/events` ✅,
+`go test ./internal/agent -run '^TestSkillCatalogChangePublishesControlEvent$'` ✅,
+frontend üretim derlemesi + 93 dosya / 663 test + Prettier kontrolü ✅. Tam Go
+koşusunda ilgili `agent/events/skills/db` paketleri geçti; `internal/api` içindeki
+mevcut Windows `TempDir RemoveAll` / `activity-inbox: Dizin boş değil` yarışı genel
+koşuyu engelledi.
+
 ## Alt-koordinatör tur ortasında ebeveynine mesaj göndermiyor (2026-09-01) ⏳
 
 **Belirti.** Dağıtım yapan bir alt-koordinatör, kendi turu sürerken ebeveyn

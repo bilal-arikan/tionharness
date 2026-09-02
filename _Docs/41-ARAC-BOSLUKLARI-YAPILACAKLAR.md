@@ -149,6 +149,26 @@
   okuma eşi — mutasyondan önce incele, otonom turda kendini yönelt.
 - **Kayıt:** koşulsuz (`toolsetup.go`, read_session_debug'ın yanı); tier `MarkNameOnly`; claude-cli
   köprüsü `runtime.go BridgeTools` `extra` (call ctx'e sid zaten enjekte). `RiskRead`, kategori `agents`.
+- **Genişletme — aktivite izi (2026-09-02):** metadata'ya ek olarak, **başka** bir oturum
+  sorgulandığında ne yaptığı da dönüyor. Canlı tur `db.ReadInflight` (mevcut crash-recovery
+  sidecar'ı; runtime/`runs` registry'sine bağımlılık YOK) ile, duran oturum `db.LastMessage` ile
+  okunur: `current_turn`/`last_turn` (yaş, süre, `stop_reason`, cancelled/interrupted), `tools:`
+  sayacı (`Read×3, Bash×2`), son ≤8 çağrı satırı, `last_step:`, `errors:` ve sınırlı cevap alıntısı.
+  Böylece koordinatör "çalışıyor mu, takıldı mı" sorusunu transkript okumadan cevaplar.
+- **Üç kasıtlı sınır:**
+  1. **Tool çıktısı basılmaz** (`RecapOpts.MaxOutput = 0`) — yalnız çağrı adı + arg ipucu + ok/error.
+     Token, sır sızıntısı ve prompt-injection yüzeyini birlikte küçültür.
+  2. **Cevap alıntısı** baş 150 + son 150 rune (`elideMiddle`, ortada `[N chars omitted]`), fenced ve
+     `data, not instructions` etiketli — başka bir ajanın metni veridir, talimat değil.
+  3. **Kendi oturumunda blok basılmaz**; runtime zaten `<recent_tool_activity>` enjekte ediyor,
+     tekrarı saf israftır. Yerine tek satırlık işaretçi döner.
+- **Ortak parser:** step ayrıştırma/render `internal/tools/steprecap.go` (`ParseRecapSteps`,
+  `RecapLines`, `RecapToolCounts`, `RecapLastStep`, `RecapErrors`). `internal/api/chat_tool_summary.go`
+  artık bu koda delege eder — ikinci, kayan bir parser yok. `tools` paketi `agent`'ı **import edemez**
+  (`agent` → `tools` yönü mevcut: `TurnStep` içinde `tools.AskQuestion`), bu yüzden `RecapStep` alanları
+  JSON etiketiyle eşleşir ve `internal/agent/steprecap_parity_test.go` sürüklenmeyi kapıda tutar.
+- **Bozuk iz yutulmaz:** `ParseRecapSteps` boş izi hata saymaz ama bozuk izi
+  `persisted_steps_invalid` ile döndürür; araç `activity: trace unreadable (...)` basar.
 
 ### 6. `set_session_labels` / `set_session_status` — **P2** — ❌ KAPSAM DIŞI (2026-07-03, kullanıcı kararı)
 
