@@ -329,7 +329,9 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `store_model_resolution.go` | İstenen model id → sağlayıcının gerçekte servis ettiği model eşlemesi |
 | `filestore.go` | Varlıktan bağımsız generic CRUD/persist yapı taşları; `store_*.go` bunlara delege eder |
 | `board_columns.go` | Kanban kolon anahtarı doğrulama (`IsValidBoardKey`) ve yerleşik kolon sabitleri |
-| `automation_limits.go` | Otomasyon iterasyon limitleri (`MaxIterations`) ve doğrulaması |
+| `automation_limits.go` | Otomasyon iterasyon limitleri (`MaxIterations`) ve doğrulaması; `ValidateAutomationShape` tetik registry'sine delege eder |
+| `automation_trigger.go` | Tetik registry'si (`TriggerSpec{Kind, Validate, NoTarget}`, `RegisterTrigger`, `TriggerKinds`) — yeni tetik türü buraya kayıt olur, switch'e dal eklenmez |
+| `store_automation_fires.go` | Otomasyon ateşleme defteri `automation-fires/<id>.jsonl`: her deneme (`fired`/`skipped`+sebep/`failed`), 500 kayıt tavanı |
 | `artifact_content.go` | Metin türü artifact gövdelerinin JSON içinde değil `<workspace>/artifacts/` altında dosya olarak tutulması |
 | `artifact_migrate.go` | Sohbet eklerinin (attachment) artifact türüne göçü |
 | `inbox.go` | Oturum başına kuyruklanmış mesaj sidecar'ı (`inbox.json`), atomik yazım |

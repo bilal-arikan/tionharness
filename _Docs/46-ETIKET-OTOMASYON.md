@@ -675,3 +675,23 @@ gate + hatalı input'ta kırmızı kenarlık.
   unit testlerle ayrıldı).
 - Opsiyonel: `tionharness-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
   flow/schedule etiketlerini de tetikleyiciye açma (şimdilik yalnız session).
+
+## Tetik registry'si, ateşleme defteri ve arşiv (2026-09-02, `_Docs/77` R5)
+
+- **Tetik registry'si.** Tetik türleri artık `db.TriggerSpec` ile kayıt olur
+  (`internal/db/automation_trigger.go`): tür-özel doğrulama (`Validate`) ve
+  "hedef/prompt gerektirmez" bayrağı (`NoTarget`, pano `archive`/`move`).
+  `ValidateAutomationShape` ve API'nin `triggerKind` listesi registry'den okur;
+  yeni bir tür (Rota'nın `phase`/`trajectory_end` tetikleri) `RegisterTrigger` +
+  motorda bir `On*` giriş noktasıyla gelir, switch'e dal eklenmez.
+- **Ateşleme defteri.** `automation-fires/<id>.jsonl` her denemeyi tutar:
+  `fired` (üretilen oturum), `skipped` (sebep: `archived`, `expired`, `cooldown`,
+  `max_iterations`, `absolute_backstop`…), `failed` (hata). 600'ü aşınca en yeni
+  500 kalır; kural silinince defter silinir. `GET /api/automations/{id}/fires`.
+  Aynı anda `ws:automation_fire` olayı workspace akışına düşer, böylece canlı
+  görünüm "neden ateşlenmedi"yi anında gösterebilir.
+- **Arşiv.** `Automation.Archived` (Schedule ve Hook'ta da): silmeden gizler ve
+  ateşlenmeyi durdurur, `Enabled`'a dokunmaz, geri alınabilir — küratörün yıkıcı
+  eylem tavanı. `POST /api/automations/{id}/archive {archived}`; varsayılan
+  listeler arşivliyi gizler, `?archived=true` yalnız arşivlileri döner. Motor ve
+  `ListEnabledAutomations` arşivliyi hiç görmez. Otomasyon kartında "Arşivle".

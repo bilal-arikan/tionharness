@@ -8,6 +8,7 @@ import type {
   ScheduleSessionMode,
   BoardState,
   Automation,
+  AutomationFireRecord,
   BoardAction,
 } from '@/types'
 import { req } from './client'
@@ -83,6 +84,11 @@ export const taskApi = {
     req<{ id: string; enabled: boolean }>(`/api/schedules/${id}/toggle`, {
       method: 'POST',
       body: JSON.stringify({ enabled }),
+    }),
+  archiveSchedule: (id: string, archived: boolean) =>
+    req<{ id: string; archived: boolean }>(`/api/schedules/${id}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived }),
     }),
   // Fire a schedule immediately ("Run" button), regardless of enabled state.
   runSchedule: (id: string) => req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
@@ -174,6 +180,17 @@ export const taskApi = {
     req<{ id: string; action: string }>(`/api/automations/${id}/reset`, { method: 'POST' }),
   deleteAutomation: (id: string) =>
     req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
+  // Archive (hide + stop, restorable) — the curator-safe alternative to delete.
+  archiveAutomation: (id: string, archived: boolean) =>
+    req<{ id: string; archived: boolean }>(`/api/automations/${id}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived }),
+    }),
+  // Archived rules only (the default list hides them).
+  listArchivedAutomations: () => req<Automation[]>('/api/automations?archived=true'),
+  // The rule's fire ledger, newest first: fired / skipped (with reason) / failed.
+  listAutomationFires: (id: string, limit = 100) =>
+    req<AutomationFireRecord[]>(`/api/automations/${id}/fires?limit=${limit}`),
   // Suggests a name without writing it (see generateScheduleTitle).
   generateAutomationTitle: (id: string) =>
     req<{ title: string }>(`/api/automations/${id}/generate-title`, { method: 'POST' }),

@@ -632,6 +632,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
+	mux.HandleFunc("POST /api/schedules/{id}/archive", s.handleArchiveSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/run", s.handleRunSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}/tags", s.handleSetScheduleTags)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
@@ -643,6 +644,9 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/automations/{id}", s.handleUpdateAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/toggle", s.handleToggleAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/reset", s.handleResetAutomation)
+	// Archive (curator-safe hide) + the per-rule fire ledger (_Docs/77 R5).
+	mux.HandleFunc("POST /api/automations/{id}/archive", s.handleArchiveAutomation)
+	mux.HandleFunc("GET /api/automations/{id}/fires", s.handleAutomationFires)
 	mux.HandleFunc("DELETE /api/automations/{id}", s.handleDeleteAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/generate-title", s.handleGenerateAutomationTitle)
 }
@@ -705,6 +709,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)
 	mux.HandleFunc("PUT /api/hooks/{id}", s.handleUpdateHook)
 	mux.HandleFunc("POST /api/hooks/{id}/toggle", s.handleToggleHook)
+	mux.HandleFunc("POST /api/hooks/{id}/archive", s.handleArchiveHook)
 	mux.HandleFunc("DELETE /api/hooks/{id}", s.handleDeleteHook)
 }
 

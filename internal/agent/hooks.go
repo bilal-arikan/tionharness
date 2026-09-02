@@ -146,6 +146,7 @@ func (r *Runtime) runPreToolHooks(ctx context.Context, sessionID string, call pr
 		}
 		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
+		_ = r.db.RecordHookFire(ctx, h.ID) // usage telemetry (_Docs/77 R5)
 		if derr != nil {
 			// FAIL-OPEN, LOUDLY: a broken hook must not disable the tool it matches.
 			// The error rides the debug journal with its message (not just an ":error"
@@ -204,6 +205,7 @@ func (r *Runtime) runPostToolHooks(ctx context.Context, sessionID string, call p
 		}
 		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
+		_ = r.db.RecordHookFire(ctx, h.ID) // usage telemetry (_Docs/77 R5)
 		if derr != nil {
 			r.logger.Warn("post hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
 			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
@@ -297,6 +299,7 @@ func (r *Runtime) RunLifecycleHooks(ctx context.Context, sessionID, event string
 		}
 		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
+		_ = r.db.RecordHookFire(ctx, h.ID) // usage telemetry (_Docs/77 R5)
 		if derr != nil {
 			r.logger.Warn("lifecycle hook failed (fail-open)", "hook", h.ID, "event", event, "error", derr)
 			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: "error", Err: true})

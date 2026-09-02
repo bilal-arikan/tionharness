@@ -49,15 +49,27 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	triggerKind := q.Get("triggerKind")
-	switch triggerKind {
-	case "", "tag", "board", "token", "counter":
-	default:
-		writeError(w, http.StatusBadRequest, "triggerKind must be one of tag, board, token, counter")
+	if !db.ValidTriggerKind(triggerKind) {
+		writeError(w, http.StatusBadRequest, "triggerKind must be one of "+strings.Join(db.TriggerKinds(), ", "))
+		return
+	}
+	// Archived rules are hidden unless asked for (archived=true lists ONLY them,
+	// archived=false only live ones, absent = live ones) — _Docs/77 R5.
+	archived, hasArchived, err := boolQuery(q, "archived")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	target := q.Get("targetAgentId")
 	matches := make([]db.Automation, 0, len(autos))
 	for _, a := range autos {
+		if hasArchived {
+			if a.Archived != *archived {
+				continue
+			}
+		} else if a.Archived {
+			continue
+		}
 		if hasEnabled && a.Enabled != *enabled {
 			continue
 		}

@@ -24,6 +24,11 @@ export interface Hook {
   command: string
   timeoutSec: number
   enabled: boolean
+  // Archived: hidden from the default list and never run, restorable.
+  archived?: boolean
+  // Usage telemetry: how many times the command ran and when it last did.
+  fireCount?: number
+  lastFiredAt?: number
   createdBy?: string
   createdAt: number
 }

@@ -21,8 +21,14 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 	// A wake whose delivery was already attempted (lastDeliveryStatus set) is kept:
 	// a successful one deletes itself, so what remains is a spent row that failed
 	// or expired — the user must be able to see and delete it.
+	// Archived schedules are hidden unless asked for (?archived=true lists ONLY
+	// them) — _Docs/77 R5.
+	showArchived := r.URL.Query().Get("archived") == "true"
 	schedules := make([]db.Schedule, 0, len(all))
 	for _, sc := range all {
+		if sc.Archived != showArchived {
+			continue
+		}
 		if sc.OneShot && sc.LastDeliveryStatus == "" {
 			continue
 		}

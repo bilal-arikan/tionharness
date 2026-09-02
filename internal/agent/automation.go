@@ -266,7 +266,13 @@ func (e *AutomationEngine) notifyFired(ctx context.Context, a db.Automation, ses
 	if err := e.db.RecordAutomationFire(ctx, a.ID, sessionID, ""); err != nil {
 		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
 	}
-	e.rt.emitAutomationFire(a, "fired", "", sessionID, "")
+	if err := e.db.AppendAutomationFire(ctx, a.ID, db.AutomationFireRecord{
+		Outcome: db.AutomationFireFired, TriggerKind: automationTriggerKind(a),
+		SessionID: sessionID, Iteration: a.IterationCount + 1,
+	}); err != nil {
+		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
+	}
+	e.rt.emitAutomationFire(a, db.AutomationFireFired, "", sessionID, "")
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",
@@ -465,6 +471,36 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 // is logged so a stalled loop is explainable in the Logs view. Shared by both the
 // tag (fire) and board (fireBoard) paths.
 func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool {
+	reason := e.guardReason(ctx, a)
+	if reason == "" {
+		return true
+	}
+	e.recordSkip(ctx, a, reason)
+	return false
+}
+
+// recordSkip writes a guard skip to the rule's fire ledger and announces it on
+// the workspace stream, so "why did this rule not fire" is answerable later
+// (_Docs/77 R5). Best-effort: ledger failures are logged, never fatal.
+func (e *AutomationEngine) recordSkip(ctx context.Context, a db.Automation, reason string) {
+	if err := e.db.AppendAutomationFire(ctx, a.ID, db.AutomationFireRecord{
+		Outcome: db.AutomationFireSkipped, Reason: reason,
+		TriggerKind: automationTriggerKind(a), Iteration: a.IterationCount,
+	}); err != nil {
+		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
+	}
+	e.rt.emitAutomationFire(a, db.AutomationFireSkipped, reason, "", "")
+}
+
+// guardReason evaluates the guard chain and returns the skip reason ("" =
+// guards pass). Side effects (auto-disable, notifications) stay here because
+// they are part of the guard's meaning, not of the ledger.
+func (e *AutomationEngine) guardReason(ctx context.Context, a db.Automation) string {
+	// Archived: hidden and inert until restored. Listed rules never reach here
+	// (ListEnabledAutomations excludes them); a rule loaded by id might.
+	if a.Archived {
+		return db.AutomationSkipArchived
+	}
 	// Expiry: past its optional end date → auto-disable and stop.
 	if a.ExpiresAt > 0 && time.Now().Unix() >= a.ExpiresAt {
 		e.logger.Info("automation: past end date; auto-disabling",
@@ -472,14 +508,14 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 		if err := e.db.SetAutomationEnabled(ctx, a.ID, false); err != nil {
 			e.logger.Warn("automation: expiry auto-disable failed", "automation", a.ID, "error", err)
 		}
-		return false
+		return db.AutomationSkipExpired
 	}
 	// Cooldown: skip if the previous fire was too recent.
 	if a.CooldownSec > 0 && a.LastFiredAt > 0 {
 		if elapsed := time.Now().Unix() - a.LastFiredAt; elapsed < int64(a.CooldownSec) {
 			e.logger.Info("automation: cooldown, skipping",
 				"automation", a.ID, "trigger", automationTrigger(a), "elapsed", elapsed, "cooldown", a.CooldownSec)
-			return false
+			return db.AutomationSkipCooldown
 		}
 	}
 	// Absolute backstop for automations stored with MaxIterations <= 0, the old
@@ -509,7 +545,7 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 				"düzenleyip 1–" + strconv.Itoa(db.MaxIterationsHardCap) + " arası bir üst sınır verin.",
 			Target: map[string]string{"view": "schedules"},
 		})
-		return false
+		return db.AutomationSkipBackstop
 	}
 	// Iteration cap: disable and stop once the budget is spent (0 = unlimited,
 	// bounded by the backstop above).
@@ -526,9 +562,9 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 			Body:   "Maksimum iterasyon (" + strconv.Itoa(a.MaxIterations) + ") aşıldı; otomasyon devre dışı bırakıldı.",
 			Target: map[string]string{"view": "schedules"},
 		})
-		return false
+		return db.AutomationSkipMaxIterations
 	}
-	return true
+	return ""
 }
 
 // fire evaluates one matching tag automation's guardrails and, if they pass,
@@ -601,6 +637,13 @@ func (e *AutomationEngine) recordFailure(ctx context.Context, a db.Automation, m
 	if err := e.db.RecordAutomationFire(ctx, a.ID, "", msg); err != nil {
 		e.logger.Warn("automation: record failure failed", "automation", a.ID, "error", err)
 	}
+	if err := e.db.AppendAutomationFire(ctx, a.ID, db.AutomationFireRecord{
+		Outcome: db.AutomationFireFailed, TriggerKind: automationTriggerKind(a),
+		Error: msg, Iteration: a.IterationCount + 1,
+	}); err != nil {
+		e.logger.Warn("automation: ledger append failed", "automation", a.ID, "error", err)
+	}
+	e.rt.emitAutomationFire(a, db.AutomationFireFailed, msg, "", "")
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "error",

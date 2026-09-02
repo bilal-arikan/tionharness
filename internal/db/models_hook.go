@@ -57,6 +57,14 @@ type Hook struct {
 	Command    string `json:"command"` // shell command for type=command
 	TimeoutSec int    `json:"timeoutSec"`
 	Enabled    bool   `json:"enabled"`
-	CreatedBy  string `json:"createdBy,omitempty"`
-	CreatedAt  int64  `json:"createdAt"`
+	// Archived hides the hook from the default list and keeps it from running,
+	// without deleting it (curator archive-only rule, _Docs/77 R5).
+	Archived bool `json:"archived,omitempty"`
+	// FireCount / LastFiredAt are usage telemetry: how many times the hook's
+	// command actually ran and when it last did. A hook that never fires is a
+	// curator candidate; before this there was no way to tell.
+	FireCount   int    `json:"fireCount,omitempty"`
+	LastFiredAt int64  `json:"lastFiredAt,omitempty"`
+	CreatedBy   string `json:"createdBy,omitempty"`
+	CreatedAt   int64  `json:"createdAt"`
 }

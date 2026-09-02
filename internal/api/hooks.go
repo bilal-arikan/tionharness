@@ -7,12 +7,17 @@ import (
 )
 
 func (s *Server) handleListHooks(w http.ResponseWriter, r *http.Request) {
-	hooks, err := ws(r).DB.ListHooks(r.Context())
+	all, err := ws(r).DB.ListHooks(r.Context())
 	if writeDBError(w, err, "") {
 		return
 	}
-	if hooks == nil {
-		hooks = []db.Hook{}
+	// Archived hooks are hidden unless asked for (?archived=true lists ONLY them).
+	showArchived := r.URL.Query().Get("archived") == "true"
+	hooks := make([]db.Hook, 0, len(all))
+	for _, h := range all {
+		if h.Archived == showArchived {
+			hooks = append(hooks, h)
+		}
 	}
 	writeJSON(w, http.StatusOK, hooks)
 }

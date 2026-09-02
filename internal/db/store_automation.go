@@ -54,11 +54,30 @@ func (d *DB) ListAutomations(ctx context.Context) ([]Automation, error) {
 	return dbList(d, d.automations, func(a, b Automation) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
-// ListEnabledAutomations returns only enabled automations (for the event engine).
+// ListEnabledAutomations returns only enabled, non-archived automations (for
+// the event engine).
 func (d *DB) ListEnabledAutomations(ctx context.Context) ([]Automation, error) {
 	return dbFilter(d, d.automations,
-		func(a Automation) bool { return a.Enabled },
+		func(a Automation) bool { return a.Enabled && !a.Archived },
 		func(a, b Automation) bool { return a.CreatedAt > b.CreatedAt }), nil
+}
+
+// SetAutomationArchived archives or restores an automation. Archiving leaves
+// Enabled untouched so a restore brings the rule back exactly as it was; the
+// engine's guard chain and ListEnabledAutomations both exclude archived rows.
+func (d *DB) SetAutomationArchived(ctx context.Context, id string, archived bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.automations[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if a.Archived == archived {
+		return nil
+	}
+	a.Archived = archived
+	a.UpdatedAt = now()
+	return d.persistAutomationLocked(a)
 }
 
 // UpdateAutomation replaces the mutable configuration of an automation. Enabled
@@ -148,6 +167,10 @@ func (d *DB) RecordAutomationFire(ctx context.Context, id, spawnedSessionID, fir
 // DeleteAutomation removes an automation.
 func (d *DB) DeleteAutomation(ctx context.Context, id string) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	return dbDeleteLocked(d, d.automations, dirAutomations, id)
+	err := dbDeleteLocked(d, d.automations, dirAutomations, id)
+	d.mu.Unlock()
+	if err == nil {
+		_ = d.ClearAutomationFires(id)
+	}
+	return err
 }

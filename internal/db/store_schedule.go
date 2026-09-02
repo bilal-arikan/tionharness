@@ -37,8 +37,26 @@ func (d *DB) ListSchedules(ctx context.Context) ([]Schedule, error) {
 // newest first.
 func (d *DB) ListEnabledSchedules(ctx context.Context) ([]Schedule, error) {
 	return dbFilter(d, d.schedules,
-		func(sc Schedule) bool { return sc.Enabled },
+		func(sc Schedule) bool { return sc.Enabled && !sc.Archived },
 		func(a, b Schedule) bool { return a.CreatedAt > b.CreatedAt }), nil
+}
+
+// SetScheduleArchived archives or restores a schedule. An archived schedule
+// leaves the cron table on the next reload and is hidden from the default list;
+// Enabled is untouched so a restore re-arms it as it was.
+func (d *DB) SetScheduleArchived(ctx context.Context, id string, archived bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	sc, ok := d.schedules[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if sc.Archived == archived {
+		return nil
+	}
+	sc.Archived = archived
+	sc.UpdatedAt = now()
+	return d.persistScheduleLocked(sc)
 }
 
 // UpdateSchedule edits the mutable fields of a schedule (agent/cron/task/prompt).

@@ -202,6 +202,9 @@ type Schedule struct {
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`
 	LastDeliveryError  string `json:"lastDeliveryError"`
 	Enabled            bool   `json:"enabled"`
+	// Archived hides the schedule from the default list and keeps it out of the
+	// cron table without deleting it (curator archive-only rule, _Docs/77 R5).
+	Archived bool `json:"archived,omitempty"`
 	// Tags are free-form labels on the schedule, editable by both the user (UI) and
 	// agents (set_schedule_tags). Organizational only (they do not drive
 	// automations — only session tags do).

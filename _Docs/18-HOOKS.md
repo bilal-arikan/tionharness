@@ -281,3 +281,12 @@ doğrulandı. Motor birim testleri (block/modify/allow/matcher) geçti.
 **Kalan (ops.):** gerçek sağlayıcılı uçtan uca tur (bir araç çağrısını native
 döngüde gerçekten engelleyen/dönüştüren canlı test); claude-cli için
 `settings.json` hook üretimi (parite genişlemesi).
+
+## Kullanım telemetrisi ve arşiv (2026-09-02, `_Docs/77` R5)
+
+`Hook.FireCount` / `LastFiredAt` her komut koşusunda güncellenir (TionHarness'in
+kendi koşturduğu hook'lar; claude-cli'ın kendi tarafında koşturdukları sayılmaz).
+Hiç ateşlenmemiş bir hook böylece küratör adayı olarak görünür. `Hook.Archived`
+hook'u silmeden devre dışı bırakır ve varsayılan listeden gizler
+(`POST /api/hooks/{id}/archive`, `GET /api/hooks?archived=true`);
+`ListEnabledHooksByEvent` arşivliyi hiç döndürmez.

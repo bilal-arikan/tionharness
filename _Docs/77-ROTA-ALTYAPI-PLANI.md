@@ -315,6 +315,30 @@ atlama nedeni için; arşivli kural ateşlenmez; şekil doğrulaması registry �
 
 **Boyut:** M. **Açar:** F2, F3 küratör.
 
+**Gerçekleşen (2026-09-02, dal `rota/r5-automation-core`).** Sapmalar:
+
+- Tetik registry'si **yalnız doğrulama** tarafını kapsıyor: `db.TriggerSpec{Kind, Label,
+  Validate, NoTarget}` + `RegisterTrigger`/`TriggerKinds`/`ValidTriggerKind`
+  (`automation_trigger.go`); `ValidateAutomationShape` switch yerine registry'ye
+  delege ediyor, API'deki sabit `triggerKind` listesi de buradan. Match/dispatch
+  tarafı motorda kind başına mevcut giriş noktalarında kaldı (dört tetik dosya
+  başına **bölünmedi**); `phase`/`trajectory_end` F2'de `RegisterTrigger` + motora
+  yeni `On*` metoduyla girer.
+- Ateşleme defteri `automation-fires/<id>.jsonl` (`store_automation_fires.go`):
+  `fired`/`skipped`/`failed`, sebep sabitleri (`archived`, `expired`, `cooldown`,
+  `max_iterations`, `absolute_backstop`…), 600'ü geçince en yeni 500'e budama,
+  silmede temizlenir; `GET /api/automations/{id}/fires`. `guardsPass` →
+  `guardReason` + `recordSkip` (defter + `ws:automation_fire skipped`);
+  `notifyFired`/`recordFailure` de deftere yazar.
+- `Archived` alanı Automation/Schedule/Hook'ta; `Set*Archived` + `POST
+  /api/{automations|schedules|hooks}/{id}/archive`; enabled-listeler arşivliyi
+  eler; liste uçları arşivliyi varsayılan gizler (`?archived=true` yalnız
+  arşivliler). `Hook.FireCount/LastFiredAt` her komut koşusunda güncellenir
+  (CLI'ın kendi koşturduğu hook'lar sayılmaz).
+- UI: Otomasyon kartında "Arşivle" eylemi; arşivlileri listeleyen ekran yok (F3
+  küratör ekranına bırakıldı), schedule/hook için yalnız API + tipler.
+- Testler: `db/automation_core_test.go`, `agent/automation_ledger_test.go`.
+
 ### R6 — Reçete frontmatter'ı tipli şema + sürüm
 
 **Neden.** `coordinator-wf-*` skill'leri serbest frontmatter (`worker_targets`,

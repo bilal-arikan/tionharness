@@ -239,6 +239,21 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     }
   }
 
+  // Archive: the rule leaves the lanes and stops firing but keeps its config and
+  // ledger (restorable through the API; a curator screen will list archived rules).
+  const archiveAutomation = async (a: Automation) => {
+    if (!confirm('Otomasyon arşivlensin mi? (Silinmez; ateşlenmeyi durdurur ve listeden kalkar)'))
+      return
+    setAutomations((prev) => prev.filter((x) => x.id !== a.id))
+    try {
+      await api.archiveAutomation(a.id, true)
+      toast.success('Otomasyon arşivlendi')
+    } catch (e) {
+      onError((e as Error).message)
+      reloadAutomations()
+    }
+  }
+
   const removeAutomation = async (a: Automation) => {
     if (!confirm('Otomasyon silinsin mi?')) return
     setEditor(null) // the delete button lives in the edit popup
@@ -360,6 +375,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             columns={columns}
             onToggle={() => toggleAutomation(a)}
             onReset={() => resetAutomation(a)}
+            onArchive={() => archiveAutomation(a)}
             onEdit={() => setEditor({ lane: kind, editing: a })}
             onSpawnTags={(tags) => setSpawnTags(a, tags)}
           />

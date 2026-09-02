@@ -79,6 +79,8 @@ export interface Schedule {
   lastDeliveryStatus: string
   lastDeliveryError: string
   enabled: boolean
+  // Archived: out of the cron table and hidden from the default list, restorable.
+  archived?: boolean
   tags?: string[] // free-form organizational labels (editable by user + agents)
   createdAt: number
   // Optional end date (unix seconds); 0/undefined = no end date.
@@ -122,6 +124,22 @@ export type CounterScope = 'session' | 'workspace'
 // archives the card with no LLM call (the 'done → archive' cleanup).
 export type BoardAction = 'spawn' | 'archive' | 'move'
 
+// One line of an automation's fire ledger (GET /api/automations/{id}/fires,
+// newest first): every attempt, fired or not, with the guard's reason.
+export interface AutomationFireRecord {
+  at: number
+  outcome: 'fired' | 'skipped' | 'failed'
+  // skipped: archived | disabled | expired | cooldown | max_iterations |
+  // absolute_backstop | autonomy_paused | target_missing | empty_prompt
+  reason?: string
+  triggerKind?: string
+  triggerSessionId?: string
+  sessionId?: string
+  driver?: 'session' | 'flow'
+  error?: string
+  iteration?: number
+}
+
 export interface Automation {
   id: string
   name: string
@@ -163,6 +181,9 @@ export interface Automation {
   promptTemplate: string // placeholders: {{result}} {{title}} {{tag}} {{sessionId}}
   spawnTags?: string[] // tags applied to the spawned session (default: [triggerTag])
   enabled: boolean
+  // Archived: hidden from the default list and inert, restorable (the curator's
+  // archive-only rule, _Docs/77 R5). Distinct from enabled.
+  archived?: boolean
   maxIterations: number // range 1-500; 0/unlimited rejected on write (legacy <=0 rows bounded by backstop)
   cooldownSec: number
   expiresAt?: number // optional end date (unix seconds); 0/undefined = no end date

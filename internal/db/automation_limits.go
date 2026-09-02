@@ -113,63 +113,17 @@ var ErrAutomationShape = errors.New("invalid automation")
 // validators (maxIterations, tokenThreshold) stay separate and are called
 // alongside this one.
 func ValidateAutomationShape(a Automation) error {
-	switch a.TriggerKind {
-	case TriggerBoard:
-		if !ValidBoardOp(a.BoardOp) {
-			return fmt.Errorf("%w: invalid boardOp %q (any|move|create|update|delete)", ErrAutomationShape, a.BoardOp)
-		}
-		if !ValidBoardAction(a.BoardAction) {
-			return fmt.Errorf("%w: invalid boardAction %q (spawn|archive|move)", ErrAutomationShape, a.BoardAction)
-		}
-		// Archive and move actions do bookkeeping with no LLM call, so they need no target.
-		if a.BoardAction == BoardActionArchive {
-			return nil
-		}
-		if a.BoardAction == BoardActionMove {
-			if a.BoardMoveToState == "" {
-				return fmt.Errorf("%w: boardMoveToState is required for move board actions", ErrAutomationShape)
-			}
-			if a.BoardToState == "" {
-				return fmt.Errorf("%w: boardToState is required for move board actions and must differ from boardMoveToState to prevent self-triggering", ErrAutomationShape)
-			}
-			if a.BoardMoveToState == a.BoardToState {
-				return fmt.Errorf("%w: boardMoveToState must differ from boardToState to prevent self-triggering", ErrAutomationShape)
-			}
-			return nil
-		}
-	case TriggerToken:
-		if !ValidTokenScope(a.TokenScope) {
-			return fmt.Errorf("%w: invalid tokenScope %q (session|workspace)", ErrAutomationShape, a.TokenScope)
-		}
-		if err := ValidateTokenThreshold(a.TokenThreshold); err != nil {
+	spec, ok := triggerSpecFor(a.TriggerKind)
+	if !ok {
+		return fmt.Errorf("%w: unknown triggerKind %q (%s)", ErrAutomationShape, a.TriggerKind, strings.Join(TriggerKinds(), "|"))
+	}
+	if spec.Validate != nil {
+		if err := spec.Validate(a); err != nil {
 			return err
 		}
-	case TriggerCounter:
-		if !ValidCounterMetric(a.CounterMetric) {
-			return fmt.Errorf("%w: invalid counterMetric %q (message|tool)", ErrAutomationShape, a.CounterMetric)
-		}
-		if !ValidCounterScope(a.CounterScope) {
-			return fmt.Errorf("%w: invalid counterScope %q (session|workspace)", ErrAutomationShape, a.CounterScope)
-		}
-		if err := ValidateCounterInterval(a.CounterInterval); err != nil {
-			return err
-		}
-	default: // TriggerTag or "" (legacy files written before the kind existed)
-		if a.TriggerTag == "" {
-			return fmt.Errorf("%w: triggerTag is required for tag automations (an empty tag never fires)", ErrAutomationShape)
-		}
 	}
-	if strings.TrimSpace(a.PromptTemplate) == "" {
-		return fmt.Errorf("%w: promptTemplate is required", ErrAutomationShape)
+	if spec.NoTarget != nil && spec.NoTarget(a) {
+		return nil
 	}
-	// Session mode is a free choice across kinds, but the value must be known.
-	if !ValidSessionMode(a.SessionMode) {
-		return fmt.Errorf("%w: invalid sessionMode %q (spawn|continue)", ErrAutomationShape, a.SessionMode)
-	}
-	// Every automation that reaches here spawns a session or runs a flow, so it
-	// needs exactly one runnable target. (Board 'archive' and 'move' returned above.)
-	if a.FlowID == "" && a.TargetAgentID == "" {
-		return fmt.Errorf("%w: targetAgentId or flowId is required", ErrAutomationShape)
-	}
-	return nil
+	return validateCommonShape(a)
 }

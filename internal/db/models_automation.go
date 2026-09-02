@@ -294,6 +294,11 @@ type Automation struct {
 	SpawnTags []string `json:"spawnTags"`
 	// Enabled is the kill switch. A disabled automation never fires.
 	Enabled bool `json:"enabled"`
+	// Archived hides the rule from the default lists and stops it firing, without
+	// deleting it: the curator's ceiling on destructive action (_Docs/77 R5). An
+	// archived rule keeps its configuration, ledger and seed identity and can be
+	// restored. Distinct from Enabled, which is the user's on/off switch.
+	Archived bool `json:"archived,omitempty"`
 	// MaxIterations caps the total number of fires. Valid range 1..MaxIterationsHardCap
 	// (500); 0 ("unlimited") is rejected at every write path by ValidateMaxIterations
 	// because a self-moving card could loop forever. Default 50 in the create paths.

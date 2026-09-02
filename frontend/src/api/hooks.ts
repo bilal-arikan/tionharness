@@ -22,5 +22,10 @@ export const hookApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
+  archiveHook: (id: string, archived: boolean) =>
+    req<{ id: string; archived: boolean }>(`/api/hooks/${id}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived }),
+    }),
   deleteHook: (id: string) => req<{ result: string }>(`/api/hooks/${id}`, { method: 'DELETE' }),
 }

@@ -1,5 +1,36 @@
 # TionHarness — İlerleme Takibi
 
+## Otomasyon çekirdeği: tetik registry'si, ateşleme defteri, arşiv — Rota altyapısı R5 (2026-09-02) ✅
+
+**Belirti.** Dört tetik `ValidateAutomationShape` içinde switch dalıydı (yeni tetik
+üç yere dal ekliyordu); bir kuralın **neden ateşlenmediği** hiçbir yerde
+kaydedilmiyordu (satır yalnız son sonucu tutar); otomasyon/schedule/hook için
+silmeden gizleme yolu yoktu, hook'ların hiç çalışıp çalışmadığı bilinmiyordu.
+
+**Ne.** `db.TriggerSpec` registry'si (`automation_trigger.go`; doğrulama +
+`NoTarget`, API `triggerKind` listesi de buradan). `automation-fires/<id>.jsonl`
+defteri (`store_automation_fires.go`): her deneme `fired`/`skipped`/`failed` +
+sebep, 500 kayıt tavanı; `guardsPass` sebep üretip deftere yazıyor ve
+`ws:automation_fire skipped` yayıyor; `GET /api/automations/{id}/fires`.
+`Archived` alanı Automation/Schedule/Hook'ta: `POST …/{id}/archive`, enabled
+listeleri ve motor arşivliyi eler, liste uçları varsayılan gizler
+(`?archived=true`). `Hook.FireCount/LastFiredAt` telemetrisi. Frontend: tipler,
+API çağrıları, otomasyon kartında "Arşivle". Detay: `_Docs/77` R5.
+
+**Dosyalar.** `internal/db/automation_trigger.go`, `store_automation_fires.go`,
+`automation_core_test.go` (yeni), `automation_limits.go`, `models_automation.go`,
+`models_hook.go`, `models_task.go`, `store_automation.go`, `store_hook.go`,
+`store_schedule.go`; `internal/agent/automation.go`, `hooks.go`,
+`automation_ledger_test.go` (yeni); `internal/api/automation_archive.go` (yeni),
+`automations.go`, `schedules.go`, `hooks.go`, `server.go`; frontend
+`types/task.ts`, `types/hook.ts`, `api/tasks.ts`, `api/hooks.ts`,
+`features/schedules/AutomationCard.tsx`, `AutomationBoard.tsx`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` db/api/agent/workspace ✅ (yeni:
+`TestTriggerRegistryValidatesEveryKind`, `TestAutomationFireLedger`,
+`TestArchivedEntitiesLeaveTheActiveLists`, `TestGuardSkipIsRecordedAndAnnounced`);
+`npx tsc --noEmit` ✅; vitest schedules ✅.
+
 ## Canlılık tek kaynağa bağlandı — Rota altyapısı R2 (2026-09-02) ✅
 
 **Belirti.** "Şu an ne koşuyor" üç registry'nin API katmanında elle birleşimiydi

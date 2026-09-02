@@ -27,6 +27,8 @@ interface Props {
   columns: BoardColumnDef[]
   onToggle: () => void
   onReset: () => void
+  // Archive: hide + stop without deleting (restorable via the API/curator).
+  onArchive: () => void
   onEdit: () => void
   onSpawnTags: (tags: string[]) => void
 }
@@ -45,6 +47,7 @@ export function AutomationCard({
   columns,
   onToggle,
   onReset,
+  onArchive,
   onEdit,
   onSpawnTags,
 }: Props) {
@@ -222,6 +225,7 @@ export function AutomationCard({
         {/* Edit (+ counter reset when maxed); deleting lives inside the popup. */}
         <div className="flex shrink-0 flex-col items-center gap-1.5">
           <CardAction icon={Pencil} label="Düzenle" onClick={onEdit} entityId={a.id} />
+          <CardAction icon={Archive} label="Arşivle" onClick={onArchive} entityId={a.id} />
           {maxed && (
             <CardAction icon={RotateCcw} label="Sayacı sıfırla" onClick={onReset} entityId={a.id} />
           )}
