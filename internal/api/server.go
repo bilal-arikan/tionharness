@@ -445,6 +445,8 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/trajectories/recipes", s.handleRecipeStats)
 	mux.HandleFunc("GET /api/trajectories/{id}", s.handleGetTrajectory)
 	mux.HandleFunc("POST /api/trajectories/{id}/summarize", s.handleSummarizeTrajectory)
+	mux.HandleFunc("GET /api/recipes/{slug}/optimizer", s.handleRecipeOptimizerState)
+	mux.HandleFunc("POST /api/recipes/{slug}/optimize", s.handleOptimizeRecipe)
 	mux.HandleFunc("GET /api/curator/report", s.handleCuratorReport)
 	mux.HandleFunc("POST /api/curator/run", s.handleCuratorRun)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)

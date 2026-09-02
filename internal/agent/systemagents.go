@@ -28,6 +28,7 @@ var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
 	"lesson-extractor":    {"🎓", "#B07AD0"},
 	"insight":             {"🔮", "#5C6480"},
 	"insight-applier":     {"🛠️", "#8A6BC8"},
+	"recipe-optimizer":    {"✦", "#6B7FD8"},
 
 	// Worker profiles — read-only.
 	"subagent-explore":   {"🔍", "#17A2A2"},
@@ -103,6 +104,17 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Provider:       "claude-cli",
 			AllowedTools:   "[]",
 			Disabled:       true,
+		},
+		{
+			SystemKey:      "recipe-optimizer",
+			Name:           "Recipe Optimizer",
+			Description:    "Proposes measured changes to a coordinator recipe from its trajectory statistics (Rota F4).",
+			SystemPrompt:   prompts.Default("recipe-optimizer"),
+			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
+			// Suggestion-only: it reads the evidence it is handed and answers with
+			// JSON; it never touches an entity, so it needs no tools.
+			AllowedTools: "[]",
 		},
 		{
 			SystemKey:      "insight-applier",

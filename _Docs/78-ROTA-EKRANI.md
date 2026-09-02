@@ -1,4 +1,4 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör)
+# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör) + F4 (optimizer)
 
 **Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
 uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
@@ -6,8 +6,10 @@ yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
 `77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
 Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
 ateşlenmedi") uygulandı (2026-09-02, §7); F3 (deterministik metrik + reçete
-istatistikleri + LLM'siz küratör + pin) uygulandı (2026-09-02, §8). Sonraki
-fazlar F4 (optimizer), F5 (kapılar / kanvastan müdahale).
+istatistikleri + LLM'siz küratör + pin) uygulandı (2026-09-02, §8); F4 (LLM
+reçete optimizer, yalnız öneri) uygulandı (2026-09-03, §9). Sonraki faz F5
+(kapılar / kanvastan müdahale); optimizer önerilerinin opt-in oto-uygulaması
+(budama sınıfı) F4-v2.
 
 ## 1. Ne gösterir
 
@@ -348,3 +350,72 @@ regresyonda geri alma); reçete sürüm geçmişinin seed ledger'ında tutulmas�
 uygulama (arşivle / reçeteyi düzenle) ve zamanlama/hook kartlarında pin
 düğmesi (API hazır, UI yalnız otomasyon kartında); faz kapılarının otomatik
 doğrulanması.
+
+## 9. F4 — LLM reçete optimizer, yalnız öneri (2026-09-03)
+
+Dal `rota/f4-optimizer` (F3'ün üstüne). Brif §7.2–7.4. Rota işinin tek LLM
+geçişi ve nadir olanı: reçete başına, **≥3 yeni özetlenmiş terminal koşu**
+biriktiğinde, bir koşu **failed** bittiğinde ya da kullanıcı istediğinde.
+v1 reçeteyi düzenlemez; öneriler mevcut içgörü yaşam döngüsüne düşer.
+
+**Sistem ajanı** `recipe-optimizer` (`systemagents.go`, ✦, araçsız —
+`AllowedTools: []`; prompt `prompts/defaults/recipe-optimizer.md`, kayıt
+`prompts.go`, workspace `config/prompts/recipe-optimizer.md` ile ezilebilir).
+Model/sağlayıcı `resolveAnalysisSystemAgent` ile içgörü analizcisi gibi
+çözülür; temel ajan `pickInsightAgent`.
+
+**Geçiş** (`internal/agent/recipe_optimizer.go`):
+- `MaybeOptimizeRecipe(slug, trigger)` rota iş kuyruğunda, rota-sonu
+  kurallarından sonra çağrılır; eşik `optimizer/state.json`'daki
+  (`db.OptimizerSlugState`: `lastAt`, `runsSeen`, `trigger`, `proposals`,
+  `skipped`) son geçişe göre ölçülür; LLM çağrısı ayrı goroutine'de, reçete
+  başına tek uçuş.
+- `RunRecipeOptimizer(slug, trigger)`: reçete (frontmatter planı + gövde,
+  6 KB'a kırpılır), sürüm başına istatistik, son 5 özet, küratörün reçete
+  önerileri → `guardedComplete` (JSON şeması). Cevap `{"proposals":[…]}`;
+  her öneri `action` (`prune_phase | make_optional | prune_watcher |
+  change_profile | add_gate | bind_watcher | split_phase | merge_phase |
+  rollback_version`), `target`, `value`, `removes`, `title`, `rationale`,
+  `evidence`, `severity`.
+- **Kodda uygulanan değişmezler** (`optimizerFinding`): sayı içeren
+  `evidence` yoksa **atılır**; genel olumsuz yargı ("güvenilmez",
+  "çalışmıyor", "useless" …) **atılır**; ekleme sınıfı (`add_gate`,
+  `bind_watcher`, `split_phase`) reçete büyüme bütçesini
+  (`skills.RecipeGrowthBudget = 9`, faz + izleyici) aşacaksa `removes`
+  adlandırmalı; bilinmeyen eylem atılır. Bütçe ayrıca `RecipeSpec.Validate`
+  ile **yüklemede** de zorlanır — tavanın üstündeki reçete yüklenmez.
+- Kabul edilen öneri `insight.Finding` olur: kanal **`recipe-opt`** (yeni;
+  `Channel.Valid()`), `LensID recipe-optimizer`, imza
+  `recipe-opt:<slug>:<action>:<target>` (tekrar = `Occurrences` artar),
+  `FilePointer skill/<slug>`, `RootCause` = kanıt, `ProposedFix` = gerekçe +
+  değer + kaldırır, `EvidenceSessionIDs` = son koşuların kök oturumları,
+  yapısal `Proposal` alanı (`insight.RecipeProposal`). Öneri varsa `insight`
+  bildirimi ("✦ Reçete optimizer — slug için N öneri").
+- Uygulama: **insan**. Kullanıcı reçeteyi Beceriler'den düzenler, bulguyu
+  `applied` + kanıt `skill/<slug>` ile kapatır (mevcut
+  `ErrAppliedNeedsEvidence` kuralı); kapanan bir bulgunun sonraki geçişte yeniden
+  gelmesi mevcut `Regressed` mekanizmasıyla işaretlenir.
+
+**API.** `POST /api/recipes/{slug}/optimize` (elle; `OptimizerResult`: ran,
+skipped, proposals, dropped), `GET /api/recipes/{slug}/optimizer` (son geçiş).
+Öneriler `GET /api/insight/findings?channel=recipe-opt`.
+
+**Ekran.** İçgörü: kanal süzgeci ve özet çipi `✦ recipe-opt`, rozet, bulgu
+modalında "Reçete önerisi" bloğu (eylem/hedef/değer/kaldırır/kanıt + "reçeteyi
+sen düzenlersin" notu). Beceriler ▸ reçete istatistikleri: **"Şimdi optimize
+et"**, açık öneri sayısı, son geçiş satırı. Rota-içi görünüm başlığı:
+"optimize et".
+
+**Testler.** `recipe_optimizer_test.go` (değişmezler: kanıt/sayı, olumsuz
+yargı, bütçe + `removes`, bilinmeyen eylem; bulgu şekli; büyüme bütçesi
+doğrulaması; prompt içeriği; ajansız/koşusuz geçişlerin durum kaydı),
+`prompts_test` kayıt senkronu, `skills` doğrulama.
+
+**Bilinen durum.** `internal/insight` paketinin `scanner_test.go:231` testi
+bu değişiklikten bağımsız olarak main'de de düşüyor (analizci zaman aşımı
+beklentisi); F4 pakete yalnız kanal sabiti + `Proposal` alanı ekler.
+
+**Kalanlar.** Budama sınıfı için reçete başına opt-in oto-uygulama (F4-v2:
+`applier` benzeri, yalnız `prune_*`/`make_optional`); "oku-sonra-yaz" reçete
+düzenleme aracı; regresyonda otomatik sürüm geri alma; F5 kapılar ve
+kanvastan müdahale.

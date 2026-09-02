@@ -1,5 +1,24 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F4: LLM reçete optimizer — yalnız öneri (2026-09-03) ✅
+
+Yeni sistem ajanı `recipe-optimizer` (araçsız, prompt `recipe-optimizer.md`).
+`RunRecipeOptimizer` reçeteyi, sürüm istatistiklerini, son 5 rota özetini ve
+küratör önerilerini tek JSON çağrısında modele verir; öneriler `optimizerFinding`
+değişmezlerinden geçer (sayı içeren kanıt zorunlu, genel olumsuz yargı atılır,
+ekleme sınıfı `RecipeGrowthBudget=9` üstünde `removes` ister — bütçe artık
+`RecipeSpec.Validate` ile yüklemede de zorlanır) ve yeni **`recipe-opt`** içgörü
+kanalına `insight.Finding` (+ yapısal `Proposal`) olarak düşer. Tetik: reçete
+başına ≥3 yeni özetlenmiş koşu, failed koşu ya da elle (`POST
+/api/recipes/{slug}/optimize`); bookkeeping `optimizer/state.json`. v1 hiçbir
+şeyi uygulamaz — kullanıcı reçeteyi düzenler, bulguyu kanıtla kapatır. UI:
+İçgörü'de kanal süzgeci/çip/rozet + modalda öneri bloğu; Beceriler'de "Şimdi
+optimize et" + açık öneri sayısı + son geçiş; rota başlığında "optimize et".
+Test: `recipe_optimizer_test.go`. Not: `internal/insight` `scanner_test.go:231`
+main'de de düşüyor (bağımsız). Ayrıntı: `78-ROTA-EKRANI.md` §9. F3+F4 dalları
+(`rota/f3-metrics-curator` → `rota/f4-optimizer`) ana ağaçtaki commitlenmemiş
+auth işi (`server.go`, `models_task.go`) yüzünden henüz main'e alınamadı.
+
 ## Rota F3: deterministik metrik, reçete istatistikleri, LLM'siz küratör + pin (2026-09-02) ✅
 
 Rota bitince rota iş kuyruğunda (rota-sonu kurallarından önce) `TrajectorySummary`

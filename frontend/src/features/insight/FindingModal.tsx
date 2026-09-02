@@ -98,6 +98,44 @@ export function FindingModal({
               <p className="leading-snug">{f.proposedFix}</p>
             </div>
           )}
+          {f.proposal && (
+            <div data-testid="finding-proposal">
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Reçete önerisi
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
+                  {f.proposal.action}
+                </code>
+                {f.proposal.target && (
+                  <span>
+                    hedef <code>{f.proposal.target}</code>
+                  </span>
+                )}
+                {f.proposal.value && (
+                  <span>
+                    değer <code>{f.proposal.value}</code>
+                  </span>
+                )}
+                {f.proposal.removes && (
+                  <span className="text-[var(--color-warning)]">
+                    kaldırır <code>{f.proposal.removes}</code>
+                  </span>
+                )}
+                <span className="text-[var(--color-text-dim)]">
+                  reçete {f.proposal.slug}
+                  {f.proposal.version ? `@${f.proposal.version}` : ''}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                Kanıt: {f.proposal.evidence}
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                Öneri uygulanmaz; reçeteyi Beceriler ekranından sen düzenlersin. Uyguladıysan
+                bulguyu <code>applied</code> olarak kapat (kanıt: skill/{f.proposal.slug}).
+              </p>
+            </div>
+          )}
           {f.filePointer && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">

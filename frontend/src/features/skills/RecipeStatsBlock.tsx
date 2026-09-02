@@ -4,9 +4,11 @@
 // happened (unfired watchers, unreached phases). Computed server-side from the
 // index rows' summaries; no LLM.
 import { useEffect, useState } from 'react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { api } from '@/api'
 import type { RecipeStats } from '@/types/trajectory'
-import { Badge } from '@/shared/components'
+import { Badge, toast } from '@/shared/components'
+import { fmtTime } from '@/features/schedules/timeUtils'
 import { fmtDurationSec, fmtTokens } from '@/features/rota/trajectoryFormat'
 
 interface Props {
@@ -16,6 +18,10 @@ interface Props {
 
 export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
   const [rows, setRows] = useState<RecipeStats[] | null>(null)
+  const [openProposals, setOpenProposals] = useState<number>(0)
+  const [lastPass, setLastPass] = useState<string>('')
+  const [optimizing, setOptimizing] = useState(false)
+  const [nonce, setNonce] = useState(0)
   useEffect(() => {
     let cancelled = false
     api
@@ -26,14 +32,66 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
       .catch(() => {
         if (!cancelled) setRows([])
       })
+    // Open optimizer proposals for this recipe + the last pass (F4).
+    api
+      .listInsightFindings({ channel: 'recipe-opt' })
+      .then((fs) => {
+        if (cancelled) return
+        setOpenProposals(
+          fs.filter((f) => f.filePointer === `skill/${slug}` && (f.status || 'new') === 'new')
+            .length,
+        )
+      })
+      .catch(() => {})
+    api
+      .recipeOptimizerState(slug)
+      .then((s) => {
+        if (cancelled || !s.ran) return
+        setLastPass(
+          `${fmtTime(s.state.lastAt)} · ${s.state.trigger === 'manual' ? 'elle' : s.state.trigger === 'failed' ? 'başarısız koşu' : 'eşik'} · ${s.state.proposals} öneri${s.state.skipped ? ` · atlandı: ${s.state.skipped}` : ''}`,
+        )
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, nonce])
+  const optimize = async () => {
+    setOptimizing(true)
+    try {
+      const r = await api.optimizeRecipe(slug)
+      if (r.ran) toast.info(`✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi)`)
+      else toast.info(`Optimizer çalışmadı: ${r.skipped ?? '—'}`)
+      setNonce((n) => n + 1)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setOptimizing(false)
+    }
+  }
   if (rows === null) return null
   return (
     <div className="mt-2 text-xs" data-testid="recipe-stats">
-      <div className="mb-1 font-medium text-[var(--color-text-dim)]">Rota istatistikleri</div>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="font-medium text-[var(--color-text-dim)]">Rota istatistikleri</span>
+        <button
+          type="button"
+          onClick={optimize}
+          disabled={optimizing}
+          className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] disabled:opacity-40"
+          title="Reçete optimizer'ı şimdi çalıştır: koşu istatistiklerinden ölçülü değişiklik önerileri üretir (recipe-opt kanalı); hiçbir şeyi kendisi uygulamaz"
+          data-testid="recipe-optimize"
+        >
+          {optimizing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+          Şimdi optimize et
+        </button>
+        {openProposals > 0 && (
+          <Badge tone="accent" className="normal-case">
+            ✦ {openProposals} açık öneri · İçgörü ▸ recipe-opt
+          </Badge>
+        )}
+        {lastPass && <span className="text-[var(--color-text-dim)]">son geçiş: {lastPass}</span>}
+      </div>
       {rows.length === 0 ? (
         <p className="text-[var(--color-text-dim)]">Bu reçeteyle henüz rota koşmadı.</p>
       ) : (

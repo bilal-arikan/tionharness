@@ -101,6 +101,28 @@ export interface RecipeStats {
   latestId?: string
 }
 
+// Recipe optimizer (Rota F4).
+export interface OptimizerResult {
+  slug: string
+  trigger: string
+  ran: boolean
+  skipped?: string
+  proposals: { id: string; title: string }[]
+  dropped: number
+}
+
+export interface OptimizerStateRow {
+  slug: string
+  ran: boolean
+  state: {
+    lastAt: number
+    runsSeen: number
+    trigger?: string
+    proposals: number
+    skipped?: string
+  }
+}
+
 export interface Trajectory {
   id: string
   rootSessionId: string

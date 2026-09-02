@@ -4,8 +4,9 @@
 // nodes are dashed. Plain SVG like the workspace canvas; the graph is re-read
 // whenever the stream announces a new revision (useTrajectory).
 import { useMemo } from 'react'
-import { ArrowLeft, MessageSquare } from 'lucide-react'
-import { Badge } from '@/shared/components'
+import { ArrowLeft, MessageSquare, Sparkles } from 'lucide-react'
+import { api } from '@/api'
+import { Badge, toast } from '@/shared/components'
 import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
 import type { Trajectory, TrajectoryEdge, TrajectoryNode } from '@/types/trajectory'
 import type { RotaSelection } from './RotaCanvas'
@@ -155,14 +156,38 @@ export function RotaTrajectoryView({
                 {layout.ghosts} hayalet
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => onOpenSession?.(t.rootSessionId)}
-              className="ml-auto flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-              title="Kök oturumun sohbetini aç"
-            >
-              <MessageSquare size={12} /> kök sohbet
-            </button>
+            <span className="ml-auto flex items-center gap-1.5">
+              {t.templateRef && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slug = t.templateRef!.replace(/@[^@]*$/, '')
+                    api
+                      .optimizeRecipe(slug)
+                      .then((r) =>
+                        toast.info(
+                          r.ran
+                            ? `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi) — İçgörü ▸ recipe-opt`
+                            : `Optimizer çalışmadı: ${r.skipped ?? '—'}`,
+                        ),
+                      )
+                      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+                  }}
+                  className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                  title="Bu rotanın reçetesi için optimizer'ı şimdi çalıştır (öneri üretir, uygulamaz)"
+                >
+                  <Sparkles size={12} /> optimize et
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onOpenSession?.(t.rootSessionId)}
+                className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                title="Kök oturumun sohbetini aç"
+              >
+                <MessageSquare size={12} /> kök sohbet
+              </button>
+            </span>
           </>
         )}
         {loading && !t && <span className="text-[var(--color-text-dim)]">yükleniyor…</span>}

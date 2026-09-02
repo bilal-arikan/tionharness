@@ -143,5 +143,14 @@ func (r *Runtime) observeTrajectoryTransitions(ev db.TrajectoryChangeEvent) {
 			r.enqueueTrajectoryWork(func() { r.summarizeOnEnd(id) })
 		}
 		r.enqueueTrajectoryWork(func() { fn(context.Background(), tr) })
+		if tr.Kind == TrajTransitionEnd {
+			// The optimizer (F4) checks its threshold last; the LLM call itself
+			// leaves the queue on its own goroutine.
+			slug, trigger := tr.RecipeSlug(), optimizerTriggerRuns
+			if tr.Status == db.TrajStatusFailed {
+				trigger = optimizerTriggerFail
+			}
+			r.enqueueTrajectoryWork(func() { r.MaybeOptimizeRecipe(context.Background(), slug, trigger) })
+		}
 	}
 }

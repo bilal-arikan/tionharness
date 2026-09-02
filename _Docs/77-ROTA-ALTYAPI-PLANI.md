@@ -568,6 +568,12 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > (`RunCurator`: arşivle/öner, provenance kapısı, pin muafiyeti, rapor) +
 > `Pinned` alanları ve pin uçları; ekranda özet çipleri, reçete istatistik
 > bloğu, Küratör paneli, 📌. Ayrıntı: `78-ROTA-EKRANI.md` §8.
+>
+> **F4 uygulandı (2026-09-03, dal `rota/f4-optimizer`):** `recipe-optimizer`
+> sistem ajanı + promptu, eşik/başarısızlık/elle tetikli `RunRecipeOptimizer`,
+> kodda zorlanan değişmezler (kanıt, olumsuz yargı yasağı, büyüme bütçesi
+> `RecipeGrowthBudget=9` — yüklemede de), öneriler `recipe-opt` içgörü kanalında
+> (`insight.RecipeProposal`); v1 uygulamaz. Ayrıntı: `78-ROTA-EKRANI.md` §9.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

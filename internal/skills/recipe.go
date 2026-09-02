@@ -73,6 +73,24 @@ var GateKinds = []string{"artifact", "verdict", "human", "schema"}
 
 var phaseIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// RecipeGrowthBudget caps phases + watchers (phase-level and recipe-wide) of
+// one recipe (brief §7.4 "net büyüme bütçesi"): above it every addition must
+// remove something. Enforced here, at load, so no optimizer can talk a recipe
+// past it.
+const RecipeGrowthBudget = 9
+
+// GrowthUsed counts what the budget measures.
+func (s *RecipeSpec) GrowthUsed() int {
+	if s == nil {
+		return 0
+	}
+	n := len(s.Phases) + len(s.Watchers)
+	for _, p := range s.Phases {
+		n += len(p.Watchers)
+	}
+	return n
+}
+
 // ValidPhaseID reports whether id is an acceptable phase id (the same rule the
 // recipe parser applies), so an agent-planned trajectory follows the recipe
 // convention.
@@ -169,6 +187,9 @@ func (s *RecipeSpec) Validate() error {
 				return fmt.Errorf("phase %q: gate kind %q must be one of %s", p.ID, p.Gate.Kind, strings.Join(GateKinds, "|"))
 			}
 		}
+	}
+	if used := s.GrowthUsed(); used > RecipeGrowthBudget {
+		return fmt.Errorf("recipe declares %d phases+watchers, above the growth budget of %d — remove something before adding", used, RecipeGrowthBudget)
 	}
 	return nil
 }

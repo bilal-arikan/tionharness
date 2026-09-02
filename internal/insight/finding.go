@@ -34,10 +34,16 @@ const (
 	// ChannelWorkspaceOpt marks a finding fixable inside the workspace without
 	// touching app code (skill pruning, blocked tools, context tuning, ...).
 	ChannelWorkspaceOpt Channel = "workspace-opt"
+	// ChannelRecipeOpt marks a recipe-optimizer proposal (Rota F4): a measured,
+	// conditional change to one coordinator recipe. Suggestion-only in v1 — the
+	// user (or a later opt-in applier) edits the recipe.
+	ChannelRecipeOpt Channel = "recipe-opt"
 )
 
-// Valid reports whether c is one of the two known channels.
-func (c Channel) Valid() bool { return c == ChannelAppFix || c == ChannelWorkspaceOpt }
+// Valid reports whether c is one of the known channels.
+func (c Channel) Valid() bool {
+	return c == ChannelAppFix || c == ChannelWorkspaceOpt || c == ChannelRecipeOpt
+}
 
 // FindingStatus is a finding's position in its review lifecycle (_Docs/60 §5).
 type FindingStatus string
@@ -95,11 +101,29 @@ type Finding struct {
 	// StatusApplied requires: without it "applied" is an unbacked claim, so the
 	// store refuses the transition (ErrAppliedNeedsEvidence).
 	AppliedEntity *AppliedEntity `json:"appliedEntity,omitempty"`
+	// Proposal is the structured recipe change behind a recipe-opt finding
+	// (Rota F4); nil on the other channels.
+	Proposal *RecipeProposal `json:"proposal,omitempty"`
 	// LastRunID is the scan run (insight.RunRecord.ID) that most recently produced
 	// or re-confirmed this finding. It is what makes "show me what the run that
 	// just finished surfaced" answerable: without it a consumer triggered by one
 	// scan can only ask for status:new and gets the whole untriaged backlog.
 	LastRunID string `json:"lastRunId,omitempty"`
+}
+
+// RecipeProposal is what the recipe optimizer proposes: one action on one
+// target of one recipe version, with the metric that justifies it.
+type RecipeProposal struct {
+	Slug    string `json:"slug"`
+	Version string `json:"version,omitempty"`
+	// Action: prune_phase | make_optional | prune_watcher | change_profile |
+	// add_gate | bind_watcher | split_phase | merge_phase | rollback_version.
+	Action string `json:"action"`
+	Target string `json:"target,omitempty"`
+	Value  string `json:"value,omitempty"`
+	// Removes names what an addition drops to stay within the growth budget.
+	Removes  string `json:"removes,omitempty"`
+	Evidence string `json:"evidence"`
 }
 
 // AppliedEntity names the workspace entity a finding was applied to. Both fields
