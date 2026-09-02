@@ -1,5 +1,52 @@
 # TionHarness — İlerleme Takibi
 
+## Workspace arka plan işleri Close'da drenaj ediliyor — `activity-inbox` yarışı kapandı (2026-09-02) ✅
+
+**Doğrulama:** `go test ./internal/api -count=3` ✅ (111s, üç koşu da temiz),
+`go test ./... -count=1` ✅ **sıfır FAIL** — bu depoda uzun süredir ilk kez.
+`go vet ./internal/workspace` ✅, `git diff --check` ✅.
+
+**Sorun:** `internal/api` tam koşuda rastgele bir test
+`TempDir RemoveAll cleanup: ...store\activity-inbox: Dizin boş değil` ile düşüyordu
+(son iki tam koşuda `TestRewindRejectedOnReadOnlySessions` ve
+`TestRewindAllowedOnWritableKinds`; tek başına koşunca ikisi de geçiyordu). Rewind ile
+ilgisi yoktu — `AddMessage` çağıran **herhangi** bir test aday.
+
+**Kök neden:** `manager.go`'daki store hook'ları işi **takip edilmeyen** `go func()`
+ile fırlatıyordu: her mesaj eklemesinde bir `DrainActivityInbox`, ayrıca
+`OnActivityRecorded`, açılışta bir drenaj ve board hook'unda iki tane daha. Test bitip
+`t.TempDir()` ağacı silmeye başladığında bu goroutine'ler hâlâ
+`store/activity-inbox` altına yazıyordu; Windows açık/yeni dosya yüzünden silmeyi
+reddediyor. POSIX'te görünmez.
+
+**Nasıl:** `Manager`'a `bg sync.WaitGroup` + `bgClosed` bayrağı ve `goBackground`
+yardımcısı eklendi; beş fırlatma noktası buna taşındı. `Close()` artık **önce** bayrağı
+kaldırıp `bg.Wait()` çağırıyor, **sonra** scheduler/runtime/DB'yi kapatıyor — drenaj
+canlı store'a karşı bitiyor, kapanış başladıktan sonra kuyruğa girecek iş ise hiç
+başlatılmıyor. Sıra önemli: DB'yi önce kapatmak, bitiremeyeceği iş için hata logu
+üreten bir drenaj bırakırdı.
+
+**Dosyalar:** `internal/workspace/manager.go`.
+
+## Shell prompt bloğu CLI turunda araçları namespace'li adıyla duyuruyor (2026-09-02) ✅
+
+**Doğrulama:** `go test ./internal/agent -run 'ShellToolsContextBlock'` ✅ (7/7),
+`go build ./...` ✅.
+
+**Sorun:** `ShellToolsContextBlock` "Call Bash by that exact name" diyordu. claude-cli
+yolunda TionHarness kendi shell'ini köprülediğinde CLI'ın **native** `Bash` ailesi
+bilerek `--disallowedTools`'a giriyor (`climcp.go`), yani çıplak `Bash` çağrısı
+`No such tool available: Bash. Bash is disabled for this session` ile ölüyor ve model
+namespace'i tahmin ederek toparlanmak zorunda kalıyor. Bu oturumda birebir yaşandı;
+`INSIGHT-BACKLOG.md` de aynı uyumsuzluğu iki oturumda kaydetmiş.
+
+**Nasıl:** `shellToolNamesFor(provider, names)` — `skillToolNameFor` ile aynı desen ve
+aynı `isCLIProviderKind` kapısı: CLI sağlayıcısında adlar `interactionToolPrefix` ile
+öneklenir, native sağlayıcıda çıplak kalır. Allow/denylist geçidi **çıplak** adlar
+üzerinde kalıyor — araç filtresi onlarla anahtarlanmış durumda.
+
+**Dosyalar:** `internal/agent/runtime_prompt.go`, `internal/agent/shellcontext_test.go`.
+
 ## `get_session_info` başka bir oturumun aktivite izini de döndürüyor (2026-09-02) ✅
 
 **Doğrulama:** `go build ./...` ✅, `gofmt` ✅,

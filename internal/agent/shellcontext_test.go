@@ -146,6 +146,38 @@ func TestShellToolsContextBlockAllowlistPartialShell(t *testing.T) {
 	}
 }
 
+// A CLI agent reaches TionHarness's shell through the Interaction MCP bridge, and
+// claude-cli's OWN native Bash is suppressed once that bridge is up (climcp.go).
+// Advertising the bare name there sends the model at a tool that answers "No such
+// tool available: Bash. Bash is disabled for this session", so the block must name
+// the namespaced form instead.
+func TestShellToolsContextBlockCLIProviderNamespacesNames(t *testing.T) {
+	names := tools.ShellToolNames()
+	if len(names) == 0 {
+		t.Skip("no backing shell interpreter on this host; enabled branch unreachable")
+	}
+	rt, _, ctx := shellCtxRuntime(t, true, nil)
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "CLIShell", Provider: "claude-cli"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	got := rt.ShellToolsContextBlock(ctx, agent, false)
+	if !strings.Contains(got, "ENABLED") {
+		t.Fatalf("CLI agent should still be told shell is ENABLED\nblock: %s", got)
+	}
+	for _, n := range names {
+		want := interactionToolPrefix + n
+		if !strings.Contains(got, want) {
+			t.Errorf("CLI block omits the namespaced tool %q\nblock: %s", want, got)
+		}
+		// The bare name must not stand alone as a callable instruction.
+		if strings.Contains(strings.ReplaceAll(got, want, ""), n) {
+			t.Errorf("CLI block still advertises the bare name %q\nblock: %s", n, got)
+		}
+	}
+}
+
 // The agent DENYLIST is the user-facing restriction (the allowlist above is the
 // legacy profile one) and must gate the block identically — "PowerShell disabled
 // to force Bash" is a real workspace configuration.

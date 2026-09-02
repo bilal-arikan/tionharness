@@ -98,6 +98,12 @@ func (r *Runtime) ShellToolsContextBlock(ctx context.Context, agent db.Agent, co
 			"call. Reach the goal with the file tools (Read / Glob / Grep / Edit / Write), or report " +
 			"that the step needs a shell that is not available in this context."
 	}
+	// Name the tools as THIS agent will actually call them. On a CLI turn the bare
+	// name is not merely unqualified — claude-cli's OWN native Bash is suppressed
+	// once TionHarness's shell is bridged (climcp.go), so a bare `Bash` call dies
+	// with "No such tool available: Bash. Bash is disabled for this session" and
+	// the model has to guess the namespace to recover.
+	names = shellToolNamesFor(agent.Provider, names)
 	noun, verb := "tool", "runs"
 	if len(names) > 1 {
 		noun, verb = "tools", "run"
@@ -109,6 +115,22 @@ func (r *Runtime) ShellToolsContextBlock(ctx context.Context, agent db.Agent, co
 	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
 		" " + verb + " host commands — " + scope + ", " +
 		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
+}
+
+// shellToolNamesFor renders shell tool names the way the given provider exposes
+// them: bare for a native (API) agent, Interaction-MCP-namespaced for a CLI one.
+// Same reasoning as skillToolNameFor, and the same forms climcp_matcher.go
+// matches hooks against — the allow/denylist gating in availableShellToolNames
+// stays on the BARE names, because that is what the tool filter is keyed by.
+func shellToolNamesFor(provider string, names []string) []string {
+	if !isCLIProviderKind(provider) {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, interactionToolPrefix+n)
+	}
+	return out
 }
 
 // availableShellToolNames narrows the host's backing shell interpreters

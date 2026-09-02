@@ -93,6 +93,18 @@ type Manager struct {
 	workspaces map[string]*Workspace
 	order      []string // creation order (first = default)
 
+	// bg tracks the detached goroutines the store hooks dispatch (activity-inbox
+	// drains, automation and card-worktree reactions). They outlive the call that
+	// started them and touch the workspace's store directory, so Close waits for
+	// them: without that, a caller that closes the manager and then removes the
+	// tree — the app on shutdown, and every test using t.TempDir — races a drain
+	// still writing under store/activity-inbox and the removal fails.
+	// bgClosed (under bgMu) makes the wait final: no goroutine may be added once
+	// Close has begun draining.
+	bgMu     sync.Mutex
+	bgClosed bool
+	bg       sync.WaitGroup
+
 	// degraded holds every workspace that is REGISTERED but could not be opened (a
 	// corrupt store file, a missing/unreadable data directory). It is not live — it
 	// has no DB or runtime — but persist() writes it back to workspaces.json all
@@ -492,11 +504,11 @@ func (m *Manager) open(meta Meta) error {
 					Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
 				})
 			}
-			go func() {
+			m.goBackground(func() {
 				if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
 					m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
 				}
-			}()
+			})
 			return nil
 		}
 		rt.Emit(events.Event{
@@ -504,24 +516,26 @@ func (m *Manager) open(meta Meta) error {
 			Level:  "info",
 			Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
 		})
-		go autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
-			SessionID:             sig.SessionID,
-			MessageTotal:          sig.MessageTotal,
-			MessageDelta:          sig.MessageDelta,
-			ToolTotal:             sig.ToolTotal,
-			ToolDelta:             sig.ToolDelta,
-			WorkspaceMessageTotal: sig.WorkspaceMessageTotal,
-			WorkspaceToolTotal:    sig.WorkspaceToolTotal,
+		m.goBackground(func() {
+			autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
+				SessionID:             sig.SessionID,
+				MessageTotal:          sig.MessageTotal,
+				MessageDelta:          sig.MessageDelta,
+				ToolTotal:             sig.ToolTotal,
+				ToolDelta:             sig.ToolDelta,
+				WorkspaceMessageTotal: sig.WorkspaceMessageTotal,
+				WorkspaceToolTotal:    sig.WorkspaceToolTotal,
+			})
 		})
 		return nil
 	}); err != nil {
 		return fmt.Errorf("register activity hook: %w", err)
 	}
-	go func() {
+	m.goBackground(func() {
 		if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
 			m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
 		}
-	}()
+	})
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
@@ -561,12 +575,12 @@ func (m *Manager) open(meta Meta) error {
 		WorktreeRoot: worktreeRoot,
 	}
 	database.SetBoardHook(func(ev db.BoardChangeEvent) {
-		go autoEngine.OnBoardChange(context.Background(), ev)
-		go func() {
+		m.goBackground(func() { autoEngine.OnBoardChange(context.Background(), ev) })
+		m.goBackground(func() {
 			if err := cardWorktrees.Handle(context.Background(), ev); err != nil {
 				m.logger.Error("card worktree lifecycle failed", "workspace", meta.ID, "task", ev.TaskID, "error", err)
 			}
-		}()
+		})
 	})
 
 	m.mu.Lock()
@@ -1041,8 +1055,35 @@ func removeDegraded(list []DegradedWorkspace, id string) []DegradedWorkspace {
 	return out
 }
 
+// goBackground runs fn on a detached goroutine Close() will wait for. Work
+// dispatched after Close has started draining is DROPPED rather than started:
+// the process (or the test) is on its way out, and a late goroutine is exactly
+// the one that would touch the store directory after it is gone.
+func (m *Manager) goBackground(fn func()) {
+	m.bgMu.Lock()
+	if m.bgClosed {
+		m.bgMu.Unlock()
+		return
+	}
+	m.bg.Add(1)
+	m.bgMu.Unlock()
+	go func() {
+		defer m.bg.Done()
+		fn()
+	}()
+}
+
 // Close stops every workspace's runtime and closes its database.
+//
+// The hook-dispatched background work is drained FIRST, while the stores are
+// still open: a drain that ran against an already-closed DB would only log a
+// failure for work it could no longer finish.
 func (m *Manager) Close() {
+	m.bgMu.Lock()
+	m.bgClosed = true
+	m.bgMu.Unlock()
+	m.bg.Wait()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ws := range m.workspaces {
