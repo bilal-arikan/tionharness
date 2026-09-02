@@ -1,5 +1,26 @@
 # TionHarness — İlerleme Takibi
 
+## Kenar çubuğu boşaldı: canlı chip'ler daraltıcı yazılmıştı (2026-09-02) 🐛✅
+
+**Belirti.** R2 (`589fda4e`) sonrası kenar çubuğunda yalnız o an çalışan oturumlar
+görünüyor, "eski oturumlar kaybolmuş" gibi duruyordu. Veri sağlamdı:
+`/api/sessions` (chip'siz) 312 oturum döndürüyordu.
+
+**Kök neden.** `sessions_chips.go` `sessionMatchesChips`, `running` /
+`awaiting-workers` chip'lerini "işaretliyse YALNIZ o durumdaki oturumları göster"
+diye uygulamıştı. Kenar çubuğu varsayılan olarak tüm chip'leri gönderir
+(`chipsOff` saklanır, seçim = tümü − kapalılar), dolayısıyla her sayfa canlı
+oturumlara daralıyordu. Frontend semantiği (`sessionKindMeta.sessionMatchesChips`)
+tam tersidir: canlı chip, `worker`/`archived` gibi **kapsam kapısıdır** —
+işaretsizse o durumdaki oturumu gizler, boştaki oturuma dokunmaz.
+
+**Düzeltme.** Sunucu predicate'i frontend ile birebir hizalandı
+(`sessionLiveScope`: running > awaiting-workers > boş; kapsam chip'i kapalıysa
+gizle; tür chip'i yine zorunlu). Regresyon testi
+`internal/api/sessions_live_chips_test.go` (tüm chip'ler açık → boştakiler
+görünür; `running` kapalı → canlı gizli; yalnız `running` → tür chip'i şart).
+Kurtarma gerekmedi; uygulamayı yeni derlemeyle yeniden başlatmak yeter.
+
 ## Rota ekranı F0 — projeksiyon kanvası (2026-09-02) ✅
 
 **Belirti.** R10 iskeleti şeritleri düz liste olarak gösteriyordu; brifin git-graf

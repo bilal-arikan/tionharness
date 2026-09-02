@@ -178,7 +178,10 @@ yerine, zaten otoriter olan kaynakların tek yerde katlanması:
   okur (RunningSet = running ∪ awaiting_workers, eski kapsam sözleşmesi korunur).
   Yeni uç `GET /api/workspace/liveness`. `sessions_chips.go`'daki "canlılık çipleri
   istemcide kalır" istisnası kalktı: `running`/`awaiting-workers` sunucuda sayfalar
-  ve sayar.
+  ve sayar. **Düzeltme (aynı gün):** ilk kesim bu iki chip'i "işaretliyse yalnız
+  canlıları göster" diye daraltıcı uygulamıştı; kenar çubuğu tüm chip'leri
+  gönderdiğinden liste canlı oturumlara indi. Frontend'deki gibi kapsam kapısına
+  çevrildi (bkz. `05-ILERLEME.md` aynı tarihli kayıt).
 - `SetExternalActiveSessions` köprüsü **kaldırılmadı**: chat turları slot claim ettiği
   için büyük ölçüde gereksiz ama istek gelişi ile slot arası pencereyi kapatıyor;
   ayrıca `liveSessions` `s.runs`'ı doğrudan da katlıyor (manager wiring'i olmayan

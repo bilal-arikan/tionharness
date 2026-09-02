@@ -128,10 +128,18 @@ func parseChips(raw string, given bool) (map[string]bool, bool) {
 	return sel, true
 }
 
-// sessionMatchesChips mirrors the sidebar predicate: an archived or worker
-// session additionally needs its scope chip, the kind chip must be on, and a
-// ticked live chip narrows to sessions in that liveness state (both ticked =
-// either state).
+// sessionMatchesChips mirrors the sidebar predicate
+// (frontend sessionKindMeta.sessionMatchesChips): the kind chip must be on, and
+// an archived / worker / live session additionally needs its SCOPE chip on. The
+// live chips are scope gates exactly like worker and archived — unticking
+// "running" hides the sessions that are running right now and nothing else;
+// an idle session is never touched by them. (The R2 cut had them the other way
+// round — "ticked = show only live" — which, with the sidebar sending every chip
+// by default, emptied the list down to the sessions in flight.)
+//
+// `running` wins over `awaiting-workers`: a coordinator that is itself
+// streaming is gated by the running chip only, so a row is filtered by exactly
+// one live scope (sessionLiveScope in the frontend).
 func sessionMatchesChips(s db.Session, sel map[string]bool, live liveness.Snapshot) bool {
 	if s.State == "archived" && !sel[chipArchived] {
 		return false
@@ -139,14 +147,22 @@ func sessionMatchesChips(s db.Session, sel map[string]bool, live liveness.Snapsh
 	if sessionIsWorker(s) && !sel[chipWorker] {
 		return false
 	}
-	if !sel[sessionChipKey(s)] {
+	if scope := sessionLiveScope(s.ID, live); scope != "" && !sel[scope] {
 		return false
 	}
-	if sel[chipRunning] || sel[chipAwaitingWorkers] {
-		return (sel[chipRunning] && live.Is(s.ID, liveness.Running)) ||
-			(sel[chipAwaitingWorkers] && live.Is(s.ID, liveness.AwaitingWorkers))
+	return sel[sessionChipKey(s)]
+}
+
+// sessionLiveScope classifies a session on the live-activity axis: running,
+// awaiting-workers, or "" when idle.
+func sessionLiveScope(id string, live liveness.Snapshot) string {
+	if live.Is(id, liveness.Running) {
+		return chipRunning
 	}
-	return true
+	if live.Is(id, liveness.AwaitingWorkers) {
+		return chipAwaitingWorkers
+	}
+	return ""
 }
 
 // sessionChipCounts counts the supplied non-chip scope per chip so the sidebar
