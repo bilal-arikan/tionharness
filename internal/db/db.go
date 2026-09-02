@@ -96,6 +96,17 @@ type DB struct {
 	// event log / trajectory projection (see store_session_hook.go).
 	sessionHook   SessionChangeFn
 	sessionHookMu sync.RWMutex
+
+	// Trajectory ("Rota") store: sidecars live in each root session's directory;
+	// trajIndex is the boot-loaded listing (trajectories/index.json). trajLocks
+	// serialise writers per root; trajIndexMu guards the map + its file. See the
+	// lock-order note in store_trajectory.go.
+	trajIndex   map[string]TrajectoryIndexEntry
+	trajIndexMu sync.RWMutex
+	trajLocks   map[string]*sync.Mutex
+	trajLocksMu sync.Mutex
+	trajHook    TrajectoryChangeFn
+	trajHookMu  sync.RWMutex
 	// activityDeliveryMu protects the per-event delivery claims. It is never held
 	// while invoking a hook: callbacks may re-enter this DB and may be slow.
 	activityDeliveryMu sync.Mutex
@@ -269,6 +280,7 @@ const (
 	dirHooks              = "hooks"
 	dirUsage              = "usage"
 	dirSessionUsage       = "session-usage"
+	dirTrajectories       = "trajectories" // index.json only; the graphs are session sidecars
 )
 
 // countersFile stores the per-entity id sequence at the workspace store root.
@@ -293,6 +305,7 @@ const (
 	idHook       = "HOK"
 	idSchedule   = "SCH"
 	idAutomation = "AUT"
+	idTrajectory = "RTA" // "Rota"
 )
 
 // loadCounters reads the persisted id sequence. A missing file is fine (fresh
@@ -461,6 +474,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.timeLoadPhase("activitySequence", d.loadActivitySequence); err != nil {
+		return err
+	}
+	if err := d.timeLoadPhase("trajectoryIndex", d.loadTrajectoryIndex); err != nil {
 		return err
 	}
 	// One bucket for the flat entity directories (agents/tasks/schedules/mcp/

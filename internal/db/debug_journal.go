@@ -189,6 +189,11 @@ func sanitizeDebugName(eventType, value string) string {
 		switch value {
 		case "/compact", "/compact-custom", "/handoff", "/refresh-context":
 			return value
+		// Named fail-closed / durability events (_Docs/38 "Adlandırılmış error
+		// olayları"): fixed identifiers, not free text, so they stay readable.
+		case "mcp_server_gate_malformed", "tool_permission_config_malformed",
+			"inbox_corrupt", "orphan_recovery_failed", "sidecar_corrupt":
+			return value
 		}
 	}
 	if eventType == DebugLifecycle {

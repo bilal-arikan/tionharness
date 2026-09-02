@@ -1208,7 +1208,9 @@ func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func
 		return err
 	}
 	// Both the transcript lock and d.mu are released by now (deferred inside
-	// deleteSessionUnderLocks), which is the hook's contract.
+	// deleteSessionUnderLocks), which is the hook's contract — and the
+	// trajectory lock order's (never under d.mu).
+	d.dropTrajectoryForRoot(sessionID)
 	d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpDelete, Session: removed})
 	return nil
 }

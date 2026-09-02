@@ -1,5 +1,33 @@
 # TionHarness — İlerleme Takibi
 
+## Sidecar soyutlaması ve Rota deposu iskeleti — Rota altyapısı R4 (2026-09-02) ✅
+
+**Belirti.** `inbox.json`, `inflight.json`, `prompt_epoch.json`, `progress/` her
+biri kendi atomik yazım / "yok mu, bozuk mu" / karantina kodunu taşıyordu; Rota'nın
+`trajectory.json`'ı altıncı kopya olacaktı.
+
+**Ne.** `db.Sidecar[T]` (`sidecar.go`): tipli, atomik yazılan, "yok ≠ hata" okunan,
+çözülemeyince `<ad>.corrupt-<unix>` olarak kenara alınıp `sidecar_corrupt` debug
+olayı yazan ve `SidecarCorruptError` döndüren yan dosya. Kilit çağıranındır. İlk
+müşteri Rota: `Trajectory` modeli (`models_trajectory.go` — faz/oturum/otomasyon/
+flowrun/gate/optimizer düğümleri, `declared`/`observed`, kenar türleri, `Validate()`)
+ve deposu (`store_trajectory.go` — kök oturum başına sidecar, `trajectories/index.json`
+boot indeksi, bozuk indekste sidecar taramasıyla yeniden kurulum, `RTA` id'leri,
+`UpdateTrajectory` revizyon CAS'ı + yeni `db.ErrConflict`, `SetTrajectoryHook`,
+kök oturum silinince satır düşer). Debug günlüğü okuyucusundaki `error` ad
+allowlist'ine 38'de belgeli dört ad + `sidecar_corrupt` eklendi (okurken parmak
+izine dönüşüyorlardı). inbox/progress'in taşınması ve HTTP uçları sonraya.
+
+**Dosyalar.** `internal/db/sidecar.go`, `models_trajectory.go`, `store_trajectory.go`
+(yeni), `db.go`, `store.go`, `debug_journal.go`; `_Docs/02`, `_Docs/38`, `_Docs/77`,
+`CLAUDE.md`.
+
+**Doğrulama.** `go build ./...` ✅, `go test ./internal/db/` ✅ (yeni:
+`TestSidecarRoundTrip`, `TestSidecarCorruptIsQuarantined`,
+`TestTrajectoryCreateGetList`, `TestTrajectoryValidation`, `TestTrajectoryUpdateCAS`,
+`TestTrajectoryIndexSurvivesReopenAndRebuild`, `TestTrajectoryDeleteAndRootDelete`,
+`TestTrajectoryCorruptSidecar`).
+
 ## Oturum kökeni tek kaynağa bağlandı — Rota altyapısı R1 (2026-09-02) ✅
 
 **Belirti.** "Bu oturumu kim başlattı" sorusunun altı ayrı cevabı vardı:

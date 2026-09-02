@@ -217,6 +217,26 @@ index ile sidecar tutarlılığı.
 
 **Boyut:** M. **Açar:** F1.
 
+**Gerçekleşen (2026-09-02, dal `rota/r4-sidecar-trajectory`).** Sapmalar:
+
+- `Sidecar[T]` karantinada `DebugError` olayının adı `sidecar_corrupt`; debug günlüğü
+  okuyucusunun ad allowlist'ine bu adla birlikte 38'de belgelenmiş ama okuyucuda
+  eksik olan dört ad (`mcp_server_gate_malformed`, `tool_permission_config_malformed`,
+  `inbox_corrupt`, `orphan_recovery_failed`) da eklendi — aksi halde okurken parmak
+  izine dönüşüyorlardı.
+- Trajectory modeli brifteki şekle ek olarak `Meta map[string]string` (projeksiyon
+  katmanının şerit sayacı gibi küçük verisi) ve düğümde `RefKind/RefID` (view.Ref
+  köprüsü, import döngüsü olmadan) taşıyor. `Validate()` yapısal: benzersiz id,
+  kenar uçları, `PhaseID` yalnız faz düğümüne.
+- `UpdateTrajectory` iki modlu: `expectedRev>0` CAS (UI/ajan), `0` koşulsuz ekleme
+  (runtime gözlemcisi, kilit altında). Kimlik alanları `fn`'den korunur.
+- İndeks yoksa boot taramaz (ilk yazım indeksi kurar); **bozuksa** karantina +
+  sidecar taraması. `RebuildTrajectoryIndex()` onarım aracı olarak dışa açık.
+- Kök oturum silinince indeks satırı `deleteSession` içinde, kilitler bırakıldıktan
+  sonra düşer (kilit sırası: rota kilidi → indeks → `mu`).
+- inbox/progress'in `Sidecar`'a taşınması bu dalda **yapılmadı** (ayrı PR).
+- HTTP uçları yok; F1'de gelir. Testler: `sidecar_test.go`, `store_trajectory_test.go`.
+
 ### R5 — Otomasyon çekirdeği: tetik kaydı, ateşleme defteri, arşiv
 
 **Neden.** Boşluk 5. `phase`/`trajectory_end` tetikleri switch'e iki dal daha
