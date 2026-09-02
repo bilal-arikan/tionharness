@@ -210,6 +210,24 @@ temizlenmemiş bir mesaj yeniden yazılmaz.
 altında hiçbir transkript I/O'su yapılmaz. Profil tarafındaki karşılığı için bkz.
 [16-PROFILLEME.md](16-PROFILLEME.md).
 
+**Aktivite WAL'ı (2026-09-02):** `AddMessage` artık satırı eklemeden önce
+oturum dizinine bir `cli-reply.wal.json` yazar ve workspace düzeyindeki
+aktivite sırasını (`activity-sequence.json`) rezerve eder; satır indikten sonra
+sinyal bir outbox dosyasına yazılır, WAL ise ancak o zaman silinir. Böylece
+sayaç otomasyonlarını besleyen aktivite sinyali sürecin her iki tarafındaki
+çökmeyi de atlatır. İki kural bu yolu "sessiz başarı"ya düşmekten korur:
+
+- **Dizin zaten var olmalı.** `durableAtomicWriteBytes` yazdığı dizini
+  oluşturur; WAL artık append'in İLK yazımı olduğu için bu, silinmiş bir oturum
+  dizinini sessizce yeniden yaratıp append'i başarılı kılardı.
+  `reserveActivitySequence` bu yüzden önce `os.Stat(dir)` yapar ve dizin yoksa
+  hata döner.
+- **Append başarısızsa WAL geri alınır.** `AddMessage`'ın sözleşmesi "başarısız
+  append arkasında hiçbir şey bırakmaz"; kalan bir WAL, o oturumdaki sonraki her
+  işlemin çağırana "kalıcı olmadı" denmiş bir mesajı replay etmesine yol açardı.
+  `AddMessageWithCLIState`'in WAL'ı bunun tersidir: çok dosyalı bir commit'i
+  kapsar ve çökmeyi kasten atlatır, bu yüzden hata yolunda diskte bırakılır.
+
 **Header/transkript ayrımı neden var:** header ile mesajlar tek dosyadayken
 *sadece* metadata değiştiren her işlem — yeniden adlandırma, etiket, pin,
 okundu işaretleme, rolling summary — tüm transkripti yeniden encode edip diske
