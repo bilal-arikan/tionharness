@@ -94,6 +94,8 @@ type chatRun struct {
 	skill       skillLoader                  // current agent's skill loader, for the Interaction MCP use_skill tool
 	skillSearch skillSearcher                // current agent's skill searcher, for the Interaction MCP skill_search tool
 	skillAllow  skillAllowedFunc             // current agent's skill allowed-tools lookup, for use_skill auto-grant (SK-3)
+	skillLedger *tools.SkillLedger           // session use_skill dedupe ledger, shared with the native tool
+	skillEpoch  int                          // fold epoch the ledger entries are valid in (session CompactionCount)
 	shell       shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
 	runAgent    runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
@@ -396,6 +398,23 @@ func (r *chatRun) grantStore() *tools.PermissionGrants {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.grants
+}
+
+// setSkillLedger installs the session's use_skill dedupe ledger and the fold
+// epoch this turn's entries are valid in, so the Interaction MCP use_skill
+// bridge suppresses duplicate bodies exactly like the native tool does.
+func (r *chatRun) setSkillLedger(l *tools.SkillLedger, epoch int) {
+	r.mu.Lock()
+	r.skillLedger, r.skillEpoch = l, epoch
+	r.mu.Unlock()
+}
+
+// skillLedgerFor returns the session's skill ledger and its epoch (nil ledger
+// when none is installed — the bridge then always serves the full body).
+func (r *chatRun) skillLedgerFor() (*tools.SkillLedger, int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.skillLedger, r.skillEpoch
 }
 
 // setArtifacts installs the artifact sink for the currently responding agent so

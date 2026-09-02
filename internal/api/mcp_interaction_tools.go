@@ -293,7 +293,8 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 		return interaction.CallResult{Text: "skills are not available for this turn", IsError: true}, nil
 	}
 	var in struct {
-		Slug string `json:"slug"`
+		Slug  string `json:"slug"`
+		Force bool   `json:"force"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return interaction.CallResult{Text: "invalid use_skill input: " + err.Error(), IsError: true}, nil
@@ -302,9 +303,26 @@ func (b *interactionBackend) callUseSkill(run *chatRun, args json.RawMessage) (i
 	if slug == "" {
 		return interaction.CallResult{Text: "slug is required", IsError: true}, nil
 	}
+	// Session-scoped dedupe, same contract as the native tool: a slug already
+	// loaded in this fold epoch gets a pointer instead of the body. Grants are
+	// still (re)applied so the skill's tools stay allowed either way.
+	ledger, epoch := run.skillLedgerFor()
+	if !in.Force && ledger != nil {
+		if already, ordinal := ledger.Note(slug, epoch); already {
+			b.grantSkillToolsCLI(run, slug)
+			return interaction.CallResult{Text: tools.SkillReloadPointer(slug, ordinal)}, nil
+		}
+	}
 	body, err := load(slug)
 	if err != nil {
+		// Do not let a failed load leave a ledger entry behind — that would suppress
+		// every later load of this slug on the strength of a read that never happened.
+		ledger.Forget(slug)
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+	}
+	if in.Force && ledger != nil {
+		ledger.Forget(slug)
+		ledger.Note(slug, epoch)
 	}
 	// SK-3 parity: auto-grant the skill's declared allowed-tools to the session,
 	// mirroring the native use_skill tool, so the CLI agent runs them without a

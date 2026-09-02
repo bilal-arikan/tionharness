@@ -265,6 +265,13 @@ func (t *chatTurn) wireInteractive() {
 	grants := t.s.grants.forSession(t.wsp.ID, t.session.ID)
 	t.run.setGrants(grants)
 	t.ctx = tools.WithGrants(t.ctx, grants)
+	// Session-scoped use_skill dedupe. The epoch is the session's rolling-summary
+	// fold count: after a fold the earlier skill body is no longer in the window,
+	// so the next load must serve the real text again. Wired onto the run as well
+	// so the CLI bridge's use_skill shares the same ledger as the native tool.
+	skillLedger := t.s.skillLedgers.forSession(t.wsp.ID, t.session.ID)
+	t.run.setSkillLedger(skillLedger, t.session.CompactionCount)
+	t.ctx = tools.WithSkillLedger(t.ctx, skillLedger, t.session.CompactionCount)
 	t.ctx = tools.WithPermissionPrompter(t.ctx, func(ctx context.Context, tool, risk, arg string, options []string) (string, error) {
 		pi := t.s.openInteraction(t.wsp.ID, t.session.ID, "permission", map[string]any{
 			"tool": tool, "reason": risk, "text": arg, "options": options,

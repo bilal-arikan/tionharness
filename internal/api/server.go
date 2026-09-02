@@ -58,6 +58,7 @@ type Server struct {
 	stopWorker    func(context.Context, *workspace.Workspace, string) error
 	deleteSession func(context.Context, *workspace.Workspace, string) error // test seam for delete-lock ordering
 	grants        *permGrantStore                                           // per-session "Always allow" permission grants
+	skillLedgers  *skillLedgerStore                                         // per-session use_skill dedupe (body sent once per fold epoch)
 	logger        *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),
@@ -123,6 +124,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 		inbox:        newInboxStore(),
 		runs:         newChatRuns(),
 		grants:       newPermGrantStore(),
+		skillLedgers: newSkillLedgerStore(),
 		logger:       logger,
 		// Workspace-independent market store (bundled + global tiers) for the
 		// workspace-template picker, which must work with zero workspaces during

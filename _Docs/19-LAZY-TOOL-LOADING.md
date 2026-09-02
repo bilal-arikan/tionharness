@@ -813,8 +813,9 @@ seviyesinde olur.
 - **Okuma tek noktadan**: `agent.ParseToolOverrides(db.Agent)` iki kaynağı **birleştirir**
   — legacy denylist `blocked` olarak katlanır (migrasyon budur), ama açık bir override
   daima kazanır (aynasında hâlâ yasaklı görünen bir aracı bilerek serbest bırakan ajan
-  onurlandırılır). Bozuk JSON **sessizce yutulmaz ama fatal de değildir**: override'sız
-  duruma düşer, ajan çalışmaz hale gelmez.
+  onurlandırılır). Bozuk JSON'un davranışı **çağıran yola bağlıdır**: görüntüleme
+  lenient (`ParseToolOverrides`), yaptırım fail-closed (`ParseToolOverridesErr`) —
+  bkz. aşağıdaki "Bozuk izin belgesi" bölümü.
 
 ### Desen (`prefix*`) genişletmesi
 
@@ -881,6 +882,36 @@ anahtarı artık üç biçimden biri olabilir:
 - Testler: `agent/tooloverrides_test.go` (parse/migrasyon/desen),
   `agent/tooloverrides_integration_test.go` (ajan workspace'i ezer, `blocked` katalogdan
   düşer, legacy denylist hâlâ yasaklar, `BlockedTools` aynası)
+
+### Bozuk izin belgesi = fail-closed (2026-09-01)
+
+İzin alanları (`AllowedTools`, `ToolOverrides`, `BlockedTools`) çözülemediğinde
+kod eskiden hatayı `_ =` ile yutuyordu. Sonuç **fail-OPEN**'dı: boş desen listesi
+"kısıt yok" demektir, yani bozuk bir allowlist ajana **her aracı** veriyordu —
+tam olarak belgenin engellemek için var olduğu şeyi.
+
+**Kural: lenient parser YALNIZ görüntüleme, yaptırım DAİMA fail-closed.**
+
+| Fonksiyon | Kullanım | Bozuk JSON'da |
+|---|---|---|
+| `ParseToolOverrides` | **yalnız display**: `toolsetup.go` görünürlük katmanı (`applyVisibilityOverrides`), `api/agent_tools.go`, `api/agent_tool_access.go` | hatayı düşürür, ayrıştırılabilen alanları döndürür — bozuk belge ajan ekranını render edilemez yapmaz |
+| `ParseToolOverridesErr` (yeni) | **yaptırım**: `blockFunc`, `mcpServerGate` | `(kısmi harita, error)` — çağıran hatayı fail-closed'a çevirmek zorundadır |
+
+Sonraki ajana not: lenient olanı bir yaptırım yoluna sokmak sessizce izin
+genişletir; yeni bir enforcement çağrısı daima `ParseToolOverridesErr` kullanır.
+
+**Predicate katmanı (`internal/agent/toolsetup.go`):**
+
+- `allowFunc` ve `blockFunc` artık `(func(string) bool, error)` döner. Boş alan
+  hata değildir (kısıt yok, davranış aynı); **çözülemeyen** belge sırasıyla
+  **deny-all** ve **block-all** predicate üretir.
+- `toolFilter` iki hatayı `errors.Join` ile birleştirir, `logger.Error` basar,
+  `db.DebugError` tipinde **`tool_permission_config_malformed`** debug olayı yazar
+  ve **her aracı reddeden** filtre döner. Ajanın gerçek sınırları bilinmiyorsa tek
+  güvenli cevap "hiçbir araç" — ve bu, sessizce değil, iki kanaldan söylenir.
+
+**Sunucu kapısı (`mcpServerGate`)** aynı kuralı CLI mount yolunda uygular; ayrıntı:
+`_Docs/52-MCP-GATEWAY.md`.
 
 ## Sohbet composer'ında araç müfettişi (salt bilgi)
 
@@ -982,3 +1013,18 @@ alanları göndermezse rozet hiç çizilmez — sahte "0" gösterilmez.
 Sayılar **tahmindir**: gruplar arası karşılaştırma için, faturalama için değil. Bu
 yüzden testleri de mutlak değere değil ilişkiye bakar (boş liste 0, uzun şema daha
 pahalı, `Examples` yalnız `full` tier'ı büyütür).
+
+## `use_skill` gövde tekrarı — oturum-kapsamlı dedupe (2026-09-01)
+
+Lazy yükleme skill **kataloğunu** ucuzlattı ama gövdenin **tekrar tekrar**
+yüklenmesine karşı bir koruma yoktu. Uzun bir koordinatör oturumunda
+(`SES2570`) `use_skill` 174 kez çağrıldı ve **167'si** aynı oturumda daha önce
+yüklenmiş bir slug'dı — 2.25 MB ≈ ~560K token, iki fold arasındaki context
+büyümesinin neredeyse tamamı.
+
+`tools.SkillLedger` oturum başına yüklenen slug'ları tutar; ikinci istekte
+gövde yerine kısa bir işaretçi döner. Fold epoch'u (`Session.CompactionCount`)
+doğruluk kapısıdır: fold gövdeyi pencereden düşürdüğü için fold sonrası ilk
+yükleme gerçek metni döndürür. Kaçış yolu `force: true`.
+
+Ayrıntı ve gerekçe: `_Docs\47-KOORDINATOR-COKLU-AJAN.md` §19.1.

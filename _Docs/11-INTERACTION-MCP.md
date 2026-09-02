@@ -295,7 +295,7 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `create_artifact` / `update_artifact` | bloklamayan | Faz 2 |
 | `request_confirmation` (evet/hayır) | bloklayan | Faz 2 |
 | `schedule_wake` | bloklamayan | Faz 2 |
-| `use_skill` | bloklamayan (skill gövdesi döndürür; yüklerken skill'in `always_allow` araçlarını oturum grant'larına ekler — SK-3) | Faz 4 |
+| `use_skill` | bloklamayan (skill gövdesi döndürür; yüklerken skill'in `always_allow` araçlarını oturum grant'larına ekler — SK-3). Aynı oturumda **ikinci kez** istenen slug için gövde yerine kısa işaretçi döner (`tools.SkillLedger`, fold epoch'una duyarlı); `force: true` gövdeyi zorlar — bkz. `_Docs\19-LAZY-TOOL-LOADING.md` | Faz 4 |
 | `skill_search` | bloklamayan (anahtar kelimeyle skill bulur; koşullu/on-demand skill'leri keşfeder) | 2026-06-23 (SK-2) |
 | `Bash` (CLI köprüsü, eski `shell`) | bloklamayan (komut çıktısı) | 2026-06-19 |
 | `spawn_session` (CLI köprüsü) | bloklamayan (fire-and-forget) | Faz 4 |
