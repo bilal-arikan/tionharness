@@ -10,25 +10,37 @@ import { api } from '@/api'
 import { EmptyState } from '@/shared/components'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { useLanes, connectLanes, seedLanes, resetLanes } from '@/shared/lib/laneStore'
+import { trajectoryForRoot } from '@/shared/lib/laneModel'
 import { seedLiveness, seedSessions, seedTrajectories } from '@/shared/lib/laneReducer'
 import { useServerNow } from './useServerNow'
 import { layoutRota } from './rotaLayout'
 import { RotaCanvas, type RotaSelection } from './RotaCanvas'
 import { RotaActivity } from './RotaActivity'
 import { RotaToolbar, type IdleCutoff } from './RotaToolbar'
+import { RotaTrajectoryView } from './RotaTrajectoryView'
 
 interface Props {
   workspaceId: string
   onError: (msg: string) => void
   onOpenSession?: (sessionId: string) => void
   onOpenFlowRun?: (flowId: string) => void
+  // Zoomed trajectory (deep link #/w/WS/rota/RTA12); null = workspace lanes.
+  trajectoryId: string | null
+  onTrajectory: (id: string | null) => void
 }
 
 // Sessions the seed pulls: the most recently active ones; older lanes arrive
 // through the stream only when they change again.
 const SEED_LIMIT = 200
 
-export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }: Props) {
+export function RotaPanel({
+  workspaceId,
+  onError,
+  onOpenSession,
+  onOpenFlowRun,
+  trajectoryId,
+  onTrajectory,
+}: Props) {
   const lanes = useLanes()
   const now = useServerNow(5000)
   const [selected, setSelected] = useState<RotaSelection | null>(null)
@@ -83,13 +95,23 @@ export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }
   const layout = layoutRota(lanes, { now, idleCutoffSec: cutoff })
   const loading = lanes.revision === 0 || lanes.stale
 
-  // ↑/↓ walk the lanes; Enter opens the selected session; Esc clears.
+  // The selected session's own trajectory (for the "◈ Rotayı aç" shortcut).
+  const selectedTrajectory = (() => {
+    if (selected?.kind !== 'session') return undefined
+    const s = lanes.sessions.get(selected.id)
+    const root = s ? s.rootSessionId || s.id : selected.id
+    return trajectoryForRoot(lanes, root)
+  })()
+
+  // ↑/↓ walk the lanes; Enter opens the selected session; Esc clears (or
+  // leaves the trajectory zoom).
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (layout.rows.length === 0) return
     if (e.key === 'Escape') {
-      setSelected(null)
+      if (selected) setSelected(null)
+      else if (trajectoryId) onTrajectory(null)
       return
     }
+    if (trajectoryId || layout.rows.length === 0) return
     if (e.key === 'Enter' && selected?.kind === 'session') {
       onOpenSession?.(selected.id)
       return
@@ -130,7 +152,7 @@ export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }
       </header>
       <div className="flex min-h-0 flex-1">
         <div ref={hostRef} className="min-w-0 flex-1 overflow-auto">
-          {layout.rows.length === 0 ? (
+          {layout.rows.length === 0 && !trajectoryId ? (
             <EmptyState
               icon={Waypoints}
               title={loading ? 'Şeritler yükleniyor…' : 'Bu pencerede şerit yok'}
@@ -138,6 +160,19 @@ export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }
               Bir oturum başladığında burada bir şerit olarak görünür; süzgeci genişletmek için
               üstteki pencereyi değiştir.
             </EmptyState>
+          ) : trajectoryId ? (
+            <RotaTrajectoryView
+              trajectoryId={trajectoryId}
+              width={width}
+              selected={selected}
+              onSelect={setSelected}
+              onOpenSession={onOpenSession}
+              onOpenFlowRun={onOpenFlowRun}
+              onBack={() => {
+                setSelected(null)
+                onTrajectory(null)
+              }}
+            />
           ) : (
             <RotaCanvas
               layout={layout}
@@ -146,12 +181,30 @@ export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }
               onSelect={setSelected}
               onOpenSession={onOpenSession}
               onOpenFlowRun={onOpenFlowRun}
+              onOpenTrajectory={(id) => {
+                setSelected(null)
+                onTrajectory(id)
+              }}
             />
           )}
         </div>
         <aside className="hidden w-80 shrink-0 flex-col overflow-auto border-l border-[var(--color-border)] md:flex">
           {selected ? (
             <div className="flex min-h-0 flex-1 flex-col">
+              {selectedTrajectory && selectedTrajectory.trajectoryId !== trajectoryId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(null)
+                    onTrajectory(selectedTrajectory.trajectoryId)
+                  }}
+                  className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-1.5 text-left text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+                  title={`${selectedTrajectory.trajectoryId} · rev ${selectedTrajectory.revision}`}
+                >
+                  ◈ Rotayı aç · {selectedTrajectory.templateRef || 'plansız'} ·{' '}
+                  {selectedTrajectory.status}
+                </button>
+              )}
               <ViewPanel
                 key={`${selected.kind}:${selected.id}`}
                 target={{ kind: selected.kind, id: selected.id }}
@@ -162,7 +215,7 @@ export function RotaPanel({ workspaceId, onError, onOpenSession, onOpenFlowRun }
               />
             </div>
           ) : (
-            <RotaActivity lanes={lanes} />
+            <RotaActivity lanes={lanes} onOpenTrajectory={onTrajectory} />
           )}
         </aside>
       </div>

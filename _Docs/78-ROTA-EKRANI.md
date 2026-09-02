@@ -1,11 +1,12 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı, backend)
+# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük)
 
 **Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
-uygulandı (2026-09-02, §5). Altyapı planı: `77-ROTA-ALTYAPI-PLANI.md`
-(R1–R10). Tasarım brifi: oturum artefaktı "Rota Tasarım Brifi" (§8 ekran, §11
-fazlar). Sonraki fazlar F1b (rota başına faz-sütunlu ekran, derin bağlantı,
-mini rota), F2 (otomasyonlar grafikte), F3 (metrik + küratör), F4 (optimizer),
-F5 (kapılar / kanvastan müdahale).
+uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
+yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
+`77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
+Tasarım Brifi" (§8 ekran, §11 fazlar). Sonraki fazlar F2 (otomasyonlar
+grafikte, "neden ateşlenmedi"), F3 (metrik + küratör), F4 (optimizer), F5
+(kapılar / kanvastan müdahale).
 
 ## 1. Ne gösterir
 
@@ -72,13 +73,10 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 
 ## 3. F0'ın bilinçli sınırları
 
-- ~~**Rota varlığı henüz üretilmiyor.**~~ F1a ile kapandı (§5): koordinatör
-  ağaçları artık rota üretir, kanvas şerit etiketine ◈ koyar ve tooltip'te
-  revizyonu gösterir. Faz bantları (dikey PLAN/KOD/İNCELEME sütunları) hâlâ
-  yok — F1b ekran işi.
-- **Faz sütunu yok, yalnız zaman.** Brifteki `x = faz sütunu` yerleşimi rota
-  başına görünümdür; workspace kökü zaman eksenlidir. Rota-içi yakınlaştırma
-  (tek rota, faz bantları, worker alt-ağacı katlama) F1/F2.
+- ~~**Rota varlığı henüz üretilmiyor.**~~ F1a ile kapandı (§5).
+- ~~**Faz sütunu yok, yalnız zaman.**~~ F1b ile kapandı (§6): workspace kökü
+  zaman eksenli kalır, ◈ tıklanınca rota-içi faz-sütunlu görünüm açılır.
+  Worker alt-ağacı katlama hâlâ yok (F2).
 - **Şerit patlaması** (12 worker = 12 şerit) için demet katlama (`+N`) yok;
   pencere süzgeci ve son-200 seed'i şimdilik yeterli.
 - **Maliyet / süre alt şeridi, mini rota (sohbet başlığı), RunView gömme** F3+.
@@ -177,3 +175,39 @@ bir kerelik `plan` önerisi; açık kapı uyarısı. Ağaçta rota yoksa bölüm
 otomasyonlara çözülmesi ve ateşlenmesi/"neden ateşlenmedi" (F2); faz kapısının
 (artifact/verdict) otomatik doğrulanması (F5); `todo_write` ilerlemesinin faza
 yansıması; UI'dan düzenleme için `PUT /api/trajectories/{id}` (CAS) yok.
+
+## 6. F1b — Görünürlük dalgası (2026-09-02)
+
+Amaç: F0–F1a'ya kadar backend'e giren her yeniliğin ekranda bir karşılığı
+olsun; kullanıcı uygulamada olan biteni hangi ekranda olursa olsun görsün.
+Dal `rota/f1b-visibility`. Keşif özeti (öncesi): rota grafı hiç çekilmiyordu
+(`getTrajectory` ölü kod), `#/w/WS/rota/RTA` ayrıştırılıp atılıyordu,
+`VIEW_KINDS`'ta `trajectory` eksikti (`parseRef` null), sohbet başlığında
+koordinatör/rota bilgisi yoktu, oturum kökeni hiçbir yerde görünmüyordu,
+beceri ekranı reçete fazlarını/hatasını göstermiyordu, ateşleme defteri
+API'de vardı UI'da yoktu, `ws:*` olayları Rota dışında hiçbir bildirime
+dönüşmüyordu.
+
+| Backend yeniliği | Ekran karşılığı (F1b) | Dosya |
+|------------------|------------------------|-------|
+| Rota grafı (R4/F1a) | **Rota-içi görünüm**: ◈ (şerit etiketi), sağ paneldeki "◈ Rotayı aç" ve "Rotalar" listesi → faz sütunları × şeritler; kök oturum sütunlar boyunca bant, worker/koşu/kapı düğümleri hücrelerde, hayaletler kesik çizgi; `spawned`/`reported`/`fired`/`blocked_by`/`forked_from` kenarları; aktif sütun vurgulu; başlıkta durum rozeti, rev, `n/m faz`, hayalet sayısı, "kök sohbet"; tek tık → sağ panel (`ViewPanel`: oturum/koşu/otomasyon/rota projeksiyonu), çift tık → sohbet/RunView, Esc → geri | `features/rota/trajectoryLayout.ts` (saf), `RotaTrajectoryView.tsx`, `useTrajectory.ts` (id **veya** kök oturumla; `ws:trajectory` revizyonu → `GET /api/trajectories/{id}` yeniden okuma; `connectLanes` ref-sayımlı) |
+| Derin bağlantı | `#/w/WS/rota/RTA12` yazılır/okunur (`routeIdForView` `rota`, `useDeepLinks.rotaTrajectory` + `openTrajectory`, `useAppNavigation`) | `app/url.ts`, `useDeepLinks.ts`, `useAppNavigation.ts`, `App.tsx` |
+| `view.KindTrajectory` (R9) | `VIEW_KINDS`'a `trajectory` eklendi → `parseRef('trajectory:RTA1')` çalışır; Harita derin bağlantısı kurtulur | `types/view.ts` |
+| Koordinasyon ağacı (M2) + rota | **Sohbet başlığı**: rol rozeti (`coordinationLabel`: Koordinatör / Alt-koordinatör / Worker) + **mini rota şeridi** (`plan ✓ · kod ● · inceleme ○`, durum rozeti, `n/m`, worker'ın bağlı olduğu faz ◂) — tık → Rota ekranı yakınlaşmış | `features/rota/RotaStrip.tsx`, `app/AppHeader.tsx` |
+| `SessionOrigin` (R1) | **Oturum bilgisi** panelinde köken çipi: "⇢ Otomasyon AUT4 tetikledi / Zamanlayıcı SCH2 başlattı / Akış FLW1 · koşu RUN7 · düğüm n2 / Koordinatör SES9 açtı / Devir · SES3 …"; tetikleyici oturum varsa tıkla-git. Backend: `SessionInfo.origin` alanı eklendi (`session_info.go`, `Lineage()` türetilmiş; `user` için boş) | `shared/lib/sessionOrigin.ts` (+test), `features/sessions/SessionTitleBlock.tsx` |
+| Reçete şeması (R6) | **Beceriler** ekranı: listede `reçete · N faz` / `⚠ reçete` çipi; detay başlığında `vN`, desen, `◈ plan → kod → inceleme` (tooltip: profil/kapı/isteğe bağlı), `⚡ izleyiciler`, `✦ optimizer`, geçersiz blokta hata metni | `features/skills/RecipeChips.tsx`, `SkillsPanel.tsx` |
+| Ateşleme defteri (R5) | Otomasyon kartında **"Ateşlemeler"** açılır listesi: her deneme ⚡/↷/✕, zaman, tetik türü, atlama sebebi (Türkçe), açılan oturum, iterasyon; `lastFiredAt` değişince yenilenir | `features/schedules/AutomationFires.tsx`, `fireMeta.ts`, `AutomationCard.tsx` |
+| `ws:*` akışı (R3/R7) | **Uygulama geneli bildirim köprüsü**: aktif workspace'in şerit deposu her ekranda açık (`connectLanes`, tek SSE paylaşımlı); yeni ateşleme (`cooldown` atlamaları hariç), stall halt, rota başladı / bitti / başarısız / terk / insan bekliyor, akış koşusu başarısızlığı → toast. Ayarlar ▸ Bildirimler'de `automation`/`coordination`/`flow` anahtarları ve yeni **Rota** türü ile susturulur | `app/workspaceSignals.ts` (saf `diffSignals`, +test), `app/useWorkspaceSignals.ts`, `shared/lib/notifyTypes.ts` |
+| Rota listesi | Rota ekranı sağ şeridi "Rotalar": kök başlığı · reçete · durum rozeti, tık → yakınlaş | `features/rota/RotaActivity.tsx` |
+
+Kalanlar (F2+): faz düğümüne tıklayınca todo listesi (faz ↔ todo bağı yok),
+hayalet otomasyona "neden ateşlenmedi" kartı, worker alt-ağacı katlama,
+RunView içinde koordinatör düğümünden rota açma, maliyet/süre alt şeridi,
+kanvastan müdahale (faz ekle/atla, buradan çatalla).
+
+Testler: `features/rota/trajectoryLayout.test.ts` (sütun/hücre yerleşimi,
+fazsız graf, özet/ilerleme), `shared/lib/sessionOrigin.test.ts`,
+`app/workspaceSignals.test.ts` (yeni ateşleme/cooldown süzgeci, rota
+başlangıç + terminal geçişler + susturma, stall/akış hatası). Doğrulama:
+`tsc`, `vitest` 100 dosya / 703 test, `vite build`, prettier; eslint'teki 13
+hata önceden vardı (main ile aynı sayı, dokunulan dosyalarda değil).

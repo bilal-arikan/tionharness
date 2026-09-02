@@ -1,5 +1,6 @@
 import { Loader2, Check, Pencil, X, Sparkles } from 'lucide-react'
 import type { SessionInfo } from '@/types'
+import { originLabel } from '@/shared/lib/sessionOrigin'
 import { Pill } from './SessionDetailBits'
 
 interface Props {
@@ -99,6 +100,24 @@ export function SessionTitleBlock({
         {info.kind && <Pill>{info.kind}</Pill>}
         {info.unread && <Pill accent>okunmadı</Pill>}
       </div>
+      {/* Origin (R1): who started this session and from where. */}
+      {(() => {
+        const o = originLabel(info.origin)
+        if (!o) return null
+        const jump = o.sessionId && o.sessionId !== info.parentSessionId ? o.sessionId : undefined
+        return (
+          <button
+            type="button"
+            onClick={() => jump && onSelectSession?.(jump)}
+            disabled={!jump || !onSelectSession}
+            className="mt-1.5 mr-1.5 inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-text)] disabled:cursor-default disabled:hover:text-[var(--color-text-dim)]"
+            title={o.title}
+            data-testid="session-origin"
+          >
+            ⇢ {o.text}
+          </button>
+        )
+      })()}
       {/* Context-reset lineage: this session continues an earlier one. */}
       {info.parentSessionId && (
         <button

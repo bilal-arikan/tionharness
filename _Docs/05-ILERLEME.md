@@ -1,5 +1,23 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F1b: backend yeniliklerinin ekran karşılıkları (2026-09-02) ✅
+
+Kullanıcı isteği: "bu zamana kadar eklediklerinin UI/UX'te de karşılığı olsun,
+olan bitenden görsel olarak haberim olsun." Keşif: rota grafı hiç çekilmiyordu,
+rota derin bağlantısı atılıyordu, `VIEW_KINDS`'ta `trajectory` yoktu, sohbet
+başlığında koordinatör/rota bilgisi yoktu, oturum kökeni görünmüyordu, beceri
+ekranı reçete fazlarını göstermiyordu, ateşleme defteri UI'sızdı, `ws:*` Rota
+dışında sessizdi. Dal `rota/f1b-visibility` hepsini kapatır: rota-içi
+faz-sütunlu görünüm (`trajectoryLayout` saf + `RotaTrajectoryView`, ◈ / "Rotayı
+aç" / "Rotalar" listesi, `#/w/WS/rota/RTA12`), sohbet başlığında rol rozeti +
+mini rota şeridi (`RotaStrip`), oturum bilgisinde köken çipi (`SessionInfo.origin`
+backend'e eklendi, `sessionOrigin.ts`), Beceriler'de reçete çipleri
+(`RecipeChips`), otomasyon kartında "Ateşlemeler" defteri (`AutomationFires`),
+uygulama geneli `ws:*` → toast köprüsü (`useWorkspaceSignals`, tek paylaşımlı
+SSE, yeni `rota` bildirim türü), `parseRef` `trajectory` düzeltmesi. Ayrıntı ve
+tablo: `78-ROTA-EKRANI.md` §6. Doğrulama: tsc, vitest 703, vite build,
+prettier; eslint 13 hata önceden vardı.
+
 ## Rota F1a: rota varlığı üretiliyor + `trajectory` aracı (2026-09-02) ✅
 
 F0 kanvası salt projeksiyondu; hiçbir şey `Trajectory` yaratmıyordu. F1a

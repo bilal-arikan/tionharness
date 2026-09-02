@@ -30,6 +30,19 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
   )
+  // Zoomed trajectory on the Rota screen (deep-link aware): #/w/{ws}/rota/{RTA}.
+  const [rotaTrajectory, setRotaTrajectory] = useState<string | null>(
+    INITIAL_ROUTE.view === 'rota' ? INITIAL_ROUTE.id : null,
+  )
+  // Open the Rota screen zoomed on one trajectory (chat header strip, session
+  // panel, run view).
+  const openTrajectory = useCallback(
+    (id: string) => {
+      setRotaTrajectory(id)
+      setView('rota')
+    },
+    [setView],
+  )
 
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
@@ -85,6 +98,9 @@ export function useDeepLinks(setView: (v: View) => void) {
     setExplorerNode,
     flowsTab,
     setFlowsTab,
+    rotaTrajectory,
+    setRotaTrajectory,
+    openTrajectory,
     artifactTarget,
     setArtifactTarget,
     flowTarget,

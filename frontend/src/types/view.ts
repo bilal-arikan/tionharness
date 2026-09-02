@@ -100,6 +100,7 @@ const VIEW_KINDS: ViewKind[] = [
   'artifact',
   'automation',
   'skill',
+  'trajectory',
   'insight',
   'logs',
 ]

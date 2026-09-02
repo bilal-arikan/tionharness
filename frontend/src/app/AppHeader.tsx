@@ -6,6 +6,8 @@ import { Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
+import { coordinationLabel } from '@/shared/lib/coordination'
+import { RotaStrip } from '@/features/rota/RotaStrip'
 import type { View } from './NavRail'
 import { VIEW_TITLE } from './viewRegistry'
 
@@ -26,6 +28,8 @@ export interface AppHeaderProps {
   sessionFlowActive: boolean
   onToggleDetail: () => void
   onError: (msg: string) => void
+  // Rota (F1b): open the Rota screen zoomed on a trajectory (mini rota strip).
+  onOpenTrajectory?: (trajectoryId: string) => void
 }
 
 export function AppHeader({
@@ -44,7 +48,10 @@ export function AppHeader({
   sessionFlowActive,
   onToggleDetail,
   onError,
+  onOpenTrajectory,
 }: AppHeaderProps) {
+  const activeSession = view === 'chat' ? sessions.find((s) => s.id === activeSessionId) : undefined
+  const coordLabel = coordinationLabel(activeSession)
   return (
     <header className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] py-3 max-md:px-3 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
@@ -73,11 +80,27 @@ export function AppHeader({
         {view === 'chat' ? (
           // Show the session's own title (not "Sohbet · Ajan"); fall back to
           // the agent name, then a generic label for a fresh untitled chat.
-          <span className="truncate text-sm font-semibold">
-            {sessions.find((s) => s.id === activeSessionId)?.title ||
-              agents.find((a) => a.id === activeAgentId)?.name ||
-              'Yeni sohbet'}
-          </span>
+          <>
+            <span className="truncate text-sm font-semibold">
+              {activeSession?.title ||
+                agents.find((a) => a.id === activeAgentId)?.name ||
+                'Yeni sohbet'}
+            </span>
+            {/* Part in the coordinator tree (M2) + the tree's trajectory as a
+                one-line phase strip (Rota F1b): what the session is doing
+                within the plan, without opening the Coord drawer. */}
+            {coordLabel && (
+              <span
+                className="hidden shrink-0 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-accent)] sm:inline"
+                title="Koordinasyon ağacındaki rolü"
+              >
+                {coordLabel}
+              </span>
+            )}
+            {activeSession && onOpenTrajectory && (
+              <RotaStrip session={activeSession} onOpenTrajectory={onOpenTrajectory} />
+            )}
+          </>
         ) : (
           <span className="shrink-0 text-sm font-semibold">{VIEW_TITLE[view]}</span>
         )}

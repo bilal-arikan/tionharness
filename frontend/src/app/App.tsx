@@ -11,6 +11,7 @@ import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
 import { FlowsPanel, NetworkPanel, RotaPanel, ExplorerView } from './lazyPanels'
+import { useWorkspaceSignals } from './useWorkspaceSignals'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
 import { useAppearance } from './useAppearance'
@@ -445,6 +446,10 @@ export default function App() {
     markViewUnread,
   })
 
+  // Workspace stream → toasts (automation fires, stall halts, trajectory
+  // start/end, flow failures) for the active workspace, whatever screen is open.
+  useWorkspaceSignals(activeWorkspaceId)
+
   // Boot the read-aloud engine: probe for the optional server-side Piper TTS
   // (so 'auto' prefers it) and arm the mobile autoplay unlock on first gesture.
   useEffect(() => {
@@ -530,6 +535,7 @@ export default function App() {
     insightTab: links.insightTab,
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
+    rotaTrajectory: links.rotaTrajectory,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -541,6 +547,7 @@ export default function App() {
     setInsightTab: links.setInsightTab,
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
+    setRotaTrajectory: links.setRotaTrajectory,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -659,6 +666,7 @@ export default function App() {
             sessionFlowActive={sessionFlowOpen}
             onToggleDetail={toggleDetail}
             onError={setError}
+            onOpenTrajectory={links.openTrajectory}
           />
         )}
 
@@ -761,6 +769,8 @@ export default function App() {
                 ctl.selectSession(sid)
               }}
               onOpenFlowRun={links.openFlowRun}
+              trajectoryId={links.rotaTrajectory}
+              onTrajectory={links.setRotaTrajectory}
             />
           </Suspense>
         )}

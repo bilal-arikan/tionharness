@@ -83,6 +83,15 @@ export const NOTIFY_TYPES: NotifyType[] = [
     cue: null,
   },
   {
+    // Frontend-only (workspace stream, useWorkspaceSignals): trajectory
+    // start / end and the other Rota-screen facts surfaced as toasts.
+    type: 'rota',
+    label: 'Rota',
+    hint: 'Bir rota başladı, bitti, başarısız oldu veya insan yanıtı bekliyor.',
+    view: 'rota',
+    cue: null,
+  },
+  {
     type: 'automation',
     label: 'Otomasyonlar',
     hint: 'Etiket/pano otomasyonu tetiklendi.',

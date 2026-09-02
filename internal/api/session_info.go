@@ -49,6 +49,9 @@ type sessionInfoResp struct {
 	// /handoff) and the handoff artifact written into this session at reset.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
+	// Origin is who started this session and from where (R1 lineage), so the
+	// inspector can say "automation X fired this" / "forked from Y".
+	Origin *db.SessionOrigin `json:"origin,omitempty"`
 	// Coordination (M2). Role is LINEAGE ("worker" = spawned by a coordinator, or
 	// ""); CoordinatorMode is the CAPABILITY (drives workers, gets the coordinator
 	// prompt + spawn_worker/... tools). They are independent — a mid-level node of
@@ -231,6 +234,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		Tags:                     session.Tags,
 		ParentSessionID:          session.ParentSessionID,
 		HandoffArtifactID:        session.HandoffArtifactID,
+		Origin:                   sessionOriginPtr(session),
 		Role:                     session.Role,
 		CoordinatorMode:          session.IsCoordinator(),
 		CoordinatorSessionID:     session.CoordinatorSessionID,
@@ -728,4 +732,14 @@ func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, h
 		return out[i].Turns > out[j].Turns
 	})
 	return out
+}
+
+// sessionOriginPtr returns the session's (possibly derived) lineage as a
+// pointer, nil only when there is nothing beyond "the user started it".
+func sessionOriginPtr(session db.Session) *db.SessionOrigin {
+	o := session.Lineage()
+	if o.Kind == "" || o.Kind == db.OriginUser {
+		return nil
+	}
+	return &o
 }

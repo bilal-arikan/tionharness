@@ -27,6 +27,7 @@ export interface AppNavigationParams {
   insightTab: string | null
   explorerNode: string | null
   flowsTab: string | null
+  rotaTrajectory: string | null
   pendingRouteRef: MutableRefObject<Route | null>
   switchWorkspace: (id: string) => void
   selectSession: (id: string, messageId?: string) => void
@@ -38,6 +39,7 @@ export interface AppNavigationParams {
   setInsightTab: (id: string | null) => void
   setExplorerNode: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
+  setRotaTrajectory: (id: string | null) => void
 }
 
 export function useAppNavigation(p: AppNavigationParams) {
@@ -54,6 +56,7 @@ export function useAppNavigation(p: AppNavigationParams) {
     setInsightTab,
     setExplorerNode,
     setFlowsTab,
+    setRotaTrajectory,
   } = p
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
@@ -86,6 +89,8 @@ export function useAppNavigation(p: AppNavigationParams) {
         setExplorerNode(r.id)
       } else if (r.view === 'flows') {
         setFlowsTab(r.id)
+      } else if (r.view === 'rota') {
+        setRotaTrajectory(r.id)
       }
     },
     [
@@ -101,6 +106,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       setInsightTab,
       setExplorerNode,
       setFlowsTab,
+      setRotaTrajectory,
     ],
   )
 
@@ -118,6 +124,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       insightTab: p.insightTab,
       flowsTab: p.flowsTab,
       explorerNode: p.explorerNode,
+      rotaTrajectory: p.rotaTrajectory,
     }),
   }
   useUrlSync(route, !!p.activeWorkspaceId, applyRoute)

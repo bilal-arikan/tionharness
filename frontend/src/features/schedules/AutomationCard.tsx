@@ -15,6 +15,7 @@ import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
 import { COLUMN_ACCENT, boardOpLabel, counterMetricLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
+import { AutomationFires } from './AutomationFires'
 import { count } from '@/shared/lib/format'
 
 interface Props {
@@ -250,6 +251,8 @@ export function AutomationCard({
       {a.lastError && (
         <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">Hata: {a.lastError}</div>
       )}
+      {/* Fire ledger (R5): every attempt with its outcome / skip reason. */}
+      <AutomationFires automationId={a.id} refreshKey={a.lastFiredAt} />
 
       {isBoardKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">

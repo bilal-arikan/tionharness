@@ -548,6 +548,12 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > insan kapılarını bağlar. `trajectory` aracı (`get|plan|phase|finish`) +
 > `<trajectory>` durum bloğu. Model eki: `TrajectoryNode.Optional`; `Gate`
 > alanı artık `gate` JSON anahtarıyla yazılır. Ayrıntı: `78-ROTA-EKRANI.md` §5.
+>
+> **F1b uygulandı (2026-09-02, dal `rota/f1b-visibility`):** R1 (köken), R3/R7
+> (`ws:*`), R4/F1a (rota grafı), R5 (ateşleme defteri), R6 (reçete şeması), R9
+> (`KindTrajectory`) yeniliklerinin ekran karşılıkları — rota-içi faz görünümü,
+> derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme
+> listesi, `ws:*` → toast köprüsü. Ayrıntı: `78-ROTA-EKRANI.md` §6.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

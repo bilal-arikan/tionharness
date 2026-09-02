@@ -355,6 +355,8 @@ export interface SessionInfo {
   persistedSteps?: number
   // Free-form labels (also drive tag-triggered automations).
   tags?: string[]
+  // Who started this session and from where (absent for a user-started one).
+  origin?: SessionOrigin
   // Context-reset lineage: the session this one continues (born from /handoff)
   // and the handoff artifact written into this session at reset.
   parentSessionId?: string

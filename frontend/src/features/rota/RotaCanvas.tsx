@@ -8,8 +8,10 @@ import { useMemo } from 'react'
 import type { RotaBar, RotaEdge, RotaLayout, RotaMark, RotaRow } from './rotaLayout'
 import { laneOriginGlyph } from './rotaLabels'
 
+// What the side panel can project from either canvas: a session / flow run
+// bar, a whole trajectory (phase header click), an automation ghost.
 export interface RotaSelection {
-  kind: 'session' | 'flowrun'
+  kind: 'session' | 'flowrun' | 'trajectory' | 'automation'
   id: string
 }
 
@@ -20,6 +22,8 @@ interface Props {
   onSelect: (sel: RotaSelection | null) => void
   onOpenSession?: (sessionId: string) => void
   onOpenFlowRun?: (flowId: string) => void
+  // Zoom into a lane's trajectory (the ◈ glyph).
+  onOpenTrajectory?: (trajectoryId: string) => void
 }
 
 export const ROW_H = 30
@@ -71,6 +75,7 @@ export function RotaCanvas({
   onSelect,
   onOpenSession,
   onOpenFlowRun,
+  onOpenTrajectory,
 }: Props) {
   const { rows, bars, edges, marks, future, t0, now, t1 } = layout
   // Past window fills what is left after the label column and the future
@@ -115,7 +120,11 @@ export function RotaCanvas({
             fill={r.y % 2 === 0 ? 'transparent' : 'var(--color-surface-2)'}
             opacity={0.5}
           />
-          <RowLabel row={r} onClick={() => onSelect({ kind: 'session', id: r.id })} />
+          <RowLabel
+            row={r}
+            onClick={() => onSelect({ kind: 'session', id: r.id })}
+            onOpenTrajectory={onOpenTrajectory}
+          />
         </g>
       ))}
 
@@ -271,7 +280,15 @@ export function RotaCanvas({
   )
 }
 
-function RowLabel({ row, onClick }: { row: RotaRow; onClick: () => void }) {
+function RowLabel({
+  row,
+  onClick,
+  onOpenTrajectory,
+}: {
+  row: RotaRow
+  onClick: () => void
+  onOpenTrajectory?: (id: string) => void
+}) {
   const s = row.session
   const y = TOP_H + row.y * ROW_H + ROW_H / 2 + 4
   const indent = row.depth === 0 ? 8 : 26
@@ -281,7 +298,19 @@ function RowLabel({ row, onClick }: { row: RotaRow; onClick: () => void }) {
       <title>{`${s.id} · ${s.kind}${s.origin ? ` · ${s.origin.kind}` : ''}${row.trajectory ? ` · rota ${row.trajectory.trajectoryId} rev ${row.trajectory.revision}` : ''}`}</title>
       <tspan fill="var(--color-text-dim)">{laneOriginGlyph(s)} </tspan>
       {label}
-      {row.trajectory && <tspan fill="var(--color-accent)"> ◈</tspan>}
+      {row.trajectory && (
+        <tspan
+          fill="var(--color-accent)"
+          className="cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenTrajectory?.(row.trajectory!.trajectoryId)
+          }}
+        >
+          {' '}
+          ◈
+        </tspan>
+      )}
     </text>
   )
 }

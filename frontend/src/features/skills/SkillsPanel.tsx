@@ -19,6 +19,7 @@ import { VISIBILITY_TIERS, visibilityMeta } from '@/features/tools/toolMeta'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { InfoToast } from '@/shared/components/InfoToast'
+import { RecipeChips } from './RecipeChips'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
@@ -582,6 +583,7 @@ export function SkillsPanel({ onError }: Props) {
                               <VisibilityChip v={skillVisibility(sk)} />
                               <SourceBadge source={sk.source} />
                               <SeedDefaultBadge state={sk.defaultState} />
+                              <RecipeChips skill={sk} compact />
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
                               {sk.description || sk.slug}
@@ -732,6 +734,7 @@ export function SkillsPanel({ onError }: Props) {
                 <VisibilityChip v={skillVisibility(active)} />
                 <SourceBadge source={active.source} />
                 <SeedDefaultBadge state={active.defaultState} />
+                <RecipeChips skill={active} />
                 {/* Push the Tam/Özet/İsim/Gizli selector to the right of the row. */}
                 <span className="ml-auto flex">
                   <SkillVisibilitySelector
