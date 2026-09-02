@@ -101,6 +101,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	if sb := coordinationScratchpadBlock(wsp, session); sb != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 	}
+	// Coordinator situation snapshot: live fleet state, the spawnable agent roster
+	// with each agent's write capability, and the board. The headless path already
+	// pushed the fleet half (autonomousDynamicSuffix); an INTERACTIVE coordinator
+	// got none of it and re-read all three with tool calls every single turn.
+	if cb := wsp.Runtime.CoordinatorSituationBlock(ctx, session); cb != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + cb)
+	}
 	// The rolling compaction summary is NOT folded into the volatile dynamic here
 	// anymore (P2, _Docs/50): it is stable between two folds, so it travels in
 	// req.Summary and cache-capable providers place it as a synthetic head message

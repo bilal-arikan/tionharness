@@ -271,12 +271,14 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) s
 			out += "\n\n" + note
 		}
 	}
-	// Coordinator turns get an authoritative live worker-state block so the model
-	// can never believe a finished worker is still running (the coalesced-
-	// notification stall). Coordinator-only, reusing the session loaded above —
+	// Coordinator turns get an authoritative live SITUATION block — fleet state,
+	// the agent roster with write capability, and the board — so the model can
+	// never believe a finished worker is still running (the coalesced-notification
+	// stall) and does not spend two or three tool calls a turn re-reading state
+	// that is already here. Coordinator-only, reusing the session loaded above —
 	// which includes a mid-level node, whose block also reports its own subtree.
 	if sid != "" && isCoordinator {
-		if wb := r.coordinatorWorkerStatusBlock(ctx, sid); wb != "" {
+		if wb := r.coordinatorSituationBlock(ctx, sid); wb != "" {
 			out += "\n\n" + wb
 		}
 	}
