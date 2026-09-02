@@ -1,5 +1,26 @@
 # TionHarness — İlerleme Takibi
 
+## Koordinasyon gözlemcisi — Rota altyapısı R7 (2026-09-02) ✅
+
+**Belirti.** Koordinatör/worker yaşam döngüsünü (spawn, rapor, drain turu, stall
+halt) izlemek isteyen her şey `coordination.go` içine kod eklemek demekti; Rota
+bağlayıcısı ve workspace akışı için bir abone modeli yoktu.
+
+**Ne.** `CoordinationObserver{OnSpawn, OnReport, OnDrain, OnStall}` +
+`Runtime.AddCoordinationObserver` (`coordination_observer.go`); emit noktaları
+`SpawnWorker` (başarılı spawn), `notifyCoordinator` (not kalıcılaştıktan sonra,
+durum `<status>` etiketinden), `drainCoordinator` (tur başı/sonu),
+`escalateCoordinatorStallHalt`. Yerleşik yayın: `ws:spawn`, `ws:report`,
+`ws:coordination` (`turn_start`/`turn_end`/`stall_halt`). Aboneler panic-izole,
+mevcut yayınlara dokunulmadı. Detay: `_Docs/58` tablo, `_Docs/77` R7.
+
+**Dosyalar.** `internal/agent/coordination_observer.go`, `coordination_observer_test.go`
+(yeni), `coordination.go`, `coordination_stall.go`, `runtime.go`;
+`internal/events/types.go`; `internal/sessionhub/workspace.go`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` agent/api/events/sessionhub ✅ (yeni:
+`TestCoordinationObserverSeesSpawnAndReport`, `TestNoteTag`).
+
 ## Flow koşusu silme, saklama ve oturum→koşu durumu — Rota altyapısı R8 (2026-09-02) ✅
 
 **Belirti.** Flow koşuları sonsuza kadar birikiyordu (silme ucu ve saklama yok);

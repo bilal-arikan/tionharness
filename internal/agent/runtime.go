@@ -164,6 +164,9 @@ type Runtime struct {
 	// Test-only deterministic barrier after durable worker-note persistence and
 	// before worker archive/batch arming. Production leaves it nil.
 	coordAfterWorkerNotePersist func(coordSessionID string)
+	// coordObservers are the coordinator/worker lifecycle subscribers
+	// (coordination_observer.go, _Docs/77 R7).
+	coordObservers coordObserverRegistry
 
 	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
 	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised

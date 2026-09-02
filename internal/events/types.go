@@ -97,6 +97,9 @@ const (
 	// back. Reserved for the coordination observer (_Docs/77 R7).
 	TypeWSSpawn  = WorkspaceStreamPrefix + "spawn"
 	TypeWSReport = WorkspaceStreamPrefix + "report"
+	// TypeWSCoordination: a coordinator's drain turn started/ended or its
+	// phantom-spawn guard halted it (target phase: turn_start | turn_end | stall_halt).
+	TypeWSCoordination = WorkspaceStreamPrefix + "coordination"
 	// TypeWSLiveness: a session's turn-admission state changed (a turn took the
 	// slot, released it, or queued behind it) — the live "running" edge of the
 	// workspace picture. Payload-light: sessionId + busy + waiting depth; the

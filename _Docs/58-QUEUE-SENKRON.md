@@ -1074,7 +1074,9 @@ yayın noktasından, `events.WorkspaceStreamPrefix` (`ws:`) ön ekli türlerle v
 | `ws:schedule_armed` | `Scheduler.syncNextRunLocked` (cron) ve `armWakeLocked` (one-shot wake) | `ScheduleArmedPayload` — `fireAt` |
 | `ws:automation_fire` | `AutomationEngine.notifyFired` | `AutomationFirePayload` — `outcome: fired` (R5 `skipped` + sebep ekler) |
 | `ws:liveness` | `Runtime.publishTurnQueue` → `emitLiveness` (tur slotu claim/release/kuyruk değişimi; R2) | `LivenessPayload` — `sessionId`, `busy`, tur `kind`, `since`, `waiting` |
-| `ws:spawn`, `ws:report` | **R7'ye ayrılmış** (koordinasyon gözlemcisi) | — |
+| `ws:spawn` | `Runtime.SpawnWorker` → `observeSpawn` (R7) | `SpawnEvent` — koordinatör, worker, kök, derinlik, ajan, alt-koordinatör mü, reçete |
+| `ws:report` | `notifyCoordinator` → `observeReport` (R7) | `ReportEvent` — worker, durum (`<status>`), son worker mı, araç sayısı |
+| `ws:coordination` | drain `turn_start`/`turn_end`, `escalateCoordinatorStallHalt` → `stall_halt` (R7) | `DrainEvent` / `StallEvent` |
 
 `api.bridgeBusToHub` döngüsünün başında `ws:` türleri yakalanıp
 `bridgeWorkspaceEvent` ile hub'ın workspace kapsamına yazılır (hub kind = ön eksiz

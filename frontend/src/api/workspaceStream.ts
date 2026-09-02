@@ -24,7 +24,44 @@ export const WorkspaceStreamKind = {
   Spawn: 'spawn',
   Report: 'report',
   Liveness: 'liveness',
+  Coordination: 'coordination',
 } as const
+
+// ws:spawn — a coordinator spawned a worker (agent.SpawnEvent).
+export interface SpawnData {
+  coordinatorId: string
+  workerId: string
+  rootId: string
+  depth: number
+  agentRef: string
+  agentName?: string
+  subCoordinator?: boolean
+  workflow?: string
+  queued?: boolean
+  at: number
+}
+
+// ws:report — a worker's task-notification reached its coordinator (agent.ReportEvent).
+export interface ReportData {
+  coordinatorId: string
+  workerId: string
+  status: string
+  lastWorker: boolean
+  toolUses: number
+  noteBytes: number
+  at: number
+}
+
+// ws:coordination — a drain turn started/ended (DrainEvent) or the stall guard
+// halted the coordinator (StallEvent); narrow on payload.target.phase.
+export interface CoordinationData {
+  coordinatorId: string
+  phase?: 'turn_start' | 'turn_end'
+  turn?: number
+  reason?: string
+  streak?: number
+  at: number
+}
 
 // One session's turn-admission state right after it changed (ws:liveness).
 // The full picture is GET /api/workspace/liveness (LivenessSnapshot).

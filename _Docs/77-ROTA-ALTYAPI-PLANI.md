@@ -408,6 +408,23 @@ mevcut olay testleri observer üzerinden aynı çıktıyı üretir.
 
 **Boyut:** M. **Açar:** F1.
 
+**Gerçekleşen (2026-09-02, dal `rota/r7-coordination-observer`).** Sapmalar:
+
+- Arayüz olay yapılarıyla: `OnSpawn(SpawnEvent)`, `OnReport(ReportEvent)`,
+  `OnDrain(DrainEvent{turn_start|turn_end, Turn})`, `OnStall(StallEvent)`
+  (`coordination_observer.go`); `Runtime.AddCoordinationObserver`. Yerleşik
+  workspace-stream yayını abone listesinde değil, `observe*` içinde koşulsuz önce
+  çalışır; aboneler panic-izole.
+- Yayınlar: `ws:spawn`, `ws:report` (durum `<status>` etiketinden okunur,
+  `lastWorker`, araç sayısı), `ws:coordination` (drain turn_start/turn_end,
+  stall_halt) — planda `coordination` türü yoktu.
+- `FlowObserver`/`ScheduleObserver` genişletmesi **yapılmadı**: flow ve schedule
+  olayları R3'te doğrudan yayınlandığı için ayrıca gözlemci gerekmedi.
+- Mevcut `emit*` çağrıları taşınmadı; gözlemci mevcut yayınlara **ek** olarak
+  çağrılıyor (kademeli geçiş).
+- Test: `coordination_observer_test.go` (spawn + rapor abone ve akışa ulaşır,
+  panikleyen abone izole, not etiketi ayrıştırma).
+
 ### R8 — Flow ↔ oturum bağlantı düzeltmeleri
 
 **Neden.** `15`/`62` belgelenmiş sınırlar: `SessionID` bitişte; `run_flow` child

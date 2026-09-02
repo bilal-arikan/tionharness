@@ -253,6 +253,7 @@ func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, a
 	}
 	r.logger.Warn("coordination: phantom-spawn stall confirmed; halting coordinator auto-turns",
 		"coordinator", coordSessionID, "streak", streak, "reason", reason)
+	r.observeStall(StallEvent{CoordinatorID: coordSessionID, AgentID: agentID, Reason: reason, Streak: streak})
 	r.emitDebug(WithSessionID(context.Background(), coordSessionID), db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: agentID,

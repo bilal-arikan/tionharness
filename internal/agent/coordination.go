@@ -643,6 +643,11 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		return SpawnResult{}, err
 	}
 	slot.markHadWorkers()
+	r.observeSpawn(SpawnEvent{
+		CoordinatorID: coordSessionID, WorkerID: res.SessionID, RootID: rootID, Depth: depth,
+		AgentRef: agentRef, AgentName: res.AgentName, SubCoordinator: coordinator,
+		Workflow: workflow, Queued: res.Queued,
+	})
 	// Surface the tree's live-worker occupancy so the coordinator sees remaining
 	// quota on every spawn. budget.used counted the LIVE workers before this call;
 	// the worker just created occupies one more slot now. Total 0 (unlimited) leaves
@@ -1780,6 +1785,13 @@ func (r *Runtime) notifyCoordinator(coordSessionID, note string, lastWorker bool
 	if r.coordAfterWorkerNotePersist != nil {
 		r.coordAfterWorkerNotePersist(coordSessionID)
 	}
+	if terminalWorkerSessionID != "" {
+		r.observeReport(ReportEvent{
+			CoordinatorID: coordSessionID, WorkerID: terminalWorkerSessionID,
+			Status: noteTag(note, "status"), LastWorker: lastWorker,
+			ToolUses: countToolSteps(steps), NoteBytes: len(note),
+		})
+	}
 	var archiveErr error
 	if terminalWorkerSessionID != "" {
 		if err := r.db.SetSessionState(context.Background(), terminalWorkerSessionID, "archived"); err != nil {
@@ -2199,6 +2211,7 @@ func (r *Runtime) drainCoordinator(ctx context.Context, coordSessionID string, s
 		// turn may have reset the cap (a human is back in the loop), and a turn that
 		// never ran must not spend the budget.
 		slot.turns++
+		turnNo := slot.turns
 		// Consume the notification(s) that armed this iteration: the turn about to run
 		// is history-aware, so it sees every note persisted so far, including any that
 		// landed while we waited for the slot.
@@ -2208,6 +2221,7 @@ func (r *Runtime) drainCoordinator(ctx context.Context, coordSessionID string, s
 		slot.mu.Unlock()
 		releaseAdmission()
 
+		r.observeDrain(DrainEvent{CoordinatorID: coordSessionID, Phase: "turn_start", Turn: turnNo})
 		if r.coordRunFn != nil {
 			r.coordRunFn(coordSessionID)
 		} else {
@@ -2218,6 +2232,7 @@ func (r *Runtime) drainCoordinator(ctx context.Context, coordSessionID string, s
 		// the whole drain, destroying the fairness property documented above.
 		endTurnCtx()
 		release()
+		r.observeDrain(DrainEvent{CoordinatorID: coordSessionID, Phase: "turn_end", Turn: turnNo})
 		if ctx.Err() != nil {
 			r.clearCoordinatorDrain(slot)
 			return
