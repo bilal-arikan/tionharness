@@ -8,6 +8,7 @@ import {
   markStale,
   seedLiveness,
   seedSessions,
+  seedTrajectories,
 } from './laneReducer'
 
 function header(partial: Partial<Session> & { id: string }): Session {
@@ -206,6 +207,49 @@ describe('lane reducer', () => {
     expect(s.activity[1].phase).toBe('stall_halt')
     expect(s.head).toBe(3)
     expect(applyLaneEvent(s, ev(4, 'something_else', {}))).toBe(s)
+  })
+
+  it('seeds trajectories from index rows without rolling back a newer revision', () => {
+    let s = applyLaneEvent(
+      emptyLanes(),
+      ev(1, 'trajectory', {
+        trajectoryId: 'RTA1',
+        rootSessionId: 'ROOT',
+        op: 'update',
+        revision: 5,
+        nodeCount: 4,
+      }),
+    )
+    const row = {
+      id: 'RTA1',
+      rootSessionId: 'ROOT',
+      status: 'running' as const,
+      revision: 3,
+      nodeCount: 2,
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    expect(seedTrajectories(s, [row])).toBe(s)
+    s = seedTrajectories(s, [{ ...row, id: 'RTA2', rootSessionId: 'OTHER', revision: 1 }])
+    expect(s.trajectories.size).toBe(2)
+    expect(trajectoryForRoot(s, 'OTHER')?.nodeCount).toBe(2)
+    expect(trajectoryForRoot(s, 'ROOT')?.revision).toBe(5)
+  })
+
+  it('lifecycle events carry createdAt, falling back to the origin stamp', () => {
+    const s = applyLaneEvent(
+      emptyLanes(),
+      ev(1, 'session_lifecycle', {
+        sessionId: 'N',
+        op: 'create',
+        kind: 'chat',
+        state: 'active',
+        rootSessionId: '',
+        origin: { kind: 'user', at: 77 },
+        updatedAt: 90,
+      }),
+    )
+    expect(s.sessions.get('N')?.createdAt).toBe(77)
   })
 
   it('connection flags bump only on change', () => {

@@ -44,7 +44,10 @@ type SessionLifecyclePayload struct {
 	RootSessionID string           `json:"rootSessionId"`
 	Origin        db.SessionOrigin `json:"origin"`
 	Coordinator   bool             `json:"coordinator,omitempty"`
-	UpdatedAt     int64            `json:"updatedAt"`
+	// CreatedAt lets a time-axis view place a session it first hears of over the
+	// stream without a REST round trip (Rota F0).
+	CreatedAt int64 `json:"createdAt,omitempty"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // OnSessionChange is the db.SessionChangeFn the workspace manager wires at boot
@@ -58,7 +61,7 @@ func (r *Runtime) OnSessionChange(ev db.SessionChangeEvent) {
 			SessionID: ev.SessionID, Op: ev.Op, Kind: s.Kind, AgentID: s.AgentID, Title: s.Title,
 			State: s.State, PrevState: ev.PrevState, RunState: s.RunState, PrevRunState: ev.PrevRunState,
 			RootSessionID: s.RootSession(), Origin: s.Lineage(), Coordinator: s.IsCoordinator(),
-			UpdatedAt: s.UpdatedAt,
+			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		})
 }
 

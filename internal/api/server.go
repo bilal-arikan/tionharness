@@ -438,6 +438,9 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspace/stream", s.handleWorkspaceStream)
 	// The composed "what is running right now" snapshot + spawn capacity (_Docs/77 R2).
 	mux.HandleFunc("GET /api/workspace/liveness", s.handleWorkspaceLiveness)
+	// Trajectory ("Rota") reads: index rows + one full graph (_Docs/77 R4, F0).
+	mux.HandleFunc("GET /api/trajectories", s.handleListTrajectories)
+	mux.HandleFunc("GET /api/trajectories/{id}", s.handleGetTrajectory)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
 	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)

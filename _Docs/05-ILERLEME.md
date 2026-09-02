@@ -1,5 +1,25 @@
 # TionHarness — İlerleme Takibi
 
+## Rota ekranı F0 — projeksiyon kanvası (2026-09-02) ✅
+
+**Belirti.** R10 iskeleti şeritleri düz liste olarak gösteriyordu; brifin git-graf
+metaforu (zaman ekseni, spawn/rapor kenarları, gelecek şeridi) ve rota okuma
+uçları yoktu.
+
+**Ne.** `features/rota/rotaLayout.ts` (saf yerleşim: satırlar kök→üye,
+çubuklar, `spawned`/`reported`/`forked_from` kenarları, ⚡/↷/✕ işaretleri,
+kurulu zamanlayıcı gelecek şeridi, pencere süzgeci), `RotaCanvas.tsx` (düz SVG,
+tık/çift tık/↑↓/Enter/Esc), `RotaPanel.tsx` (seed'e `GET /api/trajectories`
+eklendi, sağ panelde seçili düğüm için `ViewPanel`), `RotaToolbar`,
+`useServerNow`. Backend: `internal/api/trajectories.go` (`GET /api/trajectories`
++ `/{id}`), `ws:session_lifecycle.createdAt`. `laneMembers` oluşturma sırasına
+döndü; `seedTrajectories` reducer'a eklendi; `ViewKind`'a `trajectory`.
+Yeni doküman `78-ROTA-EKRANI.md`.
+
+**Test.** `rotaLayout.test.ts` (7), `laneReducer.test.ts` (+2),
+`internal/api/trajectories_test.go`; tsc/eslint/prettier temiz, tam frontend
+suite geçti.
+
 ## Şerit deposu + Rota görünüm iskeleti — Rota altyapısı R10 (2026-09-02) ✅
 
 **Belirti.** Workspace akışını (R3) tüketen bir istemci deposu yoktu; Rota

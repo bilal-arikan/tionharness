@@ -10,7 +10,14 @@ describe('rota labels', () => {
   })
 
   it('picks the origin glyph', () => {
-    const base = { id: 'S', kind: 'chat', state: 'active', rootSessionId: '', updatedAt: 1 }
+    const base = {
+      id: 'S',
+      kind: 'chat',
+      state: 'active',
+      rootSessionId: '',
+      createdAt: 1,
+      updatedAt: 1,
+    }
     expect(laneOriginGlyph(base)).toBe('●')
     expect(laneOriginGlyph({ ...base, coordinator: true })).toBe('◎')
     expect(laneOriginGlyph({ ...base, origin: { kind: 'coordinator', at: 1 } })).toBe('↳')

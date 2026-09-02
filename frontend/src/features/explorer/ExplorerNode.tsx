@@ -11,6 +11,7 @@ import {
   Clock,
   FileText,
   Zap,
+  Waypoints,
   GraduationCap,
   Lightbulb,
   ScrollText,
@@ -40,6 +41,7 @@ const KIND_ICON: Record<ViewKind, LucideIcon> = {
   skill: GraduationCap,
   insight: Lightbulb,
   logs: ScrollText,
+  trajectory: Waypoints,
 }
 
 // KIND_COLOR tints the icon per kind so the extension layers stand out from the

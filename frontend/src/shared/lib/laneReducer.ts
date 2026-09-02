@@ -10,6 +10,7 @@
 // always apply.
 import type { Session } from '@/types/session'
 import type { LivenessSnapshot } from '@/types/liveness'
+import type { TrajectoryIndexEntry } from '@/types/trajectory'
 import {
   WorkspaceStreamKind,
   dataOf,
@@ -68,9 +69,37 @@ export function laneSessionFromHeader(s: Session, live?: LaneLive): LaneSession 
     rootSessionId: s.origin?.rootSessionId ?? s.rootCoordinatorSessionId ?? '',
     origin: s.origin,
     coordinator: s.coordinatorMode,
+    createdAt: s.createdAt,
     updatedAt: s.updatedAt,
     live,
   }
+}
+
+// seedTrajectories folds REST index rows in, keeping whichever revision is
+// higher per trajectory (a stream event may already be ahead of the listing).
+export function seedTrajectories(
+  state: LaneState,
+  rows: readonly TrajectoryIndexEntry[],
+): LaneState {
+  const next = new Map(state.trajectories)
+  let changed = false
+  for (const r of rows) {
+    const prev = next.get(r.id)
+    if (prev && prev.revision >= r.revision) continue
+    next.set(r.id, {
+      trajectoryId: r.id,
+      rootSessionId: r.rootSessionId,
+      op: 'update',
+      templateRef: r.templateRef,
+      status: r.status,
+      revision: r.revision,
+      nodeCount: r.nodeCount,
+      updatedAt: r.updatedAt,
+    })
+    changed = true
+  }
+  if (!changed) return state
+  return bump(state, { trajectories: next })
 }
 
 // seedSessions replaces the session table from a REST listing, keeping the
@@ -131,6 +160,7 @@ function applyLifecycle(state: LaneState, d: SessionLifecycleData): LaneState {
     rootSessionId: d.rootSessionId ?? prev?.rootSessionId ?? '',
     origin: d.origin ?? prev?.origin,
     coordinator: d.coordinator ?? prev?.coordinator,
+    createdAt: d.createdAt || prev?.createdAt || d.origin?.at || d.updatedAt,
     updatedAt: d.updatedAt,
     live: prev?.live,
   }

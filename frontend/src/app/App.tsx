@@ -760,6 +760,7 @@ export default function App() {
                 setView('chat')
                 ctl.selectSession(sid)
               }}
+              onOpenFlowRun={links.openFlowRun}
             />
           </Suspense>
         )}

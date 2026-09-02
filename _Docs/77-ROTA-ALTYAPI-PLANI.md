@@ -532,6 +532,11 @@ Dalga C (B'ye bağlı)       R7 (R3)   R9 (R1+R2)   R10 (R3)
 Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 ```
 
+> **F0 uygulandı (2026-09-02):** workspace-kök zaman ekseni kanvası
+> (`features/rota/`), `GET /api/trajectories[/{id}]` okuma uçları,
+> `ws:session_lifecycle.createdAt`. Ayrıntı ve bilinçli sınırlar:
+> `78-ROTA-EKRANI.md`.
+
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|
 | A | R1, R4 | seri | Origin her create yolunda; eski header'lar okunur; `Sidecar` inbox testlerini geçer |

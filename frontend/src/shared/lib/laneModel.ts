@@ -24,6 +24,7 @@ export interface LaneSession {
   rootSessionId: string
   origin?: SessionOrigin
   coordinator?: boolean
+  createdAt: number
   updatedAt: number
   live?: LaneLive
 }
@@ -103,14 +104,15 @@ export function rootLanes(state: LaneState): LaneSession[] {
   return roots
 }
 
-// laneMembers returns the sessions under a root (workers, spawns, handoffs),
-// oldest first so the lane reads left-to-right in time.
+// laneMembers returns the sessions under a root (workers, spawns, handoffs) in
+// creation order (ties by last activity) so the lane reads left-to-right in
+// time and a member's trigger always precedes it.
 export function laneMembers(state: LaneState, rootId: string): LaneSession[] {
   const out: LaneSession[] = []
   for (const s of state.sessions.values()) {
     if (s.id !== rootId && s.rootSessionId === rootId) out.push(s)
   }
-  out.sort((a, b) => a.updatedAt - b.updatedAt)
+  out.sort((a, b) => a.createdAt - b.createdAt || a.updatedAt - b.updatedAt)
   return out
 }
 

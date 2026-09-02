@@ -95,6 +95,7 @@ export interface SessionLifecycleData {
   rootSessionId: string
   origin: SessionOrigin
   coordinator?: boolean
+  createdAt?: number
   updatedAt: number
 }
 

@@ -22,6 +22,8 @@ export type ViewKind =
   | 'skill'
   | 'insight'
   | 'logs'
+  // Trajectory ("Rota"): reached from a root session's children (_Docs/77 R9).
+  | 'trajectory'
 
 // Budget tiers. tiny is one dense line (safe to push into a prompt suffix), card
 // is the default, full adds per-item detail.
