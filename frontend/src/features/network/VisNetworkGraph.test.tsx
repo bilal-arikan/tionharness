@@ -70,6 +70,13 @@ const vis = vi.hoisted(() => {
     readonly initialOptions: Options
     readonly initialNodes: Record<string, unknown>[]
     readonly moveNodeCalls: Array<{ id: string; x: number; y: number }> = []
+    readonly moveToCalls: Array<{
+      scale?: number
+      position?: { x: number; y: number }
+      animation?: boolean
+    }> = []
+    scale = 1
+    viewPosition = { x: 0, y: 0 }
 
     constructor(
       _container: HTMLElement,
@@ -142,7 +149,6 @@ const vis = vi.hoisted(() => {
 
     startSimulation() {
       this.startSimulationCalls += 1
-      this.advancePhysics()
     }
 
     advancePhysics() {
@@ -169,14 +175,18 @@ const vis = vi.hoisted(() => {
     }
 
     getScale() {
-      return 1
+      return this.scale
     }
 
     getViewPosition() {
-      return { x: 0, y: 0 }
+      return this.viewPosition
     }
 
-    moveTo() {}
+    moveTo(options: { scale?: number; position?: { x: number; y: number }; animation?: boolean }) {
+      this.moveToCalls.push(options)
+      if (options.scale !== undefined) this.scale = options.scale
+      if (options.position !== undefined) this.viewPosition = options.position
+    }
     getConnectedNodes() {
       return []
     }
@@ -279,7 +289,7 @@ describe('VisNetworkGraph layout lifecycle', () => {
     network = latestNetwork()
     expect(network.moveNodeCalls).toContainEqual({ id: 'a', x: 40, y: 50 })
     expect(network.getPositions(['a']).a).toEqual({ x: 40, y: 50 })
-    expect(network.startSimulationCalls).toBe(0)
+    expect(network.startSimulationCalls).toBe(1)
     expect(localStorage.getItem(networkLayoutKey('workspace'))).toBe(stored)
     await unmount(root)
   })
@@ -367,7 +377,60 @@ describe('VisNetworkGraph layout lifecycle', () => {
     await unmount(root)
   })
 
+  it('persists and restores zoom with its world-space center', async () => {
+    const first = await mount(graph('workspace', [node('a')]))
+    const firstNetwork = latestNetwork()
+    firstNetwork.scale = 0.42
+    firstNetwork.viewPosition = { x: 125, y: -75 }
+    firstNetwork.emit('zoom')
+
+    await unmount(first.root)
+    expect(readNetworkLayout('workspace').viewport).toEqual({
+      scale: 0.42,
+      position: { x: 125, y: -75 },
+    })
+
+    const second = await mount(graph('workspace', [node('a')]))
+    const secondNetwork = latestNetwork()
+    expect(secondNetwork.initialOptions.physics).toMatchObject({
+      enabled: true,
+      stabilization: { fit: false },
+    })
+    expect(secondNetwork.moveToCalls).toContainEqual({
+      scale: 0.42,
+      position: { x: 125, y: -75 },
+      animation: false,
+    })
+    secondNetwork.scale = 0.9
+    secondNetwork.viewPosition = { x: 0, y: 0 }
+    secondNetwork.emit('afterDrawing')
+    expect(secondNetwork.getScale()).toBe(0.42)
+    expect(secondNetwork.getViewPosition()).toEqual({ x: 125, y: -75 })
+    secondNetwork.scale = 0.8
+    secondNetwork.viewPosition = { x: -1, y: 1 }
+    secondNetwork.emit('resize')
+    await act(async () => {})
+    expect(secondNetwork.getScale()).toBe(0.42)
+    expect(secondNetwork.getViewPosition()).toEqual({ x: 125, y: -75 })
+    secondNetwork.scale = 0.7
+    secondNetwork.viewPosition = { x: 2, y: -2 }
+    secondNetwork.emit('stabilizationIterationsDone')
+    expect(secondNetwork.getScale()).toBe(0.42)
+    expect(secondNetwork.getViewPosition()).toEqual({ x: 125, y: -75 })
+    const stabilizationUpdates = secondNetwork.setOptionsCalls.flatMap((options) => {
+      if (!options.physics || typeof options.physics !== 'object') return []
+      const stabilization = options.physics.stabilization
+      return stabilization && typeof stabilization === 'object' ? [stabilization] : []
+    })
+    expect(stabilizationUpdates.length).toBeGreaterThan(0)
+    for (const stabilization of stabilizationUpdates) {
+      expect(stabilization).toMatchObject({ fit: false })
+    }
+    await unmount(second.root)
+  })
+
   it('resumes an active simulation from its saved positions and velocities', async () => {
+    vi.useFakeTimers()
     const first = await mount(graph('workspace', [node('a')]))
     const firstNetwork = latestNetwork()
     firstNetwork.setPosition('a', { x: 10, y: 20 })
@@ -377,6 +440,7 @@ describe('VisNetworkGraph layout lifecycle', () => {
     expect(readNetworkLayout('workspace')).toEqual({
       physicsActive: true,
       positions: { a: { x: 10, y: 20, vx: 3, vy: 4 } },
+      viewport: { scale: 1, position: { x: 0, y: 0 } },
     })
     await unmount(first.root)
 
@@ -384,13 +448,15 @@ describe('VisNetworkGraph layout lifecycle', () => {
     const resumedNetwork = latestNetwork()
     expect(resumedNetwork.startSimulationCalls).toBe(1)
     expect(resumedNetwork.physics.physicsBody.velocities.a).toEqual({ x: 3, y: 4 })
+    resumedNetwork.advancePhysics()
     expect(resumedNetwork.getPositions(['a']).a).toEqual({ x: 13, y: 24 })
 
-    resumedNetwork.emit('stabilizationIterationsDone')
+    await act(async () => vi.advanceTimersByTimeAsync(5000))
     window.dispatchEvent(new Event('pagehide'))
     expect(readNetworkLayout('workspace')).toEqual({
-      physicsActive: false,
-      positions: { a: { x: 13, y: 24 } },
+      physicsActive: true,
+      positions: { a: { x: 13, y: 24, vx: 3, vy: 4 } },
+      viewport: { scale: 1, position: { x: 0, y: 0 } },
     })
     await unmount(resumed.root)
   })
@@ -474,25 +540,24 @@ describe('VisNetworkGraph layout lifecycle', () => {
     const { root } = await mount(graph('workspace', [node('a', { fixed: originalFixed })]))
     const network = latestNetwork()
     network.setPosition('a', { x: 100, y: 200 })
-    const stopsBefore = network.stopSimulationCalls
+    const startsBefore = network.startSimulationCalls
 
     await render(
       root,
       graph('workspace', [node('a', { fixed: originalFixed }), node('b', { x: 5, y: 6 })]),
     )
 
-    expect(network.startSimulationCalls).toBe(1)
+    expect(network.startSimulationCalls).toBe(startsBefore + 1)
     expect(network.data.nodes.get('a')).toMatchObject({ fixed: { x: true, y: true } })
     expect(readNetworkPositions('workspace')).toEqual({ a: { x: 100, y: 200 } })
 
+    const stopsBeforeCompletion = network.stopSimulationCalls
+    const optionsBeforeCompletion = network.setOptionsCalls.length
     network.emit('stabilizationIterationsDone')
-    expect(network.stopSimulationCalls).toBe(stopsBefore + 1)
+    expect(network.stopSimulationCalls).toBe(stopsBeforeCompletion)
+    expect(network.setOptionsCalls).toHaveLength(optionsBeforeCompletion)
     expect(network.data.nodes.get('a')).toMatchObject({ fixed: originalFixed })
     expect(network.getPositions(['a']).a).toEqual({ x: 100, y: 200 })
-    const disableIndex = network.setOptionsCalls.findIndex(
-      (options) => options.physics && (options.physics as { enabled?: boolean }).enabled === false,
-    )
-    expect(disableIndex).toBeGreaterThanOrEqual(0)
     expect(readNetworkPositions('workspace')).toEqual({ a: { x: 100, y: 200 } })
     await unmount(root)
   })
@@ -525,7 +590,8 @@ describe('VisNetworkGraph layout lifecycle', () => {
     await unmount(root)
   })
 
-  it('keeps physics disabled across density and theme changes', async () => {
+  it('starts restored physics and keeps it active across density and theme changes', async () => {
+    vi.useFakeTimers()
     writeNetworkPositions('workspace', { a: { x: 1, y: 2 } })
     const { root } = await mount(graph('workspace', [node('a')]))
     const network = latestNetwork()
@@ -537,23 +603,32 @@ describe('VisNetworkGraph layout lifecycle', () => {
 
     expect(network.setOptionsCalls.length).toBeGreaterThan(0)
     for (const options of network.setOptionsCalls) {
-      if (options.physics) expect(options.physics).toMatchObject({ enabled: false })
+      if (options.physics) expect(options.physics).toMatchObject({ enabled: true })
       if (options.layout) expect(options.layout).toMatchObject({ improvedLayout: false })
     }
-    expect(network.startSimulationCalls).toBe(0)
-    expect(network.getPositions(['a']).a).toEqual(restored)
+    expect(network.startSimulationCalls).toBe(1)
+    expect(network.initialOptions.physics).toMatchObject({ minVelocity: 0 })
+    expect(network.physics.physicsBody.velocities.a).not.toEqual({ x: 0, y: 0 })
+    network.advancePhysics()
+    expect(network.getPositions(['a']).a).not.toEqual(restored)
+    const stopsBefore = network.stopSimulationCalls
+    await act(async () => vi.advanceTimersByTimeAsync(5000))
+    network.emit('stabilizationIterationsDone')
+    expect(network.stopSimulationCalls).toBe(stopsBefore)
     await unmount(root)
   })
 
-  it('removes stabilization listener and timer before destroy', async () => {
+  it('stops continuous physics during destroy without leaving timers', async () => {
     vi.useFakeTimers()
     const { root } = await mount(graph('workspace', [node('a')]))
     const network = latestNetwork()
     expect(network.listenerCount('stabilizationIterationsDone')).toBe(1)
 
+    const stopsBefore = network.stopSimulationCalls
     await unmount(root)
 
     expect(network.listenerCount('stabilizationIterationsDone')).toBe(0)
+    expect(network.stopSimulationCalls).toBe(stopsBefore + 1)
     expect(network.destroyed).toBe(true)
     const fitCalls = network.fitCalls
     await vi.runAllTimersAsync()

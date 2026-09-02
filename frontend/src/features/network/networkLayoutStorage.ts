@@ -11,9 +11,15 @@ export interface NetworkPosition {
 
 export type NetworkPositions = Record<string, NetworkPosition>
 
+export interface NetworkViewport {
+  scale: number
+  position: { x: number; y: number }
+}
+
 export interface NetworkLayout {
   positions: NetworkPositions
   physicsActive: boolean
+  viewport?: NetworkViewport
 }
 
 interface StoredNetworkLayout extends NetworkLayout {
@@ -59,7 +65,12 @@ export function readNetworkLayout(
           : { x: position.x, y: position.y }
       }
     }
-    return { positions, physicsActive: parsed.physicsActive === true }
+    const viewport = readViewport(parsed.viewport)
+    return {
+      positions,
+      physicsActive: parsed.physicsActive === true,
+      ...(viewport ? { viewport } : {}),
+    }
   } catch {
     return { positions: {}, physicsActive: false }
   }
@@ -87,7 +98,11 @@ export function writeNetworkPositions(
   const latestLayout = readNetworkLayout(workspaceId, storage)
   return writeNetworkLayout(
     workspaceId,
-    { positions, physicsActive: latestLayout.physicsActive },
+    {
+      positions,
+      physicsActive: latestLayout.physicsActive,
+      viewport: latestLayout.viewport,
+    },
     storage,
     canonicalNodeIds,
     knownPositions,
@@ -129,13 +144,36 @@ export function writeNetworkLayout(
         v: NETWORK_LAYOUT_VERSION,
         positions: next,
         physicsActive: layout.physicsActive,
+        viewport: layout.viewport,
       } satisfies StoredNetworkLayout),
     )
   } catch {
     // Persistence is optional; storage can be unavailable or over quota.
     return latestLayout
   }
-  return { positions: next, physicsActive: layout.physicsActive }
+  return {
+    positions: next,
+    physicsActive: layout.physicsActive,
+    ...(layout.viewport ? { viewport: layout.viewport } : {}),
+  }
+}
+
+function readViewport(value: unknown): NetworkViewport | undefined {
+  if (value === undefined) return undefined
+  if (
+    !isRecord(value) ||
+    typeof value.scale !== 'number' ||
+    !Number.isFinite(value.scale) ||
+    value.scale <= 0 ||
+    !isRecord(value.position) ||
+    typeof value.position.x !== 'number' ||
+    !Number.isFinite(value.position.x) ||
+    typeof value.position.y !== 'number' ||
+    !Number.isFinite(value.position.y)
+  ) {
+    return undefined
+  }
+  return { scale: value.scale, position: { x: value.position.x, y: value.position.y } }
 }
 
 function pruneKnownNetworkPositions(

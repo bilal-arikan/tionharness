@@ -77,6 +77,38 @@ describe('network layout storage', () => {
     })
   })
 
+  it('round-trips a finite viewport and ignores an invalid viewport', () => {
+    const storage = memoryStorage()
+    writeNetworkLayout(
+      'workspace',
+      {
+        physicsActive: false,
+        positions: {},
+        viewport: { scale: 0.5, position: { x: 12, y: -34 } },
+      },
+      storage,
+    )
+
+    expect(readNetworkLayout('workspace', storage).viewport).toEqual({
+      scale: 0.5,
+      position: { x: 12, y: -34 },
+    })
+
+    storage.setItem(
+      networkLayoutKey('workspace'),
+      JSON.stringify({
+        v: NETWORK_LAYOUT_VERSION,
+        physicsActive: false,
+        positions: { node: { x: 1, y: 2 } },
+        viewport: { scale: 0, position: { x: 12, y: -34 } },
+      }),
+    )
+    expect(readNetworkLayout('workspace', storage)).toEqual({
+      physicsActive: false,
+      positions: { node: { x: 1, y: 2 } },
+    })
+  })
+
   it('prunes stale node ids without mutating input', () => {
     const positions = { kept: { x: 1, y: 2 }, stale: { x: 3, y: 4 } }
     expect(pruneNetworkPositions(positions, ['kept'])).toEqual({ kept: { x: 1, y: 2 } })

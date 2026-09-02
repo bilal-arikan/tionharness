@@ -5,11 +5,13 @@ import {
   readNetworkLayout,
   writeNetworkLayout,
   type NetworkPositions,
+  type NetworkViewport,
 } from './networkLayoutStorage'
 import {
   captureNetworkPositions,
   positionCoordinates,
   restoreNetworkVelocities,
+  wakeSettledNetwork,
 } from './networkPhysicsState'
 
 export type VisMode = 'relation' | 'live'
@@ -38,6 +40,20 @@ function fitAndCap(net: Network, animated: boolean): () => void {
     cap()
     return () => {}
   }
+}
+
+function captureNetworkViewport(net: Network): NetworkViewport {
+  const scale = net.getScale()
+  const position = net.getViewPosition()
+  if (
+    !Number.isFinite(scale) ||
+    scale <= 0 ||
+    !Number.isFinite(position.x) ||
+    !Number.isFinite(position.y)
+  ) {
+    throw new Error('vis-network returned an invalid viewport')
+  }
+  return { scale, position }
 }
 
 interface Props {
@@ -95,6 +111,7 @@ function buildOptions(
   lite = false,
   physicsEnabled = false,
   improvedLayoutEnabled = !lite,
+  stabilizationFit = true,
 ): Options {
   const d = Math.min(2, Math.max(0.4, density))
   return {
@@ -132,9 +149,11 @@ function buildOptions(
         avoidOverlap: mode === 'live' ? 1 : 0.6,
       },
       maxVelocity: 50,
-      minVelocity: 0.75,
+      // Keep the live graph ticking instead of declaring it settled shortly
+      // after a restored layout receives its wake velocity.
+      minVelocity: 0,
       // Fewer settle iterations on mobile so the initial simulation burst is short.
-      stabilization: { enabled: true, iterations: lite ? 120 : 300, fit: true },
+      stabilization: { enabled: true, iterations: lite ? 120 : 300, fit: stabilizationFit },
     },
     // improvedLayout is constructor-only. Restored and low-power layouts skip it.
     layout: { improvedLayout: improvedLayoutEnabled },
@@ -175,7 +194,7 @@ export function VisNetworkGraph({
   const populatedRef = useRef(false)
   const initialLayoutRef = useRef(readNetworkLayout(workspaceId))
   const persistedPositionsRef = useRef<NetworkPositions>(initialLayoutRef.current.positions)
-  const resumePhysicsRef = useRef(initialLayoutRef.current.physicsActive)
+  const preserveViewportRef = useRef(initialLayoutRef.current.viewport !== undefined)
   const physicsActiveRef = useRef(false)
   const runtimePositionsRef = useRef<NetworkPositions>({})
   const nodesRef = useRef(nodes)
@@ -212,7 +231,7 @@ export function VisNetworkGraph({
     setupGenerations.set(workspaceId, generation)
     const persistedLayout = readNetworkLayout(workspaceId)
     persistedPositionsRef.current = persistedLayout.positions
-    resumePhysicsRef.current = persistedLayout.physicsActive
+    preserveViewportRef.current = persistedLayout.viewport !== undefined
     physicsActiveRef.current = false
     let knownPositions = persistedPositionsRef.current
     runtimePositionsRef.current = {}
@@ -241,8 +260,9 @@ export function VisNetworkGraph({
         densityRef.current,
         modeRef.current,
         liteRef.current,
-        false,
+        preserveViewportRef.current,
         !liteRef.current && !hasRestoredVisibleNode,
+        !preserveViewportRef.current,
       ),
     )
     networkRef.current = network
@@ -252,8 +272,39 @@ export function VisNetworkGraph({
       const saved = persistedPositionsRef.current[node.id as string]
       if (saved) network.moveNode(node.id as string, saved.x, saved.y)
     }
+    let runtimeViewport: NetworkViewport | undefined = persistedLayout.viewport
+    const captureRuntimeViewport = () => {
+      runtimeViewport = captureNetworkViewport(network)
+    }
+    const restorePersistedViewport = () => {
+      if (!persistedLayout.viewport) return
+      network.moveTo({ ...persistedLayout.viewport, animation: false })
+      runtimeViewport = persistedLayout.viewport
+    }
+    let viewportRestoreActive = true
+    const restorePersistedViewportAfterResize = () => {
+      // Canvas emits resize before applying its cached camera state. Wait until
+      // that call stack completes, then make the persisted camera authoritative.
+      queueMicrotask(() => {
+        if (viewportRestoreActive) restorePersistedViewport()
+      })
+    }
+    restorePersistedViewport()
+    // vis-network can resize its canvas during first paint and while releasing
+    // its hidden stabilization batch. Reapply after each one-time initialization
+    // boundary so none of them can alter the restored camera.
+    if (persistedLayout.viewport) {
+      network.once('afterDrawing', restorePersistedViewport)
+      network.once('resize', restorePersistedViewportAfterResize)
+    }
+    const completeInitialViewport = persistedLayout.viewport
+      ? restorePersistedViewport
+      : captureRuntimeViewport
+    network.once('stabilizationIterationsDone', completeInitialViewport)
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
     network.on('deselectNode', () => onSelectRef.current?.(null))
+    network.on('zoom', captureRuntimeViewport)
+    network.on('dragEnd', captureRuntimeViewport)
     const capturePositions = (): NetworkPositions => {
       const ids = nodesDS.getIds() as string[]
       return ids.length === 0 ? {} : captureNetworkPositions(network, ids, physicsActiveRef.current)
@@ -265,7 +316,7 @@ export function VisNetworkGraph({
     ) => {
       const layout = writeNetworkLayout(
         workspaceId,
-        { positions, physicsActive },
+        { positions, physicsActive, viewport: runtimeViewport },
         localStorage,
         nodeIds,
         knownPositions,
@@ -280,6 +331,7 @@ export function VisNetworkGraph({
     }
     const handlePageHide = () => {
       if (!canonicalReadyRef.current) return
+      captureRuntimeViewport()
       persistPositions(
         {
           ...persistedPositionsRef.current,
@@ -331,8 +383,15 @@ export function VisNetworkGraph({
         ...runtimePositionsRef.current,
         ...capturePositions(),
       }
+      const viewport = runtimeViewport
       const nodeIds = [...canonicalNodeIdsRef.current]
+      viewportRestoreActive = false
       window.removeEventListener('pagehide', handlePageHide)
+      network.off('afterDrawing', restorePersistedViewport)
+      network.off('resize', restorePersistedViewportAfterResize)
+      network.off('stabilizationIterationsDone', completeInitialViewport)
+      network.off('zoom', captureRuntimeViewport)
+      network.off('dragEnd', captureRuntimeViewport)
       stabilizationCleanupRef.current()
       stabilizationCleanupRef.current = () => {}
       temporaryFixedRef.current.clear()
@@ -348,7 +407,7 @@ export function VisNetworkGraph({
         if (!ready || setupGenerations.get(workspaceId) !== generation) return
         writeNetworkLayout(
           workspaceId,
-          { positions, physicsActive },
+          { positions, physicsActive, viewport },
           localStorage,
           nodeIds,
           knownPositions,
@@ -374,6 +433,7 @@ export function VisNetworkGraph({
           liteRef.current,
           physicsActiveRef.current,
           false,
+          !preserveViewportRef.current,
         ),
       )
     })
@@ -448,6 +508,7 @@ export function VisNetworkGraph({
       newNodeIds: string[],
       animated: boolean,
       resumedPositions?: NetworkPositions,
+      completeAfterSettle = true,
     ) => {
       stabilizationCleanupRef.current()
       fitCleanupRef.current()
@@ -477,11 +538,8 @@ export function VisNetworkGraph({
         completed = true
         if (timer) clearTimeout(timer)
         net.off('stabilizationIterationsDone', complete)
-        net.stopSimulation()
-        net.setOptions({ physics: { enabled: false } })
-        physicsActiveRef.current = false
-        // Unpin only after physics is disabled. DataSet fixed updates schedule a
-        // redraw and must not expose restored anchors to a final physics tick.
+        // The short settling phase only controls temporary anchors. Physics stays
+        // enabled for the lifetime of the network screen.
         restoreTemporaryFixed()
         const ids = nds.getIds() as string[]
         runtimePositionsRef.current = {
@@ -502,37 +560,29 @@ export function VisNetworkGraph({
         completed = true
       }
       net.setOptions({ physics: { enabled: true } })
-      if (resumedPositions) restoreNetworkVelocities(net, resumedPositions)
-      net.once('stabilizationIterationsDone', complete)
-      timer = setTimeout(complete, 1600)
+      if (resumedPositions) {
+        restoreNetworkVelocities(net, resumedPositions)
+        wakeSettledNetwork(net, resumedPositions)
+      }
+      if (completeAfterSettle) {
+        net.once('stabilizationIterationsDone', complete)
+        timer = setTimeout(complete, 1600)
+      }
       physicsActiveRef.current = true
       net.startSimulation()
     }
 
     if (!populatedRef.current && nodes.length > 0) {
       populatedRef.current = true
-      const hasSavedPositionForEveryNode = nodes.every(
-        (node) => knownPositions[node.id as string] !== undefined,
+      // Every screen entry starts continuous physics from the persisted world
+      // coordinates. Active snapshots restore velocity; settled snapshots receive
+      // a small deterministic wake velocity before re-entering the force field.
+      settleNewNodes(
+        nodes.map((node) => node.id as string),
+        false,
+        knownPositions,
+        false,
       )
-      if (resumePhysicsRef.current) {
-        resumePhysicsRef.current = false
-        settleNewNodes(
-          nodes.map((node) => node.id as string),
-          false,
-          knownPositions,
-        )
-      } else if (hasSavedPositionForEveryNode) {
-        net.stopSimulation()
-        net.setOptions({ physics: { enabled: false } })
-        fitCleanupRef.current = fitAndCap(net, false)
-      } else {
-        settleNewNodes(
-          nodes
-            .filter((node) => knownPositions[node.id as string] === undefined)
-            .map((node) => node.id as string),
-          false,
-        )
-      }
     } else {
       const newNodeIds = toAdd
         .filter((node) => knownPositions[node.id as string] === undefined)
@@ -548,7 +598,15 @@ export function VisNetworkGraph({
     const net = networkRef.current
     if (!net) return
     net.setOptions(
-      buildOptions(resolveThemeColors(), density, mode, lite, physicsActiveRef.current, false),
+      buildOptions(
+        resolveThemeColors(),
+        density,
+        mode,
+        lite,
+        physicsActiveRef.current,
+        false,
+        !preserveViewportRef.current,
+      ),
     )
   }, [mode, density, lite])
 

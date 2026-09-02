@@ -14,6 +14,8 @@ interface PhysicsNetwork {
   }
 }
 
+const SETTLED_WAKE_SPEED = 3
+
 function physicsVelocities(network: Network): Record<string, Velocity> {
   const physics = (network as Network & Partial<PhysicsNetwork>).physics
   if (!physics?.physicsBody?.velocities) {
@@ -57,6 +59,39 @@ export function restoreNetworkVelocities(network: Network, positions: NetworkPos
     assertFiniteVelocity(id, velocity)
     velocities[id] = velocity
   }
+}
+
+export function wakeSettledNetwork(network: Network, positions: NetworkPositions): void {
+  const velocities = physicsVelocities(network)
+  const entries = Object.entries(positions)
+  const alreadyMoving = entries.some(([id]) => {
+    const velocity = velocities[id]
+    return velocity && (Math.abs(velocity.x) > 0.001 || Math.abs(velocity.y) > 0.001)
+  })
+  if (alreadyMoving || entries.length === 0) return
+
+  const center = entries.reduce(
+    (sum, [, position]) => ({ x: sum.x + position.x, y: sum.y + position.y }),
+    { x: 0, y: 0 },
+  )
+  center.x /= entries.length
+  center.y /= entries.length
+
+  entries.forEach(([id, position], index) => {
+    let dx = position.x - center.x
+    let dy = position.y - center.y
+    let distance = Math.hypot(dx, dy)
+    if (distance < 0.001) {
+      const angle = (index / entries.length) * Math.PI * 2
+      dx = Math.cos(angle)
+      dy = Math.sin(angle)
+      distance = 1
+    }
+    velocities[id] = {
+      x: (-dy / distance) * SETTLED_WAKE_SPEED,
+      y: (dx / distance) * SETTLED_WAKE_SPEED,
+    }
+  })
 }
 
 export function positionCoordinates(position: NetworkPosition): Pick<NetworkPosition, 'x' | 'y'> {

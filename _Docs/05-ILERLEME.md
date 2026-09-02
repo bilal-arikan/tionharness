@@ -1,5 +1,18 @@
 # TionHarness — İlerleme Takibi
 
+## Ağ zoom ve kamera merkezi yeniden açılışta korunuyor (2026-09-02) ✅
+
+**Fix:** Workspace kapsamlı ağ snapshot'ı artık node konumları ve fizik durumuna ek
+olarak zoom ölçeği ile kameranın dünya koordinatlı merkezini saklıyor. Ağ ekranından
+çıkış ve `pagehide` sırasında son kullanıcı zoom/pan kamerası yazılıyor; yeniden
+açılışta animasyonsuz geri yükleniyor. Kayıtlı kamera bulunan açılışlarda vis-network'ün
+ilk stabilization çerçevelemesi kapatılıyor ve canvas resize sonrası kamera yeniden
+uygulanıyor; böylece geri yüklenen zoom tekrar ezilmiyor. Eski v1 kayıtları kamera
+alanı olmadan okunmaya devam ediyor.
+
+**Dosyalar:** `frontend/src/features/network/networkLayoutStorage.ts`,
+`VisNetworkGraph.tsx` ve testleri; ayrıntı `_Docs/23`.
+
 ## Ağ fiziği yeniden açılışta kaldığı yerden sürüyor (2026-09-02) ✅
 
 **Sorun:** Ağ yerleşimi düğümlerin `x/y` koordinatlarını saklıyordu; ekran hareket
@@ -10,17 +23,21 @@ kayboluyordu.
 **Fix:** Yerleşim snapshot'ı artık `physicsActive` ile düğüm başına `vx/vy` hızlarını
 da taşıyor. Aktif snapshot açıldığında koordinatlar constructor öncesi uygulanıyor,
 vis-network velocity tablosu geri yükleniyor ve stabilization aynı fizik durumundan
-devam ediyor. Durağan snapshot davranışı değişmedi. Tema, yoğunluk ve lite değişimleri
-simülasyonu zorla kapatmak yerine mevcut aktiflik durumunu koruyor. Eski, hız içermeyen
-v1 kayıtları geriye uyumlu okunuyor; bozuk hızlar atılıp geçerli konum korunuyor.
+devam ediyor. Durağan snapshot da artık kayıtlı koordinatlarda küçük, deterministik
+teğetsel hızlarla fiziğe giriyor. Açılış simülasyonu 1,6 saniye sonunda zorla
+durdurulmuyor; fizik ağ ekranı açık kaldığı sürece etkin kalıyor. Tema, yoğunluk ve lite
+değişimleri simülasyonu zorla kapatmak yerine mevcut aktiflik durumunu koruyor. Eski,
+hız içermeyen v1 kayıtları geriye uyumlu okunuyor; bozuk hızlar atılıp geçerli konum
+korunuyor.
 
 **Dosyalar:** `frontend/src/features/network/networkLayoutStorage.ts`,
 `networkPhysicsState.ts`, `VisNetworkGraph.tsx` ve testleri; ayrıntı `_Docs/23`.
 
-**Doğrulama:** `npm test` 93 dosya / 670 test ✅, `npm run format:check` ✅,
-`npm run build` ✅. Canlı Playwright testinde aktif çıkış 88 düğüm kaydetti; 79
-düğümde finite `vx/vy` bulundu ve yeniden açılış sonrası aynı 79 düğüm kayıtlı
-koordinatından ilerledi. Konsol hatası yok, test öncesi kullanıcı snapshot'ı geri yüklendi.
+**Doğrulama:** `npm test` 94 dosya / 673 test ✅, `npm run format:check` ✅,
+`npm run build` ✅. Canlı Playwright testinde durağan 90 düğümlü snapshot ilk çıkışta
+90 hareketli düğüm kaydetti. İkinci açılışta 2. saniyede 89, 5. saniyede 84 düğüm
+hâlâ hareketliydi; bu aralıkta 80 düğüm konum değiştirdi. Konsol hatası yok, test
+öncesi kullanıcı snapshot'ı geri yüklendi.
 
 ## Workspace arka plan işleri Close'da drenaj ediliyor — `activity-inbox` yarışı kapandı (2026-09-02) ✅
 

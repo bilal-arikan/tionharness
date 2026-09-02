@@ -85,14 +85,21 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   > DAG/ağaç ister; bu veride her bağsız görev ayrı kök olup üst sırayı doldurarak
   > "bozuk" görünür. Hiyerarşi gereken yer **Akışlar** ekranıdır (gerçek DAG). Bu
   > yüzden ağ yalnız fizik düzeni kullanır.
-- **Kalıcı yerleşim:** Düğüm koordinatları workspace kapsamı ve yerleşim sürümü
+- **Kalıcı yerleşim:** Düğüm koordinatları, zoom ölçeği ve kameranın dünya koordinatlı
+  merkezi workspace kapsamı ve yerleşim sürümü
   içeren `localStorage` anahtarında saklanır. Okuma sırasında kayıt şeması ile tüm
   `x`/`y` ve varsa `vx`/`vy` değerlerinin finite sayı olduğu doğrulanır; bozuk veya eski
   sürümlü kayıt kullanılmaz. Snapshot ayrıca fizik simülasyonunun aktif olup olmadığını
   taşır. Ağ hareket hâlindeyken ekran kapanırsa açılışta kayıtlı koordinatlar ve hız
   vektörleri fizik motoruna geri verilir; kısa stabilization kaldığı yerden sürer.
-  Snapshot durağansa bütün düğümlerin kayıtlı konumu fizik kapalı açılır. Yeni düğüm
-  geldiğinde kayıtlı düğümler geçici sabitlenir ve yalnız yeni düğüm için kısa bir
+  Kayıtlı kamera açılışta animasyonsuz geri yüklenir; bu durumda vis-network'ün ilk
+  stabilization çerçevelemesi kapatılır ve canvas resize tamamlandıktan sonra kamera
+  yeniden uygulanır. Zoom/pan olayları son kullanıcı kamerasını bellekte günceller;
+  SPA çıkışındaki canvas daralması bu değeri ezemez.
+  Snapshot durağansa bütün düğümler kayıtlı konumlarında küçük, deterministik teğetsel
+  hızlarla fiziğe yeniden girer. Açılış simülasyonu süreyle kapatılmaz; fizik ağ ekranı
+  açık kaldığı sürece etkin kalır. Ekran açıkken yeni
+  düğüm geldiğinde kayıtlı düğümler geçici sabitlenir ve yalnız yeni düğüm için kısa bir
   stabilization çalışır. Sürükleme ve fizik hareketleri açık sayfa boyunca storage'a
   yazılmaz; görünür düğümlerin son fizik durumu ağ ekranından çıkışta, workspace
   değişiminde veya `pagehide` sırasında tek snapshot olarak kaydedilir.
@@ -194,8 +201,9 @@ Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
   (hover'da komşu-dışı düğüm/kenarları soldurur),
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
   konumlarını korur), stabilize sonrası `fit`; workspace/sürüm anahtarlı kalıcı
-  koordinatları uygular; durağan tam kayıtta fiziği kapatır, aktif kayıtta hızları geri
-  yükleyip stabilization'ı sürdürür ve yeni düğümlerde kısa stabilization çalıştırır.
+  koordinatları uygular; her açılışta kayıtlı konumlardan kısa fizik turu başlatır,
+  aktif kayıtta hızları geri yükleyip stabilization'ı sürdürür ve yeni düğümlerde kısa
+  stabilization çalıştırır.
   Kalıcı snapshot yalnız unmount/workspace değişimi/`pagehide` çıkışlarında yazılır;
   tema ve yoğunluk seçenekleri mevcut fizik durumunu korur.
 - `features/network/networkLayoutStorage.ts` — yerleşim anahtarı, aktiflik + `x/y/vx/vy`
