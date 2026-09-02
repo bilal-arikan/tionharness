@@ -1,5 +1,25 @@
 # TionHarness — İlerleme Takibi
 
+## Şerit deposu + Rota görünüm iskeleti — Rota altyapısı R10 (2026-09-02) ✅
+
+**Belirti.** Workspace akışını (R3) tüketen bir istemci deposu yoktu; Rota
+ekranı için ne bir view kaydı ne de "akış → depo → panel" yolu vardı.
+`api/workspaceStream.ts` `api/client`'a bağlı olduğundan saf reducer testleri
+node ortamında `localStorage is not defined` ile düşüyordu.
+
+**Ne.** `api/workspaceEvents.ts` (taşıma-bağımsız kind/payload/`dataOf`;
+`workspaceStream.ts` yeniden dışa aktarır). `shared/lib/laneModel.ts` +
+`laneReducer.ts` (saf, immutable; `updatedAt`/`revision` ile stale reddi,
+reddedilen olay aynı nesne) + `laneStore.ts` (`useSyncExternalStore`,
+ref-sayımlı `connectLanes`, `seedLanes`, `resetLanes`). `rota` görünümü:
+`View` birliği, `url.ts VIEWS`, `VIEW_TITLE`/`HEADERLESS_VIEWS`, `NAV`
+(`Waypoints`), `lazyPanels.RotaPanel`, `App.tsx`; `features/rota/` iskeleti
+(RotaPanel/RotaLane/RotaActivity/rotaLabels). Yan bulgu: `BoardFilterBar`
+`dep`/`review` `as never` dökümleri tipli hale getirildi.
+
+**Test.** `laneReducer.test.ts`, `rotaLabels.test.ts`; tsc/eslint/prettier ve
+`npm run build` temiz.
+
 ## View + graph rota bağlantısı — Rota altyapısı R9 (2026-09-02) ✅
 
 **Belirti.** Bir rotayı (R4 `Trajectory`) ne `get_view` ajan arayüzü ne de Ağ

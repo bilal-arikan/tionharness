@@ -11,6 +11,7 @@ export type View =
   | 'chat'
   | 'agents'
   | 'network'
+  | 'rota'
   | 'explorer'
   | 'board'
   | 'schedules'

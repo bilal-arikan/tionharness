@@ -11,6 +11,11 @@ export const FlowsPanel = lazy(() =>
 export const NetworkPanel = lazy(() =>
   import('@/features/network/NetworkPanel').then((m) => ({ default: m.NetworkPanel })),
 )
+// The Rota (trajectory) view is its own chunk so the lane store + panels only
+// load when the user opens it (_Docs/77 R10).
+export const RotaPanel = lazy(() =>
+  import('@/features/rota/RotaPanel').then((m) => ({ default: m.RotaPanel })),
+)
 // The Explorer (Harita) drill-down map is React Flow too — load on demand.
 export const ExplorerView = lazy(() =>
   import('@/features/explorer/ExplorerView').then((m) => ({ default: m.ExplorerView })),

@@ -6,7 +6,15 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { Search, X } from 'lucide-react'
-import type { Agent, BoardColumnDef, BoardGroupBy, BoardSort, Task } from '@/types'
+import type {
+  Agent,
+  BoardColumnDef,
+  BoardDepFilter,
+  BoardGroupBy,
+  BoardReviewFilter,
+  BoardSort,
+  Task,
+} from '@/types'
 import { FacetDropdown, type FacetOption } from './FacetDropdown'
 import { SavedViewMenu } from './SavedViewMenu'
 import {
@@ -200,14 +208,14 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
         label="Bağımlılık"
         options={depOptions}
         selected={f.dep ? [f.dep] : []}
-        onChange={(v) => patch({ dep: (v[0] ?? '') as never })}
+        onChange={(v) => patch({ dep: (v[0] ?? '') as BoardDepFilter })}
         mode="single"
       />
       <FacetDropdown
         label="Doğrulama"
         options={reviewOptions}
         selected={f.review ? [f.review] : []}
-        onChange={(v) => patch({ review: (v[0] ?? '') as never })}
+        onChange={(v) => patch({ review: (v[0] ?? '') as BoardReviewFilter })}
         mode="single"
       />
       <FacetDropdown

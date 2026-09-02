@@ -10,7 +10,7 @@ import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
-import { FlowsPanel, NetworkPanel, ExplorerView } from './lazyPanels'
+import { FlowsPanel, NetworkPanel, RotaPanel, ExplorerView } from './lazyPanels'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
 import { useAppearance } from './useAppearance'
@@ -742,6 +742,18 @@ export default function App() {
         {view === 'network' && activeWorkspaceId !== null && (
           <Suspense fallback={<LoadingState label="Ağ yükleniyor…" className="flex-1" />}>
             <NetworkPanel
+              workspaceId={activeWorkspaceId}
+              onError={setError}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          </Suspense>
+        )}
+        {view === 'rota' && activeWorkspaceId !== null && (
+          <Suspense fallback={<LoadingState label="Rota yükleniyor…" className="flex-1" />}>
+            <RotaPanel
               workspaceId={activeWorkspaceId}
               onError={setError}
               onOpenSession={(sid) => {

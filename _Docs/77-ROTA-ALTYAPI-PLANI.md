@@ -498,6 +498,30 @@ tipleri, `workspace.ts` `BoardFilter.review` düzeltmesi (yan bulgu).
 
 **Boyut:** M. **Açar:** F0 ekran iskeleti.
 
+**Gerçekleşen (2026-09-02).** `api/workspaceStream.ts` R3'te gelmişti; burada
+taşıma-bağımsız sözlük `api/workspaceEvents.ts`'e ayrıldı (kind sabitleri,
+payload tipleri, `dataOf`) — `api/client` import anında `localStorage` okuduğu
+için saf reducer ve node ortamlı testler artık transport'a dokunmadan çalışıyor;
+`workspaceStream.ts` bunları yeniden dışa aktarır. Şerit deposu üç dosya:
+`shared/lib/laneModel.ts` (`LaneState`: sessions/trajectories/flowRuns/armed
+Map'leri, fires + activity halkaları [200], `revision`/`head`/`connected`/
+`stale`, `rootLanes`/`laneMembers`/`trajectoryForRoot`), `laneReducer.ts` (saf,
+immutable: `seedSessions` REST satırından eskiyse akıştan gelen başlığı korur,
+`seedLiveness`, `applyLaneEvent` — oturum/akış koşusu `updatedAt`, rota
+`revision` ile stale reddi; silme her zaman uygulanır; reddedilen olay AYNI
+nesneyi döndürür, `revision` artmaz), `laneStore.ts` (modül deposu +
+`useSyncExternalStore`; `connectLanes` ref-sayımlı akış, `seedLanes`,
+`resetLanes`, `dispatchLaneEvent`). Görünüm kaydı: `View` birliği + `url.ts
+VIEWS` + `VIEW_TITLE`/`HEADERLESS_VIEWS` + `NAV` (`Waypoints` ikonu) +
+`lazyPanels.RotaPanel` + `App.tsx` blok; `features/rota/` iskeleti (RotaPanel:
+akış → seed → şerit listesi, RotaLane, RotaActivity: tetik/koordinasyon/kurulu
+zamanlayıcı şeridi, rotaLabels) — F0 kanvası bu veri yolunu değiştirmeden gövdeyi
+değiştirecek. `Session.origin` (R1) ve `Automation/Schedule/Hook.archived`
+(R5) tipleri zaten vardı. `BoardFilterBar` `dep`/`review` alanlarındaki
+`as never` dökümleri `BoardDepFilter`/`BoardReviewFilter` ile değiştirildi (yan
+bulgu). Testler: `laneReducer.test.ts` (seed/gruplama, stale reddi, revizyon,
+liveness, halkalar, bağlantı bayrakları), `rotaLabels.test.ts`.
+
 ## 2. Dalgalar
 
 ```

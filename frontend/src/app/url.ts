@@ -17,6 +17,7 @@ const VIEWS: View[] = [
   'chat',
   'agents',
   'network',
+  'rota',
   'explorer',
   'board',
   'schedules',
