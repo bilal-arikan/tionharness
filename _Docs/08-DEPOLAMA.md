@@ -228,6 +228,24 @@ sayaç otomasyonlarını besleyen aktivite sinyali sürecin her iki tarafındaki
   `AddMessageWithCLIState`'in WAL'ı bunun tersidir: çok dosyalı bir commit'i
   kapsar ve çökmeyi kasten atlatır, bu yüzden hata yolunda diskte bırakılır.
 
+**Bozuk WAL = karantina + degraded oturum, boot'u kırmaz.** Çözülemeyen bir
+`cli-reply.wal.json` asla "kurtaracak bir şey yok" sayılmaz ve asla silinmez:
+`quarantineCLIReplyWAL` dosyayı `cli-reply.wal.json.quarantine` adına rename
+eder, oturum dizinine `cli-reply.recovery-degraded.json` işaretçisini yazar ve
+`slog.Error` basar. `loadSessions` bu durumu `ErrCLIReplyRecoveryDegraded` olarak
+tanır, loglar ve **diğer oturumları yüklemeye devam eder** — tek bir bozuk
+sidecar yüzünden açılmayı reddetmek, kurtarılamayan o bir oturumdan çok daha
+büyük bir kayıp olurdu. İşaretçi sonraki açılışlarda ilk kontrol edilir, yani
+bozuk kayıt sessizce tekrar tekrar denenmez. Bu, `inbox.json` için
+[58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md)'de tanımlanan karantina sözleşmesinin
+aynısıdır. Test: `TestCLIReplyWALCorruptionQuarantinesWithoutBrickingTheWorkspace`.
+
+**Aktivite teslimi dayanıklıdır, "o an dinleyen yoksa düşer" değildir.** Hook
+kurulu değilken yapılan bir append sinyalini outbox'ta bırakır; kaydolan ilk hook
+onu alır (`deliverPendingCLIReplyActivities`). Boot sırasında otomasyon motoru
+henüz bağlanmamışken eklenen mesajlar bu yüzden sayaç otomasyonlarından kaçmaz.
+Test: `TestCLIReplyActivityCarriesDeterministicWorkspaceTotals`.
+
 **Header/transkript ayrımı neden var:** header ile mesajlar tek dosyadayken
 *sadece* metadata değiştiren her işlem — yeniden adlandırma, etiket, pin,
 okundu işaretleme, rolling summary — tüm transkripti yeniden encode edip diske

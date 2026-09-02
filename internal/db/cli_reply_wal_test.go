@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -524,6 +525,16 @@ func TestActivityHookReentrantCLIReplyDoesNotDeadlock(t *testing.T) {
 	}
 }
 
+// TestCLIReplyActivityCarriesDeterministicWorkspaceTotals pins what a counter
+// automation needs from the workspace-wide activity sequence: every append —
+// plain or CLI-state — reports the total BEFORE and AFTER itself, the two chain
+// with no gap and no repeat across sessions, and a threshold ("every 2 messages")
+// is therefore crossed exactly once no matter which session moved the counter.
+//
+// The hook is installed before the first append on purpose. Delivery is durable:
+// an append made while no hook is registered persists its signal and hands it to
+// the next hook that appears, so installing the hook late does not filter that
+// signal out — it only delays it into a later, harder-to-read position.
 func TestCLIReplyActivityCarriesDeterministicWorkspaceTotals(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "store")
 	d, err := Open(root)
@@ -539,16 +550,19 @@ func TestCLIReplyActivityCarriesDeterministicWorkspaceTotals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.AddMessage(ctx, Message{SessionID: first.ID, Role: "user"}); err != nil {
-		t.Fatal(err)
-	}
+	var mu sync.Mutex
 	var signals []ActivitySignal
 	if err := d.SetActivityHook(func(sig ActivitySignal) error {
 		if sig.EventID != "" {
+			mu.Lock()
 			signals = append(signals, sig)
+			mu.Unlock()
 		}
 		return nil
 	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.AddMessage(ctx, Message{SessionID: first.ID, Role: "user"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.AddMessageWithCLIState(ctx, Message{ID: "first", SessionID: first.ID, Role: "assistant"}, CLIReplyState{}); err != nil {
@@ -557,21 +571,38 @@ func TestCLIReplyActivityCarriesDeterministicWorkspaceTotals(t *testing.T) {
 	if _, err := d.AddMessageWithCLIState(ctx, Message{ID: "second", SessionID: second.ID, Role: "assistant"}, CLIReplyState{}); err != nil {
 		t.Fatal(err)
 	}
-	if len(signals) != 2 || signals[0].WorkspaceMessageTotal != 2 || signals[1].WorkspaceMessageTotal != 3 {
-		t.Fatalf("workspace totals = %+v", signals)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(signals) != 3 {
+		t.Fatalf("signal count = %d, want 3: %+v", len(signals), signals)
+	}
+	for i, sig := range signals {
+		wantPrevious := int64(i)
+		if sig.WorkspaceMessagePrevious != wantPrevious || sig.WorkspaceMessageTotal != wantPrevious+1 {
+			t.Fatalf("signal %d spans %d->%d, want %d->%d",
+				i, sig.WorkspaceMessagePrevious, sig.WorkspaceMessageTotal, wantPrevious, wantPrevious+1)
+		}
 	}
 	crossings := 0
 	for _, sig := range signals {
-		if (sig.WorkspaceMessageTotal-int64(sig.MessageDelta))/2 < sig.WorkspaceMessageTotal/2 {
+		if sig.WorkspaceMessagePrevious/2 < sig.WorkspaceMessageTotal/2 {
 			crossings++
 		}
 	}
 	if crossings != 1 {
-		t.Fatalf("threshold crossings = %d", crossings)
+		t.Fatalf("threshold crossings = %d, want 1", crossings)
 	}
 }
 
-func TestCLIReplyWALCorruptionFailsClosed(t *testing.T) {
+// TestCLIReplyWALCorruptionQuarantinesWithoutBrickingTheWorkspace pins the
+// corrupt-sidecar contract this repo already applies to inbox.json
+// (_Docs/58-QUEUE-SENKRON.md): a record that cannot be parsed is never treated as
+// "nothing to recover" and never deleted — it is renamed out of the way, the
+// session is marked degraded, and the failure is logged. One unreadable sidecar
+// must not make the whole workspace unopenable: refusing to boot would take every
+// OTHER session down with it, which is a far larger loss than the one session
+// whose pending transaction cannot be replayed.
+func TestCLIReplyWALCorruptionQuarantinesWithoutBrickingTheWorkspace(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "store")
 	d, err := Open(root)
 	if err != nil {
@@ -582,13 +613,33 @@ func TestCLIReplyWALCorruptionFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	walPath := filepath.Join(root, dirSessions, session.ID, cliReplyWALFile)
-	if err := os.WriteFile(walPath, []byte(`{"version":1,"message":"secret-authority"}`), 0o600); err != nil {
+	corrupt := []byte(`{"version":1,"message":"secret-authority"}`)
+	if err := os.WriteFile(walPath, corrupt, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(root); err == nil {
-		t.Fatal("corrupt WAL unexpectedly opened")
+	reopened, err := Open(root)
+	if err != nil {
+		t.Fatalf("a corrupt WAL in one session must not fail the workspace open: %v", err)
 	}
-	if raw, err := os.ReadFile(walPath); err != nil || len(raw) == 0 {
-		t.Fatalf("corrupt WAL was removed: bytes=%d err=%v", len(raw), err)
+	if _, err := reopened.GetSession(context.Background(), session.ID); err != nil {
+		t.Fatalf("degraded session must still load: %v", err)
+	}
+	// Quarantined, not deleted: the bytes stay recoverable by hand.
+	if _, err := os.Stat(walPath); !os.IsNotExist(err) {
+		t.Fatalf("corrupt WAL was left in place to be replayed again: %v", err)
+	}
+	raw, err := os.ReadFile(walPath + ".quarantine")
+	if err != nil {
+		t.Fatalf("read quarantined WAL: %v", err)
+	}
+	if !bytes.Equal(raw, corrupt) {
+		t.Fatalf("quarantined WAL = %q, want the original bytes", raw)
+	}
+	// The degraded marker is what keeps the next open from silently retrying.
+	if _, err := os.Stat(filepath.Join(root, dirSessions, session.ID, cliReplyDegradedFile)); err != nil {
+		t.Fatalf("degraded marker missing: %v", err)
+	}
+	if err := d.recoverCLIReplyTransaction(filepath.Join(root, dirSessions, session.ID)); !errors.Is(err, ErrCLIReplyRecoveryDegraded) {
+		t.Fatalf("recovery after quarantine = %v, want ErrCLIReplyRecoveryDegraded", err)
 	}
 }
