@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -33,7 +34,7 @@ type graphNode struct {
 	Running   bool   `json:"running,omitempty"`
 	RunKind   string `json:"runKind,omitempty"`
 	RunTarget string `json:"runTarget,omitempty"`
-	LiveScope string `json:"liveScope,omitempty"` // running | awaiting-workers
+	LiveScope string `json:"liveScope,omitempty"` // running | awaiting-workers | recent
 
 	// SessionID is the running session behind an agent instance node (agents
 	// only) — lets the UI deep-link an instance to its transcript.
@@ -119,6 +120,12 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	// while one of its direct workers runs.
 	sessions, _ := wsp.DB.ListSessions(ctx, "")
 	liveScope := buildGraphLiveScope(sessions, running)
+	// ?scope=recent widens the payload to sessions active within the last hour
+	// (_Docs/77 R9), so a coordinator tree that just finished is still drawn with
+	// its lineage instead of vanishing the moment the last worker reports.
+	if r.URL.Query().Get("scope") == "recent" {
+		addRecentGraphScope(sessions, liveScope, time.Now().Unix()-recentGraphWindowSec)
+	}
 
 	agentExists := make(map[string]bool, len(agents))
 	for _, a := range agents {
@@ -284,6 +291,37 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		runCount++
 	}
 
+	// Lineage edges between run nodes (_Docs/77 R9): a coordinator → the worker
+	// it spawned ("spawned"), and a session → the new root session it started
+	// (handoff continuation, detached spawn, tag-fired automation: "forked_from").
+	// Both endpoints must be in the payload; the graph never invents a node for
+	// a session outside the live scope.
+	lineageEdges := 0
+	for _, sess := range sessions {
+		if _, ok := liveScope[sess.ID]; !ok {
+			continue
+		}
+		o := sess.Lineage()
+		if o.TriggerSessionID == "" {
+			continue
+		}
+		if _, ok := liveScope[o.TriggerSessionID]; !ok {
+			continue
+		}
+		kind := ""
+		switch o.Kind {
+		case db.OriginCoordinator, db.OriginSubagent:
+			kind = "spawned"
+		case db.OriginHandoff, db.OriginSpawn, db.OriginAutomation:
+			kind = "forked_from"
+		}
+		if kind == "" {
+			continue
+		}
+		edges = append(edges, graphEdge{Source: runPfx + o.TriggerSessionID, Target: runPfx + sess.ID, Kind: kind})
+		lineageEdges++
+	}
+
 	writeJSON(w, http.StatusOK, workspaceGraph{
 		Nodes: nodes,
 		Edges: edges,
@@ -297,8 +335,25 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			"mcp":         mcpCount,
 			"runs":        runCount,
 			"edges":       len(edges),
+			"lineage":     lineageEdges,
 		},
 	})
+}
+
+// recentGraphWindowSec is how far back ?scope=recent reaches (one hour).
+const recentGraphWindowSec = 3600
+
+// addRecentGraphScope adds non-archived sessions active after `since` (unix
+// seconds) to the scope as "recent", without overriding a live entry.
+func addRecentGraphScope(sessions []db.Session, scope map[string]string, since int64) {
+	for _, sess := range sessions {
+		if sess.State == "archived" || sess.UpdatedAt < since {
+			continue
+		}
+		if _, live := scope[sess.ID]; !live {
+			scope[sess.ID] = "recent"
+		}
+	}
 }
 
 func buildGraphLiveScope(sessions []db.Session, running map[string]bool) map[string]string {

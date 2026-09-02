@@ -38,6 +38,14 @@ ayrı chunk; ana bundle'a binmez).
 > sayısı, `stats.agentsTotal` = canlı kapsamdaki benzersiz ajan sayısı
 > (başlıkta "N aktif ajan / M").
 
+> **Soy kenarları (Rota R9, `_Docs/77`):** canlı kapsamdaki `run:` düğümleri
+> arasında `spawned` (koordinatör/subagent → worker, turuncu) ve `forked_from`
+> (handoff/spawn/otomasyon → yeni kök oturum, mor) kenarları `Session.Lineage()`
+> ile çizilir; iki uç da payload'da değilse kenar üretilmez. `?scope=recent`
+> son 1 saatte güncellenen arşivsiz oturumları `liveScope: "recent"` ile ekler,
+> böylece yeni bitmiş bir koordinatör ağacı son worker rapor eder etmez kaybolmaz.
+> `stats.lineage` bu kenarların sayısıdır.
+
 Tüm workspace'in işbirliği ağı. **Düğüm türleri / şekilleri:** ajan (renkli disk),
 görev (**durum-renkli kare**; başlık altında etiket, **hover'da açıklama tooltip'i**),
 akış (mor baklava), **beceri/skill** (sarı **yıldız**), **MCP sunucusu** (teal **üçgen**).

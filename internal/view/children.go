@@ -57,7 +57,18 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 		if err != nil {
 			return nil, err
 		}
+		// A root session's trajectory is its first structural child: the plan
+		// hangs off the session the way its workers do (_Docs/77 R9).
+		if h := p.trajectoryHandleFor(ctx, ref.ID); h != nil {
+			workers = append([]Handle{*h}, workers...)
+		}
 		return capHandles(workers, categoryTopN), nil
+	case KindTrajectory:
+		nodes, err := p.trajectoryChildren(ctx, ref.ID)
+		if err != nil {
+			return nil, err
+		}
+		return capHandles(nodes, categoryTopN), nil
 	case KindBudget, KindTools, KindFlowRun, KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
@@ -178,7 +189,7 @@ func uniqueSortedHandles(handles []Handle) []Handle {
 // / flowrun / schedule render their breakdown inline and have no children.
 func IsExpandable(ref Ref) bool {
 	switch ref.Kind {
-	case KindSpace, KindCategory, KindAgent, KindSession:
+	case KindSpace, KindCategory, KindAgent, KindSession, KindTrajectory:
 		return true
 	case KindBoard:
 		return ref.Sub == ""

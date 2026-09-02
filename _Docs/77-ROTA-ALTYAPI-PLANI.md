@@ -465,6 +465,29 @@ boşluğunu R1 sonrası bir günde kapatır.
 
 **Boyut:** S-M. **Açar:** F0.
 
+**Gerçekleşen (2026-09-02).** `view.KindTrajectory` + `ProjectTrajectory`
+(`internal/view/trajectory.go`): tiny yalnız başlık (id, kök oturum, şablon,
+durum, revizyon); card faz zinciri (`✓ plan → ● code → ○ review`), gözlenen
+sayılar (oturum/akış koşusu/otomasyon/kapı/hayalet), ilan/gözlem/kenar sayısı;
+full her faz için kapı+sebep+süre ve her bağlı düğüm için `⌘ session W1 [active]
+⊂ p:code` satırı. Handle'lar bağlı varlıklar (session/flowrun/automation ref'i),
+12'den fazlası `Elided` (birim "düğüm"). `Store` arayüzü `GetTrajectory` +
+`GetTrajectoryByRoot` aldı; `Children(session)` kök oturumda rota handle'ını
+worker'ların **önüne** ekler, `Children(trajectory)` bağlı varlıkları listeler,
+`IsExpandable(trajectory)=true`. **Sapma:** "faz handle'ları" yerine tek bir
+rota handle'ı — fazlar ayrı projeksiyon değil, rotanın gövdesi; `Sources.Liveness`
+eklenmedi (R2 anlık görüntüsü `view`e değil `graph`/API'ye akıyor, F0'da
+gerekirse eklenir). `graph.go`: canlı kapsamdaki `run:` düğümleri arasında
+`sess.Lineage()` ile `spawned` (coordinator/subagent → worker) ve `forked_from`
+(handoff/spawn/automation → yeni kök) kenarları, iki uç da payload'da yoksa
+çizilmez; `?scope=recent` son 1 saatte güncellenen arşivsiz oturumları
+`liveScope: "recent"` ile ekler (`addRecentGraphScope`); `stats.lineage`.
+Frontend: `WorkspaceGraphEdge.kind` iki yeni tür, `EDGE_COLOR`/`EDGE_LEGEND`
+(turuncu "worker açtı", mor "çatallandı"), `LIVE_SCOPE_LABEL.recent`. Yan
+bulgular: R6'dan kalan `Skill.version` tip eksiği (tsc hatası) ve R8'den kalan
+`flowRunRetention`'ın settings golden listesinde olmaması düzeltildi. Testler:
+`view/trajectory_test.go`, `api/graph_lineage_test.go`.
+
 ### R10 — Frontend altyapısı
 
 **Ne.** `api/workspaceStream.ts` (`sessionStream.ts` ikizi: cursor, epoch, gap,

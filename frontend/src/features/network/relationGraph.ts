@@ -43,6 +43,8 @@ const EDGE_COLOR: Record<WorkspaceGraphEdge['kind'], string> = {
   uses: '#0ea5e9', // sky — flow uses agent
   skill: '#eab308', // yellow — agent uses skill
   mcp: '#14b8a6', // teal — agent ↔ MCP server
+  spawned: '#f97316', // orange — coordinator spawned this worker
+  forked_from: '#a855f7', // purple — a session started this new root session
 }
 
 export const EDGE_LEGEND: { kind: WorkspaceGraphEdge['kind']; label: string; color: string }[] = [
@@ -50,6 +52,8 @@ export const EDGE_LEGEND: { kind: WorkspaceGraphEdge['kind']; label: string; col
   { kind: 'created', label: 'oluşturdu', color: EDGE_COLOR.created },
   { kind: 'runs', label: 'akış çalıştırır', color: EDGE_COLOR.runs },
   { kind: 'uses', label: 'ajan kullanır', color: EDGE_COLOR.uses },
+  { kind: 'spawned', label: 'worker açtı', color: EDGE_COLOR.spawned },
+  { kind: 'forked_from', label: 'çatallandı', color: EDGE_COLOR.forked_from },
 ]
 
 // Toggleable node layers (agents are always shown). Drives the toolbar chips.
@@ -86,6 +90,7 @@ const RUN_KIND_LABEL: Record<string, string> = {
 const LIVE_SCOPE_LABEL = {
   running: 'Çalışan',
   'awaiting-workers': 'Bekleyen',
+  recent: 'Yakın zamanda',
 } as const
 
 // Board-state tints for task nodes.

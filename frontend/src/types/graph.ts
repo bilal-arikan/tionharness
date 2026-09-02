@@ -18,7 +18,7 @@ export interface WorkspaceGraphNode {
   // Live activity: one agent instance per eligible live-scope session. A
   // coordinator waiting on a direct worker has running=false.
   running?: boolean
-  liveScope?: 'running' | 'awaiting-workers'
+  liveScope?: 'running' | 'awaiting-workers' | 'recent'
   runKind?: string // chat | task | flow | schedule | spawned | worker | inbox | flow-coordinator
   runTarget?: string // type-prefixed id of the running task/flow (or empty)
   sessionId?: string // the session behind this agent instance
@@ -33,7 +33,9 @@ export interface WorkspaceGraphNode {
 export interface WorkspaceGraphEdge {
   source: string
   target: string
-  kind: 'owns' | 'created' | 'runs' | 'uses' | 'skill' | 'mcp'
+  // spawned: coordinator → worker; forked_from: a session → the new root session
+  // it started (handoff continuation, detached spawn, tag-fired automation).
+  kind: 'owns' | 'created' | 'runs' | 'uses' | 'skill' | 'mcp' | 'spawned' | 'forked_from'
 }
 
 export interface WorkspaceGraph {

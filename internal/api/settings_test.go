@@ -108,7 +108,7 @@ var settingsPatchGoldenFields = []string{
 	"handoffAuto", "handoffMaxChain", "handoffWriteFile",
 	"progressPersist", "progressResume",
 	"autonomousAutoContinue", "autonomousAutoContinueMax",
-	"fileFreshnessGuard", "autoTagSessions",
+	"fileFreshnessGuard", "autoTagSessions", "flowRunRetention",
 	"debugJournalEnabled", "debugJournalCap",
 	"reactiveCompact", "maxTokenRetries", "reactiveKeepRecent", "maxProviderRetries",
 	"toolGuardWarnings", "toolGuardHardStop",

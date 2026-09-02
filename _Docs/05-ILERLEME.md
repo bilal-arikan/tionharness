@@ -1,5 +1,25 @@
 # TionHarness — İlerleme Takibi
 
+## View + graph rota bağlantısı — Rota altyapısı R9 (2026-09-02) ✅
+
+**Belirti.** Bir rotayı (R4 `Trajectory`) ne `get_view` ajan arayüzü ne de Ağ
+ekranı görebiliyordu; Ağ'da koordinatör→worker bağı hiç çizilmediğinden bir
+koordinatör ağacı birbirinden kopuk `run:` düğümleri olarak duruyordu.
+
+**Ne.** `view.KindTrajectory` + `ProjectTrajectory` (tiny/card/full, 12 handle
+üstü `Elided`), `Children(session)` kök oturumda rota handle'ı,
+`Children(trajectory)` bağlı varlıklar (`internal/view/trajectory.go`).
+`graph.go`: `spawned` (coordinator/subagent → worker) ve `forked_from`
+(handoff/spawn/automation → yeni kök) kenarları `sess.Lineage()`'dan, yalnız iki
+ucu da payload'da olan çiftler; `?scope=recent` son 1 saatin arşivsiz
+oturumlarını `liveScope: "recent"` ile ekler; `stats.lineage`. Frontend efsane
+iki kenar + "Yakın zamanda" etiketi. Yan bulgu: `Skill.version` tipi (R6) ve
+settings golden listesi `flowRunRetention` (R8) düzeltildi.
+
+**Test.** `internal/view/trajectory_test.go` (seviyeler, elide, children,
+dispatch), `internal/api/graph_lineage_test.go` (canlı ve recent kapsam
+kenarları, düğüm kapsamı, stats).
+
 ## Koordinasyon gözlemcisi — Rota altyapısı R7 (2026-09-02) ✅
 
 **Belirti.** Koordinatör/worker yaşam döngüsünü (spawn, rapor, drain turu, stall

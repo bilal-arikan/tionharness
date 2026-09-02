@@ -73,6 +73,8 @@ export interface Skill {
   // coordinator recipe (M5) — a reusable orchestration pattern selectable in the
   // coordinator composer, not plain instructions.
   kind?: string
+  // Frontmatter `version` (recipe refs are stamped as slug@version, _Docs/77 R6).
+  version?: string
   // Orchestration strategy a coordinator-workflow encodes (fanout | adversarial |
   // loop | classify | generate-filter | tournament | custom). Only for kind
   // 'coordinator-workflow'.

@@ -14,13 +14,14 @@ import (
 // Children walk without a real db. Only the reads Children uses carry data; the
 // rest satisfy the interface with zero values.
 type fakeStore struct {
-	agents      []db.Agent
-	sessions    []db.Session
-	runs        []db.FlowRun
-	tasks       []db.Task
-	mcp         []db.MCPServer
-	artifacts   []db.Artifact
-	automations []db.Automation
+	agents       []db.Agent
+	sessions     []db.Session
+	runs         []db.FlowRun
+	tasks        []db.Task
+	mcp          []db.MCPServer
+	artifacts    []db.Artifact
+	automations  []db.Automation
+	trajectories []db.Trajectory
 }
 
 func (s *fakeStore) ListSessions(_ context.Context, agentID string) ([]db.Session, error) {
@@ -468,4 +469,21 @@ func TestChildrenNewKindsAreLeaves(t *testing.T) {
 			t.Errorf("%s must be a leaf, got %+v", ref.Kind, hs)
 		}
 	}
+}
+
+func (s *fakeStore) GetTrajectory(_ context.Context, id string) (db.Trajectory, error) {
+	for _, t := range s.trajectories {
+		if t.ID == id {
+			return t, nil
+		}
+	}
+	return db.Trajectory{}, db.ErrNotFound
+}
+func (s *fakeStore) GetTrajectoryByRoot(_ context.Context, root string) (db.Trajectory, error) {
+	for _, t := range s.trajectories {
+		if t.RootSessionID == root {
+			return t, nil
+		}
+	}
+	return db.Trajectory{}, db.ErrNotFound
 }

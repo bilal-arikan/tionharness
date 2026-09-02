@@ -50,7 +50,13 @@ type Store interface {
 	ListArtifacts(ctx context.Context, sessionID string) ([]db.Artifact, error)
 	GetAutomation(ctx context.Context, id string) (db.Automation, error)
 	ListAutomations(ctx context.Context) ([]db.Automation, error)
+	// Trajectories ("Rota", _Docs/77 R9): a session's plan-plus-observations graph.
+	GetTrajectory(ctx context.Context, id string) (db.Trajectory, error)
+	GetTrajectoryByRoot(ctx context.Context, rootSessionID string) (db.Trajectory, error)
 }
+
+// contextT is a local alias so the trajectory helpers read like the others.
+type contextT = context.Context
 
 // BoardRefID / WorkspaceRefID are the ids a board or workspace ref carries. Both
 // are singletons within a workspace and have no id of their own; naming them
@@ -249,6 +255,12 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level) (View, er
 			return View{}, err
 		}
 		return ProjectAutomation(in, level)
+	case KindTrajectory:
+		in, err := p.loadTrajectory(ctx, ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectTrajectory(in, level)
 	case KindSkill:
 		sk, err := p.loadSkill(ref.ID)
 		if err != nil {

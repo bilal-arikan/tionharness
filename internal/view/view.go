@@ -69,6 +69,11 @@ const (
 	// KindLogs projects the recent process log stream (the global ring buffer) as
 	// a leaf node: the tail renders inline, exactly like budget/tools.
 	KindLogs Kind = "logs"
+	// KindTrajectory projects one trajectory ("Rota", db.Trajectory): the
+	// declared phases and what actually happened under them. Reached from its
+	// root session's children; its own children are the bound sessions / flow
+	// runs / automations (_Docs/77 R9).
+	KindTrajectory Kind = "trajectory"
 	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
 	// resolvable through Projector: its input is runtime state, not store state,
 	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is
