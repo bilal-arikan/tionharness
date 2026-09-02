@@ -90,6 +90,32 @@ func ProjectTrajectory(in TrajectoryInput, level Level) (View, error) {
 		}
 	}
 	l.add("köken: %d ilan · %d gözlem · %d kenar", declared, observed, len(t.Edges))
+	if s := t.Summary; s != nil {
+		line := fmt.Sprintf("özet: %s · %d token", dur(time.Duration(s.DurationSec)*time.Second), s.Tokens)
+		if s.CostUSD > 0 {
+			line += fmt.Sprintf(" · $%.2f", s.CostUSD)
+			if !s.Priced {
+				line += "~"
+			}
+		}
+		line += fmt.Sprintf(" · %d worker", s.Sessions)
+		if s.FailedSess > 0 {
+			line += fmt.Sprintf(" (%d ✗)", s.FailedSess)
+		}
+		if s.Gates > 0 {
+			line += fmt.Sprintf(" · %d kapı %s", s.Gates, dur(time.Duration(s.GateWaitSec)*time.Second))
+		}
+		if s.Unannounced > 0 {
+			line += fmt.Sprintf(" · %d plansız", s.Unannounced)
+		}
+		if len(s.GhostPhases) > 0 {
+			line += " · hayalet faz: " + strings.Join(s.GhostPhases, ",")
+		}
+		if len(s.UnfiredWatchers) > 0 {
+			line += " · sessiz izleyici: " + strings.Join(s.UnfiredWatchers, ",")
+		}
+		l.add("%s", line)
+	}
 
 	if level == LevelFull {
 		for _, p := range phases {

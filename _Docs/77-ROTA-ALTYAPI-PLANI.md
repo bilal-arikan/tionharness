@@ -561,6 +561,13 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > reçete `watchers:` hayaletlerinin gerçekten ateşlenmesi ve her denemenin grafa
 > "neden ateşlenmedi" sebebiyle yazılması; otomasyon panosunda iki yeni şerit.
 > Ayrıntı: `78-ROTA-EKRANI.md` §7.
+>
+> **F3 uygulandı (2026-09-02, dal `rota/f3-metrics-curator`):** rota bitiş
+> özeti (`TrajectorySummary`, indekste kopya, `…/summarize`), reçete
+> istatistikleri (`GET /api/trajectories/recipes`), LLM'siz haftalık küratör
+> (`RunCurator`: arşivle/öner, provenance kapısı, pin muafiyeti, rapor) +
+> `Pinned` alanları ve pin uçları; ekranda özet çipleri, reçete istatistik
+> bloğu, Küratör paneli, 📌. Ayrıntı: `78-ROTA-EKRANI.md` §8.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

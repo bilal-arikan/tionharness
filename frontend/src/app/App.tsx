@@ -813,7 +813,9 @@ export default function App() {
             }}
           />
         )}
-        {view === 'skills' && <SkillsPanel onError={setError} />}
+        {view === 'skills' && (
+          <SkillsPanel onError={setError} onOpenTrajectory={links.openTrajectory} />
+        )}
         {view === 'tools' && <ToolCatalogPanel onError={setError} />}
         {view === 'market' && (
           <MarketPanel

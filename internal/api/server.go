@@ -440,7 +440,13 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspace/liveness", s.handleWorkspaceLiveness)
 	// Trajectory ("Rota") reads: index rows + one full graph (_Docs/77 R4, F0).
 	mux.HandleFunc("GET /api/trajectories", s.handleListTrajectories)
+	// Rota F3: per-recipe rollup of the index (registered before the {id}
+	// route so "recipes" is never read as an id), on-demand summary, curator.
+	mux.HandleFunc("GET /api/trajectories/recipes", s.handleRecipeStats)
 	mux.HandleFunc("GET /api/trajectories/{id}", s.handleGetTrajectory)
+	mux.HandleFunc("POST /api/trajectories/{id}/summarize", s.handleSummarizeTrajectory)
+	mux.HandleFunc("GET /api/curator/report", s.handleCuratorReport)
+	mux.HandleFunc("POST /api/curator/run", s.handleCuratorRun)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
 	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)
@@ -637,6 +643,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/archive", s.handleArchiveSchedule)
+	mux.HandleFunc("POST /api/schedules/{id}/pin", s.handlePinSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/run", s.handleRunSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}/tags", s.handleSetScheduleTags)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
@@ -650,6 +657,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/automations/{id}/reset", s.handleResetAutomation)
 	// Archive (curator-safe hide) + the per-rule fire ledger (_Docs/77 R5).
 	mux.HandleFunc("POST /api/automations/{id}/archive", s.handleArchiveAutomation)
+	mux.HandleFunc("POST /api/automations/{id}/pin", s.handlePinAutomation)
 	mux.HandleFunc("GET /api/automations/{id}/fires", s.handleAutomationFires)
 	mux.HandleFunc("DELETE /api/automations/{id}", s.handleDeleteAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/generate-title", s.handleGenerateAutomationTitle)
@@ -714,6 +722,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/hooks/{id}", s.handleUpdateHook)
 	mux.HandleFunc("POST /api/hooks/{id}/toggle", s.handleToggleHook)
 	mux.HandleFunc("POST /api/hooks/{id}/archive", s.handleArchiveHook)
+	mux.HandleFunc("POST /api/hooks/{id}/pin", s.handlePinHook)
 	mux.HandleFunc("DELETE /api/hooks/{id}", s.handleDeleteHook)
 }
 

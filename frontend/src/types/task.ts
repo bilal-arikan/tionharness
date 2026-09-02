@@ -81,6 +81,8 @@ export interface Schedule {
   enabled: boolean
   // Archived: out of the cron table and hidden from the default list, restorable.
   archived?: boolean
+  // Pinned: exempt from the curator's automatic passes (Rota F3).
+  pinned?: boolean
   tags?: string[] // free-form organizational labels (editable by user + agents)
   createdAt: number
   // Optional end date (unix seconds); 0/undefined = no end date.
@@ -197,6 +199,8 @@ export interface Automation {
   // Archived: hidden from the default list and inert, restorable (the curator's
   // archive-only rule, _Docs/77 R5). Distinct from enabled.
   archived?: boolean
+  // Pinned: exempt from the curator's automatic passes (Rota F3).
+  pinned?: boolean
   maxIterations: number // range 1-500; 0/unlimited rejected on write (legacy <=0 rows bounded by backstop)
   cooldownSec: number
   expiresAt?: number // optional end date (unix seconds); 0/undefined = no end date

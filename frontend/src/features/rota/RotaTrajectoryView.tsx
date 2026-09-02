@@ -17,6 +17,7 @@ import {
   type TrajPlaced,
 } from './trajectoryLayout'
 import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
+import { fmtDurationSec, fmtTokens } from './trajectoryFormat'
 import { useTrajectory } from './useTrajectory'
 
 interface Props {
@@ -145,6 +146,7 @@ export function RotaTrajectoryView({
             <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
             <span className="text-[var(--color-text-dim)]">rev {t.revision}</span>
             <PhaseProgress t={t} />
+            {t.summary && <SummaryChips s={t.summary} />}
             {layout && layout.ghosts > 0 && (
               <span
                 className="text-[var(--color-text-dim)]"
@@ -181,6 +183,59 @@ export function RotaTrajectoryView({
         )}
       </div>
     </div>
+  )
+}
+
+// SummaryChips renders the deterministic end-of-run digest (F3) inline:
+// duration, tokens / cost, workers (failed), gate wait, what the plan declared
+// but never happened.
+function SummaryChips({ s }: { s: NonNullable<Trajectory['summary']> }) {
+  const chip =
+    'rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]'
+  return (
+    <span className="flex flex-wrap items-center gap-1" data-testid="trajectory-summary">
+      <span className={chip} title="Kök oturum açılışından bitişe">
+        ⏱ {fmtDurationSec(s.durationSec)}
+      </span>
+      <span
+        className={chip}
+        title={`Bağlı oturumların toplam tokenı${s.priced ? '' : ' (bazı modeller fiyatsız)'}`}
+      >
+        {fmtTokens(s.tokens)} token
+        {s.costUsd > 0 ? ` · $${s.costUsd.toFixed(2)}${s.priced ? '' : '~'}` : ''}
+      </span>
+      <span className={chip} title="Worker oturumları (başarısız)">
+        {s.sessions} worker{s.failedSessions ? ` · ${s.failedSessions} ✗` : ''}
+      </span>
+      {s.flowRuns > 0 && (
+        <span className={chip}>
+          {s.flowRuns} koşu{s.failedRuns ? ` · ${s.failedRuns} ✗` : ''}
+        </span>
+      )}
+      {s.gates > 0 && (
+        <span className={chip} title="İnsan kapılarında geçen süre">
+          ⏸ {s.gates} kapı · {fmtDurationSec(s.gateWaitSec)}
+        </span>
+      )}
+      {s.unannounced > 0 && (
+        <span className={chip} title="Bir faza bağlı olmadan açılan oturum / koşular">
+          {s.unannounced} plansız
+        </span>
+      )}
+      {s.ghostPhases && s.ghostPhases.length > 0 && (
+        <span className={chip} title="İlan edilip hiç başlamayan fazlar">
+          ◌ {s.ghostPhases.join(', ')}
+        </span>
+      )}
+      {s.unfiredWatchers && s.unfiredWatchers.length > 0 && (
+        <span
+          className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
+          title="İlan edilip hiç ateşlenmeyen izleyiciler"
+        >
+          ⚡ sessiz: {s.unfiredWatchers.join(', ')}
+        </span>
+      )}
+    </span>
   )
 }
 

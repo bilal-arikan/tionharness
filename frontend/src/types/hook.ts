@@ -26,6 +26,8 @@ export interface Hook {
   enabled: boolean
   // Archived: hidden from the default list and never run, restorable.
   archived?: boolean
+  // Pinned: exempt from the curator's automatic passes (Rota F3).
+  pinned?: boolean
   // Usage telemetry: how many times the command ran and when it last did.
   fireCount?: number
   lastFiredAt?: number

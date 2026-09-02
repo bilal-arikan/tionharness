@@ -1,6 +1,6 @@
 // Trajectory ("Rota") reads — GET /api/trajectories and /api/trajectories/{id}.
 import { req } from './client'
-import type { Trajectory, TrajectoryIndexEntry } from '@/types/trajectory'
+import type { RecipeStats, Trajectory, TrajectoryIndexEntry } from '@/types/trajectory'
 
 export interface TrajectoryListParams {
   root?: string
@@ -23,4 +23,12 @@ export const trajectoryApi = {
   },
   getTrajectory: (id: string): Promise<Trajectory> =>
     req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}`),
+  // Rota F3: recompute the deterministic end-of-run summary on demand.
+  summarizeTrajectory: (id: string): Promise<Trajectory> =>
+    req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}/summarize`, { method: 'POST' }),
+  // Per-recipe-version rollup of the index (optionally one slug).
+  recipeStats: (slug?: string): Promise<RecipeStats[]> =>
+    req<RecipeStats[]>(
+      `/api/trajectories/recipes${slug ? `?slug=${encodeURIComponent(slug)}` : ''}`,
+    ),
 }

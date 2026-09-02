@@ -132,10 +132,16 @@ func (r *Runtime) observeTrajectoryTransitions(ev db.TrajectoryChangeEvent) {
 	fn := r.trajTransitionHook
 	r.trajTransitionMu.RUnlock()
 	if fn == nil {
-		return
+		fn = func(context.Context, TrajectoryTransition) {}
 	}
 	for _, tr := range transitions {
 		tr := tr
+		if tr.Kind == TrajTransitionEnd {
+			// The end-of-run summary (F3) lands before the trajectory_end rules
+			// run, so their prompts and the curator see final numbers.
+			id := tr.Trajectory.ID
+			r.enqueueTrajectoryWork(func() { r.summarizeOnEnd(id) })
+		}
 		r.enqueueTrajectoryWork(func() { fn(context.Background(), tr) })
 	}
 }

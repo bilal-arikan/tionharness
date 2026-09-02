@@ -1,5 +1,24 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F3: deterministik metrik, reçete istatistikleri, LLM'siz küratör + pin (2026-09-02) ✅
+
+Rota bitince rota iş kuyruğunda (rota-sonu kurallarından önce) `TrajectorySummary`
+yazılıyor: süre, token/maliyet (`SessionUsage` + `billing.RollupOf`), worker /
+koşu / başarısızlık, hayalet fazlar, plansız oturumlar, sessiz izleyiciler, kapı
+bekleme, faz başına istatistik; indeks satırında kopyası, `POST
+/api/trajectories/{id}/summarize`, `view.ProjectTrajectory` özet satırı.
+`GET /api/trajectories/recipes` reçete@sürüm başına rollup. Küratör
+(`internal/agent/curator.go`): saat başı kontrol, 7 günde bir workspace boştayken
+ya da elle (`POST /api/curator/run`), rapor `curator/last.json`; tükenmiş / süresi
+dolmuş otomasyon-zamanlama ajan yapımıysa **arşivlenir** yoksa önerilir, sessiz
+hook önerilir, ≥3 koşuda hiç ateşlenmeyen izleyici / hiç başlamayan faz reçete
+önerisi olur; `Pinned` (otomasyon/zamanlama/hook, `POST …/pin`) muaf; geçiş
+sonunda bildirim. UI: rota başlığında özet çipleri, Beceriler'de "Rota
+istatistikleri", Otomasyon panosunda Küratör düğmesi + paneli (kuru/gerçek
+çalıştır), kartta 📌. Testler: `trajectory_summary_test.go`, `curator_test.go`,
+`trajectoryFormat.test.ts`. Ayrıntı: `78-ROTA-EKRANI.md` §8. Sırada F4 (LLM
+optimizer, `recipe-opt` kanalı).
+
 ## Rota F2: otomasyonlar grafikte — `phase` / `trajectory_end` tetikleri (2026-09-02) ✅
 
 Reçetenin `watchers:` hayaletleri artık ateşleniyor. İki yeni tetik türü

@@ -1,12 +1,13 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte)
+# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör)
 
 **Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
 uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
 yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
 `77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
 Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
-ateşlenmedi") uygulandı (2026-09-02, §7). Sonraki fazlar F3 (metrik +
-küratör), F4 (optimizer), F5 (kapılar / kanvastan müdahale).
+ateşlenmedi") uygulandı (2026-09-02, §7); F3 (deterministik metrik + reçete
+istatistikleri + LLM'siz küratör + pin) uygulandı (2026-09-02, §8). Sonraki
+fazlar F4 (optimizer), F5 (kapılar / kanvastan müdahale).
 
 ## 1. Ne gösterir
 
@@ -278,3 +279,72 @@ düğümleri failed+sebep, defter kaydı, rota sonu → not_found / disabled),
 kimliği seçici (reçete fazlarından açılır liste) yok — metin alanı; hayalet
 düğüme tıklayınca kural kartı (ViewPanel `automation` projeksiyonu zaten
 açılıyor, ama `not_found` için bir "otomasyon oluştur" kısayolu yok).
+
+## 8. F3 — Deterministik metrik + küratör (2026-09-02)
+
+Dal `rota/f3-metrics-curator`. Brif §7.1, §7.4–7.5: her koşunun LLM'siz
+özeti, reçete başına istatistik ve "ekleme değil budama" yapan haftalık
+küratör. Optimizer (F4) hâlâ yok; `o:optimizer` düğümü hayalet.
+
+**Rota özeti** (`db.TrajectorySummary`, `Trajectory.Summary` + indeks
+satırında kopyası; `internal/agent/trajectory_summary.go`, saf
+`summarizeTrajectory`). Rota terminal duruma gelince rota iş kuyruğunda,
+`trajectory_end` kurallarından **önce** yazılır (kural prompt'u ve küratör
+son sayıları görür); `POST /api/trajectories/{id}/summarize` canlı bir rota
+için de yeniden hesaplar. Alanlar: süre (kök oturum açılışı → son düğüm
+bitişi / şimdi), token + maliyet (bağlı oturumların `SessionUsage` rollup'ı,
+`billing.RollupOf`; fiyatsız model varsa `priced=false`), worker sayısı ve
+başarısızlar, akış koşuları, faz sayısı / biten, **hayalet fazlar** (ilan
+edilip hiç başlamayan), **plansız** (faza bağlanmamış oturum/koşu), ilan
+edilen izleyiciler ve **sessiz** kalanlar, kapı sayısı + bekleme süresi, faz
+başına worker/başarısızlık/süre. `view.ProjectTrajectory` özet satırı basar
+(`özet: 12 dk · 40k token · $0.31 · 3 worker (1 ✗) · sessiz izleyici: docs`).
+
+**Reçete istatistikleri** (`GET /api/trajectories/recipes[?slug=]`,
+`agent.RecipeStatsFromIndex`): indeks satırlarından `TemplateRef`
+(slug@sürüm) başına terminal koşu sayısı (bitti / başarısız / terk), canlı
+sayısı, özetli koşular üzerinden ortalama süre / token / maliyet / worker,
+izleyici başına "kaç koşuda ateşlenmedi", faz başına "kaç koşuda başlamadı",
+son rota. Yalnız indeks okunur; sidecar açılmaz.
+
+**Küratör** (`internal/agent/curator.go`, `Runtime.RunCurator(trigger,
+apply)`). Saat başı kontrol, son geçiş 7 günden eskiyse **ve** workspace
+boştaysa (`Liveness` girişleri sıfır) `apply=true` ile koşar; API'den elle
+(`POST /api/curator/run?apply=`), rapor `curator/last.json`
+(`GET /api/curator/report`). Kurallar, hepsi depodaki durumdan:
+
+| Varlık | Koşul | Ajan yapımı (`CreatedBy` dolu) | Kullanıcı yapımı |
+|--------|-------|-------------------------------|------------------|
+| otomasyon | iterasyon tavanına ulaştı / son tarihi geçti | **arşivle** | öneri |
+| zamanlama | tek seferlik çalıştı (kapalı + LastRunAt) / son tarihi geçti | **arşivle** | öneri |
+| hook | 30 gündür hiç tetiklenmedi | öneri | öneri |
+| reçete | ≥3 özetli koşunun **hepsinde** ateşlenmeyen izleyici → "reçeteden çöz"; hepsinde başlamayan faz → "optional yap / kaldır" | öneri (kanıt: koşu sayısı + son rota) | öneri |
+
+Değişmezler (brif §7.4): **asla silme, arşivle** (arşiv geri alınabilir);
+**provenance kapısı** (yalnız ajan/otomasyon yapımı varlıklara dokunur);
+**pin** — `Automation/Schedule/Hook.Pinned` (`POST …/{id}/pin {pinned}`)
+her otomatik geçişten muaf. Geçiş sonunda `events.TypeAutomation` bildirimi
+("🧹 Küratör geçti — N arşivlendi, M öneri").
+
+**Ekran karşılıkları.** Rota-içi görünümün başlığında özet çipleri (⏱ süre,
+token · $, worker (✗), koşu, ⏸ kapı bekleme, plansız, ◌ hayalet fazlar,
+⚡ sessiz izleyiciler); Beceriler'de koordinatör reçetesi detayında "Rota
+istatistikleri" bloğu (sürüm başına satır, rozetler, ortalamalar, sessiz
+izleyici / hayalet faz çipleri, "son: RTA…" → Rota ekranı); Otomasyon
+panosunda **Küratör** düğmesi → panel (son geçiş, arşivlendi/öneri sayıları,
+eylem listesi, "Kuru çalıştır" / "Şimdi çalıştır"); otomasyon kartında
+📌 sabitle/kaldır ve "sabit" çipi.
+
+**Testler.** `trajectory_summary_test.go` (özet alanları, canlı koşu süresi,
+reçete rollup'ı), `curator_test.go` (ajan/kullanıcı provenance, pin muafiyeti,
+tek seferlik zamanlama, sessiz hook, rapor kaydı + haftalık saat, ≥3 koşu
+eşiğiyle reçete önerileri; `db.SetHookCreatedAtForTest` test kancası),
+`trajectoryFormat.test.ts`.
+
+**Kalanlar (F4/F5).** LLM optimizer (`recipe-optimizer` sistem ajanı,
+`recipe-opt` bulgu kanalı, net büyüme bütçesi, kanıt zorunlu uygulama,
+regresyonda geri alma); reçete sürüm geçmişinin seed ledger'ında tutulması
+(bugün yalnız `version:` + `TemplateRef`); küratör önerisini tek tıkla
+uygulama (arşivle / reçeteyi düzenle) ve zamanlama/hook kartlarında pin
+düğmesi (API hazır, UI yalnız otomasyon kartında); faz kapılarının otomatik
+doğrulanması.
