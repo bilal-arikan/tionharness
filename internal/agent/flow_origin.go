@@ -74,5 +74,11 @@ func flowSessionOrigin(ctx context.Context, flowID string) *db.SessionOrigin {
 			o.TriggerSessionID = flowTranscriptSessionFromContext(ctx)
 		}
 	}
+	if o.TriggerSessionID == "" {
+		// A run_flow call from an ordinary session (a coordinator's turn, say):
+		// the caller's session tripped this run. Only the trigger is recorded;
+		// the run's transcript stays its own per-run session.
+		o.TriggerSessionID = SessionIDFrom(ctx)
+	}
 	return &o
 }

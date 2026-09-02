@@ -73,6 +73,11 @@ var GateKinds = []string{"artifact", "verdict", "human", "schema"}
 
 var phaseIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// ValidPhaseID reports whether id is an acceptable phase id (the same rule the
+// recipe parser applies), so an agent-planned trajectory follows the recipe
+// convention.
+func ValidPhaseID(id string) bool { return phaseIDRe.MatchString(id) }
+
 // RecipeRef renders "slug@version" (or just the slug when the recipe has no
 // version) — the value Session.CoordinatorWorkflow / Trajectory.TemplateRef
 // carry so a run records the exact recipe revision it followed.

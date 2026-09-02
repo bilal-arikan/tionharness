@@ -36,6 +36,7 @@ var CoordinationToolNames = []string{
 	"list_workers",
 	"report_to_coordinator",
 	"set_coordinator_mode",
+	TrajectoryToolName,
 }
 
 // IsCoordinationTool reports whether name is part of the coordination surface.
@@ -112,6 +113,9 @@ type CoordinationFuncs struct {
 	// own initiative. Returns a human-readable note (e.g. when the change only
 	// takes effect on the next turn).
 	SetMode func(ctx context.Context, enabled bool) (string, error)
+	// Trajectory backs the trajectory (Rota) tool; nil on a non-coordinator.
+	// Its declaring actions are wired only on a root coordinator.
+	Trajectory *TrajectoryFuncs
 }
 
 type coordinationKey struct{}

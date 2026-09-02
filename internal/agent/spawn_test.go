@@ -67,7 +67,7 @@ func (r *Runtime) backgroundWorkPending() bool {
 	queued := len(r.spawnQueue.shallow) + len(r.spawnQueue.deep)
 	active := r.spawnActive.Load()
 	r.spawnQueue.mu.Unlock()
-	if active > 0 || queued > 0 {
+	if active > 0 || queued > 0 || r.trajectoryWorkPending() {
 		return true
 	}
 	pending := false

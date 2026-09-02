@@ -104,7 +104,9 @@ type TrajectoryNode struct {
 	Lane    int    `json:"lane"`
 	State   string `json:"state"`
 	Profile string `json:"profile,omitempty"` // expected worker profile for a phase
-	Gate    *TrajectoryGate
+	// Optional marks a declared phase the trajectory may finish without.
+	Optional bool            `json:"optional,omitempty"`
+	Gate     *TrajectoryGate `json:"gate,omitempty"`
 	// Reason explains a skipped/failed/ghost state in one line.
 	Reason  string `json:"reason,omitempty"`
 	StartMs int64  `json:"startMs,omitempty"`

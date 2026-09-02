@@ -1,5 +1,30 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F1a: rota varlığı üretiliyor + `trajectory` aracı (2026-09-02) ✅
+
+F0 kanvası salt projeksiyondu; hiçbir şey `Trajectory` yaratmıyordu. F1a
+(`rota/f1a-trajectory-entity`) bunu kapatır: kök koordinatör reçeteyle
+yaratılınca oturum hook'unda tohumlanır (R6 `phases:` → declared faz düğümleri,
+`next` zinciri, ghost watcher/optimizer, `TemplateRef=slug@version`);
+reçetesiz koordinatör ilk `spawn_worker`'da kök düğümle başlar; sonradan reçete
+seçimi fazları ekler (`AdoptTrajectoryRecipe`). R7 gözlemcisine abone
+`trajectoryBinder` spawn (`s:<worker>` + `spawned`, ilk pending faz otomatik
+aktif), rapor (`reported`, `<status>` → done/failed), stall'ı; `emitFlowRunEvent`
+tetikleyicisi ağaç üyesi olan akış koşularını (`r:<run>`); oturum hook'u
+otomasyon/handoff ile çatallanan yeni kökleri (`fired`/`forked_from`) ve kök
+arşivini (fazlar açıksa **abandoned**); `persistAskSuspend`/`ReleaseAsk`
+Durable Ask insan kapılarını (`g:<ask>` + `blocked_by`, rota **waiting**) bağlar.
+`ReleaseAsk` üç claimer'dan çağrılır (`ResumeAsk`, sweeper, API
+`answerDurableAsk`). Durum türetme `trajDeriveStatus`. Yeni koordinasyon aracı
+`trajectory` (`get` herkes; `plan|phase|finish` yalnız kök) native kayıt + CLI
+köprüsünde; `<trajectory>` bölümü koordinatör durum bloğuna eklendi. Yan
+değişiklikler: `TrajectoryNode.Optional`, `Gate` JSON anahtarı `gate`
+(önceden etiketsiz `Gate`), `flowSessionOrigin` akış dışından `run_flow`
+çağıran oturumu `TriggerSessionID` yapar, `skills.ValidPhaseID`. Testler:
+`trajectory_graph_test.go`, `trajectory_binder_test.go`,
+`tools/builtin_trajectory_test.go`. Ayrıntı: `78-ROTA-EKRANI.md` §5. Sırada
+F1b (faz-sütunlu rota görünümü, derin bağlantı, mini rota).
+
 ## Asılı MCP sunucusu tüm turları donduruyordu: dial zaman aşımı + devre kesici (2026-09-02) 🐛✅
 
 **Belirti.** `codebase-memory-mcp` initialize'a cevap vermiyordu (aynı store

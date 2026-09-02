@@ -43,7 +43,10 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	t.Cleanup(func() {
 		rt.CloseMCP()
 		deadline := time.Now().Add(5 * time.Second)
-		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
+		// The Rota binder's off-path queue writes trajectory.json under the store
+		// too; a worker's report is enqueued before its spawn slot releases, so
+		// waiting for the queue after the slots is enough (trajectory_queue.go).
+		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0 || rt.trajectoryWorkPending()) && time.Now().Before(deadline) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	})

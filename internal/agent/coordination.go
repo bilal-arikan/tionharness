@@ -330,6 +330,7 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 			return r.ReportToCoordinator(c, coordID, status, summary)
 		}
 	}
+	f.Trajectory = r.trajectoryFuncsFor(sess)
 	return f
 }
 
@@ -374,6 +375,9 @@ func coordinationBridgeDefs(f *tools.CoordinationFuncs) []providers.ToolDef {
 	if f.SetMode != nil {
 		defs = append(defs, tools.NewSetCoordinatorModeTool().Def())
 	}
+	if f.Trajectory != nil {
+		defs = append(defs, tools.NewTrajectoryTool().Def())
+	}
 	return defs
 }
 
@@ -400,6 +404,8 @@ func dispatchCoordinationBridge(ctx context.Context, f *tools.CoordinationFuncs,
 		t = tools.NewReportToCoordinatorTool()
 	case "set_coordinator_mode":
 		t = tools.NewSetCoordinatorModeTool()
+	case tools.TrajectoryToolName:
+		t = tools.NewTrajectoryTool()
 	default:
 		return "", false, nil
 	}

@@ -53,6 +53,9 @@ func (s *Server) answerDurableAsk(r *http.Request, sessionID, askID, answer, by 
 	if err != nil {
 		return false // not a waiting durable ask, or lost the answer race
 	}
+	if wsp.Runtime != nil {
+		wsp.Runtime.ReleaseAsk(ask, db.SessionAskResolved)
+	}
 	// Close the card on every window (the resolve-once broadcast).
 	s.publishHub(wsp.ID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
 		"id": askID, "answer": answer, "resolvedBy": by,

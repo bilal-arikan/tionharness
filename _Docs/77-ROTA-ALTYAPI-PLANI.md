@@ -539,6 +539,15 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 > (`features/rota/`), `GET /api/trajectories[/{id}]` okuma uçları,
 > `ws:session_lifecycle.createdAt`. Ayrıntı ve bilinçli sınırlar:
 > `78-ROTA-EKRANI.md`.
+>
+> **F1a uygulandı (2026-09-02, dal `rota/f1a-trajectory-entity`):** rota
+> varlığı artık üretiliyor — reçeteli kök koordinatör yaratılışta (R6 `phases:`
+> → declared faz/ghost watcher/optimizer düğümleri), reçetesiz ilk spawn'da;
+> R7 gözlemcisi (`trajectoryBinder`) spawn/rapor/stall'ı, `emitFlowRunEvent`
+> akış koşularını, oturum hook'u çatallanan kökleri ve arşivi, Durable Ask
+> insan kapılarını bağlar. `trajectory` aracı (`get|plan|phase|finish`) +
+> `<trajectory>` durum bloğu. Model eki: `TrajectoryNode.Optional`; `Gate`
+> alanı artık `gate` JSON anahtarıyla yazılır. Ayrıntı: `78-ROTA-EKRANI.md` §5.
 
 | Dalga | Kalemler | Paralellik | Kapı |
 |-------|----------|------------|------|

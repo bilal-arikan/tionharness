@@ -125,7 +125,7 @@ func (r *Runtime) persistAskSuspend(ctx context.Context, agent db.Agent, session
 	if err != nil {
 		return db.SessionAsk{}, fmt.Errorf("marshal ask suspend state: %w", err)
 	}
-	return r.db.CreateSessionAsk(ctx, db.SessionAsk{
+	ask, err := r.db.CreateSessionAsk(ctx, db.SessionAsk{
 		SessionID: sessionID,
 		AgentID:   agent.ID,
 		Kind:      sus.Kind,
@@ -133,6 +133,18 @@ func (r *Runtime) persistAskSuspend(ctx context.Context, agent db.Agent, session
 		Payload:   string(sus.Payload),
 		State:     string(data),
 	})
+	if err != nil {
+		return db.SessionAsk{}, err
+	}
+	r.bindAskToTrajectory(ask)
+	return ask, nil
+}
+
+// ReleaseAsk records that a durable ask left the waiting state (answered,
+// timed out or cancelled) on the tree's trajectory. Every claimer calls it:
+// the runtime's own resume path, the sweeper, and the API answer route.
+func (r *Runtime) ReleaseAsk(ask db.SessionAsk, status string) {
+	r.releaseAskInTrajectory(ask, status)
 }
 
 // ResumeAsk delivers an answer to a durably-suspended ask and re-drives the turn.
@@ -146,6 +158,7 @@ func (r *Runtime) ResumeAsk(ctx context.Context, askID, answer string, onStep fu
 	if err != nil {
 		return nil, nil, err // ErrNotFound or not-waiting (already answered) → caller 409s
 	}
+	r.ReleaseAsk(ask, db.SessionAskResolved)
 	agentRow, err := r.db.GetAgent(ctx, ask.AgentID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume ask: agent gone: %w", err)
@@ -326,6 +339,7 @@ func (r *Runtime) sweepWaitingAsksAt(ctx context.Context, now int64) {
 		}
 		if closed, cerr := r.db.CloseSessionAsk(ctx, a.ID, db.SessionAskTimeout); cerr == nil && closed {
 			r.logger.Info("durable ask timed out", "ask", a.ID, "session", a.SessionID, "timeoutSec", a.TimeoutSec)
+			r.ReleaseAsk(a, db.SessionAskTimeout)
 		}
 	}
 }

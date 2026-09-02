@@ -63,6 +63,7 @@ func (r *Runtime) OnSessionChange(ev db.SessionChangeEvent) {
 			RootSessionID: s.RootSession(), Origin: s.Lineage(), Coordinator: s.IsCoordinator(),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		})
+	r.onSessionChangeForTrajectory(ev)
 }
 
 // TrajectoryPayload is the Data shape of a ws:trajectory event — the index row,
@@ -114,6 +115,7 @@ func (r *Runtime) emitFlowRunEvent(run db.FlowRun) {
 			RootRunID: run.RootOf(), SessionID: run.SessionID, Status: run.Status, Error: run.Error,
 			CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
 		})
+	r.bindFlowRunToTrajectory(run)
 }
 
 // ScheduleArmedPayload is the Data shape of a ws:schedule_armed event: the

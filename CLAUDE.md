@@ -288,7 +288,11 @@ paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
   **ayrı bir goroutine'de** başlatır; o sayaçta yer almaz. `drainSpawns` artık
   `backgroundWorkPending()` ile koordinatör drain'ini ve oturum tur slotlarını da
   bekler — `SpawnSession`, `ReportToCoordinator` veya `NotifyCoordinator` çağıran
-  her testin sonuna koy.
+  her testin sonuna koy. Rota bağlayıcısının yol-dışı yazım kuyruğu
+  (`trajectoryWorkPending`, `internal/agent/trajectory_queue.go`) da aynı
+  bekleyişe dahildir; `SpawnWorker` sonrası rota grafını okuyan bir test
+  `drainSpawns` **veya** koşullu bekleme (`waitTrajectory`) kullanmalı, hemen
+  okumamalı.
 - `-race` bu makinede CGO kapalı olduğu için koşmaz; CI (linux) koşar.
 
 ## internal/db dizin haritası

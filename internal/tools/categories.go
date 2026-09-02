@@ -53,6 +53,8 @@ var builtinCategory = map[string]string{
 	"spawn_worker": CategoryAgents, "send_to_worker": CategoryAgents,
 	"stop_worker": CategoryAgents, "list_workers": CategoryAgents,
 	"report_to_coordinator": CategoryAgents, "set_coordinator_mode": CategoryAgents,
+	// trajectory (Rota): a coordinator reads / declares its tree's plan.
+	"trajectory": CategoryAgents,
 
 	// User profile (Settings ▸ Profile) — grouped with settings/config.
 	"update_user_preferences": CategoryConfig,

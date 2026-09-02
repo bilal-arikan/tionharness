@@ -33,6 +33,8 @@ export interface TrajectoryNode {
   lane: number
   state: TrajectoryNodeState
   profile?: string
+  // Declared phase the trajectory may finish without.
+  optional?: boolean
   gate?: TrajectoryGate | null
   reason?: string
   startMs?: number

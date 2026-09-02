@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -101,6 +102,13 @@ func (s *Server) handleSetSessionWorkflow(w http.ResponseWriter, r *http.Request
 	}
 	if err := wsp.DB.SetSessionCoordinatorWorkflow(ctx, id, slug, maxTurns); writeDBError(w, err, "") {
 		return
+	}
+	// Rota (F1): a recipe picked on a root coordinator seeds / extends its
+	// trajectory with the recipe's declared phases. Best-effort projection.
+	if slug != "" {
+		if terr := wsp.Runtime.AdoptTrajectoryRecipe(ctx, id); terr != nil {
+			slog.Warn("trajectory adopt recipe failed", "component", "api", "session", id, "workflow", slug, "error", terr)
+		}
 	}
 	emitSessionChange(wsp, id, "workflow")
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "workflow": slug, "maxTurns": maxTurns})

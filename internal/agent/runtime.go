@@ -167,6 +167,8 @@ type Runtime struct {
 	// coordObservers are the coordinator/worker lifecycle subscribers
 	// (coordination_observer.go, _Docs/77 R7).
 	coordObservers coordObserverRegistry
+	// trajWork is the ordered off-path queue for trajectory binder writes (Rota F1).
+	trajWork trajectoryQueue
 
 	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
 	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised
@@ -666,6 +668,9 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		})
 	})
 	go r.runSpawnQueue()
+	// Rota (F1): the trajectory binder turns coordinator lifecycle into graph
+	// appends. Registered first so it sees every spawn/report of this runtime.
+	r.AddCoordinationObserver(trajectoryBinder{r})
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still
 	// behave as "on" rather than silently off.

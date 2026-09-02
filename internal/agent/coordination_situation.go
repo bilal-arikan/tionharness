@@ -27,6 +27,9 @@ func (r *Runtime) coordinatorSituationBlock(ctx context.Context, coordSessionID 
 	if fleet := r.coordinatorWorkerStatusBlock(ctx, coordSessionID); fleet != "" {
 		sections = append(sections, fleet)
 	}
+	if rota := r.coordinatorTrajectoryBlock(ctx, coordSessionID); rota != "" {
+		sections = append(sections, rota)
+	}
 	if roster := r.coordinatorAgentRosterBlock(ctx); roster != "" {
 		sections = append(sections, roster)
 	}

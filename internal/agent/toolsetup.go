@@ -272,6 +272,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		if cf.SetMode != nil {
 			builtins = append(builtins, tools.NewSetCoordinatorModeTool())
 		}
+		// trajectory (Rota, F1): a coordinator reads / declares its tree's plan.
+		if cf.Trajectory != nil {
+			builtins = append(builtins, tools.NewTrajectoryTool())
+		}
 	}
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
