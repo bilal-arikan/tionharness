@@ -88,9 +88,16 @@ type DB struct {
 	// expected to dispatch on its own goroutine, so an append is never blocked.
 	activityHook   ActivityFn
 	activityHookMu sync.RWMutex
-	// activityDeliveryMu serialises durable CLI-reply outbox drains. Delivery is
-	// at-least-once with a stable EventID; consumers must deduplicate that ID.
+	// activityDeliveryMu protects the per-event delivery claims. It is never held
+	// while invoking a hook: callbacks may re-enter this DB and may be slow.
 	activityDeliveryMu sync.Mutex
+	activityDelivering map[string]struct{}
+	// activitySequenceMu serializes durable workspace counter reservations without
+	// holding d.mu across filesystem I/O. Reservations are carried by the
+	// per-session WAL, so a crash cannot lose an interval crossing.
+	activitySequenceMu    sync.Mutex
+	workspaceMessageTotal int64
+	workspaceToolTotal    int64
 
 	// debugCount tracks the on-disk line count of each session's debug.jsonl so
 	// the append path can cap the file (oldest events pruned) without re-reading
@@ -168,27 +175,28 @@ type DB struct {
 // loads every entity into memory.
 func Open(path string) (*DB, error) {
 	d := &DB{
-		root:             path,
-		agents:           map[string]Agent{},
-		sessions:         map[string]Session{},
-		messages:         map[string][]Message{},
-		tasks:            map[string]Task{},
-		schedules:        map[string]Schedule{},
-		mcp:              map[string]MCPServer{},
-		flows:            map[string]Flow{},
-		flowRuns:         map[string]FlowRun{},
-		sessionAsks:      map[string]SessionAsk{},
-		agentMessages:    map[string]AgentMessage{},
-		automations:      map[string]Automation{},
-		artifacts:        map[string]Artifact{},
-		hooks:            map[string]Hook{},
-		usage:            map[string]Usage{},
-		sessionUsage:     map[string]SessionUsage{},
-		debugCount:       map[string]int{},
-		counters:         map[string]int64{},
-		issued:           map[string]int64{},
-		modelResolutions: map[string]ModelResolution{},
-		transcriptMus:    map[string]*sync.Mutex{},
+		root:               path,
+		agents:             map[string]Agent{},
+		sessions:           map[string]Session{},
+		messages:           map[string][]Message{},
+		tasks:              map[string]Task{},
+		schedules:          map[string]Schedule{},
+		mcp:                map[string]MCPServer{},
+		flows:              map[string]Flow{},
+		flowRuns:           map[string]FlowRun{},
+		sessionAsks:        map[string]SessionAsk{},
+		agentMessages:      map[string]AgentMessage{},
+		automations:        map[string]Automation{},
+		artifacts:          map[string]Artifact{},
+		hooks:              map[string]Hook{},
+		usage:              map[string]Usage{},
+		sessionUsage:       map[string]SessionUsage{},
+		debugCount:         map[string]int{},
+		counters:           map[string]int64{},
+		issued:             map[string]int64{},
+		modelResolutions:   map[string]ModelResolution{},
+		transcriptMus:      map[string]*sync.Mutex{},
+		activityDelivering: map[string]struct{}{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
@@ -444,6 +452,9 @@ func (d *DB) load() error {
 	if err := d.timeLoadPhase("counters", d.loadCounters); err != nil {
 		return err
 	}
+	if err := d.timeLoadPhase("activitySequence", d.loadActivitySequence); err != nil {
+		return err
+	}
 	// One bucket for the flat entity directories (agents/tasks/schedules/mcp/
 	// flows/flow-runs/session-asks/automations/artifacts/hooks): they share one
 	// loader and one failure mode, so splitting them further would be noise until
@@ -595,6 +606,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.timeLoadPhase("sessions", d.loadSessions); err != nil {
+		return err
+	}
+	if err := d.timeLoadPhase("reconcileActivitySequence", d.reconcileActivitySequence); err != nil {
 		return err
 	}
 	// Reclaim any assistant turn that was streaming when the process last died,

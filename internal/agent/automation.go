@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -45,9 +46,10 @@ type UsageRecorded struct {
 // engine.OnTurnFinished as the runtime's turn hook. Firing runs on the detached
 // goroutine FireTurnFinished spawns, so it never blocks the finishing turn.
 type AutomationEngine struct {
-	db     *db.DB
-	rt     *Runtime
-	logger *slog.Logger
+	db         *db.DB
+	rt         *Runtime
+	logger     *slog.Logger
+	activityMu sync.Mutex
 }
 
 // NewAutomationEngine constructs an engine bound to a workspace's DB and runtime.

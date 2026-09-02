@@ -13,6 +13,13 @@ type scopedResumeTestProvider struct {
 	can   bool
 }
 
+type changedProviderTestProvider struct{}
+
+func (*changedProviderTestProvider) Name() string { return "anthropic" }
+func (*changedProviderTestProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
+	return nil, nil
+}
+
 func (p *scopedResumeTestProvider) Name() string { return "codex-cli" }
 func (p *scopedResumeTestProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
 	return nil, nil
@@ -192,6 +199,42 @@ func TestPlanCodexResumeSafetyGates(t *testing.T) {
 			plan := s.planCodexResume(context.Background(), p, tc.agentCount, session, agentRow, raw, false, &req)
 			if plan.active || req.ResumeSessionID != "" || req.CLIResumeScope != "" {
 				t.Fatalf("unsafe resume engaged: plan=%+v req=%+v", plan, req)
+			}
+		})
+	}
+}
+
+func TestPlanCLIResumePendingRecoveryStateMachine(t *testing.T) {
+	s := &Server{}
+	raw := []db.Message{{Role: providers.RoleAssistant}, {Role: providers.RoleUser}}
+	base := db.Session{
+		ID: "SES1", AgentID: "AGT1", CLISessionID: "stale-thread", CLISentMsgCount: 1,
+		CLINativeCompactionPending: true,
+	}
+	agent := db.Agent{ID: "AGT1", Provider: "codex-cli", Model: "gpt-test"}
+	cases := []struct {
+		name       string
+		provider   providers.Provider
+		session    db.Session
+		agent      db.Agent
+		wantActive bool
+		wantRetire bool
+	}{
+		{name: "valid scoped resumer", provider: &scopedResumeTestProvider{ready: true, can: true}, session: base, agent: agent, wantActive: true},
+		{name: "scoped resumer unavailable", provider: &scopedResumeTestProvider{ready: false, can: true}, session: base, agent: agent, wantRetire: true},
+		{name: "provider changed", provider: &changedProviderTestProvider{}, session: base, agent: agent, wantRetire: true},
+		{name: "agent changed", provider: &scopedResumeTestProvider{ready: true, can: true}, session: func() db.Session { v := base; v.AgentID = "AGT2"; return v }(), agent: agent, wantRetire: true},
+		{name: "multi participant", provider: &scopedResumeTestProvider{ready: true, can: true}, session: func() db.Session { v := base; v.Participants = []string{"AGT1", "AGT2"}; return v }(), agent: agent, wantRetire: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := providers.Request{System: "persona", Messages: []providers.Message{{Role: providers.RoleUser, Text: "full transcript"}}}
+			plan := s.planCLIResume(context.Background(), tc.provider, 1, tc.session, tc.agent, raw, false, &req)
+			if plan.active != tc.wantActive || plan.retireNativeRecovery != tc.wantRetire || !plan.nativeCompactionRecovery {
+				t.Fatalf("plan = %+v", plan)
+			}
+			if req.ResumeSessionID != "" {
+				t.Fatalf("pending recovery reused stale resume id %q", req.ResumeSessionID)
 			}
 		})
 	}

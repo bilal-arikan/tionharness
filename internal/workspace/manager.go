@@ -481,22 +481,47 @@ func (m *Manager) open(meta Meta) error {
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
 	// Counter-triggered automations consume the same signal on a detached goroutine.
 	if err := database.SetActivityHook(func(sig db.ActivitySignal) error {
+		if sig.EventID != "" {
+			accepted, err := database.AcceptActivitySignal(sig)
+			if err != nil {
+				return err
+			}
+			if accepted {
+				rt.Emit(events.Event{
+					Type: events.TypeSession, Level: "info",
+					Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
+				})
+			}
+			go func() {
+				if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
+					m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
+				}
+			}()
+			return nil
+		}
 		rt.Emit(events.Event{
 			Type:   events.TypeSession,
 			Level:  "info",
 			Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
 		})
 		go autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
-			SessionID:    sig.SessionID,
-			MessageTotal: sig.MessageTotal,
-			MessageDelta: sig.MessageDelta,
-			ToolTotal:    sig.ToolTotal,
-			ToolDelta:    sig.ToolDelta,
+			SessionID:             sig.SessionID,
+			MessageTotal:          sig.MessageTotal,
+			MessageDelta:          sig.MessageDelta,
+			ToolTotal:             sig.ToolTotal,
+			ToolDelta:             sig.ToolDelta,
+			WorkspaceMessageTotal: sig.WorkspaceMessageTotal,
+			WorkspaceToolTotal:    sig.WorkspaceToolTotal,
 		})
 		return nil
 	}); err != nil {
 		return fmt.Errorf("register activity hook: %w", err)
 	}
+	go func() {
+		if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
+			m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
+		}
+	}()
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())

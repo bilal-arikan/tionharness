@@ -387,10 +387,12 @@ const (
 // Session, so a single streamable transcript viewer and the unified "executions"
 // feed can render task runs, flow runs and scheduled deliveries like any chat.
 type Session struct {
-	ID            string `json:"id"`
-	AgentID       string `json:"agentId"`
-	Kind          string `json:"kind"`
-	SourceID      string `json:"sourceId,omitempty"`
+	ID       string `json:"id"`
+	AgentID  string `json:"agentId"`
+	Kind     string `json:"kind"`
+	SourceID string `json:"sourceId,omitempty"`
+	// DispatchKey identifies a durable automation launch across replay.
+	DispatchKey   string `json:"dispatchKey,omitempty"`
 	ExecutionType string `json:"executionType,omitempty"`
 	Category      string `json:"category,omitempty"`
 	ContextMode   string `json:"contextMode,omitempty"`

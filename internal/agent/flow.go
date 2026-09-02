@@ -264,6 +264,10 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{
 		FlowID: flowID, Input: input,
 		ParentRunID: parentRunID, ParentNodeID: parentNodeID, RootRunID: rootRunID,
+		DispatchKey: func() string {
+			key, _ := ctx.Value(flowDispatchKey{}).(string)
+			return key
+		}(),
 	})
 	if err != nil {
 		return db.FlowRun{}, err
@@ -591,6 +595,18 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 // streamable transcript as a chat. Returns the flow run, the session id, and any
 // setup error. obs (optional) receives per-node progress for live streaming.
 func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, autonomous bool, obs orchestration.Observer) (db.FlowRun, string, error) {
+	return r.runFlowRecorded(ctx, flowID, input, autonomous, obs, "")
+}
+
+type flowDispatchKey struct{}
+
+func (r *Runtime) runFlowRecorded(ctx context.Context, flowID, input string, autonomous bool, obs orchestration.Observer, dispatchKey string) (db.FlowRun, string, error) {
+	if dispatchKey != "" {
+		if existing, err := r.db.GetFlowRunByDispatchKey(ctx, dispatchKey); err == nil {
+			return existing, existing.SessionID, nil
+		}
+		ctx = context.WithValue(ctx, flowDispatchKey{}, dispatchKey)
+	}
 	flow, ferr := r.db.GetFlow(ctx, flowID)
 	if ferr != nil {
 		return db.FlowRun{}, "", ferr
@@ -607,16 +623,25 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	// shows it running, then the same session id is threaded into the turn record.
 	sessionID := ""
 	inputRecorded := false
-	if sess, serr := r.db.CreateSession(ctx, db.Session{
-		AgentID:  firstFlowAgentID(flow),
-		Kind:     "flow",
-		SourceID: flow.ID,
-		Title:    flow.Name,
-		// Inherit the launching turn's directory when there is one (run_flow from a
-		// session pinned to a repo); with no caller session this resolves to the
-		// workspace default, which is what a scheduled run wants.
-		WorkingDir: r.effectiveWorkDir(ctx),
-	}); serr == nil {
+	var sess db.Session
+	var serr error
+	if dispatchKey != "" {
+		sess, serr = r.db.GetSessionByDispatchKey(ctx, dispatchKey)
+	}
+	if sess.ID == "" {
+		sess, serr = r.db.CreateSession(ctx, db.Session{
+			AgentID:     firstFlowAgentID(flow),
+			Kind:        "flow",
+			SourceID:    flow.ID,
+			DispatchKey: dispatchKey,
+			Title:       flow.Name,
+			// Inherit the launching turn's directory when there is one (run_flow from a
+			// session pinned to a repo); with no caller session this resolves to the
+			// workspace default, which is what a scheduled run wants.
+			WorkingDir: r.effectiveWorkDir(ctx),
+		})
+	}
+	if serr == nil {
 		sessionID = sess.ID
 		// Own cancelable context for the whole recorded run so a human "Durdur"
 		// (CancelSession) can stop the flow — it never enters the api chatRuns.

@@ -100,6 +100,53 @@ func TestExecutionsSkipsFlowIndexWithoutFlowSessions(t *testing.T) {
 	}
 }
 
+func TestExecutionsIncludesCoordinatorLineage(t *testing.T) {
+	ctx := context.Background()
+	s, wsp := newWorkspaceServer(t)
+
+	root, err := wsp.DB.CreateSession(ctx, db.Session{Title: "root", CoordinatorMode: true})
+	if err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	child, err := wsp.DB.CreateSession(ctx, db.Session{
+		Title:                    "child coordinator",
+		Role:                     "worker",
+		CoordinatorMode:          true,
+		CoordinatorSessionID:     root.ID,
+		RootCoordinatorSessionID: root.ID,
+	})
+	if err != nil {
+		t.Fatalf("create child: %v", err)
+	}
+	leaf, err := wsp.DB.CreateSession(ctx, db.Session{
+		Title:                    "leaf worker",
+		Role:                     "worker",
+		CoordinatorSessionID:     child.ID,
+		RootCoordinatorSessionID: root.ID,
+	})
+	if err != nil {
+		t.Fatalf("create leaf: %v", err)
+	}
+
+	var got *executionItem
+	for _, item := range listExecutions(t, s, wsp) {
+		if item.SessionID == leaf.ID {
+			item := item
+			got = &item
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("leaf execution %s not returned", leaf.ID)
+	}
+	if got.CoordinatorSessionID != child.ID {
+		t.Errorf("coordinatorSessionId = %q, want %q", got.CoordinatorSessionID, child.ID)
+	}
+	if got.RootCoordinatorSessionID != root.ID {
+		t.Errorf("rootCoordinatorSessionId = %q, want %q", got.RootCoordinatorSessionID, root.ID)
+	}
+}
+
 // listExecutions drives the real handler in its legacy (unpaged) shape.
 func listExecutions(t *testing.T, s *Server, wsp *workspace.Workspace) []executionItem {
 	t.Helper()

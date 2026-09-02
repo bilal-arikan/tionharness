@@ -480,6 +480,17 @@ func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
 	return d.createSessionLocked(s)
 }
 
+func (d *DB) GetSessionByDispatchKey(ctx context.Context, key string) (Session, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, session := range d.sessions {
+		if key != "" && session.DispatchKey == key {
+			return session, nil
+		}
+	}
+	return Session{}, ErrNotFound
+}
+
 // CreateChildSession validates and atomically creates an execution child linked
 // to an existing parent. It is the sole creation path for delegated executions.
 func (d *DB) CreateChildSession(ctx context.Context, s Session) (Session, error) {
@@ -1239,11 +1250,26 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	}
 
 	d.mu.RLock()
-	_, ok := d.sessions[m.SessionID]
+	s, ok := d.sessions[m.SessionID]
+	msgs := append([]Message(nil), d.messages[m.SessionID]...)
 	d.mu.RUnlock()
 	if !ok {
 		tl.Unlock()
 		return m, ErrNotFound
+	}
+	target, _, _, err := prepareCLIReplyTarget(s, msgs, m, CLIReplyState{})
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	dir := d.dir(dirSessions, m.SessionID)
+	walPath := filepath.Join(dir, cliReplyWALFile)
+	toolDelta := target.ToolCallCount - s.ToolCallCount
+	wal := cliReplyWAL{Version: cliReplyWALVersion, TxnID: m.ID, Message: m}
+	wal, err = d.reserveActivitySequence(dir, wal, 1, int64(toolDelta))
+	if err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("prepare message recovery: %w", err)
 	}
 
 	// Persist BEFORE publishing in memory. The failure this ordering rules out is
@@ -1262,9 +1288,18 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		tl.Unlock()
 		return m, appendErr
 	}
+	sig := cliReplyActivitySignal(wal, target)
+	if err := persistCLIReplyActivity(dir, sig); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("persist message activity: %w", err)
+	}
+	if err := durableRemove(walPath); err != nil {
+		tl.Unlock()
+		return m, fmt.Errorf("retire message recovery: %w", err)
+	}
 
 	d.mu.Lock()
-	s, ok := d.sessions[m.SessionID]
+	s, ok = d.sessions[m.SessionID]
 	if !ok {
 		// Unreachable while the transcript lock is held (DeleteSession takes it
 		// too), but a session that disappeared must not be resurrected in memory.
@@ -1277,10 +1312,10 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// Sum this message's executed tool calls into the session's lifetime tool
 	// counter (backs counter automations with metric "tool"). Only assistant
 	// messages carry tool steps; a user/system append contributes 0.
-	toolDelta := 0
+	committedToolDelta := 0
 	if m.Role == "assistant" {
-		toolDelta = countToolSteps(m.Steps)
-		s.ToolCallCount += toolDelta
+		committedToolDelta = countToolSteps(m.Steps)
+		s.ToolCallCount += committedToolDelta
 	}
 	s.UpdatedAt = m.CreatedAt
 	// An agent reply marks the session unread; the UI clears it when opened.
@@ -1295,20 +1330,12 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
 	s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
 	d.sessions[s.ID] = s
-	// Snapshot the totals for the activity signal, then release BOTH locks before
-	// firing the hook (the observer dispatches on its own goroutine, which will
-	// itself take the store lock — and may append to this very session).
-	sig := ActivitySignal{
-		SessionID:    s.ID,
-		MessageTotal: s.MessageCount,
-		MessageDelta: 1,
-		ToolTotal:    s.ToolCallCount,
-		ToolDelta:    toolDelta,
-	}
 	d.mu.Unlock()
 	tl.Unlock()
-	d.fireActivityHook(sig)
 	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
+	if err := d.deliverPendingCLIReplyActivities(); err != nil {
+		slog.Error("durable message activity delivery deferred", "component", "db", "session", m.SessionID, "event", sig.EventID, "error", err)
+	}
 	return m, nil
 }
 
@@ -1373,13 +1400,10 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 		tl.Unlock()
 		return m, err
 	}
+	toolDelta := target.ToolCallCount - s.ToolCallCount
 	wal := cliReplyWAL{Version: cliReplyWALVersion, TxnID: m.ID, Message: m, State: state}
-	walData, err := json.Marshal(wal)
+	wal, err = d.reserveActivitySequence(dir, wal, 1, int64(toolDelta))
 	if err != nil {
-		tl.Unlock()
-		return m, err
-	}
-	if err := durableAtomicWriteBytes(walPath, walData, 0o600); err != nil {
 		tl.Unlock()
 		return m, fmt.Errorf("prepare CLI reply recovery: %w", err)
 	}
@@ -1622,8 +1646,11 @@ func (d *DB) loadSessions() error {
 		skip bool // absent or headerless directory — not an error
 	}
 	loaded, err := parallelLoad(dirs, func(dir string) (loadedSession, error) {
-		if err := recoverCLIReplyTransaction(dir); err != nil {
-			return loadedSession{}, err
+		if err := d.recoverCLIReplyTransaction(dir); err != nil {
+			if !errors.Is(err, ErrCLIReplyRecoveryDegraded) {
+				return loadedSession{}, err
+			}
+			slog.Error("session CLI reply recovery degraded", "component", "db", "session_dir", dir, "error", err)
 		}
 		s, msgs, err := readSessionDir(dir)
 		if err != nil {

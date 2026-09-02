@@ -371,6 +371,17 @@ func (d *DB) GetFlowRun(ctx context.Context, id string) (FlowRun, error) {
 	return dbGet(d, d.flowRuns, id)
 }
 
+func (d *DB) GetFlowRunByDispatchKey(ctx context.Context, key string) (FlowRun, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, run := range d.flowRuns {
+		if key != "" && run.DispatchKey == key {
+			return run, nil
+		}
+	}
+	return FlowRun{}, ErrNotFound
+}
+
 // ListFlowRuns returns runs for a flow (or all if flowID is empty), newest first.
 //
 // The order is the exact reverse of flowRunBefore, NOT a plain CreatedAt compare:

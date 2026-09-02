@@ -26,9 +26,10 @@ const (
 // takes precedence) or a spawned session (AgentID + Spawn). Trigger records the
 // initiator for logs/telemetry.
 type RunSpec struct {
-	Trigger    RunTrigger
-	Input      string
-	Autonomous bool
+	Trigger        RunTrigger
+	Input          string
+	Autonomous     bool
+	IdempotencyKey string
 	// flow driver:
 	FlowID string
 	// session driver:
@@ -68,10 +69,16 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 		return LaunchResult{Driver: driver}, err
 	}
 	if spec.FlowID != "" {
+		if spec.IdempotencyKey != "" {
+			if session, err := r.db.GetSessionByDispatchKey(ctx, spec.IdempotencyKey); err == nil {
+				run, _ := r.db.GetFlowRunByDispatchKey(ctx, spec.IdempotencyKey)
+				return LaunchResult{Driver: "flow", SessionID: session.ID, FlowRun: run}, nil
+			}
+		}
 		if _, err := r.db.GetFlow(ctx, spec.FlowID); err != nil {
 			return LaunchResult{Driver: "flow"}, fmt.Errorf("target flow gone: %w", err)
 		}
-		run, sessionID, err := r.RunFlowRecorded(ctx, spec.FlowID, spec.Input, spec.Autonomous, nil)
+		run, sessionID, err := r.runFlowRecorded(ctx, spec.FlowID, spec.Input, spec.Autonomous, nil, spec.IdempotencyKey)
 		if err != nil {
 			return LaunchResult{Driver: "flow", SessionID: sessionID}, fmt.Errorf("flow run failed: %w", err)
 		}
@@ -81,10 +88,16 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 		return LaunchResult{Driver: "flow", SessionID: sessionID, FlowRun: run}, nil
 	}
 
+	if spec.IdempotencyKey != "" {
+		if session, err := r.db.GetSessionByDispatchKey(ctx, spec.IdempotencyKey); err == nil {
+			return LaunchResult{Driver: "session", SessionID: session.ID}, nil
+		}
+	}
 	if _, err := r.db.GetAgent(ctx, spec.AgentID); err != nil {
 		return LaunchResult{Driver: "session"}, fmt.Errorf("target agent gone: %w", err)
 	}
 	spec.Spawn.NoQueue = true
+	spec.Spawn.IdempotencyKey = spec.IdempotencyKey
 	res, err := r.SpawnSession(ctx, spec.AgentID, spec.Input, spec.Spawn)
 	if err != nil {
 		return LaunchResult{Driver: "session"}, fmt.Errorf("spawn failed: %w", err)

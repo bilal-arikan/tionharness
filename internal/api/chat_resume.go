@@ -12,8 +12,10 @@ import (
 // cliResumePlan captures one CLI resume decision so the caller can persist the
 // returned session/thread id and updated transcript boundary afterwards.
 type cliResumePlan struct {
-	active    bool
-	sentCount int // raw message count the CLI will know AFTER this turn's user msg
+	active                   bool
+	sentCount                int // raw message count the CLI will know AFTER this turn's user msg
+	nativeCompactionRecovery bool
+	retireNativeRecovery     bool
 	// coldStart is true when resume was ENABLED for this turn but no warm thread
 	// was carried into it, so the CLI conversation restarts here: first CLI turn,
 	// a fold re-baseline, or a stored id the provider could not resume. It is the
@@ -25,14 +27,26 @@ type cliResumePlan struct {
 // planCLIResume keeps Claude's existing opt-in/persistent-session semantics and
 // adds Codex's scoped durable-thread path. Non-CLI providers remain inert.
 func (s *Server) planCLIResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, agentRow db.Agent, rawHistory []db.Message, compacted bool, llmReq *providers.Request) cliResumePlan {
+	recoveringNativeCompaction := session.CLINativeCompactionPending
+	if recoveringNativeCompaction {
+		// A previous native compactor may have mutated its external thread before
+		// the rotated id/boundary commit failed. Never send the old resume id or
+		// derive a delta from the old cursor; rebuild from the prepared transcript.
+		session.CLISessionID = ""
+		session.CLISentMsgCount = 0
+	}
+	var plan cliResumePlan
 	switch provider.Name() {
 	case "claude-cli":
-		return s.planClaudeResume(ctx, provider, agentCount, session, rawHistory, compacted, llmReq)
+		plan = s.planClaudeResume(ctx, provider, agentCount, session, rawHistory, compacted, llmReq)
 	case "codex-cli":
-		return s.planCodexResume(ctx, provider, agentCount, session, agentRow, rawHistory, compacted, llmReq)
+		plan = s.planCodexResume(ctx, provider, agentCount, session, agentRow, rawHistory, compacted, llmReq)
 	default:
-		return cliResumePlan{}
+		plan = cliResumePlan{}
 	}
+	plan.nativeCompactionRecovery = recoveringNativeCompaction
+	plan.retireNativeRecovery = recoveringNativeCompaction && !plan.active
+	return plan
 }
 
 // planCodexResume enables warm `codex exec resume` only when three independent

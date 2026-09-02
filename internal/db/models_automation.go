@@ -312,6 +312,9 @@ type Automation struct {
 	LastFiredAt    int64  `json:"lastFiredAt,omitempty"`
 	LastSessionID  string `json:"lastSessionId,omitempty"`
 	LastError      string `json:"lastError,omitempty"`
+	// ActivityDispatchReceipts makes counter activity replay idempotent at the
+	// automation bookkeeping boundary. Keyed by durable activity EventID.
+	ActivityDispatchReceipts map[string]AutomationActivityDispatchOutcome `json:"activityDispatchReceipts,omitempty"`
 
 	// CreatedBy is the ID of the agent that created this automation via a
 	// self-management tool ("" = created by the user). Agents may only edit/delete

@@ -14,11 +14,38 @@ import (
 // so the engine's hook signature does not leak the db type into every caller.
 // Emitted from the store's activity hook, wired by the workspace manager.
 type ActivityRecorded struct {
-	SessionID    string
-	MessageTotal int
-	MessageDelta int
-	ToolTotal    int
-	ToolDelta    int
+	EventID               string
+	SessionID             string
+	MessageTotal          int
+	MessageDelta          int
+	ToolTotal             int
+	ToolDelta             int
+	WorkspaceMessageTotal int64
+	WorkspaceToolTotal    int64
+}
+
+// DrainActivityInbox processes durably accepted CLI reply activity serially.
+// Completion receipts remain on disk, making source outbox replay idempotent.
+func (e *AutomationEngine) DrainActivityInbox(ctx context.Context) error {
+	e.activityMu.Lock()
+	defer e.activityMu.Unlock()
+	signals, err := e.db.PendingActivitySignals()
+	if err != nil {
+		return err
+	}
+	for _, sig := range signals {
+		e.OnActivityRecorded(ctx, ActivityRecorded{
+			EventID: sig.EventID, SessionID: sig.SessionID,
+			MessageTotal: sig.MessageTotal, MessageDelta: sig.MessageDelta,
+			ToolTotal: sig.ToolTotal, ToolDelta: sig.ToolDelta,
+			WorkspaceMessageTotal: sig.WorkspaceMessageTotal,
+			WorkspaceToolTotal:    sig.WorkspaceToolTotal,
+		})
+		if err := e.db.CompleteActivitySignal(sig); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // OnActivityRecorded is the activity hook. It fires after every message append
@@ -63,10 +90,6 @@ func (e *AutomationEngine) OnActivityRecorded(ctx context.Context, sig ActivityR
 		}
 		return crossingIsMaint
 	}
-	// Workspace-scope totals resolved once, lazily: only summed if some enabled
-	// counter automation actually watches the workspace scope (the token path's
-	// wsTotal pattern). -1 = not yet resolved.
-	wsMsg, wsTool := int64(-1), int64(-1)
 	for _, a := range autos {
 		if a.TriggerKind != db.TriggerCounter || a.CounterInterval <= 0 {
 			continue
@@ -91,15 +114,9 @@ func (e *AutomationEngine) OnActivityRecorded(ctx context.Context, sig ActivityR
 		switch a.CounterScope {
 		case db.CounterScopeWorkspace:
 			if metric == db.CounterMetricTool {
-				if wsTool < 0 {
-					wsTool = e.db.WorkspaceCounterTotal(db.CounterMetricTool)
-				}
-				total = wsTool
+				total = sig.WorkspaceToolTotal
 			} else {
-				if wsMsg < 0 {
-					wsMsg = e.db.WorkspaceCounterTotal(db.CounterMetricMessage)
-				}
-				total = wsMsg
+				total = sig.WorkspaceMessageTotal
 			}
 			if crossedMultiple(total-delta, total, interval) {
 				e.fireCounter(ctx, a, "", total) // no single crossing session for workspace scope

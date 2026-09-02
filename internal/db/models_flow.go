@@ -66,7 +66,8 @@ type FlowRun struct {
 	// (Session.Kind "flow"), so the chat view can resolve a flow session back to
 	// the exact run — and its REAL graph/layout — instead of reifying the
 	// transcript into a synthetic linear chain. Empty on pre-link runs.
-	SessionID string `json:"sessionId,omitempty"`
+	SessionID   string `json:"sessionId,omitempty"`
+	DispatchKey string `json:"dispatchKey,omitempty"`
 	// ParentRunID is the run that launched this one — a subflow/spawn node, or an
 	// agent node's run_flow tool call. Empty means this is a ROOT run (started by
 	// a user, schedule or automation). Child runs stay first-class: they get their

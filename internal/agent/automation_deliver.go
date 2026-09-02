@@ -153,8 +153,9 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// it renders like a normal chat turn).
 	output, err = r.recordAssistantReply(ctx, session.ID, a.TargetAgentID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu otomasyon promptu için boş yanıt döndürdü.")
 	// Self-completion: an autonomous fire has no human to send the follow-up, so if
-	// the turn stalled with unfinished work keep it going until done. Bounded + budget-gated.
-	r.maybeAutoContinue(ctx, agent, session.ID, KindSchedule, steps)
+	// the turn stalled with unfinished work keep it going until done. Skipped when the
+	// turn was cut short. Bounded + budget-gated.
+	r.maybeAutoContinue(ctx, agent, session.ID, KindSchedule, steps, truncated)
 	// Context-reset handoff: if this turn hit the context limit, optionally continue
 	// the work in a fresh session. No-op unless HandoffAuto is enabled.
 	r.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())

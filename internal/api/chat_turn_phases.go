@@ -522,6 +522,18 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// and a durable scoped home. A fold always leaves the compacted request intact
 	// and starts fresh from TionHarness summary + recent tail.
 	resumePlan := t.s.planCLIResume(t.ctx, provider, len(t.agents), t.session, agentRow, rawHistory, prep.Compacted, &llmReq)
+	if resumePlan.retireNativeRecovery {
+		if rerr := t.database.RetireSessionCLINativeCompactionRecovery(t.ctx, t.session.ID); rerr != nil {
+			t.failTurn(agentRow.ID, "persist_error", "retire CLI native compaction recovery: "+rerr.Error())
+			return out, false
+		}
+		resumePlan.nativeCompactionRecovery = false
+		resumePlan.retireNativeRecovery = false
+		t.session.CLISessionID = ""
+		t.session.CLISentMsgCount = 0
+		t.session.CLICompactMsgCount = 0
+		t.session.CLINativeCompactionPending = false
+	}
 
 	out.llmReq = llmReq
 	out.leadSteps = leadSteps
@@ -864,58 +876,55 @@ func (t *chatTurn) persistInterruptedTurn(agentRow db.Agent, replyID string, age
 // state forward and publishes the reply. Returns false when persisting failed and
 // the turn must end.
 func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, replyID string, agentStart time.Time, leadSteps, steps []agent.TurnStep, resp *providers.Response) bool {
+	boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory))
+	state := db.CLIReplyState{
+		UpdateResume:          prep.resumePlan.active && resp.SessionID != "",
+		ResumeSessionID:       resp.SessionID,
+		ResumeSentMsgCount:    prep.resumePlan.sentCount + 1,
+		UpdateCompactBoundary: compacted,
+		CompactMsgCount:       boundary,
+	}
+	if prep.resumePlan.nativeCompactionRecovery {
+		state.ClearNativeCompactionPending = true
+		if !state.UpdateResume {
+			state.RetireResume = true
+			state.ResumeSentMsgCount = 0
+		}
+	}
+	reply := db.Message{
+		ID:         replyID,
+		SessionID:  t.session.ID,
+		AgentID:    agentRow.ID,
+		Role:       providers.RoleAssistant,
+		Text:       resp.Text,
+		Steps:      marshalSteps(append(leadSteps, steps...)),
+		Model:      resp.Model,
+		StopReason: resp.StopReason,
+		Usage:      messageUsage(resp.Usage),
+		DurationMs: time.Since(agentStart).Milliseconds(),
+		// Flag the boundary where the underlying CLI conversation restarted,
+		// so the transcript can draw a divider above this turn (TSK514).
+		CLIColdStart: prep.resumePlan.active && prep.resumePlan.coldStart,
+	}
+	var replyMsg db.Message
 	var failureReason, failureDetail string
 	current := t.withGeneration(func() {
-		replyMsg, aerr := t.database.AddMessage(t.ctx, db.Message{
-			ID:         replyID,
-			SessionID:  t.session.ID,
-			AgentID:    agentRow.ID,
-			Role:       providers.RoleAssistant,
-			Text:       resp.Text,
-			Steps:      marshalSteps(append(leadSteps, steps...)),
-			Model:      resp.Model,
-			StopReason: resp.StopReason,
-			Usage:      messageUsage(resp.Usage),
-			DurationMs: time.Since(agentStart).Milliseconds(),
-			// Flag the boundary where the underlying CLI conversation restarted,
-			// so the transcript can draw a divider above this turn (TSK514).
-			CLIColdStart: prep.resumePlan.active && prep.resumePlan.coldStart,
-		})
+		var aerr error
+		if state.UpdateResume || state.UpdateCompactBoundary || state.ClearNativeCompactionPending {
+			replyMsg, aerr = t.database.AddMessageWithCLIState(t.ctx, reply, state)
+		} else {
+			replyMsg, aerr = t.database.AddMessage(t.ctx, reply)
+		}
 		if aerr != nil {
 			failureReason, failureDetail = "persist_error", aerr.Error()
 			return
 		}
-		// Persist the CLI session/thread id so the NEXT turn resumes it and sends
-		// only the new delta. sentCount+1 accounts for this turn's assistant
-		// reply, which the CLI already holds server-side (no need to resend it).
-		if prep.resumePlan.active && resp.SessionID != "" {
-			if rerr := t.database.SetSessionCLIResume(t.ctx, t.session.ID, resp.SessionID, prep.resumePlan.sentCount+1); rerr != nil {
-				t.s.logger.Warn("persist cli resume state failed", "session", t.session.ID, "error", rerr)
-			}
-			// P1.4: claude-cli resume model mismatch — the CLI may have served the
-			// response with a different model than the agent's current configuration
-			// (e.g. agent was reconfigured but the warm CLI session still runs the old
-			// model). Log a debug event so the discrepancy is diagnosable.
-			if resp.Model != "" && resp.Model != agentRow.Model {
-				t.s.logger.Info("cli-resume-model-mismatch",
-					"session", t.session.ID, "agent", agentRow.ID,
-					"agent_model", agentRow.Model, "cli_model", resp.Model,
-					"cli_session", resp.SessionID)
-			}
-		}
-		// A CLI that ran out of room compacts its OWN context mid-turn and keeps
-		// serving the turn. It reports that as a completed native-compaction
-		// lifecycle event — the same one /compact produces (nativeCompactSession) —
-		// so re-baseline the compaction boundary here too, or the meter and the fold
-		// gate keep charging a persisted trace the CLI has already thrown away and
-		// fold early for no reason. len(rawHistory), not +1: the compaction happened
-		// BEFORE this turn's reply, whose own trace is still warm.
-		if boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory)); compacted {
-			if berr := t.database.SetSessionCLICompactBoundary(t.ctx, t.session.ID, boundary); berr != nil {
-				failureReason = "persist_cli_compaction_boundary"
-				failureDetail = "reply persisted but CLI compaction boundary failed: " + berr.Error()
-				return
-			}
+		// The CLI state above was committed atomically with the reply. The remaining
+		// block only reports a model mismatch; it performs no second store mutation.
+		if state.UpdateResume && resp.Model != "" && resp.Model != agentRow.Model {
+			t.s.logger.Info("cli-resume-model-mismatch",
+				"session", t.session.ID, "agent", agentRow.ID,
+				"agent_model", agentRow.Model, "cli_model", resp.Model)
 		}
 		// P1.1: update the session header's model snapshot when the actual
 		// response model differs — keeps the header's O(1) answer current.

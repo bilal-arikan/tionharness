@@ -13,15 +13,19 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
 	cliReplyWALFile         = "cli-reply.wal.json"
-	cliReplyWALVersion      = 1
+	cliReplyWALVersion      = 3
 	cliReplyActivityPrefix  = "cli-reply-activity-"
 	cliReplyActivitySuffix  = ".outbox.json"
 	cliReplyActivityVersion = 1
+	cliReplyDegradedFile    = "cli-reply.recovery-degraded.json"
 )
+
+var ErrCLIReplyRecoveryDegraded = errors.New("CLI reply recovery degraded")
 
 type cliReplyTxnPhase string
 
@@ -34,10 +38,14 @@ const (
 )
 
 type cliReplyWAL struct {
-	Version int           `json:"version"`
-	TxnID   string        `json:"txnId"`
-	Message Message       `json:"message"`
-	State   CLIReplyState `json:"state"`
+	Version                  int           `json:"version"`
+	TxnID                    string        `json:"txnId"`
+	Message                  Message       `json:"message"`
+	State                    CLIReplyState `json:"state"`
+	WorkspaceMessageTotal    int64         `json:"workspaceMessageTotal,omitempty"`
+	WorkspaceToolTotal       int64         `json:"workspaceToolTotal,omitempty"`
+	WorkspaceMessagePrevious int64         `json:"workspaceMessagePrevious,omitempty"`
+	WorkspaceToolPrevious    int64         `json:"workspaceToolPrevious,omitempty"`
 }
 
 type cliReplyActivity struct {
@@ -50,13 +58,23 @@ func cliReplyActivitySignal(wal cliReplyWAL, target Session) ActivitySignal {
 	if wal.Message.Role == "assistant" {
 		toolDelta = countToolSteps(wal.Message.Steps)
 	}
+	messagePrevious := wal.WorkspaceMessagePrevious
+	toolPrevious := wal.WorkspaceToolPrevious
+	if wal.Version < 3 {
+		messagePrevious = wal.WorkspaceMessageTotal - 1
+		toolPrevious = wal.WorkspaceToolTotal - int64(toolDelta)
+	}
 	return ActivitySignal{
-		EventID:      "cli-reply:" + wal.TxnID,
-		SessionID:    target.ID,
-		MessageTotal: target.MessageCount,
-		MessageDelta: 1,
-		ToolTotal:    target.ToolCallCount,
-		ToolDelta:    toolDelta,
+		EventID:                  "cli-reply:" + target.ID + ":" + wal.TxnID,
+		SessionID:                target.ID,
+		MessageTotal:             target.MessageCount,
+		MessageDelta:             1,
+		ToolTotal:                target.ToolCallCount,
+		ToolDelta:                toolDelta,
+		WorkspaceMessageTotal:    wal.WorkspaceMessageTotal,
+		WorkspaceToolTotal:       wal.WorkspaceToolTotal,
+		WorkspaceMessagePrevious: messagePrevious,
+		WorkspaceToolPrevious:    toolPrevious,
 	}
 }
 
@@ -173,7 +191,12 @@ func writeDurableMessages(dir string, msgs []Message) error {
 	return durableAtomicWriteBytes(filepath.Join(dir, sessionMsgsFile), data, 0o644)
 }
 
-func recoverCLIReplyTransaction(dir string) error {
+func (d *DB) recoverCLIReplyTransaction(dir string) error {
+	if marker, err := os.ReadFile(filepath.Join(dir, cliReplyDegradedFile)); err == nil {
+		return fmt.Errorf("%w: %s", ErrCLIReplyRecoveryDegraded, strings.TrimSpace(string(marker)))
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect CLI reply recovery degraded marker: %w", err)
+	}
 	walPath := filepath.Join(dir, cliReplyWALFile)
 	raw, err := os.ReadFile(walPath)
 	if os.IsNotExist(err) {
@@ -184,10 +207,10 @@ func recoverCLIReplyTransaction(dir string) error {
 	}
 	var wal cliReplyWAL
 	if err := json.Unmarshal(raw, &wal); err != nil {
-		return fmt.Errorf("invalid CLI reply recovery record: %w", err)
+		return quarantineCLIReplyWAL(dir, walPath, fmt.Errorf("invalid CLI reply recovery record: %w", err))
 	}
-	if wal.Version != cliReplyWALVersion || wal.TxnID == "" || wal.Message.ID == "" || wal.TxnID != wal.Message.ID {
-		return errors.New("invalid CLI reply recovery record metadata")
+	if (wal.Version < 1 || wal.Version > cliReplyWALVersion) || wal.TxnID == "" || wal.Message.ID == "" || wal.TxnID != wal.Message.ID {
+		return quarantineCLIReplyWAL(dir, walPath, errors.New("invalid CLI reply recovery record metadata"))
 	}
 	headerRaw, err := os.ReadFile(filepath.Join(dir, sessionHeaderFile))
 	if err != nil {
@@ -198,7 +221,7 @@ func recoverCLIReplyTransaction(dir string) error {
 		return fmt.Errorf("recover CLI reply header: %w", err)
 	}
 	if s.ID == "" || wal.Message.SessionID != s.ID {
-		return errors.New("CLI reply recovery session mismatch")
+		return quarantineCLIReplyWAL(dir, walPath, errors.New("CLI reply recovery session mismatch"))
 	}
 	msgs, err := readMessagesFile(filepath.Join(dir, sessionMsgsFile))
 	if err != nil {
@@ -219,10 +242,35 @@ func recoverCLIReplyTransaction(dir string) error {
 	if err := persistCLIReplyActivity(dir, cliReplyActivitySignal(wal, target)); err != nil {
 		return fmt.Errorf("recover CLI reply activity: %w", err)
 	}
+	if err := d.observeRecoveredActivitySequence(wal); err != nil {
+		return fmt.Errorf("recover CLI reply activity sequence: %w", err)
+	}
 	if err := durableRemove(walPath); err != nil {
 		return fmt.Errorf("retire CLI reply recovery record: %w", err)
 	}
 	return nil
+}
+
+func quarantineCLIReplyWAL(dir, walPath string, cause error) error {
+	marker := struct {
+		Version int    `json:"version"`
+		Error   string `json:"error"`
+		At      int64  `json:"at"`
+	}{Version: 1, Error: cause.Error(), At: time.Now().Unix()}
+	raw, err := json.Marshal(marker)
+	if err != nil {
+		return fmt.Errorf("%w: encode marker: %v", ErrCLIReplyRecoveryDegraded, err)
+	}
+	if err := durableAtomicWriteBytes(filepath.Join(dir, cliReplyDegradedFile), raw, 0o600); err != nil {
+		return fmt.Errorf("%w: persist marker: %v", ErrCLIReplyRecoveryDegraded, err)
+	}
+	quarantine := walPath + ".quarantine"
+	if err := os.Rename(walPath, quarantine); err != nil && !os.IsNotExist(err) {
+		slog.Error("invalid CLI reply WAL retained", "component", "db", "path", walPath, "error", cause, "quarantine_error", err)
+	} else {
+		slog.Error("invalid CLI reply WAL quarantined", "component", "db", "path", quarantine, "error", cause)
+	}
+	return fmt.Errorf("%w: %v", ErrCLIReplyRecoveryDegraded, cause)
 }
 
 func (d *DB) recoverCLIReplyBeforeMutationLocked(sessionID string) (bool, error) {
@@ -232,7 +280,7 @@ func (d *DB) recoverCLIReplyBeforeMutationLocked(sessionID string) (bool, error)
 	} else if err != nil {
 		return false, fmt.Errorf("inspect CLI reply recovery record: %w", err)
 	}
-	if err := recoverCLIReplyTransaction(dir); err != nil {
+	if err := d.recoverCLIReplyTransaction(dir); err != nil {
 		return false, err
 	}
 	s, msgs, err := readSessionDir(dir)
@@ -256,9 +304,6 @@ func (d *DB) deliverRecoveredCLIReplyActivity(recovered bool, sessionID string) 
 }
 
 func (d *DB) deliverPendingCLIReplyActivities() error {
-	d.activityDeliveryMu.Lock()
-	defer d.activityDeliveryMu.Unlock()
-
 	d.activityHookMu.RLock()
 	fn := d.activityHook
 	d.activityHookMu.RUnlock()
@@ -290,29 +335,60 @@ func (d *DB) deliverPendingCLIReplyActivities() error {
 		}
 	}
 	sort.Strings(paths)
+	var deliveryErrors []error
 	for _, path := range paths {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		d.activityDeliveryMu.Lock()
+		if _, busy := d.activityDelivering[path]; busy {
+			d.activityDeliveryMu.Unlock()
+			continue
 		}
-		var record cliReplyActivity
-		if err := json.Unmarshal(raw, &record); err != nil {
-			return fmt.Errorf("invalid CLI reply activity record: %w", err)
-		}
-		if record.Version != cliReplyActivityVersion || record.Signal.EventID == "" || record.Signal.SessionID == "" || cliReplyActivityPath(filepath.Dir(path), record.Signal.EventID) != path {
-			return errors.New("invalid CLI reply activity record metadata")
-		}
-		if err := fn(record.Signal); err != nil {
-			return fmt.Errorf("activity hook rejected %s: %w", record.Signal.EventID, err)
-		}
-		if d.cliReplyActivityHook != nil {
-			if err := d.cliReplyActivityHook(record.Signal); err != nil {
-				return err
+		d.activityDelivering[path] = struct{}{}
+		d.activityDeliveryMu.Unlock()
+		func() {
+			defer func() {
+				d.activityDeliveryMu.Lock()
+				delete(d.activityDelivering, path)
+				d.activityDeliveryMu.Unlock()
+			}()
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				deliveryErrors = append(deliveryErrors, err)
+				return
 			}
-		}
-		if err := durableRemove(path); err != nil {
-			return fmt.Errorf("retire CLI reply activity: %w", err)
-		}
+			var record cliReplyActivity
+			if err := json.Unmarshal(raw, &record); err != nil {
+				quarantineCLIReplyActivity(path, fmt.Errorf("invalid CLI reply activity record: %w", err))
+				return
+			}
+			if record.Version != cliReplyActivityVersion || record.Signal.EventID == "" || record.Signal.SessionID == "" || cliReplyActivityPath(filepath.Dir(path), record.Signal.EventID) != path {
+				quarantineCLIReplyActivity(path, errors.New("invalid CLI reply activity record metadata"))
+				return
+			}
+			if err := invokeActivityHook(fn, record.Signal); err != nil {
+				deliveryErrors = append(deliveryErrors, fmt.Errorf("activity hook rejected %s: %w", record.Signal.EventID, err))
+				return
+			}
+			if d.cliReplyActivityHook != nil {
+				if err := d.cliReplyActivityHook(record.Signal); err != nil {
+					deliveryErrors = append(deliveryErrors, err)
+					return
+				}
+			}
+			if err := durableRemove(path); err != nil {
+				if !os.IsNotExist(err) {
+					deliveryErrors = append(deliveryErrors, fmt.Errorf("retire CLI reply activity: %w", err))
+				}
+			}
+		}()
 	}
-	return nil
+	return errors.Join(deliveryErrors...)
+}
+
+func quarantineCLIReplyActivity(path string, cause error) {
+	quarantine := path + ".quarantine"
+	if err := os.Rename(path, quarantine); err != nil {
+		slog.Error("invalid CLI reply activity retained", "component", "db", "path", path, "error", cause, "quarantine_error", err)
+		return
+	}
+	slog.Error("invalid CLI reply activity quarantined", "component", "db", "path", quarantine, "error", cause)
 }
