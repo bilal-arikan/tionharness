@@ -1,5 +1,203 @@
 # TionHarness — İlerleme Takibi
 
+## Alt-koordinatör tur ortasında ebeveynine mesaj göndermiyor (2026-09-01) ⏳
+
+**Belirti.** Dağıtım yapan bir alt-koordinatör, kendi turu sürerken ebeveyn
+oturuma `<task-progress status="delegating">` mesajı enjekte ediyordu. Bu, ebeveyn
+için yeni bilgi taşımayan ama turu kesen bir gürültüydü; aynı bilgi ebeveynin canlı
+worker görünümünde zaten mevcuttu.
+
+**Nasıl:**
+
+- `notifyDelegating` kaldırıldı — alt-koordinatör dağıtım sırasında ebeveyne
+  hiçbir ara mesaj göndermiyor.
+- Bilgi kaybı yok: ebeveynin canlı worker görünümünde `subCoordinatorBusy()`
+  (rapor borcu olan **veya** canlı worker'ı bulunan düğüm) artık
+  `Running+Delegating` olarak görünüyor.
+- `report_to_coordinator` notu tur ortasında değil, **tur sonunda** gönderiliyor:
+  not `pendingUpwardReport` zulasına yazılır, `flushUpwardReport` turun bitiminde
+  boşaltır. Failed/killed/panik dahil her terminal yol kapsanır, böylece rapor
+  turun nasıl bittiğinden bağımsız olarak yukarı ulaşır. Worker turu **dışında**
+  yapılan çağrıda senkron gönderim korunur.
+
+**Dosyalar:** `internal/agent/coordination.go`, `internal/agent/coordination_tree.go`,
+`internal/agent/coordination_situation.go`, `internal/agent/workernotesteps.go`,
+`internal/tools/builtin_coordination.go`, `internal/prompts/defaults/coordinator.md`,
+`internal/skills/defaults/tionharness-coordinator/SKILL.md`,
+`_Docs/47-KOORDINATOR-COKLU-AJAN.md`.
+
+## Oturum listesi sayfalaması çip seçimine göre sunucuda filtreleniyor (2026-09-01) ⏳
+
+**Belirti.** Sidebar'da 52 aktif sohbet varken listede yalnız ~3'ü görünüyordu ve
+"Daha fazla yükle" bir işe yaramıyor gibiydi. Neden: sayfalama TÜM türler üzerinde
+yapılıyordu (`/api/sessions?limit=100`), çip filtresi ise sayfa geldikten SONRA
+istemcide uygulanıyordu. Worker/subagent oturumları listenin başını doldurduğu için
+100'lük pencerede yalnız birkaç sohbet kalıyor, `total`/`hasMore` ise kullanıcının
+göremediği satırları sayıyordu.
+
+**Ne:** Çip seçimi artık liste isteğinin bir parçası — sunucu aynı çip yüklemini
+sayfalamadan ÖNCE uygular, dolayısıyla `total`/`hasMore` ve "Daha fazla yükle"
+gerçekten gösterilebilen satırları anlatır.
+
+**Nasıl:**
+
+- `internal/api/sessions_chips.go` (yeni): sidebar çip yükleminin sunucu ikizi —
+  `sessionChipKey` (kategori → executionType → legacy kind sırası),
+  `sessionIsWorker`, `sessionMatchesChips`, `sessionChipCounts`. İki canlılık çipi
+  (`running`, `awaiting-workers`) kasıtlı olarak dışarıda: canlılık istemci
+  durumudur, sunucu bilmez; onlar sayfa üzerinde istemcide daraltmaya devam eder.
+- `internal/api/sessions.go`: `chips` sorgu parametresi (virgülle ayrılmış seçili
+  çipler). Parametrenin **hiç verilmemesi** "filtre yok", **boş verilmesi** ise
+  "hiçbir çip seçili değil" demektir ve hiçbir şeyle eşleşmez. Zarfa `chipCounts`
+  eklendi: filtre uygulanmadan ÖNCE tüm workspace üzerinden sayılır, böylece
+  işaretsiz bir çip kaç satır sakladığını göstermeye devam eder.
+- `frontend/src/features/sessions/useSessionChips.ts` (yeni): çip seçimi
+  sidebar'dan yukarı taşındı (istek onu taşıdığı için tek kaynak gerekiyordu);
+  localStorage kalıcılığı ve Ctrl/Shift tıklama semantiği burada.
+- `useSessionsController.ts`: her `listSessions` çağrısı `chips` gönderir; seçim
+  değişince ilk sayfa yeniden çekilir (`loadedPageSizeRef` sunucu sıralamasındaki
+  offset'i tutar). `withActiveSession`: AÇIK oturum çip filtresine takılsa bile
+  state'te tutulur — başlık/composer/transkript onu bu listeden çözüyor, düşerse
+  okunan sohbet boşalırdı; sidebar aynı yüklemi istemcide de uyguladığı için satır
+  yine listede görünmez.
+- `SessionsSidebar.tsx`: çip durumu prop'tan gelir; rozet sayıları sunucunun
+  `chipCounts`'undan okunur (canlı çipler yüklü satırlardan). Başlık "Yüklenenlerde"
+  yerine "Filtreler".
+
+**Doğrulama:** `go build ./...` ✅, `go test ./internal/api/ -count=1` ✅ (yeni:
+`TestListSessionsChipFilterPagesFilteredSet`, `TestListSessionsChipScopeChips`,
+`TestListSessionsChipsEmptyVersusAbsent`, `TestSessionChipKeyClassification`);
+`npx tsc --noEmit` ✅, `npm test` ✅ (83 dosya / 613 test).
+
+## Oturum akışlarındaki sessiz olaylar journal'a bağlandı (2026-09-01) ⏳
+
+**Belirti.** Bir turun teardown tarafından iptal edilmesi, kuyruktan hiç
+çalışmadan düşen bir mesaj, atlanan bir native compaction ve çıktısız kalıp yine
+de faturalanan bir tur hiçbir iz bırakmıyordu: olay ya "kendiliğinden ölmüş" bir
+tur ya da açıklamasız bir rolling fold olarak okunuyordu.
+
+- **Yeni `lifecycle` olay tipi.** Oturum yaşam döngüsü olayları için ayrı tip
+  (`internal/db/debug_journal.go` `DebugLifecycle`); okuyucularda
+  `lifecycleEvents` sayacı, araç `type` enum'u ve UI filtre çipiyle temsil edilir.
+- **9 yeni adlandırılmış olay.** `lifecycle`:
+  `turn_cancelled_by_teardown`, `autonomous_cancelled`, `teardown_grace_exceeded`
+  (`internal/api/session_teardown.go`), `queued_turn_dropped`
+  (`internal/api/inbox_debug.go`). `compaction`: `native_skipped`,
+  `claim_consumed`, `native_fallback_rolling`
+  (`internal/conversation/manager.go` + `nativecompact.go`). `pressure`:
+  `fold_idle_floor` (`internal/conversation/foldtimeout.go`) — fold yalnız
+  `FoldIdleOutputFloor` sayesinde watchdog'dan kurtulduğunda. `llm_call`:
+  `failed_turn_billed` (`internal/agent/toolloop.go` `recordFailedUsage`) —
+  çıktısız ama faturalanan tur; çift sayımı önlemek için aggregate'lere girmez.
+- **`emitDebug` bypass'ı kapandı.** Runtime'a erişemeyen katmanlar (conversation
+  manager, API kuyruk/özet dayanıklılık yolları) artık
+  `internal/db/debug_journal_policy.go` içindeki `AppendDebugEventGated`
+  üzerinden yazar; `DebugJournalEnabled` bayrağı ve kullanıcı cap'i bu ikinci
+  huniye de uygulanır. Ham `AppendDebugEvent` yalnız kapıların içinden çağrılır.
+- **Runtime workspace'leri politikayı devralıyor.** Çalışırken oluşturulan veya
+  attach edilen workspace'ler store'ları açılır açılmaz aynı ayarı alır
+  (`internal/api/workspaces.go` → `applyDebugJournalToStore`); önceden bir sonraki
+  ayar güncellemesine kadar journal açık + varsayılan cap ile kalıyorlardı.
+- Tablo ve operatör notları: `_Docs/38-SESSION-DEBUG.md`.
+
+## Araç izin katmanı ve inbox dayanıklılığı fail-closed oldu (2026-09-01) ⏳
+
+**Belirti.** Bozuk bir izin/konfigürasyon belgesi sessizce "kısıt yok" anlamına
+geliyordu: çözülemeyen `AllowedTools`/`ToolOverrides`/`BlockedTools` belgesi
+kısıtsız bir araç yüzeyi, bozuk `inbox.json` ise boş bir kuyruk üretiyordu.
+
+- **`mcpServerGate` / `allowFunc` / `blockFunc` artık deny-all döner.** Belge
+  çözülemediğinde kapı hiçbir aracı ve hiçbir MCP sunucusunu geçirmez; tur
+  denetlenmemiş bir araç yüzeyiyle başlamak yerine durur
+  (`internal/agent/mcpservergate.go`, `climcp.go`, `codexmcp.go`,
+  `toolsetup.go`). Detay: `_Docs/19-LAZY-TOOL-LOADING.md`,
+  `_Docs/52-MCP-GATEWAY.md`.
+- **Bozuk `inbox.json` karantinaya alınıyor.** Sidecar okunamadığında dosya
+  `inbox.json.corrupt-<unix>` olarak yeniden adlandırılır, kuyruktaki mesajlar
+  **dağıtılmaz** ve durum hem log'a hem oturum debug günlüğüne yazılır
+  (`internal/api/inbox_durability.go` `quarantineInbox`). Detay:
+  `_Docs/58-QUEUE-SENKRON.md`.
+- **`RecoverOrphanedTurns` sessiz erken dönüşü bitti.** `ListSessions` hatası
+  artık loglanır ve debug günlüğüne düşer (`internal/agent/coordination.go`).
+- **Görünürlük.** Dört yol da `db.DebugError` tipinde adlandırılmış olay yazar:
+  `mcp_server_gate_malformed`, `tool_permission_config_malformed`,
+  `inbox_corrupt`, `orphan_recovery_failed` — tablo:
+  `_Docs/38-SESSION-DEBUG.md`.
+
+## Debug journal enum drift'i kapatıldı (2026-09-01) ⏳
+
+**Belirti.** Yeni debug olay tipleri eklendikçe okuma tarafı geride kaldı: bazı
+tipler diskte vardı ama özet/tur görünümünde sayılmıyor, araç şemasında
+filtrelenemiyor ve UI'da çipi bulunmuyordu — yani yazılan olay pratikte
+görünmezdi.
+
+- **Okuyucu arm'ları tamamlandı.** `GetTurnDebug`, `GetDebugSummary` ve
+  `summarizeDebugDetail` eksik tipleri karşılıyor; her tipin ayrı redaksiyon
+  etiketi var.
+- **15 tipin tamamı karşılanıyor.** Her tip artık en az bir sayaç/özet alanı,
+  `read_session_debug` araç şemasındaki `type` enum'u ve UI filtre çipi ile
+  temsil ediliyor; tip → okuyucu tablosu `_Docs/38-SESSION-DEBUG.md`'de.
+- **Frontend hizalaması.** Debug olay tipi union'ı ve çip listesi aynı 15 tipi
+  içeriyor.
+
+## Codex native compaction'ı idle watchdog'u tetiklemiyor (2026-09-01) ⏳
+
+**Belirti (SES2570, TSK693).** Codex `context_compaction` item'ını duyurup
+compaction model çağrısı boyunca susuyordu. `codexIdleOutputTimeout` bu sessizliği
+takılma sayıp süreç ağacını öldürüyor, hata **non-retryable** dönüyor ve oturum
+`blocked` kalıyordu — bağlam %92 dolduğunda, yani tam da compaction'ın gerekli
+olduğu anda.
+
+- **Uçuştaki compaction sayacı.** `codexStreamParser` artık `item.started` ile
+  açılıp `item.completed` ile kapanan compaction'ları sayıyor
+  (`compactionActive`, `compactionInFlight()`). Sayaç yalnız read-loop
+  goroutine'inden yazılıp okunduğu için kilit gerekmiyor.
+- **Sınırlı grace penceresi.** `runAttempt` read loop'unda `case <-idle.C`,
+  compaction uçuştaysa `codexCompactionIdleGrace` (2) ek pencere bağışlayıp
+  timer'ı sıfırlıyor. Hiç tamamlanmayan bir compaction en geç 3× idle
+  penceresinde ölüyor; bu tur idle watchdog'unun (20 dk) altında kalıyor.
+- **Idle takılması artık koşullu retryable.** `retryable = !p.ranTool()`: hiç
+  araç çalışmadıysa turun yan etkisi yok, bir kez yeniden koşulabilir. Retry
+  döngüsü bunu `codexIdleHangError` / `isCodexIdleHang` ile tanıyıp **tek** yeniden
+  koşuyla sınırlıyor — her denemenin tam bir idle penceresi harcaması yüzünden.
+  Hata metni kullanılan grace penceresi sayısını ve retryable etiketini taşıyor.
+- **Testler.** `internal/providers/codexcli_hang_test.go`:
+  `TestCodexIdleWatchdogWaitsOutNativeCompaction`,
+  `TestCodexIdleHangAfterToolIsNotRetryable`; mevcut
+  `TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe` beklentisi
+  "non-retryable" yerine "araç çalışmadı → retryable" olarak güncellendi.
+- **Fold yolu ayrı katman.** Tek atışlık fold/handoff çağrılarının idle tabanı
+  (`conversation.FoldIdleOutputFloor` + `providers.WithMinIdleOutputTimeout`)
+  bağımsız durmaya devam ediyor; bu değişiklik tur içindeki native compaction'ı
+  kapsıyor. Detay: `_Docs/69-CODEX-CLI-SAGLAYICI.md`.
+
+## `run_subagent` senkron-tek moda indi, `stop_subagent` silindi (2026-09-01) ⏳
+
+**Karar.** `run_subagent` artık her zaman senkron çalışır. Şemadaki `wait` alanı
+tek sürümlük bir geçiş için kabul edilmeye devam ediyor ama **kullanımdan
+kaldırıldı ve etkisiz**: `wait:"sync"` (veya alanın hiç verilmemesi) çalışır,
+`wait:"async"` artık hata döndürür. `stop_subagent` aracı tamamen silindi.
+
+- **Neden.** Durdurulabilir bir alt-ajan koşusunun tek üreticisi async daldı.
+  Senkron çağıran, çocuk koşarken araç çağrısının içinde bloklu bekler; o turda
+  ikinci bir araç çağrısı — yani bir iptal çağrısı — yayınlayamaz. Async gidince
+  `stop_subagent`'ın hedefleyebileceği erişilebilir bir koşu kalmadı: araç dar
+  değil, ölü hale geldi. Koordinatör işçileri `Kind="worker"` taşır ve ayrı
+  `stop_worker` ile durdurulur; onlar etkilenmedi.
+- **Yerine ne var.** Turdan uzun sürecek iş için iki yol kaldı: işi kendi içinde
+  tamamlanan birkaç küçük `run_subagent` çağrısına böl, ya da koordinatör moduna
+  geç (`set_coordinator_mode`) ve `spawn_worker` ile arka planda koştur. Spawn guard'ları ve `launchSpawn`'ın
+  iptal kaydı yerinde — hâlâ `spawn_worker`, köprülenen `spawn_session`, peer
+  mesajları, otomasyonlar ve flow'lara hizmet ediyorlar.
+- **Metin temizliği.** Async'i öneren tüm prompt/skill/doküman/arayüz metinleri
+  güncellendi (`default-instructions.md`, `tionharness-self-management` ve
+  `tionharness-autonomous-ops` skill'leri, `25-SUBAGENT-ISOLATION.md`,
+  `22-SPAWN-SESSION.md`, `24-SELF-MANAGEMENT.md`, `47-KOORDINATOR-COKLU-AJAN.md`,
+  `types/settings.ts`, `AppToolsPanel.tsx`). Hiçbir talimat artık modele `wait`
+  göndermesini söylemiyor; alan yalnız bayat çağrıları yumuşak karşılamak için
+  duruyor. Geçmiş kayıtlar (`03-YOL-HARITASI`,
+  bu dosyanın eski girdileri) tarihsel olarak olduğu gibi bırakıldı.
+
 ## CLI olay çözümlemesi toleranslı, kalıcı oturumda watchdog (2026-08-31) ⏳
 
 **Belirti.** `api_error_status` alanı bazı CLI sürümlerinde slug ("rate_limit"),
@@ -161,7 +359,7 @@ Panodan iki kart; ikisi de "olan biteni görünür kıl" ekseninde.
 
 - **TSK513 — beşli oturum kategorisi.** `SessionsSidebar` kapsam çipleri
   `Worker` + `Arşiv` ikilisinden dörde çıktı: `Çalışan` (oturumun kendi turu akıyor)
-  ve `Worker Bekleyen` (kendisi boşta, altındaki en az bir doğrudan worker canlı)
+  ve `Bekleyen` (kendisi boşta, altındaki en az bir doğrudan worker canlı)
   eklendi. Sınıflandırma `sessionKindMeta.ts` içindeki saf `sessionLiveScope()`
   fonksiyonunda; iki değer karşılıklı dışlayıcıdır (kendi turu da akan bir
   koordinatör `Çalışan` sayılır), böylece bir satırı görünür tutmak için iki çipin
@@ -10564,3 +10762,81 @@ doğrulama gösterir.
   repeated Running ve boş/running subagent snapshot ilerleme değil. Yeni child
   output, meaningful substep artışı ve terminal geçiş sayılır. State 512 kaynakla
   sınırlı.
+## Uzun koordinatör oturumu maliyet düşürme paketi (SES2570 türevi) (2026-09-01) ✅
+
+20.7 saatlik tek koordinatör oturumunun (`SES2570`, codex-cli) ölçümünden
+türetilen altı düzeltme. Oturum ağacı: 27 oturum, 8.95M in+out token, 74.7M
+cache-read, `messages.jsonl` 12.33 MB, 5 fold, sıfır commit. Tam analiz ve her
+düzeltmenin gerekçesi: `_Docs\47-KOORDINATOR-COKLU-AJAN.md` §19.
+
+1. **Oturum-kapsamlı `use_skill` dedupe** — 174 skill yüklemesinin 167'si
+   tekrardı (~560K token). `tools.SkillLedger` + `SkillReloadPointer`; fold
+   epoch'u (`Session.CompactionCount`) doğruluk kapısı, `force: true` kaçış yolu.
+   Native araç ve CLI köprüsü aynı defteri paylaşır.
+2. **Spawn-zamanı yetenek kontrolü** — salt-okunur bir ajana verilen dosya-yazma
+   brief'i artık spawn anında reddediliyor (`checkWorkerCapability`). Ayrıca
+   `Registry.unknownToolMessage` izin sınırını "bilinmeyen araç"tan ayırıyor.
+3. **Worker adım izi bildirimden ayrıldı** — `digestWorkerSteps` yalnız kartın
+   render ettiğini (dosya değişiklikleri + todo) saklıyor; 12.33 MB'ın 8.2 MB'ı
+   buydu ve hiç görüntülenmiyordu.
+4. **Durum sorguları push'landı** — `coordinatorSituationBlock` fleet + ajan
+   roster'ı (yetenek etiketli) + panoyu her tura enjekte ediyor ve **chat** yoluna
+   da bağlandı (daha önce yalnız headless yolda vardı). 194 durum çağrısını
+   hedefliyor.
+5. **Doğrulama kapısı tur bütçesi** — `Task.ReviewBounces` + `ReviewRoundBudget`
+   (3) + `<review-gate-exhausted>` bloğu; 7 saatlik reviewer koşu bandını kesiyor.
+6. **Kapsam sözleşmesi** — kart ne yapar / ne YAPMAZ; kapsam dışı bulgu kartı
+   bloklayamaz, yeni kart açılır. Prompt düzeyinde kural (`coordinator.md` +
+   `orchestrator-doctrine` §9).
+
+**Doğrulama turu rozeti (aynı gün, takip):** `ReviewBounces` artık kullanıcıya da
+görünür — `TaskCard`'da `↻ N/3` rozeti (bütçe dolunca kırmızı), `TaskFormModal`'da
+ne yapılacağını söyleyen salt-okunur bant, pano filtre çubuğunda `Doğrulama`
+facet'i (`bounced` / `exhausted`), `get_view board` projeksiyonunda sinyal satırı
+ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşındı
+(`db.ReviewRoundBudget`) — runtime ve view aynı kaynağı okuyor; frontend'deki
+`REVIEW_ROUND_BUDGET` elle senkronlanan aynası. Detay:
+`_Docs\67-BOARD-GORUNUMLERI.md` § "Doğrulama turu rozeti".
+
+**Canlı doğrulamada çıkan üç düzeltme (2026-09-01, aynı gün):**
+
+1. `ReviewBounces` yalnız `MoveTask`'ta sayılıyordu; kart sürükleme ve kart formu
+   `PUT /api/tasks/{id}` → `UpdateTask` yolundan geçiyor ve sayaç hiç artmıyordu —
+   yani rozet tam olarak insanın kullandığı yola görünmezdi. Kural
+   `db.countReviewBounce`'a çıkarıldı ve iki yol da çağırıyor. Alan sunucu-sahipli:
+   `UpdateTask` istemcinin gönderdiği `reviewBounces` değerini yok sayar.
+2. Koordinatörün pano ve doğrulama-kapısı blokları `ListTasks` okuyordu →
+   arşivlenmiş kartlar da sayılıyordu; blok 117 kartlık panoyu 270 kart olarak
+   bildiriyordu. `ListActiveTasks`'a çevrildi (`get_view` zaten onu kullanıyor).
+3. `frontend/src/features/artifacts/artifactGrouping.test.ts:109` — `Draft` tipini
+   doğrudan `Record<string, unknown>`'a cast eden satır `tsc -b`'yi kırıyor ve
+   `npm run build`'i tamamen bloke ediyordu. Gömülü `internal/web/dist` bu yüzden
+   eski kalmıştı, yani derlenen binary güncel arayüzü hiç servis etmiyordu.
+   `as unknown as` ile düzeltildi (TypeScript'in kendi önerdiği çözüm). Hata
+   `8f026b4a` commit'inden beri duruyordu ve CI'daki `npm run build` adımı
+   (`.gitea/workflows/ci.yml:83`) de bunu kırmızıya düşürmüş olmalı.
+
+## Otomatik devam dürtmesi: durdurulan ve yarıda kesilen turlarda susuyor (2026-09-01) ✅
+
+- **Sorun:** "⏰ Otomatik devam — Önceki turda görevi tamamlamadan durdun…" notu, turun
+  neden bittiğine bakmadan yazılıyordu. Watchdog kesmesi (hard/idle), araç-iterasyon
+  tavanı, guardrail durdurması veya bağlam/çıktı tükenmesi ile **yarıda kesilen** bir tur
+  `reconcileTurnOutcome`'dan `err == nil` + `truncated == true` ile döndüğü için
+  `maybeAutoContinue` yine de çalışıyor; kullanıcı hem "iş bitmedi" outcome notunu hem de
+  onun hemen ardından ajanı aynı duvara geri süren dürtmeyi görüyordu. Aynı şekilde
+  insan "Durdur"a bastığında (`CancelSession` → sade `context.Canceled`) döngü,
+  deadline'a özgü "⏱️ Süre doldu…" notunu yazıyordu — yanlış gerekçe.
+- **Fix — `internal/agent/autocontinue.go`:** `maybeAutoContinue` artık `truncated`
+  parametresi alıyor ve yarıda kesilen turda hiç devam turu açmıyor (yalnız log).
+  Döngü başındaki context kontrolü ikiye ayrıldı: **bütçe** dolduysa (yeni
+  `deadlineExpired`: `context.DeadlineExceeded` / `ErrTurnHardTimeout` /
+  `ErrTurnIdleTimeout` cause'u) eski "⏱️ Süre doldu…" notu korunuyor; **elle durdurma**
+  ise sessizce çıkıyor — kullanıcının bilerek durdurduğu iş yeniden başlatılmıyor.
+  Ek olarak devam turunun kendisi bir tavana takılırsa (`classifyTurnSteps` terminal
+  işareti) döngü orada bitiyor.
+- **Çağrı noktaları:** `runSpawn` (`outcome.Truncated()`), scheduler `deliverPrompt` ve
+  `deliverAutomationTurn` (`truncated`) — üçü de yeni argümanı geçiriyor. Hata dalları
+  (`err != nil`) zaten erken dönüyordu, davranışları değişmedi.
+- **Test:** `TestAutoContinueSkipsStoppedAndCutShortTurns` (store'suz runtime ile: dürtme
+  yazılsaydı panik ederdi) + `TestDeadlineExpired`. `go test ./internal/agent/ -count=1`
+  yeşil.

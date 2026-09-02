@@ -888,6 +888,21 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
     sunucu kalır, blocked desen matrisi, kısıtsız ajan her şeyi mount eder, `group:` anahtarları
     yok sayılır).
 
+  **Bozuk izin belgesi → fail-closed (2026-09-01).** `mcpServerGate` imzası artık
+  `(func(string) bool, error)`. **Boş** `AllowedTools` hâlâ "kısıt yok" demektir (nil kapı,
+  davranış değişmedi); ama `AllowedTools` / `ToolOverrides` / `BlockedTools` **çözülemezse**
+  fonksiyon **deny-all** kapı + hata döner. Eskiden `json.Unmarshal` hatası `_ =` ile
+  yutuluyordu → iki liste de boş kalıyor, boş liste "kısıtsız" sayılıyor ve bozuk bir
+  allowlist **her MCP sunucusunu** CLI sürecine mount ediyordu; yani kapının kapatmak için
+  var olduğu delik, tam da belgenin okunamadığı anda açılıyordu.
+  - Çağıran iki yol (`internal/agent/climcp.go` → `writeCLIMCPConfig`,
+    `internal/agent/codexmcp.go` → `codexMCPSpec`) hatayı `logger.Error` ile basar,
+    `db.DebugError` tipinde **`mcp_server_gate_malformed`** debug olayı yazar ve **erken
+    döner** — hiçbir MCP sunucusu mount edilmez, tur yaptırımsız bir araç yüzeyiyle başlamaz.
+  - Ayrıştırma `agent.ParseToolOverridesErr` üzerinden yapılır; lenient `ParseToolOverrides`
+    yalnız görüntüleme yollarına aittir (kural ve tablo: `_Docs/19-LAZY-TOOL-LOADING.md`
+    "Bozuk izin belgesi = fail-closed").
+
   **Politika kararı (Bilal, 2026-08-21) — "sözleşmeyi kabul et":** yerleşik worker
   profilleri (`explore`/`planner`/`coder`/`reviewer`/`validator`/`config`,
   `internal/agent/subagent.go`) **built-in-only** kalır; hiçbirine MCP deseni

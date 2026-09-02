@@ -71,9 +71,11 @@ curl -o block.txt "http://127.0.0.1:6060/debug/pprof/block?debug=1"
 ```
 
 `db.(*DB).mu` bu profillerde üst sıradaysa: store'un tek RWMutex'i altında bir
-tam-tarama okuma yolu var demektir. `appendMessageLocked` bu kilidi **senkron
-dosya yazımı boyunca** tutar ve Go'da bekleyen yazar yeni okurları bloklar —
-yani bir poll ile canlı tur birbirini serileştirir.
+tam-tarama okuma yolu var demektir. Go'da bekleyen bir yazar yeni okurları
+bloklar, yani `mu` altında yapılan her senkron iş bir poll ile canlı turu
+birbirine serileştirir. Mesaj ekleme bu nedenle **artık `mu` altında disk
+yazmaz**: transkript yazımı oturum başına ayrı bir mutex'e taşındı
+(`internal/db/transcript_lock.go`), `mu` yalnız bellek içi haritaları korur.
 
 ## pprof içinde gezinme
 

@@ -997,3 +997,49 @@ Yan düzeltmeler (aynı sınıf hata):
 interaction/chatRuns izolasyonu), `internal/api/session_teardown_test.go`
 (WS-A'nın silinmesi WS-B'nin aynı id'li oturumuna dokunmaz; workspace'siz teardown
 reddedilir).
+
+## Bozuk `inbox.json` — fail-closed karantina (2026-09-01)
+
+Kuyruktaki mesajlar **kullanıcı girdisidir ve başka kopyası yoktur**. Buna rağmen
+`decodeInbox` iki `json.Unmarshal` hatasını da yutuyor, boş bir `persistedInbox`
+döndürüyordu: bozuk bir sidecar boot'ta sessizce **"kuyrukta mesaj yok"** anlamına
+geliyordu — bekleyen her mesaj, kesilen uçuşan head dahil, logda tek satır iz
+bırakmadan düşüyordu.
+
+**Parse artık hata döndürür.** `decodeInbox` imzası
+`([]byte) (persistedInbox, error)`; legacy bare-array ile obje şekli ayrımı
+korunur (`skipLeadingWS` ilk anlamlı bayta bakar), ama çözülemeyen gövde
+`legacy inbox array: …` / `inbox object: …` hatasıyla döner. Boş kuyruk **asla**
+hata yerine geçmez.
+
+**Karantina — `Server.quarantineInbox` (`internal/api/inbox_durability.go`):**
+
+- Dosyayı silmez, `DB.QuarantineInbox` (`internal/db/inbox.go`) ile
+  **`inbox.json.corrupt-<unix>`** adına `rename` eder — elle kurtarılabilir kalır.
+  Adlandırma ayarlar store'unun karantinasını izler. Sidecar hiç yoksa hata
+  değildir (`""` döner).
+- `logger.Error` basar: başarılıysa "inbox.json was corrupt: quarantined, its
+  queued messages were NOT dispatched" (+ hedef yol), rename başarısızsa
+  **"could not be quarantined; queued messages are lost"**.
+- Oturumun debug günlüğüne `db.DebugError` tipinde **`inbox_corrupt`** adlı olay
+  yazar (Debug paneli / `read_session_debug` / anomali taraması görür).
+
+**Boot davranışı (`recoverInboxes`, `internal/api/inbox.go`):** bozuk dosyada
+oturum artık **boş kuyrukla açılmaz** — `quarantineInbox` çağrılır ve o oturum
+`continue` ile atlanır. Diğer oturumların kurtarması etkilenmez.
+
+`ReadInbox`'ın iki başarısızlığı ayrı ele alınır: `ok=false` (sidecar yok) normal
+durumdur, sessizce atlanır; `err != nil` (IO/izin hatası) **karantinaya alınmaz**
+— içerik bozuk değildir, dosya okunamamıştır — ama görünür kılınır:
+`logger.Error` + oturumun debug günlüğüne `db.DebugError` tipinde
+**`inbox_unreadable`** olayı. Önceden ikisi tek `if err != nil || !ok` dalında
+birleşiyor ve okunamayan bir kuyruk hiçbir iz bırakmadan düşüyordu.
+
+**Yazma yolu (`flushInbox`) kontrol akışı düzeltmesi:** eski
+`else if data, err := json.Marshal(...); err == nil` kalıbı marshal hatasında
+gövdeyi atlıyor, **bayat sidecar'ı diskte bırakıyordu** → sonraki boot onu güncel
+kuyruk sanıp replay ediyordu. Artık marshal hatasında `ClearInbox` çağrılır
+(bir flush'ı kaybetmek kurtarılabilir, bayat kuyruğu replay etmek değil) ve
+`ClearInbox`/`WriteInbox` hataları da loglanır — eskiden `_ =` ile yutuluyordu.
+
+Testler: `internal/api/inbox_durability_test.go`.

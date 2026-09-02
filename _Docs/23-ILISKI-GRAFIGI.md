@@ -67,9 +67,9 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   **istemci-tarafı saf fonksiyon** (`networkFilter.ts` → `filterGraph`): düğümü elerken
   ona değen kenarlar ve **kenarsız kalan skill/MCP** düğümleri de düşer; stats
   workspace toplamı olarak korunur. Sağda "N / M düğüm" sayacı + "N filtre ✕" temizle.
-  Filtre hem İlişki hem Canlı modda çalışır; hiç eşleşme yoksa "Filtreye uyan düğüm yok"
-  + temizle butonu. **Arşiv toggle varsayılan kapalı** → arşivlenmiş oturumlar gizli,
-  açılınca görünür (arşiv run kartları kesik-kenar + 🗄 rozetiyle işaretli).
+  Filtre Canlı yerleşimde çalışır; hiç eşleşme yoksa "Filtreye uyan düğüm yok"
+  mesajı ve temizle butonu görünür. **Arşiv toggle varsayılan kapalı** → arşivlenmiş
+  oturumlar gizli, açılınca görünür (arşiv run kartları kesik-kenar + 🗄 rozetiyle işaretli).
 - **Yoğunluk kaydırıcısı (0.4×–2×):** sonraki yeni-düğüm stabilizasyonunda fizik
   itme + yay uzunluğunu ölçekler — yüksek değer = daha sıkı paketleme, düşük = daha
   geniş yayılım. Yoğunluk, tema ve lite değişiklikleri mevcut fiziği yeniden başlatmaz
@@ -98,19 +98,18 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   gözlenen diğer-tab ekleme, güncelleme ve silmeleri three-way merge ile korunur.
   `localStorage` atomik compare-and-swap sunmadığından tam eşzamanlı
   read-modify-write/`setItem` işlemleri last-writer-wins olabilir.
-- Başlık çubuğunda istatistik (ajan/görev/akış/beceri/MCP sayısı) + Yenile. Ayrı bir
-  mod/gösterge satırı yok — **İlişki/Canlı mod geçişi ve "canlı" gösterge satırı UI'dan
-  kaldırıldı**; ağ artık **daima Canlı** (animasyonlu,
-  olaylarda kendini yenileyen board akışı). `NetworkPanel`'de `mode` sabit `'live'`;
-  `relationGraph.workspaceToVis` hâlâ `mode` üzerinde dallanır (ilişki modu ileride geri
-  gelebilir diye kod korundu), ama statik ilişki web'ine giden buton yok.
+- Başlık çubuğunda istatistik (ajan/görev/akış/beceri/MCP sayısı) + Yenile. Ağ tek
+  **Canlı yerleşimi** kullanır; kullanıcı kontrolleri yoğunluk, katman chip'leri ve
+  facet filtreleriyle sınırlıdır.
 
-#### Canlı (live) modu
+#### Canlı yerleşim
+
 Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
+
 - **Workspace board sütun başlıkları** üstte (`physics:false` — solver taşımaz ama
   kullanıcı sürükleyebilir; `fixed` kullanılmaz, bkz. "Sabit alanlar sürüklenebilir").
-  Özel sütun tanımı varsa aynen kullanılır; tanım yoksa beş yerleşik sütun
-  (Yapılacak→Başarısız) fallback olur.
+  Kullanıcı tanımlı `boardColumns` varsa aynen kullanılır; yoksa beş varsayılan sütun
+  (Yapılacak→Başarısız) kullanılır.
 - Her görev **kendi durum sütununa** yaylanır (`task→col` kenarı, kesik çizgi) →
   görevler durumlarına göre sütun altlarında kümelenir.
 - **Aktif bağ:** bir ajan yalnız **şu an çalıştığı** göreve bağlanır — `owns` kenarı
@@ -132,7 +131,7 @@ Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
   yayla buraya çekilir, böylece boşlukta savrulmazlar. Hedefli örnekleri güçlü
   aktif bağ kendi kartına çeker. Hiç hedefsiz örnek yoksa çekirdek hiç çizilmez.
   (Eskiden "Boşta" lobisiydi; ağda artık boşta ajan bulunmadığı için amacı değişti.)
-- **Ajanın akışı/skill/MCP'si:** Canlı modda `uses` (akış→ajan), `skill` ve `mcp`
+- **Ajanın akışı/skill/MCP'si:** Canlı yerleşimde `uses` (akış→ajan), `skill` ve `mcp`
   bağları korunur → ajanın bağlı olduğu akış/beceri/sunucu onunla birlikte sürüklenir.
   Görev/sütun yapısaldır; flow/skill/MCP katmanları chip'lerle açılıp kapatılır.
 - **Canlı kapsam:** Tamamlanmış/geçmiş run düğümleri grafiğe alınmaz. Ajan ve oturum
@@ -182,14 +181,14 @@ Ağ ekranının tek güncel yerleşimi, board akışını canlı gösterir:
 - `types/graph.ts` — `WorkspaceGraph` DTO'su (barrel: `types.ts`).
 - `api/graph.ts` — `graphApi.workspaceGraph()` (barrel: `api.ts`).
 - `features/network/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
-  (`workspaceToVis(graph, visible, mode, boardColumns)`) + kenar/lejant/tür renk
+  (`workspaceToVis(graph, visible, 'live', boardColumns)`) + kenar/lejant/tür renk
   sabitleri + yardımcılar (`tip`/`truncate`). Ajan düğümünün etiketi iki satır:
   ad + canlı kapsam durumu ("Çalışan" / "Bekleyen"); tooltip aynı Türkçe
   durumu gösterir ve aynı ajanın kopyalarını ayırt eder.
 - `features/network/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
-  yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
-  canlı modda merkez-çekimi düşük), **`density`** (itme/yay uzunluğunu ölçekler — canlı
-  `setOptions`), **`highlightNeighbors`** (hover'da komşu-dışı düğüm/kenarları soldurur),
+  yaşam döngüsü, tek Canlı forceAtlas2 fizik yerleşimi. Prop'lar: **`density`**
+  (itme/yay uzunluğunu ölçekler — canlı `setOptions`), **`highlightNeighbors`**
+  (hover'da komşu-dışı düğüm/kenarları soldurur),
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
   konumlarını korur), stabilize sonrası `fit`; workspace/sürüm anahtarlı kalıcı
   koordinatları uygular, tam kayıtlı açılışta fiziği kapatır ve yeni düğümlerde kısa
