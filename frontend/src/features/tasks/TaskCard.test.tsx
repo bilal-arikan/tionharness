@@ -140,4 +140,27 @@ describe('TaskCard task id', () => {
     expect(container.textContent).not.toContain('temp-123')
     expect(card?.getAttribute('aria-label')).not.toContain('görev kimliği')
   })
+
+  it('shows no review-gate badge on a card that never failed a verification round', () => {
+    const container = renderCard()
+
+    expect(container.querySelector('[data-testid="task-review-gate"]')).toBeNull()
+  })
+
+  it('warns with the review-gate badge once the card has bounced out of review', () => {
+    const container = renderCard({ reviewBounces: 1 })
+    const badge = container.querySelector<HTMLElement>('[data-testid="task-review-gate"]')
+
+    expect(badge?.textContent).toContain('1/3')
+    expect(badge?.getAttribute('title')).toContain('1 kez geri döndü')
+    expect(badge?.style.color).toContain('--color-warning')
+  })
+
+  it('turns the review-gate badge red at the budget, where the coordinator is told to stop', () => {
+    const container = renderCard({ reviewBounces: 3 })
+    const badge = container.querySelector<HTMLElement>('[data-testid="task-review-gate"]')
+
+    expect(badge?.textContent).toContain('3/3')
+    expect(badge?.style.color).toContain('--color-danger')
+  })
 })

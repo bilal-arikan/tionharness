@@ -1,9 +1,10 @@
 import { memo } from 'react'
-import { Paperclip, ArchiveRestore } from 'lucide-react'
+import { Paperclip, ArchiveRestore, RotateCcw } from 'lucide-react'
 import type { Agent, Flow, Task } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { taskCardShadowClass } from './taskCardAppearance'
+import { reviewGateBadge } from './reviewGate'
 
 // Priority chip colors/labels, keyed by the stored priority slug.
 const PRIORITY_META: Record<string, { label: string; color: string }> = {
@@ -83,7 +84,8 @@ function TaskCardImpl({
   const { owner, flow, depIds, unmetDeps, unmetColColor, image } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
   const pending = t.id.startsWith('temp-')
-  const hasAttributeBadges = Boolean(t.priority || (t.tags?.length ?? 0) > 0)
+  const reviewGate = reviewGateBadge(t.reviewBounces)
+  const hasAttributeBadges = Boolean(t.priority || (t.tags?.length ?? 0) > 0 || reviewGate)
   const hasMetadata = Boolean(
     owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0,
   )
@@ -225,6 +227,22 @@ function TaskCardImpl({
               }}
             >
               ● {PRIORITY_META[t.priority].label}
+            </span>
+          )}
+          {/* Review-gate badge: how many verification rounds this card has
+              FAILED. Absent until the first bounce, red once the backend stops
+              accepting another review round (see reviewGate.ts). */}
+          {reviewGate && (
+            <span
+              data-testid="task-review-gate"
+              title={reviewGate.title}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${reviewGate.color} 14%, transparent)`,
+                color: `color-mix(in srgb, ${reviewGate.color} 75%, var(--color-text))`,
+              }}
+            >
+              <RotateCcw size={10} /> {reviewGate.label}
             </span>
           )}
           {t.tags?.map((tag) => (

@@ -6,6 +6,7 @@
 
 import type { BoardFilter, BoardSort, Task } from '@/types'
 import { PRIORITY_ORDER } from './boardViewTypes'
+import { REVIEW_ROUND_BUDGET } from '../reviewGate'
 import { compareText } from '@/shared/lib/intl'
 
 // foldForSearch normalises text for substring matching.
@@ -74,6 +75,11 @@ export function filterTasks(all: Task[], filter: BoardFilter): Task[] {
     }
     if (filter.dep) {
       if (depState(t, byID) !== filter.dep) return false
+    }
+    if (filter.review) {
+      const bounces = t.reviewBounces ?? 0
+      if (filter.review === 'bounced' && bounces < 1) return false
+      if (filter.review === 'exhausted' && bounces < REVIEW_ROUND_BUDGET) return false
     }
     return true
   })

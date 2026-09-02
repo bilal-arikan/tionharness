@@ -111,3 +111,28 @@ describe('sortTasks', () => {
     expect(out.map((t) => t.id)).toEqual(['crit', 'low', 'none'])
   })
 })
+
+describe('filterTasks · review facet', () => {
+  const tasks = [
+    task({ id: 'clean' }),
+    task({ id: 'once', reviewBounces: 1 }),
+    task({ id: 'spent', reviewBounces: 3 }),
+    task({ id: 'over', reviewBounces: 5 }),
+  ]
+
+  it('is inactive when unset', () => {
+    expect(filterTasks(tasks, {}).map((t) => t.id)).toEqual(['clean', 'once', 'spent', 'over'])
+  })
+
+  it('bounced keeps every card that came back from review at least once', () => {
+    expect(filterTasks(tasks, { review: 'bounced' }).map((t) => t.id)).toEqual([
+      'once',
+      'spent',
+      'over',
+    ])
+  })
+
+  it('exhausted keeps only cards at or past the round budget', () => {
+    expect(filterTasks(tasks, { review: 'exhausted' }).map((t) => t.id)).toEqual(['spent', 'over'])
+  })
+})

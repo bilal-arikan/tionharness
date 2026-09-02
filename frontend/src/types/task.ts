@@ -26,6 +26,11 @@ export interface Task {
   // Archived cards are hidden from the active board (reversible soft-hide). Only
   // present/true on archived cards; the default board list omits them entirely.
   archived?: boolean
+  // How many times this card has returned from the review column to a working
+  // one — i.e. how many verification rounds it has FAILED. Server-maintained
+  // (db.MoveTask); absent/0 on a card that has never been sent back. Rendered as
+  // the review-gate badge (see reviewGate.ts).
+  reviewBounces?: number
   lastRunId: string
   lastRunStatus: string
   lastRunAt: number

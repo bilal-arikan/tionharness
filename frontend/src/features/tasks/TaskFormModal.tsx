@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Copy,
   RefreshCw,
+  RotateCcw,
   X,
 } from 'lucide-react'
 import { api } from '@/api'
@@ -13,6 +14,7 @@ import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority, Artif
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
 import { TaskArtifactRefs } from './TaskArtifactRefs'
+import { reviewGateBadge } from './reviewGate'
 import { Button, ModalOverlay, toast } from '@/shared/components'
 import { avatarForeground, normalizeAvatar } from '@/shared/lib/avatar'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -98,6 +100,8 @@ export function TaskFormModal({
   const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
+  // Server-maintained failed-verification-round count; not part of the edit form.
+  const reviewGate = reviewGateBadge(task?.reviewBounces)
   const [archiving, setArchiving] = useState(false)
   // Dependencies picker is collapsible; open by default only when the task
   // already has dependencies, so the section stays out of the way otherwise.
@@ -292,6 +296,35 @@ export function TaskFormModal({
 
         {/* Body */}
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+          {/* Review-gate notice. Read-only: the count is server-maintained by
+              MoveTask, so there is nothing here to edit — the value is shown
+              because a card that keeps bouncing out of review is the single
+              strongest signal that its SCOPE is wrong, and that is editable
+              right below. */}
+          {reviewGate && (
+            <div
+              data-testid="task-detail-review-gate"
+              className="flex items-start gap-2 rounded border px-3 py-2 text-xs"
+              style={{
+                borderColor: `color-mix(in srgb, ${reviewGate.color} 40%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${reviewGate.color} 10%, transparent)`,
+              }}
+            >
+              <RotateCcw size={14} className="mt-px shrink-0" style={{ color: reviewGate.color }} />
+              <div className="min-w-0">
+                <div className="font-medium">
+                  {reviewGate.exhausted
+                    ? `Doğrulama bütçesi doldu (${reviewGate.label})`
+                    : `İncelemeden ${reviewGate.count} kez geri döndü (${reviewGate.label})`}
+                </div>
+                <div className="mt-0.5 text-[var(--color-text-dim)]">
+                  {reviewGate.exhausted
+                    ? 'Yeni bir inceleme turu açmak yakınsamıyor. Kartı geçen kısma daralt ve reddedilen kısmı yeni bir karta taşı, ya da karar için kullanıcıya sor.'
+                    : 'Kapsam sözleşmesini gözden geçir: kapsam dışı bir bulgu kartı bloklamamalı, yeni kart olarak açılmalı.'}
+                </div>
+              </div>
+            </div>
+          )}
           <Field label="Açıklama">
             <textarea
               ref={descRef}

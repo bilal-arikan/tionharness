@@ -63,6 +63,11 @@ mümkün değil, dolayısıyla radyo düğmesi — çoklu seçim yanlış bir zi
 kurardı. `dues` ise çoklu, çünkü en faydalı kombinasyon ("bugün **veya** zaten
 gecikmiş") tekil enum ile ifade edilemiyordu.
 
+`review` de tekil ve aynı gerekçeyle: `exhausted`, `bounced`'ın **öz alt
+kümesidir** (bütçesi dolan kart zaten en az bir kez geri dönmüştür), yani ikisini
+birlikte seçmenin anlamı olmazdı. Değerler `Task.reviewBounces` üzerinden okunur:
+`bounced` ≥ 1, `exhausted` ≥ `REVIEW_ROUND_BUDGET`.
+
 ### Türkçe arama katlaması
 
 Metin araması `toLocaleLowerCase('tr')` **kullanmaz**. Türkçe küçültme `I`→`ı`
@@ -204,3 +209,35 @@ Testler: `filterTasks.test.ts`, `deriveColumns.test.ts` (saf fonksiyonlar),
   zoom. Kalabalığa karşı filtreden sonraki en büyük kazanç.
 - **Ajan tarafı görünüm üretimi** — `BoardViewDef` zaten tipli; bir
   self-management aracı "bloke işlerimi göster" görünümünü kendi kaydedebilir.
+
+## Doğrulama turu rozeti (2026-09-01)
+
+Bir kart `review` sütunundan çalışma sütununa her düştüğünde `Task.ReviewBounces`
+artar (`review → done` bir PASS'tir ve sayılmaz). Kural `db.countReviewBounce`
+içindedir ve board state'i değiştirebilen **her iki** yazma yolu onu çağırır:
+`MoveTask` (move_task aracı) ve `UpdateTask` (kart sürükleme / kart formunun
+`PUT /api/tasks/{id}` isteği). Alan sunucu-sahiplidir — istemcinin gönderdiği
+`reviewBounces` değeri yok sayılır. Bu sayaç
+koordinatörün doğrulama koşu bandına girdiğini gösteren tek dayanıklı kayıttır —
+gerekçe ve backend tarafı: `_Docs\47-KOORDINATOR-COKLU-AJAN.md` §19.5.
+
+Panoda üç yerde görünür:
+
+| Yer | Ne gösterir |
+|-----|-------------|
+| `TaskCard` rozeti | `↻ N/3`; ilk geri dönüşten itibaren sarı, bütçe dolunca kırmızı |
+| `TaskFormModal` bandı | Salt-okunur açıklama + ne yapılacağı (daralt / kullanıcıya sor) |
+| `Doğrulama` facet'i | `bounced` / `exhausted` ile panoyu daraltır |
+
+Ajan tarafındaki `get_view board` projeksiyonu aynı durumu kendi sinyal satırıyla
+bildirir (`↻ N kart doğrulama bütçesini doldurdu`), kart drill-down'ı ise ilk
+geri dönüşten itibaren `↻ doğrulama turu: N/3 başarısız` satırını ekler.
+
+**Bütçe iki yerde yazılıdır ve elle senkron tutulur:** `db.ReviewRoundBudget`
+(Go, tek kaynak — runtime + view onu okur) ve `REVIEW_ROUND_BUDGET`
+(`frontend/src/features/tasks/reviewGate.ts`). Frontend'in Go sabitini okuma yolu
+yok; "3/3" yazarken backend'in 4'te eskale etmesi rozetin hiç olmamasından
+kötüdür, o yüzden ikisi birlikte değiştirilir.
+
+Rozet **sıfır turda hiç çıkmaz**: pano zaten yoğun ve "0 başarısız tur" her
+kartın normal hâli.

@@ -162,3 +162,69 @@ func TestBoardCardDrilldownExtras(t *testing.T) {
 		t.Errorf("plain card must not render empty extras:\n%s", plain.Text())
 	}
 }
+
+// TestBoardFlagsReviewTreadmill: a card that has exhausted its verification
+// round budget is a board-level signal, not just a coordinator-prompt one — the
+// same condition surfaces wherever the board is read.
+func TestBoardFlagsReviewTreadmill(t *testing.T) {
+	now := time.Now()
+	in := boardFixture(now)
+	in.Tasks = append(in.Tasks,
+		db.Task{ID: "T9", Title: "treadmill", BoardState: db.BoardInProgress,
+			UpdatedAt: now.Unix(), ReviewBounces: db.ReviewRoundBudget},
+		// Under budget: not a treadmill yet, must NOT be named.
+		db.Task{ID: "T10", Title: "one bounce", BoardState: db.BoardInProgress,
+			UpdatedAt: now.Unix(), ReviewBounces: 1},
+		// Shipped despite the rounds: no longer on a treadmill.
+		db.Task{ID: "T11", Title: "shipped late", BoardState: db.BoardDone,
+			UpdatedAt: now.Unix(), ReviewBounces: db.ReviewRoundBudget + 2},
+	)
+	v, err := ProjectBoard(in, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	// Assert on the treadmill LINE, not the whole view: T10 legitimately appears
+	// in the unrelated "changed in 24h" signal.
+	var line string
+	for _, ln := range strings.Split(txt, "\n") {
+		if strings.Contains(ln, "doğrulama bütçesini doldurdu") {
+			line = ln
+			break
+		}
+	}
+	if line == "" {
+		t.Fatalf("board must flag the over-budget card:\n%s", txt)
+	}
+	if !strings.Contains(line, "T9") {
+		t.Errorf("treadmill signal must name T9: %q", line)
+	}
+	if strings.Contains(line, "T10") || strings.Contains(line, "T11") {
+		t.Errorf("treadmill signal must not name an under-budget or finished card: %q", line)
+	}
+}
+
+// TestBoardCardDetailShowsReviewRounds: the drill-down reports rounds from the
+// FIRST bounce — the reader deciding whether to open another round needs it
+// before the budget is gone.
+func TestBoardCardDetailShowsReviewRounds(t *testing.T) {
+	now := time.Now()
+	in := BoardInput{
+		Now: now,
+		Sub: "T1",
+		Tasks: []db.Task{
+			{ID: "T1", Title: "twice back", BoardState: db.BoardInProgress, UpdatedAt: now.Unix(), ReviewBounces: 2},
+		},
+	}
+	v, err := ProjectBoard(in, LevelCard)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	if !strings.Contains(txt, "doğrulama turu: 2/3 başarısız") {
+		t.Errorf("card detail must report the round count:\n%s", txt)
+	}
+	if strings.Contains(txt, "bütçe doldu") {
+		t.Errorf("under-budget card must not claim the budget is spent:\n%s", txt)
+	}
+}

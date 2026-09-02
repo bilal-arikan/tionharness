@@ -7,6 +7,7 @@
 
 import type {
   BoardDepFilter,
+  BoardReviewFilter,
   BoardFilter,
   BoardGroupBy,
   BoardSort,
@@ -95,6 +96,11 @@ export const DEP_LABELS: Record<Exclude<BoardDepFilter, ''>, string> = {
   ready: 'Hazır (bağımlılıkları bitti)',
 }
 
+export const REVIEW_LABELS: Record<Exclude<BoardReviewFilter, ''>, string> = {
+  bounced: 'İncelemeden geri döndü',
+  exhausted: 'Doğrulama bütçesi doldu',
+}
+
 // resolveView fills in the optional groupBy/sort so downstream code never has
 // to branch on undefined.
 export function resolveView(v: BoardViewDef | null): ResolvedView {
@@ -117,6 +123,7 @@ export function countActiveFacets(f: BoardFilter): number {
   if (f.agentIds?.length) n++
   if (f.columns?.length) n++
   if (f.dep) n++
+  if (f.review) n++
   return n
 }
 
@@ -131,6 +138,7 @@ export function sameView(a: ResolvedView, b: ResolvedView): boolean {
   return (
     (fa.text ?? '') === (fb.text ?? '') &&
     (fa.dep ?? '') === (fb.dep ?? '') &&
+    (fa.review ?? '') === (fb.review ?? '') &&
     set(fa.priorities) === set(fb.priorities) &&
     set(fa.tags) === set(fb.tags) &&
     set(fa.agentIds) === set(fb.agentIds) &&

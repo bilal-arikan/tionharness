@@ -22,6 +22,12 @@ export type BoardSort = 'updated' | 'priority' | 'deps' | 'title'
 // 'ready' = has dependencies and all are done.
 export type BoardDepFilter = '' | 'blocked' | 'ready'
 
+// Narrows the board by a card's failed-verification-round count
+// (Task.reviewBounces). 'bounced' = came back from review at least once;
+// 'exhausted' = reached the round budget, where the backend stops accepting
+// another review round. '' = facet inactive.
+export type BoardReviewFilter = '' | 'bounced' | 'exhausted'
+
 // Sentinel used in BoardFilter.agentIds to match tasks with no owner agent.
 // A real agent id can never be '-', so this cannot collide.
 export const UNASSIGNED_AGENT_ID = '-'
@@ -38,6 +44,10 @@ export interface BoardFilter {
   // Single-valued: blocked and ready are mutually exclusive states of one task,
   // so this renders as a radio rather than a checklist.
   dep?: BoardDepFilter
+  // Single-valued for the same reason as dep: 'exhausted' is a strict subset of
+  // 'bounced', so offering both at once would be a checklist whose combinations
+  // mean nothing.
+  review?: BoardReviewFilter
 }
 
 // A named filter + layout preset stored per workspace. Built-in views live in

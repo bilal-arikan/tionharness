@@ -11,6 +11,7 @@ import { FacetDropdown, type FacetOption } from './FacetDropdown'
 import { SavedViewMenu } from './SavedViewMenu'
 import {
   DEP_LABELS,
+  REVIEW_LABELS,
   GROUP_BY_LABELS,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -112,6 +113,11 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
     label: DEP_LABELS[d],
   }))
 
+  const reviewOptions: FacetOption[] = (['bounced', 'exhausted'] as const).map((r) => ({
+    value: r,
+    label: REVIEW_LABELS[r],
+  }))
+
   const activeFacets = countActiveFacets(f)
   const filtering = activeFacets > 0
 
@@ -195,6 +201,13 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
         options={depOptions}
         selected={f.dep ? [f.dep] : []}
         onChange={(v) => patch({ dep: (v[0] ?? '') as never })}
+        mode="single"
+      />
+      <FacetDropdown
+        label="Doğrulama"
+        options={reviewOptions}
+        selected={f.review ? [f.review] : []}
+        onChange={(v) => patch({ review: (v[0] ?? '') as never })}
         mode="single"
       />
       <FacetDropdown

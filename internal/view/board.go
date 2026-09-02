@@ -163,6 +163,16 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 		l.addIf(card.WorktreeLastError != "", "✗ worktree hatası: %s",
 			clip(compactPaths(card.WorktreeLastError), 120))
 	}
+	// Failed verification rounds. Shown from the FIRST bounce (not only past the
+	// budget): on a single card's drill-down, "this came back from review twice"
+	// is exactly the context a reader needs before opening a third round.
+	if card.ReviewBounces > 0 {
+		mark := ""
+		if card.ReviewBounces >= db.ReviewRoundBudget {
+			mark = " — bütçe doldu, yeni inceleme turu açma"
+		}
+		l.add("↻ doğrulama turu: %d/%d başarısız%s", card.ReviewBounces, db.ReviewRoundBudget, mark)
+	}
 	if card.BoardState == db.BoardFailed {
 		l.add("✗ kart başarısız sütunda")
 	}
@@ -277,6 +287,10 @@ func boardSignals(in BoardInput, cols []boardColumn, now time.Time) []string {
 		out = append(out, fmt.Sprintf("✗ %d başarısız kart: %s",
 			len(failed), namesOf(failed, boardSignalCards)))
 	}
+	if treadmill := reviewTreadmillCards(in.Tasks); len(treadmill) > 0 {
+		out = append(out, fmt.Sprintf("↻ %d kart doğrulama bütçesini doldurdu (≥%d tur): %s",
+			len(treadmill), db.ReviewRoundBudget, namesOf(treadmill, boardSignalCards)))
+	}
 	if blocked := blockedCards(in.Tasks); len(blocked) > 0 {
 		out = append(out, fmt.Sprintf("⛔ %d kart bağımlılıkla bloke: %s",
 			len(blocked), namesOf(blocked, boardSignalCards)))
@@ -357,6 +371,25 @@ func cardsInColumn(cols []boardColumn, key string) []db.Task {
 }
 
 // blockedCards are cards with at least one dependency that is not done.
+// reviewTreadmillCards are the OPEN cards that have failed at least
+// db.ReviewRoundBudget verification rounds — the board's view of the same
+// condition the coordinator is handed as <review-gate-exhausted>. A card that
+// reached done or was cancelled is excluded: however many rounds it took, it is
+// no longer on a treadmill.
+func reviewTreadmillCards(tasks []db.Task) []db.Task {
+	var out []db.Task
+	for _, t := range tasks {
+		if t.ReviewBounces < db.ReviewRoundBudget {
+			continue
+		}
+		if t.BoardState == db.BoardDone || t.BoardState == db.BoardCancelled {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
 func blockedCards(tasks []db.Task) []db.Task {
 	done := map[string]bool{}
 	for _, t := range tasks {
