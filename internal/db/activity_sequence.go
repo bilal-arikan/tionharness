@@ -69,6 +69,14 @@ func (d *DB) reconcileActivitySequence() error {
 func (d *DB) reserveActivitySequence(dir string, wal cliReplyWAL, messageDelta, toolDelta int64) (cliReplyWAL, error) {
 	d.activitySequenceMu.Lock()
 	defer d.activitySequenceMu.Unlock()
+	// The WAL is the FIRST write of an append, and durableAtomicWriteBytes creates
+	// the directory it writes into. Without this check an append to a session whose
+	// directory is gone (deleted underneath us, or a storage fault) would silently
+	// re-create it and then succeed, resurrecting a session the caller believes is
+	// gone — and defeating the failure the caller must be told about.
+	if _, err := os.Stat(dir); err != nil {
+		return cliReplyWAL{}, err
+	}
 	wal.WorkspaceMessagePrevious = d.workspaceMessageTotal
 	wal.WorkspaceToolPrevious = d.workspaceToolTotal
 	wal.WorkspaceMessageTotal = d.workspaceMessageTotal + messageDelta

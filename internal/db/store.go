@@ -1285,6 +1285,16 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// recomputed from the message lines on load and refreshed by the next full
 	// rewrite (title/summary change).
 	if appendErr := d.appendMessageLine(m.SessionID, m); appendErr != nil {
+		// AddMessage's contract is "a failed append leaves nothing behind". Unlike
+		// AddMessageWithCLIState — whose WAL is the recovery record for a multi-file
+		// commit and is meant to outlive a crash — this WAL only covers the single
+		// line that just failed to land. Leaving it would make every later operation
+		// on this session replay a message the caller was already told did not
+		// persist, and a permanently unwritable transcript would keep failing there.
+		if removeErr := durableRemove(walPath); removeErr != nil {
+			tl.Unlock()
+			return m, errors.Join(appendErr, fmt.Errorf("retire message recovery: %w", removeErr))
+		}
 		tl.Unlock()
 		return m, appendErr
 	}
