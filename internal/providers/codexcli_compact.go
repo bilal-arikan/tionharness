@@ -36,8 +36,11 @@ type codexRPCEnvelope struct {
 // this covers the other case: the client stays connected and codex itself
 // wedges. Without it /compact blocks forever and keeps holding the session's
 // command-turn lock. Generous, because compacting a long thread is a model call
-// — it only has to be shorter than "never".
-const codexCompactStepTimeout = 5 * time.Minute
+// — it only has to be shorter than "never". Kept in step with the fold floor the
+// rolling paths use (conversation.FoldIdleOutputFloor): both bound the same
+// "single request, then silence until the model's first token" shape, and a
+// near-full context window can sit in that silence for many minutes.
+const codexCompactStepTimeout = 10 * time.Minute
 
 var codexCompactStepTimeoutDuration = codexCompactStepTimeout
 

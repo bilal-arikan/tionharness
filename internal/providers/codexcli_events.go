@@ -175,6 +175,12 @@ type codexStreamParser struct {
 	// drop is reported in full and the rest are counted for the finish summary.
 	notedParseDrop bool
 	parseDropCount int
+	// compactionActive counts context_compaction items that started without a
+	// matching completion. Codex emits nothing at all while it compacts, so the
+	// stdout-silence watchdog must not read that gap as a hang — runAttempt asks
+	// through compactionInFlight before killing. Written by feed and read by the
+	// same read-loop goroutine, so it needs no lock.
+	compactionActive int
 }
 
 func newCodexParser(model string, onEvent func(TraceStep)) *codexStreamParser {
@@ -399,6 +405,7 @@ func (p *codexStreamParser) feedContextCompaction(evType string, it *codexItem) 
 	if evType != "item.completed" {
 		if evType == "item.started" {
 			p.itemStart[it.ID] = time.Now()
+			p.compactionActive++
 			step.Running = true
 			if p.onEvent != nil {
 				p.onEvent(step)
@@ -406,8 +413,16 @@ func (p *codexStreamParser) feedContextCompaction(evType string, it *codexItem) 
 		}
 		return
 	}
+	if p.compactionActive > 0 {
+		p.compactionActive--
+	}
 	p.setStep(it, true, step)
 }
+
+// compactionInFlight reports whether a native context_compaction has started and
+// not yet completed. The stdout-silence watchdog uses it to tell a compaction
+// pause from a wedged process.
+func (p *codexStreamParser) compactionInFlight() bool { return p.compactionActive > 0 }
 
 // setStep creates or updates the trace step backing this item id, and emits it
 // once the item is final. TraceStep.Batch is deliberately left at 0 everywhere:

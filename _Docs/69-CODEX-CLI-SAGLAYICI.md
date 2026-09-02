@@ -1079,9 +1079,32 @@ Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
   yapılandırılır, 0 = kapalı), ilk çıktıdan sonra ardışık iki stdout
   satırı arasındaki sessizliği ölçer. Her satır timer'ı sıfırlar; timer yaşam
   döngüsü `defer idle.Stop()` ile kapatılır.
-- Idle süresi dolunca `proc.KillTree` tüm proses ağacını öldürür. Hata
-  **non-retryable** döner ve o ana kadarki stdout tail'ini taşır; böylece kısmi
-  içerik kurtarma korunurken aynı yan etkili turun yeniden çalışması engellenir.
+- Idle süresi dolunca `proc.KillTree` tüm proses ağacını öldürür. Hata o ana
+  kadarki stdout tail'ini taşır ve **turda hiç araç çalışmadıysa retryable**
+  döner (`retryable = !p.ranTool()`): yan etkisi olmayan bir takılma tekrar
+  denenebilir. Bir araç çalıştıysa hata terminaldir — aynı yan etki ikinci kez
+  üretilmez. Retry döngüsü idle takılmasına **tek bir yeniden koşu** hakkı verir
+  (`codexIdleHangError` + `isCodexIdleHang`); temiz çöküşten farkı, her denemenin
+  tam bir idle penceresi harcamasıdır.
+- **Native compaction sessizliği idle sayılmaz.** Codex `context_compaction`
+  item'ını `item.started` ile duyurur ve compaction model çağrısı dönene kadar
+  hiçbir şey yazmaz; dolmaya yakın bir bağlamda bu boşluk idle penceresini
+  rahatça aşar. Parser uçuştaki compaction'ları sayar
+  (`codexStreamParser.compactionActive` / `compactionInFlight`), read loop de
+  compaction sürerken `codexCompactionIdleGrace` (2) ek pencere bağışlar. Yani
+  hiç tamamlanmayan bir compaction en geç 3× idle penceresinde ölür; hata mesajı
+  kaç grace penceresi kullanıldığını yazar. Regresyon: SES2570 — compaction
+  duyurulduktan sonra gelen sessizlik turu öldürüyor, oturum `blocked` kalıyordu.
+- **Tek atışlık fold çağrıları (`/handoff`, `/compact`, reaktif ara-döngü
+  sıkıştırması) bu pencereyi 10 dakikaya yükseltir.** Bir tur içinde codex
+  sürekli tool/step olayı yayar, dolayısıyla 90 saniyelik sessizlik gerçekten
+  takılma demektir; fold ise tüm transkripti tek istekte gönderip modelin ilk
+  token'ını bekler ve dolmaya yakın bir bağlam penceresinde bu boşluk
+  dakikalarca sürebilir. Çağrı `providers.WithMinIdleOutputTimeout` ile ctx
+  üzerinde bir **taban** taşır (`conversation.FoldIdleOutputFloor`);
+  `resolveIdleOutputWindow` pencereyi yalnız yükseltir — global ayar daha
+  büyükse o kazanır, watchdog kapalıysa (`codexStdoutIdleSec <= 0`) kapalı
+  kalır. Taban, tur idle watchdog'unun (varsayılan 20 dakika) altındadır.
 
 Bu watchdog, codex'in başlattığı `adb` daemon'u gibi bir torunun stdout pipe'ını
 miras alıp codex öldükten sonra da açık tuttuğu gerçek yetim inflight turunu
@@ -1104,6 +1127,13 @@ Regresyon testleri: `internal/proc/reap_pipe_test.go`
 kısa süre enjekte eder; ikisi de test binary'sini yeniden exec ederek stdout
 pipe'ını açık tutan gerçek bir torun proses kurar. Düzeltme geri alındığında
 düşerler (doğrulandı).
+
+Compaction grace ve retry sınıflandırması için aynı dosyada
+`TestCodexIdleWatchdogWaitsOutNativeCompaction` (compaction duyurulduktan sonraki
+sessizlik en az `codexCompactionIdleGrace + 1` pencere yaşamalı) ve
+`TestCodexIdleHangAfterToolIsNotRetryable` (araç çalıştıktan sonraki takılma
+retryable olmamalı) vardır; ikisi de `runCodexStallHelper` üzerinden tek satır
+yazıp susan sahte bir codex çalıştırır.
 
 ---
 

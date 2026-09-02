@@ -138,8 +138,13 @@ func TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe(t *testing.T) 
 	if err == nil {
 		t.Fatal("runAttempt returned no idle timeout error")
 	}
-	if retryable {
-		t.Fatal("idle timeout error was retryable")
+	// The helper ran no tool before stalling, so the attempt had no side effects
+	// and re-running it once is safe.
+	if !retryable {
+		t.Fatal("idle timeout error with no tool executed was not retryable")
+	}
+	if !isCodexIdleHang(err) {
+		t.Fatalf("idle timeout error is not classified as an idle hang: %v", err)
 	}
 	if message := err.Error(); !strings.Contains(message, window.String()) || !strings.Contains(message, "idle-test-output") {
 		t.Fatalf("idle timeout error lacks timeout or output tail: %v", err)
@@ -189,5 +194,81 @@ func TestCodexHelperSleeps(t *testing.T) {
 	if os.Getenv("CODEX_TEST_HELPER") != "sleep" {
 		t.Skip("helper: only runs under the re-exec in TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe")
 	}
+	time.Sleep(60 * time.Second)
+}
+
+// Regression (SES2570): codex announced a native context_compaction and then
+// went silent for the whole compaction model call. The stdout-silence watchdog
+// read that as a hang and killed a turn that was making progress. It must now
+// forgive codexCompactionIdleGrace windows first.
+func TestCodexIdleWatchdogWaitsOutNativeCompaction(t *testing.T) {
+	if os.Getenv("CODEX_TEST_HELPER") != "" {
+		return
+	}
+	const window = 150 * time.Millisecond
+	err, elapsed, retryable := runCodexStallHelper(t, window,
+		`{"type":"item.started","item":{"id":"c1","type":"context_compaction"}}`)
+	if err == nil {
+		t.Fatal("runAttempt returned no idle timeout error")
+	}
+	// grace windows + the final one that actually kills.
+	if min := time.Duration(codexCompactionIdleGrace+1) * window; elapsed < min-20*time.Millisecond {
+		t.Fatalf("killed after %s, want at least %s: the compaction grace window did not apply", elapsed, min)
+	}
+	if !strings.Contains(err.Error(), "compaction grace window") {
+		t.Fatalf("idle error does not report the grace windows: %v", err)
+	}
+	if !retryable {
+		t.Fatal("a stalled compaction with no tool executed was not retryable")
+	}
+}
+
+// A stall AFTER a tool ran may have side effects on disk, so re-running the turn
+// is not free: it must come back non-retryable even though the diagnosis is the
+// same idle watchdog.
+func TestCodexIdleHangAfterToolIsNotRetryable(t *testing.T) {
+	if os.Getenv("CODEX_TEST_HELPER") != "" {
+		return
+	}
+	err, _, retryable := runCodexStallHelper(t, 150*time.Millisecond,
+		`{"type":"item.completed","item":{"id":"t1","type":"command_execution","command":"touch x","exit_code":0,"status":"completed"}}`)
+	if err == nil {
+		t.Fatal("runAttempt returned no idle timeout error")
+	}
+	if retryable {
+		t.Fatal("idle timeout after a tool call was retryable")
+	}
+}
+
+// runCodexStallHelper runs a fake codex that prints line, then stalls until it is
+// killed. It returns the attempt's error, how long the attempt took, and whether
+// the error was reported as retryable.
+func runCodexStallHelper(t *testing.T, window time.Duration, line string) (error, time.Duration, bool) {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Skipf("no test binary path: %v", err)
+	}
+	t.Setenv("CODEX_TEST_STALL_LINE", line)
+
+	originalTimeout := codexIdleOutputWindow()
+	SetCodexIdleOutputTimeout(window)
+	t.Cleanup(func() { SetCodexIdleOutputTimeout(originalTimeout) })
+
+	c := &CodexCLI{binPath: self}
+	args := []string{"-test.run=TestCodexHelperEmitsThenStalls", "-test.v=false"}
+	start := time.Now()
+	_, retryable, runErr := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{}, "")
+	return runErr, time.Since(start), retryable
+}
+
+// TestCodexHelperEmitsThenStalls is the fake codex binary for the stall tests: it
+// prints the one line it was given, then produces nothing until it is killed.
+func TestCodexHelperEmitsThenStalls(t *testing.T) {
+	line := os.Getenv("CODEX_TEST_STALL_LINE")
+	if line == "" {
+		t.Skip("helper: only runs under the re-exec in runCodexStallHelper")
+	}
+	fmt.Println(line)
 	time.Sleep(60 * time.Second)
 }

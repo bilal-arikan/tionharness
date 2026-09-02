@@ -1,0 +1,3 @@
+{"type":"system","subtype":"hook_started","hook_id":"pre-1","hook_event":"PreCompact","session_id":"session-in"}
+{"type":"system","subtype":"compact_boundary","session_id":"session-out","compact_metadata":{"trigger":"auto"}}
+{"type":"system","subtype":"hook_response","hook_id":"post-1","hook_event":"PostCompact","session_id":"session-out"}

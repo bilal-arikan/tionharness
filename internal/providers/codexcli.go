@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -347,6 +348,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	// error so the usage it carries can be folded into whatever finally succeeds.
 	var failed []error
 	mcpFallbackUsed := false
+	idleRetried := false
 	for attempt := 0; attempt < 3; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, home)
 		if err == nil {
@@ -384,6 +386,15 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 		if !retryable {
 			return nil, err
 		}
+		// A stdout stall burns a whole idle window before it is even detected, so
+		// it gets exactly one re-run — unlike a clean crash, which fails fast and
+		// can use the remaining attempts.
+		if isCodexIdleHang(err) {
+			if idleRetried {
+				return nil, err
+			}
+			idleRetried = true
+		}
 	}
 	return nil, failed[len(failed)-1]
 }
@@ -417,6 +428,29 @@ const codexStartupTimeout = 90 * time.Second
 // the caller's turn idle watchdog (default 3 minutes) so THIS diagnosis (with
 // the stdout tail) wins the race against the generic turn cancel.
 const codexIdleOutputTimeout = 90 * time.Second
+
+// codexCompactionIdleGrace is how many extra idle windows a turn is granted
+// while a native context_compaction is in flight. Two, so a compaction that
+// never reports completion is still bounded at 3× the idle window — long enough
+// for a real compaction of a nearly full context, short enough to stay inside
+// the caller's turn watchdog.
+const codexCompactionIdleGrace = 2
+
+// codexIdleHangError marks the stdout-silence watchdog kill so the retry loop
+// can cap it at a single re-run. Each stalled attempt costs a whole idle window,
+// so retrying it on every pass would turn one wedged turn into a very long dead
+// one.
+type codexIdleHangError struct{ err error }
+
+func (e *codexIdleHangError) Error() string { return e.err.Error() }
+func (e *codexIdleHangError) Unwrap() error { return e.err }
+
+// isCodexIdleHang reports whether err came from the idle watchdog, through any
+// wrapping (UsageError in particular).
+func isCodexIdleHang(err error) bool {
+	var hang *codexIdleHangError
+	return errors.As(err, &hang)
+}
 
 var (
 	codexIdleMu sync.RWMutex
@@ -526,6 +560,9 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 	sawOutput := false
 	startupHang := false
 	idleHang := false
+	// compactionGrace counts idle windows already forgiven because a native
+	// compaction was running — see codexCompactionIdleGrace.
+	compactionGrace := 0
 	// killedEarly records that we tore the process down ourselves on a terminal
 	// error, so the resulting non-zero exit is expected rather than diagnostic.
 	killedEarly := false
@@ -583,6 +620,19 @@ readLoop:
 			})
 			break readLoop
 		case <-idle.C:
+			// Codex announces a native compaction (context_compaction item.started)
+			// and then emits nothing until the compaction model call returns. On a
+			// near-full context window that pause routinely outlasts the idle window,
+			// and killing there aborts a turn that was making progress — the SES2570
+			// failure. Forgive a bounded number of windows while the compaction is in
+			// flight; one that never completes still dies, just later.
+			if p.compactionInFlight() && compactionGrace < codexCompactionIdleGrace {
+				compactionGrace++
+				if idleWindow > 0 {
+					idle.Reset(idleWindow)
+				}
+				continue
+			}
 			idleHang = true
 			proc.KillTree(cmd)
 			reportWatchdogKill(req, WatchdogKill{
@@ -642,9 +692,22 @@ readLoop:
 			codexStartupTimeout, runErr))
 	}
 	if idleHang {
-		return nil, false, p.usageError(fmt.Errorf(
-			"codex CLI produced no output for %s and was killed after the idle output timeout (non-retryable) (exit: %v) %s",
-			idleWindow, runErr, stdoutCrashTail(tail)))
+		// A stall with no tool executed has no side effects to duplicate, so one
+		// re-run is safe — and usually the right move, since the common causes (a
+		// wedged compaction, a grandchild holding the pipe) do not repeat. Once a
+		// tool ran, re-running could run it again: terminal.
+		retryable := !p.ranTool()
+		label := "non-retryable"
+		if retryable {
+			label = "retryable"
+		}
+		graced := ""
+		if compactionGrace > 0 {
+			graced = fmt.Sprintf(" after %d compaction grace window(s)", compactionGrace)
+		}
+		return nil, retryable, p.usageError(&codexIdleHangError{fmt.Errorf(
+			"codex CLI produced no output for %s and was killed after the idle output timeout%s (%s) (exit: %v) %s",
+			idleWindow, graced, label, runErr, stdoutCrashTail(tail))})
 	}
 	if runErr == nil {
 		// The process exited cleanly yet produced no turn.completed — a truncated

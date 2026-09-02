@@ -479,6 +479,9 @@ func (c *ClaudeCLI) completeWithArgs(ctx context.Context, args []string, prompt,
 	// A discarded attempt still spent tokens (see foldFailedAttempts): keep its
 	// error so the usage it carries can be folded into whatever finally succeeds.
 	var failed []error
+	if req.cliCompaction == nil {
+		req.cliCompaction = newCLICompactionEmitter(req)
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
 		if err == nil {
@@ -506,6 +509,9 @@ func (c *ClaudeCLI) CompactNative(ctx context.Context, resumeSessionID string, r
 	}
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-hook-events", "--resume", resumeSessionID}
 	args = append(args, c.permissionArgs(req)...)
+	req.ResumeSessionID = resumeSessionID
+	req.cliCompaction = newCLICompactionEmitter(req)
+	req.forceCLICompact = true
 	resp, _, err := c.runAttempt(ctx, args, "/compact", req.Model, req)
 	if err != nil {
 		return nil, err
@@ -692,6 +698,28 @@ func cliStartupTimeout() time.Duration {
 }
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
+	if req.cliCompaction == nil {
+		req.cliCompaction = newCLICompactionEmitter(req)
+	}
+	p := newCLIParser(model, req.OnEvent)
+	p.onCompaction = req.cliCompaction
+	if req.forceCLICompact {
+		p.startNativeCompaction("", "command")
+	}
+	processExitCode := 0
+	lifecycleErrorKind := "process_error"
+	defer func() {
+		if err == nil {
+			return
+		}
+		phase := CLICompactionError
+		kind := lifecycleErrorKind
+		if ctx.Err() != nil {
+			phase = CLICompactionCancelled
+			kind = "cancelled"
+		}
+		p.terminateOpenNativeCompaction(phase, kind, retryable, processExitCode)
+	}()
 	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// The CLI spawns its own children (MCP servers, and whatever a Bash tool call
 	// shells out to — a build daemon outlives the build that started it). They
@@ -765,6 +793,7 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	cmd.Stderr = &stderr
 	stdout, serr := cmd.StdoutPipe()
 	if serr != nil {
+		lifecycleErrorKind = "startup_error"
 		return nil, false, serr
 	}
 	// Admit only ONE launch while an OAuth refresh is due for this claude-home.
@@ -776,12 +805,12 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// so the gate covers the launch it admits rather than the whole turn.
 	claudeauth.SerializeRefresh(c.configDir)
 	if serr := cmd.Start(); serr != nil {
+		lifecycleErrorKind = "startup_error"
 		return nil, false, serr
 	}
 
 	// Parse events as they stream so OnEvent fires step-by-step. ReadString
 	// handles arbitrarily long lines (tool results / the init tool list).
-	p := newCLIParser(model, req.OnEvent)
 	rd := bufio.NewReader(stdout)
 	var tail []string // bounded ring of recent raw stdout lines (crash diagnostics)
 	const tailMax = 12
@@ -863,12 +892,22 @@ readLoop:
 		}
 	}
 	runErr := cmd.Wait()
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		processExitCode = exitErr.ExitCode()
+	}
 
-	out, parseErr := p.finish()
+	out, parseErr := p.finishAfterProcess()
 	if parseErr == nil {
+		phase, kind := CLICompactionError, "missing_terminal"
+		if ctx.Err() != nil {
+			phase, kind = CLICompactionCancelled, "cancelled"
+		}
+		p.terminateOpenNativeCompaction(phase, kind, false, processExitCode)
 		return out, false, nil
 	}
 	if runErr == nil {
+		lifecycleErrorKind = "stream_error"
 		return nil, false, parseErr
 	}
 	// Resilience: the CLI can exit non-zero AFTER producing a usable answer — e.g.
@@ -877,12 +916,17 @@ readLoop:
 	// than fail the whole turn / flow node, salvage the assistant content captured
 	// before the crash. Genuine error results (hadError) are NOT salvaged.
 	if partial := p.salvage(); partial != nil {
+		// Returning a salvaged answer deliberately clears the provider error, so the
+		// deferred error-only closer below will not run. Close any compaction that
+		// was open when the process crashed before returning the usable partial.
+		p.terminateOpenNativeCompaction(CLICompactionError, "process_error", false, processExitCode)
 		return partial, false, nil
 	}
 	// Startup watchdog fired: the subprocess emitted nothing within cliStartupTimeout
 	// and was killed. There is no salvageable content — surface a clear, retryable
 	// failure so self-healing retries once and the turn fails fast instead of hanging.
 	if startupHang {
+		lifecycleErrorKind = "startup_timeout"
 		return nil, true, p.usageError(fmt.Errorf(
 			"claude CLI produced no output within %s and was killed as a likely MCP startup hang (retryable) — check the interaction MCP bridge / concurrent-spawn load (exit: %v)",
 			cliStartupTimeout(), runErr))
@@ -902,6 +946,7 @@ readLoop:
 	// before any answer and a retry hits the same wall in milliseconds — classify
 	// it clearly, mark it NON-retryable, and point at the exact config dir to fix.
 	if p.notLoggedIn {
+		lifecycleErrorKind = "authentication"
 		msg := strings.TrimSpace(p.authMsg)
 		if msg == "" {
 			msg = "authentication_failed"
@@ -919,6 +964,7 @@ readLoop:
 	// only burns the next attempt against the same wall — classify it clearly and
 	// mark it NON-retryable so the flow fails fast with an actionable reason.
 	if p.rateLimited {
+		lifecycleErrorKind = "rate_limit"
 		msg := strings.TrimSpace(p.rateLimitMsg)
 		if msg == "" {
 			msg = "subscription usage window exhausted"
@@ -932,13 +978,14 @@ readLoop:
 	// The caller's pre-flight check (ClaudeCLI.CanResume) normally prevents this;
 	// reaching here means the home changed after that check.
 	if req.ResumeSessionID != "" && isMissingConversation(detail) {
+		lifecycleErrorKind = "resume_missing"
 		home := c.configDir
 		if home == "" {
 			home = "the CLI's default config dir (~/.claude)"
 		}
 		return nil, false, p.usageError(fmt.Errorf(
-			"claude CLI cannot resume session %s: no such conversation under %s — the CLI config home no longer holds this transcript; the next turn must start cold (exit: %v)",
-			req.ResumeSessionID, home, runErr))
+			"claude CLI cannot resume the stored session: no such conversation under %s — the CLI config home no longer holds this transcript; the next turn must start cold (exit: %v)",
+			home, runErr))
 	}
 	// Died right after init with zero model output (only system/hook/init events).
 	// This is the signature of a usage-limit rejection that emitted no rate_limit

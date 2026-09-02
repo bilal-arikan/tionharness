@@ -1,0 +1,2 @@
+{"type":"system","subtype":"status","status":"compacting","session_id":"session-in"}
+{"type":"system","subtype":"status","status":null,"compact_result":"failed","compact_error":"Not enough messages to compact.","session_id":"session-in"}

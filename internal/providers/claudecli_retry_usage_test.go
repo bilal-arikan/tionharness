@@ -24,8 +24,14 @@ const (
 // (the "clean crash" shape: usage, no model turn, no tool → retryable); attempt 1
 // answers normally.
 func TestClaudeHelperCrashesThenSucceeds(t *testing.T) {
-	if os.Getenv(claudeRetryHelperEnv) != "crash-then-succeed" {
+	mode := os.Getenv(claudeRetryHelperEnv)
+	if mode != "crash-then-succeed" && mode != "compact-crash-then-succeed" && mode != "compact-crash-after-text" {
 		t.Skip("helper: only runs when re-executed as a fake claude binary")
+	}
+	if mode == "compact-crash-after-text" {
+		fmt.Println(`{"type":"system","subtype":"hook_started","hook_id":"pre-salvage","hook_event":"PreCompact","session_id":"cli-in"}`)
+		fmt.Println(`{"type":"assistant","message":{"content":[{"type":"text","text":"usable partial"}]}}`)
+		os.Exit(1)
 	}
 	counter := os.Getenv(claudeRetryCounterEnv)
 	attempt := 0
@@ -41,16 +47,90 @@ func TestClaudeHelperCrashesThenSucceeds(t *testing.T) {
 		os.Exit(2)
 	}
 	if attempt == 0 {
+		if mode == "compact-crash-then-succeed" {
+			fmt.Println(`{"type":"system","subtype":"hook_started","hook_id":"pre-first","hook_event":"PreCompact","session_id":"cli-in"}`)
+			os.Exit(1)
+		}
 		fmt.Println(`{"type":"result","is_error":true,"result":"transient crash right after init",` +
 			`"num_turns":1,"usage":{"input_tokens":1000,"output_tokens":20,` +
 			`"cache_read_input_tokens":300,"cache_creation_input_tokens":40}}`)
 		os.Exit(1)
+	}
+	if mode == "compact-crash-then-succeed" {
+		fmt.Println(`{"type":"system","subtype":"hook_started","hook_id":"pre-second","hook_event":"PreCompact","session_id":"cli-in"}`)
+		fmt.Println(`{"type":"system","subtype":"compact_boundary","session_id":"cli-out"}`)
 	}
 	fmt.Println(`{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}`)
 	fmt.Println(`{"type":"result","is_error":false,"result":"hello","num_turns":3,` +
 		`"usage":{"input_tokens":7,"output_tokens":5,"cache_read_input_tokens":11,` +
 		`"cache_creation_input_tokens":13}}`)
 	os.Exit(0)
+}
+
+func TestClaudeRetryCompactionLifecycleClosesEachAttempt(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Skipf("no test binary path: %v", err)
+	}
+	counter := filepath.Join(t.TempDir(), "attempts")
+	t.Setenv(claudeRetryHelperEnv, "compact-crash-then-succeed")
+	t.Setenv(claudeRetryCounterEnv, counter)
+	var events []CLICompactionEvent
+	req := Request{
+		ResumeSessionID: "cli-in",
+		OnCLICompaction: func(ev CLICompactionEvent) { events = append(events, ev) },
+	}
+	c := &ClaudeCLI{binPath: self}
+	args := []string{"-test.run=TestClaudeHelperCrashesThenSucceeds", "-test.v=false"}
+	if _, err := c.completeWithArgs(context.Background(), args, "prompt", "opus", req); err != nil {
+		t.Fatal(err)
+	}
+	var terminals []CLICompactionEvent
+	for _, ev := range events {
+		if ev.Phase == CLICompactionError || ev.Phase == CLICompactionSuccess {
+			terminals = append(terminals, ev)
+		}
+	}
+	if len(terminals) != 2 || terminals[0].Phase != CLICompactionError || !terminals[0].Retryable || terminals[1].Phase != CLICompactionSuccess {
+		t.Fatalf("terminals = %+v; all events=%+v", terminals, events)
+	}
+	if terminals[0].ExitCode != 1 || terminals[0].ErrorKind != "process_error" {
+		t.Fatalf("first terminal classification = %+v", terminals[0])
+	}
+	if terminals[0].AttemptID == terminals[1].AttemptID || terminals[0].Attempt != 1 || terminals[1].Attempt != 2 {
+		t.Fatalf("attempt correlation = %+v", terminals)
+	}
+}
+
+func TestClaudeSalvagedCrashClosesOpenCompactionAttempt(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Skipf("no test binary path: %v", err)
+	}
+	t.Setenv(claudeRetryHelperEnv, "compact-crash-after-text")
+	var events []CLICompactionEvent
+	req := Request{
+		ResumeSessionID: "cli-in",
+		OnCLICompaction: func(ev CLICompactionEvent) { events = append(events, ev) },
+	}
+	c := &ClaudeCLI{binPath: self}
+	args := []string{"-test.run=TestClaudeHelperCrashesThenSucceeds", "-test.v=false"}
+	resp, _, err := c.runAttempt(context.Background(), args, "prompt", "opus", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || resp.Text == "" {
+		t.Fatalf("salvaged response = %+v", resp)
+	}
+	var terminal *CLICompactionEvent
+	for i := range events {
+		if events[i].Phase == CLICompactionError || events[i].Phase == CLICompactionCancelled || events[i].Phase == CLICompactionSuccess {
+			terminal = &events[i]
+		}
+	}
+	if terminal == nil || terminal.Phase != CLICompactionError || terminal.ErrorKind != "process_error" || terminal.ExitCode != 1 {
+		t.Fatalf("terminal = %+v; events=%+v", terminal, events)
+	}
 }
 
 // The retry loop used to return the successful attempt's response and drop the
