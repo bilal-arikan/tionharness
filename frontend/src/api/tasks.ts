@@ -2,14 +2,17 @@
 // surface: tasks are described, columned and optionally tagged with an agent or
 // flow. It never runs anything — flows, schedules and agent sessions do the work.
 import type {
-  Task,
-  TaskPatch,
-  Schedule,
-  ScheduleSessionMode,
-  BoardState,
   Automation,
   AutomationFireRecord,
+  AutomationTriggerKind,
   BoardAction,
+  BoardState,
+  Schedule,
+  ScheduleSessionMode,
+  Task,
+  TaskPatch,
+  TrajEndStatus,
+  TrajEvent,
 } from '@/types'
 import { req } from './client'
 
@@ -112,7 +115,12 @@ export const taskApi = {
     req<{ tokensToday: number; messages: number; tools: number }>('/api/automations/live-stats'),
   createAutomation: (data: {
     name?: string
-    triggerKind?: 'tag' | 'board' | 'token' | 'counter'
+    triggerKind?: AutomationTriggerKind
+    // Rota (F2) trigger filters — see types/task.ts.
+    trajPhase?: string
+    trajRecipe?: string
+    trajEvent?: TrajEvent
+    trajStatus?: TrajEndStatus
     triggerTag?: string
     boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
     boardFromState?: string
@@ -143,7 +151,12 @@ export const taskApi = {
     id: string,
     data: {
       name?: string
-      triggerKind?: 'tag' | 'board' | 'token' | 'counter'
+      triggerKind?: AutomationTriggerKind
+      // Rota (F2) trigger filters — see types/task.ts.
+      trajPhase?: string
+      trajRecipe?: string
+      trajEvent?: TrajEvent
+      trajStatus?: TrajEndStatus
       triggerTag?: string
       boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
       boardFromState?: string
