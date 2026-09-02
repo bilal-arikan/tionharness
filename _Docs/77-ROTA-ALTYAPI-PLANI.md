@@ -1,10 +1,11 @@
 # 77 — Rota Altyapı Hazırlık Planı
 
-> **Durum:** TASLAK (2026-09-02) · **R1 uygulandı** (2026-09-02, dal
-> `rota/r1-session-origin`; sapmalar R1 kaleminin sonunda). Bu doküman, "Rota" (oturumları dinamik,
-> çatallanan akış grafiğine hizalama + workspace canlı görünümü + koşu-sonu optimizer)
-> özelliği **başlamadan önce** altyapıda kapatılması gereken boşlukları ve gerekli
-> refactor'ları sıralar. Rota'nın kendisi ayrı bir dokümana (78) gelecek.
+> **Durum:** **UYGULANDI** — R1–R10 tamamı (2026-09-02, her kalem kendi
+> dalında; sapmalar kalemlerin "Gerçekleşen" notlarında) ve üstüne Rota F0–F5
+> (2026-09-02/03; §2'deki notlar). Bu doküman, "Rota" (oturumları dinamik,
+> çatallanan akış grafiğine hizalama + workspace canlı görünümü + koşu-sonu
+> optimizer) özelliği **başlamadan önce** altyapıda kapatılan boşlukları ve
+> refactor'ları sıralar; Rota'nın kendisi `78-ROTA-EKRANI.md`'de.
 >
 > **Önkoşul okuma:** `47-KOORDINATOR-COKLU-AJAN.md`, `15-FLOW-CANVAS.md`,
 > `46-ETIKET-OTOMASYON.md`, `58-QUEUE-SENKRON.md`, `66-VIEW-KATMANI.md`,

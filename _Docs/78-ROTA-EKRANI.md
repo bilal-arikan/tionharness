@@ -1,18 +1,38 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte) + F3 (metrik + küratör) + F4 (optimizer) + F5 (kapılar + kanvastan müdahale)
+# 78 — Rota: Sistem ve Ekran
 
-**Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
-uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
-yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
-`77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
-Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
-ateşlenmedi") uygulandı (2026-09-02, §7); F3 (deterministik metrik + reçete
-istatistikleri + LLM'siz küratör + pin) uygulandı (2026-09-02, §8); F4 (LLM
-reçete optimizer, yalnız öneri) uygulandı (2026-09-03, §9); F5 (faz kapıları
-Durable Ask üstünden, kanvastan müdahale, RunView → Rota) ve F4-v2 (reçete
-başına opt-in oto-budama) uygulandı (2026-09-03, §10). Brifin §11 yol
-haritası bununla **tamamlandı**; kalanlar §10 sonunda.
+> **Durum:** Brifin §11 yol haritası **tamamlandı** (F0–F5, 2026-09-02/03).
+> Altyapı planı ve gerçekleşen notları `77-ROTA-ALTYAPI-PLANI.md` (R1–R10).
+> Tasarım brifi: oturum artefaktı "Rota Tasarım Brifi" (§8 ekran, §11 fazlar).
+> Bu doküman faz faz büyüdü: §1–§4 F0'ın kanvasını anlatır, §5–§10 her fazın
+> **ne eklediğini** ve **neyi bilinçli bıraktığını**. Bugünkü davranışı okumak
+> için önce aşağıdaki haritaya, sonra ilgili faz bölümüne git.
 
-## 1. Ne gösterir
+**Rota nedir.** Bir koordinatör ağacının *ilan edilen* planı (reçetenin
+`phases:` bloğu ya da ajanın `trajectory{plan}` çağrısı) ile *gözlenen*
+gerçeklerin (worker'lar, akış koşuları, otomasyon ateşlemeleri, insan
+kapıları) tek grafta buluşması. Rota hiçbir şeyi **çalıştırmaz**; runtime
+gözlemcileri yazar, ekran ve ajan okur. Kök oturum başına bir rota
+(`sessions/<root>/trajectory.json` + `trajectories/index.json`).
+
+## 0. Fazlar ve harita
+
+| Faz | Ne getirdi | Bölüm | Kod (başlıca) |
+|-----|------------|-------|---------------|
+| F0 | Workspace kök zaman-eksenli kanvas, `GET /api/trajectories` | §1–§4 | `frontend/src/features/rota/rotaLayout.ts`, `RotaCanvas.tsx`, `RotaPanel.tsx`; `internal/api/trajectories.go` |
+| F1a | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/agent/trajectory_graph.go`, `trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
+| F1b | Rota-içi faz-sütunlu görünüm, derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme defteri, `ws:*` → toast | §6 | `features/rota/trajectoryLayout.ts`, `RotaTrajectoryView.tsx`, `RotaStrip.tsx`; `app/useWorkspaceSignals.ts` |
+| F2 | `phase` / `trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi, grafta "neden ateşlenmedi" | §7 | `internal/db/automation_trigger_traj.go`, `internal/agent/trajectory_transitions.go`, `automation_trajectory.go` |
+| F3 | Rota bitiş özeti, reçete istatistikleri, LLM'siz küratör, pin | §8 | `internal/agent/trajectory_summary.go`, `trajectory_recipe_stats.go`, `curator.go`; `features/schedules/CuratorPanel.tsx` |
+| F4 | `recipe-optimizer` sistem ajanı, `recipe-opt` içgörü kanalı (yalnız öneri) | §9 | `internal/agent/recipe_optimizer.go`, `internal/prompts/defaults/recipe-optimizer.md` |
+| F5 | Faz kapıları (artifact / verdict / human = Durable Ask), kanvastan müdahale, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` | §10 | `internal/agent/trajectory_gate.go`, `internal/api/trajectory_actions.go`; `features/rota/PhaseActions.tsx`, `ForkModal.tsx`; `internal/skills/recipe_edit.go` |
+
+**Sözlük.** *Faz* — ilan edilmiş adım (`p:<id>`, declared). *Şerit* — çizim
+satırı; kök 0, her worker/koşu yeni şerit. *Hayalet* — ilan edilip henüz
+gerçekleşmemiş düğüm (kesik çizgi). *Kapı* — fazın çıkış koşulu. *İzleyici*
+— faz/rota sonunda ateşlenecek otomasyon (`watchers:`). *Küratör* — LLM'siz
+haftalık budama. *Optimizer* — nadir LLM geçişi, yalnız öneri.
+
+## 1. Workspace kök görünümü (F0) — ne gösterir
 
 NavRail **Rota** girişi (`#/w/WS/rota`). Kök yakınlaştırma düzeyi **workspace**:
 son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sağa.
@@ -39,7 +59,7 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 Etkileşim: tık = seç, çift tık = oturumu Sohbet'te / akış koşusunu Akışlar'da
 aç, ↑↓ şeritler arasında gez, Enter aç, Esc seçimi bırak (Harita sözleşmesi).
 
-## 2. Veri yolu
+## 2. Veri yolu (F0)
 
 ```
 GET /api/sessions (son 200, updated_desc)      ┐
@@ -75,18 +95,19 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 `view.KindTrajectory` frontend `ViewKind`'a eklendi; Harita ikon haritasında
 `trajectory: Waypoints`.
 
-## 3. F0'ın bilinçli sınırları
+## 3. F0'ın bilinçli sınırları ve kapanışları
 
-- ~~**Rota varlığı henüz üretilmiyor.**~~ F1a ile kapandı (§5).
-- ~~**Faz sütunu yok, yalnız zaman.**~~ F1b ile kapandı (§6): workspace kökü
-  zaman eksenli kalır, ◈ tıklanınca rota-içi faz-sütunlu görünüm açılır.
-  Worker alt-ağacı katlama hâlâ yok (F2).
-- **Şerit patlaması** (12 worker = 12 şerit) için demet katlama (`+N`) yok;
-  pencere süzgeci ve son-200 seed'i şimdilik yeterli.
-- **Maliyet / süre alt şeridi, mini rota (sohbet başlığı), RunView gömme** F3+.
-- Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır.
+| F0'da bırakılan | Kapandı mı | Nerede |
+|-----------------|------------|--------|
+| Rota varlığı üretilmiyor | ✅ F1a | §5 |
+| Faz sütunu yok, yalnız zaman | ✅ F1b (◈ → rota-içi görünüm) | §6 |
+| Mini rota (sohbet başlığı), RunView gömme | ✅ F1b / F5 | §6, §10 |
+| Maliyet / süre | ✅ F3 (özet çipleri; ayrı alt şerit yok) | §8 |
+| Şerit patlaması için demet katlama (`+N`) | ❌ açık | pencere süzgeci + son-200 seed |
+| Worker alt-ağacı katlama | ❌ açık | — |
+| Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır | tasarım kararı | — |
 
-## 4. Test
+## 4. Testler (F0 + F1a)
 
 - `frontend/src/features/rota/rotaLayout.test.ts` — satır sırası ve derinlik,
   spawn/report/fork kenar zamanları, canlı/biten çubuklar, işaret şeridi, gelecek
