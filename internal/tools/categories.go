@@ -182,3 +182,13 @@ func CategoryOf(name string) string {
 	}
 	return CategoryOther
 }
+
+// IsKnownBuiltin reports whether name is a built-in tool TionHarness ships at
+// all — independent of whether the CALLING agent may use it. A registry that
+// lacks a known builtin lacks it because this agent's allow/deny list removed
+// it, which is a very different message than "no such tool" (see
+// Registry.unknownToolMessage).
+func IsKnownBuiltin(name string) bool {
+	_, ok := builtinCategory[name]
+	return ok
+}

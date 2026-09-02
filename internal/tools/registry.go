@@ -805,6 +805,24 @@ func (r *Registry) resolveCatalogName(name string) string {
 }
 
 func (r *Registry) unknownToolMessage(name string) string {
+	// A name TionHarness ships as a built-in, absent from THIS registry, was
+	// removed by the agent's allow/deny list — it is a permission boundary, not a
+	// typo. Saying "unknown tool; use tool_search" there sends the model hunting
+	// for a spelling that does not exist: a read-only worker asked to write a file
+	// retried Write under different names, reported a vague failure, and its
+	// coordinator re-spawned the same read-only worker five times (SES2570, ~70
+	// minutes). Name the boundary instead, and say the retry is pointless.
+	bare := name
+	if i := strings.LastIndex(bare, nsSep); i >= 0 {
+		bare = bare[i+len(nsSep):]
+	}
+	if IsKnownBuiltin(bare) {
+		return fmt.Sprintf("tool %q exists in TionHarness but is NOT available to this agent: "+
+			"its allowed/blocked tool configuration excludes it. This is a permission boundary, "+
+			"not a naming problem — retrying under another name or via tool_search will not help. "+
+			"Do what you can with the tools you have, and state plainly in your result that this "+
+			"task needs %q (a differently-configured agent must run that part).", bare, bare)
+	}
 	needle := strings.ToLower(name)
 	var nearby []string
 	for _, d := range r.Defs(nil) {
