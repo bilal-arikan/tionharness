@@ -24,6 +24,18 @@ func publishEntityChange(wsp *workspace.Workspace, typ, title, body string, targ
 		Body:   body,
 		Target: target,
 	})
+	// Board changes ALSO ride the ordered, replayable per-workspace stream. The
+	// notify above goes to /api/events, which has no cursor: a consumer that
+	// drops the connection loses those events for good. Mirroring rather than
+	// moving, because the notify is what raises the UI's badge/toast — the two
+	// feeds serve different consumers and both need the signal.
+	if typ == "board" {
+		wsp.Runtime.Emit(events.Event{
+			Type:   events.TypeWSBoard,
+			Level:  "info",
+			Target: target,
+		})
+	}
 }
 
 // emitSessionChange is the per-session "session" notify every session mutation

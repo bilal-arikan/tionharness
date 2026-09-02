@@ -64,16 +64,23 @@ func (s *mcpFailStreaks) state(name string) *mcpFailState {
 	return st
 }
 
-// note increments the server's streak and returns the new value. At and past
-// the threshold it (re)opens the breaker for one cooldown.
+// note increments the server's streak and returns the new value. EVERY failure
+// (re)opens the breaker for one cooldown.
+//
+// Opening only at mcpFailStreakThreshold left the expensive case unprotected: a
+// server that hangs in initialize costs a full dial deadline PER build, so a cold
+// outage burned threshold x DefaultDialTimeout (3 x 20s) of blocked UI before the
+// breaker could skip anything -- which is precisely the minute-long freeze at
+// project open this breaker was added for (2026-09-03). One failure is already
+// proof the server is not answering; make the next build skip it and probe once
+// per cooldown instead. The streak still counts up independently, so ERROR
+// escalation continues to fire only at the threshold and a blip stays at WARN.
 func (s *mcpFailStreaks) note(name string) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.state(name)
 	st.streak++
-	if st.streak >= mcpFailStreakThreshold {
-		st.openUntil = s.clock().Add(mcpBreakerCooldown)
-	}
+	st.openUntil = s.clock().Add(mcpBreakerCooldown)
 	return st.streak
 }
 

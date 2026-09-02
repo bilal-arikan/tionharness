@@ -258,13 +258,49 @@ func (r *Runtime) sessionCwd(ctx context.Context) string {
 	return strings.TrimSpace(s.WorkingDir)
 }
 
+// ephemeralIndexDirs are path segments marking a working directory that is a
+// short-lived COPY of a repo rather than a repo in its own right: a per-task git
+// worktree (workspace/manager.go builds these under .tionharness-worktrees/<ws>)
+// and a session scratchpad. Indexing them is pure waste -- the code is already
+// covered by the parent repo's index, the store is thrown away with the task, and
+// the server keys one store per path so every task mints a fresh multi-hundred-MB
+// database.
+//
+// Found live (2026-09-03): the cache had grown to 16GB, most of it per-worktree
+// stores (~90-100MB each for WS5 tsk440..tsk760) plus abandoned staging copies
+// from index runs that were killed when their task ended. The bloat pushed
+// codebase-memory-mcp's initialize past the pool's dial deadline, which stalled
+// every registry build behind it -- the UI hang this guard exists to prevent.
+var ephemeralIndexDirs = []string{".tionharness-worktrees", "scratchpad"}
+
+// isEphemeralWorkdir reports whether cwd sits inside a throwaway working copy.
+// Matching is per PATH SEGMENT (not a substring) so a legitimate repo whose name
+// merely contains one of these words is still indexed.
+func isEphemeralWorkdir(cwd string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(cwd), "/") {
+		for _, bad := range ephemeralIndexDirs {
+			if strings.EqualFold(seg, bad) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // EnsureCodebaseIndexed fires a best-effort, background incremental index of cwd
 // into the server's own store, at most once per cwd per process. No-op when cwd
-// is empty or no codebase-memory server is enabled. Failures are LOGGED (not
-// silently swallowed) and clear the guard so a later turn can retry.
+// is empty, sits in a throwaway working copy (isEphemeralWorkdir), or no
+// codebase-memory server is enabled. Failures are LOGGED (not silently
+// swallowed) and clear the guard so a later turn can retry.
 func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	cwd = strings.TrimSpace(cwd)
 	if cwd == "" {
+		return
+	}
+	// A worktree/scratchpad is a copy of a repo the parent index already covers;
+	// indexing it burns disk and dial time for a store discarded with the task.
+	if isEphemeralWorkdir(cwd) {
+		r.logger.Debug("codebase-memory auto-index skipped: ephemeral working copy", "cwd", cwd)
 		return
 	}
 	command := r.codebaseMemoryCmd(ctx) // "" when disabled or no server

@@ -130,6 +130,18 @@ type Task struct {
 	LastRunID     string `json:"lastRunId"`
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`
+	// SessionIDs are the sessions that have worked this card, oldest first.
+	// SERVER-OWNED like ReviewBounces: UpdateTask never copies it from the
+	// caller's payload, because a client PUTs whatever it last read and would
+	// silently drop links added since. LinkTaskSession is the only writer.
+	//
+	// Before this existed the board was untrackable from outside: a card carried
+	// no reference to the work it caused, and "which session is doing card X?"
+	// could only be answered by timestamp-matching the automation fire ledger
+	// (store_automation_fires.go). The LastRun* fields below look like they would
+	// serve this, but nothing has written them since the board stopped executing
+	// tasks — they are history, not a live link.
+	SessionIDs []string `json:"sessionIds,omitempty"`
 	// CreatedBy is the ID of the agent that created this task via a
 	// self-management tool ("" = created by the user), for provenance/display.
 	// It does not gate deletion: delete_task removes ANY task, including

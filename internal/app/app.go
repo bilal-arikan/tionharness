@@ -248,6 +248,26 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// or installs anything — the UI only shows a link to the release notes.
 	server.StartUpdateCheck()
 
+	// REST auth. Opt-in: a token turns the gate on, its absence leaves the API
+	// open exactly as before. The exposed-bind case only WARNS — scripts/dev.ps1
+	// binds 0.0.0.0 by default for phone/LAN testing and the bundled frontend
+	// sends no Authorization header, so refusing there would break the normal dev
+	// loop with a 401 the UI cannot satisfy (see internal/api/auth.go).
+	//
+	// Read from the RESOLVED listener address, not cfg.Addr: the desktop app
+	// passes "127.0.0.1:0" and only the listener knows what was actually bound.
+	apiToken, exposedBind := api.AuthPolicyFromEnv(ln.Addr().String())
+	server.SetAuthToken(apiToken)
+	switch {
+	case apiToken != "":
+		logger.Info("API bearer authentication ENABLED", "addr", ln.Addr().String())
+	case exposedBind:
+		logger.Warn("API is reachable beyond loopback with NO authentication — "+
+			"anyone who can reach this port can run shell commands and read secrets; "+
+			"set "+api.AuthTokenEnv+" (and send it as a bearer token) to require auth",
+			"addr", ln.Addr().String())
+	}
+
 	httpSrv := &http.Server{
 		Handler:           server.Routes(),
 		ReadHeaderTimeout: 10 * time.Second,

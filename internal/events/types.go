@@ -100,6 +100,12 @@ const (
 	// TypeWSCoordination: a coordinator's drain turn started/ended or its
 	// phantom-spawn guard halted it (target phase: turn_start | turn_end | stall_halt).
 	TypeWSCoordination = WorkspaceStreamPrefix + "coordination"
+	// TypeWSBoard: a kanban card was created / moved / updated / deleted. Mirrors
+	// the "board" notify onto the ordered stream: that feed (/api/events) has no
+	// cursor and no replay, so a consumer that drops the connection loses board
+	// changes permanently and can only recover by re-polling GET /api/tasks.
+	// Payload target carries taskId + op, same as the notify.
+	TypeWSBoard = WorkspaceStreamPrefix + "board"
 	// TypeWSLiveness: a session's turn-admission state changed (a turn took the
 	// slot, released it, or queued behind it) — the live "running" edge of the
 	// workspace picture. Payload-light: sessionId + busy + waiting depth; the

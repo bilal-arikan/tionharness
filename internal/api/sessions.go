@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -302,6 +303,38 @@ func titleSourceFromMessages(msgs []db.Message) string {
 
 func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
+	// ?tail=N returns only the last N messages plus the envelope describing where
+	// they sit. Opt-in, because the default MUST stay the full transcript: the
+	// chat renders from it and the legacy shape is a bare array. Without this an
+	// external consumer had no way to bound the response at all — a long session
+	// is multiple megabytes and grows without limit.
+	if raw := strings.TrimSpace(r.URL.Query().Get("tail")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "tail must be a positive integer, got "+strconv.Quote(raw))
+			return
+		}
+		tail, from, err := ws(r).DB.ListMessagesTail(r.Context(), sessionID, n)
+		if writeDBError(w, err, "session not found") {
+			return
+		}
+		for i := range tail {
+			tail[i].Steps = trimStepsJSON(tail[i].Steps)
+		}
+		if tail == nil {
+			tail = []db.Message{}
+		}
+		// `from` is the index the tail starts at, so from>0 means older messages
+		// exist — the caller raises tail (or drops to the full read) to reach them.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":     tail,
+			"offset":    from,
+			"total":     from + len(tail),
+			"hasMore":   from > 0,
+			"truncated": from > 0,
+		})
+		return
+	}
 	messages, err := ws(r).DB.ListMessages(r.Context(), sessionID)
 	if writeDBError(w, err, "") {
 		return

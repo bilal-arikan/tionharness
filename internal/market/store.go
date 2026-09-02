@@ -260,6 +260,9 @@ func (s *Store) Publish(p Pack) (Pack, error) {
 	if p.ID == "" || p.Kind == "" {
 		return Pack{}, fmt.Errorf("pack id and kind are required")
 	}
+	if reservedPackID(p.ID) {
+		return Pack{}, fmt.Errorf("pack id %q is reserved by the market API route table", p.ID)
+	}
 	p.Schema = SchemaV1
 	if err := os.MkdirAll(s.globalDir, 0o755); err != nil {
 		return Pack{}, fmt.Errorf("create market dir: %w", err)
@@ -298,4 +301,26 @@ func (s *Store) Import(raw []byte) (Pack, error) {
 func safeFileName(id string) string {
 	r := strings.NewReplacer("/", "_", "\\", "_", ":", "_", "..", "_", " ", "-")
 	return strings.Trim(r.Replace(id), "._-")
+}
+
+// reservedPackIDs are the literal path segments registered under /api/market
+// alongside the GET /api/market/{id} wildcard. Go's ServeMux gives a literal
+// segment precedence over a wildcard, so a pack published with one of these ids
+// would be silently unreachable: GET /api/market/registries returns the registry
+// list, never the pack. Rejecting at publish time is the fix — the alternative
+// (renaming the routes) breaks existing clients, and detecting it at read time
+// is too late, the pack is already on disk.
+//
+// Keep in sync with registerMarketRoutes (internal/api/market.go).
+var reservedPackIDs = map[string]bool{
+	"registries": true,
+	"connectors": true,
+	"reload":     true,
+	"publish":    true,
+	"import":     true,
+}
+
+// reservedPackID reports whether an id collides with a literal market route.
+func reservedPackID(id string) bool {
+	return reservedPackIDs[strings.ToLower(strings.TrimSpace(id))]
 }

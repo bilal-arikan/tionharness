@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -344,6 +345,50 @@ func equalStringSlice(a, b []string) bool {
 
 type archiveTaskReq struct {
 	Archived bool `json:"archived"`
+}
+
+type linkTaskSessionReq struct {
+	SessionID string `json:"sessionId"`
+}
+
+// handleLinkTaskSession attaches a session to a card, answering "which work is
+// this card causing?" — the question an external tool driving the board could
+// not previously answer at all. The board has no dispatcher (see models_task.go),
+// so the intended flow for an outside consumer is: read the card, POST
+// /api/sessions/spawn with its prompt, then POST the resulting session id here.
+//
+// Idempotent, matching the store: re-linking the same session returns 200 with
+// the unchanged card rather than erroring, so a retried call is safe.
+func (s *Server) handleLinkTaskSession(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[linkTaskSessionReq](w, r)
+	if !ok {
+		return
+	}
+	wsp := ws(r)
+	ctx := r.Context()
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		writeError(w, http.StatusBadRequest, "sessionId is required")
+		return
+	}
+	// Verify the session exists before recording it: a card pointing at a
+	// nonexistent session is worse than no link, because a reader trusts it.
+	if _, err := wsp.DB.GetSession(ctx, sessionID); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, "unknown session "+sessionID)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	task, err := wsp.DB.LinkTaskSession(ctx, r.PathValue("id"), sessionID)
+	if writeDBError(w, err, "task not found") {
+		return
+	}
+	s.logger.Info("task linked to session", "task", task.ID, "session", sessionID)
+	publishEntityChange(wsp, "board", "Göreve oturum bağlandı: "+task.Title, task.BoardState,
+		map[string]string{"view": "board", "taskId": task.ID, "op": "link-session"})
+	writeJSON(w, http.StatusOK, task)
 }
 
 func (s *Server) handleUnknownTaskSubpath(w http.ResponseWriter, r *http.Request) {

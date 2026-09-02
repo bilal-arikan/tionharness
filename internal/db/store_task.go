@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 )
 
 // BoardChangeEvent describes a single kanban card change. It is delivered to the
@@ -154,6 +156,45 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	}
 	d.fireBoardHook(ev)
 	return nil
+}
+
+// LinkTaskSession records that a session worked this card, appending to
+// Task.SessionIDs. Idempotent: linking the same session twice is a no-op, so a
+// caller that retries (or an automation that fires again for the same session)
+// cannot grow the list. Returns ErrNotFound for an unknown task.
+//
+// This is the only writer of SessionIDs — UpdateTask deliberately leaves the
+// field alone so a client PUT cannot clobber links it never read.
+func (d *DB) LinkTaskSession(ctx context.Context, taskID, sessionID string) (Task, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return Task{}, fmt.Errorf("session id is required")
+	}
+	d.mu.Lock()
+	cur, ok := d.tasks[taskID]
+	if !ok {
+		d.mu.Unlock()
+		return Task{}, ErrNotFound
+	}
+	if slices.Contains(cur.SessionIDs, sessionID) {
+		d.mu.Unlock()
+		return cur, nil // already linked; no write, no event
+	}
+	cur.SessionIDs = append(append([]string{}, cur.SessionIDs...), sessionID)
+	cur.UpdatedAt = now()
+	err := d.persistTaskLocked(cur)
+	d.mu.Unlock()
+	if err != nil {
+		return Task{}, err
+	}
+	// Reuse the ordinary update op: a linked session changes what the card shows,
+	// and board listeners already refresh on it.
+	d.fireBoardHook(BoardChangeEvent{
+		TaskID: cur.ID, Title: cur.Title, OwnerAgentID: cur.OwnerAgentID,
+		Tags: cur.Tags, Priority: cur.Priority,
+		Op: BoardOpUpdate, ToState: cur.BoardState,
+	})
+	return cur, nil
 }
 
 // MoveTask changes only a task's board state (kanban drag/drop). Fires the board

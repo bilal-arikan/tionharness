@@ -6,12 +6,27 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 func (s *Server) handleListLessons(w http.ResponseWriter, r *http.Request) {
-	lessons, err := ws(r).DB.ListLessons(0)
+	// ?limit=N caps the newest-first journal. The store has always accepted a
+	// limit; the handler hardcoded 0 ("no limit"), so an external consumer had
+	// no way to bound a file that only ever grows. 0 stays the default so the
+	// existing UI keeps its full list.
+	limit := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer, got "+strconv.Quote(raw))
+			return
+		}
+		limit = n
+	}
+	lessons, err := ws(r).DB.ListLessons(limit)
 	if writeDBError(w, err, "") {
 		return
 	}

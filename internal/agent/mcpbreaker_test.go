@@ -5,22 +5,30 @@ import (
 	"time"
 )
 
-// The breaker opens exactly at the threshold, stays open for the cooldown,
-// lets ONE probe through afterwards, and a failed probe re-opens it.
-func TestMCPFailBreakerOpensAtThresholdAndProbesAfterCooldown(t *testing.T) {
+// The breaker opens on the FIRST failure, stays open for the cooldown, lets ONE
+// probe through afterwards, and a failed probe re-opens it.
+//
+// Opening immediately is the point: a server hung in initialize costs a full dial
+// deadline per build, so waiting for a streak of threshold before skipping burned
+// threshold x DefaultDialTimeout of blocked UI at project open.
+func TestMCPFailBreakerOpensOnFirstFailureAndProbesAfterCooldown(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	s := mcpFailStreaks{now: func() time.Time { return now }}
 
-	for i := int64(1); i < mcpFailStreakThreshold; i++ {
-		s.note("cbm")
-		if isOpen, _, _ := s.open("cbm"); isOpen {
-			t.Fatalf("breaker open after %d failure(s), want closed below the threshold", i)
-		}
-	}
 	s.note("cbm")
 	isOpen, retryIn, streak := s.open("cbm")
-	if !isOpen || streak != mcpFailStreakThreshold || retryIn != mcpBreakerCooldown {
-		t.Fatalf("at threshold: open=%v retryIn=%s streak=%d", isOpen, retryIn, streak)
+	if !isOpen || streak != 1 || retryIn != mcpBreakerCooldown {
+		t.Fatalf("after first failure: open=%v retryIn=%s streak=%d, want open at streak 1", isOpen, retryIn, streak)
+	}
+
+	// Each further failure re-arms a full cooldown and keeps counting toward the
+	// ERROR-escalation threshold, which is independent of the breaker window.
+	for i := int64(2); i <= mcpFailStreakThreshold; i++ {
+		now = now.Add(mcpBreakerCooldown)
+		s.note("cbm")
+		if isOpen, retryIn, streak := s.open("cbm"); !isOpen || retryIn != mcpBreakerCooldown || streak != i {
+			t.Fatalf("failure %d: open=%v retryIn=%s streak=%d", i, isOpen, retryIn, streak)
+		}
 	}
 
 	// Mid-cooldown: still open, remaining time shrinks.

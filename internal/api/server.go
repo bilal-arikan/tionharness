@@ -99,6 +99,18 @@ type Server struct {
 	// (see chatTurnIdle); it exists so a test can actually OBSERVE a stalled turn
 	// being reclaimed instead of asserting it in under a minute of wall clock.
 	chatTurnIdleOverride time.Duration
+	// authToken is the REST bearer secret (see auth.go). Empty — the default —
+	// leaves the API open, exactly as before the gate existed. Set via
+	// SetAuthToken before Routes() is called.
+	authToken string
+}
+
+// SetAuthToken enables bearer authentication for the REST surface. An empty
+// token leaves the API open on every bind address; see auth.go for why the gate
+// is opt-in rather than automatic on a non-loopback bind. Must be called before
+// Routes().
+func (s *Server) SetAuthToken(token string) {
+	s.authToken = token
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
@@ -407,8 +419,12 @@ func (s *Server) Routes() http.Handler {
 
 	// withRecover sits inside withRequestLog so a recovered panic's 500 is also
 	// reflected in the access log, and outside withWorkspace so a panic in any
-	// workspace-scoped handler is caught.
-	return withCORS(s.withRequestLog(s.withRecover(s.withWorkspace(mux))))
+	// workspace-scoped handler is caught. apiAuth sits inside withCORS (a
+	// preflight must still answer without a token) but outside everything else,
+	// so an unauthenticated request never reaches a handler or a workspace. It is
+	// a no-op unless a token is configured (auth.go).
+	return withCORS(s.withRequestLog(apiAuth(s.authToken,
+		s.withRecover(s.withWorkspace(mux)))))
 }
 
 // registerWebRoutes mounts the embedded frontend SPA at the catch-all "/" route.
@@ -473,6 +489,7 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 // registerAgentRoutes registers agent CRUD.
 func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents", s.handleListAgents)
+	mux.HandleFunc("GET /api/agents/{id}", s.handleGetAgent)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
@@ -621,18 +638,23 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 // registerTaskRoutes registers the kanban board + run history.
 func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/tasks", s.handleListTasks)
+	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("POST /api/tasks/{id}/archive", s.handleArchiveTask)
 	mux.HandleFunc("POST /api/tasks/{id}/unarchive", s.handleUnarchiveTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
+	// Record which session is working a card. The board has no dispatcher, so an
+	// external driver spawns the session itself and reports it back here.
+	mux.HandleFunc("POST /api/tasks/{id}/sessions", s.handleLinkTaskSession)
 	mux.HandleFunc("POST /api/tasks/{id}/{subpath...}", s.handleUnknownTaskSubpath)
 }
 
 // registerScheduleRoutes registers cron schedules.
 func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/schedules", s.handleListSchedules)
+	mux.HandleFunc("GET /api/schedules/{id}", s.handleGetSchedule)
 	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}", s.handleUpdateSchedule)
 	mux.HandleFunc("POST /api/schedules/{id}/toggle", s.handleToggleSchedule)
@@ -644,6 +666,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	// Tag-triggered automations (event-driven loops), surfaced in the Schedules UI.
 	mux.HandleFunc("GET /api/automations/live-stats", s.handleAutomationLiveStats)
 	mux.HandleFunc("GET /api/automations", s.handleListAutomations)
+	mux.HandleFunc("GET /api/automations/{id}", s.handleGetAutomation)
 	mux.HandleFunc("POST /api/automations", s.handleCreateAutomation)
 	mux.HandleFunc("PUT /api/automations/{id}", s.handleUpdateAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/toggle", s.handleToggleAutomation)
@@ -673,7 +696,15 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp-servers/importable", s.handleImportableMCPServers)
 	mux.HandleFunc("POST /api/mcp-servers/importable/add", s.handleAddImportableMCPServer)
 	mux.HandleFunc("GET /api/mcp-servers/pool", s.handleMCPPoolStats)
+	mux.HandleFunc("GET /api/mcp-servers/{id}", s.handleGetMCPServer)
 	mux.HandleFunc("PATCH /api/mcp-servers/{id}", s.handleUpdateMCPServer)
+	// PUT alongside PATCH: every other family updates with PUT, so a client
+	// generating calls from that pattern would otherwise get a bare 405 here.
+	// PUT is in fact the ACCURATE verb — UpdateMCPServer (store_mcp.go) assigns
+	// every mutable field from the request, so an omitted field is cleared, not
+	// preserved. PATCH stays registered because the frontend already calls it;
+	// it is the alias now, despite being the older spelling.
+	mux.HandleFunc("PUT /api/mcp-servers/{id}", s.handleUpdateMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/toggle", s.handleToggleMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/test", s.handleTestMCPServer)
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
@@ -709,6 +740,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/insight/settings", s.handleGetInsightSettings)
 	mux.HandleFunc("PUT /api/insight/settings", s.handleUpdateInsightSettings)
 	mux.HandleFunc("GET /api/hooks", s.handleListHooks)
+	mux.HandleFunc("GET /api/hooks/{id}", s.handleGetHook)
 	mux.HandleFunc("GET /api/hooks/builtins", s.handleListBuiltinHooks)
 	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)
 	mux.HandleFunc("PUT /api/hooks/{id}", s.handleUpdateHook)
