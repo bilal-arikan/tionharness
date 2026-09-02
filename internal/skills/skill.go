@@ -78,24 +78,37 @@ func (s Skill) IsCoordinatorWorkflow() bool {
 // Lives here (a leaf package) rather than beside the HTTP handler so both entry
 // points can share it: the session-role API and a flow's coordinator node.
 func ResolveCoordinatorWorkflow(store *Store, slug string) (maxTurns int, err error) {
-	slug = strings.TrimSpace(slug)
+	sk, err := ResolveRecipe(store, slug)
+	if err != nil || sk == nil {
+		return 0, err
+	}
+	return sk.MaxTurns, nil
+}
+
+// ResolveRecipe is ResolveCoordinatorWorkflow returning the whole skill. ref may
+// be a bare slug or "slug@version" (RecipeRef); the version part is informational
+// — the CURRENT file is what resolves, and a mismatch is not an error (the
+// trajectory records the version it was seeded from, the session runs the
+// recipe as it is now). A nil skill with a nil error means an empty ref.
+func ResolveRecipe(store *Store, ref string) (*Skill, error) {
+	slug, _ := ParseRecipeRef(ref)
 	if slug == "" {
-		return 0, nil
+		return nil, nil
 	}
 	if store == nil {
-		return 0, fmt.Errorf("skills store unavailable")
+		return nil, fmt.Errorf("skills store unavailable")
 	}
 	sk, ok := store.Get(slug)
 	if !ok {
-		return 0, fmt.Errorf("workflow %q not found", slug)
+		return nil, fmt.Errorf("workflow %q not found", slug)
 	}
 	if !sk.IsCoordinatorWorkflow() {
-		return 0, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
+		return nil, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
 	}
 	if sk.Pattern != "" && !KnownPattern(sk.Pattern) {
-		return 0, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, PatternValues)
+		return nil, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, PatternValues)
 	}
-	return sk.MaxTurns, nil
+	return &sk, nil
 }
 
 // Source identifies which tier a skill was resolved from. The workspace tier
@@ -200,6 +213,13 @@ type Skill struct {
 	// MaxTurns optionally overrides CoordinatorMaxTurns for this recipe (0 = keep
 	// the workspace default). Set from frontmatter `max_turns`.
 	MaxTurns int `json:"maxTurns,omitempty"`
+	// Recipe is the STRUCTURED part of a coordinator-workflow recipe (phases,
+	// watchers, optimizer — see recipe.go), parsed and validated at load. nil for
+	// a prose-only recipe and for a non-recipe skill. When the block is present
+	// but invalid, Recipe stays nil and RecipeError says why — the skill still
+	// loads and works as prose, but no trajectory is seeded from it.
+	Recipe      *RecipeSpec `json:"recipe,omitempty"`
+	RecipeError string      `json:"recipeError,omitempty"`
 	// Source is the tier this skill was resolved from.
 	Source Source `json:"source"`
 	// ModifiedAt is the SKILL.md file's last-modified time (Unix seconds), surfaced

@@ -362,6 +362,25 @@ atlama nedeni için; arşivli kural ateşlenmez; şekil doğrulaması registry �
 **Boyut:** M. **Açar:** F1 tohumlama, F3 sürümleme. **Not:** `internal/skills`
 eşzamanlı değişti; rebase ile başlanır.
 
+**Gerçekleşen (2026-09-02, dal `rota/r6-recipe-schema`).** Sapmalar:
+
+- `RecipeSpec` **eski alanları kapsamıyor**: `WorkerTargets/StopCondition/MaxTurns`
+  `Skill` üzerinde kaldı (mevcut tüketiciler); `RecipeSpec{Version, Phases,
+  Watchers, Optimizer}` + `PhaseSpec{ID, Label, Profile, Gate, Watchers,
+  MaxRounds, Optional}` yalnız yeni yapısal kısmı taşır. `Skill.Recipe` /
+  `Skill.RecipeError`.
+- Frontmatter ayrıştırıcısına `blocks` (ham iç içe blok yakalama) eklendi;
+  `phases` için özel `parsePhaseBlock` (skaler / `[..]` / `{ k: v }`). YAML
+  bağımlılığı **eklenmedi**.
+- Sürüm damgası `SpawnWorker` ve flow koordinatör düğümünde; `createSessionLocked`
+  ajan varsayılanı çıplak slug bırakır (db skills'i göremez), okuyucular ikisini
+  de kabul eder. Seed ledger'a ayrı sürüm izi **eklenmedi**: gönderilen dosyanın
+  değişmesi mevcut hash-ledger ile `default/tuned/edited` durumuna zaten düşer.
+- Picker: "Fazlar: plan (planner) → …" satırı, `(vN)` etiketi ve geçersiz blok
+  uyarısı. `_Docs/47` §16.
+- Testler: `internal/skills/recipe_test.go` (blok sızıntısı yok, şema, ref, store
+  yükleme + geçersiz işaretleme, gönderilen reçeteler geçerli).
+
 ### R7 — Koordinasyon gözlemci arayüzü
 
 **Neden.** Rota'nın `observed` düğümleri `SpawnWorker`, `NotifyCoordinator`,

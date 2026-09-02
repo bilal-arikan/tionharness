@@ -49,11 +49,13 @@ func coordinatorRecipeBlock(wsp *workspace.Workspace, session db.Session) string
 	if store == nil {
 		return ""
 	}
-	sk, ok := store.Get(session.CoordinatorWorkflow)
+	// The session may carry "slug@version" (R6); the current file resolves.
+	slug, _ := skills.ParseRecipeRef(session.CoordinatorWorkflow)
+	sk, ok := store.Get(slug)
 	if !ok || !sk.IsCoordinatorWorkflow() {
 		return ""
 	}
-	body, err := store.Body(session.CoordinatorWorkflow)
+	body, err := store.Body(slug)
 	if err != nil {
 		return ""
 	}
@@ -61,6 +63,30 @@ func coordinatorRecipeBlock(wsp *workspace.Workspace, session db.Session) string
 	fmt.Fprintf(&b, "## Active workflow: %s", sk.Name)
 	if sk.Pattern != "" {
 		fmt.Fprintf(&b, " (pattern: %s)", sk.Pattern)
+	}
+	if sk.Recipe != nil && len(sk.Recipe.Phases) > 0 {
+		// The declared phases, so the coordinator and the trajectory seeded from
+		// this recipe name the same steps (_Docs/77 R6).
+		b.WriteString("\n**Declared phases (in order):** ")
+		for i, p := range sk.Recipe.Phases {
+			if i > 0 {
+				b.WriteString(" → ")
+			}
+			b.WriteString(p.ID)
+			if p.Profile != "" {
+				fmt.Fprintf(&b, " (%s)", p.Profile)
+			}
+			if p.Gate != nil {
+				fmt.Fprintf(&b, " [gate: %s", p.Gate.Kind)
+				if p.Gate.Value != "" {
+					fmt.Fprintf(&b, " %q", p.Gate.Value)
+				}
+				b.WriteString("]")
+			}
+			if p.Optional {
+				b.WriteString(" (optional)")
+			}
+		}
 	}
 	b.WriteString("\nThe user selected this saved orchestration recipe for this session. Follow it as your operating plan for the task, on top of the general coordinator rules above.\n\n")
 	b.WriteString(strings.TrimSpace(body))

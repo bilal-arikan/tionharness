@@ -104,7 +104,9 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 		CoordinatorMode: true,
 		// Persisting the slug is all the recipe needs: the turn's static prefix
 		// resolves and injects its body from the session (coordinatorRecipeBlock).
-		CoordinatorWorkflow: strings.TrimSpace(spec.Workflow),
+		// Versioned ref ("slug@version") when the recipe declares a version, so the
+		// session — and the trajectory seeded from it — record the revision (R6).
+		CoordinatorWorkflow: skills.RecipeRefFor(r.skills, spec.Workflow),
 		CoordinatorMaxTurns: maxTurns,
 	})
 	if err != nil {

@@ -4,6 +4,11 @@ kind: coordinator-workflow
 pattern: fanout
 description: "Split a task into independent sub-questions, one worker per branch, then synthesize the findings into a single answer yourself."
 worker_targets: [explore]
+version: 1
+phases:
+  - id: dispatch
+    profile: explore
+  - id: synthesize
 icon: "🌿"
 color: "#0ea5e9"
 access: shared

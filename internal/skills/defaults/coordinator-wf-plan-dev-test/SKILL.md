@@ -6,6 +6,19 @@ description: "Deliver one feature/fix as three separate workers — a planner, a
 worker_targets: [planner, coder, validator]
 stop_condition: "the validator returns VERDICT: PASS, or the repair budget is spent"
 max_turns: 24
+version: 1
+phases:
+  - id: plan
+    profile: planner
+    gate: { kind: artifact, value: plan }
+  - id: code
+    profile: coder
+  - id: review
+    profile: validator
+    gate: { kind: verdict, value: "VERDICT: PASS" }
+    max_rounds: 2
+  - id: ship
+    optional: true
 icon: "🧩"
 color: "#10b981"
 access: shared

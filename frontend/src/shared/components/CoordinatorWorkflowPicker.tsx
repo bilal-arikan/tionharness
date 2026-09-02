@@ -40,7 +40,16 @@ function recipeHelp(r: Skill): string {
   if (r.workerTargets?.length) lines.push(`Önerilen worker'lar: ${r.workerTargets.join(', ')}`)
   if (r.stopCondition) lines.push(`Durma koşulu: ${r.stopCondition}`)
   if (r.maxTurns) lines.push(`Tur üst sınırı: ${r.maxTurns}`)
-  lines.push(`Skill: ${r.slug}`)
+  // Structured plan (R6): the phases a trajectory will be seeded with, or the
+  // reason the block was rejected (the recipe still works as prose).
+  if (r.recipe?.phases?.length) {
+    const phases = r.recipe.phases
+      .map((p) => (p.profile ? `${p.id} (${p.profile})` : p.id) + (p.optional ? '?' : ''))
+      .join(' → ')
+    lines.push(`Fazlar: ${phases}`)
+  }
+  if (r.recipeError) lines.push(`⚠ Faz bloğu geçersiz: ${r.recipeError}`)
+  lines.push(r.version ? `Skill: ${r.slug} (v${r.version})` : `Skill: ${r.slug}`)
   return lines.join('\n\n')
 }
 

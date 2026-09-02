@@ -7,6 +7,31 @@ import type { SeedDefaultState } from './seed'
 
 export type SkillSource = 'global' | 'workspace'
 
+// A phase's exit condition (recipe frontmatter `gate`).
+export interface GateSpec {
+  kind: 'artifact' | 'verdict' | 'human' | 'schema'
+  value?: string
+}
+
+// One declared phase of a coordinator recipe.
+export interface PhaseSpec {
+  id: string
+  label?: string
+  profile?: string
+  gate?: GateSpec
+  watchers?: string[]
+  maxRounds?: number
+  optional?: boolean
+}
+
+// The structured part of a coordinator recipe (skills.RecipeSpec, _Docs/77 R6).
+export interface RecipeSpec {
+  version?: string
+  phases: PhaseSpec[]
+  watchers?: string[]
+  optimizer?: string
+}
+
 export interface Skill {
   slug: string
   name: string
@@ -58,6 +83,12 @@ export interface Skill {
   stopCondition?: string
   // Optional per-session CoordinatorMaxTurns override a recipe applies (0 = default).
   maxTurns?: number
+  // Structured recipe (phases / watchers / optimizer) parsed from the
+  // frontmatter of a coordinator-workflow skill (_Docs/77 R6). Absent for a
+  // prose-only recipe; recipeError set when the block is present but invalid
+  // (the recipe still works as prose, no trajectory is seeded from it).
+  recipe?: RecipeSpec
+  recipeError?: string
   // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
   // a "last edited" label; skills are sorted within each group newest-first by it.
   modifiedAt?: number

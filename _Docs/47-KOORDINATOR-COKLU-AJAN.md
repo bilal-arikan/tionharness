@@ -1854,3 +1854,52 @@ açılır. Kapsamı yalnız kullanıcı genişletir.
 
 > Bu madde bilinçli olarak **prompt düzeyinde** bir kuraldır, zorlanan bir mekanizma
 > değil: kapsam kartın serbest metnindedir, runtime onu doğrulamaz.
+
+## 16. Reçete frontmatter şeması ve sürüm (2026-09-02, `_Docs/77` R6)
+
+Bir `kind: coordinator-workflow` skill'i düzyazı gövdesinin yanında artık
+**yapısal bir plan** taşıyabilir; Rota (yörünge) bu bloktan tohumlanır, düzyazı
+koordinatör prompt'una girmeye devam eder:
+
+```yaml
+version: 1
+phases:
+  - id: plan
+    profile: planner
+    gate: { kind: artifact, value: plan }
+  - id: code
+    profile: coder
+    watchers: [summarize-board]
+  - id: review
+    profile: validator
+    gate: { kind: verdict, value: "VERDICT: PASS" }
+    max_rounds: 2
+  - id: ship
+    optional: true
+watchers: [update-docs]
+optimizer: recipe-optimizer
+```
+
+- **Şema** (`internal/skills/recipe.go`): `RecipeSpec{Version, Phases, Watchers,
+  Optimizer}`, `PhaseSpec{ID, Label, Profile, Gate, Watchers, MaxRounds, Optional}`,
+  `GateSpec{Kind: artifact|verdict|human|schema, Value}`. Faz id'leri küçük harf
+  slug, benzersiz. Değer biçimleri: skaler, satır-içi dizi `[a, b]`, satır-içi map
+  `{ k: v }` (frontmatter ayrıştırıcısı bağımlılıksız kalır; iç içe blok
+  `frontmatter.blocks` ile ham yakalanıp `parsePhaseBlock` ile çözülür).
+- **Yükleme davranışı:** blok yoksa `Skill.Recipe == nil` (yalnız-düzyazı reçete,
+  hata değil). Blok varsa ve **geçersizse** skill yine yüklenir ve düzyazı olarak
+  çalışır, `Skill.RecipeError` nedeni taşır, seçici bunu "⚠ Faz bloğu geçersiz"
+  olarak gösterir; ondan Rota tohumlanmaz. Gönderilen reçetelerin bloğu
+  `TestShippedRecipesParse` ile CI'da doğrulanır.
+- **Sürümlü referans:** `skills.RecipeRef(slug, version)` → `slug@1`.
+  `Session.CoordinatorWorkflow` worker spawn'ında (`SpawnWorker`) ve flow
+  koordinatör düğümünde sürümlü damgalanır; ajan varsayılanından gelen değer ve
+  eski oturumlar çıplak slug taşır, tüm okuyucular (`ResolveRecipe`,
+  `coordinatorRecipeBlock`) `ParseRecipeRef` ile ikisini de kabul eder. Sürüm
+  **bilgilendiricidir**: çözümlenen her zaman güncel dosyadır; Rota tohumlandığı
+  sürümü `TemplateRef`'te kaydeder.
+- **Prompt:** reçete bloğuna "Declared phases (in order)" satırı eklenir, böylece
+  koordinatör ile ondan tohumlanan Rota aynı faz adlarını kullanır.
+- Gönderilen `plan-dev-test` (plan → code → review → ship?) ve `fanout`
+  (dispatch → synthesize) reçetelerine `version: 1` + `phases` eklendi; diğerleri
+  düzyazı olarak kaldı.

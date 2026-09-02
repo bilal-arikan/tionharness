@@ -629,9 +629,11 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		RootCoordinatorSessionID: rootID,
 		CoordinatorDepth:         depth,
 		CoordinatorMode:          coordinator,
-		CoordinatorWorkflow:      workflow,
-		CoordinatorMaxTurns:      maxTurns,
-		onDrop:                   func(error) bool { return dropped() },
+		// Versioned ref ("slug@version") when the recipe declares one, so the
+		// sub-coordinator's trajectory records the revision it followed (R6).
+		CoordinatorWorkflow: skills.RecipeRefFor(r.Skills(), workflow),
+		CoordinatorMaxTurns: maxTurns,
+		onDrop:              func(error) bool { return dropped() },
 	})
 	if err != nil {
 		// SpawnSession never launched runWorker, so release the reservation here.

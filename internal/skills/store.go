@@ -168,6 +168,13 @@ func scanDir(t tier) []scannedSkill {
 			Source:          t.source,
 			Path:            path,
 		}
+		if sk.IsCoordinatorWorkflow() {
+			if spec, rerr := parseRecipeSpec(fm, sk.Version); rerr != nil {
+				sk.RecipeError = rerr.Error()
+			} else {
+				sk.Recipe = spec
+			}
+		}
 		// Stamp the SKILL.md last-modified time (Unix seconds) so the UI can show
 		// a "last edited" date and sort by recency. Best-effort: 0 if stat fails.
 		if info, statErr := os.Stat(path); statErr == nil {

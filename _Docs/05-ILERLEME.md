@@ -1,5 +1,33 @@
 # TionHarness — İlerleme Takibi
 
+## Reçete frontmatter şeması ve sürümlü referans — Rota altyapısı R6 (2026-09-02) ✅
+
+**Belirti.** Koordinatör reçeteleri yalnız düzyazıydı; Rota'nın tohumlanacağı faz
+listesi hiçbir yerde yapısal değildi, reçetenin sürümü yoktu, oturum hangi
+revizyonu izlediğini bilmiyordu.
+
+**Ne.** `internal/skills/recipe.go`: `RecipeSpec{Version, Phases, Watchers,
+Optimizer}` + `PhaseSpec` + `GateSpec`; frontmatter `phases:` bloğu
+(`frontmatter.blocks` ham yakalama + `parsePhaseBlock`) yüklemede çözülüp
+doğrulanır; geçersiz blok skill'i düşürmez, `Skill.RecipeError` taşır. Sürümlü
+referans `slug@version` (`RecipeRef`/`ParseRecipeRef`/`RecipeRefFor`), worker
+spawn'ı ve flow koordinatör düğümünde damgalanır, okuyucular iki biçimi de
+kabul eder. Koordinatör prompt bloğuna "Declared phases" satırı; picker faz
+zinciri + sürüm + geçersizlik uyarısı gösterir. Gönderilen `plan-dev-test` ve
+`fanout` reçetelerine `version: 1` + `phases` eklendi. Detay: `_Docs/47` §16,
+`_Docs/77` R6.
+
+**Dosyalar.** `internal/skills/recipe.go`, `recipe_test.go` (yeni),
+`frontmatter.go`, `skill.go`, `store.go`, `defaults/coordinator-wf-plan-dev-test/
+SKILL.md`, `defaults/coordinator-wf-fanout/SKILL.md`; `internal/api/
+coordinator_prompt.go`; `internal/agent/coordination.go`, `flow_coordinator.go`;
+`frontend/src/types/skill.ts`, `shared/components/CoordinatorWorkflowPicker.tsx`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` skills/agent/api/workspace ✅ (yeni:
+`TestFrontmatterNestedBlockDoesNotLeak`, `TestParseRecipeSpec`,
+`TestRecipeRefRoundTrip`, `TestStoreLoadsRecipeAndFlagsInvalidOnes`,
+`TestShippedRecipesParse`); `npx tsc --noEmit` ✅.
+
 ## Otomasyon çekirdeği: tetik registry'si, ateşleme defteri, arşiv — Rota altyapısı R5 (2026-09-02) ✅
 
 **Belirti.** Dört tetik `ValidateAutomationShape` içinde switch dalıydı (yeni tetik

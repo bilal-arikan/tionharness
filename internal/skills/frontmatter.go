@@ -7,6 +7,11 @@ import "strings"
 type frontmatter struct {
 	scalars map[string]string
 	lists   map[string][]string
+	// blocks keeps the RAW indented text under a `key:` line whose value is
+	// empty — nested structures (a list of maps such as the recipe `phases:`
+	// block) that the flat scalar/list model cannot represent. Dedented to the
+	// block's own base indentation; consumers parse it themselves.
+	blocks map[string]string
 }
 
 func (f frontmatter) scalar(keys ...string) string {
@@ -84,7 +89,7 @@ func splitFrontmatter(content string) (fmText, body string) {
 // It is intentionally dependency-free (the project keeps go.mod minimal).
 func parseFrontmatter(content string) (frontmatter, string) {
 	fmText, body := splitFrontmatter(content)
-	fm := frontmatter{scalars: map[string]string{}, lists: map[string][]string{}}
+	fm := frontmatter{scalars: map[string]string{}, lists: map[string][]string{}, blocks: map[string]string{}}
 	if fmText == "" {
 		return fm, body
 	}
@@ -131,6 +136,24 @@ func parseFrontmatter(content string) (frontmatter, string) {
 			// Begin a block list (or an empty value); record the key so following
 			// "- item" lines attach to it.
 			curList = key
+			// Also capture the raw nested block and skip its DEEPER lines: a list
+			// of maps ("- id: plan" followed by "    profile: planner") must not
+			// leak its nested keys into the top-level scalars. Flat "- item" lines
+			// at the block's base indentation still attach to the list above.
+			if block, base, consumed := collectRawBlock(lines[i+1:]); consumed > 0 {
+				fm.blocks[key] = block
+				for _, ln := range lines[i+1 : i+1+consumed] {
+					t := strings.TrimSpace(ln)
+					lead := len(ln) - len(strings.TrimLeft(ln, " \t"))
+					if lead == base && strings.HasPrefix(t, "- ") {
+						if item := unquote(strings.TrimSpace(t[2:])); item != "" {
+							fm.lists[key] = append(fm.lists[key], item)
+						}
+					}
+				}
+				i += consumed
+				curList = ""
+			}
 		case strings.HasPrefix(val, "[") && strings.HasSuffix(val, "]"):
 			fm.lists[key] = parseInlineArray(val)
 		default:
@@ -138,6 +161,40 @@ func parseFrontmatter(content string) (frontmatter, string) {
 		}
 	}
 	return fm, body
+}
+
+// collectRawBlock consumes the indented lines that follow a `key:` line (up to
+// the next non-blank line at column 0), returning them dedented to the block's
+// base indentation, that base, and how many lines were consumed (0 = no block).
+func collectRawBlock(rest []string) (block string, base int, consumed int) {
+	base = -1
+	var out []string
+	for _, ln := range rest {
+		if strings.TrimSpace(ln) == "" {
+			out = append(out, "")
+			consumed++
+			continue
+		}
+		lead := len(ln) - len(strings.TrimLeft(ln, " \t"))
+		if lead == 0 {
+			break
+		}
+		if base < 0 {
+			base = lead
+		}
+		if lead < base {
+			break
+		}
+		out = append(out, ln[base:])
+		consumed++
+	}
+	if base < 0 {
+		return "", 0, 0
+	}
+	for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+		out = out[:len(out)-1]
+	}
+	return strings.Join(out, "\n"), base, consumed
 }
 
 // isBlockScalarIndicator reports whether a value is a YAML block-scalar header:
