@@ -275,6 +275,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           onChange={(v) => set('coordinatorStallMaxNudges', v)}
         />
       </div>
+      <Toggle
+        label="Düzeltici notu sohbette göster"
+        hint="Guard bir fantom spawn yakaladığında transkripte `<coordination-guard>` notu enjekte edilir. Bu ayar yalnızca notun EKRANDA görünüp görünmeyeceğini belirler — not her hâlükârda kaydedilir ve koordinatörün bir sonraki turuna girer. Varsayılan: KAPALI (gizli)."
+        checked={draft.coordinatorStallNoteVisible}
+        onChange={(v) => set('coordinatorStallNoteVisible', v)}
+      />
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Çalışma dizini güvenliği.</b> Dosya/kabuk araçları artık workspace'e kilitli değil (her

@@ -143,7 +143,7 @@ instances with different keys).
 - `progressResume` (default true) — restore that list on a fresh session.
 
 ### Autonomous self-completion (see _Docs/05)
-- `autonomousAutoContinue` (default true) — when an autonomous turn (scheduler/spawn/wake) ends with unfinished work (it left `todo_write` items open, or its last action was a lazy-tool activation whose tools only take effect next turn), automatically run a continuation turn so the work self-completes instead of stalling. Each continuation is history-aware and budget-gated; the loop stops when the work is done, a turn makes no tool progress, or the daily budget is hit.
+- `autonomousAutoContinue` (default true) — when an autonomous turn (scheduler/spawn/wake) ends with unfinished work (it left `todo_write` items open, or its last action was a lazy-tool activation whose tools only take effect next turn), automatically run a continuation turn so the work self-completes instead of stalling. Each continuation is history-aware and budget-gated; the loop stops when the work is done, a turn makes no tool progress, or the daily budget is hit. It never fires for a turn that was CUT SHORT (watchdog cut, tool-iteration cap, guardrail halt, context/output exhaustion) or for a run the user STOPPED — those already say why they ended, and re-nudging would restart work that was deliberately halted.
 - `autonomousAutoContinueMax` (default 3, 0 = default) — hard cap on auto-issued continuation turns per autonomous run.
 
 ### File freshness guard (Claude Code parity)

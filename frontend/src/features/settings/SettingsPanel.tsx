@@ -240,6 +240,7 @@ export function SettingsPanel({
       coordinatorStallGuard: draft.coordinatorStallGuard,
       coordinatorStallSweepMin: draft.coordinatorStallSweepMin,
       coordinatorStallMaxNudges: draft.coordinatorStallMaxNudges,
+      coordinatorStallNoteVisible: draft.coordinatorStallNoteVisible,
       autonomousConfine: draft.autonomousConfine,
       autonomousBootSeq: draft.autonomousBootSeq,
       autonomousAutoContinue: draft.autonomousAutoContinue,

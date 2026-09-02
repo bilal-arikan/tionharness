@@ -400,6 +400,12 @@ type Settings struct {
 	CoordinatorStallGuard     bool `json:"coordinatorStallGuard"`
 	CoordinatorStallSweepMin  int  `json:"coordinatorStallSweepMin"`
 	CoordinatorStallMaxNudges int  `json:"coordinatorStallMaxNudges"`
+	// CoordinatorStallNoteVisible controls whether the injected
+	// <coordination-guard> corrective note is RENDERED in the transcript. It is a
+	// display choice only: the note is always recorded and always reaches the
+	// coordinator's next turn — hiding it just keeps a runtime self-correction out
+	// of the reader's chat. Default false (hidden).
+	CoordinatorStallNoteVisible bool `json:"coordinatorStallNoteVisible"`
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
@@ -709,6 +715,7 @@ type DTO struct {
 	CoordinatorStallGuard         bool `json:"coordinatorStallGuard"`
 	CoordinatorStallSweepMin      int  `json:"coordinatorStallSweepMin"`
 	CoordinatorStallMaxNudges     int  `json:"coordinatorStallMaxNudges"`
+	CoordinatorStallNoteVisible   bool `json:"coordinatorStallNoteVisible"`
 
 	AutonomousConfine bool `json:"autonomousConfine"`
 	AutonomousBootSeq bool `json:"autonomousBootSeq"`
@@ -830,6 +837,7 @@ func (s Settings) ToDTO() DTO {
 		CoordinatorStallGuard:         s.CoordinatorStallGuard,
 		CoordinatorStallSweepMin:      s.CoordinatorStallSweepMin,
 		CoordinatorStallMaxNudges:     s.CoordinatorStallMaxNudges,
+		CoordinatorStallNoteVisible:   s.CoordinatorStallNoteVisible,
 
 		AutonomousConfine: s.AutonomousConfine,
 		AutonomousBootSeq: s.AutonomousBootSeq,
@@ -953,6 +961,7 @@ type Patch struct {
 	CoordinatorStallGuard         *bool `json:"coordinatorStallGuard"`
 	CoordinatorStallSweepMin      *int  `json:"coordinatorStallSweepMin"`
 	CoordinatorStallMaxNudges     *int  `json:"coordinatorStallMaxNudges"`
+	CoordinatorStallNoteVisible   *bool `json:"coordinatorStallNoteVisible"`
 
 	AutonomousConfine *bool `json:"autonomousConfine"`
 	AutonomousBootSeq *bool `json:"autonomousBootSeq"`

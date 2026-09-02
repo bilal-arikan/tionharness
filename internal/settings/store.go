@@ -269,6 +269,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.CoordinatorStallGuard, p.CoordinatorStallGuard)
 	applyInt(&next.CoordinatorStallSweepMin, p.CoordinatorStallSweepMin)
 	applyInt(&next.CoordinatorStallMaxNudges, p.CoordinatorStallMaxNudges)
+	applyBool(&next.CoordinatorStallNoteVisible, p.CoordinatorStallNoteVisible)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)

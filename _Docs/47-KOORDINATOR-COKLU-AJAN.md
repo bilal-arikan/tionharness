@@ -396,6 +396,18 @@ ve halt edilir.
   status, gerçek sonucu sonuç olmaktan çıkarmaz; normal taze-worker grace süresini
   korur. Böylece son raporu alan tur yanlışlıkla "worker açmadın" nudge'ına düşmez.
 
+**Notun görünürlüğü (2026-09-01).** Enjekte edilen `<coordination-guard>` notu
+artık sohbet transkriptinde **varsayılan olarak gizlidir**. Ayar:
+`CoordinatorStallNoteVisible` (`coordinatorStallNoteVisible`, varsayılan `false`)
+— Ayarlar ▸ Araçlar ▸ "Düzeltici notu sohbette göster". Bu **yalnızca gösterim**
+kararıdır: not her hâlükârda `recordInjectedUserNote` ile kaydedilir, koordinatörün
+bir sonraki turuna girer ve `hasRecentWorkerNoteInbound` mantığını değiştirmez —
+sadece okuyucunun ekranından düşer. Ön yüz akışı: `applyClientPrefs`
+(`useAppearance.ts`) değeri `setGuardNoteVisible` ile modül store'una yazar
+(`shared/lib/coordinationGuardNote.ts`), `ChatView` `dropGuardNotes` ile
+`MessageList`'e giden listeyi süzer. Değer `settings` SSE olayıyla canlı güncellenir;
+todo paneli / cache-warmth / rewind tam listeyle çalışmaya devam eder.
+
 Test seam: `Runtime.stallJudgeFn` (üretimde nil) — yargıç sonrası kademeler canlı
 sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_test.go`
 (`TestCoordinatorStallGuardJudgesAfterWorkerNote`,

@@ -118,7 +118,7 @@ export interface AppSettings {
   delegationMaxDepth: number
   delegationMaxCalls: number
 
-  // Spawn guards — the detached background surface (run_subagent async + spawn).
+  // Spawn guards — the detached background surface (spawn_worker + bridged spawn).
   spawnMaxConcurrent: number
   spawnQueueMax: number
   spawnMaxPerTurn: number
@@ -158,6 +158,9 @@ export interface AppSettings {
   coordinatorStallGuard: boolean // master on/off (default true)
   coordinatorStallSweepMin: number // staleness sweeper window in minutes (0 = default 5; -1 disables the sweeper)
   coordinatorStallMaxNudges: number // max consecutive corrective nudges (0 = default 2)
+  // Display-only: whether the injected <coordination-guard> note is rendered in
+  // the transcript. The note is always recorded and always reaches the next turn.
+  coordinatorStallNoteVisible: boolean // default false (hidden)
 
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean
@@ -244,7 +247,7 @@ export interface CatalogModel {
   // absent for providers whose ids are already concrete.
   resolvedModel?: string
   // Reasoning levels this model meaningfully supports ("off"/"low"/"medium"/
-  // "high"/"xhigh"/"max"), filled by the backend catalog from ThinkingTiersFor.
+  // "high"/"xhigh"/"max"/"ultra"), filled by backend provider-aware tiers.
   // The pickers keep every tier visible but grey out the ones absent here.
   // Absent means "unknown" → all tiers enabled (the provider clamps anyway).
   thinkingTiers?: string[]

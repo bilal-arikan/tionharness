@@ -29,6 +29,7 @@ import {
   todoDismissalKey,
 } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
+import { dropGuardNotes, useGuardNoteVisible } from '@/shared/lib/coordinationGuardNote'
 import type { useChatStream } from './useChatStream'
 import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb'
 import {
@@ -154,6 +155,17 @@ export function ChatView({
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodo = useMemo(() => latestTodos(messages), [messages])
+
+  // The rendered transcript hides the runtime's <coordination-guard> corrective
+  // notes unless the app setting turns them on. Display-only: the note stays in
+  // the session and still reaches the coordinator's next turn — only the reader's
+  // view drops it. Everything else on this screen (todos, cache warmth, rewind)
+  // keeps working off the full list.
+  const guardNotesVisible = useGuardNoteVisible()
+  const shownMessages = useMemo(
+    () => dropGuardNotes(messages, guardNotesVisible),
+    [messages, guardNotesVisible],
+  )
   const currentTodos = currentTodo?.todos ?? []
   const [locallyDismissedTodo, setLocallyDismissedTodo] = useState<string | null>(null)
   const todoDismissed = useMemo(() => {
@@ -273,7 +285,7 @@ export function ChatView({
         <ChatSkeleton />
       ) : (
         <MessageList
-          messages={messages}
+          messages={shownMessages}
           sessionId={activeSessionId ?? undefined}
           pending={chat.activePending}
           // Who the not-yet-arrived turn belongs to, so the standalone "working"

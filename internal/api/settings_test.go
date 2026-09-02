@@ -126,6 +126,7 @@ var settingsPatchGoldenFields = []string{
 	"coordinatorMaxWorkers", "coordinatorMaxTurns", "coordinatorMaxDepth",
 	"coordinatorMaxSubtreeSessions", "coordinatorSettleGraceSec",
 	"coordinatorStallGuard", "coordinatorStallSweepMin", "coordinatorStallMaxNudges",
+	"coordinatorStallNoteVisible",
 	"autonomousConfine", "autonomousBootSeq",
 	"backupEnabled", "backupIntervalHours", "backupRetain", "backupDir",
 }
