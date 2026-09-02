@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Eye, Trash2, Star, Copy, RotateCcw, Power } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
@@ -14,7 +14,12 @@ import { Button, PromptEditor } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import { useCatalog, thinkingOptionsForModel } from '@/shared/lib/catalog'
-import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
+import {
+  BOOLEAN_OPTIONS,
+  PERMISSION_OPTIONS,
+  THINKING_OPTIONS,
+  booleanFromOption,
+} from './agentOptions'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 
 interface Props {
@@ -68,6 +73,7 @@ export function AgentSettingsForm({
   onSetDefault,
   dirtyView,
 }: Props) {
+  const descriptionId = useId()
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
   // open and persisted clean when the form is saved.
@@ -402,16 +408,20 @@ export function AgentSettingsForm({
           </p>
         )}
 
-        <Field label="Düşünme (thinking) seviyesi">
+        <OptionField label="Düşünme (thinking) seviyesi">
           <OptionPills
             value={thinkingLevel}
             onChange={setThinkingLevel}
             options={thinkingOptions}
             ariaLabel="Düşünme seviyesi"
+            ariaDescribedBy={`${descriptionId}-thinking-level`}
             testid="agent-thinking-level"
           />
-        </Field>
-        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+        </OptionField>
+        <p
+          id={`${descriptionId}-thinking-level`}
+          className="-mt-2 text-xs text-[var(--color-text-dim)]"
+        >
           Uzatılmış akıl yürütme <strong>anthropic</strong> sağlayıcıda araçsız sohbette etkilidir.{' '}
           <strong>claude-cli</strong>'da seviye alt sürece geçer: seçilen seviye CLI{' '}
           <code>effortLevel</code>'ına eşlenir (<strong>Yüksek+ / Maks</strong> derin-çalışma
@@ -430,16 +440,20 @@ export function AgentSettingsForm({
           </p>
         )}
 
-        <Field label="İzin modu (araç kullanımı)">
+        <OptionField label="İzin modu (araç kullanımı)">
           <OptionPills
             value={permissionMode}
             onChange={setPermissionMode}
             options={PERMISSION_OPTIONS}
             ariaLabel="İzin modu"
+            ariaDescribedBy={`${descriptionId}-permission-mode`}
             testid="agent-permission-mode"
           />
-        </Field>
-        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+        </OptionField>
+        <p
+          id={`${descriptionId}-permission-mode`}
+          className="-mt-2 text-xs text-[var(--color-text-dim)]"
+        >
           <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong>{' '}
           modunda yazma/komut araçları için sohbette onay penceresi çıkar (Allow once / Always allow
           / Deny); onay verecek kimse yoksa (otonom koşu) reddedilir. claude-cli ajanlarında bu mod
@@ -447,45 +461,45 @@ export function AgentSettingsForm({
           otomatik→<code>bypass</code>).
         </p>
 
-        <Field label="Sağlayıcının kendi web araması">
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--color-text)]">
-            <input
-              type="checkbox"
-              data-testid="agent-native-web-search"
-              checked={nativeWebSearch}
-              onChange={(e) => setNativeWebSearch(e.target.checked)}
-              className="mt-0.5 accent-[var(--color-accent)]"
-            />
-            <span>
-              CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin (varsayılan açık)
-            </span>
-          </label>
-        </Field>
-        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-          Açıkken (varsayılan) sağlayıcı kendi aramasını yapar; çağrı yine de aktivite izinde bir
-          adım olarak görünür. Kapatırsan codex'in <code>web_search</code>'ü config'te kapatılır ve
-          claude-cli'nin <code>WebSearch</code>/<code>WebFetch</code> yerleşikleri
+        <OptionField label="Sağlayıcının kendi web araması">
+          <OptionPills
+            value={nativeWebSearch ? 'on' : 'off'}
+            onChange={(value) => setNativeWebSearch(booleanFromOption(value))}
+            options={BOOLEAN_OPTIONS}
+            ariaLabel="Sağlayıcının kendi web araması"
+            ariaDescribedBy={`${descriptionId}-native-web-search`}
+            testid="agent-native-web-search"
+          />
+        </OptionField>
+        <p
+          id={`${descriptionId}-native-web-search`}
+          className="-mt-2 text-xs text-[var(--color-text-dim)]"
+        >
+          CLI sağlayıcısı <strong>kendi</strong> web aramasını kullanabilsin; ayar varsayılan olarak
+          açıktır. Açıkken sağlayıcı kendi aramasını yapar ve çağrı yine de aktivite izinde bir adım
+          olarak görünür. Kapatırsan codex'in <code>web_search</code>'ü config'te kapatılır ve
+          claude-cli'nin <code>WebSearch</code>/<code>WebFetch</code> yerleşikleri{' '}
           <code>--disallowedTools</code> + <code>permissions.deny</code> ile engellenir; arama
           yalnız TionHarness'in köprülenen <code>WebSearch</code>/<code>WebFetch</code> araçlarından
           geçer (izleme ve kullanım sayacı bunlarda çalışır).
         </p>
 
-        <Field label="Koordinatör">
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--color-text)]">
-            <input
-              type="checkbox"
-              data-testid="agent-coordinator-mode"
-              checked={coordinatorMode}
-              onChange={(e) => setCoordinatorMode(e.target.checked)}
-              className="mt-0.5 accent-[var(--color-accent)]"
-            />
-            <span>
-              Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
-            </span>
-          </label>
-        </Field>
-        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-          Açıkken ajan her yeni oturumda koordinatör el kitabını ve <code>spawn_worker</code> /{' '}
+        <OptionField label="Koordinatör">
+          <OptionPills
+            value={coordinatorMode ? 'on' : 'off'}
+            onChange={(value) => setCoordinatorMode(booleanFromOption(value))}
+            options={BOOLEAN_OPTIONS}
+            ariaLabel="Koordinatör"
+            ariaDescribedBy={`${descriptionId}-coordinator-mode`}
+            testid="agent-coordinator-mode"
+          />
+        </OptionField>
+        <p
+          id={`${descriptionId}-coordinator-mode`}
+          className="-mt-2 text-xs text-[var(--color-text-dim)]"
+        >
+          Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın. Açıkken ajan
+          her yeni oturumda koordinatör el kitabını ve <code>spawn_worker</code> /{' '}
           <code>send_to_worker</code> / <code>stop_worker</code> / <code>list_workers</code>{' '}
           araçlarını hazır bulur — oturum başına elle açman gerekmez. Bu bir{' '}
           <strong>varsayılan</strong>: <em>mevcut</em> oturumlar etkilenmez, ve ajan tek-iş moduna
@@ -583,5 +597,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-xs font-medium text-[var(--color-text-dim)]">{label}</span>
       {children}
     </label>
+  )
+}
+
+function OptionField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="block min-w-0 space-y-1">
+      <legend className="text-xs font-medium text-[var(--color-text-dim)]">{label}</legend>
+      {children}
+    </fieldset>
   )
 }

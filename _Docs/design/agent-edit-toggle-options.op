@@ -1,0 +1,705 @@
+{
+  "version": "0.8.4",
+  "themes": {},
+  "variables": {},
+  "children": [
+    {
+      "type": "frame",
+      "id": "n1",
+      "name": "Agent edit — option pills",
+      "x": 0.0,
+      "y": 0.0,
+      "width": 900.0,
+      "height": 620.0,
+      "layout": "vertical",
+      "gap": 24.0,
+      "padding": 32.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#0D1117"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n2",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 6.0,
+          "children": [
+            {
+              "type": "text",
+              "id": "n3",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Ajan ayarları — seçim kalıpları",
+              "fontFamily": "Inter",
+              "fontSize": 24.0,
+              "fontWeight": 700,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#F0F6FC"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n4",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Boolean ayarlar da izin modu gibi her zaman görünür, iki seçenekli pill kontrolü kullanır.",
+              "fontFamily": "Inter",
+              "fontSize": 13.0,
+              "fontWeight": 400,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#8B949E"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n5",
+          "name": "Settings panel",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 22.0,
+          "padding": 24.0,
+          "cornerRadius": 12.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#161B22"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#30363D"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "frame",
+              "id": "n6",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 9.0,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n7",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "İzin modu (araç kullanımı)",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 600,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n8",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 7.0,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n9",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1F3A5F"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2F81F7"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n10",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "⚡",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n11",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Otomatik",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n12",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#161B22"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#30363D"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n13",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "✋",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n14",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Sor",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n15",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#161B22"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#30363D"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n16",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "🔒",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n17",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Salt-okunur",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n18",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Tüm araçlar onaysız çalışır.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 400,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n19",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 9.0,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n20",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Sağlayıcının kendi web araması",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 600,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n21",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 7.0,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n22",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1F3A5F"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2F81F7"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n23",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "●",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n24",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Açık",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n25",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#161B22"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#30363D"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n26",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "○",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n27",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Kapalı",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n28",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "CLI sağlayıcısının yerleşik web aramasını açar veya kapatır.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 400,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n29",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 9.0,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n30",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Koordinatör",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 600,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n31",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 7.0,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n32",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1F3A5F"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#2F81F7"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n33",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "●",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n34",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Açık",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#F0F6FC"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n35",
+                      "role": "button",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "layout": "horizontal",
+                      "gap": 7.0,
+                      "padding": [
+                        8.0,
+                        12.0
+                      ],
+                      "alignItems": "center",
+                      "cornerRadius": 8.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#161B22"
+                        }
+                      ],
+                      "stroke": {
+                        "thickness": 1.0,
+                        "fill": [
+                          {
+                            "type": "solid",
+                            "color": "#30363D"
+                          }
+                        ]
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n36",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "○",
+                          "fontFamily": "Inter",
+                          "fontSize": 15.0,
+                          "fontWeight": 500,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n37",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "Kapalı",
+                          "fontFamily": "Inter",
+                          "fontSize": 14.0,
+                          "fontWeight": 600,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#8B949E"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n38",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "Ajanın açtığı yeni oturumların koordinatör olarak başlayıp başlamayacağını seçer.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12.0,
+                  "fontWeight": 400,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#8B949E"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "editorMeta": {
+    "activePageIndex": 0,
+    "preserveAuthoredGeometry": false
+  }
+}

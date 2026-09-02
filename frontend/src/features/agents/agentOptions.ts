@@ -33,3 +33,17 @@ export const PERMISSION_OPTIONS: PillOption[] = [
   { value: 'ask', label: 'Sor', hint: 'Yazma/komut için onay iste', icon: '✋' },
   { value: 'read-only', label: 'Salt-okunur', hint: 'Yazma/komut engellenir', icon: '🔒' },
 ]
+
+// Two-state agent settings use the same always-visible selection language as
+// permission mode. Keep string tokens at the visual-control boundary; persisted
+// agent fields remain booleans.
+export const BOOLEAN_OPTIONS: PillOption[] = [
+  { value: 'on', label: 'Açık', hint: 'Etkin', icon: '●' },
+  { value: 'off', label: 'Kapalı', hint: 'Devre dışı', icon: '○' },
+]
+
+export function booleanFromOption(value: string): boolean {
+  if (value === 'on') return true
+  if (value === 'off') return false
+  throw new Error(`Bilinmeyen boolean seçenek: ${value}`)
+}

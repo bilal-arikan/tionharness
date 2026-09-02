@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+
 export interface PillOption {
   value: string
   label: string
@@ -17,6 +19,7 @@ interface Props {
   // Accessible group label + the per-option data-testid prefix ("foo" →
   // group data-testid="foo", each pill data-testid="foo-option" + data-value).
   ariaLabel: string
+  ariaDescribedBy?: string
   testid?: string
 }
 
@@ -24,29 +27,69 @@ interface Props {
 // readable alternative to a <select> for a small, fixed set of choices. It mirrors
 // the chat composer's per-turn pickers (icon + label, accent highlight on the
 // active choice) so the agent settings read the same way.
-export function OptionPills({ value, onChange, options, ariaLabel, testid }: Props) {
+export function OptionPills({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  ariaDescribedBy,
+  testid,
+}: Props) {
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const enabledIndexes = options.flatMap((option, index) => (option.disabled ? [] : [index]))
+  const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled)
+  const tabStopIndex = selectedIndex >= 0 ? selectedIndex : (enabledIndexes[0] ?? -1)
+
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       data-testid={testid}
       className="flex flex-wrap gap-1.5"
     >
-      {options.map((o) => {
+      {options.map((o, index) => {
         const active = o.value === value
         const disabled = !!o.disabled
         return (
           <button
             key={o.value || '_default'}
+            ref={(node) => {
+              optionRefs.current[index] = node
+            }}
             type="button"
             role="radio"
             aria-checked={active}
             aria-disabled={disabled || undefined}
             disabled={disabled}
+            tabIndex={index === tabStopIndex ? 0 : -1}
             data-testid={testid ? `${testid}-option` : undefined}
             data-value={o.value}
             onClick={() => {
               if (!disabled) onChange(o.value)
+            }}
+            onKeyDown={(event) => {
+              if (
+                !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(
+                  event.key,
+                )
+              ) {
+                return
+              }
+              event.preventDefault()
+              const current = enabledIndexes.indexOf(index)
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? enabledIndexes.length - 1
+                    : event.key === 'ArrowRight' || event.key === 'ArrowDown'
+                      ? (current + 1) % enabledIndexes.length
+                      : (current - 1 + enabledIndexes.length) % enabledIndexes.length
+              const nextIndex = enabledIndexes[next]
+              if (nextIndex === undefined) return
+              onChange(options[nextIndex].value)
+              optionRefs.current[nextIndex]?.focus()
             }}
             title={o.hint}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition ${
@@ -57,7 +100,11 @@ export function OptionPills({ value, onChange, options, ariaLabel, testid }: Pro
                   : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-text)]'
             }`}
           >
-            {o.icon && <span className="text-base leading-none">{o.icon}</span>}
+            {o.icon && (
+              <span aria-hidden="true" className="text-base leading-none">
+                {o.icon}
+              </span>
+            )}
             <span className="font-medium">{o.label}</span>
           </button>
         )
