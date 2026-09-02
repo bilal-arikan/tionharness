@@ -1,5 +1,65 @@
 # TionHarness — İlerleme Takibi
 
+## Rota F5 + F4-v2: faz kapıları, kanvastan müdahale, oto-budama (2026-09-03) ✅
+
+Faz `done`'a taşınırken ilan edilmiş kapı çalışır (`trajectory_gate.go`):
+`artifact` ağaçta başlık/tür eşleşmesi, `verdict` kök transkriptte satır,
+`human` kök oturuma Durable Ask kartı (`ws:ask` → API köprüsü `openDurableAskCard`;
+yanıt `answerDurableAsk` → `ResolvePhaseGate`: onay → done, red → aktif + sebep,
+transkripte `<gate>` notu); geçmezse araç hata / kanvas 422 + zorla, insan
+kapısında araç "kart açıldı" / kanvas 202. Ortak `SetTrajectoryPhase /
+PlanTrajectory / FinishTrajectory` (CAS `expectedRev`), araca `force`. Kanvas
+uçları `POST /api/trajectories/{id}/plan|phase|finish`, **buradan çatalla**
+`POST /api/sessions/{id}/workers`, `GET /api/trajectories/by-node`. UI:
+PhaseActions çubuğu (aktif/tamamlandı/atla/faz ekle/bitir), ForkModal, RunView
+koordinatör düğümünde "Rota" düğmesi; istemci hataları `status` taşır. F4-v2:
+`auto_prune: true` reçetelerde optimizer'ın budama önerileri
+`skills.ApplyRecipeProposal` ile (yalnız `phases/watchers/version/optimizer`
+satırları yeniden yazılır, round-trip doğrulaması, sürüm artışı) anında
+uygulanır ve bulgu `applied` kapanır; `✂ oto-budama` çipi. Testler:
+`trajectory_gate_test.go`, `skills/recipe_edit_test.go`. Brif §11 yol haritası
+(F0–F5) tamamlandı. Dallar `rota/f3-metrics-curator → f4-optimizer →
+f5-gates-canvas` ana ağaçtaki commitlenmemiş auth işi yüzünden henüz main'e
+alınmadı. Ayrıntı: `78-ROTA-EKRANI.md` §10.
+
+## Rota F4: LLM reçete optimizer — yalnız öneri (2026-09-03) ✅
+
+Yeni sistem ajanı `recipe-optimizer` (araçsız, prompt `recipe-optimizer.md`).
+`RunRecipeOptimizer` reçeteyi, sürüm istatistiklerini, son 5 rota özetini ve
+küratör önerilerini tek JSON çağrısında modele verir; öneriler `optimizerFinding`
+değişmezlerinden geçer (sayı içeren kanıt zorunlu, genel olumsuz yargı atılır,
+ekleme sınıfı `RecipeGrowthBudget=9` üstünde `removes` ister — bütçe artık
+`RecipeSpec.Validate` ile yüklemede de zorlanır) ve yeni **`recipe-opt`** içgörü
+kanalına `insight.Finding` (+ yapısal `Proposal`) olarak düşer. Tetik: reçete
+başına ≥3 yeni özetlenmiş koşu, failed koşu ya da elle (`POST
+/api/recipes/{slug}/optimize`); bookkeeping `optimizer/state.json`. v1 hiçbir
+şeyi uygulamaz — kullanıcı reçeteyi düzenler, bulguyu kanıtla kapatır. UI:
+İçgörü'de kanal süzgeci/çip/rozet + modalda öneri bloğu; Beceriler'de "Şimdi
+optimize et" + açık öneri sayısı + son geçiş; rota başlığında "optimize et".
+Test: `recipe_optimizer_test.go`. Not: `internal/insight` `scanner_test.go:231`
+main'de de düşüyor (bağımsız). Ayrıntı: `78-ROTA-EKRANI.md` §9. F3+F4 dalları
+(`rota/f3-metrics-curator` → `rota/f4-optimizer`) ana ağaçtaki commitlenmemiş
+auth işi (`server.go`, `models_task.go`) yüzünden henüz main'e alınamadı.
+
+## Rota F3: deterministik metrik, reçete istatistikleri, LLM'siz küratör + pin (2026-09-02) ✅
+
+Rota bitince rota iş kuyruğunda (rota-sonu kurallarından önce) `TrajectorySummary`
+yazılıyor: süre, token/maliyet (`SessionUsage` + `billing.RollupOf`), worker /
+koşu / başarısızlık, hayalet fazlar, plansız oturumlar, sessiz izleyiciler, kapı
+bekleme, faz başına istatistik; indeks satırında kopyası, `POST
+/api/trajectories/{id}/summarize`, `view.ProjectTrajectory` özet satırı.
+`GET /api/trajectories/recipes` reçete@sürüm başına rollup. Küratör
+(`internal/agent/curator.go`): saat başı kontrol, 7 günde bir workspace boştayken
+ya da elle (`POST /api/curator/run`), rapor `curator/last.json`; tükenmiş / süresi
+dolmuş otomasyon-zamanlama ajan yapımıysa **arşivlenir** yoksa önerilir, sessiz
+hook önerilir, ≥3 koşuda hiç ateşlenmeyen izleyici / hiç başlamayan faz reçete
+önerisi olur; `Pinned` (otomasyon/zamanlama/hook, `POST …/pin`) muaf; geçiş
+sonunda bildirim. UI: rota başlığında özet çipleri, Beceriler'de "Rota
+istatistikleri", Otomasyon panosunda Küratör düğmesi + paneli (kuru/gerçek
+çalıştır), kartta 📌. Testler: `trajectory_summary_test.go`, `curator_test.go`,
+`trajectoryFormat.test.ts`. Ayrıntı: `78-ROTA-EKRANI.md` §8. Sırada F4 (LLM
+optimizer, `recipe-opt` kanalı).
+
 ## Rota F2: otomasyonlar grafikte — `phase` / `trajectory_end` tetikleri (2026-09-02) ✅
 
 Reçetenin `watchers:` hayaletleri artık ateşleniyor. İki yeni tetik türü

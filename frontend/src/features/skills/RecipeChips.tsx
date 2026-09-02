@@ -93,6 +93,14 @@ export function RecipeChips({ skill: sk, compact = false }: Props) {
           ✦ {r.optimizer}
         </span>
       )}
+      {r?.autoPrune && (
+        <span
+          className={`${chip} bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]`}
+          title="auto_prune: true — optimizer'ın budama önerileri (izleyici çöz, faz kaldır, isteğe bağlı yap) otomatik uygulanır; eklemeler yine insan onayı bekler"
+        >
+          ✂ oto-budama
+        </span>
+      )}
     </>
   )
 }

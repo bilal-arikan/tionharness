@@ -60,6 +60,8 @@ type Hook struct {
 	// Archived hides the hook from the default list and keeps it from running,
 	// without deleting it (curator archive-only rule, _Docs/77 R5).
 	Archived bool `json:"archived,omitempty"`
+	// Pinned exempts the hook from the curator's automatic passes (Rota F3).
+	Pinned bool `json:"pinned,omitempty"`
 	// FireCount / LastFiredAt are usage telemetry: how many times the hook's
 	// command actually ran and when it last did. A hook that never fires is a
 	// curator candidate; before this there was no way to tell.

@@ -94,6 +94,12 @@ var specs = []Spec{
 		OwnedBySystemKey: "insight",
 	},
 	{
+		Key:              "recipe-optimizer",
+		Label:            "Reçete optimizer promptu",
+		Hint:             "Rota F4: bir koordinatör reçetesinin koşu istatistiklerinden ölçülü, koşullu değişiklik önerileri üreten sistem ajanı promptu (öneri kanalı recipe-opt; hiçbir şeyi kendisi uygulamaz).",
+		OwnedBySystemKey: "recipe-optimizer",
+	},
+	{
 		Key:              "insight-applier",
 		Label:            "İçgörü uygulama promptu",
 		Hint:             "Taramanın ürettiği workspace-opt bulgularını workspace varlıklarına (skill/agent/hook/automation) uygulayan ajanın sistem promptu. Repo dosyalarına erişimi yoktur.",

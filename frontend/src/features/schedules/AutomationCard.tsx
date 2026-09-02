@@ -9,6 +9,8 @@ import {
   MoveRight,
   Waypoints,
   Flag,
+  Pin,
+  PinOff,
 } from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -32,6 +34,8 @@ interface Props {
   onReset: () => void
   // Archive: hide + stop without deleting (restorable via the API/curator).
   onArchive: () => void
+  // Pin / unpin (Rota F3): a pinned rule is exempt from the curator.
+  onPin?: () => void
   onEdit: () => void
   onSpawnTags: (tags: string[]) => void
 }
@@ -51,6 +55,7 @@ export function AutomationCard({
   onToggle,
   onReset,
   onArchive,
+  onPin,
   onEdit,
   onSpawnTags,
 }: Props) {
@@ -206,6 +211,14 @@ export function AutomationCard({
                 #{a.triggerTag}
               </span>
             )}
+            {a.pinned && (
+              <span
+                className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]"
+                title="Sabitlendi: küratörün otomatik geçişlerinden muaf"
+              >
+                📌 sabit
+              </span>
+            )}
             {isBoardKind && a.boardExclusive && (
               <span
                 className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[11px] text-[var(--color-text)]"
@@ -251,6 +264,14 @@ export function AutomationCard({
         <div className="flex shrink-0 flex-col items-center gap-1.5">
           <CardAction icon={Pencil} label="Düzenle" onClick={onEdit} entityId={a.id} />
           <CardAction icon={Archive} label="Arşivle" onClick={onArchive} entityId={a.id} />
+          {onPin && (
+            <CardAction
+              icon={a.pinned ? PinOff : Pin}
+              label={a.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle (küratörden muaf)'}
+              onClick={onPin}
+              entityId={a.id}
+            />
+          )}
           {maxed && (
             <CardAction icon={RotateCcw} label="Sayacı sıfırla" onClick={onReset} entityId={a.id} />
           )}

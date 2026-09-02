@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Clock, Flag, Hash, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
+import { Brush, Clock, Flag, Hash, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -19,6 +19,7 @@ import { BoardColumn } from './BoardColumn'
 import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
+import { CuratorPanel } from './CuratorPanel'
 import { count } from '@/shared/lib/format'
 
 // Backstop refresh for the lane-header metrics; visibility-gated.
@@ -49,6 +50,7 @@ type Editor =
 // automations. Rules are read-only cards; creating and editing happen in a popup
 // (ScheduleModal / AutomationModal) so the lanes stay compact.
 export function AutomationBoard({ agents, focusId, onError }: Props) {
+  const [curatorOpen, setCuratorOpen] = useState(false)
   const schedulesTick = useRefreshTrigger(SIGNAL_SCHEDULES)
   const automationsTick = useRefreshTrigger(SIGNAL_AUTOMATIONS)
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -254,6 +256,18 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     }
   }
 
+  // Pin (Rota F3): exempt the rule from the curator's automatic passes.
+  const pinAutomation = async (a: Automation) => {
+    const pinned = !a.pinned
+    setAutomations((prev) => prev.map((x) => (x.id === a.id ? { ...x, pinned } : x)))
+    try {
+      await api.pinAutomation(a.id, pinned)
+    } catch (e) {
+      onError((e as Error).message)
+      reloadAutomations()
+    }
+  }
+
   const removeAutomation = async (a: Automation) => {
     if (!confirm('Otomasyon silinsin mi?')) return
     setEditor(null) // the delete button lives in the edit popup
@@ -394,6 +408,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             onToggle={() => toggleAutomation(a)}
             onReset={() => resetAutomation(a)}
             onArchive={() => archiveAutomation(a)}
+            onPin={() => pinAutomation(a)}
             onEdit={() => setEditor({ lane: kind, editing: a })}
             onSpawnTags={(tags) => setSpawnTags(a, tags)}
           />
@@ -407,39 +422,61 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       <PaneHeader
         title="Otomasyon"
         right={
-          pauseAutonomy !== null ? (
+          <>
             <button
-              data-testid="workspace-pause-autonomy-toggle"
-              onClick={togglePauseAutonomy}
-              disabled={savingPause}
-              aria-pressed={pauseAutonomy}
-              title={
-                pauseAutonomy
-                  ? 'Bu workspace’te otonomi duraklatıldı — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez). Tıkla: sürdür.'
-                  : 'Bu workspace’te otonomiyi duraklat — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez).'
-              }
-              className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition disabled:opacity-40 ${
-                pauseAutonomy
-                  ? 'border-[var(--color-danger)] text-[var(--color-danger)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-              }`}
+              type="button"
+              onClick={() => setCuratorOpen(true)}
+              title="Küratör: haftalık, boşta tetiklenen LLM'siz temizlik geçişi — son rapor ve elle çalıştırma"
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              data-testid="curator-open"
             >
-              <span
-                className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
-                  pauseAutonomy ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-border)]'
+              <Brush size={14} />
+              <span className="hidden sm:inline">Küratör</span>
+            </button>
+            {pauseAutonomy !== null ? (
+              <button
+                data-testid="workspace-pause-autonomy-toggle"
+                onClick={togglePauseAutonomy}
+                disabled={savingPause}
+                aria-pressed={pauseAutonomy}
+                title={
+                  pauseAutonomy
+                    ? 'Bu workspace’te otonomi duraklatıldı — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez). Tıkla: sürdür.'
+                    : 'Bu workspace’te otonomiyi duraklat — yalnız zamanlama çağrılarını bloklar (manuel sohbet + “şimdi çalıştır” etkilenmez).'
+                }
+                className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition disabled:opacity-40 ${
+                  pauseAutonomy
+                    ? 'border-[var(--color-danger)] text-[var(--color-danger)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
                 }`}
               >
                 <span
-                  className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${pauseAutonomy ? 'translate-x-4' : ''}`}
-                />
-              </span>
-              <span className="hidden sm:inline">
-                {pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomiyi duraklat'}
-              </span>
-            </button>
-          ) : undefined
+                  className={`h-4 w-8 flex-shrink-0 rounded-full transition ${
+                    pauseAutonomy ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-border)]'
+                  }`}
+                >
+                  <span
+                    className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${pauseAutonomy ? 'translate-x-4' : ''}`}
+                  />
+                </span>
+                <span className="hidden sm:inline">
+                  {pauseAutonomy ? 'Otonomi duraklatıldı' : 'Otonomiyi duraklat'}
+                </span>
+              </button>
+            ) : undefined}
+          </>
         }
       />
+      {curatorOpen && (
+        <CuratorPanel
+          onClose={() => setCuratorOpen(false)}
+          onError={onError}
+          onChanged={() => {
+            reloadAutomations()
+            reloadSchedules()
+          }}
+        />
+      )}
 
       {/* Three lanes side by side. Below `md` (portrait phones / narrow windows)
           they become a snap-scrolling carousel: one near-full-width lane per

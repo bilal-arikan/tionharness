@@ -2,15 +2,19 @@
 
 export function ChannelBadge({ channel }: { channel: string }) {
   const appFix = channel === 'app-fix'
+  const recipe = channel === 'recipe-opt'
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-xs ${
         appFix
           ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
-          : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+          : recipe
+            ? 'bg-[#6B7FD8]/15 text-[#6B7FD8]'
+            : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
       }`}
+      title={recipe ? 'Reçete optimizer önerisi (Rota F4) — reçeteyi sen düzenlersin' : undefined}
     >
-      {appFix ? 'app-fix' : 'workspace-opt'}
+      {appFix ? 'app-fix' : recipe ? '✦ recipe-opt' : 'workspace-opt'}
     </span>
   )
 }

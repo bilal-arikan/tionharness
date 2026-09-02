@@ -20,6 +20,7 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { InfoToast } from '@/shared/components/InfoToast'
 import { RecipeChips } from './RecipeChips'
+import { RecipeStatsBlock } from './RecipeStatsBlock'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
@@ -51,6 +52,8 @@ const GLOBAL_CHANGE_MSG =
 
 interface Props {
   onError: (msg: string) => void
+  // Rota F3: open the Rota screen on a recipe's latest trajectory.
+  onOpenTrajectory?: (id: string) => void
 }
 
 // Tier badge styling — workspace (higher priority) is accented, global is muted.
@@ -186,7 +189,7 @@ function SkillVisibilitySelector({
 
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
-export function SkillsPanel({ onError }: Props) {
+export function SkillsPanel({ onError, onOpenTrajectory }: Props) {
   const skillsTick = useRefreshTrigger(SIGNAL_SKILLS)
   const [list, setList] = useState<Skill[]>([])
   const [catalogRevision, setCatalogRevision] = useState(0)
@@ -828,6 +831,9 @@ export function SkillsPanel({ onError }: Props) {
                     <span className="opacity-70">({relativeTime(active.modifiedAt)})</span>
                   </p>
                 ) : null}
+                {active.kind === 'coordinator-workflow' && (
+                  <RecipeStatsBlock slug={active.slug} onOpenTrajectory={onOpenTrajectory} />
+                )}
                 {active.alwaysAllow && active.alwaysAllow.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
                     <span className="font-medium">İzinli araçlar:</span>

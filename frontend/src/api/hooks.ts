@@ -22,6 +22,11 @@ export const hookApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
+  pinHook: (id: string, pinned: boolean) =>
+    req<{ id: string; pinned: boolean }>(`/api/hooks/${id}/pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    }),
   archiveHook: (id: string, archived: boolean) =>
     req<{ id: string; archived: boolean }>(`/api/hooks/${id}/archive`, {
       method: 'POST',

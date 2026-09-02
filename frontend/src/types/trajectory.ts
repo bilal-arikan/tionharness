@@ -48,6 +48,108 @@ export interface TrajectoryEdge {
   origin: TrajectoryNodeOrigin
 }
 
+// Deterministic end-of-run digest (Rota F3, db.TrajectorySummary).
+export interface PhaseStat {
+  sessions: number
+  failed: number
+  durationSec: number
+}
+
+export interface TrajectorySummary {
+  at: number
+  durationSec: number
+  tokens: number
+  costUsd: number
+  priced: boolean
+  sessions: number
+  failedSessions: number
+  flowRuns: number
+  failedRuns: number
+  phases: number
+  phasesDone: number
+  ghostPhases?: string[]
+  unannounced: number
+  watchers: number
+  unfiredWatchers?: string[]
+  gates: number
+  gateWaitSec: number
+  perPhase?: Record<string, PhaseStat>
+}
+
+// Per-recipe-version rollup of the index (agent.RecipeStats).
+export interface RecipeStats {
+  templateRef: string
+  slug: string
+  version?: string
+  runs: number
+  done: number
+  failed: number
+  abandoned: number
+  live: number
+  summarized: number
+  avgDurationSec: number
+  avgTokens: number
+  avgCostUsd: number
+  priced: boolean
+  avgSessions: number
+  failedSessions: number
+  unannounced: number
+  gateWaitSec: number
+  unfiredWatchers?: Record<string, number>
+  ghostPhases?: Record<string, number>
+  lastAt: number
+  latestId?: string
+}
+
+// Canvas actions (Rota F5).
+export interface PlanTrajectoryReq {
+  phases: {
+    id: string
+    label?: string
+    profile?: string
+    optional?: boolean
+    gate?: TrajectoryGate
+  }[]
+  expectedRev: number
+}
+
+export interface SetPhaseReq {
+  id: string
+  state: 'active' | 'done' | 'skipped' | 'failed'
+  reason?: string
+  force?: boolean
+  expectedRev: number
+}
+
+export interface FinishTrajectoryReq {
+  status: 'done' | 'failed'
+  reason?: string
+  expectedRev: number
+}
+
+// Recipe optimizer (Rota F4).
+export interface OptimizerResult {
+  slug: string
+  trigger: string
+  ran: boolean
+  skipped?: string
+  proposals: { id: string; title: string }[]
+  dropped: number
+  applied?: number
+}
+
+export interface OptimizerStateRow {
+  slug: string
+  ran: boolean
+  state: {
+    lastAt: number
+    runsSeen: number
+    trigger?: string
+    proposals: number
+    skipped?: string
+  }
+}
+
 export interface Trajectory {
   id: string
   rootSessionId: string
@@ -57,6 +159,7 @@ export interface Trajectory {
   nodes: TrajectoryNode[]
   edges: TrajectoryEdge[]
   meta?: Record<string, string>
+  summary?: TrajectorySummary
   createdAt: number
   updatedAt: number
 }
@@ -69,6 +172,7 @@ export interface TrajectoryIndexEntry {
   status: TrajectoryStatus
   revision: number
   nodeCount: number
+  summary?: TrajectorySummary
   createdAt: number
   updatedAt: number
 }

@@ -3,9 +3,10 @@
 // sessions / runs / gates that actually happened under them (the facts), ghost
 // nodes are dashed. Plain SVG like the workspace canvas; the graph is re-read
 // whenever the stream announces a new revision (useTrajectory).
-import { useMemo } from 'react'
-import { ArrowLeft, MessageSquare } from 'lucide-react'
-import { Badge } from '@/shared/components'
+import { useMemo, useState } from 'react'
+import { ArrowLeft, GitFork, MessageSquare, Sparkles } from 'lucide-react'
+import { api } from '@/api'
+import { Badge, toast } from '@/shared/components'
 import { SKIP_REASON_LABEL } from '@/features/schedules/fireMeta'
 import type { Trajectory, TrajectoryEdge, TrajectoryNode } from '@/types/trajectory'
 import type { RotaSelection } from './RotaCanvas'
@@ -17,7 +18,10 @@ import {
   type TrajPlaced,
 } from './trajectoryLayout'
 import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
+import { fmtDurationSec, fmtTokens } from './trajectoryFormat'
 import { useTrajectory } from './useTrajectory'
+import { PhaseActions } from './PhaseActions'
+import { ForkModal } from './ForkModal'
 
 interface Props {
   trajectoryId: string
@@ -126,6 +130,13 @@ export function RotaTrajectoryView({
 }: Props) {
   const { trajectory: t, loading, error } = useTrajectory({ id: trajectoryId })
   const layout = useMemo(() => (t ? layoutTrajectory(t) : null), [t])
+  // Canvas actions (F5): the phase column the user picked, and the fork modal.
+  const [pickedPhase, setPickedPhase] = useState<string | null>(null)
+  const [fork, setFork] = useState<{ id: string; title?: string } | null>(null)
+  const selectedSession =
+    selected?.kind === 'session' && t
+      ? t.nodes.find((n) => n.kind === 'session' && n.refId === selected.id)
+      : undefined
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -145,6 +156,7 @@ export function RotaTrajectoryView({
             <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
             <span className="text-[var(--color-text-dim)]">rev {t.revision}</span>
             <PhaseProgress t={t} />
+            {t.summary && <SummaryChips s={t.summary} />}
             {layout && layout.ghosts > 0 && (
               <span
                 className="text-[var(--color-text-dim)]"
@@ -153,19 +165,58 @@ export function RotaTrajectoryView({
                 {layout.ghosts} hayalet
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => onOpenSession?.(t.rootSessionId)}
-              className="ml-auto flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
-              title="Kök oturumun sohbetini aç"
-            >
-              <MessageSquare size={12} /> kök sohbet
-            </button>
+            <span className="ml-auto flex items-center gap-1.5">
+              {t.templateRef && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slug = t.templateRef!.replace(/@[^@]*$/, '')
+                    api
+                      .optimizeRecipe(slug)
+                      .then((r) =>
+                        toast.info(
+                          r.ran
+                            ? `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi) — İçgörü ▸ recipe-opt`
+                            : `Optimizer çalışmadı: ${r.skipped ?? '—'}`,
+                        ),
+                      )
+                      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+                  }}
+                  className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                  title="Bu rotanın reçetesi için optimizer'ı şimdi çalıştır (öneri üretir, uygulamaz)"
+                >
+                  <Sparkles size={12} /> optimize et
+                </button>
+              )}
+              {selected?.kind === 'session' && (
+                <button
+                  type="button"
+                  onClick={() => setFork({ id: selected.id, title: selectedSession?.label })}
+                  className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                  title="Seçili oturumun altında worker aç (buradan çatalla)"
+                  data-testid="fork-here"
+                >
+                  <GitFork size={12} /> buradan çatalla
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onOpenSession?.(t.rootSessionId)}
+                className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
+                title="Kök oturumun sohbetini aç"
+              >
+                <MessageSquare size={12} /> kök sohbet
+              </button>
+            </span>
           </>
         )}
         {loading && !t && <span className="text-[var(--color-text-dim)]">yükleniyor…</span>}
         {error && <span className="text-[var(--color-danger)]">{error}</span>}
       </div>
+      {t && <PhaseActions trajectory={t} phase={pickedPhase} />}
+      {fork && (
+        <ForkModal sessionId={fork.id} sessionTitle={fork.title} onClose={() => setFork(null)} />
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
         {t && layout && (
           <TrajectorySvg
@@ -177,10 +228,64 @@ export function RotaTrajectoryView({
             onOpenSession={onOpenSession}
             onOpenFlowRun={onOpenFlowRun}
             trajectoryId={trajectoryId}
+            onPickPhase={setPickedPhase}
           />
         )}
       </div>
     </div>
+  )
+}
+
+// SummaryChips renders the deterministic end-of-run digest (F3) inline:
+// duration, tokens / cost, workers (failed), gate wait, what the plan declared
+// but never happened.
+function SummaryChips({ s }: { s: NonNullable<Trajectory['summary']> }) {
+  const chip =
+    'rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]'
+  return (
+    <span className="flex flex-wrap items-center gap-1" data-testid="trajectory-summary">
+      <span className={chip} title="Kök oturum açılışından bitişe">
+        ⏱ {fmtDurationSec(s.durationSec)}
+      </span>
+      <span
+        className={chip}
+        title={`Bağlı oturumların toplam tokenı${s.priced ? '' : ' (bazı modeller fiyatsız)'}`}
+      >
+        {fmtTokens(s.tokens)} token
+        {s.costUsd > 0 ? ` · $${s.costUsd.toFixed(2)}${s.priced ? '' : '~'}` : ''}
+      </span>
+      <span className={chip} title="Worker oturumları (başarısız)">
+        {s.sessions} worker{s.failedSessions ? ` · ${s.failedSessions} ✗` : ''}
+      </span>
+      {s.flowRuns > 0 && (
+        <span className={chip}>
+          {s.flowRuns} koşu{s.failedRuns ? ` · ${s.failedRuns} ✗` : ''}
+        </span>
+      )}
+      {s.gates > 0 && (
+        <span className={chip} title="İnsan kapılarında geçen süre">
+          ⏸ {s.gates} kapı · {fmtDurationSec(s.gateWaitSec)}
+        </span>
+      )}
+      {s.unannounced > 0 && (
+        <span className={chip} title="Bir faza bağlı olmadan açılan oturum / koşular">
+          {s.unannounced} plansız
+        </span>
+      )}
+      {s.ghostPhases && s.ghostPhases.length > 0 && (
+        <span className={chip} title="İlan edilip hiç başlamayan fazlar">
+          ◌ {s.ghostPhases.join(', ')}
+        </span>
+      )}
+      {s.unfiredWatchers && s.unfiredWatchers.length > 0 && (
+        <span
+          className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
+          title="İlan edilip hiç ateşlenmeyen izleyiciler"
+        >
+          ⚡ sessiz: {s.unfiredWatchers.join(', ')}
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -206,6 +311,7 @@ interface SvgProps {
   onOpenSession?: (sessionId: string) => void
   onOpenFlowRun?: (flowId: string) => void
   trajectoryId: string
+  onPickPhase: (phase: string | null) => void
 }
 
 function TrajectorySvg({
@@ -217,6 +323,7 @@ function TrajectorySvg({
   onOpenSession,
   onOpenFlowRun,
   trajectoryId,
+  onPickPhase,
 }: SvgProps) {
   const { columns, lanes, nodes, edges, root, rootToCol, activeCol } = layout
   const colW = Math.max(COL_W, Math.floor((width - LABEL_W - PAD) / Math.max(1, columns.length)))
@@ -312,6 +419,7 @@ function TrajectorySvg({
             onClick={(ev) => {
               ev.stopPropagation()
               onSelect({ kind: 'trajectory', id: trajectoryId })
+              onPickPhase(c.phase ? phaseId(c.id) : null)
             }}
           >
             <title>

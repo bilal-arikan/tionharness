@@ -1,14 +1,38 @@
-# Rota Ekranı — F0 (projeksiyon) + F1a (rota varlığı) + F1b (görünürlük) + F2 (otomasyonlar grafikte)
+# 78 — Rota: Sistem ve Ekran
 
-**Durum:** F0 uygulandı (2026-09-02); F1a (rota varlığı + ilan, backend)
-uygulandı (2026-09-02, §5); F1b (rota-içi faz görünümü + backend'in her
-yeniliğinin UI karşılığı) uygulandı (2026-09-02, §6). Altyapı planı:
-`77-ROTA-ALTYAPI-PLANI.md` (R1–R10). Tasarım brifi: oturum artefaktı "Rota
-Tasarım Brifi" (§8 ekran, §11 fazlar). F2 (otomasyonlar grafikte, "neden
-ateşlenmedi") uygulandı (2026-09-02, §7). Sonraki fazlar F3 (metrik +
-küratör), F4 (optimizer), F5 (kapılar / kanvastan müdahale).
+> **Durum:** Brifin §11 yol haritası **tamamlandı** (F0–F5, 2026-09-02/03).
+> Altyapı planı ve gerçekleşen notları `77-ROTA-ALTYAPI-PLANI.md` (R1–R10).
+> Tasarım brifi: oturum artefaktı "Rota Tasarım Brifi" (§8 ekran, §11 fazlar).
+> Bu doküman faz faz büyüdü: §1–§4 F0'ın kanvasını anlatır, §5–§10 her fazın
+> **ne eklediğini** ve **neyi bilinçli bıraktığını**. Bugünkü davranışı okumak
+> için önce aşağıdaki haritaya, sonra ilgili faz bölümüne git.
 
-## 1. Ne gösterir
+**Rota nedir.** Bir koordinatör ağacının *ilan edilen* planı (reçetenin
+`phases:` bloğu ya da ajanın `trajectory{plan}` çağrısı) ile *gözlenen*
+gerçeklerin (worker'lar, akış koşuları, otomasyon ateşlemeleri, insan
+kapıları) tek grafta buluşması. Rota hiçbir şeyi **çalıştırmaz**; runtime
+gözlemcileri yazar, ekran ve ajan okur. Kök oturum başına bir rota
+(`sessions/<root>/trajectory.json` + `trajectories/index.json`).
+
+## 0. Fazlar ve harita
+
+| Faz | Ne getirdi | Bölüm | Kod (başlıca) |
+|-----|------------|-------|---------------|
+| F0 | Workspace kök zaman-eksenli kanvas, `GET /api/trajectories` | §1–§4 | `frontend/src/features/rota/rotaLayout.ts`, `RotaCanvas.tsx`, `RotaPanel.tsx`; `internal/api/trajectories.go` |
+| F1a | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/agent/trajectory_graph.go`, `trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
+| F1b | Rota-içi faz-sütunlu görünüm, derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme defteri, `ws:*` → toast | §6 | `features/rota/trajectoryLayout.ts`, `RotaTrajectoryView.tsx`, `RotaStrip.tsx`; `app/useWorkspaceSignals.ts` |
+| F2 | `phase` / `trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi, grafta "neden ateşlenmedi" | §7 | `internal/db/automation_trigger_traj.go`, `internal/agent/trajectory_transitions.go`, `automation_trajectory.go` |
+| F3 | Rota bitiş özeti, reçete istatistikleri, LLM'siz küratör, pin | §8 | `internal/agent/trajectory_summary.go`, `trajectory_recipe_stats.go`, `curator.go`; `features/schedules/CuratorPanel.tsx` |
+| F4 | `recipe-optimizer` sistem ajanı, `recipe-opt` içgörü kanalı (yalnız öneri) | §9 | `internal/agent/recipe_optimizer.go`, `internal/prompts/defaults/recipe-optimizer.md` |
+| F5 | Faz kapıları (artifact / verdict / human = Durable Ask), kanvastan müdahale, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` | §10 | `internal/agent/trajectory_gate.go`, `internal/api/trajectory_actions.go`; `features/rota/PhaseActions.tsx`, `ForkModal.tsx`; `internal/skills/recipe_edit.go` |
+
+**Sözlük.** *Faz* — ilan edilmiş adım (`p:<id>`, declared). *Şerit* — çizim
+satırı; kök 0, her worker/koşu yeni şerit. *Hayalet* — ilan edilip henüz
+gerçekleşmemiş düğüm (kesik çizgi). *Kapı* — fazın çıkış koşulu. *İzleyici*
+— faz/rota sonunda ateşlenecek otomasyon (`watchers:`). *Küratör* — LLM'siz
+haftalık budama. *Optimizer* — nadir LLM geçişi, yalnız öneri.
+
+## 1. Workspace kök görünümü (F0) — ne gösterir
 
 NavRail **Rota** girişi (`#/w/WS/rota`). Kök yakınlaştırma düzeyi **workspace**:
 son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sağa.
@@ -35,7 +59,7 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 Etkileşim: tık = seç, çift tık = oturumu Sohbet'te / akış koşusunu Akışlar'da
 aç, ↑↓ şeritler arasında gez, Enter aç, Esc seçimi bırak (Harita sözleşmesi).
 
-## 2. Veri yolu
+## 2. Veri yolu (F0)
 
 ```
 GET /api/sessions (son 200, updated_desc)      ┐
@@ -71,18 +95,19 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 `view.KindTrajectory` frontend `ViewKind`'a eklendi; Harita ikon haritasında
 `trajectory: Waypoints`.
 
-## 3. F0'ın bilinçli sınırları
+## 3. F0'ın bilinçli sınırları ve kapanışları
 
-- ~~**Rota varlığı henüz üretilmiyor.**~~ F1a ile kapandı (§5).
-- ~~**Faz sütunu yok, yalnız zaman.**~~ F1b ile kapandı (§6): workspace kökü
-  zaman eksenli kalır, ◈ tıklanınca rota-içi faz-sütunlu görünüm açılır.
-  Worker alt-ağacı katlama hâlâ yok (F2).
-- **Şerit patlaması** (12 worker = 12 şerit) için demet katlama (`+N`) yok;
-  pencere süzgeci ve son-200 seed'i şimdilik yeterli.
-- **Maliyet / süre alt şeridi, mini rota (sohbet başlığı), RunView gömme** F3+.
-- Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır.
+| F0'da bırakılan | Kapandı mı | Nerede |
+|-----------------|------------|--------|
+| Rota varlığı üretilmiyor | ✅ F1a | §5 |
+| Faz sütunu yok, yalnız zaman | ✅ F1b (◈ → rota-içi görünüm) | §6 |
+| Mini rota (sohbet başlığı), RunView gömme | ✅ F1b / F5 | §6, §10 |
+| Maliyet / süre | ✅ F3 (özet çipleri; ayrı alt şerit yok) | §8 |
+| Şerit patlaması için demet katlama (`+N`) | ❌ açık | pencere süzgeci + son-200 seed |
+| Worker alt-ağacı katlama | ❌ açık | — |
+| Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır | tasarım kararı | — |
 
-## 4. Test
+## 4. Testler (F0 + F1a)
 
 - `frontend/src/features/rota/rotaLayout.test.ts` — satır sırası ve derinlik,
   spawn/report/fork kenar zamanları, canlı/biten çubuklar, işaret şeridi, gelecek
@@ -278,3 +303,205 @@ düğümleri failed+sebep, defter kaydı, rota sonu → not_found / disabled),
 kimliği seçici (reçete fazlarından açılır liste) yok — metin alanı; hayalet
 düğüme tıklayınca kural kartı (ViewPanel `automation` projeksiyonu zaten
 açılıyor, ama `not_found` için bir "otomasyon oluştur" kısayolu yok).
+
+## 8. F3 — Deterministik metrik + küratör (2026-09-02)
+
+Dal `rota/f3-metrics-curator`. Brif §7.1, §7.4–7.5: her koşunun LLM'siz
+özeti, reçete başına istatistik ve "ekleme değil budama" yapan haftalık
+küratör. Optimizer (F4) hâlâ yok; `o:optimizer` düğümü hayalet.
+
+**Rota özeti** (`db.TrajectorySummary`, `Trajectory.Summary` + indeks
+satırında kopyası; `internal/agent/trajectory_summary.go`, saf
+`summarizeTrajectory`). Rota terminal duruma gelince rota iş kuyruğunda,
+`trajectory_end` kurallarından **önce** yazılır (kural prompt'u ve küratör
+son sayıları görür); `POST /api/trajectories/{id}/summarize` canlı bir rota
+için de yeniden hesaplar. Alanlar: süre (kök oturum açılışı → son düğüm
+bitişi / şimdi), token + maliyet (bağlı oturumların `SessionUsage` rollup'ı,
+`billing.RollupOf`; fiyatsız model varsa `priced=false`), worker sayısı ve
+başarısızlar, akış koşuları, faz sayısı / biten, **hayalet fazlar** (ilan
+edilip hiç başlamayan), **plansız** (faza bağlanmamış oturum/koşu), ilan
+edilen izleyiciler ve **sessiz** kalanlar, kapı sayısı + bekleme süresi, faz
+başına worker/başarısızlık/süre. `view.ProjectTrajectory` özet satırı basar
+(`özet: 12 dk · 40k token · $0.31 · 3 worker (1 ✗) · sessiz izleyici: docs`).
+
+**Reçete istatistikleri** (`GET /api/trajectories/recipes[?slug=]`,
+`agent.RecipeStatsFromIndex`): indeks satırlarından `TemplateRef`
+(slug@sürüm) başına terminal koşu sayısı (bitti / başarısız / terk), canlı
+sayısı, özetli koşular üzerinden ortalama süre / token / maliyet / worker,
+izleyici başına "kaç koşuda ateşlenmedi", faz başına "kaç koşuda başlamadı",
+son rota. Yalnız indeks okunur; sidecar açılmaz.
+
+**Küratör** (`internal/agent/curator.go`, `Runtime.RunCurator(trigger,
+apply)`). Saat başı kontrol, son geçiş 7 günden eskiyse **ve** workspace
+boştaysa (`Liveness` girişleri sıfır) `apply=true` ile koşar; API'den elle
+(`POST /api/curator/run?apply=`), rapor `curator/last.json`
+(`GET /api/curator/report`). Kurallar, hepsi depodaki durumdan:
+
+| Varlık | Koşul | Ajan yapımı (`CreatedBy` dolu) | Kullanıcı yapımı |
+|--------|-------|-------------------------------|------------------|
+| otomasyon | iterasyon tavanına ulaştı / son tarihi geçti | **arşivle** | öneri |
+| zamanlama | tek seferlik çalıştı (kapalı + LastRunAt) / son tarihi geçti | **arşivle** | öneri |
+| hook | 30 gündür hiç tetiklenmedi | öneri | öneri |
+| reçete | ≥3 özetli koşunun **hepsinde** ateşlenmeyen izleyici → "reçeteden çöz"; hepsinde başlamayan faz → "optional yap / kaldır" | öneri (kanıt: koşu sayısı + son rota) | öneri |
+
+Değişmezler (brif §7.4): **asla silme, arşivle** (arşiv geri alınabilir);
+**provenance kapısı** (yalnız ajan/otomasyon yapımı varlıklara dokunur);
+**pin** — `Automation/Schedule/Hook.Pinned` (`POST …/{id}/pin {pinned}`)
+her otomatik geçişten muaf. Geçiş sonunda `events.TypeAutomation` bildirimi
+("🧹 Küratör geçti — N arşivlendi, M öneri").
+
+**Ekran karşılıkları.** Rota-içi görünümün başlığında özet çipleri (⏱ süre,
+token · $, worker (✗), koşu, ⏸ kapı bekleme, plansız, ◌ hayalet fazlar,
+⚡ sessiz izleyiciler); Beceriler'de koordinatör reçetesi detayında "Rota
+istatistikleri" bloğu (sürüm başına satır, rozetler, ortalamalar, sessiz
+izleyici / hayalet faz çipleri, "son: RTA…" → Rota ekranı); Otomasyon
+panosunda **Küratör** düğmesi → panel (son geçiş, arşivlendi/öneri sayıları,
+eylem listesi, "Kuru çalıştır" / "Şimdi çalıştır"); otomasyon kartında
+📌 sabitle/kaldır ve "sabit" çipi.
+
+**Testler.** `trajectory_summary_test.go` (özet alanları, canlı koşu süresi,
+reçete rollup'ı), `curator_test.go` (ajan/kullanıcı provenance, pin muafiyeti,
+tek seferlik zamanlama, sessiz hook, rapor kaydı + haftalık saat, ≥3 koşu
+eşiğiyle reçete önerileri; `db.SetHookCreatedAtForTest` test kancası),
+`trajectoryFormat.test.ts`.
+
+**Kalanlar (F4/F5).** LLM optimizer (`recipe-optimizer` sistem ajanı,
+`recipe-opt` bulgu kanalı, net büyüme bütçesi, kanıt zorunlu uygulama,
+regresyonda geri alma); reçete sürüm geçmişinin seed ledger'ında tutulması
+(bugün yalnız `version:` + `TemplateRef`); küratör önerisini tek tıkla
+uygulama (arşivle / reçeteyi düzenle) ve zamanlama/hook kartlarında pin
+düğmesi (API hazır, UI yalnız otomasyon kartında); faz kapılarının otomatik
+doğrulanması.
+
+## 9. F4 — LLM reçete optimizer, yalnız öneri (2026-09-03)
+
+Dal `rota/f4-optimizer` (F3'ün üstüne). Brif §7.2–7.4. Rota işinin tek LLM
+geçişi ve nadir olanı: reçete başına, **≥3 yeni özetlenmiş terminal koşu**
+biriktiğinde, bir koşu **failed** bittiğinde ya da kullanıcı istediğinde.
+v1 reçeteyi düzenlemez; öneriler mevcut içgörü yaşam döngüsüne düşer.
+
+**Sistem ajanı** `recipe-optimizer` (`systemagents.go`, ✦, araçsız —
+`AllowedTools: []`; prompt `prompts/defaults/recipe-optimizer.md`, kayıt
+`prompts.go`, workspace `config/prompts/recipe-optimizer.md` ile ezilebilir).
+Model/sağlayıcı `resolveAnalysisSystemAgent` ile içgörü analizcisi gibi
+çözülür; temel ajan `pickInsightAgent`.
+
+**Geçiş** (`internal/agent/recipe_optimizer.go`):
+- `MaybeOptimizeRecipe(slug, trigger)` rota iş kuyruğunda, rota-sonu
+  kurallarından sonra çağrılır; eşik `optimizer/state.json`'daki
+  (`db.OptimizerSlugState`: `lastAt`, `runsSeen`, `trigger`, `proposals`,
+  `skipped`) son geçişe göre ölçülür; LLM çağrısı ayrı goroutine'de, reçete
+  başına tek uçuş.
+- `RunRecipeOptimizer(slug, trigger)`: reçete (frontmatter planı + gövde,
+  6 KB'a kırpılır), sürüm başına istatistik, son 5 özet, küratörün reçete
+  önerileri → `guardedComplete` (JSON şeması). Cevap `{"proposals":[…]}`;
+  her öneri `action` (`prune_phase | make_optional | prune_watcher |
+  change_profile | add_gate | bind_watcher | split_phase | merge_phase |
+  rollback_version`), `target`, `value`, `removes`, `title`, `rationale`,
+  `evidence`, `severity`.
+- **Kodda uygulanan değişmezler** (`optimizerFinding`): sayı içeren
+  `evidence` yoksa **atılır**; genel olumsuz yargı ("güvenilmez",
+  "çalışmıyor", "useless" …) **atılır**; ekleme sınıfı (`add_gate`,
+  `bind_watcher`, `split_phase`) reçete büyüme bütçesini
+  (`skills.RecipeGrowthBudget = 9`, faz + izleyici) aşacaksa `removes`
+  adlandırmalı; bilinmeyen eylem atılır. Bütçe ayrıca `RecipeSpec.Validate`
+  ile **yüklemede** de zorlanır — tavanın üstündeki reçete yüklenmez.
+- Kabul edilen öneri `insight.Finding` olur: kanal **`recipe-opt`** (yeni;
+  `Channel.Valid()`), `LensID recipe-optimizer`, imza
+  `recipe-opt:<slug>:<action>:<target>` (tekrar = `Occurrences` artar),
+  `FilePointer skill/<slug>`, `RootCause` = kanıt, `ProposedFix` = gerekçe +
+  değer + kaldırır, `EvidenceSessionIDs` = son koşuların kök oturumları,
+  yapısal `Proposal` alanı (`insight.RecipeProposal`). Öneri varsa `insight`
+  bildirimi ("✦ Reçete optimizer — slug için N öneri").
+- Uygulama: **insan**. Kullanıcı reçeteyi Beceriler'den düzenler, bulguyu
+  `applied` + kanıt `skill/<slug>` ile kapatır (mevcut
+  `ErrAppliedNeedsEvidence` kuralı); kapanan bir bulgunun sonraki geçişte yeniden
+  gelmesi mevcut `Regressed` mekanizmasıyla işaretlenir.
+
+**API.** `POST /api/recipes/{slug}/optimize` (elle; `OptimizerResult`: ran,
+skipped, proposals, dropped), `GET /api/recipes/{slug}/optimizer` (son geçiş).
+Öneriler `GET /api/insight/findings?channel=recipe-opt`.
+
+**Ekran.** İçgörü: kanal süzgeci ve özet çipi `✦ recipe-opt`, rozet, bulgu
+modalında "Reçete önerisi" bloğu (eylem/hedef/değer/kaldırır/kanıt + "reçeteyi
+sen düzenlersin" notu). Beceriler ▸ reçete istatistikleri: **"Şimdi optimize
+et"**, açık öneri sayısı, son geçiş satırı. Rota-içi görünüm başlığı:
+"optimize et".
+
+**Testler.** `recipe_optimizer_test.go` (değişmezler: kanıt/sayı, olumsuz
+yargı, bütçe + `removes`, bilinmeyen eylem; bulgu şekli; büyüme bütçesi
+doğrulaması; prompt içeriği; ajansız/koşusuz geçişlerin durum kaydı),
+`prompts_test` kayıt senkronu, `skills` doğrulama.
+
+**Bilinen durum.** `internal/insight` paketinin `scanner_test.go:231` testi
+bu değişiklikten bağımsız olarak main'de de düşüyor (analizci zaman aşımı
+beklentisi); F4 pakete yalnız kanal sabiti + `Proposal` alanı ekler.
+
+**Kalanlar.** Budama sınıfı için reçete başına opt-in oto-uygulama (F4-v2:
+`applier` benzeri, yalnız `prune_*`/`make_optional`); "oku-sonra-yaz" reçete
+düzenleme aracı; regresyonda otomatik sürüm geri alma; F5 kapılar ve
+kanvastan müdahale.
+
+## 10. F5 — Kapılar ve kanvastan müdahale + F4-v2 oto-budama (2026-09-03)
+
+Dal `rota/f5-gates-canvas` (F4'ün üstüne).
+
+**Faz kapıları** (`internal/agent/trajectory_gate.go`). Bir faz `done`'a
+taşınırken (ajanın `trajectory{phase}` aracı ya da kanvas) fazın ilan edilmiş
+kapısı çalışır; `force` atlar:
+
+| Kapı | Koşul | Geçmezse |
+|------|-------|----------|
+| `artifact` | ağaçtaki oturumlardan birinde başlığı değeri içeren (ya da türü değere eşit) artifact var | `ErrGateBlocked` — araç hata döner, kanvas 422 + "zorla?" onayı |
+| `verdict` | kök transkriptin son 60 mesajında değer geçiyor ("VERDICT: PASS") | aynı |
+| `human` | kök oturuma **Durable Ask** parklanır ("Rota RTA · plan fazı bitti sayılsın mı?" Onayla / Reddet); faz aktif kalır, rota **waiting**, grafta `g:<ask>` düğümü fazın altında (`kapı: plan`) | `ErrGatePending` — araç "kart açıldı, turunu bitir" der, kanvas 202 |
+| `schema` | v1'de doğrulanmaz, notla geçer | — |
+
+İnsan kapısı: `openPhaseGateAsk` `SessionAsk{Kind: ask, Payload: {question,
+options, gate:{trajectoryId, phase, kind, value}}}` yaratır (faz başına tek
+açık kapı), `ws:ask` (yeni tür, `sessionhub.KindWSAsk`) yayınlar; API köprüsü
+(`bridgeWorkspaceEvent`) kartı oturum hub'ında açar (`openDurableAskCard`) —
+yeniden bağlanan pencere `restoreWaitingAsks` ile aynı kartı görür. Yanıt
+mevcut `answerDurableAsk` yolundan gelir; `agent.GateAskRef` ile kapı olduğu
+anlaşılınca tur yeniden sürülmez, `ResolvePhaseGate` fazı kapatır (onay →
+done, "kapı onaylandı") ya da aktif bırakır ("kapı reddedildi: …"), kök
+transkripte `<gate …>` notu düşer, ask satırı silinir.
+
+**Ortak graf düzenleyiciler.** `Runtime.SetTrajectoryPhase / PlanTrajectory /
+FinishTrajectory` (CAS `expectedRev`, 0 = ajan aracı) — araç ve kanvas aynı
+yolu kullanır; `trajectory` aracına `force` alanı eklendi.
+
+**Kanvas API'leri** (`internal/api/trajectory_actions.go`): `POST
+/api/trajectories/{id}/plan|phase|finish` (409 eski revizyon, 422 kapı, 202
+insan kapısı), `POST /api/sessions/{id}/workers` (**buradan çatalla**:
+`SpawnWorker`, koordinatör olmayan oturuma 400), `GET
+/api/trajectories/by-node?run=&node=` (akış koordinatör düğümü → rota).
+İstemci hataları artık `status` taşır (`api/client.ts`).
+
+**Ekran.** Rota-içi görünümde faz sütununa tıklayınca **PhaseActions** çubuğu
+(aktif yap / tamamlandı (kapı) / atla; "faz ekle" mini formu; "bitir"); seçili
+oturum için **"buradan çatalla"** → `ForkModal` (profil/ajan, görev,
+alt-koordinatör); RunView'da koordinatör düğümünün başlığında **"Rota"**
+düğmesi (`#/w/WS/rota/RTA` hash'i ile derin bağlantı, prop zinciri yok).
+
+**F4-v2 oto-budama.** Reçete frontmatter'ında `auto_prune: true`
+(`RecipeSpec.AutoPrune`) varsa optimizer'ın **budama sınıfı** önerileri
+(`prune_watcher`, `prune_phase`, `make_optional`) `skills.ApplyRecipeProposal`
+ile anında uygulanır: yalnız `phases:` / `watchers:` / `version:` /
+`optimizer:` satırları yeniden yazılır (diğer frontmatter ve gövde bayt bayt
+korunur), sürüm artar, yazmadan önce yeniden ayrıştırılıp doğrulanır; bulgu
+`applied` + kanıt `skill/<slug>` ile kapanır (`OptimizerResult.applied`).
+Eklemeler (`add_gate`, `bind_watcher`, `split/merge`, `rollback`) hep insan
+onayı bekler. Beceriler'de `✂ oto-budama` çipi.
+
+**Testler.** `trajectory_gate_test.go` (artifact/verdict kapıları, force, CAS
+409, insan kapısı: tek ask, waiting graf, red → aktif + sebep, onay → done,
+transkript notu), `skills/recipe_edit_test.go` (budama/profil değişimi, sürüm
+artışı, korunan satırlar, ret durumları, render), araç testi `force`.
+
+**Kalanlar (brif dışı / sonraki).** Faz ↔ todo bağı (faz düğümüne tıklayınca
+todo listesi), worker alt-ağacı katlama, maliyet/süre alt şeridi, `schema`
+kapısının gerçek doğrulaması, reçete sürüm geçmişinin seed ledger'ında
+tutulması, küratör önerisini tek tıkla uygulama, zamanlama/hook kartlarında
+pin düğmesi, faz kuralı modalında faz kimliği seçici, `rollback_version`
+uygulaması.

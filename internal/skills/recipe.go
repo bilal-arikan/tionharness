@@ -48,6 +48,10 @@ type RecipeSpec struct {
 	Watchers []string `json:"watchers,omitempty"`
 	// Optimizer names the system agent (or automation) to run at trajectory end.
 	Optimizer string `json:"optimizer,omitempty"`
+	// AutoPrune opts the recipe into applying the optimizer's PRUNING proposals
+	// (prune_watcher / prune_phase / make_optional) automatically (F4-v2).
+	// Additions always wait for a human.
+	AutoPrune bool `json:"autoPrune,omitempty"`
 }
 
 // PhaseSpec is one declared phase.
@@ -72,6 +76,24 @@ type GateSpec struct {
 var GateKinds = []string{"artifact", "verdict", "human", "schema"}
 
 var phaseIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+
+// RecipeGrowthBudget caps phases + watchers (phase-level and recipe-wide) of
+// one recipe (brief §7.4 "net büyüme bütçesi"): above it every addition must
+// remove something. Enforced here, at load, so no optimizer can talk a recipe
+// past it.
+const RecipeGrowthBudget = 9
+
+// GrowthUsed counts what the budget measures.
+func (s *RecipeSpec) GrowthUsed() int {
+	if s == nil {
+		return 0
+	}
+	n := len(s.Phases) + len(s.Watchers)
+	for _, p := range s.Phases {
+		n += len(p.Watchers)
+	}
+	return n
+}
 
 // ValidPhaseID reports whether id is an acceptable phase id (the same rule the
 // recipe parser applies), so an agent-planned trajectory follows the recipe
@@ -127,6 +149,7 @@ func parseRecipeSpec(fm frontmatter, version string) (spec *RecipeSpec, err erro
 		return nil, nil
 	}
 	spec = &RecipeSpec{Version: strings.TrimSpace(version), Watchers: watchers, Optimizer: optimizer, Phases: []PhaseSpec{}}
+	spec.AutoPrune = strings.EqualFold(strings.TrimSpace(fm.scalar("auto_prune")), "true")
 	if hasPhases {
 		phases, perr := parsePhaseBlock(block)
 		if perr != nil {
@@ -169,6 +192,9 @@ func (s *RecipeSpec) Validate() error {
 				return fmt.Errorf("phase %q: gate kind %q must be one of %s", p.ID, p.Gate.Kind, strings.Join(GateKinds, "|"))
 			}
 		}
+	}
+	if used := s.GrowthUsed(); used > RecipeGrowthBudget {
+		return fmt.Errorf("recipe declares %d phases+watchers, above the growth budget of %d — remove something before adding", used, RecipeGrowthBudget)
 	}
 	return nil
 }

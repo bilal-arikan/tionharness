@@ -28,9 +28,49 @@ type Trajectory struct {
 	Edges    []TrajectoryEdge `json:"edges"`
 	// Meta is small free-form data owned by the projection layer (e.g. the lane
 	// counter). Kept opaque so the store never needs to know about layout.
-	Meta      map[string]string `json:"meta,omitempty"`
-	CreatedAt int64             `json:"createdAt"`
-	UpdatedAt int64             `json:"updatedAt"`
+	Meta map[string]string `json:"meta,omitempty"`
+	// Summary is the deterministic end-of-run digest (Rota F3): cost, duration,
+	// workers, failures, gate waits, what was declared but never happened and
+	// what happened unannounced. Written when the trajectory ends (and on
+	// demand); carried on the index row so recipe statistics never open a
+	// sidecar.
+	Summary   *TrajectorySummary `json:"summary,omitempty"`
+	CreatedAt int64              `json:"createdAt"`
+	UpdatedAt int64              `json:"updatedAt"`
+}
+
+// TrajectorySummary is the LLM-free metric digest of one trajectory.
+type TrajectorySummary struct {
+	At          int64   `json:"at"`          // when it was computed (unix seconds)
+	DurationSec int64   `json:"durationSec"` // root creation → end (or now)
+	Tokens      int64   `json:"tokens"`      // sum over bound sessions (input+output+cache)
+	CostUSD     float64 `json:"costUsd"`
+	Priced      bool    `json:"priced"` // false when some model had no price
+	Sessions    int     `json:"sessions"`
+	FailedSess  int     `json:"failedSessions"`
+	FlowRuns    int     `json:"flowRuns"`
+	FailedRuns  int     `json:"failedRuns"`
+	Phases      int     `json:"phases"`
+	PhasesDone  int     `json:"phasesDone"`
+	// GhostPhases: declared phases that never became active.
+	GhostPhases []string `json:"ghostPhases,omitempty"`
+	// Unannounced: sessions / runs bound to no phase (spawned outside the plan).
+	Unannounced int `json:"unannounced"`
+	// Watchers declared by the recipe, and the ones that never fired.
+	Watchers        int      `json:"watchers"`
+	UnfiredWatchers []string `json:"unfiredWatchers,omitempty"`
+	Gates           int      `json:"gates"`
+	GateWaitSec     int64    `json:"gateWaitSec"`
+	// PerPhase is the worker / failure count under each declared phase, keyed by
+	// bare phase id.
+	PerPhase map[string]PhaseStat `json:"perPhase,omitempty"`
+}
+
+// PhaseStat is one phase's share of the run.
+type PhaseStat struct {
+	Sessions    int   `json:"sessions"`
+	Failed      int   `json:"failed"`
+	DurationSec int64 `json:"durationSec"`
 }
 
 // Trajectory statuses.
@@ -130,8 +170,10 @@ type TrajectoryIndexEntry struct {
 	Status        string `json:"status"`
 	Revision      uint64 `json:"revision"`
 	NodeCount     int    `json:"nodeCount"`
-	CreatedAt     int64  `json:"createdAt"`
-	UpdatedAt     int64  `json:"updatedAt"`
+	// Summary mirrors Trajectory.Summary once the run has one.
+	Summary   *TrajectorySummary `json:"summary,omitempty"`
+	CreatedAt int64              `json:"createdAt"`
+	UpdatedAt int64              `json:"updatedAt"`
 }
 
 // IndexEntry projects the trajectory into its index row.
@@ -139,7 +181,7 @@ func (t Trajectory) IndexEntry() TrajectoryIndexEntry {
 	return TrajectoryIndexEntry{
 		ID: t.ID, RootSessionID: t.RootSessionID, TemplateRef: t.TemplateRef,
 		Status: t.Status, Revision: t.Revision, NodeCount: len(t.Nodes),
-		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Summary: t.Summary, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 }
 

@@ -556,6 +556,8 @@ func (m *Manager) open(meta Meta) error {
 	// Coordinator stall sweeper: the long-horizon backstop for a coordinator frozen
 	// after narrating a spawn it never issued (no-op while the guard/window is off).
 	rt.StartCoordinatorStallSweeper(context.Background())
+	// Rota F3: weekly, idle-triggered curator pass (archive-only, pin-aware).
+	rt.StartCuratorSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings() // apply persisted per-workspace overrides (e.g. autonomy pause)

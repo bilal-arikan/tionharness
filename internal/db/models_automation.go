@@ -303,6 +303,9 @@ type Automation struct {
 	SpawnTags []string `json:"spawnTags"`
 	// Enabled is the kill switch. A disabled automation never fires.
 	Enabled bool `json:"enabled"`
+	// Pinned exempts the rule from every automatic curator pass (Rota F3): the
+	// user's "keep this" mark. Independent of Enabled / Archived.
+	Pinned bool `json:"pinned,omitempty"`
 	// Archived hides the rule from the default lists and stops it firing, without
 	// deleting it: the curator's ceiling on destructive action (_Docs/77 R5). An
 	// archived rule keeps its configuration, ledger and seed identity and can be

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -48,32 +49,23 @@ func (r *Runtime) trajectoryFuncsFor(sess db.Session) *tools.TrajectoryFuncs {
 			}
 			plan = append(plan, pp)
 		}
-		updated, err := r.db.UpdateTrajectory(ctx, t.ID, 0, func(t *db.Trajectory) error {
-			if err := trajApplyPlan(t, plan); err != nil {
-				return err
-			}
-			trajDeriveStatus(t)
-			return nil
-		})
+		updated, err := r.PlanTrajectory(ctx, t.ID, plan, 0)
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Plan recorded on %s (revision %d).\nPhases: %s\nCall trajectory{action:\"phase\", id, state:\"active\"} when you start a phase.",
 			updated.ID, updated.Revision, trajPhaseLine(&updated)), nil
 	}
-	f.Phase = func(ctx context.Context, id, state, reason string) (string, error) {
+	f.Phase = func(ctx context.Context, id, state, reason string, force bool) (string, error) {
 		t, err := r.EnsureTrajectory(ctx, root)
 		if err != nil {
 			return "", err
 		}
-		updated, err := r.db.UpdateTrajectory(ctx, t.ID, 0, func(t *db.Trajectory) error {
-			if err := trajSetPhaseState(t, id, state, reason, nowMs()); err != nil {
-				return err
-			}
-			trajDeriveStatus(t)
-			return nil
-		})
+		updated, err := r.SetTrajectoryPhase(ctx, t.ID, id, state, reason, 0, force)
 		if err != nil {
+			if errors.Is(err, ErrGatePending) {
+				return fmt.Sprintf("Phase %s has a HUMAN gate: a question card was opened on session %s. The phase stays active until it is answered; end your turn.", strings.TrimSpace(id), t.RootSessionID), nil
+			}
 			return "", err
 		}
 		return fmt.Sprintf("Phase %s is now %s (trajectory %s, revision %d).\nPhases: %s",
@@ -93,30 +85,7 @@ func (r *Runtime) trajectoryFuncsFor(sess db.Session) *tools.TrajectoryFuncs {
 		if err != nil {
 			return "", err
 		}
-		at := nowMs()
-		updated, err := r.db.UpdateTrajectory(ctx, t.ID, 0, func(t *db.Trajectory) error {
-			for i := range t.Nodes {
-				n := &t.Nodes[i]
-				if n.Kind == db.TrajNodePhase && n.State == db.TrajStateActive {
-					n.State = db.TrajStateDone
-					if final == db.TrajStatusFailed {
-						n.State = db.TrajStateFailed
-						n.Reason = strings.TrimSpace(reason)
-					}
-					n.EndMs = at
-				}
-			}
-			if n := trajNodePtr(t, trajSessionNodeID(root)); n != nil {
-				n.EndMs = at
-				n.State = db.TrajStateDone
-				if final == db.TrajStatusFailed {
-					n.State = db.TrajStateFailed
-				}
-				n.Reason = strings.TrimSpace(reason)
-			}
-			t.Status = final
-			return nil
-		})
+		updated, err := r.FinishTrajectory(ctx, t.ID, final, reason, 0)
 		if err != nil {
 			return "", err
 		}

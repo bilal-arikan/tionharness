@@ -390,16 +390,26 @@ func (r *Runtime) bindAskToTrajectory(ask db.SessionAsk) {
 	if at == 0 {
 		at = nowMs()
 	}
+	// A phase gate (F5) hangs under its phase and names it; an agent's ask_user
+	// hangs where the asking session is.
+	_, gatePhase, isGate := GateAskRef(ask)
 	r.updateTrajectoryByRoot(ctx, sess.RootSession(), func(t *db.Trajectory) error {
 		from := trajSessionNodeID(sess.ID)
 		asker := trajNodePtr(t, from)
 		if asker == nil {
 			return nil
 		}
+		label, phaseID, gateValue := ask.Kind, asker.PhaseID, ask.Kind
+		if isGate {
+			label, gateValue = "kapı: "+gatePhase, gatePhase
+			if trajNodePtr(t, trajPhaseNodeID(gatePhase)) != nil {
+				phaseID = trajPhaseNodeID(gatePhase)
+			}
+		}
 		trajAddNode(t, db.TrajectoryNode{
 			ID: trajGateNodeID(ask.ID), Kind: db.TrajNodeGate, Origin: db.TrajOriginObserved,
-			Label: ask.Kind, RefKind: "ask", RefID: ask.ID, PhaseID: asker.PhaseID,
-			Lane: asker.Lane, State: db.TrajStateActive, Gate: &db.TrajectoryGate{Kind: "human", Value: ask.Kind},
+			Label: label, RefKind: "ask", RefID: ask.ID, PhaseID: phaseID,
+			Lane: asker.Lane, State: db.TrajStateActive, Gate: &db.TrajectoryGate{Kind: "human", Value: gateValue},
 			StartMs: at,
 		})
 		trajAddEdge(t, from, trajGateNodeID(ask.ID), db.TrajEdgeBlockedBy, db.TrajOriginObserved)

@@ -44,6 +44,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         <option value="">Tüm kanallar</option>
         <option value="app-fix">app-fix</option>
         <option value="workspace-opt">workspace-opt</option>
+        <option value="recipe-opt">recipe-opt</option>
       </select>
 
       <select

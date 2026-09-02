@@ -57,6 +57,7 @@ func TestSystemAgentDefaults(t *testing.T) {
 		{key: "compaction", promptKey: "compact"},
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
+		{key: "recipe-optimizer", promptKey: "recipe-optimizer"},
 		{key: "insight-applier", promptKey: "insight-applier"},
 		{key: "subagent-explore", promptKey: "subagent-explore"},
 		{key: "subagent-planner", promptKey: "subagent-planner"},

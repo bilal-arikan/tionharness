@@ -217,6 +217,8 @@ type Schedule struct {
 	// Archived hides the schedule from the default list and keeps it out of the
 	// cron table without deleting it (curator archive-only rule, _Docs/77 R5).
 	Archived bool `json:"archived,omitempty"`
+	// Pinned exempts the schedule from the curator's automatic passes (Rota F3).
+	Pinned bool `json:"pinned,omitempty"`
 	// Tags are free-form labels on the schedule, editable by both the user (UI) and
 	// agents (set_schedule_tags). Organizational only (they do not drive
 	// automations — only session tags do).

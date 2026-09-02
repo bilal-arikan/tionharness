@@ -44,8 +44,9 @@ type TrajectoryFuncs struct {
 	Get func(ctx context.Context) (string, error)
 	// Plan declares (or re-declares) the phase list.
 	Plan func(ctx context.Context, phases []TrajectoryPhaseInput) (string, error)
-	// Phase moves one phase to a state (active | done | skipped | failed).
-	Phase func(ctx context.Context, id, state, reason string) (string, error)
+	// Phase moves one phase to a state (active | done | skipped | failed); force
+	// skips the phase's gate when moving to done.
+	Phase func(ctx context.Context, id, state, reason string, force bool) (string, error)
 	// Finish closes the trajectory (done | failed) with an optional reason.
 	Finish func(ctx context.Context, status, reason string) (string, error)
 }
@@ -60,6 +61,7 @@ type trajectoryInput struct {
 	State  string                 `json:"state"`
 	Status string                 `json:"status"`
 	Reason string                 `json:"reason"`
+	Force  bool                   `json:"force"`
 }
 
 // TrajectoryTool is the trajectory (Rota) tool.
@@ -76,7 +78,9 @@ func (TrajectoryTool) Def() providers.ToolDef {
 			"phases so the graph shows your intent next to the facts.\n\n" +
 			"Actions: `get` renders the graph. `plan` declares the phase list (ids like plan/code/review; " +
 			"re-planning may add phases but never drops one that is active or done). `phase` moves a " +
-			"phase to `active` (closing the previously active one as done), `done`, `skipped` or `failed`. " +
+			"phase to `active` (closing the previously active one as done), `done`, `skipped` or `failed`; " +
+			"moving to `done` runs the phase's GATE (artifact must exist / verdict line must be in the transcript / " +
+			"a human must approve a card) and is refused when it does not hold — fix the cause or pass `force`. " +
 			"`finish` closes the whole trajectory as `done` or `failed`. A recipe-driven coordinator " +
 			"already has its phases: call `phase` when you move on, and `finish` at the end.",
 		InputSchema: json.RawMessage(`{
@@ -110,7 +114,8 @@ func (TrajectoryTool) Def() providers.ToolDef {
     "id": { "type": "string", "description": "phase: the phase id." },
     "state": { "type": "string", "enum": ["active", "done", "skipped", "failed"], "description": "phase: the new state." },
     "status": { "type": "string", "enum": ["done", "failed"], "description": "finish: the final status." },
-    "reason": { "type": "string", "description": "phase/finish: one line explaining a skip, failure or early finish." }
+    "reason": { "type": "string", "description": "phase/finish: one line explaining a skip, failure or early finish." },
+    "force": { "type": "boolean", "description": "phase → done only: skip the phase's declared gate (artifact / verdict / human). Say why in reason." }
   },
   "required": ["action"],
   "additionalProperties": false
@@ -146,7 +151,7 @@ func (TrajectoryTool) Call(ctx context.Context, input json.RawMessage) (string, 
 		if strings.TrimSpace(in.ID) == "" || strings.TrimSpace(in.State) == "" {
 			return "", fmt.Errorf("phase needs \"id\" and \"state\"")
 		}
-		return f.Phase(ctx, in.ID, strings.ToLower(strings.TrimSpace(in.State)), in.Reason)
+		return f.Phase(ctx, in.ID, strings.ToLower(strings.TrimSpace(in.State)), in.Reason, in.Force)
 	case "finish":
 		if f.Finish == nil {
 			return "", fmt.Errorf("only the ROOT coordinator may finish the trajectory; this session is a sub-coordinator")

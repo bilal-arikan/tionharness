@@ -141,6 +141,7 @@ export interface FindingSummary {
   total: number
   appFix: number
   workspaceOpt: number
+  recipeOpt: number
   high: number
   regressed: number
   open: number
@@ -151,6 +152,7 @@ export function summarize(findings: InsightFinding[]): FindingSummary {
     total: findings.length,
     appFix: 0,
     workspaceOpt: 0,
+    recipeOpt: 0,
     high: 0,
     regressed: 0,
     open: 0,
@@ -158,6 +160,7 @@ export function summarize(findings: InsightFinding[]): FindingSummary {
   for (const f of findings) {
     if (f.channel === 'app-fix') s.appFix++
     else if (f.channel === 'workspace-opt') s.workspaceOpt++
+    else if (f.channel === 'recipe-opt') s.recipeOpt++
     if (f.severity === 'high') s.high++
     if (f.regressed) s.regressed++
     const st = f.status || 'new'

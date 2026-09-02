@@ -86,6 +86,12 @@ dokümantasyon sitesi, Astro — Go modülünün dışındadır).
 - **Otomasyon (automation)** — olay tetikli kurallar (etiketli oturumun bitmesi, kart durumu
   değişmesi gibi) bir ajanı veya akışı çalıştırır. Zamanlamalarla birlikte "Otomasyon"
   ekranında yönetilir.
+- **Rota (trajectory)** — bir koordinatör ağacının ilan edilen planı (reçetenin `phases:`
+  bloğu ya da ajanın `trajectory` aracı) ile gözlenen gerçeklerin (worker'lar, akış koşuları,
+  otomasyon ateşlemeleri, insan kapıları) tek grafta buluşması. Rota hiçbir şeyi çalıştırmaz;
+  runtime yazar, "Rota" ekranı ve ajan okur. Faz kapıları (artifact / verdict / human), faz
+  bitişi ve rota sonu tetikli otomasyonlar, koşu özeti, LLM'siz haftalık küratör ve yalnız
+  öneri üreten reçete optimizer'ı bunun üstüne kuruludur.
 - **Skill** — ajanın talep üzerine yüklediği yeniden kullanılabilir talimat paketi; bağlamı
   şişirmemek için tam metin yalnız gerektiğinde okunur.
 - **Araçlar & MCP** — yerleşik araçlar (dosya oku/yaz/düzenle, glob/grep, shell [opsiyonel],
@@ -105,7 +111,7 @@ ve ajanlar tek tek örneklere bağlanır:
 
 ## Arayüz
 
-Panel, Sohbet, Ajanlar, Ağ, Harita, Görevler, Otomasyon, Akışlar, Artifactlar, Skills,
+Panel, Sohbet, Ajanlar, Ağ, Harita, Rota, Görevler, Otomasyon, Akışlar, Artifactlar, Skills,
 Araçlar & MCP, Market, Bütçe, Loglar ve İçgörü ekranları. Tema: açık/koyu/sistem +
 6 renk paleti (Violet, Blue, Emerald, Rose, Amber, Nord) — her biri açık ve koyu varyantıyla,
 hepsi canlı uygulanır. Arayüz dili, ajanın yanıt dilinden bağımsız olarak ayarlanır.

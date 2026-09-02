@@ -88,6 +88,11 @@ export const taskApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
+  pinSchedule: (id: string, pinned: boolean) =>
+    req<{ id: string; pinned: boolean }>(`/api/schedules/${id}/pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    }),
   archiveSchedule: (id: string, archived: boolean) =>
     req<{ id: string; archived: boolean }>(`/api/schedules/${id}/archive`, {
       method: 'POST',
@@ -194,6 +199,12 @@ export const taskApi = {
   deleteAutomation: (id: string) =>
     req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
   // Archive (hide + stop, restorable) — the curator-safe alternative to delete.
+  // Pin (Rota F3): exempt from the curator's automatic passes.
+  pinAutomation: (id: string, pinned: boolean) =>
+    req<{ id: string; pinned: boolean }>(`/api/automations/${id}/pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    }),
   archiveAutomation: (id: string, archived: boolean) =>
     req<{ id: string; archived: boolean }>(`/api/automations/${id}/archive`, {
       method: 'POST',

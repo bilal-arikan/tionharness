@@ -86,7 +86,9 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
     )
   }
   if (!res.ok) {
-    throw new Error(await errorFromResponse(res))
+    const err = new Error(await errorFromResponse(res)) as Error & { status?: number }
+    err.status = res.status
+    throw err
   }
   // Tolerate empty bodies (204 No Content, or any handler that writes no JSON):
   // parsing "" would throw "Unexpected end of JSON input". Endpoints typed as
