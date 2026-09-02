@@ -506,8 +506,9 @@ func (r *Runtime) runSpawn(runCtx context.Context, cancelRun context.CancelFunc,
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID, "status", outcome.Status)
 	// Self-completion: if the spawned turn stalled with unfinished work (activated
 	// tools it never used, or open todos), keep it going — there is no human to send
-	// the follow-up. No-op when the turn finished cleanly. Bounded + budget-gated.
-	r.maybeAutoContinue(ctx, agent, sessionID, KindSpawn, steps)
+	// the follow-up. No-op when the turn finished cleanly, and skipped outright when
+	// it was cut short. Bounded + budget-gated.
+	r.maybeAutoContinue(ctx, agent, sessionID, KindSpawn, steps, outcome.Truncated())
 	r.emitSpawnEvent(agent, sessionID, prompt, !outcome.Truncated())
 	// Auto-tag any tool errors from this spawned turn.
 	r.AutoTagTurn(ctx, sessionID, steps, "")

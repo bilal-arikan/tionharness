@@ -696,8 +696,9 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	output, err = s.rt.recordAssistantReply(ctx, session.ID, sc.AgentID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu zamanlanmış prompt için boş yanıt döndürdü.")
 	// Self-completion: a scheduled run has no human to send the follow-up, so if the
 	// turn stalled with unfinished work (activated tools it never used, or open
-	// todos) keep it going until done. No-op on a clean finish. Bounded + budget-gated.
-	s.rt.maybeAutoContinue(ctx, agent, session.ID, KindSchedule, steps)
+	// todos) keep it going until done. No-op on a clean finish, skipped when the turn
+	// was cut short. Bounded + budget-gated.
+	s.rt.maybeAutoContinue(ctx, agent, session.ID, KindSchedule, steps, truncated)
 	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
 	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
 	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())

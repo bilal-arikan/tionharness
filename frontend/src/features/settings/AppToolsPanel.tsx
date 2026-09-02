@@ -296,7 +296,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
       />
       <Toggle
         label="Otomatik devam (otonom turlarda kendi kendine tamamlama)"
-        hint="Açıkken zamanlama/spawn/wake turu işi yarım bırakırsa (açık todo maddeleri veya son eylemi bir lazy-tool aktivasyonu) oturuma bir 'Otomatik devam' dürtmesi yazılır ve tur devam ettirilir. Kapatınca bu mesaj hiç oluşmaz, yarım kalan otonom tur olduğu yerde durur. Önerilen: AÇIK."
+        hint="Açıkken zamanlama/spawn/wake turu işi yarım bırakırsa (açık todo maddeleri veya son eylemi bir lazy-tool aktivasyonu) oturuma bir 'Otomatik devam' dürtmesi yazılır ve tur devam ettirilir. Elle durdurulan ya da bir tavana takılıp yarıda kesilen turlarda (süre/araç limiti/guardrail) bu dürtme hiç yazılmaz. Kapatınca mesaj hiç oluşmaz, yarım kalan otonom tur olduğu yerde durur. Önerilen: AÇIK."
         checked={draft.autonomousAutoContinue}
         onChange={(v) => set('autonomousAutoContinue', v)}
       />

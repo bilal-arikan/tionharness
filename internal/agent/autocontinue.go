@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -84,6 +85,17 @@ func (r *Runtime) shouldAutoContinue(sessionID string, steps []TurnStep) bool {
 	return needsAutoContinue(steps)
 }
 
+// deadlineExpired reports whether a finished context ended because its BUDGET ran
+// out (the schedule/spawn deadline, or a watchdog cut recorded as the cancellation
+// cause) rather than because someone cancelled it. A plain cancellation is the human
+// "Durdur" (Runtime.CancelSession), which auto-continue must honour silently.
+func deadlineExpired(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+	return errors.Is(cause, context.DeadlineExceeded) ||
+		errors.Is(cause, ErrTurnHardTimeout) ||
+		errors.Is(cause, ErrTurnIdleTimeout)
+}
+
 // maybeAutoContinue keeps an autonomous run going until its work is actually done.
 // After the caller has persisted the turn's reply, this inspects the trace: if it
 // signals unfinished work (needsAutoContinue) it issues a continuation turn on the
@@ -95,14 +107,34 @@ func (r *Runtime) shouldAutoContinue(sessionID string, steps []TurnStep) bool {
 // This is the unattended-completion guarantee: a scheduled/spawned/woken agent
 // that "planned + activated tools + stopped" no longer strands its own task,
 // because there is no human to send the follow-up the lazy tools were waiting for.
-func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, sessionID string, kind CallKind, lastSteps []TurnStep) {
+//
+// truncated says the preceding turn was CUT SHORT rather than finished (watchdog
+// hard/idle cut, tool-iteration cap, guardrail halt, context/output exhaustion —
+// see reconcileTurnOutcome). Such a turn is skipped entirely: its own outcome note
+// already explains that the work is unfinished, and the nudge ("you stopped without
+// finishing") would both misreport why it stopped and push the agent straight back
+// into the ceiling it just hit.
+func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, sessionID string, kind CallKind, lastSteps []TurnStep, truncated bool) {
 	if !r.tun.AutoContinue() || sessionID == "" {
+		return
+	}
+	if truncated {
+		r.logger.Info("auto-continue: previous turn was cut short — no continuation",
+			"session", sessionID, "agent", agent.ID)
 		return
 	}
 	max := r.tun.AutoContinueMax()
 	steps := lastSteps
 	for i := 0; i < max; i++ {
 		if !r.shouldAutoContinue(sessionID, steps) {
+			return
+		}
+		// The run was stopped by hand ("Durdur"): the human ended it on purpose, so a
+		// nudge would both restart work they just halted and label their stop as an
+		// unfinished turn. Leave the thread as they left it — the stop already shows.
+		if ctx.Err() != nil && !deadlineExpired(ctx) {
+			r.logger.Info("auto-continue: run was stopped — skipping continuation",
+				"session", sessionID, "agent", agent.ID, "iteration", i+1)
 			return
 		}
 		// The preceding turn may have consumed the whole spawn/schedule deadline; a
@@ -171,6 +203,15 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		}
 		r.maybeAutoHandoff(ctx, sessionID, agent, overflow.Load())
 		r.AutoTagTurn(ctx, sessionID, cSteps, "")
+
+		// The continuation hit a ceiling of its own (iteration cap, guardrail halt,
+		// context/output exhaustion). Its trace already carries the terminal marker
+		// explaining that; nudging again would only re-run into the same wall.
+		if o, ok := classifyTurnSteps(cSteps); ok {
+			r.logger.Info("auto-continue: continuation cut short — stopping",
+				"session", sessionID, "agent", agent.ID, "status", o.Status)
+			return
+		}
 
 		// No-progress guard: a continuation that ran no tools can't advance a
 		// tool-activation/todo stall — stop instead of looping to the cap.
