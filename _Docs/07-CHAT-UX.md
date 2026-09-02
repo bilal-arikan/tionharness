@@ -838,6 +838,9 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   satırda o ajanın avatarı görünür. Ajan roster'ı ayrı **Ajanlar** view'inde
   (`AgentRoster`/`AgentsView`) = yeni sohbetlerin varsayılan ajan seçicisi.
   `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
+- Oturum satırındaki model rozeti, tur çalışırken bağlı ajanın güncel istek modelini
+  gösterir; tur bitince provider'ın doğruladığı `Session.Model` snapshot'ına döner.
+  Böylece yeni tur sırasında önceki turun veya oturum oluşturma anının modeli görünmez.
 - **Ajan seçimi dropdown ile (zorunlu):** composer'daki `AgentSelect` oturumun ajanını
   gösterir; değiştirince `PUT /api/sessions/{id}/agent` ile kalıcı olur ve `activeAgentId`
   - sessions listesi güncellenir. `sendMessage` her zaman **oturumun ajanını** tek

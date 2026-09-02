@@ -47,6 +47,7 @@ import { isWorkerSession } from '@/shared/lib/coordination'
 import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 import { sessionMatchesQuery } from './sessionSearch'
 import { countLiveDescendantWorkers } from './liveWorkerCounts'
+import { sessionListModel } from './sessionListModel'
 
 const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
@@ -458,6 +459,7 @@ export function SessionsSidebar({
                 const meta = kindMeta(sessionChipKey(s))
                 const KindIcon = meta.icon
                 const isSelected = sel.isSelected(s.id)
+                const displayedModel = sessionListModel(s.model, owner?.model, isStreaming)
                 return (
                   <div
                     key={s.id}
@@ -566,12 +568,12 @@ export function SessionsSidebar({
                         <span className="flex items-center gap-1.5 text-[10px]">
                           <KindIcon size={11} className="shrink-0 opacity-60" />
                           <span className="shrink-0 opacity-60">{meta.label}</span>
-                          {s.model && (
+                          {displayedModel && (
                             <span
                               className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
-                              title={`Model: ${s.model}`}
+                              title={`Model: ${displayedModel}`}
                             >
-                              {modelDisplayName(s.model)}
+                              {modelDisplayName(displayedModel)}
                             </span>
                           )}
                           {isStreaming ? (
