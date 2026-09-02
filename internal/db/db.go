@@ -88,6 +88,14 @@ type DB struct {
 	// expected to dispatch on its own goroutine, so an append is never blocked.
 	activityHook   ActivityFn
 	activityHookMu sync.RWMutex
+
+	// sessionHook is an optional observer invoked (best-effort) after a session is
+	// created, changes state/run-state, gains its origin run id, or is deleted.
+	// Same contract as boardHook: called AFTER the store and transcript locks are
+	// released, callback dispatches on its own goroutine. Backs the workspace
+	// event log / trajectory projection (see store_session_hook.go).
+	sessionHook   SessionChangeFn
+	sessionHookMu sync.RWMutex
 	// activityDeliveryMu protects the per-event delivery claims. It is never held
 	// while invoking a hook: callbacks may re-enter this DB and may be slow.
 	activityDeliveryMu sync.Mutex

@@ -1,5 +1,32 @@
 // Sessions plus the rich detail/context model behind the session info panel.
 
+// Session origin kinds (db.Origin* constants).
+export type SessionOriginKind =
+  | 'user'
+  | 'spawn'
+  | 'coordinator'
+  | 'subagent'
+  | 'flow'
+  | 'schedule'
+  | 'automation'
+  | 'handoff'
+  | 'insight'
+
+// Who started a session and from where (db.SessionOrigin). Field meaning
+// depends on kind: entityId names the automation/schedule/flow, runId the flow
+// or insight run, nodeId the flow node, triggerSessionId the session whose
+// activity caused this one (coordinator, parent turn, handed-off session, tagged
+// session), rootSessionId the top of the tree (empty = this session is a root).
+export interface SessionOrigin {
+  kind: SessionOriginKind
+  entityId?: string
+  runId?: string
+  nodeId?: string
+  triggerSessionId?: string
+  rootSessionId?: string
+  at: number
+}
+
 export interface Session {
   id: string
   // The DEFAULT responder: the agent that answers when a turn carries no explicit
@@ -23,6 +50,10 @@ export interface Session {
   // Links the session to the entity that owns it (a task or flow id); empty for
   // plain chat and agent-keyed kinds (schedule).
   sourceId?: string
+  // Who started this session and from where (db.Session.Origin). The single
+  // lineage source for graph/trajectory views; absent on headers written before
+  // schema version 4 (the backend derives it in memory, so API responses carry it).
+  origin?: SessionOrigin
   title: string
   messageCount: number
   // Visibility only: 'active' | 'archived'. NOT the run outcome — see runState.

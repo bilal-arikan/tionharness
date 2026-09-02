@@ -75,9 +75,22 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 	if nodeID := orchestration.NodeIDFromContext(ctx); nodeID != "" {
 		title += " · " + nodeID
 	}
+	runID := flowRunIDFromContext(ctx)
+	origin := &db.SessionOrigin{
+		Kind:   db.OriginFlow,
+		RunID:  runID,
+		NodeID: orchestration.NodeIDFromContext(ctx),
+		// The run's own transcript session is the one this coordinator hangs
+		// under in the lineage graph; the flow id names the entity.
+		TriggerSessionID: flowTranscriptSessionFromContext(ctx),
+	}
+	if run, rerr := r.db.GetFlowRun(ctx, runID); rerr == nil {
+		origin.EntityID = run.FlowID
+	}
 	sess, err := r.db.CreateSession(ctx, db.Session{
 		AgentID: agent.ID,
 		Kind:    SessionKindFlowCoordinator,
+		Origin:  origin,
 		// Same directory the flow run itself works in; its workers then inherit from
 		// here (SpawnWorker), so a whole coordinator tree stays in one repository.
 		WorkingDir: r.effectiveWorkDir(ctx),

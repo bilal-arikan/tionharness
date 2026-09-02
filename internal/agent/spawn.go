@@ -62,6 +62,14 @@ type SpawnOptions struct {
 	// bounded repair loop can retry. Requires ParentSessionID.
 	ClearParentTagsOnSuccess []string
 
+	// Origin is the explicit lineage record stamped on the spawned session
+	// (db.Session.Origin). Launchers that know more than the legacy fields carry
+	// — the automation and the session that tripped it, the schedule, the
+	// handed-off session — set it; left nil, the store derives the origin from the
+	// spawn's own shape (worker → coordinator, subagent, handoff, plain spawn), so
+	// a caller never has to set it just to be correct.
+	Origin *db.SessionOrigin
+
 	// Coordinator/worker link (see coordination.go, _Docs/47). When
 	// CoordinatorSessionID is set the spawn is a WORKER: the session is created with
 	// Kind="worker" + Role="worker" + this back-link, and its background turn runs
@@ -252,6 +260,7 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		DispatchKey:              opts.IdempotencyKey,
 		Title:                    title,
 		ParentSessionID:          parentID,
+		Origin:                   opts.Origin,
 		WorkingDir:               cwd,
 		Tags:                     opts.Tags,
 		Role:                     strings.TrimSpace(opts.Role),

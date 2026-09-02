@@ -216,14 +216,23 @@ func crossedMultiple(prev, now, interval int64) bool {
 // Returns the fired session id and a driver label ("flow"|"session"). Shared by
 // all four fire paths so the mode choice lives in one place.
 func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID, driver string, err error) {
+	// Lineage: whichever driver runs, the session it produces was started by THIS
+	// automation, tripped (for a session-scoped trigger) by the session the caller
+	// put in ParentSessionID. The flow driver threads it through LaunchRun into
+	// the run's transcript session; the session driver stamps it on the spawn.
+	origin := &db.SessionOrigin{Kind: db.OriginAutomation, EntityID: a.ID, TriggerSessionID: spawn.ParentSessionID}
 	if a.FlowID != "" {
 		res, ferr := e.rt.LaunchRun(ctx, RunSpec{
 			Trigger:    trigger,
 			Input:      prompt,
 			Autonomous: true,
 			FlowID:     a.FlowID,
+			Origin:     origin,
 		})
 		return res.SessionID, "flow", ferr
+	}
+	if spawn.Origin == nil {
+		spawn.Origin = origin
 	}
 	if a.EffectiveSessionMode() == db.SessionModeContinue {
 		if e.rt.Paused() {

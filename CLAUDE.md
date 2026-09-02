@@ -321,6 +321,8 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `store_activity.go` | Mesaj ekleme aktivite sinyali (`ActivitySignal`) ve gözlemci hook'u |
 | `store_agent_system.go` | Yerleşik (system) ajan tanımları; silme yerine devre dışı bırakma (`ErrSystemAgentDelete`) |
 | `store_session_ask.go` | Durable Ask — oturuma sorulan ve yanıt bekleyen sorular |
+| `models_session_origin.go` | `SessionOrigin` — oturumu kimin/nereden başlattığı (tek köken kaynağı), `Lineage()`/`RootSession()` türetimi ve eski header'lar için bellek-içi backfill |
+| `store_session_hook.go` | `SetSessionHook` — oturum yaşam döngüsü gözlemcisi (create/state/runstate/origin/delete), kilitler bırakıldıktan sonra ateşlenir (`SetBoardHook` ikizi) |
 | `store_model_resolution.go` | İstenen model id → sağlayıcının gerçekte servis ettiği model eşlemesi |
 | `filestore.go` | Varlıktan bağımsız generic CRUD/persist yapı taşları; `store_*.go` bunlara delege eder |
 | `board_columns.go` | Kanban kolon anahtarı doğrulama (`IsValidBoardKey`) ve yerleşik kolon sabitleri |

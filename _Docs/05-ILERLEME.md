@@ -1,5 +1,43 @@
 # TionHarness — İlerleme Takibi
 
+## Oturum kökeni tek kaynağa bağlandı — Rota altyapısı R1 (2026-09-02) ✅
+
+**Belirti.** "Bu oturumu kim başlattı" sorusunun altı ayrı cevabı vardı:
+`ParentSessionID` handoff, `CoordinatorSessionID` worker, `Kind+SourceID` flow'a
+işaret eder run'a değil, `FlowRun.SessionID` koşu **bitince** damgalanır,
+automation-run için yalnız `Automation.LastSessionID`. Rota (dinamik akış grafiği,
+`_Docs/77`) projeksiyonunun kenarları bu veriden türeyecek; dağınık haliyle tahmin
+gerekirdi.
+
+**Ne.** `Session.Origin *SessionOrigin` (`kind`: user/spawn/coordinator/subagent/
+flow/schedule/automation/handoff/insight + `entityId`/`runId`/`nodeId`/
+`triggerSessionId`/`rootSessionId`/`at`), tek damgalama noktası
+`createSessionLocked`, `Lineage()`/`RootSession()` okuyucuları, boot'ta eski
+header'lar için bellek-içi backfill (dosya yeniden yazılmaz), `SessionSchemaVersion`
+3→4. Açık köken veren yollar: `SpawnOptions.Origin` (handoff, schedule spawn,
+automation one-shot), `RunSpec.Origin` (automation/schedule → flow, ctx ile
+`runFlowRecorded`'a taşınır), flow-coordinator düğümü (run + node), insight koşusu.
+`FlowRun.SessionID` artık `RunFlow` içinde satır oluşur oluşmaz damgalanıyor ve
+`SetSessionOriginRun` aynı anda `origin.runId`'yi tamamlıyor. Yeni
+`db.SetSessionHook` (create/state/runstate/origin/delete; kilit dışı, `SetBoardHook`
+ikizi) R3 workspace olay günlüğünün besleme noktası. Frontend: `Session.origin`
+tipi; `SessionFlowInline` 5 sn `createdAt` eşleştirmesini yalnız link-öncesi
+mağazalarda kullanıyor.
+
+**Dosyalar.** `internal/db/models_session_origin.go` (yeni), `store_session_hook.go`
+(yeni), `models.go`, `store.go`, `db.go`; `internal/agent/flow_origin.go` (yeni),
+`flow.go`, `flow_coordinator.go`, `spawn.go`, `launch.go`, `automation.go`,
+`scheduler.go`, `handoff.go`, `insightsteps.go`; `frontend/src/types/session.ts`,
+`features/flows/SessionFlowInline.tsx`; `_Docs/02`, `_Docs/77`, `CLAUDE.md`.
+
+**Doğrulama.** `go build ./...` ✅; `go test` db/api/workspace/view/tools/agent
+paketleri ✅ (yeni: `TestDeriveOrigin`, `TestCreateSessionStampsOrigin`,
+`TestLegacyHeaderOriginBackfilledOnLoad`, `TestSetSessionOriginRun`,
+`TestSessionHookOpsAndLockFreedom`, `TestSessionHookNotFiredOnFailure`,
+`TestRunFlowStampsSessionAtStart`, `TestLaunchRunFlowCarriesLauncherOrigin`,
+`TestSpawnWorkerOriginIsCoordinator`, `TestHandoffContinuationOrigin`);
+`npx tsc --noEmit` ✅; vitest flows+sessions ✅.
+
 ## Ağ fiziği yeniden açılışta kaldığı yerden sürüyor (2026-09-02) ✅
 
 **Sorun:** Ağ yerleşimi düğümlerin `x/y` koordinatlarını saklıyordu; ekran hareket

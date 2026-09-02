@@ -30,6 +30,13 @@ type RunSpec struct {
 	Input          string
 	Autonomous     bool
 	IdempotencyKey string
+	// Origin is the lineage record for the session this launch produces — who
+	// started it (automation, schedule) and, for a session-scoped trigger, which
+	// session tripped it. Applied to the flow run's transcript session by the flow
+	// driver and to the spawn by the session driver (Spawn.Origin wins when the
+	// caller set both). Nil lets the store derive a default from the session's
+	// own shape.
+	Origin *db.SessionOrigin
 	// flow driver:
 	FlowID string
 	// session driver:
@@ -78,6 +85,9 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 		if _, err := r.db.GetFlow(ctx, spec.FlowID); err != nil {
 			return LaunchResult{Driver: "flow"}, fmt.Errorf("target flow gone: %w", err)
 		}
+		if spec.Origin != nil {
+			ctx = withLaunchOrigin(ctx, spec.Origin)
+		}
 		run, sessionID, err := r.runFlowRecorded(ctx, spec.FlowID, spec.Input, spec.Autonomous, nil, spec.IdempotencyKey)
 		if err != nil {
 			return LaunchResult{Driver: "flow", SessionID: sessionID}, fmt.Errorf("flow run failed: %w", err)
@@ -98,6 +108,9 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 	}
 	spec.Spawn.NoQueue = true
 	spec.Spawn.IdempotencyKey = spec.IdempotencyKey
+	if spec.Spawn.Origin == nil {
+		spec.Spawn.Origin = spec.Origin
+	}
 	res, err := r.SpawnSession(ctx, spec.AgentID, spec.Input, spec.Spawn)
 	if err != nil {
 		return LaunchResult{Driver: "session"}, fmt.Errorf("spawn failed: %w", err)

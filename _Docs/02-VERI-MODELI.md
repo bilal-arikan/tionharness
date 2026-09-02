@@ -219,6 +219,26 @@ erDiagram
 > (`SetSessionStallNudges`), dolayısıyla eşik "toplam ömür" değil **toparlanmadan
 > nüks** ölçer — `stuck_turns` ile aynı ardışık-sıfırlama deseni.
 
+> **`origin` — oturum kökeni (2026-09-02, `_Docs/77` R1).** Oturumu **kimin,
+> nereden** başlattığının tek kaynağı (`db.SessionOrigin`, `models_session_origin.go`):
+> `kind` ∈ `user` · `spawn` · `coordinator` · `subagent` · `flow` · `schedule` ·
+> `automation` · `handoff` · `insight`; `entityId` (AUT/SCH/FLW), `runId` (flow ya da
+> insight koşusu), `nodeId` (flow düğümü), `triggerSessionId` (worker için koordinatör,
+> subagent için ebeveyn tur, handoff için devredilen oturum, tag tetiklemesi için
+> etiketli oturum), `rootSessionId` (ağaç kökü; **boş = kendisi**), `at`. **Tek damgalama
+> noktası `createSessionLocked`**: çağıran açık köken vermezse eski alanlardan
+> (`coordinator_session_id`, `execution_type`, `kind`+`source_id`, `parent_session_id`)
+> türetilir; boot'ta şema sürümü 4'ün altındaki header'lar için aynı türetim
+> **bellek içinde** yapılır, dosya bunun için yeniden yazılmaz. Okuma yolu her zaman
+> `Session.Lineage()` / `RootSession()`; eski alanlar mevcut tüketicileri için
+> kalır. Flow koşusunun transkript oturumu koşu satırından **önce** açıldığı için
+> `runId` `RunFlow` içinde satır oluşur oluşmaz `SetSessionOriginRun` ile tamamlanır
+> (aynı anda `flow_runs.session_id` de damgalanır — artık koşu bitişini beklemez).
+> Oturum yaşam döngüsü için `SetSessionHook` (`store_session_hook.go`): `create` /
+> `state` / `runstate` / `origin` / `delete` op'ları, kilitler bırakıldıktan sonra
+> ateşlenir (`SetBoardHook` sözleşmesi); R3 workspace olay günlüğünün ve Rota
+> projeksiyonunun besleme noktasıdır.
+
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
 > `automations`, `hooks`, `mcp_servers`, `artifacts`, **`workspaces`** — `workspaces.json`
