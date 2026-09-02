@@ -353,7 +353,14 @@ func handoffContinuationSpawnOpts(session db.Session, opts HandoffOptions) Spawn
 	return SpawnOptions{
 		CreatedBy:       opts.CreatedBy,
 		ParentSessionID: session.ID,
-		Title:           "↪ " + handoffTitle(session),
+		// A continuation stays in its parent's tree: same root, "next" edge from
+		// the handed-off session (see db.OriginHandoff).
+		Origin: &db.SessionOrigin{
+			Kind:             db.OriginHandoff,
+			TriggerSessionID: session.ID,
+			RootSessionID:    session.RootSession(),
+		},
+		Title: "↪ " + handoffTitle(session),
 		// Keep a chat handoff in the "Sohbet" sidebar filter next to its parent; other
 		// parent kinds fall back to the writable "spawned" kind (see continuationKind).
 		Kind:                continuationKind(session.Kind),

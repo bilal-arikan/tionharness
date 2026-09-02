@@ -173,6 +173,7 @@ erDiagram
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 | `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`tool` (+ tarihsel `agent` — otomatik yakalama kaldırıldı, yeni artifact üretmez); köken `session_id`/`agent_id`. **Otomatik yakalama YOK:** artifact yalnız araçla (`create_artifact`/`update_artifact`) veya API/UI ile bilerek oluşturulur; dosya yazmak artifact üretmez. Workspace-scoped — TionHarness'in Claude.ai artifact karşılığı |
+| `trajectories` | **Rota** (2026-09-02, `_Docs/77` R4): kök oturum başına bir yörünge grafiği — ilan edilen fazlar (`declared`) + runtime'ın gözlediği oturum/otomasyon/flow-run düğümleri (`observed`), kenarlar (`next`/`spawned`/`reported`/`fired`/`feeds`/`blocked_by`/`forked_from`), `status` (planned/running/waiting/done/failed/abandoned) ve her yazımda artan `revision`. **Depolama iki parçalı:** grafik kök oturumun dizininde `trajectory.json` sidecar'ıdır (oturumla yaşar, yedeklenir, silinir); `trajectories/index.json` yalnız listeleme özetidir (id, kök, şablon, durum, revizyon, düğüm sayısı) ve boot'ta yüklenir, bozuksa karantinaya alınıp sidecar'lardan yeniden kurulur. Yazımlar kök başına kilitle serileşir; `UpdateTrajectory(id, expectedRev, fn)` — UI/ajan düzenlemesi gördüğü revizyonu geçirir, uyuşmazsa `ErrConflict` (409); yalnız gözlem ekleyen runtime çağrıları 0 geçer. Rota **hiçbir şey çalıştırmaz**; pano gibi yansıtır. Id ön eki `RTA` |
 
 > **`state` (görünürlük) ve `run_state` (koşu sonucu) AYRI alanlardır.**
 >
@@ -218,6 +219,26 @@ erDiagram
 > edilir. Gerçekten koordinasyon aracı çağıran temiz bir tur alanı **0'a çeker**
 > (`SetSessionStallNudges`), dolayısıyla eşik "toplam ömür" değil **toparlanmadan
 > nüks** ölçer — `stuck_turns` ile aynı ardışık-sıfırlama deseni.
+
+> **`origin` — oturum kökeni (2026-09-02, `_Docs/77` R1).** Oturumu **kimin,
+> nereden** başlattığının tek kaynağı (`db.SessionOrigin`, `models_session_origin.go`):
+> `kind` ∈ `user` · `spawn` · `coordinator` · `subagent` · `flow` · `schedule` ·
+> `automation` · `handoff` · `insight`; `entityId` (AUT/SCH/FLW), `runId` (flow ya da
+> insight koşusu), `nodeId` (flow düğümü), `triggerSessionId` (worker için koordinatör,
+> subagent için ebeveyn tur, handoff için devredilen oturum, tag tetiklemesi için
+> etiketli oturum), `rootSessionId` (ağaç kökü; **boş = kendisi**), `at`. **Tek damgalama
+> noktası `createSessionLocked`**: çağıran açık köken vermezse eski alanlardan
+> (`coordinator_session_id`, `execution_type`, `kind`+`source_id`, `parent_session_id`)
+> türetilir; boot'ta şema sürümü 4'ün altındaki header'lar için aynı türetim
+> **bellek içinde** yapılır, dosya bunun için yeniden yazılmaz. Okuma yolu her zaman
+> `Session.Lineage()` / `RootSession()`; eski alanlar mevcut tüketicileri için
+> kalır. Flow koşusunun transkript oturumu koşu satırından **önce** açıldığı için
+> `runId` `RunFlow` içinde satır oluşur oluşmaz `SetSessionOriginRun` ile tamamlanır
+> (aynı anda `flow_runs.session_id` de damgalanır — artık koşu bitişini beklemez).
+> Oturum yaşam döngüsü için `SetSessionHook` (`store_session_hook.go`): `create` /
+> `state` / `runstate` / `origin` / `delete` op'ları, kilitler bırakıldıktan sonra
+> ateşlenir (`SetBoardHook` sözleşmesi); R3 workspace olay günlüğünün ve Rota
+> projeksiyonunun besleme noktasıdır.
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,

@@ -215,8 +215,10 @@ func (a Agent) NativeWebSearchEnabled() bool {
 // so a future loader can branch on the version. 1 = first versioned header
 // (added pinned + the enriched per-message fields). 2 = generic participant model
 // (Session.Participants + per-message AuthorKind/AuthorID/RecipientID). 3 adds
-// execution lineage/classification metadata.
-const SessionSchemaVersion = 3
+// execution lineage/classification metadata. 4 adds Session.Origin (who started
+// the session — see models_session_origin.go); headers below 4 derive it in
+// memory at load (reconcileHeader) and are never rewritten for it.
+const SessionSchemaVersion = 4
 
 const (
 	ExecutionInteractive = "interactive"
@@ -495,6 +497,15 @@ type Session struct {
 	// Both empty for an ordinary (non-handoff) session.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
+
+	// Origin records WHO started this session and from where (user, coordinator,
+	// flow run + node, automation, schedule, handoff, subagent, insight). It is the
+	// single lineage source every graph/projection consumer reads via Lineage();
+	// the older per-path fields above and below (ParentSessionID,
+	// CoordinatorSessionID, Kind+SourceID, RetryOfSessionID) are kept for their
+	// existing consumers and are what Lineage() derives from when Origin is nil
+	// (a header written before schema version 4). Stamped once at creation.
+	Origin *SessionOrigin `json:"origin,omitempty"`
 
 	// Participants is the roster of agent ids taking part in this thread, beyond
 	// the implicit human "user" (UserParticipantID) which is always a participant.

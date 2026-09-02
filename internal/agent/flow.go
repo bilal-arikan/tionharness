@@ -272,6 +272,21 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	if err != nil {
 		return db.FlowRun{}, err
 	}
+	// Link run ↔ transcript session NOW, before the first node runs: the session
+	// was created up front by runFlowRecorded so the executions feed shows the run
+	// live, and every consumer that walks from a session to its exact run (the
+	// chat "Akış olarak gör", the trajectory projection) must not have to wait for
+	// the run to finish — or fall back to matching timestamps.
+	if sid := flowTranscriptSessionFromContext(ctx); sid != "" {
+		if lerr := r.db.SetFlowRunSession(ctx, run.ID, sid); lerr != nil {
+			r.logger.Warn("link flow run to session at start failed", "run", run.ID, "session", sid, "error", lerr)
+		} else {
+			run.SessionID = sid
+		}
+		if oerr := r.db.SetSessionOriginRun(ctx, sid, run.ID); oerr != nil {
+			r.logger.Warn("stamp session origin run failed", "run", run.ID, "session", sid, "error", oerr)
+		}
+	}
 	r.logger.Info("flow run started", "flow", flowID, "run", run.ID, "parent", parentRunID)
 	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
 }
@@ -634,6 +649,7 @@ func (r *Runtime) runFlowRecorded(ctx context.Context, flowID, input string, aut
 			Kind:        "flow",
 			SourceID:    flow.ID,
 			DispatchKey: dispatchKey,
+			Origin:      flowSessionOrigin(ctx, flow.ID),
 			Title:       flow.Name,
 			// Inherit the launching turn's directory when there is one (run_flow from a
 			// session pinned to a repo); with no caller session this resolves to the
@@ -652,6 +668,9 @@ func (r *Runtime) runFlowRecorded(ctx context.Context, flowID, input string, aut
 		// session-scoped tooling — the autonomous Interaction wiring above all —
 		// sees an empty session id and degrades to "unavailable".
 		ctx = WithSessionID(runCtx, sessionID)
+		// Lets RunFlow link the run row to THIS session the moment it is created
+		// (FlowRun.SessionID + Origin.RunID), not only after the run finishes.
+		ctx = withFlowTranscriptSession(ctx, sessionID)
 		run := r.trackSession(sessionID, cancelRun)
 		defer run.release()
 		// Record the user turn AND announce the session up front, so the chat
@@ -804,7 +823,9 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 	if sessionID == "" {
 		// The up-front create failed (or a caller passed none) — make the per-run
 		// session now so the run is still recorded somewhere.
-		sess, err := r.db.CreateSession(ctx, db.Session{AgentID: owner, Kind: "flow", SourceID: flow.ID, Title: flow.Name, WorkingDir: r.effectiveWorkDir(ctx)})
+		origin := flowSessionOrigin(ctx, flow.ID)
+		origin.RunID = run.ID
+		sess, err := r.db.CreateSession(ctx, db.Session{AgentID: owner, Kind: "flow", SourceID: flow.ID, Origin: origin, Title: flow.Name, WorkingDir: r.effectiveWorkDir(ctx)})
 		if err != nil {
 			r.logger.Warn("flow session create failed", "flow", flow.ID, "error", err)
 			return ""

@@ -67,10 +67,13 @@ export function SessionFlowInline({
           return
         }
         let run = runs.find((r) => r.sessionId === sessionId) ?? null
-        // Legacy runs predate the explicit run↔session link: pair by nearest
-        // creation time (a per-run session is created at ~the same second as its
-        // run). A small tolerance means a deleted run still falls back to reify.
-        if (!run && sessionCreatedAt) {
+        // The run↔session link is stamped the moment the run row is created (R1,
+        // _Docs/77), so an exact match is the only path for anything recorded
+        // since. The nearest-createdAt pairing survives ONLY for a store whose
+        // runs of this flow all predate the link (no run carries a sessionId);
+        // once any run is linked, a miss means "deleted" and falls back to reify.
+        const linkedStore = runs.some((r) => !!r.sessionId)
+        if (!run && !linkedStore && sessionCreatedAt) {
           let bestDiff = Infinity
           for (const r of runs) {
             const diff = Math.abs((r.createdAt ?? 0) - sessionCreatedAt)

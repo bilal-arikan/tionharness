@@ -168,7 +168,7 @@ func TestCreateChildSessionMetadataPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if child.SchemaVersion != 3 || child.ParentSessionID != parent.ID || child.TargetProfile != "coder" {
+	if child.SchemaVersion != SessionSchemaVersion || child.ParentSessionID != parent.ID || child.TargetProfile != "coder" {
 		t.Fatalf("child metadata = %+v", child)
 	}
 	reopened, err := Open(d.Root())

@@ -172,6 +172,7 @@ karşılanmasından** doğar. Hepsi `Err=true`'dur ve `Error` alanında altta ya
 | `tool_permission_config_malformed` | `toolsetup.go` — `toolFilter` | Ajanın araç izin belgesi çözülemedi | Filtre **her aracı reddediyor**. Ajan araçsız kalır; düzeltme yeri ajanın izin konfigürasyonudur. Detay: `19-LAZY-TOOL-LOADING.md` |
 | `inbox_corrupt` | `api/inbox_durability.go` — `quarantineInbox` | `inbox.json` okunamadı/çözülemedi | Sidecar `inbox.json.corrupt-<unix>` olarak karantinaya alındı; **kuyruktaki mesajlar dağıtılmadı ve kaybedildi**. Bekleyen bir mesajın hiç işlenmemiş görünmesinin sebebi budur; karantina dosyası incelenebilir. Detay: `58-QUEUE-SENKRON.md` |
 | `orphan_recovery_failed` | `coordination.go` — `RecoverOrphanedTurns` | Açılışta `ListSessions` hata verdi | Öksüz (yarım kalmış) turların kurtarma taraması **hiç çalışmadı**. Çöküş sonrası yeniden dispatch edilmesi beklenen turlar `running` takılı kalmış olabilir |
+| `sidecar_corrupt` | `db/sidecar.go` — `Sidecar[T].Load` | Oturuma ait tipli bir sidecar (ör. `trajectory.json`) çözülemedi | Dosya `<ad>.corrupt-<unix>` olarak karantinaya alındı, sonraki okuma "yok" döner; çağıran işlem ilk seferde `SidecarCorruptError` alır. Rota için: indeks satırı düşer, kök oturum sıfırdan rota açabilir. Detay: `77-ROTA-ALTYAPI-PLANI.md` R4 |
 
 ### Adlandırılmış yaşam döngüsü / sıkışma olayları (2026-09-01)
 

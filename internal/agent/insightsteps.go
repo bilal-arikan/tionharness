@@ -203,6 +203,7 @@ func (r *Runtime) openInsightSession(ctx context.Context, runID, agentID, title 
 		AgentID:  agentID,
 		Kind:     db.SessionKindInsight,
 		SourceID: runID,
+		Origin:   &db.SessionOrigin{Kind: db.OriginInsight, RunID: runID},
 		Title:    title,
 		// The scan session carries the trigger tag the insight-apply automation
 		// waits for (see insightScanSessionTag). Without it OnTurnFinished has

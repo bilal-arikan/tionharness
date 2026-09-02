@@ -559,6 +559,7 @@ func (s *Scheduler) deliverFlow(ctx context.Context, sc db.Schedule) (string, er
 		Input:      sc.Prompt,
 		Autonomous: true,
 		FlowID:     sc.FlowID,
+		Origin:     &db.SessionOrigin{Kind: db.OriginSchedule, EntityID: sc.ID},
 	})
 	if err != nil {
 		s.logger.Error("schedule deliver: flow run failed",
@@ -738,7 +739,8 @@ func (s *Scheduler) deliverSpawnedPrompt(ctx context.Context, sc db.Schedule) (s
 		Autonomous: true,
 		AgentID:    sc.AgentID,
 		Spawn: SpawnOptions{
-			Title: scheduleSpawnTitle(sc),
+			Title:  scheduleSpawnTitle(sc),
+			Origin: &db.SessionOrigin{Kind: db.OriginSchedule, EntityID: sc.ID},
 			// Kind "schedule-run", NOT the reuse-mode thread's plain "schedule": that
 			// kind is looked up by (agentID, Kind) alone in getOrCreateKindSession
 			// (SourceID is ignored), so reusing it here would make this one-shot

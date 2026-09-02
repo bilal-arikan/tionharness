@@ -415,12 +415,20 @@ func (d *DB) mutateSessionAfterWriteLocked(id string, fn func(*Session) error) e
 // that to fn — some session mutations (e.g. rolling summary) are not "edits".
 // Returns ErrNotFound when the session is absent.
 func (d *DB) mutateSessionLocked(id string, fn func(*Session)) error {
+	_, err := d.mutateSession(id, fn)
+	return err
+}
+
+// mutateSession is mutateSessionLocked returning the post-mutation row, for
+// setters that fire the session hook AFTER every lock is released (the returned
+// copy is what the hook carries; no lock is held by the time it fires).
+func (d *DB) mutateSession(id string, fn func(*Session)) (Session, error) {
 	tl := d.transcriptLock(id)
 	tl.Lock()
 	recovered, err := d.recoverCLIReplyBeforeMutationLocked(id)
 	if err != nil {
 		tl.Unlock()
-		return err
+		return Session{}, err
 	}
 	defer func() {
 		tl.Unlock()
@@ -430,10 +438,10 @@ func (d *DB) mutateSessionLocked(id string, fn func(*Session)) error {
 	defer d.mu.Unlock()
 	s, ok := d.sessions[id]
 	if !ok {
-		return ErrNotFound
+		return Session{}, ErrNotFound
 	}
 	fn(&s)
-	return d.persistSessionLocked(s)
+	return s, d.persistSessionLocked(s)
 }
 
 // writeSessionHeaderLocked writes ONLY the session header file. Every metadata
@@ -476,8 +484,12 @@ func (d *DB) writeSessionFileLocked(s Session) error {
 // CreateSession inserts a new session.
 func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.createSessionLocked(s)
+	created, err := d.createSessionLocked(s)
+	d.mu.Unlock()
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
+	}
+	return created, err
 }
 
 func (d *DB) GetSessionByDispatchKey(ctx context.Context, key string) (Session, error) {
@@ -494,6 +506,14 @@ func (d *DB) GetSessionByDispatchKey(ctx context.Context, key string) (Session, 
 // CreateChildSession validates and atomically creates an execution child linked
 // to an existing parent. It is the sole creation path for delegated executions.
 func (d *DB) CreateChildSession(ctx context.Context, s Session) (Session, error) {
+	created, err := d.createChildSession(s)
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
+	}
+	return created, err
+}
+
+func (d *DB) createChildSession(s Session) (Session, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if strings.TrimSpace(s.ParentSessionID) == "" {
@@ -560,6 +580,21 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	if s.SchemaVersion == 0 {
 		s.SchemaVersion = SessionSchemaVersion
 	}
+	// Stamp the origin — the single lineage source (models_session_origin.go).
+	// A caller that knows more than the legacy fields carry (the flow run + node,
+	// the automation and the session that tripped it) passes an explicit origin;
+	// everyone else gets the same derivation the boot loader applies to old
+	// headers, so a session's lineage never depends on which build created it.
+	if s.Origin == nil {
+		o := deriveOrigin(s)
+		s.Origin = &o
+	}
+	if s.Origin.At == 0 {
+		s.Origin.At = s.CreatedAt
+	}
+	if err := validateOrigin(s.Origin); err != nil {
+		return Session{}, err
+	}
 	// Seed the session's model snapshot from its agent's configured model so
 	// the header answers "which model?" in O(1) without scanning messages.
 	if s.Model == "" && s.AgentID != "" {
@@ -622,13 +657,18 @@ func normalizeSessionMeta(s Session) Session {
 
 func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	for _, s := range d.sessions {
 		if s.AgentID == agentID && s.Kind == kind {
+			d.mu.Unlock()
 			return s, nil
 		}
 	}
-	return d.createSessionLocked(Session{AgentID: agentID, Kind: kind, Title: title})
+	created, err := d.createSessionLocked(Session{AgentID: agentID, Kind: kind, Title: title})
+	d.mu.Unlock()
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
+	}
+	return created, err
 }
 
 // GetOrCreateSourceSession returns (creating if absent) the session that owns a
@@ -637,13 +677,43 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 // turn, so the entity's whole execution history reads as a single transcript.
 func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agentID, title string) (Session, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	for _, s := range d.sessions {
 		if s.Kind == kind && s.SourceID == sourceID {
+			d.mu.Unlock()
 			return s, nil
 		}
 	}
-	return d.createSessionLocked(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
+	created, err := d.createSessionLocked(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
+	d.mu.Unlock()
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
+	}
+	return created, err
+}
+
+// SetSessionOriginRun fills the flow run id into a flow-origin session's Origin.
+// The per-run transcript session is created BEFORE its FlowRun row exists (so the
+// executions feed shows the run the instant it starts), which is the one case
+// where the origin cannot be complete at creation; RunFlow calls this right after
+// CreateFlowRun, before the first node runs. A no-op when the id is already set.
+func (d *DB) SetSessionOriginRun(ctx context.Context, sessionID, runID string) error {
+	changed := false
+	updated, err := d.mutateSession(sessionID, func(s *Session) {
+		if s.Origin == nil {
+			o := deriveOrigin(*s)
+			o.At = s.CreatedAt
+			s.Origin = &o
+		}
+		if s.Origin.RunID == runID {
+			return
+		}
+		s.Origin.RunID = runID
+		changed = true
+	})
+	if err == nil && changed {
+		d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpOrigin, Session: updated})
+	}
+	return err
 }
 
 // SetSessionSummary persists the rolling compaction summary for a session and
@@ -701,10 +771,16 @@ func (d *DB) SetSessionInboundPolicy(ctx context.Context, sessionID, policy stri
 // archived session drops out of the active list + the cross-session context
 // block but is never deleted. Bumps UpdatedAt so the change is reflected.
 func (d *DB) SetSessionState(ctx context.Context, sessionID, state string) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
+	prev := ""
+	updated, err := d.mutateSession(sessionID, func(s *Session) {
+		prev = s.State
 		s.State = state
 		s.UpdatedAt = now()
 	})
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpState, Session: updated, PrevState: prev})
+	}
+	return err
 }
 
 // SetSessionTags replaces a session's free-form tags. Does not bump UpdatedAt
@@ -732,10 +808,16 @@ func (d *DB) SetSessionStuckTurns(ctx context.Context, sessionID string, n int) 
 // restart. `at` is the unix second the outcome was decided. Does not bump
 // UpdatedAt — the caller records the reply message, which is the real activity.
 func (d *DB) SetSessionRunState(ctx context.Context, sessionID, state string, at int64) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
+	prev := ""
+	updated, err := d.mutateSession(sessionID, func(s *Session) {
+		prev = s.RunState
 		s.RunState = state
 		s.RunStateAt = at
 	})
+	if err == nil {
+		d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpRunState, Session: updated, PrevRunState: prev})
+	}
+	return err
 }
 
 // BumpSessionStallNudges increments the cumulative coordinator-stall counter and
@@ -1121,6 +1203,21 @@ func (d *DB) DeleteSession(ctx context.Context, sessionID string) error {
 }
 
 func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func(string) error) error {
+	removed, err := d.deleteSessionUnderLocks(ctx, sessionID, removeAll)
+	if err != nil {
+		return err
+	}
+	// Both the transcript lock and d.mu are released by now (deferred inside
+	// deleteSessionUnderLocks), which is the hook's contract — and the
+	// trajectory lock order's (never under d.mu).
+	d.dropTrajectoryForRoot(sessionID)
+	d.fireSessionHook(SessionChangeEvent{SessionID: sessionID, Op: SessionOpDelete, Session: removed})
+	return nil
+}
+
+// deleteSessionUnderLocks removes the session under the transcript lock and
+// d.mu, returning the row as it was for the delete event.
+func (d *DB) deleteSessionUnderLocks(ctx context.Context, sessionID string, removeAll func(string) error) (Session, error) {
 	// Removing the session directory destroys the transcript file, so it takes the
 	// transcript lock like any other writer — otherwise an append could recreate
 	// messages.jsonl underneath a delete that is already in progress.
@@ -1129,25 +1226,32 @@ func (d *DB) deleteSession(ctx context.Context, sessionID string, removeAll func
 	recovered, err := d.recoverCLIReplyBeforeMutationLocked(sessionID)
 	if err != nil {
 		tl.Unlock()
-		return err
+		return Session{}, err
 	}
 	defer func() {
 		tl.Unlock()
 		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
 	}()
+	return d.deleteSessionLocked(ctx, sessionID, removeAll)
+}
+
+// deleteSessionLocked does the store-side removal under d.mu and returns the row
+// as it was, for the delete event. Caller holds the transcript lock.
+func (d *DB) deleteSessionLocked(ctx context.Context, sessionID string, removeAll func(string) error) (Session, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.sessions[sessionID]; !ok {
-		return ErrNotFound
+	removed, ok := d.sessions[sessionID]
+	if !ok {
+		return Session{}, ErrNotFound
 	}
 	if err := removeSessionDirWithRetry(ctx, d.dir(dirSessions, sessionID), removeAll); err != nil {
-		return err
+		return Session{}, err
 	}
 	delete(d.sessions, sessionID)
 	delete(d.messages, sessionID)
 	d.deleteSessionFilesLocked(sessionID)
 	d.dropTranscriptLock(sessionID)
-	return nil
+	return removed, nil
 }
 
 // deleteSessionFilesLocked removes a session's artifacts when the session is
@@ -1824,6 +1928,15 @@ func decodeMessages(lines [][]byte) ([]Message, error) {
 // roster is rebuilt the same way — an agent that joined via the append path
 // never reached the header — so it self-heals across a restart.
 func reconcileHeader(s Session, msgs []Message) Session {
+	// Lineage backfill for headers written before schema version 4: derive the
+	// origin IN MEMORY so every loaded session answers Lineage() the same way a
+	// new one does. The header is not rewritten for this — it lands on disk only
+	// when some later mutation persists the row anyway.
+	if s.Origin == nil {
+		o := deriveOrigin(s)
+		o.At = s.CreatedAt
+		s.Origin = &o
+	}
 	s.MessageCount = len(msgs)
 	s.ToolCallCount = 0
 	for _, m := range msgs {
