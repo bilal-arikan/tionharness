@@ -54,6 +54,9 @@ const (
 	TypeNavigate = "navigate"
 	// TypeProgress is a persistent todo-list change.
 	TypeProgress = "progress"
+	// TypeSkills signals that the resolved skill catalog changed. It refreshes the
+	// open Skills screen and lights its unread nav dot, but never raises a toast.
+	TypeSkills = "skills"
 	// TypeSessionStep carries one live turn-step frame (Event.Step).
 	TypeSessionStep = "session_step"
 	// TypeSessionUserMessage carries one runtime-injected user-role message

@@ -298,9 +298,9 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // notification also fires below for backgrounded windows / other tabs.
   }
   // Chat completions are handled by the branch above (chime + toast via the
-  // funnel); here they only drove the badge. Other event types raise a desktop
-  // notification that deep-links to the target on click.
-  if (e.type === 'chat') return
+  // funnel); here they only drove the badge. Skill catalog changes are a quiet
+  // control signal: refresh + nav dot only, never an OS notification.
+  if (e.type === 'chat' || e.type === 'skills') return
   // A worker START is UI plumbing (roster/banner refresh), not an outcome worth
   // interrupting the user for — a fan-out of 8 workers would fire 8 toasts. Only
   // worker completions notify.

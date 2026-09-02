@@ -625,6 +625,11 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
 	coordCtx, coordCancel := context.WithCancel(context.Background())
+	skillStore := skills.New(globalSkillsDir(), workspaceSkillsDir(workDir))
+	// Establish the catalog fingerprint before wiring notifications. This keeps
+	// boot silent while ensuring a first action from Market (which writes files
+	// before calling Reload) is still observed as a real change.
+	skillStore.Reload()
 	r := &Runtime{
 		db:          database,
 		providers:   registry,
@@ -637,7 +642,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		wsName:      wsName,
 		logs:        logs,
 		logger:      logger,
-		skills:      skills.New(globalSkillsDir(), workspaceSkillsDir(workDir)),
+		skills:      skillStore,
 		market:      market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
@@ -649,6 +654,14 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		coordCtx:    coordCtx,
 		coordCancel: coordCancel,
 	}
+	r.skills.SetChangeHandler(func() {
+		r.publish(events.Event{
+			Type:   events.TypeSkills,
+			Level:  "info",
+			Title:  "Beceriler değişti",
+			Target: map[string]string{"view": "skills"},
+		})
+	})
 	go r.runSpawnQueue()
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still

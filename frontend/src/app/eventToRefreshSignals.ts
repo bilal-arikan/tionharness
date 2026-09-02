@@ -22,6 +22,7 @@ export const SIGNAL_FLOWS = 'flows' // FlowsPanel
 export const SIGNAL_SCHEDULES = 'schedules' // SchedulesPanel
 export const SIGNAL_AUTOMATIONS = 'automations' // AutomationBoard
 export const SIGNAL_ARTIFACTS = 'artifacts' // Artifact views
+export const SIGNAL_SKILLS = 'skills' // SkillsPanel catalog + selected detail
 export const SIGNAL_WORKSPACE_ACTIVITY = 'workspace-activity' // cross-workspace live-run flags (switcher pulse)
 
 // signalsForEvent returns the set of signal keys that should bump for the
@@ -79,6 +80,8 @@ export function signalsForEvent(e: AppEvent): string[] {
       return [SIGNAL_AGENTS, SIGNAL_NETWORK, SIGNAL_EXPLORER]
     case 'artifact':
       return [SIGNAL_ARTIFACTS]
+    case 'skills':
+      return [SIGNAL_SKILLS]
     default:
       // settings / workspaces / navigate / session_step (routed through the
       // separate `step` SSE channel) don't drive panel refreshes.

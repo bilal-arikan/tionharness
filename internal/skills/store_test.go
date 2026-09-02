@@ -553,6 +553,50 @@ func TestStoreCreateUpdateDelete(t *testing.T) {
 	}
 }
 
+func TestStoreChangeHandlerTracksRealCatalogChanges(t *testing.T) {
+	global := t.TempDir()
+	wsDir := t.TempDir()
+	writeSkill(t, global, "global", "---\nname: Global\ndescription: base\n---\nbody")
+	s := New(global, wsDir)
+	s.Reload() // baseline, matching Runtime startup
+
+	changes := 0
+	s.SetChangeHandler(func() { changes++ })
+	s.Reload()
+	if changes != 0 {
+		t.Fatalf("unchanged reload emitted %d changes, want 0", changes)
+	}
+
+	created, err := s.Create("tracked", SkillInput{Name: "Tracked", Body: "# First"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if changes != 1 {
+		t.Fatalf("create emitted %d changes, want 1", changes)
+	}
+
+	// Full-file hashing catches body-only edits even when filesystem mtimes share
+	// the same one-second ModifiedAt value used by the UI.
+	if _, err := s.Update(created.Slug, SkillInput{Name: created.Name, Body: "# Second"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if changes != 2 {
+		t.Fatalf("body-only update emitted %d changes, want 2", changes)
+	}
+
+	s.Reload()
+	if changes != 2 {
+		t.Fatalf("post-update no-op reload emitted %d changes, want 2", changes)
+	}
+
+	if err := s.Delete(created.Slug); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if changes != 3 {
+		t.Fatalf("delete emitted %d changes, want 3", changes)
+	}
+}
+
 func TestCreateWithoutWorkspaceTier(t *testing.T) {
 	s := New(t.TempDir(), "") // global only
 	if _, err := s.Create("x", SkillInput{Name: "X"}); err == nil {

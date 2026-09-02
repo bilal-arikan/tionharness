@@ -39,6 +39,8 @@ import {
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { relativeTime, fullDateTime } from '@/shared/lib/time'
 import { compareText } from '@/shared/lib/intl'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_SKILLS } from '@/app/eventToRefreshSignals'
 
 // Advisory shown after any mutation to a GLOBAL-tier skill: its SKILL.md lives in
 // the shared global dir, so the change reaches every workspace that does not
@@ -184,7 +186,9 @@ function SkillVisibilitySelector({
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
 export function SkillsPanel({ onError }: Props) {
+  const skillsTick = useRefreshTrigger(SIGNAL_SKILLS)
   const [list, setList] = useState<Skill[]>([])
+  const [catalogRevision, setCatalogRevision] = useState(0)
   // Selection persists across screen switches within the session (resets on reload).
   const [activeSlug, setActiveSlug] = useSessionState<string | null>('skills.activeSlug', null)
   const [active, setActive] = useState<SkillDetail | null>(null)
@@ -240,15 +244,21 @@ export function SkillsPanel({ onError }: Props) {
       .listSkills()
       .then((rows) => {
         setList(rows)
-        setActiveSlug((cur) => cur ?? rows[0]?.slug ?? null)
+        setActiveSlug((cur) =>
+          cur && rows.some((skill) => skill.slug === cur) ? cur : (rows[0]?.slug ?? null),
+        )
+        // Sequence detail refresh after catalog resolution. This prevents a
+        // concurrent request for a selected slug that the catalog just deleted.
+        setCatalogRevision((revision) => revision + 1)
       })
       .catch((e) => onError((e as Error).message))
   }, [onError])
 
-  useEffect(() => reload(), [reload])
+  useEffect(() => reload(), [reload, skillsTick])
 
   // Load the selected skill's full body lazily when the selection changes.
   useEffect(() => {
+    if (catalogRevision === 0) return
     if (!activeSlug) {
       setActive(null)
       return
@@ -259,7 +269,7 @@ export function SkillsPanel({ onError }: Props) {
       .then(setActive)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoadingBody(false))
-  }, [activeSlug, onError])
+  }, [activeSlug, catalogRevision, onError])
 
   // Flip the selected skill between shared (on-demand) and restricted; rewrites
   // the SKILL.md frontmatter on disk and refreshes the catalog.
@@ -320,20 +330,12 @@ export function SkillsPanel({ onError }: Props) {
   )
 
   // Delete the selected skill (confirm first), then refresh + clear selection.
-  // After restoring a shipped default the file on disk is a different document —
-  // frontmatter AND body. Re-read it so the body, visibility flags and edited
-  // badge all reflect the restored file while keeping the detail pane selected.
+  // After restoring a shipped default the file on disk is a different document.
+  // The catalog revision refreshes its list metadata and full body together.
   const restoreDone = useCallback(() => {
-    const slug = active?.slug ?? null
     setActive(null)
     reload()
-    if (slug) {
-      api
-        .getSkill(slug)
-        .then(setActive)
-        .catch((e) => onError((e as Error).message))
-    }
-  }, [active, reload, onError])
+  }, [reload])
 
   const removeActive = useCallback(() => {
     if (!active) return
@@ -391,19 +393,11 @@ export function SkillsPanel({ onError }: Props) {
       if (slugs.length === 0) return
       setBulkVisBusy(true)
       Promise.all(slugs.map((slug) => api.setSkillVisibility(slug, tier)))
-        .then(() => {
-          reload()
-          if (activeSlug && sel.selected.has(activeSlug)) {
-            api
-              .getSkill(activeSlug)
-              .then(setActive)
-              .catch(() => {})
-          }
-        })
+        .then(reload)
         .catch((e) => onError((e as Error).message))
         .finally(() => setBulkVisBusy(false))
     },
-    [sel.selected, reload, activeSlug, onError],
+    [sel.selected, reload, onError],
   )
 
   // Bulk-set the access mode (shared/on-demand vs restricted) for every selected
@@ -416,19 +410,11 @@ export function SkillsPanel({ onError }: Props) {
       if (slugs.length === 0) return
       setBulkAccessBusy(true)
       Promise.all(slugs.map((slug) => api.setSkillAccess(slug, shared)))
-        .then(() => {
-          reload()
-          if (activeSlug && sel.selected.has(activeSlug)) {
-            api
-              .getSkill(activeSlug)
-              .then(setActive)
-              .catch(() => {})
-          }
-        })
+        .then(reload)
         .catch((e) => onError((e as Error).message))
         .finally(() => setBulkAccessBusy(false))
     },
-    [sel.selected, reload, activeSlug, onError],
+    [sel.selected, reload, onError],
   )
 
   // Bulk-set the `group` (organisation bucket) of every selected skill at once, so
@@ -444,17 +430,11 @@ export function SkillsPanel({ onError }: Props) {
         .then(() => {
           setBulkGroup('')
           reload()
-          if (activeSlug && sel.selected.has(activeSlug)) {
-            api
-              .getSkill(activeSlug)
-              .then(setActive)
-              .catch(() => {})
-          }
         })
         .catch((e) => onError((e as Error).message))
         .finally(() => setBulkGroupBusy(false))
     },
-    [sel.selected, reload, activeSlug, onError],
+    [sel.selected, reload, onError],
   )
 
   // Drag-and-drop group move: dropping a card on a group header rewrites its
@@ -463,16 +443,12 @@ export function SkillsPanel({ onError }: Props) {
   const moveToGroup = useCallback(
     (slugs: string[], group: string) => {
       Promise.all(slugs.map((slug) => api.setSkillGroup(slug, group)))
-        .then(() => {
-          if (activeSlug && slugs.includes(activeSlug))
-            return api.getSkill(activeSlug).then(setActive)
-        })
         .catch((e) => onError((e as Error).message))
         // Refresh either way: on success to re-bucket the list, on failure so the
         // cards snap back to the persisted truth instead of a half-applied move.
         .finally(() => reload())
     },
-    [activeSlug, reload, onError],
+    [reload, onError],
   )
   const dnd = useGroupDnD<Skill>({
     items: list,
@@ -487,16 +463,9 @@ export function SkillsPanel({ onError }: Props) {
   const rescan = useCallback(() => {
     api
       .reloadSkills()
-      .then(() => {
-        reload()
-        if (activeSlug)
-          api
-            .getSkill(activeSlug)
-            .then(setActive)
-            .catch(() => {})
-      })
+      .then(reload)
       .catch((e) => onError((e as Error).message))
-  }, [reload, activeSlug, onError])
+  }, [reload, onError])
 
   return (
     <div className="flex h-full min-h-0 flex-1">

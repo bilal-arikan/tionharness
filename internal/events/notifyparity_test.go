@@ -112,7 +112,7 @@ func TestNotifyKindsHaveNoDuplicates(t *testing.T) {
 func TestControlTypesAreNotNotifyKinds(t *testing.T) {
 	control := []string{
 		TypeSession, TypeSettings, TypeWorkspaces, TypeNavigate,
-		TypeProgress, TypeSessionStep, TypeFlowNode, TypeLog,
+		TypeProgress, TypeSkills, TypeSessionStep, TypeFlowNode, TypeLog,
 	}
 	for _, c := range control {
 		if IsNotifyKind(c) {

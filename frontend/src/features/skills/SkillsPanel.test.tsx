@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDetail } from '@/types'
 import { clearSessionState } from '@/shared/hooks/useSessionState'
+import { bumpSignal } from '@/shared/lib/refreshSignals'
+import { SIGNAL_SKILLS } from '@/app/eventToRefreshSignals'
 import { SkillsPanel } from './SkillsPanel'
 
 const apiMock = vi.hoisted(() => ({
@@ -71,6 +73,34 @@ afterEach(() => {
 })
 
 describe('SkillsPanel shipped skill state', () => {
+  it('reloads the catalog and selected detail after a skills change signal', async () => {
+    renderPanel()
+    await flush()
+
+    expect(apiMock.listSkills).toHaveBeenCalledTimes(1)
+    expect(apiMock.getSkill).toHaveBeenCalledTimes(1)
+
+    act(() => bumpSignal(SIGNAL_SKILLS))
+    await flush()
+
+    expect(apiMock.listSkills).toHaveBeenCalledTimes(2)
+    expect(apiMock.getSkill).toHaveBeenCalledTimes(2)
+  })
+
+  it('selects a remaining skill when the active skill was externally deleted', async () => {
+    const remaining = { ...editedSkill, slug: 'remaining-skill', name: 'Remaining Skill' }
+    apiMock.listSkills.mockResolvedValueOnce([editedSkill]).mockResolvedValue([remaining])
+    apiMock.getSkill.mockResolvedValueOnce(editedSkill).mockResolvedValue(remaining)
+    const { onError } = renderPanel()
+    await flush()
+
+    act(() => bumpSignal(SIGNAL_SKILLS))
+    await flush()
+
+    expect(apiMock.getSkill).toHaveBeenLastCalledWith('remaining-skill')
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it('shows the edited badge in the list and selected-skill header', async () => {
     const { container } = renderPanel()
     await flush()

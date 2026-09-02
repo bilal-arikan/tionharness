@@ -1,7 +1,9 @@
 package skills
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,10 +25,12 @@ type tier struct {
 type Store struct {
 	tiers []tier
 
-	mu     sync.RWMutex
-	loaded bool
-	bySlug map[string]Skill // slug -> resolved (highest-priority) skill
-	order  []string         // slugs, display order (sorted by name)
+	mu           sync.RWMutex
+	loaded       bool
+	bySlug       map[string]Skill    // slug -> resolved (highest-priority) skill
+	order        []string            // slugs, display order (sorted by name)
+	fingerprints map[string][32]byte // resolved SKILL.md identity + full contents
+	onChange     func()              // called after a loaded catalog actually changes
 }
 
 // New builds a store over the two skill tiers. Any dir may be empty/missing;
@@ -40,7 +44,21 @@ func New(globalDir, workspaceDir string) *Store {
 	if workspaceDir != "" {
 		tiers = append(tiers, tier{workspaceDir, SourceWorkspace})
 	}
-	return &Store{tiers: tiers, bySlug: map[string]Skill{}}
+	return &Store{
+		tiers:        tiers,
+		bySlug:       map[string]Skill{},
+		fingerprints: map[string][32]byte{},
+	}
+}
+
+// SetChangeHandler installs the single catalog-change callback. Reload invokes it
+// after releasing the store lock, and only when an already-loaded catalog's
+// resolved SKILL.md set or contents actually changed. The first load establishes
+// a baseline and never reports a user-visible change.
+func (s *Store) SetChangeHandler(handler func()) {
+	s.mu.Lock()
+	s.onChange = handler
+	s.mu.Unlock()
 }
 
 // ensure lazily loads the catalog on first use.
@@ -58,9 +76,12 @@ func (s *Store) ensure() {
 // SKILL.md's frontmatter, not its body.
 func (s *Store) Reload() {
 	bySlug := map[string]Skill{}
+	fingerprints := map[string][32]byte{}
 	for _, t := range s.tiers { // ascending priority: later overrides earlier
-		for _, sk := range scanDir(t) {
+		for _, scanned := range scanDir(t) {
+			sk := scanned.skill
 			bySlug[sk.Slug] = sk
+			fingerprints[sk.Slug] = scanned.fingerprint
 		}
 	}
 	order := make([]string, 0, len(bySlug))
@@ -76,19 +97,31 @@ func (s *Store) Reload() {
 	})
 
 	s.mu.Lock()
+	changed := s.loaded && !maps.Equal(s.fingerprints, fingerprints)
 	s.bySlug = bySlug
 	s.order = order
+	s.fingerprints = fingerprints
 	s.loaded = true
+	onChange := s.onChange
 	s.mu.Unlock()
+
+	if changed && onChange != nil {
+		onChange()
+	}
+}
+
+type scannedSkill struct {
+	skill       Skill
+	fingerprint [32]byte
 }
 
 // scanDir reads every <dir>/<slug>/SKILL.md and parses its frontmatter.
-func scanDir(t tier) []Skill {
+func scanDir(t tier) []scannedSkill {
 	entries, err := os.ReadDir(t.dir)
 	if err != nil {
 		return nil // missing/inaccessible dir → no skills
 	}
-	var out []Skill
+	var out []scannedSkill
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -148,7 +181,11 @@ func scanDir(t tier) []Skill {
 			sk.DefaultState = DefaultState(t.dir, slug)
 		}
 		sk.Visibility = skillVisibility(sk)
-		out = append(out, sk)
+		// Include source + path as well as bytes: deleting a workspace override can
+		// reveal an identical global file, which is still a visible catalog change.
+		identity := string(t.source) + "\x00" + filepath.Clean(path) + "\x00"
+		fingerprint := sha256.Sum256(append([]byte(identity), data...))
+		out = append(out, scannedSkill{skill: sk, fingerprint: fingerprint})
 	}
 	return out
 }
