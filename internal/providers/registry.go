@@ -334,6 +334,28 @@ func (r *Registry) resolve(inst Instance) ResolvedConfig {
 // with its current configuration (key set / CLI present). Used by the catalog
 // handler. An unregistered id reports false rather than erroring — the
 // catalog only needs a yes/no badge.
+// FirstAvailableOfKind returns the id of the first ENABLED, available provider
+// instance of the given kind (ids sorted, so the pick is deterministic), or ""
+// when none is usable. Auxiliary-call routing uses it to find a configured
+// first-party API instance without hard-coding the instance id.
+func (r *Registry) FirstAvailableOfKind(kind string) string {
+	r.mu.RLock()
+	var ids []string
+	for _, inst := range r.instances {
+		if inst.KindID == kind && inst.Enabled {
+			ids = append(ids, inst.ID)
+		}
+	}
+	r.mu.RUnlock()
+	sort.Strings(ids)
+	for _, id := range ids {
+		if r.Available(id) {
+			return id
+		}
+	}
+	return ""
+}
+
 func (r *Registry) Available(id string) bool {
 	inst, k, err := r.resolveInstance(id)
 	if err != nil {

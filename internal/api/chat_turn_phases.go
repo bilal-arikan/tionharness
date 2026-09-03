@@ -443,7 +443,7 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	// would bust the rolling prompt-cache breakpoint.
 	feedbackRecap := recentFeedbackBlock(history)
 	// Carry this workspace's editable compaction prompt onto the turn context.
-	t.ctx = conversation.WithCompactPrompt(t.ctx, t.wsp.Runtime.CompactPromptTemplate())
+	t.ctx = t.wsp.Runtime.FoldContext(t.ctx, agentRow)
 	t.ctx = conversation.WithAttachmentRoot(t.ctx, t.wsp.SandboxRoot())
 	t.ctx = conversation.WithClaudeHome(t.ctx, t.wsp.Runtime.ClaudeHomeDir())
 	// Budget the fold against the TRUE per-turn footprint: the non-message

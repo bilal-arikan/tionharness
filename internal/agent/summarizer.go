@@ -72,7 +72,7 @@ func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
 	agent.Model = adoptSystemAgentModel(r.logger, "overview-summarizer", agent.Provider, agent.Model, compactor.Model)
 	agent.System = true
 	agent.SystemKey = compactor.SystemKey
-	return agent, compactor.Soul
+	return r.routeAuxAgent(agent, compactor), compactor.Soul
 }
 
 // gatherSummaryData collects up to maxSummaryItems rows of the requested kind and

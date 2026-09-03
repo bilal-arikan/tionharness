@@ -257,9 +257,19 @@ type Request struct {
 	// Claude Code consumes low..xhigh through settings.json and lifts max through
 	// CLAUDE_CODE_EFFORT_LEVEL. Codex maps it to model_reasoning_effort; 0.148.0
 	// accepts xhigh, max and ultra. HTTP providers ignore it.
-	CLIEffortLevel  string
-	cliCompaction   *cliCompactionEmitter
-	forceCLICompact bool
+	CLIEffortLevel string
+	// CLIRestrictNativeTools, when set, pins claude-cli's BUILT-IN tool menu to
+	// CLINativeTools via `--tools` (an empty list disables every built-in). The
+	// CLI prompt is sized by the tools it carries: the unrestricted menu costs
+	// ~36k tokens per session, a five-tool worker menu ~11k and no tools ~7k
+	// (measured on 2.1.259, _Docs/17). TionHarness hands each turn exactly the
+	// natives it needs (file tools + ToolSearch for the deferred MCP tiers) and
+	// nothing at all on tool-less auxiliary calls (title/summary/judge). HTTP
+	// providers and codex ignore it.
+	CLIRestrictNativeTools bool
+	CLINativeTools         []string
+	cliCompaction          *cliCompactionEmitter
+	forceCLICompact        bool
 }
 
 type CLICompactionPhase string

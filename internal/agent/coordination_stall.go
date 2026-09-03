@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -72,15 +73,9 @@ const coordStallNote = "<coordination-guard>\n" +
 	"If the plan still has work to delegate, CALL the spawn_worker tool for each worker in THIS turn (and use list_workers to check real status). If nothing remains to delegate, say so plainly and conclude.\n" +
 	"</coordination-guard>"
 
-// stallJudgeSystemPrompt instructs the cheap classifier. Terse and strict: it must
-// return ONE JSON object so the reply parses deterministically. Language-agnostic
-// by design — the whole point is to survive vocabulary drift a regex cannot.
-const stallJudgeSystemPrompt = `You are auditing one turn of a multi-agent COORDINATOR.
-You are told: the coordinator's latest message, and the fact that this turn made NO worker-spawn / coordination tool call and NO worker is currently running under it.
-Decide: does the message CLAIM (in ANY language) to have just started, spawned, opened, or launched worker(s) / branches / sub-tasks — or report them as running / in-progress — when in reality none was started this turn?
-- stalled=true if it narrates delegation as done or underway (e.g. "spawned 3 workers", "Round 5 opened - 2 arms", "SES144 acildi", "[running]").
-- stalled=false if it plainly concludes, reports already-finished work, asks the user a question, or narrates only its own non-delegated actions.
-Reply with STRICT JSON and nothing else: {"stalled": true} or {"stalled": false}.`
+// The judge's system prompt is the "stall-judge" system agent's Soul
+// (prompts/defaults/stall-judge.md is the compiled fallback): terse and strict,
+// it must answer in JSON so the verdict is machine-readable.
 
 // guardCoordinatorStall runs after every coordinator turn (from runCoordinatorTurn).
 // A real coordination tool call clears the nudge streak and returns. Otherwise, when
@@ -140,7 +135,7 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	// already spent, because confirming the stall PERSISTS is what justifies the hard
 	// halt below. Fails safe on a judge error: no nudge, no halt, leave it to the
 	// sweeper, so a judge outage can neither spam re-arms nor wrongly halt.
-	stalled, err := r.judgeCoordinatorStalled(context.Background(), agent, text)
+	stalled, err := r.judgeCoordinatorStalled(context.Background(), coordSessionID, agent, text)
 	if err != nil {
 		r.logger.Warn("coordination: stall judge failed; deferring to sweeper", "coordinator", coordSessionID, "error", err)
 		return
@@ -375,24 +370,61 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 	return total
 }
 
+// stallJudgeVerdict is one coordinator's last judged message and its verdict
+// (Runtime.stallJudgeMemo, keyed by coordinator session id).
+type stallJudgeVerdict struct {
+	hash    [32]byte
+	stalled bool
+}
+
 // judgeCoordinatorStalled asks a cheap model whether `text` claims a spawn that
 // never happened. Synchronous (the turn-end caller re-arms on a true verdict, so the
-// decision must be in hand before it returns), bounded by a short timeout. A cheaper
-// model is preferred, same policy as lessons/summaries: the coordinator's own model.
-func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, agent db.Agent, text string) (bool, error) {
-	if r.stallJudgeFn != nil {
-		return r.stallJudgeFn(ctx, agent, text)
-	}
+// decision must be in hand before it returns), bounded by a short timeout.
+//
+// The classifier is the "stall-judge" system agent (haiku by default) on the
+// coordinator's credentials — routed to a native anthropic instance when the
+// coordinator is on a CLI (routeAuxAgent), because a fresh `claude -p` per
+// verdict paid Claude Code's whole base prompt for ten output tokens.
+//
+// Memo: the turn-end guard and the 60-second sweeper both judge the coordinator's
+// LATEST message, and a silent coordinator keeps the same latest message for the
+// whole staleness window — the sweeper used to re-judge the identical text every
+// minute (four identical transcripts in one idle spell, WS-2026-09-03). A verdict
+// is therefore remembered per coordinator until the text changes; a judge error
+// is never memoised.
+func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, coordSessionID string, agent db.Agent, text string) (bool, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return false, nil
 	}
-	model := agent.Model
+	sum := sha256.Sum256([]byte(text))
+	if coordSessionID != "" {
+		if v, ok := r.stallJudgeMemo.Load(coordSessionID); ok {
+			if m, _ := v.(stallJudgeVerdict); m.hash == sum {
+				return m.stalled, nil
+			}
+		}
+	}
+	stalled, err := r.judgeCoordinatorStalledUncached(ctx, agent, text)
+	if err == nil && coordSessionID != "" {
+		r.stallJudgeMemo.Store(coordSessionID, stallJudgeVerdict{hash: sum, stalled: stalled})
+	}
+	return stalled, err
+}
+
+func (r *Runtime) judgeCoordinatorStalledUncached(ctx context.Context, agent db.Agent, text string) (bool, error) {
+	if r.stallJudgeFn != nil {
+		return r.stallJudgeFn(ctx, agent, text)
+	}
+	judge, system, err := r.resolveAnalysisSystemAgent("stall-judge", agent)
+	if err != nil {
+		return false, err
+	}
 	jctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	resp, err := r.guardedComplete(WithCallKind(jctx, KindReflect), agent, providers.Request{
-		Model:     model,
-		System:    stallJudgeSystemPrompt,
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(jctx, KindReflect), "stall-judge", system), judge, providers.Request{
+		Model:     judge.Model,
+		System:    system,
 		MaxTokens: 30,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: "Coordinator's latest message:\n\n" + truncateRunes(text, 4000)},
@@ -532,7 +564,7 @@ func (r *Runtime) judgeAndNudgeStall(ctx context.Context, coordSessionID string,
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	stalled, jerr := r.judgeCoordinatorStalled(ctx, agent, text)
+	stalled, jerr := r.judgeCoordinatorStalled(ctx, coordSessionID, agent, text)
 	if jerr != nil || !stalled {
 		return
 	}

@@ -215,6 +215,8 @@ export function SettingsPanel({
       claudeResume: draft.claudeResume,
       claudePersistentSession: draft.claudePersistentSession,
       claudeSysPromptFile: draft.claudeSysPromptFile,
+      claudeCliToolAllowlist: draft.claudeCliToolAllowlist,
+      auxNativeRouting: draft.auxNativeRouting,
       delegationMaxDepth: draft.delegationMaxDepth,
       delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent,

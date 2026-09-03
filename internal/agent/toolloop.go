@@ -363,7 +363,11 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	// is a pool of warm claude-cli processes (stream-json protocol, claude session
 	// ids) and the setting gating it is claude-specific. Another CLI transport must
 	// fall through to the one-shot Complete below.
-	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() {
+	// Auxiliary calls (title/summary/judge…) never enter the pool: they share the
+	// conversation's session id but carry a different prompt/model, so routing them
+	// through the warm process would cold-restart it on a fingerprint mismatch —
+	// twice (once for the side job, once when the real turn comes back).
+	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() && !isAuxiliaryKind(callKindFrom(ctx)) {
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
 			resp, perr := runProviderOperation(ctx, req.OnEvent == nil, func(opCtx context.Context) (*providers.Response, error) {

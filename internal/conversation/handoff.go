@@ -79,10 +79,13 @@ func BuildHandoff(ctx context.Context, database *db.DB, provider providers.Provi
 	// Self-pin the workspace claude-home before the direct Complete (same reason
 	// as summarizeRendered: this runs outside guardedComplete). Carried on ctx via
 	// WithClaudeHome; no-op when the caller already pinned via PinClaudeHome.
+	provider, agent = foldTargetFrom(ctx, provider, agent)
 	pinClaudeHome(ctx, provider)
 	resp, err := provider.Complete(foldCtx(ctx), providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
+		// Tool-less by nature (see summarizeRendered).
+		CLIRestrictNativeTools: true,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompts.Render(promptTmpl, map[string]string{
 				"summary":     existing,

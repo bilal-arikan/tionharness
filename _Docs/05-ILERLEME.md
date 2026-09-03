@@ -1,5 +1,27 @@
 # TionHarness — İlerleme Takibi
 
+## claude-cli token maliyeti: prefix anatomisi + üç kaldıraç (2026-09-03) ✅
+
+30 günlük `session-usage` verisi harcamanın ~%90'ının yeniden gönderilen prefix
+olduğunu gösterdi (claude-cli: tur başına ~92k cache-write, oturum başına 50–59k
+soğuk `cache_creation`). Canlı ölçüm (2.1.259, haiku): Claude Code tabanı 36k,
+`--disallowedTools` küçültmüyor (38,8k), `--tools` allowlist 10,6k, `--tools ""` 7,3k,
+MCP zaten erteleniyor. Uygulanan: **(1)** köprülü claude-cli turlarında yerleşik
+araç allowlist'i (`claudeCliToolAllowlist`, `cliNativeToolAllowlist`,
+`Request.CLIRestrictNativeTools`); **(2)** yardımcı çağrılar (`isAuxiliaryKind`)
+köprüsüz, `--tools ""`, persistent havuz dışı — compaction/handoff istekleri de
+araçsız işaretli; **(3)** `auxNativeRouting`: çağıran ajan CLI'daysa ve anthropic
+anahtarı varsa başlık/özet/compaction katlaması/ders/içgörü/optimizer/stall
+yargıcı native API'de sistem ajanının modeliyle koşar (`routeAuxAgent`,
+`FoldContext`/`WithFoldTarget`, `NativeClaudeModel`); **(4)** stall yargıcı
+`stall-judge` sistem ajanı + koordinatör başına metin-hash memo'su. Ayarlar
+`claudeCliToolAllowlist`/`auxNativeRouting` (varsayılan açık; Ayarlar ▸ Araçlar).
+Testler: `claudecli_nativetools_test.go`, `climcp_allowlist_test.go`,
+`systemagent_route_test.go`, `coordination_stall_memo_test.go`,
+`conversation/foldtarget_test.go`, `settings/prefixlevers_test.go`. Ayrıntı:
+`_Docs/17` "claude-cli prefix anatomisi", `_Docs/74`, `_Docs/47`,
+`_Docs/MALIYET-DUSURME-PLANI.md`.
+
 ## Rota E2E (gerçek LLM) + üç bulgu düzeltmesi (2026-09-03) ✅
 
 Çalışan örnekte claude-cli ajanlarıyla uçtan uca koşu: reçeteli tam koşu

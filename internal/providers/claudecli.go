@@ -220,6 +220,18 @@ func (c *ClaudeCLI) permissionArgs(req Request) []string {
 // --disallowedTools (suppressing conflicting CLI built-ins) precedes the trailing
 // --allowedTools so neither variadic flag swallows the other. Empty when no MCP
 // config is set. Shared by Complete and the persistent-session launcher.
+// nativeToolArgs renders the built-in tool restriction (Request.CLIRestrictNativeTools)
+// as claude-cli's `--tools` flag. The flag is variadic, so the list travels as ONE
+// comma-joined argument (the documented "Bash,Edit,Read" form) and the empty list
+// as a literal "" — the CLI's spelling for "no built-in tools". Placed after the
+// MCP/allowlist flags so no variadic flag swallows another. Nil when unrestricted.
+func nativeToolArgs(req Request) []string {
+	if !req.CLIRestrictNativeTools {
+		return nil
+	}
+	return []string{"--tools", strings.Join(req.CLINativeTools, ",")}
+}
+
 func (c *ClaudeCLI) mcpArgs() []string {
 	var args []string
 	// --strict-mcp-config only means anything next to --mcp-config, so both are
@@ -461,6 +473,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	}
 
 	args = append(args, c.mcpArgs()...)
+	args = append(args, nativeToolArgs(req)...)
 
 	return c.completeWithArgs(ctx, args, prompt, model, req)
 }

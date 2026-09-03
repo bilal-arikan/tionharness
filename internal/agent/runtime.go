@@ -325,6 +325,11 @@ type Runtime struct {
 	// telemetry only — never gates a turn.
 	cacheProbes sync.Map
 
+	// stallJudgeMemo remembers, per coordinator session id, the last message the
+	// stall judge classified and its verdict (stallJudgeVerdict), so the sweeper
+	// does not re-judge an unchanged message every minute. Zero value ready.
+	stallJudgeMemo sync.Map
+
 	// pendingCacheBreaks holds the one-shot inline notice for a cache break the
 	// chat turn should card (keyed by session id, value agent.CacheBreak). Armed by
 	// noteCacheOutcome for the "something changed" causes only, drained by

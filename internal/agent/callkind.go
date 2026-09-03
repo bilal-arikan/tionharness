@@ -117,6 +117,19 @@ func callKindFrom(ctx context.Context) CallKind {
 	return KindChat
 }
 
+// isAuxiliaryKind reports whether a call origin is a tool-less side job (title,
+// summary, compaction, reflection, /btw) rather than an agent turn. Auxiliary
+// calls never need the Interaction MCP bridge, the CLI's built-in tools or the
+// persistent claude-cli process; they get the smallest possible request instead.
+func isAuxiliaryKind(k CallKind) bool {
+	switch k {
+	case KindTitle, KindSummary, KindReflect, KindCompact, KindBtw:
+		return true
+	default:
+		return false
+	}
+}
+
 // usageCallKind combines the system actor key and operation only at the usage
 // boundary. Recording one qualified kind avoids double-counting ByKind totals.
 func usageCallKind(ctx context.Context, agent db.Agent) (string, error) {

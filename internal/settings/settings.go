@@ -321,6 +321,19 @@ type Settings struct {
 	// spawning a fresh process each turn — warm turns ship only the new user
 	// message. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
+	// ClaudeCLIToolAllowlist pins claude-cli's BUILT-IN tool menu to the natives a
+	// bridged turn needs (`--tools Read,Edit,…`) instead of only suppressing the
+	// shadowed ones. Claude Code's prompt scales with the tools it carries: the
+	// full menu is ~36k tokens per session, the allowlisted worker menu ~11k
+	// (measured on 2.1.259, _Docs/17). Default on.
+	ClaudeCLIToolAllowlist bool `json:"claudeCliToolAllowlist"`
+	// AuxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
+	// compaction fold, lessons, insight, recipe optimizer, stall judge) on a
+	// configured first-party anthropic API instance when the calling agent is on a
+	// CLI transport, so a ten-token verdict stops paying Claude Code's base prompt.
+	// Those calls are then billed to the API key, not the CLI login. Default on;
+	// no-op without an anthropic key. _Docs/74.
+	AuxNativeRouting bool `json:"auxNativeRouting"`
 	// ClaudeSysPromptFile controls HOW the appended system prompt is handed to the
 	// claude-cli subprocess: false (default) passes it inline via
 	// --append-system-prompt <text>; true writes it to a temp file and passes
@@ -531,6 +544,10 @@ func Default() Settings {
 		// and the process holds the rest. Supersedes --resume when both are on.
 		// _Docs/17.
 		ClaudePersistentSession: true,
+		// Built-in tool allowlist + auxiliary native routing on by default: pure
+		// prefix-size levers (_Docs/17, 2026-09-03).
+		ClaudeCLIToolAllowlist: true,
+		AuxNativeRouting:       true,
 
 		// System prompt handed to claude-cli via a temp file by default
 		// (--append-system-prompt-file): a large appended prompt (skills + lazy tool
@@ -684,6 +701,12 @@ type DTO struct {
 	// in-memory so warm turns ship only the new user message — maximal prompt-cache
 	// reuse + no per-turn startup. Supersedes --resume when on. Default on. _Docs/17.
 	ClaudePersistentSession bool `json:"claudePersistentSession"`
+	// ClaudeCLIToolAllowlist: `--tools` allowlist of claude-cli built-ins per turn
+	// (prompt-size lever, default on). AuxNativeRouting: auxiliary system-agent
+	// calls prefer a configured anthropic API instance over the caller's CLI
+	// (default on, no-op without a key). _Docs/17, _Docs/74.
+	ClaudeCLIToolAllowlist bool `json:"claudeCliToolAllowlist"`
+	AuxNativeRouting       bool `json:"auxNativeRouting"`
 	// ClaudeSysPromptFile: true (default) routes the appended system prompt through a
 	// temp file (--append-system-prompt-file) to survive the Windows command-line
 	// limit; false hands it inline via --append-system-prompt. _Docs/17.
@@ -810,6 +833,8 @@ func (s Settings) ToDTO() DTO {
 		EnableCodeMode:          s.EnableCodeMode,
 		ClaudeResume:            s.ClaudeResume,
 		ClaudePersistentSession: s.ClaudePersistentSession,
+		ClaudeCLIToolAllowlist:  s.ClaudeCLIToolAllowlist,
+		AuxNativeRouting:        s.AuxNativeRouting,
 		ClaudeSysPromptFile:     s.ClaudeSysPromptFile,
 		DelegationMaxDepth:      s.DelegationMaxDepth,
 		DelegationMaxCalls:      s.DelegationMaxCalls,
@@ -935,6 +960,8 @@ type Patch struct {
 	EnableCodeMode          *bool `json:"enableCodeMode"`
 	ClaudeResume            *bool `json:"claudeResume"`
 	ClaudePersistentSession *bool `json:"claudePersistentSession"`
+	ClaudeCLIToolAllowlist  *bool `json:"claudeCliToolAllowlist"`
+	AuxNativeRouting        *bool `json:"auxNativeRouting"`
 	ClaudeSysPromptFile     *bool `json:"claudeSysPromptFile"`
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`

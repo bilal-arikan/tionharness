@@ -36,6 +36,11 @@ type toolLoopTurn struct {
 	isCLI  bool
 	inter  tools.InteractionEndpoint
 	cliMCP bool
+	// aux marks a tool-less auxiliary call (title/summary/reflection/compaction,
+	// see isAuxiliaryKind): it skips the Interaction MCP bridge and, on claude-cli,
+	// disables every built-in tool so the subprocess carries the ~7k-token minimal
+	// prompt instead of the ~36k full one (_Docs/17).
+	aux bool
 
 	// Resolved by prepareNativeLoop.
 	reg     *tools.Registry
@@ -195,7 +200,14 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// headless endpoint on demand for ANY such CLI turn; skipped whenever one is
 	// already present (the stream path installs its own).
 	cleanup := noop
-	if t.isCLI && t.inter.URL == "" && t.r.autoInteract != nil {
+	t.aux = isAuxiliaryKind(callKindFrom(t.ctx)) && len(t.req.Tools) == 0
+	if t.isCLI && t.aux {
+		// No bridge, no built-ins: the auxiliary prompt is the whole request.
+		t.inter = tools.InteractionEndpoint{}
+		t.req.CLIRestrictNativeTools = true
+		t.req.CLINativeTools = nil
+	}
+	if t.isCLI && !t.aux && t.inter.URL == "" && t.r.autoInteract != nil {
 		var done func()
 		t.ctx, done = t.r.autoInteract(t.ctx, t.agent, SessionIDFrom(t.ctx))
 		cleanup = done
@@ -306,10 +318,22 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 		}
 		return noop
 	}
+	if t.aux {
+		// Auxiliary call: no MCP servers, no settings file — the built-in menu was
+		// already emptied in prepare (CLIRestrictNativeTools).
+		return noop
+	}
 	path, allowed, disallowed, cleanup, err := t.r.writeCLIMCPConfig(t.ctx, t.agent.MCPEnabled, t.agent, t.inter, t.agent.PermissionMode)
 	if err != nil {
 		t.r.logger.Warn("cli mcp config failed", "error", err)
 		return noop
+	}
+	// Built-in tool allowlist (`--tools`): only when the bridge is wired — without
+	// an Interaction endpoint the natives ARE the agent's whole tool surface, so the
+	// menu is left untouched (the suppression list alone applies, as before).
+	if t.inter.URL != "" && t.r.tun.ClaudeCLIToolAllowlist() {
+		t.req.CLIRestrictNativeTools = true
+		t.req.CLINativeTools = cliNativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled())
 	}
 	if path == "" && len(disallowed) == 0 {
 		return noop
@@ -541,7 +565,7 @@ func (t *toolLoopTurn) compactAndRetry(reason contReason) bool {
 	if t.pruneAndRetry(reason) {
 		return true
 	}
-	cctx := conversation.WithCompactPrompt(t.ctx, t.r.CompactPromptTemplate())
+	cctx := t.r.FoldContext(t.ctx, t.agent)
 	folded, fold, ok, cerr := conversation.CompactInFlightMessages(cctx, t.r.db, t.provider, t.agent, t.req.Messages, t.keepRecent)
 	if cerr != nil || !ok {
 		return false

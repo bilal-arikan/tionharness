@@ -118,6 +118,7 @@ var settingsPatchGoldenFields = []string{
 	"autoTitleEnabled",
 	"enableShell", "enableCliHooks", "enableCodeMode",
 	"claudeResume", "claudePersistentSession", "claudeSysPromptFile",
+	"claudeCliToolAllowlist", "auxNativeRouting",
 	"delegationMaxDepth", "delegationMaxCalls",
 	"spawnMaxConcurrent", "spawnQueueMax", "spawnMaxPerTurn", "spawnTimeoutMin", "spawnIdleTimeoutMin",
 	"chatTurnTimeoutMin", "chatTurnIdleTimeoutMin", "codexStdoutIdleSec",

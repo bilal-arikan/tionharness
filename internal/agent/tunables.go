@@ -156,8 +156,21 @@ type Tunables struct {
 	cliHooks         bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	cliPersist       bool // keep a long-lived claude-cli process per session (on by default)
 	cliSysPromptFile bool // hand claude-cli system prompt via temp file vs inline (off by default = inline)
-	delegMaxDepth    int  // 0 → DefaultMaxDelegationDepth
-	delegMaxCalls    int  // 0 → DefaultMaxDelegationCalls
+	// cliToolAllowlist pins claude-cli's built-in tool menu to the natives a turn
+	// actually needs (`--tools`), instead of only suppressing the shadowed ones
+	// (`--disallowedTools`). The CLI prompt scales with the tools it carries — the
+	// full menu is ~36k tokens per session, the worker menu ~11k (_Docs/17). On by
+	// default.
+	cliToolAllowlist bool
+	// auxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
+	// compaction, lessons, insight, recipe optimizer, stall judge) on a configured
+	// first-party anthropic API instance instead of the calling agent's CLI, so a
+	// ten-token verdict no longer pays Claude Code's ~36k-token base prompt. Only
+	// effective when the CALLING agent is on a CLI transport and an anthropic key
+	// is configured; otherwise the call stays where it was. On by default.
+	auxNativeRouting bool
+	delegMaxDepth    int // 0 → DefaultMaxDelegationDepth
+	delegMaxCalls    int // 0 → DefaultMaxDelegationCalls
 
 	agentMsgMaxBytes    int // 0 → DefaultAgentMessageMaxBytes (per-message body cap)
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
@@ -359,6 +372,10 @@ func NewTunables() *Tunables {
 		// Lesson reflection on by default: it only fires on failing turns (rare)
 		// and uses the cheap title-model override when configured.
 		lessonReflect: true,
+		// claude-cli built-in tool allowlist + auxiliary native routing on by
+		// default: both are pure prefix-size levers (_Docs/17, 2026-09-03).
+		cliToolAllowlist: true,
+		auxNativeRouting: true,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -445,6 +462,38 @@ func (t *Tunables) ClaudePersistentSession() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliPersist
+}
+
+// SetClaudeCLIToolAllowlist toggles pinning claude-cli's built-in tool menu to
+// the per-turn native allowlist (`--tools`). See cliNativeToolAllowlist.
+func (t *Tunables) SetClaudeCLIToolAllowlist(enabled bool) {
+	t.mu.Lock()
+	t.cliToolAllowlist = enabled
+	t.mu.Unlock()
+}
+
+// ClaudeCLIToolAllowlist reports whether claude-cli turns carry a `--tools`
+// allowlist of built-ins.
+func (t *Tunables) ClaudeCLIToolAllowlist() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.cliToolAllowlist
+}
+
+// SetAuxNativeRouting toggles running auxiliary system-agent calls on a
+// configured anthropic API instance when the calling agent is on a CLI. See
+// routeAuxAgent.
+func (t *Tunables) SetAuxNativeRouting(enabled bool) {
+	t.mu.Lock()
+	t.auxNativeRouting = enabled
+	t.mu.Unlock()
+}
+
+// AuxNativeRouting reports whether auxiliary calls prefer the native API.
+func (t *Tunables) AuxNativeRouting() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.auxNativeRouting
 }
 
 // SetClaudeSysPromptFile toggles routing the appended claude-cli system prompt

@@ -75,6 +75,18 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.claudeSysPromptFile}
         onChange={(v) => set('claudeSysPromptFile', v)}
       />
+      <Toggle
+        label="claude-cli yerleşik araç allowlist'i (--tools)"
+        hint="Açık (varsayılan): köprülü her turda Claude Code'a yalnız gerçekten gereken yerleşik araçlar verilir (Read/Edit/Write/Glob/Grep/NotebookEdit/ToolSearch + koşullu WebSearch/plan-mode/native fallback'ler). Claude Code'un sistem promptu taşıdığı araç sayısıyla büyür: tam menü ~36k token/oturum, allowlist ~11k (ölçüm 2.1.259, _Docs/17). --disallowedTools listesi yine geçer; bu sadece prompt boyutunu düşürür. Bir yerleşik aracın kaybolduğunu görürseniz kapatın."
+        checked={draft.claudeCliToolAllowlist}
+        onChange={(v) => set('claudeCliToolAllowlist', v)}
+      />
+      <Toggle
+        label="Yardımcı çağrıları native Anthropic API'den koştur"
+        hint="Açık (varsayılan): başlık, özet, compaction katlaması, ders/içgörü çıkarma ve koordinatör stall yargıcı gibi ARAÇSIZ sistem ajanı çağrıları, çağıran ajan claude-cli/codex-cli'daysa ve bir Anthropic API anahtarı tanımlıysa o anahtarla native API'den (haiku sınıfı, ~1-2k token) yapılır; aksi hâlde eskisi gibi CLI'da kalır (her çağrı ~36k token'lık Claude Code tabanını taşır). Not: bu çağrılar CLI aboneliğinden değil API anahtarından faturalanır."
+        checked={draft.auxNativeRouting}
+        onChange={(v) => set('auxNativeRouting', v)}
+      />
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Ajan→ajan delegasyon (run_subagent).</b> Bu araç artık daima kuruludur; açıp kapatmayı
         ajan bazında <b>Araçlar</b> ekranından yaparsınız. Aşağıdaki değerler her delegasyon

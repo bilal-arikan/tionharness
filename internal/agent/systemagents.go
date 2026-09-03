@@ -29,6 +29,7 @@ var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
 	"insight":             {"🔮", "#5C6480"},
 	"insight-applier":     {"🛠️", "#8A6BC8"},
 	"recipe-optimizer":    {"✦", "#6B7FD8"},
+	"stall-judge":         {"⚖️", "#7A8FA6"},
 
 	// Worker profiles — read-only.
 	"subagent-explore":   {"🔍", "#17A2A2"},
@@ -114,6 +115,16 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			Provider:       "claude-cli",
 			// Suggestion-only: it reads the evidence it is handed and answers with
 			// JSON; it never touches an entity, so it needs no tools.
+			AllowedTools: "[]",
+		},
+		{
+			SystemKey:      "stall-judge",
+			Name:           "Stall Judge",
+			Description:    "Classifies whether a coordinator turn narrated a worker spawn it never made.",
+			SystemPrompt:   prompts.Default("stall-judge"),
+			SuggestedModel: "haiku",
+			Provider:       "claude-cli",
+			// Pure classifier: one short JSON verdict, no tools.
 			AllowedTools: "[]",
 		},
 		{

@@ -86,6 +86,46 @@ func compactPromptFromCtx(ctx context.Context) string {
 	return prompts.Default("compact")
 }
 
+// foldTargetCtxKey carries the provider + agent copy a fold's direct
+// provider.Complete should run on, when the caller wants it to differ from the
+// session agent (a cheaper model, a native API instead of a CLI). Stamped by
+// agent.Runtime.FoldContext; read by summarizeRendered and BuildHandoff.
+type foldTargetCtxKey struct{}
+
+type foldTarget struct {
+	provider providers.Provider
+	agent    db.Agent
+}
+
+// WithFoldTarget returns a context whose folds run on the given agent copy
+// (model, provider identity) instead of the agent handed to Prepare/
+// ForceCompact/BuildHandoff. provider may be nil: then only the agent copy is
+// swapped and the fold keeps the provider object it was handed — the shape for
+// "same provider, cheaper model". A non-nil provider replaces the object too
+// (the shape for routing the fold to a different transport).
+func WithFoldTarget(ctx context.Context, provider providers.Provider, agent db.Agent) context.Context {
+	return context.WithValue(ctx, foldTargetCtxKey{}, foldTarget{provider: provider, agent: agent})
+}
+
+// foldTargetFrom returns the ctx override when present, else the given pair.
+func foldTargetFrom(ctx context.Context, provider providers.Provider, agent db.Agent) (providers.Provider, db.Agent) {
+	t, ok := ctx.Value(foldTargetCtxKey{}).(foldTarget)
+	if !ok {
+		return provider, agent
+	}
+	if t.provider != nil {
+		provider = t.provider
+	}
+	return provider, t.agent
+}
+
+// FoldTargetAgent reports the agent copy a fold on ctx would run as, when an
+// override is stamped. Diagnostic/test accessor.
+func FoldTargetAgent(ctx context.Context) (db.Agent, bool) {
+	t, ok := ctx.Value(foldTargetCtxKey{}).(foldTarget)
+	return t.agent, ok
+}
+
 // preCompactCtxKey carries a callback fired just before Prepare folds history
 // into the rolling summary — the seam the API layer uses to run PreCompact
 // lifecycle hooks without conversation importing agent (which would cycle).
@@ -612,6 +652,8 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 	if existing == "" {
 		existing = "(none)"
 	}
+	// The fold may be re-targeted (cheaper model / native API) by the caller.
+	provider, agent = foldTargetFrom(ctx, provider, agent)
 	// Self-pin the workspace claude-home before the direct Complete: this fold
 	// runs outside guardedComplete/the tool loop, so without a pin the shared
 	// claude-cli provider uses its global-default config dir and fails auth. The
@@ -620,6 +662,9 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 	resp, err := provider.Complete(foldCtx(ctx), providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
+		// Tool-less by nature: a CLI transport drops its whole built-in tool menu
+		// (~36k → ~7k tokens of base prompt on claude-cli, _Docs/17).
+		CLIRestrictNativeTools: true,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: prompts.Render(compactPromptFromCtx(ctx), map[string]string{
 				"summary":  existing,

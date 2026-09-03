@@ -13,9 +13,9 @@ func (r *Runtime) resolveInsightConfig(agent db.Agent) (db.Agent, string, error)
 func (r *Runtime) resolveAnalysisSystemAgent(key string, agent db.Agent) (db.Agent, string, error) {
 	systemAgent, _, err := r.ResolveSystemAgent(key)
 	if err != nil {
-		promptKey := "lesson"
-		if key == "insight" {
-			promptKey = "insight-analyzer"
+		promptKey := analysisPromptKeys[key]
+		if promptKey == "" {
+			promptKey = "lesson"
 		}
 		r.logger.Warn("analysis system agent resolution failed; using embedded behavior", "systemKey", key, "error", err)
 		return agent, r.readPrompt(promptKey), nil
@@ -26,5 +26,14 @@ func (r *Runtime) resolveAnalysisSystemAgent(key string, agent db.Agent) (db.Age
 	agent.Model = adoptSystemAgentModel(r.logger, key, agent.Provider, agent.Model, systemAgent.Model)
 	agent.System = true
 	agent.SystemKey = systemAgent.SystemKey
-	return agent, systemAgent.Soul, nil
+	return r.routeAuxAgent(agent, systemAgent), systemAgent.Soul, nil
+}
+
+// analysisPromptKeys maps an analysis system agent to the prompt-registry key
+// its embedded fallback reads when the agent cannot be resolved.
+var analysisPromptKeys = map[string]string{
+	"lesson-extractor": "lesson",
+	"insight":          "insight-analyzer",
+	"recipe-optimizer": "recipe-optimizer",
+	"stall-judge":      "stall-judge",
 }

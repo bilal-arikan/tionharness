@@ -44,7 +44,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, ag.ID, history)
 		toolRecap := recentToolActivityBlock(history)
 		feedbackRecap := recentFeedbackBlock(history)
-		ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
+		ctx = wsp.Runtime.FoldContext(ctx, ag)
 		ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 		// Pin the workspace claude-home BEFORE Prepare's fold: the tool loop below
 		// pins the provider itself, but this Prepare runs first and folds via a

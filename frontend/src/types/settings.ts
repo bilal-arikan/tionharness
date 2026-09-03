@@ -113,6 +113,11 @@ export interface AppSettings {
   // How the claude-cli appended system prompt is delivered: false (default) inline
   // via --append-system-prompt, true via a temp file (--append-system-prompt-file).
   claudeSysPromptFile: boolean
+  // `--tools` allowlist of claude-cli built-ins per bridged turn (prompt-size lever).
+  claudeCliToolAllowlist: boolean
+  // Auxiliary system-agent calls (title/summary/compaction/lessons/judge) run on a
+  // configured anthropic API instance instead of the caller's CLI.
+  auxNativeRouting: boolean
   // run_subagent is always installed; availability is per-tool from the Tools screen.
   // These remain as per-turn delegation guards.
   delegationMaxDepth: number

@@ -100,6 +100,12 @@ var specs = []Spec{
 		OwnedBySystemKey: "recipe-optimizer",
 	},
 	{
+		Key:              "stall-judge",
+		Label:            "Koordinatör stall yargıcı promptu",
+		Hint:             "Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandıran ucuz yargıcın sistem promptu. Yanıt STRICT JSON ({\"stalled\": true|false}) kalmalı.",
+		OwnedBySystemKey: "stall-judge",
+	},
+	{
 		Key:              "insight-applier",
 		Label:            "İçgörü uygulama promptu",
 		Hint:             "Taramanın ürettiği workspace-opt bulgularını workspace varlıklarına (skill/agent/hook/automation) uygulayan ajanın sistem promptu. Repo dosyalarına erişimi yoktur.",

@@ -21,6 +21,35 @@ Derlenmiş kayıt defteri altı altyapı rolü ve altı yerleşik worker profili
 | `lesson-extractor` | Etkin | `lesson` | Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır (`internal/agent/systemagents.go:29-34`, `internal/agent/lessons_systemagent.go:5-7`). |
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
 | `insight-applier` | Etkin | `insight-applier` | İçgörü taramasının `workspace-opt` bulgularını workspace varlıklarına uygular (`internal/agent/systemagents.go`, `internal/prompts/defaults/insight-applier.md`). |
+| `stall-judge` | Etkin | `stall-judge` | Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandırır; araçsız, tek satır JSON (`internal/agent/coordination_stall.go`, 2026-09-03). |
+
+### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)
+
+Çözümleyiciler (`resolveTitleConfig`, `resolveCompactorConfig`,
+`resolveAnalysisSystemAgent`, `resolveFoldAgent`) sistem ajanından yalnız prompt +
+model alır; kimlik ve **kimlik bilgileri çağıran ajandan** gelir. Çağıran ajan
+claude-cli/codex-cli'daysa bu, her başlık/özet/yargı için taze bir `claude -p` =
+Claude Code'un ~36k token'lık taban promptu (2.1.259 ölçümü, `_Docs/17`) demekti.
+`Runtime.routeAuxAgent` (`internal/agent/systemagent_route.go`) artık üç koşul
+sağlanınca kopyayı anahtarlı ilk `anthropic` instance'ına çevirir: ayar
+`auxNativeRouting` açık (varsayılan), çağıran CLI türünde, `Registry.
+FirstAvailableOfKind("anthropic")` boş değil. Model, sistem ajanının alias'ından
+API id'sine çevrilir (`providers.NativeClaudeModel`: haiku →
+`claude-haiku-4-5-20251001`). Koşullar sağlanmazsa davranış eskisi gibidir;
+native anthropic bir çağıranda yalnız alias çevrilir. Faturalama çağıran ajanın
+ID'sinde kalır, usage satırının provider sütunu değişir — bu çağrılar CLI
+aboneliğinden değil **API anahtarından** ödenir.
+
+**Compaction katlaması** da bu yoldan geçer: önceden `Manager.Prepare`/`ForceCompact`
+oturum ajanının sağlayıcı+modeliyle (ör. claude-cli opus, tam taban) doğrudan
+`provider.Complete` çağırıyordu; `compaction` sistem ajanının modeli yalnız
+belgede geçerliydi. `Runtime.FoldContext(ctx, agent)` (`internal/agent/
+fold_target.go`) beş katlama giriş noktasında (`chat_turn_phases`, `chat_btw`,
+`summary`, `wake_turn`, `toolloop_phases.compactAndRetry`) + handoff'ta
+`conversation.WithFoldTarget` damgalar: aynı sağlayıcıda yalnız model değişir
+(provider nesnesi elde kalır), yönlendirmede sağlayıcı da değişir. Katlama
+istekleri araçsız olduğundan `CLIRestrictNativeTools` taşır. Testler:
+`systemagent_route_test.go`, `conversation/foldtarget_test.go`.
 
 ### `insight-applier` — dar allowlist bir güvenlik sözleşmesidir
 

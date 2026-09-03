@@ -337,6 +337,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 		}
 	}
 	args = append(args, c.mcpArgs()...)
+	args = append(args, nativeToolArgs(req)...)
 
 	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// Persistent process: its MCP servers and tool subprocesses inherit the pipes,
@@ -413,6 +414,7 @@ func (c *ClaudeCLI) persistentFingerprint(req Request, sys string) string {
 	fmt.Fprintln(h, c.permissionPromptTool)
 	fmt.Fprintln(h, strings.Join(c.allowedTools, ","))
 	fmt.Fprintln(h, strings.Join(c.disallowedTools, ","))
+	fmt.Fprintln(h, req.CLIRestrictNativeTools, strings.Join(req.CLINativeTools, ","))
 	fmt.Fprintln(h, sys)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

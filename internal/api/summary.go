@@ -585,7 +585,7 @@ func (s *Server) customCompactSession(ctx context.Context, wsp *workspace.Worksp
 	// history is the pre-command snapshot captured by the caller (before the
 	// "/compact" user message was appended), so the fold boundary matches the real
 	// conversation.
-	ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
+	ctx = wsp.Runtime.FoldContext(ctx, agentRow)
 	ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 	ctx = conversation.WithClaudeHome(ctx, wsp.Runtime.ClaudeHomeDir())
 	fold, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)

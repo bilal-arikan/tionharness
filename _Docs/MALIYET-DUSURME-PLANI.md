@@ -49,3 +49,24 @@ Ayrıca: dahili fiyat tablosundaki opus-4-8 satırını sağlayıcının güncel
 - **Volatile/stable ayrımı**: tarih-saat (dakika hassasiyeti), oturum durumu vb. kullanıcı mesajına eklenir; sistem promptu ilk `chat()` çağrısında **pinlenir**, oturum boyunca bayt-sabit (`prompt-builder.ts:85-133`, `claude-agent.ts:817-839`).
 - **Yalnızca bağlı-aktif kaynakların araçları** eklenir; pasif kaynak tek satır metin + hata güdümlü lazy aktivasyon (`claude-agent.ts:432-466, 1503-1506`).
 - **Haiku yönlendirmesi** (başlık/özet/doğrulama) ve **12k+ araç sonuçlarını diske yazma**.
+
+## 2026-09-03 güncellemesi — 30 günlük veri ve üç yeni kaldıraç
+
+Son 30 gün (`session-usage`, claude-cli): 1.429 oturum, 4.807 tur, 443,6M cache-write
+(tur başına ~92k), 7,34B cache-read, 32,3M output → harcamanın ~%90'ı yeniden gönderilen
+prefix. Transkriptlerde her oturumun ilk çağrısı 50–59k `cache_creation`.
+
+Ölçüm (claude-cli 2.1.259, `_Docs/17` "claude-cli prefix anatomisi"): taban 36,4k;
+`--disallowedTools` küçültmüyor (38,8k); `--tools` allowlist 10,6–12,2k; `--tools ""` 7,3k;
+MCP ertelemesi zaten çalışıyor (+460); proje CLAUDE.md +10k (kullanıcı dosyası).
+
+| # | Ne | Durum |
+|---|-----|-------|
+| 9 | ✅ claude-cli yerleşik araç **allowlist'i** (`claudeCliToolAllowlist`, `--tools`) — köprülü turda taban 36k → ~11k | `internal/agent/climcp.go cliNativeToolAllowlist`, `providers/claudecli.go nativeToolArgs` |
+| 10 | ✅ Yardımcı çağrılar (title/summary/compaction/reflect/btw) **köprüsüz + `--tools ""`** ve persistent havuz dışı | `internal/agent/toolloop_phases.go` (`aux`), `callkind.go isAuxiliaryKind` |
+| 11 | ✅ Yardımcı çağrıları **native Anthropic API'ye yönlendirme** (`auxNativeRouting`; compaction katlaması dahil, `FoldContext`) — ~36k → ~1–2k/çağrı, API anahtarından faturalanır | `internal/agent/systemagent_route.go`, `fold_target.go`, `conversation.WithFoldTarget` |
+| 12 | ✅ Stall yargıcı `stall-judge` sistem ajanı + metin-hash memo (aynı mesaj tekrar yargılanmaz) | `internal/agent/coordination_stall.go` |
+| — | ✅ Kullanıcı kurulumunda `claudePersistentSession` eski `false` → `true` | `~/.tionharness/settings.json` |
+
+Açık kalanlar: 2 (MCP sunucu satırlarını ajan bazında kapatma), 5 (TTL 1h → 5m seçeneği),
+7 (büyük araç sonuçlarını dosyaya taşıma), 8 (cache-break dedektörü iyileştirmeleri).

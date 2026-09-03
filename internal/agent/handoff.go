@@ -112,6 +112,8 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	// Carry the claude-home on ctx too so the fold core self-pins (defense in
 	// depth alongside the explicit PinClaudeHome above).
 	ctx = conversation.WithClaudeHome(ctx, r.claudeHomeDir())
+	// Fold target (cheaper model / native API when configured), same as compaction.
+	ctx = r.FoldContext(ctx, agent)
 	handoffText, err := conversation.BuildHandoff(ctx, r.db, provider, agent, session.Summary, rendered, env, r.readPrompt("handoff"))
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("generate handoff: %w", err)

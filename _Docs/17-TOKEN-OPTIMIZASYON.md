@@ -787,6 +787,7 @@ edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ay
 > kayıtları **tarihseldir**; ilgili alt sistem kaldırıldı. Konuşma-özeti (transcript
 > compaction) ve prompt-cache iyileştirmeleri geçerliliğini korur.
 
+- **✅ claude-cli `--tools` allowlist + araçsız yardımcı çağrılar + native yönlendirme** (2026-09-03) — ölçüm ve kaldıraçlar yukarıda "claude-cli prefix anatomisi" bölümünde; taban 36k → 11k (köprülü tur) / 7k (araçsız), yardımcı çağrılar anthropic API'de ~1–2k.
 - **✅ Density-aware token tahmini** (CG-9/1, 2026-06-22) — `estimateText` yoğun içerikte ~1.5 chars/token, düz metinde ~3; `tokens_test.go`.
 - **✅ Auto-compaction görünürlüğü** (2026-08-11) — rutin bütçe-tabanlı rolling-summary fold'u (`Prepare`) artık iki yüzeyde görünür: (1) `debug.jsonl`'e `type:"compaction"` olayı (`Name:"auto"`/`"manual"`, `SavedBytes`+`Detail`) her tur-türünde (chat/spawned/wake/koordinatör); (2) interaktif chat turunda başa **görünür lead-step** ("🗜 Bağlam otomatik sıkıştırıldı — N mesaj katlandı") — manuel `/compact` ile **aynı hub kanalı** (canlı SSE + çok-pencere `publishHub` + kalıcı trace). **Queue notu:** auto-fold zaten serialize turn'ün içinde (inbox slotunu tutar), bu yüzden manuel komut gibi `acquireInboxSlot`'a girmez — girse self-deadlock olurdu. `Prepared.FoldedMsgs` step'i besler. Detay `38`.
 - **✅ charsPerToken kalibrasyonu 4→3** (2026-07-23) — yeni Claude tokenizer'ı (Sonnet 5 / Opus 4.7+) sabit metinde ~%35 daha çok token üretiyor; ~1.15M karakter gerçek oturum metni üzerinde ölçüm (o200k proxy) 3.29 chars/token (Türkçe 3.25) → eski `4` değeri token'ı ~%33 eksik sayıp geç compaction/bağlam taşması riski doğuruyordu. Yalnız bütçe/compaction tahmini ve UI ölçerini etkiler; **fatura gerçek `usage`'dan geldiği için değişmez.**
@@ -1121,6 +1122,72 @@ göstermediği `38-SESSION-DEBUG.md`'de anlatılır.
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
+
+## claude-cli prefix anatomisi ve üç yeni kaldıraç (2026-09-03)
+
+**Soru:** Claude Code tek başına çok az token harcarken TionHarness neden çok
+harcıyor? Son 30 günün `session-usage` verisi (yalnız claude-cli satırları):
+1.429 oturum / 4.807 tur, **443,6M cache-write** (tur başına ~92k), 7,34B
+cache-read, 32,3M output. Harcamanın ~%90'ı yeniden gönderilen prefix; output
+payı ~%10. Yani fark modelin işi değil, **her oturumun soğuk başlaması + oturum
+sayısı** (spawned 13.541 tur, chat 3.076).
+
+**Ölçüm (claude-cli 2.1.259, haiku, izole `claude-home`, boş cwd, `usage`
+toplam girdi = input + cache_creation + cache_read):**
+
+| Varyant | Toplam girdi |
+|---|---|
+| A — taban (MCP yok, kısıt yok) | 36.354 |
+| B — A + codebase-memory-mcp (`ENABLE_TOOL_SEARCH=auto`) | 36.814 (+460: MCP zaten erteleniyor) |
+| C — B ile aynı, `ENABLE_TOOL_SEARCH=true` | 36.812 (fark yok) |
+| D — A + `--tools ""` (yerleşik araç yok) | **7.272** |
+| E — A, cwd = TionHarness deposu (proje CLAUDE.md) | 46.343 (+10k, kullanıcı dosyası) |
+| G — A + TionHarness'in 19 girişli `--disallowedTools` listesi | 38.814 (**küçültmüyor**) |
+| F — `--tools Read,Edit,Write,Glob,Grep,ToolSearch` | **10.637** |
+| F2 — F + NotebookEdit,WebSearch,WebFetch | 12.183 |
+| H — F + codebase-memory-mcp, "araçlarını listele" | 17.429; MCP araçları erişilebilir (ToolSearch/inline) |
+
+Çıkarımlar: (1) `--disallowedTools` prompt boyutunu düşürmez, `--tools`
+allowlist'i tabanı ~36k → ~11k'ya indirir; (2) MCP ertelemesi zaten çalışıyor,
+`ENABLE_TOOL_SEARCH=true` kazandırmaz; (3) araçsız çağrı `--tools ""` ile 7k;
+(4) proje CLAUDE.md'si (+10k) Claude Code'un kendi davranışı, TionHarness'in
+değil. Transkriptlerde gözlenen 50–59k'lık ilk `cache_creation` = 36k taban +
+proje CLAUDE.md + core araçlar + eklenen sistem promptu ile örtüşür.
+
+Uygulanan kaldıraçlar (hepsi ayarlanabilir, varsayılan açık):
+
+1. **`--tools` allowlist** (`Settings.ClaudeCLIToolAllowlist`,
+   `agent.cliNativeToolAllowlist`, `providers.Request.CLIRestrictNativeTools/
+   CLINativeTools`, `nativeToolArgs`): köprülü her claude-cli turunda yerleşik
+   menü Read/Edit/Write/Glob/Grep/NotebookEdit/ToolSearch + MCP resource
+   okuyucuları; WebSearch/WebFetch ajan toggle'ına, Bash ailesi "shell köprülü
+   değil"e, TodoWrite/Skill aileleri "köprü ilan edilmedi"ye (WS17
+   invariantı), plan-mode araçları ask/read-only moduna bağlı. `--disallowedTools`
+   olduğu gibi kalır (savunma derinliği). Persistent fingerprint kısıtı içerir.
+   Test: `TestCLINativeToolAllowlistDisjointFromSuppression` (allowlist ∩
+   disallow = ∅, iki shell durumu × üç mod).
+2. **Yardımcı çağrılar araçsız ve köprüsüz** (`isAuxiliaryKind`: title/summary/
+   reflect/compact/btw): `toolLoopTurn.aux` interaction endpoint'ini ve MCP
+   config'ini atlar, `--tools ""` gönderir, persistent havuza **girmez** (aynı
+   oturum id'siyle farklı prompt → fingerprint uyuşmazlığı ana süreci iki kez
+   soğuk başlatıyordu). Compaction katlaması ve handoff da `CLIRestrictNativeTools`
+   taşır (`conversation.summarizeRendered`/`BuildHandoff`).
+3. **Yardımcı çağrıları native API'ye yönlendirme** (`Settings.AuxNativeRouting`,
+   `Runtime.routeAuxAgent`, `providers.NativeClaudeModel`): çağıran ajan CLI
+   türündeyse ve bir anthropic instance'ı anahtarlıysa başlık/özet/compaction
+   katlaması/ders/içgörü/reçete optimizer/stall yargıcı o instance'ta, sistem
+   ajanının modeliyle (alias → API id) koşar: ~36k yerine ~1–2k token. Bu
+   çağrılar API anahtarından faturalanır (abonelikten değil). Compaction için
+   `Runtime.FoldContext` → `conversation.WithFoldTarget` (aynı sağlayıcı + ucuz
+   model: yalnız ajan kopyası; farklı sağlayıcı: provider nesnesi de).
+   Ayrıntı: [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md).
+4. **Stall yargıcı** artık `stall-judge` sistem ajanı (haiku) + koordinatör
+   başına metin-hash memo'su: sweeper aynı sessiz mesajı her dakika yeniden
+   yargılamıyor (bir sessizlik penceresinde 4 özdeş transkript gözlenmişti).
+   [47-KOORDINATOR-COKLU-AJAN.md](47-KOORDINATOR-COKLU-AJAN.md).
+
+Kullanıcı kurulumunda ayrıca `claudePersistentSession` (settings.json'da eski
+`false` değeri kalmıştı) `true` yapıldı; varsayılan zaten `true` idi.
 
 ## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
 

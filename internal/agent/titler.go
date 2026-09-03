@@ -86,7 +86,7 @@ func (r *Runtime) resolveTitleConfig(agent db.Agent) (db.Agent, string) {
 	// resolved actor identity into RecordUsage so KindTitle becomes system:title.
 	agent.System = true
 	agent.SystemKey = titler.SystemKey
-	return agent, titler.Soul
+	return r.routeAuxAgent(agent, titler), titler.Soul
 }
 
 // TitleFor resolves a titling agent (the preferred one if given, otherwise the

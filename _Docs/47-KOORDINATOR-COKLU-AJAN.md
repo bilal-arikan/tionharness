@@ -408,6 +408,16 @@ sadece okuyucunun ekranından düşer. Ön yüz akışı: `applyClientPrefs`
 `MessageList`'e giden listeyi süzer. Değer `settings` SSE olayıyla canlı güncellenir;
 todo paneli / cache-warmth / rewind tam listeyle çalışmaya devam eder.
 
+**Yargıcın maliyeti ve memo (2026-09-03):** yargıç artık `stall-judge` sistem ajanıdır
+(`prompts/defaults/stall-judge.md`, haiku; `resolveAnalysisSystemAgent("stall-judge")`),
+ve `auxNativeRouting` ile CLI'daki koordinatörler için anthropic API'ye yönlendirilir —
+önceden koordinatörün kendi modeliyle taze bir `claude -p` açılıyor, 10 token'lık
+verdict için ~51k token prefix ödeniyordu. Ayrıca `Runtime.stallJudgeMemo`
+(koordinatör oturumu → son yargılanan metnin sha256 + verdict): tur-sonu guard'ı ve
+60 sn'lik sweeper aynı "son mesaj"ı yargılar, sessiz koordinatörün mesajı pencere
+boyunca değişmez → aynı metin **bir kez** yargılanır, metin değişince yeniden,
+yargıç hatası memo'ya girmez (`coordination_stall_memo_test.go`).
+
 Test seam: `Runtime.stallJudgeFn` (üretimde nil) — yargıç sonrası kademeler canlı
 sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_test.go`
 (`TestCoordinatorStallGuardJudgesAfterWorkerNote`,

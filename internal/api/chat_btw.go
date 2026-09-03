@@ -91,7 +91,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// Prepare may fold older turns into the session's rolling summary — that is a
 	// legitimate shared side effect (the same fold the next real turn would have
 	// performed), not a side-chat mutation of the transcript.
-	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
+	ctx = ws(r).Runtime.FoldContext(ctx, agentRow)
 	ctx = conversation.WithAttachmentRoot(ctx, ws(r).SandboxRoot())
 	// Pin the workspace claude-home so Prepare's rolling fold (a direct
 	// provider.Complete outside the tool loop) doesn't fall back to the global
