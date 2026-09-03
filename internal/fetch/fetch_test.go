@@ -9,8 +9,8 @@ import (
 
 func TestNormalizeRepoRef(t *testing.T) {
 	cases := map[string]string{
-		"owner/repo":                  "https://github.com/owner/repo",
-		"owner/repo/tree/main/skills": "https://github.com/owner/repo/tree/main/skills",
+		"owner/repo":                    "https://github.com/owner/repo",
+		"owner/repo/tree/main/skills":   "https://github.com/owner/repo/tree/main/skills",
 		"https://github.com/owner/repo": "https://github.com/owner/repo",
 		"github.com/owner/repo":         "github.com/owner/repo",
 	}
@@ -44,13 +44,13 @@ func TestParseGitHubURL(t *testing.T) {
 
 func TestGroupByMarkerAndFindFiles(t *testing.T) {
 	tree := Tree{
-		"agents/a.md":            []byte("A"),
-		"agents/b.md":            []byte("B"),
-		"skills/x/SKILL.md":      []byte("X"),
-		"skills/x/ref/guide.md":  []byte("g"),
-		"skills/x/sub/SKILL.md":  []byte("SUB"), // nested marker keeps its own files
-		"skills/x/sub/note.md":   []byte("n"),
-		"README.md":              []byte("top"),
+		"agents/a.md":           []byte("A"),
+		"agents/b.md":           []byte("B"),
+		"skills/x/SKILL.md":     []byte("X"),
+		"skills/x/ref/guide.md": []byte("g"),
+		"skills/x/sub/SKILL.md": []byte("SUB"), // nested marker keeps its own files
+		"skills/x/sub/note.md":  []byte("n"),
+		"README.md":             []byte("top"),
 	}
 	groups := GroupByMarker(tree, "skills", "SKILL.md")
 	if len(groups) != 2 {

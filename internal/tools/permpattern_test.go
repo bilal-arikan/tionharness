@@ -7,10 +7,10 @@ import (
 
 func TestParsePermRule(t *testing.T) {
 	cases := map[string]PermRule{
-		"Bash":           {Tool: "Bash"},
-		"Bash(git *)":    {Tool: "Bash", ArgGlob: "git *"},
+		"Bash":            {Tool: "Bash"},
+		"Bash(git *)":     {Tool: "Bash", ArgGlob: "git *"},
 		"  Bash( npm * )": {Tool: "Bash", ArgGlob: "npm *"},
-		"Write":      {Tool: "Write"},
+		"Write":           {Tool: "Write"},
 		"broken(":         {Tool: "broken("}, // no trailing ) → whole-tool, left as-is
 	}
 	for in, want := range cases {

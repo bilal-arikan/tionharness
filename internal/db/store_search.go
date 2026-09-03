@@ -9,14 +9,14 @@ import (
 // SearchHit is one message that matched a cross-session search, with enough
 // context to render a result line and deep-link back to the message.
 type SearchHit struct {
-	SessionID    string `json:"sessionId"`
-	SessionTitle string `json:"sessionTitle"`
-	MessageID    string `json:"messageId"`
-	Role         string `json:"role"`
-	AgentID      string `json:"agentId,omitempty"`
-	Snippet      string `json:"snippet"`
+	SessionID    string  `json:"sessionId"`
+	SessionTitle string  `json:"sessionTitle"`
+	MessageID    string  `json:"messageId"`
+	Role         string  `json:"role"`
+	AgentID      string  `json:"agentId,omitempty"`
+	Snippet      string  `json:"snippet"`
 	Score        float64 `json:"score"`
-	CreatedAt    int64  `json:"createdAt"`
+	CreatedAt    int64   `json:"createdAt"`
 }
 
 // SearchOpts parameterizes SearchMessages. Query is split on whitespace into
