@@ -244,3 +244,26 @@ in the distributed TionHarness binary or in the published static site:
   the TionHarness binary or emitted into the published site output.
 - `caniuse-lite` (CC-BY-4.0) is a development-only dependency used for browser
   target data.
+
+---
+
+## Prior art and inspiration (no code copied)
+
+TionHarness is an independent implementation, but several of its design ideas
+were shaped by reading other agent projects. No source code from these projects
+is copied into or distributed with TionHarness; they are listed here to credit
+the prior art honestly.
+
+- **Craft Agent OSS** (`craft-ai-agents/craft-agents-oss`) — informed the session
+  self-management prompt section, the environment marker, the working-directory
+  context block, and the shift-tab permission-cycle interaction. TionHarness
+  deliberately diverges on prompt strategy (a lean prefix that delegates to
+  skills, rather than a large static system prompt).
+- **GitHub Copilot CLI** — its `/chronicle` session-insight command family was
+  read as a reference when shaping TionHarness' own retrospective scanning.
+- **Hermes Agent** — informed the error-classifier failover pattern, the
+  tool-loop guardrail thresholds, the frozen prompt-snapshot ("prompt epoch")
+  idea, and the verify-after-mutation check.
+
+Each of these influences is a design pattern or interaction idea, independently
+implemented in Go and TypeScript for this codebase.
