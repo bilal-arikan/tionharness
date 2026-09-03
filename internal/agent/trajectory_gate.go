@@ -192,12 +192,21 @@ func (r *Runtime) ResolvePhaseGate(ctx context.Context, ask db.SessionAsk, answe
 		return err
 	}
 	note := fmt.Sprintf("<gate trajectory=%q phase=%q approved=%t>%s</gate>", tid, phaseID, approved, strings.TrimSpace(answer))
-	if _, nerr := r.recordInjectedUserNote(ctx, ask.SessionID, "gate", note); nerr != nil {
+	if _, nerr := r.recordInjectedUserNote(ctx, ask.SessionID, noteOriginGate, note); nerr != nil {
 		r.logger.Warn("trajectory: gate note failed", "ask", ask.ID, "error", nerr)
 	}
 	r.logger.Info("trajectory: human gate resolved", "trajectory", tid, "phase", phaseID, "approved", approved)
 	return nil
 }
+
+// noteOriginGate marks the transcript record of a resolved human gate. It is a
+// user-role message for display (it sits where the answer happened) but NOT a
+// prompt: nothing owes it a reply, so a session whose transcript ends with it is
+// finished, not orphaned — RecoverOrphanedTurns checks this origin. Without that
+// check, every restart re-enqueued the finished root of a gated rota and its
+// coordinator spawned a fresh round of workers on a done task (observed
+// 2026-09-03: SES5 re-ran and bound three new workers into a `done` trajectory).
+const noteOriginGate = "gate"
 
 // --- graph edits shared by the agent tool and the canvas API ---
 

@@ -1,5 +1,34 @@
 # TionHarness — İlerleme Takibi
 
+## Rota E2E (gerçek LLM) + üç bulgu düzeltmesi (2026-09-03) ✅
+
+Çalışan örnekte claude-cli ajanlarıyla uçtan uca koşu: reçeteli tam koşu
+(artifact + verdict kapıları, özet), kanvastan kapı senaryosu (artifact 422 →
+zorla, insan kapısı 202 → sohbet kartı → ret/onay), `trajectory_end` otomasyonu
+(gerçek ateşleme + graf düğümü), küratör kuru koşusu, optimizer (tek koşuyla 0
+öneri — beklenen). Bulgular ve düzeltmeler: **(1)** `report_to_coordinator`
+çağırıp turunu bitiren yaprak worker koordinatöre iki "completed" bildirimi
+düşürüyordu → `pendingUpwardReport.foldIntoTerminal`: rapor terminal bildirime
+katlanır, ajanın daha zayıf öz-değerlendirmesi (`incomplete`/`failed`) tur
+durumunu ezer, ertelenen alt-koordinatör yolu değişmedi
+(`coordination_tree.go`, test `TestUpwardReportFoldsIntoTerminalNote`).
+**(2)** Faza bağlı olmayan düğümlerin "fazsız" sütunu 1440 px'te ekran dışında
+kalıyordu → `trajectoryGeometry.ts` (min sütun 210→150, `columnsOverflow`) ve
+başlıkta "N sütun · sağa kaydır ⇢" ipucu. **(3)** Bir rotanın üyesinin
+başlattığı kök oturum (otomasyon ateşlemesi, handoff) reçeteli ajandaysa kendi
+rotasını da tohumluyordu → önce `bindForkedSession`, bağlandıysa tohum yok;
+gerçekten delege ederse `bindSpawn` o zaman tohumlar
+(`TestTrajectoryForkedSessionBinding`). **(4)** Yeniden başlatmada ortaya çıktı:
+kapı yanıtının `<gate>` transkript kaydı user-rollü olduğundan
+`RecoverOrphanedTurns` bitmiş kök oturumu yeniden kuyrukladı ve koordinatör
+bitmiş işe yeni worker'lar açtı → kayıt `Origin: gate` (`noteOriginGate`),
+kurtarma bu kayıtla biten transkripti bitmiş sayar
+(`TestRecoverSkipsTrailingGateNote`). Codex tekrarı: codex-cli koordinatör
+(gpt-5.x) `trajectory` aracını doğru kullandı, RTA `done` 3/4 faz, worker
+başına tek bildirim, `trajectory_end` ateşlemesinin açtığı codex oturumu kendi
+rotasını tohumlamadı; 1440 px'te beş sütun sığıyor, dar panelde "sağa kaydır"
+çipi çıkıyor.
+
 ## Rota F5 + F4-v2: faz kapıları, kanvastan müdahale, oto-budama (2026-09-03) ✅
 
 Faz `done`'a taşınırken ilan edilmiş kapı çalışır (`trajectory_gate.go`):

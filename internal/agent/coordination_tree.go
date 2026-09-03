@@ -218,19 +218,51 @@ func (r *Runtime) deferWorkerReport(ctx context.Context, sess db.Session, status
 // fresh context per attempt, and a report made in a cut-short attempt must not be
 // dropped by the retry.
 type pendingUpwardReport struct {
-	mu    sync.Mutex
-	coord string
-	note  string
-	armed bool
+	mu     sync.Mutex
+	coord  string
+	note   string
+	status string // the status the agent reported (turnStatus*), for the fold below
+	armed  bool
 }
 
 // stash records the note to deliver, overwriting any earlier one. Two
 // report_to_coordinator calls in the same turn mean the agent corrected itself:
 // the last one wins and only that one is sent.
-func (p *pendingUpwardReport) stash(coordSessionID, note string) {
+func (p *pendingUpwardReport) stash(coordSessionID, note, status string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.coord, p.note, p.armed = coordSessionID, note, true
+	p.coord, p.note, p.status, p.armed = coordSessionID, note, status, true
+}
+
+// foldIntoTerminal consumes the stash for a node whose turn IS its result (a
+// leaf worker, or a sub-coordinator that never delegated) and returns the status
+// its terminal <task-notification> should carry.
+//
+// Before this fold the parent got BOTH notes: the stashed report_to_coordinator
+// summary and, seconds later, the runtime's terminal notification with the same
+// "completed" status and the full reply (observed 2026-09-03 on every worker that
+// called the tool: two notes 4s apart, one wasted coordinator turn). For such a
+// node the terminal note already carries everything — the persisted reply, tool
+// count, the all-idle fold — so the explicit report is dropped. What survives is
+// the agent's self-assessment: a weaker reported status ("incomplete" / "failed"
+// on a turn that ended cleanly) overrides the turn status, because the agent
+// knows better than the runtime whether the task is actually done.
+//
+// Deferred sub-coordinators (deferWorkerReport) are NOT folded: their terminal
+// note is withheld, so the stashed report is the only thing that reaches the
+// parent and flushUpwardReport must still deliver it.
+func (p *pendingUpwardReport) foldIntoTerminal(turnStatus string) string {
+	_, _, ok := p.take()
+	if !ok {
+		return turnStatus
+	}
+	p.mu.Lock()
+	reported := p.status
+	p.mu.Unlock()
+	if reported != "" && reported != turnStatusCompleted && turnStatus == turnStatusCompleted {
+		return reported
+	}
+	return turnStatus
 }
 
 // take hands out the stashed note exactly once, so a second flush (an early return
@@ -314,7 +346,7 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 	note := formatTaskNotification(sessionID, sess.AgentID, r.agentName(sess.AgentID), sess.Model, status, summary, 0, 0)
 	deferred := false
 	if stash := pendingUpwardReportFrom(ctx); stash != nil {
-		stash.stash(sess.CoordinatorSessionID, note)
+		stash.stash(sess.CoordinatorSessionID, note, status)
 		deferred = true
 	} else {
 		r.NotifyCoordinator(sess.CoordinatorSessionID, note)

@@ -134,6 +134,45 @@ func TestReportToCoordinatorDeliversAtEndOfTurn(t *testing.T) {
 	drainSpawns(t, rt)
 }
 
+// TestUpwardReportFoldsIntoTerminalNote: a node whose turn IS its result (a leaf
+// worker) must not wake the parent twice. The stashed report_to_coordinator is
+// consumed by the fold, its weaker status wins over a clean turn, and the flush
+// that follows the terminal note sends nothing.
+func TestUpwardReportFoldsIntoTerminalNote(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	root := newTreeNode(t, rt, "root-fold", "", "", 0, true)
+	leaf := newTreeNode(t, rt, "leaf-fold", root.ID, root.ID, 1, false)
+
+	upward := &pendingUpwardReport{}
+	turnCtx := withPendingUpwardReport(ctx, upward)
+	if err := rt.ReportToCoordinator(turnCtx, leaf.ID, "incomplete", "ran out of budget"); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if got := upward.foldIntoTerminal(turnStatusCompleted); got != "incomplete" {
+		t.Fatalf("fold status = %q, want the agent's weaker self-assessment", got)
+	}
+	rt.flushUpwardReport(upward, leaf.ID)
+	msgs, err := rt.db.ListMessages(ctx, root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("the folded report must not be delivered on its own, got %d message(s)", len(msgs))
+	}
+	// No stash → the turn status stands; a reported "completed" never upgrades a
+	// failed turn.
+	if got := (&pendingUpwardReport{}).foldIntoTerminal(turnStatusCompleted); got != turnStatusCompleted {
+		t.Fatalf("empty fold = %q", got)
+	}
+	up2 := &pendingUpwardReport{}
+	up2.stash(root.ID, "n", turnStatusCompleted)
+	if got := up2.foldIntoTerminal("failed"); got != "failed" {
+		t.Fatalf("fold must not upgrade a failed turn, got %q", got)
+	}
+	drainSpawns(t, rt)
+}
+
 // TestReportToCoordinatorSendsImmediatelyOutsideAWorkerTurn keeps the fallback
 // honest: a call with no turn stash (a chat turn opened directly on the worker
 // session, or a direct runtime call) has no terminal path to flush it, so it must

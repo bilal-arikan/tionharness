@@ -249,12 +249,20 @@ func (r *Runtime) onSessionChangeForTrajectory(ev db.SessionChangeEvent) {
 		if s.RootSession() != s.ID {
 			return // a tree member: OnSpawn owns it
 		}
+		// A root that another trajectory's member started (an automation fire, a
+		// handoff) is first and foremost a NODE of that trajectory. It is not seeded
+		// with a trajectory of its own at create even when its agent carries a
+		// recipe — otherwise every rota-sonu watcher on a coordinator agent listed a
+		// second "planlandı" rota that never went anywhere (observed 2026-09-03). If
+		// it really delegates later, bindSpawn's EnsureTrajectory seeds it then.
+		if r.bindForkedSession(ctx, s) {
+			return
+		}
 		if s.IsCoordinator() && strings.TrimSpace(s.CoordinatorWorkflow) != "" {
 			if _, err := r.EnsureTrajectory(ctx, s.ID); err != nil {
 				r.logger.Warn("trajectory seed at create failed", "session", s.ID, "error", err)
 			}
 		}
-		r.bindForkedSession(ctx, s)
 	case db.SessionOpState:
 		if s.State != "archived" || s.RootSession() != s.ID {
 			return
@@ -286,26 +294,29 @@ func (r *Runtime) onSessionChangeForTrajectory(ev db.SessionChangeEvent) {
 // bindForkedSession records a new ROOT session that another trajectory's
 // member started (an automation fire, a handoff, a spawn_session) as a node of
 // that trajectory with a fired / forked_from edge from the trigger. Flow
-// transcript sessions are skipped: the flow RUN node stands for them.
-func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) {
+// transcript sessions are skipped: the flow RUN node stands for them. Reports
+// whether the session was bound into a trigger's trajectory.
+func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) bool {
 	o := s.Lineage()
 	if o.TriggerSessionID == "" || o.TriggerSessionID == s.ID || o.Kind == db.OriginFlow {
-		return
+		return false
 	}
 	trigger, err := r.db.GetSession(ctx, o.TriggerSessionID)
 	if err != nil {
-		return
+		return false
 	}
 	edge := db.TrajEdgeForkedFrom
 	if o.Kind == db.OriginAutomation {
 		edge = db.TrajEdgeFired
 	}
 	at := s.CreatedAt * 1000
+	bound := false
 	r.updateTrajectoryByRoot(ctx, trigger.RootSession(), func(t *db.Trajectory) error {
 		from := trajSessionNodeID(trigger.ID)
 		if trajNodePtr(t, from) == nil {
 			return nil
 		}
+		bound = true
 		label := s.Title
 		if o.Kind == db.OriginAutomation && o.EntityID != "" {
 			label = o.EntityID + " → " + s.Title
@@ -318,6 +329,7 @@ func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) {
 		trajAddEdge(t, from, trajSessionNodeID(s.ID), edge, db.TrajOriginObserved)
 		return nil
 	})
+	return bound
 }
 
 // --- flow runs ---

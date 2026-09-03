@@ -17,6 +17,15 @@ import {
   trajectoryProgress,
   type TrajPlaced,
 } from './trajectoryLayout'
+import {
+  HEAD_H,
+  LABEL_W,
+  NODE_H,
+  PAD,
+  ROW_H,
+  colWidth,
+  columnsOverflow,
+} from './trajectoryGeometry'
 import { STATUS_LABEL, STATUS_TONE } from './trajectoryStatus'
 import { fmtDurationSec, fmtTokens } from './trajectoryFormat'
 import { useTrajectory } from './useTrajectory'
@@ -32,13 +41,6 @@ interface Props {
   onOpenFlowRun?: (flowId: string) => void
   onBack: () => void
 }
-
-const COL_W = 210
-const ROW_H = 46
-const LABEL_W = 150
-const HEAD_H = 54
-const NODE_H = 26
-const PAD = 12
 
 const EDGE_STYLE: Record<TrajectoryEdge['kind'], { stroke: string; dash?: string }> = {
   next: { stroke: 'var(--color-border)' },
@@ -163,6 +165,16 @@ export function RotaTrajectoryView({
                 title="İlan edilmiş ama henüz gerçekleşmemiş düğümler"
               >
                 {layout.ghosts} hayalet
+              </span>
+            )}
+            {layout && columnsOverflow(layout.columns.length, width) && (
+              <span
+                className="rounded border border-dashed border-[var(--color-border)] px-1.5 text-[var(--color-text-dim)]"
+                title="Sütunlar panele sığmıyor; kanvası sağa kaydır"
+                data-testid="columns-overflow"
+              >
+                {layout.columns.length} sütun · sağa kaydır ⇢{' '}
+                {layout.columns[layout.columns.length - 1].label}
               </span>
             )}
             <span className="ml-auto flex items-center gap-1.5">
@@ -326,7 +338,7 @@ function TrajectorySvg({
   onPickPhase,
 }: SvgProps) {
   const { columns, lanes, nodes, edges, root, rootToCol, activeCol } = layout
-  const colW = Math.max(COL_W, Math.floor((width - LABEL_W - PAD) / Math.max(1, columns.length)))
+  const colW = colWidth(columns.length, width)
   const svgW = LABEL_W + columns.length * colW + PAD
   const height = HEAD_H + lanes.length * ROW_H + PAD
   const laneY = useMemo(

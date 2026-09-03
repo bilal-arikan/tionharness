@@ -369,4 +369,31 @@ func TestTrajectoryForkedSessionBinding(t *testing.T) {
 	if !edge {
 		t.Fatalf("edges = %+v, want fired", tr.Edges)
 	}
+	// The fired session is a node of the trigger's trajectory, not a root of its
+	// own — even on a recipe-bearing coordinator agent (a rota-sonu watcher target).
+	coordFired, err := rt.db.CreateSession(ctx, db.Session{AgentID: base.ID, Kind: "chat", Title: "Retro",
+		CoordinatorMode: true, CoordinatorWorkflow: "plan-dev-test",
+		Origin: &db.SessionOrigin{Kind: db.OriginAutomation, EntityID: "AUT9", TriggerSessionID: sess.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.db.GetTrajectoryByRoot(ctx, coordFired.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a session forked into a trajectory must not seed its own, got err=%v", err)
+	}
+	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
+	if trajNodePtr(&tr, "s:"+coordFired.ID) == nil {
+		t.Fatalf("forked coordinator session missing from the trigger's trajectory: %+v", tr.Nodes)
+	}
+	// A trigger with no trajectory of its own (a plain chat) binds nothing, so the
+	// recipe-bearing session is seeded as usual.
+	plain, _ := rt.db.CreateSession(ctx, db.Session{AgentID: base.ID, Kind: "chat"})
+	seeded, err := rt.db.CreateSession(ctx, db.Session{AgentID: base.ID, Kind: "chat", Title: "Own",
+		CoordinatorMode: true, CoordinatorWorkflow: "plan-dev-test",
+		Origin: &db.SessionOrigin{Kind: db.OriginAutomation, EntityID: "AUT9", TriggerSessionID: plain.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.db.GetTrajectoryByRoot(ctx, seeded.ID); err != nil {
+		t.Fatalf("a fork off a trajectory-less trigger must still be seeded: %v", err)
+	}
 }

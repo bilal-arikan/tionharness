@@ -1570,6 +1570,10 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	// bounds how much of it enters the coordinator's context — an overflowing result is
 	// capped and its full text offloaded to an artifact + worker-session handle, so a
 	// single verbose worker can no longer fill the coordinator's window (_Docs/47, P0/P2).
+	// A report_to_coordinator made during this turn folds into the terminal note
+	// (its status may override a clean turn's); sending both woke the parent twice
+	// with the same result. See pendingUpwardReport.foldIntoTerminal.
+	status = upward.foldIntoTerminal(status)
 	notifyResult := r.buildWorkerResult(ctx, workerSessionID, agent.ID, status, replyText)
 	note := formatTaskNotification(workerSessionID, agent.ID, agent.Name, agent.Model, status, notifyResult, countToolSteps(steps), time.Since(turnStart).Milliseconds())
 	// Release BEFORE notifying: this worker is done, and whether it took the fleet to
@@ -1581,8 +1585,9 @@ func (r *Runtime) runWorkerWithCtl(runCtx context.Context, cancelRun context.Can
 	if notifyErr := r.notifyCoordinator(coordSessionID, note, workerDone(), digestWorkerSteps(steps), workerSessionID); notifyErr != nil {
 		r.logger.Error("worker: terminal notification failed", "session", workerSessionID, "coordinator", coordSessionID, "error", notifyErr)
 	}
-	// After the reply is persisted and the slot released: a report_to_coordinator
-	// made during this turn is delivered now, never mid-turn.
+	// The stash was consumed by the fold above; this flush is a no-op unless a
+	// report landed between the fold and here (a late tool call on a cut-short
+	// attempt) — then it still goes out rather than being lost.
 	r.flushUpwardReport(upward, workerSessionID)
 }
 
@@ -1650,8 +1655,11 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		if err != nil || len(msgs) == 0 {
 			continue
 		}
-		if msgs[len(msgs)-1].Role != "user" {
-			continue // completed normally (last message is an assistant reply)
+		if last := msgs[len(msgs)-1]; last.Role != "user" || last.Origin == noteOriginGate {
+			// Completed normally (last message is an assistant reply), or the
+			// transcript ends with a record that owes no reply (a resolved human
+			// gate, see noteOriginGate) — either way there is no turn to reclaim.
+			continue
 		}
 		switch {
 		case isWorker:

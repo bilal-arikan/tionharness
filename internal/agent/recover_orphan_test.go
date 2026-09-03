@@ -4,7 +4,9 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -51,6 +53,38 @@ func TestRecoverOrphanedWorker(t *testing.T) {
 	if len(wm2) != 2 {
 		t.Fatalf("second recovery must be a no-op, worker msgs=%d", len(wm2))
 	}
+}
+
+// TestRecoverSkipsTrailingGateNote: a coordinator whose transcript ends with the
+// record of a resolved human gate is finished, not orphaned — the note is a
+// user-role message for display only and owes no reply. Before the check every
+// restart re-enqueued such a root and it spawned workers on a done task.
+func TestRecoverSkipsTrailingGateNote(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	var enqueued atomic.Int32
+	rt.coordRunFn = func(string) { enqueued.Add(1) }
+	ctx := context.Background()
+
+	coord, _ := rt.db.CreateSession(ctx, db.Session{AgentID: "AGT1", Kind: "chat", Role: "coordinator", CoordinatorMode: true, SourceID: "s:c-gate"})
+	rt.db.AddMessage(ctx, db.Message{SessionID: coord.ID, Role: "user", Text: "task"})
+	rt.db.AddMessage(ctx, db.Message{SessionID: coord.ID, Role: "assistant", Text: "done"})
+	if _, err := rt.recordInjectedUserNote(ctx, coord.ID, noteOriginGate, `<gate trajectory="RTA1" phase="code" approved=true>Onayla</gate>`); err != nil {
+		t.Fatal(err)
+	}
+
+	rt.RecoverOrphanedTurns(ctx)
+	time.Sleep(150 * time.Millisecond) // the wake is asynchronous; give a wrong enqueue time to show
+
+	cm, _ := rt.db.ListMessages(ctx, coord.ID)
+	if len(cm) != 3 || enqueued.Load() != 0 {
+		t.Fatalf("a trailing gate note must not resurrect the coordinator: msgs=%d enqueued=%d", len(cm), enqueued.Load())
+	}
+	// A genuine trailing prompt on the same shape of session is still reclaimed.
+	other, _ := rt.db.CreateSession(ctx, db.Session{AgentID: "AGT1", Kind: "chat", Role: "coordinator", CoordinatorMode: true, SourceID: "s:c-prompt"})
+	rt.db.AddMessage(ctx, db.Message{SessionID: other.ID, Role: "user", Text: "<task-notification>x</task-notification>"})
+	rt.RecoverOrphanedTurns(ctx)
+	waitForCondition(t, 5*time.Second, "real trailing prompt re-enqueued", func() bool { return enqueued.Load() == 1 })
+	drainSpawns(t, rt)
 }
 
 // TestRecoverSkipsCompletedWorker verifies a worker that finished normally (last

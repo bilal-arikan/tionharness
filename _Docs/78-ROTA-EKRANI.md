@@ -442,6 +442,18 @@ beklentisi); F4 pakete yalnız kanal sabiti + `Proposal` alanı ekler.
 düzenleme aracı; regresyonda otomatik sürüm geri alma; F5 kapılar ve
 kanvastan müdahale.
 
+## 10a. E2E sonrası düzeltmeler (2026-09-03)
+
+Gerçek LLM e2e'sinin (claude-cli, ardından codex-cli) ortaya çıkardığı üç
+davranış ve kapanışları — hepsi bu belgenin kurallarını değiştirir:
+
+| Bulgu | Kural (yeni) | Kod |
+|-------|--------------|-----|
+| Yaprak worker `report_to_coordinator{completed}` deyip turunu bitirince koordinatöre 4 sn arayla **iki** "completed" bildirimi düşüyordu (biri tutulan rapor, biri terminal bildirim) | Turu sonucu olan düğümde (yaprak worker / delege etmemiş alt-koordinatör) tutulan rapor terminal bildirime **katlanır**: yalnız terminal not gider; ajan daha zayıf bir durum bildirdiyse (`incomplete`/`failed`) o durum notun durumu olur. Ertelenen alt-koordinatör (`deferWorkerReport`) eskisi gibi yalnız raporunu gönderir | `coordination_tree.go` `pendingUpwardReport.foldIntoTerminal`, `coordination.go` terminal yol |
+| "fazsız" sütunu (rota-sonu izleyicisi ve oturumu gibi faza bağlı olmayan düğümler) 1440 px'te kaydırma dışında kalıyor, ipucu yoktu | Min sütun genişliği 150 px (beş sütun 912 px panele sığar); sığmazsa başlıkta `N sütun · sağa kaydır ⇢ <son sütun>` çipi | `features/rota/trajectoryGeometry.ts` (+test), `RotaTrajectoryView.tsx` |
+| Kapı yanıtının transkript kaydı (`<gate …>`) user-rollü olduğundan yeniden başlatmada `RecoverOrphanedTurns` bitmiş kök oturumu "yarım kalmış tur" sayıp yeniden kuyrukluyordu; koordinatör bitmiş işe yeni worker'lar açtı | Kayıt `Origin: gate` ile yazılır (`noteOriginGate`); kurtarma, transkripti bu kayıtla biten oturumu **bitmiş** sayar | `trajectory_gate.go`, `coordination.go` `RecoverOrphanedTurns`, test `TestRecoverSkipsTrailingGateNote` |
+| Otomasyonun açtığı oturum reçeteli koordinatör ajandaysa listede ayrı bir "planlandı" rota olarak da beliriyordu | Başka bir rotanın üyesinin başlattığı kök oturum önce o rotaya **düğüm** olarak bağlanır; bağlandıysa create'te tohumlanmaz. Gerçekten worker açarsa `bindSpawn` → `EnsureTrajectory` o anda kendi rotasını kurar | `trajectory_binder.go` `onSessionChangeForTrajectory` / `bindForkedSession` (bool döner) |
+
 ## 10. F5 — Kapılar ve kanvastan müdahale + F4-v2 oto-budama (2026-09-03)
 
 Dal `rota/f5-gates-canvas` (F4'ün üstüne).
