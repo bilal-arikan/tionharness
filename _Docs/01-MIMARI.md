@@ -84,6 +84,12 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 
 ### 7. Diğer Modüller
 - **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; **stdio + Streamable HTTP** taşıma. Kalıcı bağlantı havuzu (`pool.go`) turlar arası paylaşılır; hibrit kapsam (`scope: shared|scoped`) ile per-`(session,agent)` izole bağlantı mümkün (bkz. `52-MCP-GATEWAY.md`).
+- **`internal/agent`'tan ayrılan saf paketler (2026-09-03, `_Docs/81`):** `internal/climcp`
+  (claude-cli `--mcp-config`/`--tools`/`--settings` üretimi, `Host` arayüzü),
+  `internal/trajectory` (Rota graf mantığı, özet, geçiş differ'ı, reçete istatistikleri),
+  `internal/mcp/repair` (MCP çağrı koruması: argüman ön-kontrolü, not-indexed onarımı,
+  başarısızlık serisi/breaker, sunucu-yok notu), `internal/flows` (state-delta yazıcısı,
+  varsayılan flow tohumlama). Hiçbiri `internal/agent`'ı import etmez (`scripts/depcheck.sh`).
 - **Görevler (ayrı paket yok):** Kanban/pano + atama + yürütme mantığı `internal/db` (model+store) + `internal/api` + `internal/agent/executor.go` içinde yaşar — ayrı bir `internal/tasks` paketi yoktur.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).

@@ -2,6 +2,18 @@
 
 > **Özet (2026-09-03):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Paket bölme, adım 1/2/3/5 (2026-09-03) ✅
+
+`_Docs/81` planının mekanik olarak güvenli adımları uygulandı, her adım ayrı commit ve yeşil
+`go test`: **`internal/climcp`** (claude-cli config üretimi; `Host` arayüzü + `agent.cliHost`
+adaptörü), **`internal/trajectory`** (Rota graf/özet/geçiş/reçete istatistikleri; `agent`'ta
+tip alias'ları), **`internal/mcp/repair`** (MCP çağrı koruması; `mcp.ProjectIDForPath` ortak
+proje-id kuralı), **`internal/flows`** (state-delta yazıcısı + varsayılan flow tohumlama).
+`internal/agent` 62.603 → 58.412 satır; `scripts/depcheck.sh` yeni paketlerin `agent`'ı
+import etmediğini `test.sh full` içinde doğrular. Adım 4 (`coordination`), 6 (`subagent`) ve
+7 (`api`) mekanik taşıma değil arayüz tasarımı gerektirdiği için ertelendi; gerekçe ve
+ölçüm `_Docs/81` §5–6.
+
 ## Ajan verimliliği: CLAUDE.md küçültme, proje skill'leri, LF normalizasyonu, kırık testler (2026-09-03) ✅
 
 Claude Code'un bu depoda daha tutarlı/hızlı çalışması için tek turda uygulanan paket:

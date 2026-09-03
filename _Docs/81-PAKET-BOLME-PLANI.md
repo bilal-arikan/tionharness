@@ -1,6 +1,8 @@
 # 81 — Paket Bölme Planı (`internal/agent`, `internal/api`)
 
-> **Özet (2026-09-03):** Plan; henüz uygulanmadı. `internal/agent` 323 dosya / 62.603
+> **Özet (2026-09-03):** Kısmen uygulandı — adım 1/2/3/5 tamam (dört yeni paket, ~4,5k
+> satır `internal/agent`'tan çıktı: 62.603 → 58.412), adım 4/6/7 tasarım gerektirdiği için
+> bekliyor (aşağıda §6). `internal/agent` 323 dosya / 62.603
 > satır, `internal/api` 269 / 46.351, `internal/tools` 190 / 31.820. Bu boyut ajan
 > aramalarını (grep, codebase-memory), derleme ve `go test ./internal/agent/` süresini
 > (65–78 sn) doğrudan uzatıyor. Bölme, `Runtime` üzerindeki yöntem kümelerinin ayrı
@@ -65,7 +67,40 @@
 - `_Docs/01-MIMARI.md` paket haritası güncellenir; `_Docs/80` §8 tablosuna yeni paketler
   eklenir.
 
-## 5. Yapılmayan
+## 5. Uygulama günlüğü (2026-09-03)
 
-Bu doküman yalnız plandır. 62k satırlık paketi tek seferde bölmek risklidir; her adım
-ayrı, testleri yeşil bir PR olmalıdır.
+| Adım | Paket | Satır | Commit | Not |
+|---|---|---:|---|---|
+| 1 | `internal/climcp` | 1.289 | `415b1647` | `Host` arayüzü (`EnabledServers`, `ServerGate`, `EnabledHooks`, tunable'lar, logger, debug); `agent.cliHost` adaptörü; saf testler sahte host ile, db-bağımlı olanlar `agent`'ta kaldı |
+| 2 | `internal/trajectory` | 1.324 | `75f27660` | graf/özet/geçiş differ'ı/reçete istatistikleri; `agent` tarafında `TrajectoryPlanPhase`/`TrajectoryTransition`/`RecipeStats` alias'ları, `api`/`workspace` dokunulmadı |
+| 3 | `internal/mcp/repair` | 1.312 | `0e7e84e1` | `Guard`, `FailStreaks`, `FailureCollector`, `CallKey`; proje-id kuralı `mcp.ProjectIDForPath` oldu (capabilities + repair tek kaynak) |
+| 5 | `internal/flows` | 586 | `067de343` | state-delta yazıcısı + varsayılan flow tohumlama/migrasyon; `workspace` yeni paketi çağırır |
+
+Bağımlılık yönü kapısı: `scripts/depcheck.sh` (`scripts/test.sh full` içinde) yeni paketlerin
+`internal/agent`'ı import etmediğini `go list -deps` ile doğrular.
+
+Ölçülen gerçek: `internal/agent`'ın kalan 58k satırının büyük kısmı `func (r *Runtime)`
+yöntemleridir (koordinasyon 4.386 satırda 94 Runtime yöntemi, yalnız ~313 satır saf yardımcı;
+otomasyon motoru `Runtime`, `LaunchRun`, tetikleyici sabitleri ve tur slotlarına doğrudan
+bağlı; subagent runner `Runtime`). Bunlar dosya taşımakla değil, önce bir arayüz
+(`SlotView`/`RunHost`) tasarlayıp yöntemleri o arayüz üzerinden yeniden yazmakla çıkar.
+
+## 6. Kalan adımlar (tasarım gerektirir)
+
+- **Adım 4 — `coordination`:** saf kısım küçük (`formatWorkerTree`, `parseStallVerdict`,
+  `slotIsStallCandidate`, `spawnclaim.go`); `coordSlot` ve `TurnStep` tipleri ile 94 yöntem
+  `Runtime`'a bağlı. Önce `SlotView` (salt-okunur slot görünümü) + `WorkerNotifier`
+  arayüzleri; sonra stall/situation/tree politikaları taşınır. Riskli bölge (stall
+  guard olayları), ayrı bir görev olmalı.
+- **Adım 6 — `subagent`:** profil sözleşmesi (`defaultSubagentProfiles`, allowlist)
+  `systemagents.go` ve `subagent_allowlist.go` ile iç içe; runner `Runtime`. Profil +
+  allowlist saf katmanı ~250 satır; kazancı küçük, `systemagents` ile birlikte ele alınmalı.
+- **Adım 7 — `internal/api` bölme:** 271 handler tek `server.go`'da kayıtlı; `chat_turn*`
+  (1,9k) ve `session*` (6k) kümeleri `Server` alanlarına bağlı. Alt paket için önce
+  `Server`'ın tur-kompozisyon bağımlılıklarının (`convo`, `providers`, `tun`, `hub`)
+  bir arayüze indirgenmesi gerekir.
+
+## 7. Yapılmayan
+
+Adım 4/6/7 bu turda uygulanmadı: mekanik taşıma değil arayüz tasarımı gerektiriyor ve
+koordinasyon kodu en çok olay üreten bölge. Her biri ayrı, testleri yeşil bir PR olmalıdır.

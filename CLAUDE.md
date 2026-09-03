@@ -51,7 +51,8 @@ scripts/test.sh full      # go test ./... -count=1 + vitest (~3-4 dk; teslimden 
 - `TIONHARNESS_ENABLE_SHELL=1` script tarafından ayarlanır; elle koşarken sen ayarla.
 - Harici araç isteyen testler `t.Skip` ile geçitlenir; goroutine başlatan test sonunda
   `drainSpawns(t, rt)` çağırır (ayrıntı `_Docs/80` §6).
-- Paket alt-kümesi geçidi kurma; `full` teslim kapısıdır.
+- Paket alt-kümesi geçidi kurma; `full` teslim kapısıdır (`scripts/depcheck.sh`'i de
+  koşar: `internal/{climcp,trajectory,mcp/repair,flows}` asla `internal/agent`'ı import edemez).
 
 ## Delegasyon
 
