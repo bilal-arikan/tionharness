@@ -1,4 +1,4 @@
-package agent
+package repair
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestFormatMCPFailureNote_NamesEveryServerAndReason(t *testing.T) {
-	note := formatMCPFailureNote([]mcpFailedServer{
+	note := FormatFailureNote([]FailedServer{
 		{Name: "playwright", Err: "dial tcp 127.0.0.1:9222: connect: connection refused"},
 		{Name: "codebase-memory", Err: "handshake timeout"},
 	})
@@ -19,20 +19,20 @@ func TestFormatMCPFailureNote_NamesEveryServerAndReason(t *testing.T) {
 }
 
 func TestFormatMCPFailureNote_EmptyWhenNothingFailed(t *testing.T) {
-	if got := formatMCPFailureNote(nil); got != "" {
+	if got := FormatFailureNote(nil); got != "" {
 		t.Errorf("note = %q, want empty", got)
 	}
 }
 
 func TestMCPFailureCollector_SortedAndDeduped(t *testing.T) {
-	ctx, c := withMCPFailures(context.Background())
-	if mcpFailuresFrom(ctx) != c {
+	ctx, c := WithFailures(context.Background())
+	if FailuresFrom(ctx) != c {
 		t.Fatal("collector not reachable from ctx")
 	}
-	c.record("zeta", "boom")
-	c.record("alpha", "first")
-	c.record("alpha", "second") // last write wins, one entry
-	got := c.list()
+	c.Record("zeta", "boom")
+	c.Record("alpha", "first")
+	c.Record("alpha", "second") // last write wins, one entry
+	got := c.List()
 	if len(got) != 2 {
 		t.Fatalf("list = %+v, want 2 entries", got)
 	}
@@ -45,37 +45,37 @@ func TestMCPFailureCollector_SortedAndDeduped(t *testing.T) {
 }
 
 func TestMCPFailureCollector_NilIsNoOp(t *testing.T) {
-	var c *mcpFailureCollector
-	c.record("x", "boom") // must not panic
-	if got := c.list(); got != nil {
+	var c *FailureCollector
+	c.Record("x", "boom") // must not panic
+	if got := c.List(); got != nil {
 		t.Errorf("list = %+v, want nil", got)
 	}
 	// A context without a collector yields nil, so build paths need no branch.
-	if mcpFailuresFrom(context.Background()) != nil {
+	if FailuresFrom(context.Background()) != nil {
 		t.Error("bare context returned a collector")
 	}
 }
 
 // A reasonless failure must still be reported: the server is down either way.
 func TestMCPFailureCollector_EmptyReasonStillReported(t *testing.T) {
-	_, c := withMCPFailures(context.Background())
-	c.record("srv", "")
-	note := formatMCPFailureNote(c.list())
+	_, c := WithFailures(context.Background())
+	c.Record("srv", "")
+	note := FormatFailureNote(c.List())
 	if !strings.Contains(note, "srv (no error text)") {
 		t.Errorf("note = %q", note)
 	}
 }
 
 func TestShortMCPErr(t *testing.T) {
-	if got := shortMCPErr("  line one\nline  two \r"); got != "line one line two" {
+	if got := shortErr("  line one\nline  two \r"); got != "line one line two" {
 		t.Errorf("collapse = %q", got)
 	}
-	if got := shortMCPErr(""); got != "no error text" {
+	if got := shortErr(""); got != "no error text" {
 		t.Errorf("empty = %q", got)
 	}
-	long := strings.Repeat("x", mcpErrTextLimit+50)
-	got := shortMCPErr(long)
-	if len(got) <= mcpErrTextLimit || !strings.HasSuffix(got, "…") {
+	long := strings.Repeat("x", errTextLimit+50)
+	got := shortErr(long)
+	if len(got) <= errTextLimit || !strings.HasSuffix(got, "…") {
 		t.Errorf("long error not truncated: len=%d", len(got))
 	}
 }

@@ -52,7 +52,7 @@ type DeadToolActivator func(ctx context.Context, token, bareName string) bool
 
 // deadToolRepair is the per-turn repair state. It carries no Runtime reference —
 // activation and journalling are injected — so it stays unit-testable without a
-// live workspace, mirroring mcpRepair in this package.
+// live workspace, mirroring repair.Guard (internal/mcp/repair).
 type deadToolRepair struct {
 	// bearer is the turn's per-run Interaction token: the address activation is
 	// applied to, since the activated set is per session/run, not global.

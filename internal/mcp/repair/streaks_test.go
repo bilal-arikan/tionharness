@@ -1,4 +1,4 @@
-package agent
+package repair
 
 import "testing"
 
@@ -6,11 +6,11 @@ import "testing"
 // escalation useful rather than noisy: the threshold is crossed exactly once per
 // outage, and a server that recovers starts over.
 func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
-	var s mcpFailStreaks
+	var s FailStreaks
 
 	crossings := 0
-	for i := 0; i < mcpFailStreakThreshold*3; i++ {
-		if s.note("cbm") == mcpFailStreakThreshold {
+	for i := 0; i < FailStreakThreshold*3; i++ {
+		if s.Note("cbm") == FailStreakThreshold {
 			crossings++
 		}
 	}
@@ -20,10 +20,10 @@ func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
 
 	// Recovery, then a second outage: the threshold must fire again, or a server
 	// that flaps all day would escalate only once in the life of the process.
-	s.clear("cbm")
+	s.Clear("cbm")
 	crossings = 0
-	for i := 0; i < mcpFailStreakThreshold; i++ {
-		if s.note("cbm") == mcpFailStreakThreshold {
+	for i := 0; i < FailStreakThreshold; i++ {
+		if s.Note("cbm") == FailStreakThreshold {
 			crossings++
 		}
 	}
@@ -35,26 +35,26 @@ func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
 // TestMCPFailStreakIsPerServer confirms one broken server cannot drag another
 // across the threshold — the incident had two servers failing for unrelated reasons.
 func TestMCPFailStreakIsPerServer(t *testing.T) {
-	var s mcpFailStreaks
-	for i := 0; i < mcpFailStreakThreshold; i++ {
-		s.note("cbm")
+	var s FailStreaks
+	for i := 0; i < FailStreakThreshold; i++ {
+		s.Note("cbm")
 	}
-	if got := s.note("playwright"); got != 1 {
+	if got := s.Note("playwright"); got != 1 {
 		t.Fatalf("playwright streak = %d, want 1 (streaks must not be shared)", got)
 	}
 	// Clearing one must not clear the other.
-	s.clear("playwright")
-	if got := s.note("cbm"); got != mcpFailStreakThreshold+1 {
-		t.Fatalf("cbm streak = %d, want %d", got, mcpFailStreakThreshold+1)
+	s.Clear("playwright")
+	if got := s.Note("cbm"); got != FailStreakThreshold+1 {
+		t.Fatalf("cbm streak = %d, want %d", got, FailStreakThreshold+1)
 	}
 }
 
 // TestMCPFailStreakClearOnUnknownServerIsSafe: the reset loop runs over every
 // configured server, including ones that have never failed.
 func TestMCPFailStreakClearOnUnknownServerIsSafe(t *testing.T) {
-	var s mcpFailStreaks
-	s.clear("never-seen")
-	if got := s.note("never-seen"); got != 1 {
+	var s FailStreaks
+	s.Clear("never-seen")
+	if got := s.Note("never-seen"); got != 1 {
 		t.Fatalf("streak = %d, want 1", got)
 	}
 }

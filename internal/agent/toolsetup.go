@@ -13,6 +13,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/codemode"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -536,7 +537,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// A failed server silently loses ALL of its tools for the turn, so the log
 		// line is not enough: hand the failures to the turn's collector (when one is
 		// wired) so the tool loop can card them once. See mcpnotice.go.
-		failures := mcpFailuresFrom(ctx)
+		failures := repair.FailuresFrom(ctx)
 		// Circuit breaker (mcpescalate.go): a server that failed the last
 		// mcpFailStreakThreshold builds in a row is not dialed again until its
 		// cooldown passes. It is carded as skipped, exactly like a failed one, and
@@ -545,9 +546,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// as long as the caller's context lived (2026-09-02, codebase-memory-mcp).
 		live := make([]mcp.ServerConfig, 0, len(cfgs))
 		for _, cfg := range cfgs {
-			if isOpen, retryIn, streak := r.mcpFailStreaks.open(cfg.Name); isOpen {
+			if isOpen, retryIn, streak := r.mcpFailStreaks.Open(cfg.Name); isOpen {
 				retry := retryIn.Round(time.Second)
-				failures.record(cfg.Name, fmt.Sprintf("skipped after %d consecutive failures; next probe in %s", streak, retry))
+				failures.Record(cfg.Name, fmt.Sprintf("skipped after %d consecutive failures; next probe in %s", streak, retry))
 				r.logger.Debug("mcp catalog: breaker open, server skipped", "server", cfg.Name, "consecutive", streak, "retry_in", retry)
 				continue
 			}
@@ -557,22 +558,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		for name, e := range errs {
 			// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
 			// same WARN forever made a workspace where no turn could start look normal.
-			streak := r.mcpFailStreaks.note(name)
+			streak := r.mcpFailStreaks.Note(name)
 			switch {
-			case streak == mcpFailStreakThreshold:
+			case streak == repair.FailStreakThreshold:
 				r.logger.Error("mcp catalog build failing repeatedly; this server's tools are unavailable",
 					"server", name, "consecutive", streak, "error", e)
 			default:
 				r.logger.Warn("mcp catalog build failed", "server", name, "consecutive", streak, "error", e)
 			}
-			failures.record(name, e)
+			failures.Record(name, e)
 		}
 		// Reset the streak for every server that catalogued fine this turn, so the
 		// threshold measures the current outage rather than a lifetime total. Only
 		// the servers actually dialed count: a skipped one must keep its streak.
 		for _, cfg := range live {
 			if _, bad := errs[cfg.Name]; !bad {
-				r.mcpFailStreaks.clear(cfg.Name)
+				r.mcpFailStreaks.Clear(cfg.Name)
 			}
 		}
 		caller := func(cctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error) {

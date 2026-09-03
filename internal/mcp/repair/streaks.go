@@ -1,4 +1,4 @@
-package agent
+package repair
 
 import (
 	"sync"
@@ -17,9 +17,9 @@ import (
 // exactly like normal operation. This adds the missing distinction: a streak of
 // consecutive failures for the SAME server crosses into ERROR exactly once, so a
 // standing outage is visible at a glance without the transient case becoming noise.
-const mcpFailStreakThreshold = 3
+const FailStreakThreshold = 3
 
-// mcpBreakerCooldown is how long a server that crossed the threshold is skipped
+// BreakerCooldown is how long a server that crossed the threshold is skipped
 // before the next build probes it again.
 //
 // On 2026-09-02 codebase-memory-mcp hung in initialize (nine instances plus a
@@ -29,36 +29,36 @@ const mcpFailStreakThreshold = 3
 // looked like the app had stopped. The breaker turns a hung server into a
 // missing server: after the threshold it is skipped for this long, recorded on
 // the turn's failure card as "skipped", and probed once per cooldown.
-const mcpBreakerCooldown = 45 * time.Second
+const BreakerCooldown = 45 * time.Second
 
-// mcpFailStreaks tracks consecutive catalog-build failures per server name and
+// FailStreaks tracks consecutive catalog-build failures per server name and
 // the breaker window they open. Process-local and reset on success, like
 // anomalyNotified: this is an operational signal, not persisted state.
-type mcpFailStreaks struct {
+type FailStreaks struct {
 	mu  sync.Mutex
-	m   map[string]*mcpFailState
+	m   map[string]*failState
 	now func() time.Time // injectable clock for tests; nil => time.Now
 }
 
-type mcpFailState struct {
+type failState struct {
 	streak    int64
 	openUntil time.Time
 }
 
-func (s *mcpFailStreaks) clock() time.Time {
+func (s *FailStreaks) clock() time.Time {
 	if s.now != nil {
 		return s.now()
 	}
 	return time.Now()
 }
 
-func (s *mcpFailStreaks) state(name string) *mcpFailState {
+func (s *FailStreaks) state(name string) *failState {
 	if s.m == nil {
-		s.m = map[string]*mcpFailState{}
+		s.m = map[string]*failState{}
 	}
 	st := s.m[name]
 	if st == nil {
-		st = &mcpFailState{}
+		st = &failState{}
 		s.m[name] = st
 	}
 	return st
@@ -67,7 +67,7 @@ func (s *mcpFailStreaks) state(name string) *mcpFailState {
 // note increments the server's streak and returns the new value. EVERY failure
 // (re)opens the breaker for one cooldown.
 //
-// Opening only at mcpFailStreakThreshold left the expensive case unprotected: a
+// Opening only at FailStreakThreshold left the expensive case unprotected: a
 // server that hangs in initialize costs a full dial deadline PER build, so a cold
 // outage burned threshold x DefaultDialTimeout (3 x 20s) of blocked UI before the
 // breaker could skip anything -- which is precisely the minute-long freeze at
@@ -75,19 +75,19 @@ func (s *mcpFailStreaks) state(name string) *mcpFailState {
 // proof the server is not answering; make the next build skip it and probe once
 // per cooldown instead. The streak still counts up independently, so ERROR
 // escalation continues to fire only at the threshold and a blip stays at WARN.
-func (s *mcpFailStreaks) note(name string) int64 {
+func (s *FailStreaks) Note(name string) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.state(name)
 	st.streak++
-	st.openUntil = s.clock().Add(mcpBreakerCooldown)
+	st.openUntil = s.clock().Add(BreakerCooldown)
 	return st.streak
 }
 
 // clear resets the server's streak (and closes its breaker) after a successful
 // catalog build. A server that recovers and fails again must escalate again --
 // the threshold measures a CURRENT outage, not a lifetime failure count.
-func (s *mcpFailStreaks) clear(name string) {
+func (s *FailStreaks) Clear(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if st := s.m[name]; st != nil {
@@ -100,7 +100,7 @@ func (s *mcpFailStreaks) clear(name string) {
 // until the next probe, and the current streak. Once the cooldown has passed
 // the breaker reads closed so exactly one build probes the server; a failed
 // probe re-opens it through note.
-func (s *mcpFailStreaks) open(name string) (isOpen bool, retryIn time.Duration, streak int64) {
+func (s *FailStreaks) Open(name string) (isOpen bool, retryIn time.Duration, streak int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.m[name]

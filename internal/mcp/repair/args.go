@@ -1,10 +1,18 @@
-package agent
+// Package repair is the MCP call guard of the native tool loop: argument
+// pre-checks and prefills (args.go), the not-indexed auto-repair of
+// codebase-memory calls (repair.go), the per-server failure streak / breaker
+// (streaks.go) and the "servers unavailable" turn notice (notice.go). It is pure
+// — no runtime, no store — so every rule is unit-tested in isolation; the loop
+// in internal/agent turns its verdicts into synthetic results and hints.
+// Extracted from internal/agent on 2026-09-03 (_Docs/81, step 3).
+package repair
 
 import (
 	"encoding/json"
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -17,7 +25,7 @@ import (
 // omission here means that call is either corrected or refused with an accurate
 // message, and never reaches the server in a shape whose error lies.
 
-// missingRequiredArgs returns the required properties the schema declares that
+// MissingRequiredArgs returns the required properties the schema declares that
 // input does not supply, sorted for a stable message. A schema that is absent,
 // unparsable, or declares no `required` array yields nothing — this guard only
 // ever acts on an explicit contract, never on a guess.
@@ -25,7 +33,7 @@ import (
 // A property counts as supplied when the key is present and its value is neither
 // JSON null nor an empty/blank string; `{"project": ""}` is exactly as unusable
 // to the server as omitting it.
-func missingRequiredArgs(schema, input json.RawMessage) []string {
+func MissingRequiredArgs(schema, input json.RawMessage) []string {
 	if len(schema) == 0 {
 		return nil
 	}
@@ -66,7 +74,7 @@ func argSupplied(raw json.RawMessage) bool {
 	return true
 }
 
-// prefillMCPArgs fills arguments TionHarness can derive itself when the model left
+// PrefillArgs fills arguments TionHarness can derive itself when the model left
 // them out. Today that is exactly one: `project` on a codebase-memory tool, which
 // is derivable from the session's working directory via the server's own
 // path→id rule. Returns the rewritten call and true when something was filled.
@@ -74,8 +82,8 @@ func argSupplied(raw json.RawMessage) bool {
 // It is deliberately narrow. Inventing values for arbitrary required arguments
 // would paper over real model mistakes; this one is a pure restatement of
 // context TionHarness already knows and the model has no reason to get right.
-func prefillMCPArgs(call providers.ToolCall, missing []string, sessionCwd string) (providers.ToolCall, bool) {
-	id := projectIDForPath(sessionCwd)
+func PrefillArgs(call providers.ToolCall, missing []string, sessionCwd string) (providers.ToolCall, bool) {
+	id := mcp.ProjectIDForPath(sessionCwd)
 	if id == "" {
 		return call, false
 	}
@@ -92,11 +100,11 @@ func prefillMCPArgs(call providers.ToolCall, missing []string, sessionCwd string
 	return call, false
 }
 
-// missingArgsMessage renders the model-facing refusal for a call that omitted
+// MissingArgsMessage renders the model-facing refusal for a call that omitted
 // required arguments. It names the fields and states plainly that the call was
 // never sent, so the model does not read the text as a server verdict about the
 // data it was asking for.
-func missingArgsMessage(tool string, missing []string) string {
+func MissingArgsMessage(tool string, missing []string) string {
 	return "This call to `" + tool + "` was not sent: it omits the required argument(s) " +
 		"`" + strings.Join(missing, "`, `") + "`. " +
 		"Re-issue the call with those arguments set. This is a local schema check — " +

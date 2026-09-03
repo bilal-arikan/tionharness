@@ -223,24 +223,7 @@ func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState) strin
 // [A-Za-z0-9-] is dropped. Empty in -> empty out. Kept in sync with the server's
 // naming so the agent can address the project without a discovery round-trip; the
 // context block still points the agent at list_projects if the guess ever misses.
-func projectIDForPath(p string) string {
-	p = strings.TrimSpace(p)
-	if p == "" {
-		return ""
-	}
-	b := make([]rune, 0, len(p))
-	for _, ch := range p {
-		switch {
-		case ch == '/' || ch == '\\' || ch == ':':
-			if len(b) > 0 && b[len(b)-1] != '-' {
-				b = append(b, '-')
-			}
-		case (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-':
-			b = append(b, ch)
-		}
-	}
-	return strings.Trim(string(b), "-")
-}
+func projectIDForPath(p string) string { return mcp.ProjectIDForPath(p) }
 
 // sessionCwd returns the session's EXPLICIT working directory (the repo the agent
 // operates on) from ctx, or "" when unset. Unlike effectiveWorkDir it does NOT

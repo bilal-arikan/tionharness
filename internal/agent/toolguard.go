@@ -2,11 +2,10 @@ package agent
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -79,10 +78,7 @@ func newToolGuard(cfg toolGuardConfig) *toolGuard {
 }
 
 // callKey collapses a tool call to a stable identity: name + input digest.
-func callKey(call providers.ToolCall) string {
-	sum := sha256.Sum256(call.Input)
-	return call.Name + ":" + hex.EncodeToString(sum[:8])
-}
+func callKey(call providers.ToolCall) string { return repair.CallKey(call) }
 
 // check runs BEFORE a call executes. With the hard stop disabled it always
 // allows (warnings ride the result text via observe). With it enabled, a call

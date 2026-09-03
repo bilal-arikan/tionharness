@@ -21,6 +21,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/market"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
 	"github.com/bilal-arikan/tionharness/internal/skills"
@@ -60,7 +61,7 @@ type Runtime struct {
 
 	// mcpFailStreaks counts consecutive MCP catalog-build failures per server so a
 	// standing outage escalates from WARN to a single ERROR (see mcpescalate.go).
-	mcpFailStreaks mcpFailStreaks
+	mcpFailStreaks repair.FailStreaks
 
 	// logs is the process-wide ring buffer of captured log entries, exposed to
 	// agents through the read_logs self-management tool. May be nil.

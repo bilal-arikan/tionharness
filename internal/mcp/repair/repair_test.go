@@ -1,4 +1,4 @@
-package agent
+package repair
 
 import (
 	"encoding/json"
@@ -39,25 +39,25 @@ func TestMCPRepair_FiresOnNativeLoopToolName(t *testing.T) {
 	if strings.HasPrefix(searchTool, "mcp__") {
 		t.Fatalf("registry namespace unexpectedly carries the CLI prefix: %q", searchTool)
 	}
-	m := newMCPRepair()
+	m := NewGuard()
 	call := mcpCall(searchTool, map[string]any{"project": "nope", "pattern": "foo"})
-	if _, ok := m.repair(call, errResult(notIndexedBody), ""); !ok {
+	if _, ok := m.Repair(call, errResult(notIndexedBody), ""); !ok {
 		t.Fatal("repair must fire on the native loop's <server>__<tool> name")
 	}
 }
 
 func TestMCPRepair_AutoCorrectsMissingProjectFromSessionCwd(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	call := mcpCall(searchTool, map[string]any{"pattern": "queryToValues"})
 
-	plan, ok := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
+	plan, ok := m.Repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
 	if plan.Fixed == nil {
 		t.Fatalf("expected an auto-corrected call, got hint-only: %q", plan.Hint)
 	}
-	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
+	if got := CallProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
 		t.Errorf("project = %q, want the session repo's id", got)
 	}
 	// Every other argument survives the rewrite.
@@ -69,61 +69,61 @@ func TestMCPRepair_AutoCorrectsMissingProjectFromSessionCwd(t *testing.T) {
 		t.Errorf("pattern lost in rewrite: %v", args)
 	}
 	// A corrected call must NOT be poisoned — the loop is about to run it.
-	if blocked, _ := m.precheck(*plan.Fixed); blocked {
+	if blocked, _ := m.Precheck(*plan.Fixed); blocked {
 		t.Error("the corrected call must not be pre-blocked")
 	}
 }
 
 func TestMCPRepair_AutoCorrectsSingleIndexedProject(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// No project argument, and the session cwd is unknown — one indexed repo is
 	// still an unambiguous answer.
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"pattern": "x"}), errResult(oneProjectBody), "")
+	plan, ok := m.Repair(mcpCall(searchTool, map[string]any{"pattern": "x"}), errResult(oneProjectBody), "")
 	if !ok || plan.Fixed == nil {
 		t.Fatalf("expected auto-correction to the only indexed project; plan=%+v", plan)
 	}
-	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-SampleRepo" {
+	if got := CallProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-SampleRepo" {
 		t.Errorf("project = %q", got)
 	}
 }
 
 func TestMCPRepair_AutoCorrectsBareRepoName(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// The model named the repo instead of the project id.
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "TionHarness"}), errResult(notIndexedBody), "")
+	plan, ok := m.Repair(mcpCall(searchTool, map[string]any{"project": "TionHarness"}), errResult(notIndexedBody), "")
 	if !ok || plan.Fixed == nil {
 		t.Fatalf("expected a bare repo name to resolve; plan=%+v", plan)
 	}
-	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
+	if got := CallProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
 		t.Errorf("project = %q", got)
 	}
 }
 
 func TestMCPRepair_AmbiguousArgumentIsNotGuessed(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// "Projects" suffix-matches nothing, cwd is unknown, and two repos are indexed
 	// → no single defensible answer, so the model must be told rather than sent to
 	// an arbitrary repo.
 	call := mcpCall(searchTool, map[string]any{"project": "some-other-repo"})
-	plan, ok := m.repair(call, errResult(notIndexedBody), "")
+	plan, ok := m.Repair(call, errResult(notIndexedBody), "")
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
 	if plan.Fixed != nil {
-		t.Fatalf("must not guess between two projects; got %q", callProjectArg(*plan.Fixed))
+		t.Fatalf("must not guess between two projects; got %q", CallProjectArg(*plan.Fixed))
 	}
 	if !strings.Contains(plan.Hint, "some-other-repo") {
 		t.Errorf("hint should quote the rejected argument; got %q", plan.Hint)
 	}
-	if blocked, _ := m.precheck(call); !blocked {
+	if blocked, _ := m.Precheck(call); !blocked {
 		t.Error("an uncorrectable call must be poisoned against an identical repeat")
 	}
 }
 
 func TestMCPRepair_MissingArgumentHintDoesNotClaimUnindexed(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// Missing project AND no way to derive it (unknown cwd, two candidates).
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"pattern": "x"}), errResult(notIndexedBody), "")
+	plan, ok := m.Repair(mcpCall(searchTool, map[string]any{"pattern": "x"}), errResult(notIndexedBody), "")
 	if !ok || plan.Fixed != nil {
 		t.Fatalf("expected a hint-only plan; plan=%+v", plan)
 	}
@@ -138,16 +138,16 @@ func TestMCPRepair_MissingArgumentHintDoesNotClaimUnindexed(t *testing.T) {
 }
 
 func TestMCPRepair_RewritesOnlyOncePerCall(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	call := mcpCall(searchTool, map[string]any{"pattern": "x"})
 
-	plan, _ := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
+	plan, _ := m.Repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if plan.Fixed == nil {
 		t.Fatal("setup: expected the first attempt to auto-correct")
 	}
 	// The corrected call failed too: the second pass must fall back to guidance
 	// instead of rewriting again (which would ping-pong with the server).
-	plan2, ok := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
+	plan2, ok := m.Repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire on the retry failure")
 	}
@@ -160,11 +160,11 @@ func TestMCPRepair_RewritesOnlyOncePerCall(t *testing.T) {
 }
 
 func TestMCPRepair_StartsIndexWhenSessionRepoAbsent(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// The session works on a repo the server has never indexed, and the argument
 	// cannot be corrected to it.
 	cwd := `C:\Users\user\Desktop\Projects\brand-new`
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "other"}), errResult(notIndexedBody), cwd)
+	plan, ok := m.Repair(mcpCall(searchTool, map[string]any{"project": "other"}), errResult(notIndexedBody), cwd)
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
@@ -177,11 +177,11 @@ func TestMCPRepair_StartsIndexWhenSessionRepoAbsent(t *testing.T) {
 }
 
 func TestMCPRepair_NoIndexWhenSessionRepoAlreadyIndexed(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	// Two indexed repos, cwd is one of them, argument names neither → hint only.
 	// Re-indexing an already-indexed repo here would be busywork.
-	m.repaired[callKey(mcpCall(searchTool, map[string]any{"project": "zzz"}))] = true
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "zzz"}), errResult(notIndexedBody), tionharnessCwd)
+	m.repaired[CallKey(mcpCall(searchTool, map[string]any{"project": "zzz"}))] = true
+	plan, ok := m.Repair(mcpCall(searchTool, map[string]any{"project": "zzz"}), errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
@@ -191,36 +191,36 @@ func TestMCPRepair_NoIndexWhenSessionRepoAlreadyIndexed(t *testing.T) {
 }
 
 func TestMCPRepair_IgnoresSuccessAndNonMCP(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 
 	// A successful MCP call must not poison anything.
 	okCall := mcpCall(searchTool, map[string]any{"project": "good"})
-	if _, ok := m.repair(okCall, providers.ToolResult{Content: `{"results":[]}`, IsError: false}, ""); ok {
+	if _, ok := m.Repair(okCall, providers.ToolResult{Content: `{"results":[]}`, IsError: false}, ""); ok {
 		t.Error("repair must not fire on a successful result")
 	}
-	if blocked, _ := m.precheck(okCall); blocked {
+	if blocked, _ := m.Precheck(okCall); blocked {
 		t.Error("a successful call must not be poisoned")
 	}
 
 	// A built-in tool that happens to carry the marker text is out of scope.
-	biCall := mcpCall("Grep", map[string]any{"pattern": mcpNotIndexedMarker})
-	if _, ok := m.repair(biCall, errResult(mcpNotIndexedMarker), ""); ok {
+	biCall := mcpCall("Grep", map[string]any{"pattern": NotIndexedMarker})
+	if _, ok := m.Repair(biCall, errResult(NotIndexedMarker), ""); ok {
 		t.Error("repair must only act on namespaced MCP tools")
 	}
-	if blocked, _ := m.precheck(biCall); blocked {
+	if blocked, _ := m.Precheck(biCall); blocked {
 		t.Error("built-in tools must never be precheck-blocked")
 	}
 }
 
 func TestMCPRepair_DifferentArgsNotBlocked(t *testing.T) {
-	m := newMCPRepair()
+	m := NewGuard()
 	bad := mcpCall(searchTool, map[string]any{"project": "some-other-repo"})
-	if _, ok := m.repair(bad, errResult(notIndexedBody), ""); !ok {
+	if _, ok := m.Repair(bad, errResult(notIndexedBody), ""); !ok {
 		t.Fatal("setup: expected repair to fire")
 	}
 	// Same tool, corrected argument → must be allowed through (not the poisoned key).
 	fixed := mcpCall(searchTool, map[string]any{"project": "C-Users-user-Desktop-Projects-TionHarness"})
-	if blocked, _ := m.precheck(fixed); blocked {
+	if blocked, _ := m.Precheck(fixed); blocked {
 		t.Error("a call with corrected arguments must not be blocked")
 	}
 }

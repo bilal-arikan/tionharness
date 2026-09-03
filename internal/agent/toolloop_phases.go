@@ -9,6 +9,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -61,7 +62,7 @@ type toolLoopTurn struct {
 	keepRecent      int
 	guard           *toolGuard
 	guardHaltReason string
-	repair          *mcpRepair
+	repair          *repair.Guard
 	partial         strings.Builder
 	steerRole       string
 	batchSeq        int
@@ -388,14 +389,14 @@ func (t *toolLoopTurn) prepareNativeLoop() (resp *providers.Response, steps []Tu
 	// Collect per-server MCP catalog failures during the build so the turn can
 	// report them once (mcpnotice.go); without this they are log-only and the
 	// missing tools look like they never existed.
-	ctx, mcpFailures := withMCPFailures(t.ctx)
+	ctx, mcpFailures := repair.WithFailures(t.ctx)
 	t.ctx = ctx
 	t.reg = t.r.buildRegistry(t.ctx, t.agent)
 	// One card per turn (not per tool call) naming every MCP server that failed
 	// its catalog build, with the reason — so a missing tool reads as "the server
 	// is down" instead of "that tool does not exist".
-	if note := formatMCPFailureNote(mcpFailures.list()); note != "" {
-		st := TurnStep{Kind: StepRecovery, Reason: mcpFailureReason, Text: note}
+	if note := repair.FormatFailureNote(mcpFailures.List()); note != "" {
+		st := TurnStep{Kind: StepRecovery, Reason: repair.FailureReason, Text: note}
 		t.mcpNote = &st
 		t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugError, AgentID: t.agent.ID, Detail: note, Err: true})
 	}
@@ -527,7 +528,7 @@ func (t *toolLoopTurn) initLoopState() {
 	// whose `project` is unindexed fails with a body the model does not act on, so
 	// it loops. This breaks the loop on the first repeat — independent of the loop
 	// guardrail's hard-stop setting. Per-turn, isolated to mcprepair.go.
-	t.repair = newMCPRepair()
+	t.repair = repair.NewGuard()
 	// Steer messages ride the operator channel ({"role":"system"} in messages)
 	// on models that support it — cache-safe, non-spoofable, and valid between a
 	// tool_result user turn and the next assistant turn. Elsewhere they stay
@@ -951,7 +952,7 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	// a call that already failed this turn because its `project` is unindexed.
 	// Hitting the server again would return the same error; instead feed the
 	// recovery instruction (call list_projects, copy an exact project id).
-	if blocked, msg := t.repair.precheck(call); blocked {
+	if blocked, msg := t.repair.Precheck(call); blocked {
 		t.r.logger.Info("mcp call blocked by not-indexed repair", "agent", t.agent.ID, "tool", call.Name)
 		t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair_block", Detail: call.Name, Err: true})
 		b.results = append(b.results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
@@ -967,15 +968,15 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	// with an accurate message. Letting it through means the model reads the
 	// server's inference about an incomplete call, which for this server
 	// reports a missing argument as an unindexed project.
-	if missing := missingRequiredArgs(t.reg.MCPSchema(call.Name), call.Input); len(missing) > 0 {
-		if fixed, ok := prefillMCPArgs(call, missing, t.r.sessionCwd(t.ctx)); ok {
+	if missing := repair.MissingRequiredArgs(t.reg.MCPSchema(call.Name), call.Input); len(missing) > 0 {
+		if fixed, ok := repair.PrefillArgs(call, missing, t.r.sessionCwd(t.ctx)); ok {
 			t.r.logger.Info("mcp call prefilled", "agent", t.agent.ID, "tool", call.Name, "args", strings.Join(missing, ","))
 			t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_prefill", Detail: call.Name})
 			call = fixed
-			missing = missingRequiredArgs(t.reg.MCPSchema(call.Name), call.Input)
+			missing = repair.MissingRequiredArgs(t.reg.MCPSchema(call.Name), call.Input)
 		}
 		if len(missing) > 0 {
-			msg := missingArgsMessage(call.Name, missing)
+			msg := repair.MissingArgsMessage(call.Name, missing)
 			t.r.logger.Info("mcp call missing required args", "agent", t.agent.ID, "tool", call.Name, "args", strings.Join(missing, ","))
 			t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_args_block", Detail: call.Name, Err: true})
 			b.results = append(b.results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
@@ -1139,10 +1140,10 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 	// for it), start a background index of the session's repo, or append the
 	// recovery instruction and remember the call so an identical repeat is
 	// refused above before it re-hits the server.
-	if plan, ok := t.repair.repair(call, res, t.r.sessionCwd(t.ctx)); ok {
+	if plan, ok := t.repair.Repair(call, res, t.r.sessionCwd(t.ctx)); ok {
 		switch {
 		case plan.Fixed != nil:
-			t.r.logger.Info("mcp call auto-repaired", "agent", t.agent.ID, "tool", call.Name, "project", callProjectArg(*plan.Fixed))
+			t.r.logger.Info("mcp call auto-repaired", "agent", t.agent.ID, "tool", call.Name, "project", repair.CallProjectArg(*plan.Fixed))
 			t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair_retry", Detail: call.Name})
 			// Surface the otherwise-silent fix-up in the chat trace too,
 			// not only in the debug journal.
@@ -1165,7 +1166,7 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 			call.Input = plan.Fixed.Input
 			// A retry that failed again gets the normal treatment (hint + poison),
 			// so a broken repair degrades to the old behaviour instead of hiding.
-			if plan2, ok2 := t.repair.repair(call, res, t.r.sessionCwd(t.ctx)); ok2 {
+			if plan2, ok2 := t.repair.Repair(call, res, t.r.sessionCwd(t.ctx)); ok2 {
 				res.Content += plan2.Hint
 				if plan2.IndexPath != "" {
 					t.r.EnsureCodebaseIndexed(t.ctx, plan2.IndexPath)

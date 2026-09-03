@@ -1,20 +1,21 @@
-package agent
+package repair
 
 import (
 	"encoding/json"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-// mcpNotIndexedMarker is the exact substring codebase-memory-mcp (and any MCP
+// NotIndexedMarker is the exact substring codebase-memory-mcp (and any MCP
 // server following the same convention) returns in an error result when the
 // requested project has never been indexed. Matching on the message body — not
 // a status code — is deliberate: MCP surfaces this as an ordinary isError tool
 // result, so the body is the only reliable signal.
-const mcpNotIndexedMarker = "project not found or not indexed"
+const NotIndexedMarker = "project not found or not indexed"
 
-// mcpNamespaceSep separates server from tool in a namespaced MCP tool name.
+// namespaceSep separates server from tool in a namespaced MCP tool name.
 // Two forms reach this guard and BOTH must match:
 //
 //   - claude-cli form:  mcp__<server>__<tool>
@@ -24,12 +25,12 @@ const mcpNotIndexedMarker = "project not found or not indexed"
 // TionHarness's own agentic loop — the only loop it can actually run in — because
 // the registry never produces that prefix. Built-in tool names carry no "__",
 // so this separator is an unambiguous MCP marker.
-const mcpNamespaceSep = "__"
+const namespaceSep = "__"
 
-// isMCPToolCall reports whether name is a namespaced MCP tool call.
-func isMCPToolCall(name string) bool { return strings.Contains(name, mcpNamespaceSep) }
+// IsMCPToolCall reports whether name is a namespaced MCP tool call.
+func IsMCPToolCall(name string) bool { return strings.Contains(name, namespaceSep) }
 
-// mcpRepair is a per-turn repair for MCP tool calls that fail because their
+// Guard is a per-turn repair for MCP tool calls that fail because their
 // `project` argument names a repo the server has not indexed. Without it the
 // model reads a raw JSON error, never connects it to a recovery action, and
 // re-issues the identical call — a tight loop the generic loop guardrail only
@@ -45,16 +46,16 @@ func isMCPToolCall(name string) bool { return strings.Contains(name, mcpNamespac
 // It is side-effect free beyond its own poisoned-set state; the loop owns
 // turning its verdicts into synthetic results and appended hints, mirroring the
 // toolGuard pattern in this package.
-type mcpRepair struct {
+type Guard struct {
 	poisoned map[string]bool // callKey → already answered with a not-indexed repair this turn
 	repaired map[string]bool // callKey → already auto-corrected once this turn (no second rewrite)
 }
 
-func newMCPRepair() *mcpRepair {
-	return &mcpRepair{poisoned: map[string]bool{}, repaired: map[string]bool{}}
+func NewGuard() *Guard {
+	return &Guard{poisoned: map[string]bool{}, repaired: map[string]bool{}}
 }
 
-// repairPlan is the verdict repair() hands back to the loop. Exactly one of the
+// Plan is the verdict repair() hands back to the loop. Exactly one of the
 // three fields drives the loop's next move; Hint may accompany IndexPath.
 //
 //   - Fixed non-nil    → re-run this corrected call once, in place of the failed one.
@@ -62,9 +63,9 @@ func newMCPRepair() *mcpRepair {
 //   - Hint non-empty   → append to the result body so the model reads the recovery
 //     instruction where the failure happened.
 //
-// Keeping the decision data-only leaves mcpRepair free of Runtime dependencies,
+// Keeping the decision data-only leaves Guard free of Runtime dependencies,
 // so it stays unit-testable without a live workspace.
-type repairPlan struct {
+type Plan struct {
 	Fixed     *providers.ToolCall
 	IndexPath string
 	Hint      string
@@ -76,11 +77,11 @@ type repairPlan struct {
 // NOT gated on a hard-stop setting: repeating a call we already KNOW resolves the
 // project the same (unindexed) way cannot make progress, so it is always
 // short-circuited.
-func (m *mcpRepair) precheck(call providers.ToolCall) (blocked bool, msg string) {
-	if !isMCPToolCall(call.Name) {
+func (m *Guard) Precheck(call providers.ToolCall) (blocked bool, msg string) {
+	if !IsMCPToolCall(call.Name) {
 		return false, ""
 	}
-	if m.poisoned[callKey(call)] {
+	if m.poisoned[CallKey(call)] {
 		return true, mcpRepairInstruction(call.Name, "", nil)
 	}
 	return false, ""
@@ -100,17 +101,17 @@ func (m *mcpRepair) precheck(call providers.ToolCall) (blocked bool, msg string)
 //     raw server error is kept, so the model still sees available_projects).
 //
 // Returns (zero, false) for anything else, leaving the result untouched.
-func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult, sessionCwd string) (repairPlan, bool) {
-	if !res.IsError || !isMCPToolCall(call.Name) {
-		return repairPlan{}, false
+func (m *Guard) Repair(call providers.ToolCall, res providers.ToolResult, sessionCwd string) (Plan, bool) {
+	if !res.IsError || !IsMCPToolCall(call.Name) {
+		return Plan{}, false
 	}
-	if !strings.Contains(res.Content, mcpNotIndexedMarker) {
-		return repairPlan{}, false
+	if !strings.Contains(res.Content, NotIndexedMarker) {
+		return Plan{}, false
 	}
-	key := callKey(call)
+	key := CallKey(call)
 	available := parseAvailableProjects(res.Content)
-	want := callProjectArg(call)
-	preferred := projectIDForPath(sessionCwd)
+	want := CallProjectArg(call)
+	preferred := mcp.ProjectIDForPath(sessionCwd)
 
 	// (1) Auto-correct — at most once per call, so a rewrite that still fails
 	// cannot ping-pong with the server.
@@ -119,7 +120,7 @@ func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult, se
 			corrected, err := withProjectArg(call, fixed)
 			if err == nil {
 				m.repaired[key] = true
-				return repairPlan{Fixed: &corrected}, true
+				return Plan{Fixed: &corrected}, true
 			}
 			// A malformed Input cannot be rewritten; fall through to the hint so
 			// the failure stays visible instead of being silently dropped.
@@ -127,7 +128,7 @@ func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult, se
 	}
 
 	m.poisoned[key] = true
-	plan := repairPlan{Hint: mcpRepairInstruction(call.Name, want, available)}
+	plan := Plan{Hint: mcpRepairInstruction(call.Name, want, available)}
 	// (2) The session's own repo is not in the index — trigger it for later turns.
 	if preferred != "" && !containsProject(available, preferred) {
 		plan.IndexPath = sessionCwd
@@ -136,10 +137,10 @@ func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult, se
 	return plan, true
 }
 
-// callProjectArg reads the `project` argument of an MCP call. A missing field, a
+// CallProjectArg reads the `project` argument of an MCP call. A missing field, a
 // non-string value or malformed JSON all read as "" — the caller treats that as
 // "unspecified", which is exactly the case auto-correction exists for.
-func callProjectArg(call providers.ToolCall) string {
+func CallProjectArg(call providers.ToolCall) string {
 	var args struct {
 		Project string `json:"project"`
 	}
@@ -220,7 +221,7 @@ func resolveProjectID(want, preferred string, available []string) string {
 // ("C:\...\SampleRepo"). Ambiguity (two or more candidates) returns "".
 func matchProjectID(want string, available []string) string {
 	norm := strings.ToLower(want)
-	if p := projectIDForPath(want); p != "" {
+	if p := mcp.ProjectIDForPath(want); p != "" {
 		norm = strings.ToLower(p)
 	}
 	var found string
