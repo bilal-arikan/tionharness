@@ -1,4 +1,4 @@
-package agent
+package flows
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ func benchmarkFlowStates() []orchestration.State {
 	states := make([]orchestration.State, 100)
 	state := orchestration.State{Current: "0", Outputs: map[string]string{}}
 	for i := range states {
-		state = cloneFlowState(state)
+		state = CloneState(state)
 		state.Current = fmt.Sprintf("%d", i+1)
 		state.Steps = i + 1
 		state.Outputs[state.Current] = strings.Repeat("x", 32<<10)
@@ -28,14 +28,14 @@ func benchmarkFlowStates() []orchestration.State {
 
 func marshalFlowStates(states []orchestration.State, delta bool) (int64, error) {
 	var total int64
-	var writer *flowStateDeltaWriter
+	var writer *StateDeltaWriter
 	if delta {
-		writer = newFlowStateDeltaWriter("checkpoint", 0, orchestration.State{Outputs: map[string]string{}})
+		writer = NewStateDeltaWriter("checkpoint", 0, orchestration.State{Outputs: map[string]string{}})
 	}
 	for _, state := range states {
 		value := any(state)
 		if delta {
-			flowDelta, err := writer.next(state)
+			flowDelta, err := writer.Next(state)
 			if err != nil {
 				return 0, err
 			}

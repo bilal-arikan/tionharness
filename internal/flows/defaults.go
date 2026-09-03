@@ -1,4 +1,4 @@
-package agent
+package flows
 
 import (
 	"context"
@@ -92,7 +92,7 @@ func EnsureDefaultFlows(ctx context.Context, database *db.DB, storeDir string) e
 		}
 	}
 
-	agentID := firstAgentID(ctx, database)
+	agentID := FirstAgentID(ctx, database)
 
 	changed := false
 	for _, df := range defaultFlows {
@@ -168,9 +168,9 @@ func MigrateFlowsStartEnd(ctx context.Context, database *db.DB) error {
 	return nil
 }
 
-// firstAgentID returns the newest agent's id (ListAgents is sorted newest-first)
+// FirstAgentID returns the newest agent's id (ListAgents is sorted newest-first)
 // or "" when the workspace has no agents yet.
-func firstAgentID(ctx context.Context, database *db.DB) string {
+func FirstAgentID(ctx context.Context, database *db.DB) string {
 	agents, err := database.ListAgents(ctx)
 	if err != nil || len(agents) == 0 {
 		return ""

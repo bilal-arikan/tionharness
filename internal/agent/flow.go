@@ -10,6 +10,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
 	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
@@ -558,9 +559,9 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 		run.Error = fmt.Sprintf("load flow state journal: %v", journalErr)
 		return run
 	}
-	deltaWriter := newFlowStateDeltaWriter(checkpointID, sequence, st)
+	deltaWriter := flowpkg.NewStateDeltaWriter(checkpointID, sequence, st)
 	save := func(s orchestration.State) error {
-		delta, err := deltaWriter.next(s)
+		delta, err := deltaWriter.Next(s)
 		if err != nil {
 			return err
 		}

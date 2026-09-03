@@ -1,4 +1,4 @@
-package agent
+package flows
 
 import (
 	"testing"
@@ -8,15 +8,15 @@ import (
 
 func TestFlowStateDeltaAppendAndReplacement(t *testing.T) {
 	base := orchestration.State{Current: "a", Outputs: map[string]string{"old": "x"}, Trace: []orchestration.TraceEntry{{NodeID: "old"}}, Spawned: map[string][]string{"spawn": {"RUN1"}}}
-	w := newFlowStateDeltaWriter("checkpoint", 0, base)
-	next := cloneFlowState(base)
+	w := NewStateDeltaWriter("checkpoint", 0, base)
+	next := CloneState(base)
 	next.Current = "b"
 	next.Outputs["new"] = "large"
 	delete(next.Outputs, "old")
 	next.Trace = append(next.Trace, orchestration.TraceEntry{NodeID: "new"})
 	next.Thread = append(next.Thread, orchestration.Msg{Role: "user", Text: "hello"})
 	next.Spawned = nil
-	delta, err := w.next(next)
+	delta, err := w.Next(next)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,10 +32,10 @@ func TestFlowStateDeltaRejectsShrinkingPrefixes(t *testing.T) {
 		"thread": func(s *orchestration.State) { s.Thread = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
-			w := newFlowStateDeltaWriter("checkpoint", 0, base)
-			next := cloneFlowState(base)
+			w := NewStateDeltaWriter("checkpoint", 0, base)
+			next := CloneState(base)
 			mutate(&next)
-			if _, err := w.next(next); err == nil {
+			if _, err := w.Next(next); err == nil {
 				t.Fatal("expected prefix error")
 			}
 		})

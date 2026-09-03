@@ -20,6 +20,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
@@ -402,12 +403,12 @@ func (m *Manager) open(meta Meta) error {
 	// Seed the built-in default flows into this workspace's store. Idempotent and
 	// deletion-aware (a ledger keeps a user-removed default from coming back).
 	// Running it here backfills every existing workspace on the next startup.
-	if err := agent.EnsureDefaultFlows(context.Background(), database, storeDir); err != nil {
+	if err := flowpkg.EnsureDefaultFlows(context.Background(), database, storeDir); err != nil {
 		m.logger.Warn("seed default flows failed", "workspace", meta.ID, "error", err)
 	}
 	// Upgrade existing flows to the required start-node model (adds a start node
 	// where missing). Idempotent; backfills every workspace on the next startup.
-	if err := agent.MigrateFlowsStartEnd(context.Background(), database); err != nil {
+	if err := flowpkg.MigrateFlowsStartEnd(context.Background(), database); err != nil {
 		m.logger.Warn("migrate flows to start-node model failed", "workspace", meta.ID, "error", err)
 	}
 	// Seed the built-in automations (board-driven execution: card→in_progress spawns

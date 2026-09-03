@@ -1,4 +1,8 @@
-package agent
+// Package flows holds the runtime-free parts of flow execution: the checkpoint
+// state-delta writer and the built-in flow seeding/migration helpers. The
+// executor itself stays in internal/agent. Extracted on 2026-09-03 (_Docs/81,
+// step 5).
+package flows
 
 import (
 	"encoding/json"
@@ -9,17 +13,17 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
-type flowStateDeltaWriter struct {
+type StateDeltaWriter struct {
 	checkpointID string
 	sequence     uint64
 	previous     orchestration.State
 }
 
-func newFlowStateDeltaWriter(checkpointID string, sequence uint64, state orchestration.State) *flowStateDeltaWriter {
-	return &flowStateDeltaWriter{checkpointID: checkpointID, sequence: sequence, previous: cloneFlowState(state)}
+func NewStateDeltaWriter(checkpointID string, sequence uint64, state orchestration.State) *StateDeltaWriter {
+	return &StateDeltaWriter{checkpointID: checkpointID, sequence: sequence, previous: CloneState(state)}
 }
 
-func cloneFlowState(state orchestration.State) orchestration.State {
+func CloneState(state orchestration.State) orchestration.State {
 	cloned := state
 	cloned.Outputs = make(map[string]string, len(state.Outputs))
 	for key, value := range state.Outputs {
@@ -41,7 +45,7 @@ func rawJSON(value any) (json.RawMessage, error) {
 	return json.RawMessage(data), err
 }
 
-func (w *flowStateDeltaWriter) next(current orchestration.State) (db.FlowRunStateDelta, error) {
+func (w *StateDeltaWriter) Next(current orchestration.State) (db.FlowRunStateDelta, error) {
 	if len(current.Trace) < len(w.previous.Trace) {
 		return db.FlowRunStateDelta{}, fmt.Errorf("flow state trace prefix shrank from %d to %d", len(w.previous.Trace), len(current.Trace))
 	}
@@ -112,7 +116,7 @@ func (w *flowStateDeltaWriter) next(current orchestration.State) (db.FlowRunStat
 		}
 		delta.Spawned = raw
 	}
-	w.previous = cloneFlowState(current)
+	w.previous = CloneState(current)
 	w.sequence++
 	return delta, nil
 }

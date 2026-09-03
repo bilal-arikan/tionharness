@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
 )
 
 // defaultAutomation describes a built-in automation shipped into every workspace
@@ -167,7 +168,7 @@ func EnsureDefaultAutomations(ctx context.Context, database *db.DB, storeDir str
 		}
 	}
 
-	agentID := firstAgentID(ctx, database)
+	agentID := flowpkg.FirstAgentID(ctx, database)
 
 	changed := false
 	for _, dba := range defaultAutomations {
