@@ -70,6 +70,10 @@ type toolLoopTurn struct {
 	// its results: that request's trailing message must stay PURE tool_results,
 	// so queued guidance is delivered on the next ordinary iteration instead.
 	pendingProgrammatic bool
+	// earlyPruned marks the one-shot pre-overflow tool-result prune as spent for
+	// this turn (see toolloop_prune_early.go). Also set when the pass ran and
+	// found nothing, so the measurement is not repeated every iteration.
+	earlyPruned bool
 }
 
 // toolBatch is the per-iteration state of one provider response's tool calls,
@@ -615,6 +619,12 @@ func (t *toolLoopTurn) runNativeLoop() (*providers.Response, []TurnStep, error) 
 		// calls from the previous iteration.
 		t.active.SetIter(i)
 		t.req.Tools = t.shipFor()
+		// Pre-overflow context reduction: drop old oversized tool-result bodies
+		// once the request crosses a share of the model's window, instead of
+		// waiting for the provider to refuse the turn. One-shot; free (no
+		// summarizer call). Runs after shipFor so the tool schemas it measures are
+		// the ones actually being sent this iteration.
+		t.maybeEarlyPrune(i)
 		// Self-healing: enforce the tool_use↔tool_result pairing invariants on
 		// the in-flight history before every provider call. A well-formed slice
 		// passes through untouched; a healed one is logged + journaled (never

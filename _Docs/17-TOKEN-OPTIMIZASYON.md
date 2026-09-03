@@ -2,6 +2,11 @@
 
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
 >
+> **Not (2026-09-04):** tur-içi araç-çıktısı budaması artık **taşmayı beklemiyor** —
+> istek model penceresinin %55'ini geçince tur başına bir kez, bedava (LLM'siz)
+> çalışıyor; eşik pencereye göre ölçekleniyor ve tur-içi tahmin artık araç şemalarını
+> da sayıyor. Bkz. "Taşma-öncesi araç çıktısı budaması (2026-09-04)".
+>
 > **Not (2026-07-10): built-in araç-çıktısı sıkıştırması TAMAMEN KALDIRILDI.**
 > TionHarness artık hiçbir built-in (deterministik veya LLM tabanlı) araç-çıktısı
 > sıkıştırması **içermez**. Eskiden var olan iki sistem — "Sistem A" (deterministik,
@@ -1122,6 +1127,59 @@ göstermediği `38-SESSION-DEBUG.md`'de anlatılır.
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
+
+## Taşma-öncesi araç çıktısı budaması (2026-09-04)
+
+**Sorun.** `PruneInFlightToolResults` (bedava, LLM'siz, `internal/conversation/prune.go`)
+yalnız **kurtarma yolundan** çağrılıyordu: `decideRecovery` → `compact: true` →
+`compactAndRetry` → `pruneAndRetry`. O dal ise sadece `errContextOverflow` veya
+`StopContextWindow` ile açılıyor — yani **sağlayıcı isteği reddettikten sonra**. O ana
+kadar tool döngüsünün her iterasyonu birikmiş tüm araç çıktılarını yeniden gönderiyordu:
+20 iterasyonluk bir tur, çıktıları ~20 kez taşıyor (girdi tarafında O(n²)).
+
+Prompt cache bunun çoğunu 0.10×'e indiriyor, **ama** çok sayıda paralel `tool_use`/
+`tool_result` bloğu ekleyen bir batch, önceki cache'li öneki Anthropic'in ~20 bloğu
+tarayan arama ufkunun dışına itebiliyor (bkz. bu dosyada hedge breakpoint). Kaçırılan
+önek tam fiyattan yeniden yazılıyor — budama, o kuyruğun boyunu sınırlıyor.
+
+**Çözüm.** `internal/agent/toolloop_prune_early.go` → `maybeEarlyPrune`, döngüde
+`shipFor()` sonrası çağrılıyor (ölçülen araç şemaları gerçekten gönderilenler olsun diye):
+
+- Eşik **oransal**: `earlyPruneRatio` = 0.55 × model penceresi. `pruneSufficientRatio`
+  (0.70) altında bilinçli — reaktif yol ölçmeye başladığında iş zaten işlenmiş oluyor.
+- `earlyPruneMinIter` = 3'ten önce çalışmaz: erken büyük bir tur, biriken araç çıktısı
+  yüzünden değil **açılış bağlamı** (büyük yapıştırma, resume edilmiş transkript)
+  yüzünden büyüktür; orada budamak kullanıcının kendi materyalini atmak olur.
+- **Tur başına tek atış** (`toolLoopTurn.earlyPruned`). Her budama geçmişi ortadan
+  değiştirir → o noktadan sonra cache öneki geçersizleşir ve preserved-thinking
+  modellerinde sonraki tüm thinking blokları düşer (`thinkingdrop.go`). Tek kararlı
+  geçiş bu bedeli **bir kez** öder; her iterasyonda azar azar budamak onu her
+  iterasyonda ödeyip amacı yok ederdi. Hiçbir şey bulamayan geçiş de "harcanmış"
+  sayılır, ölçüm tekrarlanmasın diye.
+- CLI sağlayıcılar muaf (transkript onların; `req.Messages` yalnız görmedikleri delta) —
+  `pruneAndRetry` ile aynı gerekçe.
+- `ls.compacted` **set edilmez**: gerçek bir taşma hâlâ kendi budama+fold kurtarmasını
+  alır. O noktada bu geçiş büyük gövdeleri zaten almış olur, `pruneAndRetry` budayacak
+  bir şey bulamaz ve doğrudan fold'a düşer — istenen davranış.
+- Görünürlük değişmiyor: aynı `StepCompaction` kartı + `debug.jsonl` girdisi, ama
+  `reasonEarlyPrune` ("early_prune") etiketiyle — tasarrufu hasar kontrolünden ayırmak
+  için (kurtarma yolu `reactive_compact_retry` yazar).
+
+### İki destekleyici düzeltme
+
+**(a) Tur-içi tahmin araç şemalarını saymıyordu.** `EstimateProviderTokens` yalnız
+mesajları geziyor; fold kararı için doğru (fold tools bloğunu küçültemez) ama "bu geçmiş
+artık **sığıyor mu**" kararı için yanlış — native-search modunda gönderilen set **tüm
+deferred katalog**, on binlerce token. Turlar-arası yolda bu terim zaten vardı
+(`contextOverheadFrom`); tur içinde yoktu. `internal/conversation/footprint.go` →
+`EstimateToolDefTokens` / `EstimateInFlightTokens` bunu kapatıyor.
+
+**(b) Budama eşiği pencereye göre ölçekleniyor.** Sabit 4 KB 200K'lık pencere için
+ayarlıydı: 32K'lık bir modelde on tane 3 KB'lık sonuç (pencerenin çoğu) eşiğin altında
+kalıp **hiç** budanmıyordu; 1M'lik bir modelde ise penceresi bol olan gövdeler
+atılıyordu. `PruneMinBytesFor(window)` 200K referansından doğrusal ölçekliyor,
+[1 KB, 16 KB] arasına kelepçeliyor; bilinmeyen pencere varsayılanı korur.
+`PruneInFlightToolResults` imzası korundu, `…Min` varyantı eklendi.
 
 ## claude-cli prefix anatomisi ve üç yeni kaldıraç (2026-09-03)
 

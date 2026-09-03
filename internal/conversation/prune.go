@@ -24,12 +24,43 @@ import (
 // they were, so the tool_use↔tool_result pairing RepairSequence enforces still
 // holds after a prune.
 
-// pruneToolResultMinBytes is the size above which an old tool result's body is
-// replaced by a marker. Below it a prune saves almost nothing while still
-// costing the model a fact it could have used, so small results are left alone.
-// 4 KB is well under the 100 KB write-time cap (MaxToolOutputKB) and well above
-// an ordinary command's output.
+// pruneToolResultMinBytes is the DEFAULT size above which an old tool result's
+// body is replaced by a marker. Below it a prune saves almost nothing while
+// still costing the model a fact it could have used, so small results are left
+// alone. 4 KB is well under the 100 KB write-time cap (MaxToolOutputKB) and well
+// above an ordinary command's output. PruneMinBytesFor scales it to the model's
+// window; this value is what a 200K-class model gets.
 const pruneToolResultMinBytes = 4096
+
+// The prune threshold scales with the model's context window. A flat 4 KB is
+// tuned for a 200K window: on a 32K model ten 3 KB results (30 KB — most of the
+// window) are all under it and nothing is ever pruned, while on a 1M model it
+// throws away bodies the window had ample room for. The bounds keep the scaling
+// from running away in either direction.
+const (
+	pruneWindowRef     = 200_000 // window the default threshold is tuned for
+	pruneMinBytesFloor = 1024    // never prune bodies smaller than this
+	pruneMinBytesCeil  = 16384   // never require more than this to qualify
+)
+
+// PruneMinBytesFor returns the body size above which a tool result qualifies for
+// pruning on a model with the given context window, scaled linearly from the
+// 200K-class default and clamped to the bounds above. window<=0 (unknown family)
+// keeps the default: guessing from no information is how a threshold ends up
+// wrong in the dangerous direction.
+func PruneMinBytesFor(window int) int {
+	if window <= 0 {
+		return pruneToolResultMinBytes
+	}
+	n := pruneToolResultMinBytes * window / pruneWindowRef
+	if n < pruneMinBytesFloor {
+		return pruneMinBytesFloor
+	}
+	if n > pruneMinBytesCeil {
+		return pruneMinBytesCeil
+	}
+	return n
+}
 
 // pruneSufficientRatio is the share of the model's context window the pruned
 // history must fit under for the caller to retry WITHOUT also paying for a
@@ -63,8 +94,19 @@ type PruneStat struct {
 // in a copy, so a caller holding the original (e.g. an askSuspend payload
 // captured earlier in the turn) keeps the history it captured.
 func PruneInFlightToolResults(msgs []providers.Message, keepRecent int) ([]providers.Message, PruneStat, bool) {
+	return PruneInFlightToolResultsMin(msgs, keepRecent, pruneToolResultMinBytes)
+}
+
+// PruneInFlightToolResultsMin is PruneInFlightToolResults with an explicit
+// minimum body size, so a caller that knows the model's context window can pass
+// PruneMinBytesFor(window) instead of the 200K-class default. A non-positive
+// minBytes falls back to that default.
+func PruneInFlightToolResultsMin(msgs []providers.Message, keepRecent, minBytes int) ([]providers.Message, PruneStat, bool) {
 	if keepRecent < 1 {
 		keepRecent = 1
+	}
+	if minBytes <= 0 {
+		minBytes = pruneToolResultMinBytes
 	}
 	limit := len(msgs) - keepRecent
 	if limit <= 0 {
@@ -86,7 +128,7 @@ func PruneInFlightToolResults(msgs []providers.Message, keepRecent int) ([]provi
 		}
 		var results []providers.ToolResult
 		for j, tr := range src.ToolResults {
-			if len(tr.Content) <= pruneToolResultMinBytes || strings.HasPrefix(tr.Content, prunedToolResultPrefix) {
+			if len(tr.Content) <= minBytes || strings.HasPrefix(tr.Content, prunedToolResultPrefix) {
 				continue
 			}
 			if results == nil {

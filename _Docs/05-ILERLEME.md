@@ -1,6 +1,40 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-03):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Taşma-öncesi araç çıktısı budaması (2026-09-04) ✅
+
+Bedava (LLM'siz) araç-çıktısı budaması artık **taşmayı beklemiyor**. Eskiden
+`PruneInFlightToolResults` yalnız `decideRecovery`'nin `compact` dalından —
+yani sağlayıcı isteği **reddettikten sonra** — çağrılıyordu; o ana kadar tool
+döngüsünün her iterasyonu birikmiş tüm araç çıktılarını yeniden gönderiyordu
+(20 iterasyonluk turda ~20 kez; girdi tarafında O(n²)). Prompt cache çoğunu
+0.10×'e indiriyor ama paralel `tool_use`/`tool_result` batch'i önceki cache'li
+öneki Anthropic'in ~20 blokluk arama ufkunun dışına itince önek tam fiyattan
+yeniden yazılıyor.
+
+`internal/agent/toolloop_prune_early.go` → `maybeEarlyPrune`, döngüde `shipFor()`
+sonrası: istek model penceresinin `earlyPruneRatio` (0.55) payını geçince eski/büyük
+araç sonucu gövdelerini görünür bir marker ile değiştirir. **Tur başına tek atış**
+(`earlyPruned`) — her budama cache önekini o noktadan geçersizleştirdiği ve
+preserved-thinking modellerinde sonraki thinking bloklarını düşürdüğü için bedel bir
+kez ödenir. `earlyPruneMinIter` (3) öncesi çalışmaz (erken büyük tur, biriken çıktı
+değil açılış bağlamı yüzünden büyüktür). CLI sağlayıcılar muaf. `ls.compacted` set
+edilmez → gerçek taşma hâlâ kendi budama+fold kurtarmasını alır. Kart/journal aynı,
+`reasonEarlyPrune` etiketiyle ayrışır.
+
+İki destekleyici düzeltme: **(a)** `internal/conversation/footprint.go` →
+`EstimateToolDefTokens`/`EstimateInFlightTokens` — tur-içi tahmin araç şemalarını
+saymıyordu (native-search modunda gönderilen set tüm deferred katalog); turlar-arası
+yolda bu terim zaten `contextOverheadFrom` olarak vardı. **(b)** `PruneMinBytesFor(window)`
+— sabit 4 KB eşiği 200K'ya ayarlıydı: 32K modelde on tane 3 KB'lık sonuç hiç budanmıyor,
+1M modelde ise yeri olan gövdeler atılıyordu; artık 200K referansından ölçekleniyor ve
+[1 KB, 16 KB] arasına kelepçeleniyor. `PruneInFlightToolResults` imzası korundu.
+
+Ayrıntı → `_Docs/17-TOKEN-OPTIMIZASYON.md`. Testler: `internal/conversation/footprint_test.go`,
+`internal/agent/toolloop_prune_early_test.go` (fixture pencereyi **oransal** hesaplar, sabit
+byte değil — eşik oran olduğu için). `scripts/test.sh full` yeşil.
+
 
 ## Paket bölme, adım 1/2/3/5 (2026-09-03) ✅
 

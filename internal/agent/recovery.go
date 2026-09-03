@@ -168,6 +168,10 @@ func recoveryText(r contReason) string {
 const (
 	reasonMCPRepairRetry = "mcp_repair_retry"
 	reasonMCPRepairIndex = "mcp_repair_index"
+	// reasonEarlyPrune tags the pre-overflow tool-result prune, so the journal
+	// tells it apart from the identical prune done on the recovery path
+	// (contCompactRetry) — one is a saving, the other is damage control.
+	reasonEarlyPrune = "early_prune"
 )
 
 // mcpRepairStep builds the inline StepRecovery card for one MCP repair episode.
