@@ -116,6 +116,11 @@ type createAgentReq struct {
 	// CoordinatorPrompt is injected only while a session of this agent is
 	// coordinating (see db.Agent.CoordinatorPrompt).
 	CoordinatorPrompt string `json:"coordinatorPrompt"`
+	// ParentID creates the agent as a CHILD that inherits every field from the
+	// named agent (see db.Agent.ParentID). Only name and a non-empty soul are
+	// applied on top (as overrides); provider/model/thinking come from the
+	// parent, so they are not validated here.
+	ParentID string `json:"parentId"`
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +130,10 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.ParentID != "" {
+		s.createDerivedAgent(w, r, req)
 		return
 	}
 
@@ -241,6 +250,15 @@ func (s *Server) handleDuplicateAgent(w http.ResponseWriter, r *http.Request) {
 	clone.DeletedAt = 0
 	clone.CreatedAt = 0 // stamped by CreateAgent
 	clone.UpdatedAt = 0
+	// A clone is an ordinary, editable agent: never a locked built-in, and never
+	// a second holder of a system role (at most one customisation may serve a
+	// SystemKey — use derive+bindRole for that). src is already RESOLVED, so a
+	// clone of a built-in carries its effective values as a root; a clone of a
+	// child keeps the same parent and override set.
+	clone.Locked = false
+	clone.System = false
+	clone.SystemKey = ""
+	clone.Disabled = false
 
 	agent, err := ws(r).DB.CreateAgent(r.Context(), clone)
 	if writeDBError(w, err, "") {
@@ -306,7 +324,7 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	err := wsp.DB.DeleteAgent(r.Context(), id)
 	if errors.Is(err, db.ErrSystemAgentDelete) {
-		writeError(w, http.StatusConflict, "system agent cannot be deleted; disable it instead")
+		writeError(w, http.StatusConflict, db.ErrSystemAgentDelete.Error())
 		return
 	}
 	if writeDBError(w, err, "agent not found") {
@@ -319,39 +337,6 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.Info("agent deleted", "id", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
-}
-
-// handleRestoreSystemAgent replaces user-editable system-agent fields with the
-// compiled defaults for its stable SystemKey. Disabled is intentionally left
-// unchanged; enabling and disabling are separate, explicit operations.
-func (s *Server) handleRestoreSystemAgent(w http.ResponseWriter, r *http.Request) {
-	wsp := ws(r)
-	current, err := wsp.DB.GetAgent(r.Context(), r.PathValue("id"))
-	if writeDBError(w, err, "agent not found") {
-		return
-	}
-	def, ok := agentpkg.SystemAgentDefault(current.SystemKey)
-	if !current.System || current.SystemKey == "" || !ok {
-		writeError(w, http.StatusNotFound, "system agent default not found")
-		return
-	}
-
-	if err := wsp.DB.UpdateAgentAllowedTools(r.Context(), current.ID, def.AllowedTools); writeDBError(w, err, "agent not found") {
-		return
-	}
-	restored, err := wsp.DB.UpdateAgent(r.Context(), current.ID, db.AgentProfilePatch{
-		Name:     &def.Name,
-		Soul:     &def.SystemPrompt,
-		Identity: &def.Description,
-		Model:    &def.SuggestedModel,
-		Avatar:   &def.Avatar,
-		Color:    &def.Color,
-	})
-	if writeDBError(w, err, "agent not found") {
-		return
-	}
-	restored.AllowedTools = def.AllowedTools
-	writeJSON(w, http.StatusOK, restored)
 }
 
 type updateAgentReq struct {
@@ -383,6 +368,12 @@ type updateAgentReq struct {
 	// CoordinatorPrompt is the coordinator-only prompt block. Pointer so omitting
 	// it leaves the stored text alone and an explicit "" clears it.
 	CoordinatorPrompt *string `json:"coordinatorPrompt"`
+	// ParentID re-parents the agent ("" detaches it into a root that keeps its
+	// effective values). See db.Agent.ParentID.
+	ParentID *string `json:"parentId"`
+	// ResetFields drops the named overrides so those fields inherit from the
+	// parent again (db.InheritableFieldKeys). Ignored on a root agent.
+	ResetFields []string `json:"resetFields"`
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -471,6 +462,8 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		CoordinatorMode:     req.CoordinatorMode,
 		CoordinatorWorkflow: req.CoordinatorWorkflow,
 		CoordinatorPrompt:   req.CoordinatorPrompt,
+		ParentID:            req.ParentID,
+		ResetFields:         req.ResetFields,
 	}
 	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); only sync
 	// when the request actually touches it (nil = "not in this patch").
@@ -480,7 +473,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agent, err := wsp.DB.UpdateAgent(r.Context(), agentID, patch)
-	if writeDBError(w, err, "agent not found") {
+	if writeAgentWriteError(w, err, "agent not found") {
 		return
 	}
 	s.logger.Info("agent updated", "agent", agent.Name, "id", agent.ID)

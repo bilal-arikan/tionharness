@@ -753,6 +753,10 @@ export function useSessionsController({
       provider: string,
       model?: string,
       coordinator?: { mode: boolean; workflow: string; prompt: string },
+      // When set, the agent is created as a child of this agent: provider /
+      // model / thinking / coordinator settings are inherited, so the values
+      // above are ignored by the server for a derived create.
+      parentId?: string,
     ) => {
       try {
         const agent = await api.createAgent({
@@ -768,6 +772,7 @@ export function useSessionsController({
           coordinatorMode: coordinator?.mode,
           coordinatorWorkflow: coordinator?.workflow,
           coordinatorPrompt: coordinator?.prompt,
+          parentId: parentId || undefined,
         })
         setAllAgents((prev) => [agent, ...prev])
         // Focus the new agent (so Agents/Tools views select it) but do NOT make
@@ -802,6 +807,23 @@ export function useSessionsController({
         setAllAgents((prev) => [clone, ...prev])
         setActiveAgentId(clone.id)
         return clone.id
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
+
+  // Derive a child that inherits every field from `id` (bindRole: take over
+  // the parent's system role — how a locked built-in is customised). Like
+  // duplicate, the new agent is focused but never made the chat default.
+  const deriveAgent = useCallback(
+    async (id: string, opts: { name?: string; bindRole?: boolean } = {}) => {
+      try {
+        const child = await api.deriveAgent(id, opts)
+        setAllAgents((prev) => [child, ...prev])
+        setActiveAgentId(child.id)
+        return child.id
       } catch (e) {
         setError((e as Error).message)
       }
@@ -943,6 +965,7 @@ export function useSessionsController({
     createAgent,
     updateAgent,
     duplicateAgent,
+    deriveAgent,
     deleteAgent,
     newSession,
     regenerateSessionTitle,

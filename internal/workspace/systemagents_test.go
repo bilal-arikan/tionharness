@@ -58,8 +58,10 @@ func TestCreateSeedsCoreSystemAgents(t *testing.T) {
 			t.Errorf("system agent %q not seeded", def.SystemKey)
 			continue
 		}
-		if seeded.Disabled != def.Disabled {
-			t.Errorf("system agent %q disabled = %v, want %v", def.SystemKey, seeded.Disabled, def.Disabled)
+		// A built-in is a LOCKED row and is never disabled: it is the fallback
+		// every role resolves to when no customisation is enabled.
+		if !seeded.Locked || seeded.Disabled {
+			t.Errorf("system agent %q locked=%v disabled=%v, want locked and enabled", def.SystemKey, seeded.Locked, seeded.Disabled)
 		}
 	}
 	// The five core (non-subagent) keys are named explicitly so a refactor that

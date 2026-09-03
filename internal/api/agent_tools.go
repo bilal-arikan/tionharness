@@ -245,8 +245,7 @@ func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := ws(r).DB.UpdateAgentTools(r.Context(), id, req.MCPEnabled, string(overridesJSON)); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := ws(r).DB.UpdateAgentTools(r.Context(), id, req.MCPEnabled, string(overridesJSON)); writeAgentWriteError(w, err, "agent not found") {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"mcpEnabled": req.MCPEnabled, "toolOverrides": overrides})

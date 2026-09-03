@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -398,15 +399,24 @@ func TestSpawnWorkerTargetsSystemAgent(t *testing.T) {
 }
 
 // TestResolveWorkerTargetReassertsProfileAllowlist proves the allowlist is a code
-// contract: an edited system-agent row is pulled back to the profile's tools,
-// while unrelated per-agent customization (tool overrides) survives.
+// contract: the built-in row itself is locked, so the edit lands on the
+// workspace CUSTOMISATION of the profile (a bound child) — and even there the
+// allowlist is pulled back to the profile's tools, while unrelated per-agent
+// customization (tool overrides) survives.
 func TestResolveWorkerTargetReassertsProfileAllowlist(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	seedSystemAgents(t, rt)
-	sys, ok := rt.db.FindAgentBySystemKey("subagent-validator")
+	builtin, ok := rt.db.FindBuiltinAgentBySystemKey("subagent-validator")
 	if !ok {
-		t.Fatal("subagent-validator system agent missing")
+		t.Fatal("subagent-validator built-in missing")
+	}
+	if err := rt.db.UpdateAgentAllowedTools(ctx, builtin.ID, `["Read","Write","Bash"]`); !errors.Is(err, db.ErrAgentLocked) {
+		t.Fatalf("editing the built-in allowlist = %v, want ErrAgentLocked", err)
+	}
+	sys, err := rt.db.DeriveAgent(ctx, builtin.ID, db.DeriveAgentOptions{BindRole: true})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := rt.db.UpdateAgentAllowedTools(ctx, sys.ID, `["Read","Write","Bash"]`); err != nil {
 		t.Fatal(err)

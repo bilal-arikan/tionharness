@@ -147,11 +147,21 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 	if err != nil {
 		return err
 	}
-	_, err = d.mutateAgentLocked(agentID, func(a *Agent) {
+	_, err = d.mutateAgentLockedErr(agentID, func(a *Agent) error {
+		if a.Locked {
+			return ErrAgentLocked
+		}
 		a.MCPEnabled = mcpEnabled
 		a.ToolOverrides = toolOverrides
 		a.BlockedTools = string(blockedJSON)
 		a.AllowedTools = "[]"
+		// The tool trio is one inheritance unit; the allowlist reset above is a
+		// write too, so a child pins both.
+		if a.ParentID != "" {
+			a.Overrides = withOverride(a.Overrides, "tools")
+			a.Overrides = withOverride(a.Overrides, "allowedTools")
+		}
+		return nil
 	})
 	return err
 }
@@ -163,8 +173,15 @@ func (d *DB) UpdateAgentAllowedTools(ctx context.Context, agentID, allowedTools 
 	if err := json.Unmarshal([]byte(allowedTools), &allowed); err != nil {
 		return fmt.Errorf("allowed tools must be a JSON array: %w", err)
 	}
-	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
+	_, err := d.mutateAgentLockedErr(agentID, func(a *Agent) error {
+		if a.Locked {
+			return ErrAgentLocked
+		}
 		a.AllowedTools = allowedTools
+		if a.ParentID != "" {
+			a.Overrides = withOverride(a.Overrides, "allowedTools")
+		}
+		return nil
 	})
 	return err
 }

@@ -129,6 +129,7 @@ func TestMapCCModel(t *testing.T) {
 		{"haiku", "claude-cli", "claude-haiku-4-5-20251001", false},
 		{"sonnet", "claude-cli", "claude-sonnet-5", false},
 		{"opus", "claude-cli", "claude-opus-4-8", false},
+		{"fable", "claude-cli", "claude-fable-5-1", false},
 		{"claude-3-5-sonnet-20241022", "claude-cli", "claude-sonnet-5", false}, // family substring
 		{"inherit", "", "", false},
 		{"", "", "", false},

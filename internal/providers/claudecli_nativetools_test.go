@@ -43,7 +43,7 @@ func TestNativeClaudeModel(t *testing.T) {
 		"haiku":                     "claude-haiku-4-5-20251001",
 		"Sonnet":                    "claude-sonnet-5",
 		"opus":                      "claude-opus-5",
-		"fable":                     "claude-fable-5",
+		"fable":                     "claude-fable-5-1",
 		"claude-opus-4-8":           "claude-opus-4-8",
 		"":                          "claude-haiku-4-5-20251001",
 		"gpt-5.6-sol":               "claude-haiku-4-5-20251001",

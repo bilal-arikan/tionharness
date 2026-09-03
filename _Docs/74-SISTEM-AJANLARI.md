@@ -1,8 +1,10 @@
 # 74 — Sistem Ajanları
 
-> **Durum: UYGULANDI (2026-08-26).** Başlıklandırma, sıkıştırma, ders çıkarma ve
-> içgörü analizi gibi uygulama içi LLM işleri, workspace içinde özelleştirilebilen
-> fakat güvenli yerleşik tanımlara düşebilen sistem ajanlarıyla yürütülür.
+> **Durum: UYGULANDI (2026-08-26; kilitli yerleşik + kalıtım modeli 2026-09-03).**
+> Başlıklandırma, sıkıştırma, ders çıkarma ve içgörü analizi gibi uygulama içi LLM işleri
+> sistem ajanlarıyla yürütülür. Her rolün **kilitli yerleşik** satırı (koddan dayatılır,
+> düzenlenemez) uygulamanın varsayılanıdır; özelleştirme, ondan kalıtım alan ve yalnız
+> istenen alanları override eden bir çocukla yapılır (`82-AJAN-KALITIMI.md`).
 
 ## Kavram ve kayıt defteri
 
@@ -112,6 +114,11 @@ başarısız olduğunda kullanılan `readPrompt(<anahtar>)` aynı anahtara gider
 
 ## Görsel kimlik (avatar + renk)
 
+> **2026-09-03:** Aşağıdaki "yalnız seed edilir, dayatılmaz" kuralı kilitli yerleşik
+> satır için kalktı — yerleşik her açılışta kanonik avatar/rengi geri alır. Kullanıcının
+> seçtiği avatar/renk artık rolü devralan **özelleştirme çocuğunda** `avatar`/`color`
+> override'ı olarak yaşar ve UI'da ebeveynin rengi soldaki kalıtım şeridinde görünür.
+
 Her yerleşik ajanın avatarı (tek emoji) ve rengi (hex) kanoniktir: aynı sistem ajanı
 her workspace'te aynı görünür. Tek kaynak `systemAgentVisuals` tablosudur
 (`internal/agent/systemagents.go`); tablo `SystemKey` ile anahtarlanır ve
@@ -146,102 +153,88 @@ avatar ve rengi de tanımdan geri yükler.
 
 ## Çözümleme ve koşulsuz fallback
 
-`ResolveSystemAgent`, yalnız workspace'te bulunan **ve etkin** sistem ajanını
-kullanır. Kayıt yoksa da kayıt bulunup `Disabled` ise de koşulsuz biçimde derlenmiş
-tanıma düşer; fallback ad, prompt, açıklama, model, araç izinleri ve `SystemKey`
-alanlarını kayıt defterinden kurar (`internal/agent/systemagent_resolve.go:9-30`).
-Bu nedenle sistem ajanını devre dışı bırakmak ilgili altyapı işini kapatmaz:
-özelleştirilmiş workspace profilini devreden çıkarır ve yerleşik davranışı etkinleştirir.
-Frontend bunu devre dışı sistem ajanında **“yerleşik tanım etkin”** rozetiyle açıklar
-(`frontend/src/features/agents/SystemAgentStatusBadge.tsx:7-17`).
+> **2026-09-03 — kilitli yerleşikler + kalıtım.** Ayrıntı `82-AJAN-KALITIMI.md`; burada
+> yalnız bu dokümanın eski anlatımından değişen noktalar özetlenir.
 
-Bilinmeyen bir `SystemKey` sessizce kabul edilmez; kayıt defterinde karşılığı yoksa
-`unknown system agent key` hatası döner (`internal/agent/systemagent_resolve.go:16-19`).
+Her sistem rolü artık workspace'te **iki tür satırla** temsil edilir:
 
-Çağrı yerleri (`titler`, `overview-summarizer`, `compaction`, `lesson-extractor`, `insight`) önce bu
-çözümleyiciyi kullanır. Çözümleyici hata döndürürse her çağrı yeri kendi eski gömülü
-prompt/model davranışına geri döner; registry ve gömülü yollar aynı merkezi prompt
-anahtarlarını kullandığı için varsayılan prompt içeriği değişmez
-(`internal/agent/titler.go:83-95`, `internal/agent/summarizer.go:65-80`,
-`internal/agent/lessons_systemagent.go:13-29`).
+- **Kilitli yerleşik** (`Locked: true`): derlenmiş tanımın birebir kopyası; her açılışta
+  `EnsureSystemAgents` kanonik değerleri yeniden dayatır. Düzenlenemez, silinemez, devre dışı
+  bırakılamaz. Uygulamanın **varsayılanı** budur.
+- **Özelleştirme** (`System: true, Locked: false, ParentID = yerleşik`): "Özelleştir" ile
+  türetilen çocuk; override etmediği her alanı yerleşikten devralır.
+
+`FindAgentBySystemKey` sırası: etkin özelleştirme → kilitli yerleşik → (göç öncesi
+depolar) devre dışı özelleştirme. `ResolveSystemAgent` değişmedi: bulduğu satır devre dışı
+değilse onu kullanır; artık pratikte daima ID'li bir satır bulur. Derlenmiş tanımdan ID'siz
+ajan kurma yolu yalnız tohumlanmamış depolar içindir. Bilinmeyen `SystemKey` yine
+`unknown system agent key` hatasıdır.
+
+Çağrı yerleri (`titler`, `overview-summarizer`, `compaction`, `lesson-extractor`, `insight`,
+worker profilleri) değişmedi; hepsi etkin ajanı (kalıtım katlanmış) alır.
 
 ## Devre dışı bırakma, silme ve varsayılana döndürme
 
-Sistem ajanı **silinemez**. Store `ErrSystemAgentDelete` döndürür
-(`internal/db/store_agent_system.go:8-10`, `internal/db/store.go:111-120`); API bunu
-HTTP 409 Conflict ve “disable it instead” mesajına çevirir
-(`internal/api/agents.go:281-293`). Frontend sistem ajanlarını normal ajanlardan ayrı
-bir **Sistem ajanları** bölümünde gösterir ve silme eylemini sağlamaz
-(`frontend/src/features/agents/AgentsView.tsx:145-149`,
-`frontend/src/features/agents/AgentsView.tsx:378-386`,
-`frontend/src/features/agents/AgentsView.tsx:456-471`). Dolayısıyla `disable`, silmenin
-eşanlamlısı değildir: kalıcı kimlik korunur ve çalışma yerleşik fallback ile sürer.
-
-Özelleştirilmiş profili derlenmiş ayarlara döndürmek için
-`POST /api/agents/{id}/restore-default` kullanılır
-(`internal/api/server.go:413`). İşlem kayıt defterindeki ad, sistem promptu,
-açıklama, model ve izinli araçları geri yazar; `Disabled` alanını bilerek değiştirmez
-(`internal/api/agents.go:306-334`). Hedef sistem ajanı değilse veya geçerli bir
-`SystemKey` varsayılanı yoksa HTTP 404 döner (`internal/api/agents.go:311-318`).
-Etkinleştirme/devre dışı bırakma bu nedenle restore işleminden ayrı, açık bir eylemdir
-(`internal/api/agents.go:306-308`).
+- **Yerleşik satır silinemez** (`ErrSystemAgentDelete` → HTTP 409, mesaj "built-in agent
+  cannot be deleted; derive a copy to customise it") ve düzenlenemez (`ErrAgentLocked` →
+  409). Frontend kilitli ajanda Kaydet/Sil/Devre dışı sunmaz.
+- **Özelleştirme silinebilir**: rol yerleşiğe döner; yumuşak silme oturumları korur.
+- **Devre dışı** yalnız özelleştirmede anlamlıdır: kapatınca rol yerleşiğe düşer
+  ("yerleşik tanım etkin" rozeti). Yeniden etkinleştirme, aynı rolü etkin olarak sağlayan
+  başka bir özelleştirme varsa `ErrSystemRoleTaken` (409) ile reddedilir.
+- `POST /api/agents/{id}/restore-default` artık **"tüm override'ları kaldır"** demektir
+  (`ClearAgentOverrides`): çocuk her alanı yeniden devralır. Kilitli → 409, kök ajan → 404.
+  Eski "kayıt defterinden alanları geri yaz" davranışı gereksizleşti; yerleşik satır zaten
+  hep kayıt defteridir.
 
 ## API yüzeyi
 
-- `DELETE /api/agents/{id}` sistem ajanı için HTTP 409 döndürür.
-- `POST /api/agents/{id}/restore-default` düzenlenebilir profil alanlarını derlenmiş
-  varsayılana döndürür; `Disabled` değerini korur.
-- `PUT /api/agents/{id}` ile `disabled` güncellenebilir. `system` veya `systemKey`
-  mevcut değerden farklı gönderilirse HTTP 400 döner; sistem kimliği sonradan
-  değiştirilemez (`internal/api/agents.go:340-411`).
+- `DELETE /api/agents/{id}` kilitli yerleşik için 409; özelleştirme için normal silme.
+- `PUT /api/agents/{id}` kilitli için 409; `system`/`systemKey` değişimi yine 400.
+  Yeni alanlar: `parentId`, `resetFields`.
+- `POST /api/agents/{id}/derive` `{bindRole: true}` ile rolü devralan özelleştirme,
+  `bindRole` olmadan sıradan türev oluşturur (201).
+- `POST /api/agents/{id}/restore-default` override temizler (yukarı bakın).
 
-Rotalar `internal/api/server.go:406-414` içinde kayıtlıdır.
+Rotalar `internal/api/server.go` (`registerAgentRoutes`); hata eşlemesi
+`internal/api/agent_inherit.go` (`writeAgentWriteError`).
 
 ## UI davranışı
 
-Frontend sistem ajanlarını normal ajanlardan sonra ayrı **Sistem ajanları** bölümünde
-gösterir. Sistem ajanı seçim ve toplu silme listesine girmez; ayar formunda **Sil**
-butonu render edilmez. Bunun yerine **Varsayılana dön** ve **Etkinleştir / Devre dışı
-bırak** eylemleri sunulur (`frontend/src/features/agents/AgentsView.tsx:145-175`,
-`frontend/src/features/agents/AgentsView.tsx:378-471`,
-`frontend/src/features/agents/AgentSettingsForm.tsx:303-321`). Devre dışı bir sistem
-ajanında **yerleşik tanım etkin** rozeti görünür
-(`frontend/src/features/agents/SystemAgentStatusBadge.tsx:7-17`).
+"Sistem ajanları" bölümü **gruplanır**: her kilitli yerleşik, hemen altında rolü devralan
+özelleştirme(ler) ve soldaki kalıtım şeridiyle. Rozetler: 🔒 *yerleşik*, *rolü sağlıyor*
+(etkin özelleştirme), *yerleşik tanım etkin* (devre dışı özelleştirme)
+(`frontend/src/features/agents/SystemAgentStatusBadge.tsx`). Kilitli ajanın formu
+salt-okunurdur ve **Özelleştir** / **Özelleştirmeyi aç** sunar; özelleştirmede alan alan
+"devralındı / override" rozeti ve "devral" sıfırlaması vardır
+(`AgentSettingsForm.tsx`, `FieldOverrideBadge.tsx`, `AgentLineageChips.tsx`).
 
 ## Sistem ajanı varsayılan ajan olamaz
 
 Workspace'in `defaultAgentId` ayarı (yeni sohbetlerde önseçili ajan) bir sistem
-ajanını gösteremez. Sistem ajanı çalışma zamanına hizmet eder (başlıklandırma,
-compaction, worker profilleri) ve sohbet muhatabı değildir.
+ajanını gösteremez — kilitli yerleşik de, rolü devralan özelleştirme de (`System: true`).
+Sistem ajanı çalışma zamanına hizmet eder ve sohbet muhatabı değildir. Yerleşikten
+`bindRole` olmadan türetilen sıradan ajan bu kısıta girmez.
 
 - **Backend kapısı:** `Manager.UpdateSettings` yamayı uygulamadan önce hedefi
   çözer ve sistem ajanıysa `ErrDefaultAgentSystem` döndürür
-  (`internal/workspace/settings.go`). `defaultAgentId` için tek yazma yolu burasıdır,
-  dolayısıyla HTTP handler'ı, şablon/market kurulumu ve workspace bridge aynı kapıdan
-  geçer. HTTP tarafında bu hata 400'e eşlenir
+  (`internal/workspace/settings.go`). HTTP tarafında bu hata 400'e eşlenir
   (`internal/api/workspace_settings.go`).
 - **Boot onarımı:** workspace açılışında `sanitizeDefaultAgent` kapı eklenmeden önce
   yazılmış bir değeri temizler ve `Warn` loglar (`internal/workspace/manager.go`).
-  Değer temizlenince yeni sohbetler roster'daki ilk ajana düşer.
-- **UI:** sistem ajanının ayar formunda **Varsayılan yap** düğmesi hiç render
-  edilmez (`frontend/src/features/agents/AgentSettingsForm.tsx`).
-
-Kısıt yalnız "yeni sohbetlerin varsayılan ajanı" içindir; sistem ajanının kendi
-işlevi (titler/compaction/worker olarak çağrılması) etkilenmez.
+- **UI:** sistem ajanının ayar formunda **Varsayılan yap** düğmesi hiç render edilmez.
 
 ## Workspace seed
 
 Workspace manager'ın ortak `open()` yolu derlenmiş tanımları `EnsureSystemAgents`
-ile seed eder (`internal/workspace/manager.go:263-293`). Aynı yol yeni workspace
-oluşturulurken ve kayıtlı workspace'ler boot sırasında açılırken çalıştığından eski
-workspace'ler de açılışta backfill edilir (`internal/workspace/manager.go:523-537`).
-Seed idempotenttir. Eski `compactor` kaydı `overview-summarizer` anahtarına aynı ID ile
-yerinde taşınır; soul, model ve disabled dahil kullanıcı özelleştirmeleri korunur.
-Aynı `SystemKey` için canlı kayıt varsa alanlarına dokunulmaz — tek istisna boş
-`Avatar`/`Color` alanlarının kanonik değerle doldurulmasıdır (bkz. "Görsel kimlik") —,
-yalnız eksik kayıt oluşturulur;
-yeni kayda `System`, `SystemKey` ve varsayılan `Disabled` değeri dahil tüm tanım yazılır
-(`internal/db/store_agent_system.go:38-58`).
+ile seed eder (`internal/workspace/manager.go`); yeni workspace'te ve boot'ta açılan
+kayıtlı workspace'lerde çalışır, idempotenttir. 2026-09-03 itibarıyla seed **kilitli**
+satırı garanti eder ve kanonik değerleri her açılışta yeniden yazar (avatar/renk dahil —
+"yalnız seed et, dayatma" kuralı yerleşik satır için kalktı; kullanıcı tercihi artık
+özelleştirme çocuğunda yaşar). Eski tek satırlı depoların göçü (en eski satır **yerinde**
+kilitlenir, eski düzenlemeleri atılır; `compactor` anahtar göçü ve `worker:<profil>`
+benimseme önce çalışır) ve ilk göçün bıraktığı gereksiz çocukları katlayan açılış onarımı
+`82-AJAN-KALITIMI.md` §3'te anlatılır (`internal/db/store_agent_system.go`).
 
 ## Özyineleme koruması
 

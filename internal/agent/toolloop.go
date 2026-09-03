@@ -380,6 +380,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 				preserveOrDeriveThinkingTokens(resp)
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+				r.noteInputTransformations(ctx, agent, resp)
 				r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 				return resp, nil
 			} else {
@@ -412,6 +413,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+	r.noteInputTransformations(ctx, agent, resp)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
 }
@@ -449,6 +451,7 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 	preserveOrDeriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+	r.noteInputTransformations(ctx, agent, resp)
 	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
 }

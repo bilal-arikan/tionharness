@@ -26,10 +26,16 @@ const (
 	// inside the same call (a decline before output isn't billed; the rescue
 	// bills at the fallback model's rates). Per-request, Fable-class models only.
 	betaServerFallback = "server-side-fallback-2026-06-01"
+	// betaThinkingBinding unlocks thinking.block_binding on the Fable/Mythos 5.1
+	// class (SupportsThinkingBinding) and adds input_transformations to every
+	// response so dropped thinking blocks are observable.
+	betaThinkingBinding = "thinking-binding-controls-2026-08-01"
 )
 
-// refusalFallbackModel is the substitute model for refused Fable-class requests
-// — the only supported server-side fallback target at launch.
+// refusalFallbackModel is the substitute model for refused Fable-class requests.
+// Fable 5 launched with Opus 4.8 as the only permitted target; Fable 5.1 also
+// permits Opus 5. Opus 4.8 is kept for both so a rescue is billed at the
+// cheaper, longer-established rate.
 const refusalFallbackModel = "claude-opus-4-8"
 
 // Server-side web tools. The _20260209 variants carry dynamic filtering (a
@@ -256,6 +262,34 @@ type thinkingParam struct {
 	Type         string `json:"type"`                    // "adaptive" | "disabled" | "enabled"
 	BudgetTokens int    `json:"budget_tokens,omitempty"` // legacy enabled shape only
 	Display      string `json:"display,omitempty"`       // "summarized" — adaptive class defaults to "omitted" (empty traces)
+	// BlockBinding (beta betaThinkingBinding) tells the API what to do with a
+	// thinking block whose signature no longer matches the conversation prefix:
+	// "drop_block" degrades (the block and every later one are dropped, reported
+	// in input_transformations), "error" fails the request. Fable/Mythos 5.1 only.
+	BlockBinding *blockBinding `json:"block_binding,omitempty"`
+}
+
+type blockBinding struct {
+	PrefixMismatchBehavior string `json:"prefix_mismatch_behavior"` // "drop_block" | "error"
+}
+
+// applyThinkingBinding attaches the drop_block binding policy on the preserved-
+// thinking class and reports whether the beta header must ride along. The
+// native tool loop edits in-flight history in ways the check rejects — the
+// per-turn dynamic block, pruned tool results, schemas activated mid-turn,
+// in-flight compaction — so on enforced organizations the honest choice is to
+// degrade (drop + re-plan, observable via input_transformations) rather than
+// 400 the turn. On an always-on model an omitted thinking field is valid, but
+// the binding needs a carrier, so {type:"adaptive"} is materialised then.
+func applyThinkingBinding(model string, thinking *thinkingParam) (*thinkingParam, bool) {
+	if !SupportsThinkingBinding(model) {
+		return thinking, false
+	}
+	if thinking == nil {
+		thinking = &thinkingParam{Type: "adaptive"}
+	}
+	thinking.BlockBinding = &blockBinding{PrefixMismatchBehavior: "drop_block"}
+	return thinking, true
 }
 
 // outputConfig carries response-level controls; effort steers thinking depth on
@@ -510,7 +544,10 @@ type anthropicResp struct {
 			Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
 		} `json:"cache_creation"`
 	} `json:"usage"`
-	Error *struct {
+	// InputTransformations is present (possibly empty) on every response when
+	// the thinking-binding beta rides the request; absent otherwise.
+	InputTransformations []inputTransformation `json:"input_transformations"`
+	Error                *struct {
 		Type    string `json:"type"`
 		Message string `json:"message"`
 	} `json:"error"`
@@ -519,6 +556,24 @@ type anthropicResp struct {
 // fallbackParam names one substitute model for the server-side refusal fallback.
 type fallbackParam struct {
 	Model string `json:"model"`
+}
+
+// inputTransformation mirrors one input_transformations entry.
+type inputTransformation struct {
+	Type   string `json:"type"`
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
+func toInputTransformations(in []inputTransformation) []InputTransformation {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]InputTransformation, 0, len(in))
+	for _, t := range in {
+		out = append(out, InputTransformation{Type: t.Type, Path: t.Path, Reason: t.Reason})
+	}
+	return out
 }
 
 // Complete implements Provider.
@@ -540,6 +595,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		maxTokens = defaultMaxTokens
 	}
 	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
+	thinking, bindingBeta := applyThinkingBinding(model, thinking)
 	outCfg, taskBudgetBeta := applyTaskBudget(model, req.TaskBudgetTokens, outCfg)
 	outCfg = applyOutputSchema(model, req.OutputSchema, outCfg)
 	ptc := req.ProgrammaticTools && SupportsProgrammaticTools(model)
@@ -577,6 +633,9 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	if refusalFallback {
 		beta = joinNonEmptyComma(beta, betaServerFallback)
 	}
+	if bindingBeta {
+		beta = joinNonEmptyComma(beta, betaThinkingBinding)
+	}
 	if beta != "" {
 		headers["anthropic-beta"] = beta
 	}
@@ -596,7 +655,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 			// gets 400 on EVERY request with a payload-shaped error. Attach the
 			// actionable hint so the user doesn't debug the request body.
 			if AlwaysOnThinking(model) && strings.Contains(strings.ToLower(msg), "retention") {
-				msg += " (hint: Claude Fable 5 requires 30-day data retention; organizations configured for zero/short retention get 400 on every request — check the org's data-retention setting, not the request)"
+				msg += " (hint: the Claude Fable 5.x class requires 30-day data retention; organizations configured for zero/short retention get 400 on every request — check the org's data-retention setting, not the request)"
 			}
 			return nil, fmt.Errorf("anthropic API error (%s): %s%s", parsed.Error.Type, msg, raSuffix)
 		}
@@ -671,9 +730,13 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		RawContent:  rawContent,
 		ContainerID: containerID,
 		StopDetails: stopDetails,
-		StopReason:  parsed.StopReason,
-		Model:       parsed.Model,
-		Trace:       trace,
+		// Dropped thinking blocks (Fable 5.1 preserved-thinking check). Surfaced so
+		// the agent layer can journal them: a steady stream of
+		// prefix_binding_mismatch entries means the harness is editing history.
+		InputTransformations: toInputTransformations(parsed.InputTransformations),
+		StopReason:           parsed.StopReason,
+		Model:                parsed.Model,
+		Trace:                trace,
 		Usage: Usage{
 			InputTokens:        parsed.Usage.InputTokens,
 			OutputTokens:       parsed.Usage.OutputTokens,
@@ -759,6 +822,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 		maxTokens = defaultMaxTokens
 	}
 	thinking, outCfg, maxTokens := thinkingFor(model, req.ThinkingBudget, maxTokens)
+	thinking, bindingBeta := applyThinkingBinding(model, thinking)
 
 	sysField, msgs := a.buildSystemAndMessages(req, model)
 	body := anthropicReq{
@@ -774,7 +838,20 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 		"x-api-key":         a.apiKey,
 		"anthropic-version": anthropicVersion,
 	}
-	if beta := a.betaHeader(); beta != "" {
+	// Same refusal-fallback policy as Complete: a plain streamed chat turn on a
+	// Fable-class model must not fall over on a classifier decline either.
+	refusalFallback := a.refusalFallback && a.name == "anthropic" && AlwaysOnThinking(model)
+	if refusalFallback {
+		body.Fallbacks = []fallbackParam{{Model: refusalFallbackModel}}
+	}
+	beta := a.betaHeader()
+	if refusalFallback {
+		beta = joinNonEmptyComma(beta, betaServerFallback)
+	}
+	if bindingBeta {
+		beta = joinNonEmptyComma(beta, betaThinkingBinding)
+	}
+	if beta != "" {
 		headers["anthropic-beta"] = beta
 	}
 
@@ -797,12 +874,14 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 							Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
 						} `json:"cache_creation"`
 					} `json:"usage"`
+					InputTransformations []inputTransformation `json:"input_transformations"`
 				} `json:"message"`
 			}
 			if unmarshalErr := json.Unmarshal(data, &ev); unmarshalErr != nil {
 				parseErr = fmt.Errorf("anthropic message_start: %w", unmarshalErr)
 				return false
 			}
+			out.InputTransformations = toInputTransformations(ev.Message.InputTransformations)
 			out.Usage.InputTokens = ev.Message.Usage.InputTokens
 			out.Usage.CacheWriteTokens = ev.Message.Usage.CacheCreationInputTokens
 			out.Usage.CacheWrite5mTokens = ev.Message.Usage.CacheCreation.Ephemeral5mInputTokens
@@ -1121,6 +1200,16 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 	// that point. minimax keeps the text-level coalescePlainSameRole — its chat
 	// format has no content blocks and no prefix cache to protect.)
 	lastPlain := false
+	// anchor is the index (in out) of the newest user message that is NOT a bare
+	// tool_result batch — the message that opened the current turn. The volatile
+	// dynamic block rides THAT message, not whatever message happens to be last:
+	// inside a tool loop the last message changes every iteration (each new
+	// tool_result batch), and moving the block along with it rewrote the opening
+	// user message on every request — a history edit that busted the in-turn cache
+	// prefix on every iteration and, on Fable 5.1, invalidates every thinking
+	// block after it (preserved thinking, _Docs/17). Pinning it to the opening
+	// message keeps the request append-only for the whole turn.
+	anchor := -1
 	for _, m := range msgs {
 		// Verbatim echo: an assistant turn captured from a prior response in this
 		// tool loop carries the exact content array (incl. server-tool blocks the
@@ -1141,6 +1230,9 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 				} else {
 					prev.Content = append(prev.Content, contentBlock{Type: "text", Text: m.Text})
 				}
+			}
+			if m.Role == RoleUser {
+				anchor = len(out) - 1
 			}
 			continue
 		}
@@ -1168,6 +1260,9 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 		}
 		out = append(out, anthropicMessage{Role: m.Role, Content: blocks})
 		lastPlain = plain
+		if m.Role == RoleUser && len(m.ToolResults) == 0 {
+			anchor = len(out) - 1
+		}
 	}
 	if extendedCache {
 		// Rolling history breakpoint: mark the last block of the last (persisted)
@@ -1208,12 +1303,23 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 		// irrelevant because it was never part of the cached prefix. When there are
 		// no messages yet, seed one so the dynamic is not dropped.
 		if d := strings.TrimSpace(dynamic); d != "" && !pureTail {
-			if len(out) == 0 {
+			switch {
+			case len(out) == 0:
 				out = append(out, anthropicMessage{Role: RoleUser, Content: []contentBlock{{Type: "text", Text: d}}})
-			} else if last := &out[len(out)-1]; len(last.Raw) == 0 {
-				// A verbatim (Raw) last message must stay byte-identical — on that
-				// rare pause_turn resume the dynamic is simply skipped for one call.
-				last.Content = append(last.Content, contentBlock{Type: "text", Text: d})
+			case anchor >= 0 && len(out[anchor].Raw) == 0:
+				// The turn's opening user message (see anchor above). When it is
+				// also the last message the block trails the rolling breakpoint,
+				// exactly as before; deeper in a tool loop it sits inside the
+				// in-turn prefix, byte-stable across the loop's iterations.
+				out[anchor].Content = append(out[anchor].Content, contentBlock{Type: "text", Text: d})
+			default:
+				if last := &out[len(out)-1]; len(last.Raw) == 0 {
+					// No plain user message to anchor on (history opens with tool
+					// results): trail the last message. A verbatim (Raw) last message
+					// must stay byte-identical — on that rare pause_turn resume the
+					// dynamic is simply skipped for one call.
+					last.Content = append(last.Content, contentBlock{Type: "text", Text: d})
+				}
 			}
 		}
 	}

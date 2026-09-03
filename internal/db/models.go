@@ -188,6 +188,27 @@ type Agent struct {
 	// Agents may only edit/delete entities that were created by an agent.
 	CreatedBy string `json:"createdBy,omitempty"`
 
+	// ParentID names the agent this one INHERITS from (see agent_inherit.go).
+	// Every inheritable field whose key is NOT listed in Overrides is read from
+	// the parent's effective value at read time (GetAgent/ListAgents return the
+	// resolved row), so a child follows its parent until it overrides a field.
+	// Empty = a root agent that owns every value. Chains may be arbitrarily deep;
+	// cycles are rejected on write.
+	ParentID string `json:"parentId,omitempty"`
+	// Overrides lists the inheritable field keys (InheritableFieldKeys) this
+	// agent pins to its own stored value instead of inheriting. Meaningless on a
+	// root agent. Editing a field on a child adds its key here; "reset to
+	// inherited" removes it. The raw stored value of a non-overridden field is a
+	// stale cache and must never be read directly — go through the resolver.
+	Overrides []string `json:"overrides,omitempty"`
+	// Locked marks a BUILT-IN agent whose every field is owned by the compiled
+	// registry (agent.SystemAgentDefaults) and re-imposed on boot. It cannot be
+	// edited, disabled or deleted; the supported way to customise it is to derive
+	// a child (DeriveAgent) and override fields there. Runtime roles resolve to
+	// the enabled child bound to the same SystemKey first and fall back to the
+	// locked row, which is what makes the built-in the unconditional default.
+	Locked bool `json:"locked,omitempty"`
+
 	// Deleted marks the agent as removed WITHOUT destroying it: the sessions it
 	// owns stay readable and still resolve the name/avatar/colour they were
 	// written with, so past conversations render their author as deleted instead

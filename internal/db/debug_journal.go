@@ -384,6 +384,11 @@ const (
 	DebugBuild         = "build"          // backend build running when the session journal was created
 	DebugCLICompaction = "cli_compaction" // Claude CLI native-compaction lifecycle
 	DebugLifecycle     = "lifecycle"      // session lifecycle: turn cancelled at teardown, queued turn dropped before it ran, teardown grace exceeded
+	// DebugThinkingDropped: the API dropped thinking blocks from the request
+	// (Fable 5.1 preserved thinking). Name = reason of the first drop, Detail =
+	// the dropped paths. A prefix_binding_mismatch stream means the harness
+	// edited in-flight history; a model_binding_mismatch means a model switch.
+	DebugThinkingDropped = "thinking_dropped"
 )
 
 var debugBuildInfo struct {

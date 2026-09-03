@@ -58,13 +58,48 @@ export interface Agent {
   // the session is in coordinator mode, right after the shared coordinator
   // manual. Empty injects nothing at all, so it is free when not coordinating.
   coordinatorPrompt?: string
+  // Inheritance (see internal/db/agent_inherit.go). parentId names the agent
+  // this one inherits from; every inheritable field whose key is NOT in
+  // `overrides` is served RESOLVED from the parent (the server folds the chain
+  // before answering), so the values on this object are always the effective
+  // ones. `overrides` lists the field units this agent pins to its own value.
+  parentId?: string
+  overrides?: AgentOverrideKey[]
+  // A built-in whose every field is owned by the compiled registry: it cannot be
+  // edited, disabled or deleted. Customise it by deriving a child (bindRole).
+  locked?: boolean
   createdAt: number
   updatedAt: number
 }
 
+// One inheritable unit of an agent profile — the keys the backend accepts in
+// `overrides` / `resetFields` (db.InheritableFieldKeys). "provider" covers the
+// provider kind + instance; "tools" covers mcpEnabled + the tool override map.
+export type AgentOverrideKey =
+  | 'soul'
+  | 'identity'
+  | 'provider'
+  | 'model'
+  | 'thinkingLevel'
+  | 'nativeWebSearch'
+  | 'permissionMode'
+  | 'inboundPolicy'
+  | 'avatar'
+  | 'color'
+  | 'tools'
+  | 'allowedTools'
+  | 'skills'
+  | 'coordinatorMode'
+  | 'coordinatorWorkflow'
+  | 'coordinatorPrompt'
+
 // Editable agent profile fields (PUT /api/agents/{id}). Partial — omitted keys
-// are left unchanged on the backend.
+// are left unchanged on the backend. On a derived agent every key present in
+// the patch becomes an override; `resetFields` releases overrides so those
+// fields inherit again.
 export interface AgentPatch {
+  parentId?: string
+  resetFields?: AgentOverrideKey[]
   name?: string
   soul?: string
   identity?: string

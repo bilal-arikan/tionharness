@@ -79,9 +79,6 @@ func TestSystemAgentDefaults(t *testing.T) {
 			if def.SystemPrompt != prompts.Default(tc.promptKey) {
 				t.Fatal("system prompt differs from current runtime default")
 			}
-			if got, want := def.Disabled, tc.key == "insight"; got != want {
-				t.Fatalf("disabled = %v, want %v", got, want)
-			}
 		})
 	}
 	if _, ok := SystemAgentDefault("missing"); ok {

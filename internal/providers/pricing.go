@@ -138,8 +138,11 @@ var priceTable = map[string]map[string]Price{
 		"claude-sonnet-5":           {InputPerMTok: 3, OutputPerMTok: 15, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-sonnet-4-6":         {InputPerMTok: 3, OutputPerMTok: 15, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-haiku-4-5-20251001": {InputPerMTok: 1, OutputPerMTok: 5, CacheWriteMultOverride: CacheWrite1hMult},
-		// Fable 5 sits ABOVE Opus-tier pricing ($10/$50 per MTok).
-		"claude-fable-5": {InputPerMTok: 10, OutputPerMTok: 50, CacheWriteMultOverride: CacheWrite1hMult},
+		// Fable 5.x sits ABOVE Opus-tier pricing ($10/$50 per MTok). Fable 5.1 keeps
+		// the same per-token price but reads its cache at $0.25/MTok — 0.025× base
+		// input, a quarter of Fable 5's 0.10× (2026-09 launch pricing).
+		"claude-fable-5-1": {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.025, CacheWriteMultOverride: CacheWrite1hMult},
+		"claude-fable-5":   {InputPerMTok: 10, OutputPerMTok: 50, CacheWriteMultOverride: CacheWrite1hMult},
 	},
 	// codex-cli is intentionally absent from this table for the SAME reason as
 	// claude-cli above: it runs against a ChatGPT subscription login (CODEX_HOME),
@@ -189,6 +192,7 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-sonnet-5":   {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-4.6": {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
+		"anthropic/claude-fable-5.1":  {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.025, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5":    {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 	},
 	// Z.ai GLM family (Anthropic-mode transport). Official Z.ai list prices per 1M

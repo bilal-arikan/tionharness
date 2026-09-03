@@ -302,6 +302,7 @@ export function SessionDebugCard({
                   'build',
                   'cli_compaction',
                   'lifecycle',
+                  'thinking_dropped',
                 ].map((t) => (
                   <button
                     key={t || 'all'}
@@ -471,6 +472,8 @@ function eventLabel(e: SessionDebugEvent): string {
       }`
     case 'lifecycle':
       return `${e.name ?? 'lifecycle'}${e.detail ? ` · ${e.detail}` : ''}`
+    case 'thinking_dropped':
+      return `${e.calls ?? 1} thinking bloğu düşürüldü · ${e.name ?? ''}${e.detail ? ` · ${e.detail}` : ''}`
     case 'error':
       return e.detail ?? ''
     default:

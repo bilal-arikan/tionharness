@@ -35,6 +35,92 @@ Ayrıntı → `_Docs/17-TOKEN-OPTIMIZASYON.md`. Testler: `internal/conversation/
 `internal/agent/toolloop_prune_early_test.go` (fixture pencereyi **oransal** hesaplar, sabit
 byte değil — eşik oran olduğu için). `scripts/test.sh full` yeşil.
 
+## Ajan kalıtımı + kilitli yerleşik sistem ajanları (2026-09-03) ✅
+
+Ajanlar başka bir ajandan **kalıtım** alabiliyor: `Agent.ParentID` + `Overrides` (alan
+anahtarları). Override edilmeyen alan diskte önbellektir; `GetAgent`/`ListAgents`/
+`FindAgentBySystemKey` ve tüm mutatorlar zinciri kökten katlayıp **etkin** ajanı döner
+(`internal/db/agent_inherit.go`, `inheritableFields` tablosu tek kaynak: soul, identity,
+provider(+instance), model, thinkingLevel, nativeWebSearch, permissionMode, inboundPolicy,
+avatar, color, tools(mcpEnabled+toolOverrides+blockedTools), allowedTools, skills,
+coordinator*). `UpdateAgent` çocukta dokunulan alanı override eder, `ResetFields` bırakır
+(ham değer ebeveynden tazelenir); `ParentID` geçişleri davranışı korur (""→X hepsi override,
+X→"" materialize). Silmede çocuklar büyükebeveyne bağlanır, etkin değerleri değişmez
+(`reparentChildrenLocked`). Döngü/eksik ebeveyn yazımda reddedilir.
+
+Sistem ajanları artık her workspace'te **kilitli** (`Locked`) satırlar: `EnsureSystemAgents`
+kanonik değerleri her açılışta dayatır; düzenleme/silme/devre dışı yok (`ErrAgentLocked`,
+`ErrSystemAgentDelete` → 409). Özelleştirme = `DeriveAgent(parent, BindRole)` ile rolü
+devralan çocuk (`System+SystemKey`); etkinken rol ondan, değilse yerleşikten çözülür
+(rol başına tek etkin özelleştirme, `ErrSystemRoleTaken`). Göç: tanıma eşit eski satır
+yerinde kilitlenir (ID korunur), düzenlenmiş satır override'larıyla çocuk olur.
+Tanımlardaki `Disabled` alanı kaldırıldı (yerleşik hiç disabled olmaz). **2026-09-04 düzeltme:**
+göç artık eski satırı daima **yerinde** kilitler (eski düzenlemeler atılır); ilk sürümün her
+workspace'te bıraktığı 8–12 gereksiz "özelleştirme" çocuğunu açılıştaki
+`collapseLegacyChildLocked` onarımı katlar (kilitliden eski tek çocuk → yerinde yerleşik,
+göçün yarattığı referanssız kilitli satır silinir). WS5 kopyasında kuru koşu: 29 → 18 ajan.
+
+API: `POST /api/agents/{id}/derive {name?, bindRole?}`; `PUT` `parentId`/`resetFields`;
+`POST /api/agents {parentId}` türetilmiş oluşturma; `restore-default` = tüm override'ları
+kaldır; hata eşlemesi `internal/api/agent_inherit.go`. UI: liste satırında atalar için
+renkli **kalıtım şeritleri** (`AgentLineageStripes`, kök dışta), sistem bölümü yerleşik +
+altında özelleştirme diye gruplu, rozetler 🔒 yerleşik / rolü sağlıyor / yerleşik tanım
+etkin; formda `AgentLineageChips` zinciri, kilitli ajanda salt-okunur + **Özelleştir**,
+çocukta alan alan **devralındı / override + devral** (`FieldOverrideBadge`), Kaydet yalnız
+override edilen alanları gönderir; Yeni Ajan formunda ebeveyn seçimi. Testler:
+`internal/db/agent_inherit_test.go`, `store_agent_system_test.go` (yeniden yazıldı),
+`internal/api/agents_system_test.go`, `AgentSettingsForm.inherit.test.tsx`,
+`agentLineage.test.ts`; canlı claude-cli doğrulaması `internal/agent/inherit_live_test.go`
+(`TIONHARNESS_LIVE_INHERIT=1`, titler özelleştirmesi + devralınan soul, geçti). Doküman:
+`82-AJAN-KALITIMI.md`, `74` güncellendi.
+
+## Kalıcı claude-cli süreci: 2. tur takılması düzeltildi (2026-09-03) ✅
+
+`claudePersistentSession=true` canlı denenince 1. tur çalıştı, 2. tur 4 dk sonunda
+`context deadline exceeded` ile düştü ve süreç "öldürülemedi" (Windows access denied). Ham CLI
+ile iki turlu stream-json oturumu sorunsuzdu → hata havuz kodundaydı: `CLISession.Turn` her turda
+paylaşılan `bufio.Reader` üzerinde yeni bir okuyucu goroutine açıyordu; önceki turun goroutine'i
+`ReadString`'de bloke kalıp sonraki turun ilk satırlarını çalıyordu (birini ölü kanala
+tamponlar, ikincisini düşürür) — çalınan `result` olunca tur sonsuza kadar bekliyor. Düzeltme:
+süreç başına **tek** okuyucu (`startReader`, 256 tamponlu `lines` kanalı; `Turn` önce eski
+tur artıklarını boşaltır, EOF'u anında raporlar). İkinci hata: `proc.KillTree` (taskkill)
+sonrası `Process.Kill()` çıkmış süreç için "erişim engellendi" döndürüyor ve sahte "could NOT
+be killed" hatası üretiyordu → `killProcessLocked` süreç gerçekten hâlâ yaşıyorsa hata verir
+(`processIsAlive`). Regresyon: `TestCLISessionSecondTurnReceivesEveryLine` (5 ardışık tur,
+CLI patlaması Turn'den önce yazılır), `TestCLISessionTurnReportsEndedStream`. Canlı
+(`TestLivePersistentPoolLifecycle`, haiku): soğuk 9.643 write → sıcak turlar 75/71 write +
+9,6k read (yalnız yeni mesaj gidiyor), fingerprint değişiminde soğuk yeniden başlatma, paralel
+iki oturum, temiz kapanış. Fable 5.1 ile aynı test Anthropic 529 Overloaded yüzünden
+koşulamadı (sunucu tarafı). Not: bu hata, persistent modun ölçüldüğü 2026-07-02'den beri CLI
+sürümüyle ortaya çıkmış olabilir; ayar sabah açıldığı için düzeltme kritikti.
+
+## Claude Fable 5.1 desteği (2026-09-03) ✅
+
+`claude-fable-5-1` katalogda (anthropic, openrouter `anthropic/claude-fable-5.1`; claude-cli
+`fable` alias'ı ve `providers.NativeClaudeModel` artık 5.1'e çözülür; ingest `fable` → 5.1).
+Model-sınıfı yardımcıları (`AlwaysOnThinking`, adaptif thinking, structured outputs, dinamik
+web araçları, PTC, 1M pencere, uzun istek süresi) `fable` alt-dizesiyle 5.1'i zaten kapsıyordu.
+Fiyat: $10/$50, **cache-read 0.025×** ($0.25/MTok; Fable 5'in çeyreği). Fable 5.1'e özgü üç
+kırıcı değişikliğe karşı: **(1)** zorunlu `tool_choice` hiç gönderilmiyordu — değişiklik yok;
+**(2)** thinking blokları modele bağlı — sağlayıcı değişiminde API zaten sessizce düşürür;
+**(3)** *preserved thinking* (bloklar konuşma önekine bağlı, geçmiş düzenlemesi 400 döner):
+turlar arası thinking bloğu tekrar gönderilmiyor (RawContent yalnız tur içi), ama tur içinde
+üç düzenleme vardı — dinamik blok her iterasyonda son mesaja taşınıyordu, prune/compaction
+eski mesajları yeniden yazıyor, `activate_tools` şema ekliyor. Çözüm: **(a)** dinamik blok artık
+turu açan kullanıcı mesajına sabitleniyor (`toAnthropicMessages` `anchor`; tur içi istek
+append-only, tur içi prefix bayt-sabit → cache de kazanıyor); **(b)** 5.1/Mythos 5.1
+sınıfında (`SupportsThinkingBinding`) `thinking.block_binding.prefix_mismatch_behavior=drop_block`
++ `thinking-binding-controls-2026-08-01` beta'sı gönderilir, kalan düzenlemeler 400 yerine
+"düşür ve yeniden planla"ya iner; **(c)** yanıttaki `input_transformations`
+`Response.InputTransformations` olarak yüzeye çıkar ve `Runtime.noteInputTransformations`
+`thinking_dropped` debug olayı + uyarı logu yazar (frontend Debug kartında filtre + etiket).
+Ayrıca `SupportsSystemInMessages` Opus 5 ve Fable/Mythos 5.x'e genişletildi (skill
+matrisi), `Stream` yoluna Complete ile aynı red-fallback eklendi. Veri saklama ipucu "Fable 5.x".
+Testler: `anthropic_fable51_test.go` (sınıf, binding, uçtan uca beta+body+transformations,
+dinamik anchor'un iterasyonlar arası bayt-sabitliği, fiyat), `ingest_test`, alias testi.
+Yapılmayan (isteğe bağlı beta'lar): mesaj-başı effort, `clear_at` tur-kapsamlı sistem mesajı,
+`display: "updates"` ilerleme notları, `mid-conversation-tool-changes` (activate_tools'un
+şema eklemesini düzenleme saymayan yol) — `_Docs/55` yol haritasına aday.
 
 ## Paket bölme, adım 1/2/3/5 (2026-09-03) ✅
 

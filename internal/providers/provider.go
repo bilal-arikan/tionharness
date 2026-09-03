@@ -403,6 +403,19 @@ type Response struct {
 	// StopDetails carries the refusal classification when StopReason is
 	// StopRefusal; nil for every other stop reason.
 	StopDetails *StopDetails
+	// InputTransformations lists the thinking blocks the API dropped from the
+	// request before the model saw it (Fable 5.1 "preserved thinking": a
+	// prefix_binding_mismatch means this harness edited earlier history, a
+	// model_binding_mismatch means the conversation switched models). Empty
+	// unless the request carried the thinking-binding beta. anthropic only.
+	InputTransformations []InputTransformation
+}
+
+// InputTransformation is one entry of the API's input_transformations array.
+type InputTransformation struct {
+	Type   string // "thinking_dropped"
+	Path   string // "messages.N.content.M"
+	Reason string // "prefix_binding_mismatch" | "model_binding_mismatch"
 }
 
 // TokenCounter is implemented by providers exposing an exact server-side token

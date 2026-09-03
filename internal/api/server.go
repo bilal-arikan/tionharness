@@ -509,7 +509,11 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
-	mux.HandleFunc("POST /api/agents/{id}/restore-default", s.handleRestoreSystemAgent)
+	// Drop every override on a derived agent so it inherits again.
+	mux.HandleFunc("POST /api/agents/{id}/restore-default", s.handleRestoreAgentDefaults)
+	// Create a child that inherits every field (optionally taking over the
+	// parent's system role — the way a locked built-in is customised).
+	mux.HandleFunc("POST /api/agents/{id}/derive", s.handleDeriveAgent)
 	// Clone an existing agent (full profile + tool config) into a new "(kopya)".
 	mux.HandleFunc("POST /api/agents/{id}/duplicate", s.handleDuplicateAgent)
 	// Fresh-start context preview (assembled system prompt + tool catalog).

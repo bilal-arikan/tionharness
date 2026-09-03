@@ -1384,6 +1384,14 @@ sıfıra clamp edilir; worker bağlamından tahmini ek yük çıkarılmaz.
 > kaldırıldı). Not: **--resume (delta)**, External Agent'ın kullandığı modun ta kendisidir
 > (her tur respawn + `resume: sessionId`); kalıcı süreç TionHarness'e özgüdür.
 
+### Persistent süreç düzeltmesi (2026-09-03)
+
+Kalıcı süreçte 2. tur takılıyordu: tur başına okuyucu goroutine paylaşılan `bufio.Reader`
+üzerinde sonraki turun satırlarını çalıyordu. Artık süreç başına tek okuyucu var
+(`CLISession.startReader`); Windows'ta taskkill sonrası sahte "could NOT be killed" de
+giderildi (`killProcessLocked`). Canlı doğrulama ve rakamlar: `05-ILERLEME.md` aynı tarihli
+giriş; canlı test `TestLivePersistentPoolLifecycle` (`TIONHARNESS_LIVE_CLI_POOL=1`).
+
 ### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
 
 AGT1/opus-4-8, aynı 3-turluk sohbet, per-session `usage-detail`:

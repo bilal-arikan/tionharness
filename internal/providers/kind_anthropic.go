@@ -20,7 +20,8 @@ func init() {
 				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Placeholder: "sk-ant-...", Help: "Anthropic Console'dan alinan API anahtari."},
 			},
 			Models: []ModelInfo{
-				{ID: "claude-fable-5", Label: "Claude Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri. Not: 30 günlük veri saklama gerektirir (ZDR organizasyonlarda çalışmaz); güvenlik sınıflandırıcıları reddi Opus 4.8 fallback'iyle karşılanır (Ayarlar)"},
+				{ID: "claude-fable-5-1", Label: "Claude Fable 5.1 — öncü", Description: "En yetenekli genel-erişim model; 1M bağlam, 128K çıktı, adaptif düşünme (daima açık), cache-read Opus'un yarısı ($0.25/MTok). Fable 5 ile aynı fiyat. Farklar: zorunlu tool_choice yok, thinking blokları konuşmaya bağlı (TionHarness drop_block ile tolere eder). 30 günlük veri saklama gerektirir; güvenlik reddi Opus 4.8 fallback'iyle karşılanır (Ayarlar)"},
+				{ID: "claude-fable-5", Label: "Claude Fable 5 — önceki öncü", Description: "Fable 5.1'in öncülü; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri. Not: 30 günlük veri saklama gerektirir (ZDR organizasyonlarda çalışmaz); güvenlik sınıflandırıcıları reddi Opus 4.8 fallback'iyle karşılanır (Ayarlar)"},
 				{ID: "claude-opus-5", Label: "Claude Opus 5 — en yetenekli", Description: "En yeni Opus amiral (24 Tem 2026); 1M bağlam, öncü ajan/kodlama + computer-use, Opus fiyatı sabit ($5/$25)"},
 				{ID: "claude-opus-4-8", Label: "Claude Opus 4.8 — önceki nesil", Description: "Önceki Opus amiral; karmaşık akıl yürütme, kodlama, ajan görevleri"},
 				{ID: "claude-sonnet-5", Label: "Claude Sonnet 5 — dengeli", Description: "En yeni dengeli nesil; 1M bağlam, güçlü ajan/kodlama, hız/kalite dengesi"},

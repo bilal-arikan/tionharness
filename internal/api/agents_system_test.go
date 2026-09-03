@@ -28,6 +28,9 @@ func systemAgentAPIFixture(t *testing.T) (*Server, *workspace.Workspace, db.Agen
 	if !ok {
 		t.Fatal("titler system agent not found")
 	}
+	if !systemAgent.Locked {
+		t.Fatalf("seeded titler must be a locked built-in: %+v", *systemAgent)
+	}
 	s := newTestServer()
 	s.runs = newChatRuns()
 	wsp := &workspace.Workspace{Meta: workspace.Meta{ID: "WS1"}, DB: database}
@@ -42,54 +45,79 @@ func systemAgentAPIRequest(wsp *workspace.Workspace, method, target, id string, 
 	return req
 }
 
-func TestHandleRestoreSystemAgentDefault(t *testing.T) {
-	s, wsp, systemAgent := systemAgentAPIFixture(t)
-	customPrompt, customModel := "MUTATED", "custom-model"
-	if _, err := wsp.DB.UpdateAgent(context.Background(), systemAgent.ID, db.AgentProfilePatch{Soul: &customPrompt, Model: &customModel}); err != nil {
-		t.Fatalf("customize system agent: %v", err)
-	}
-	if err := wsp.DB.UpdateAgentAllowedTools(context.Background(), systemAgent.ID, `["Bash"]`); err != nil {
-		t.Fatalf("customize allowed tools: %v", err)
-	}
+// TestHandleDeriveAgentBindsRole: deriving a built-in with bindRole yields the
+// workspace's customisation of that role; edits pin overrides, and
+// restore-default drops them so the child inherits the built-in again.
+func TestHandleDeriveAgentBindsRole(t *testing.T) {
+	s, wsp, builtin := systemAgentAPIFixture(t)
 
 	rec := httptest.NewRecorder()
-	s.handleRestoreSystemAgent(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+systemAgent.ID+"/restore-default", systemAgent.ID, nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	s.handleDeriveAgent(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+builtin.ID+"/derive", builtin.ID, []byte(`{"bindRole":true}`)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var got db.Agent
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+	var child db.Agent
+	if err := json.Unmarshal(rec.Body.Bytes(), &child); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	def, _ := agentpkg.SystemAgentDefault(systemAgent.SystemKey)
-	if def.SystemPrompt == "" {
-		t.Fatal("compiled default prompt is empty")
+	if child.ParentID != builtin.ID || !child.System || child.SystemKey != "titler" || child.Locked || len(child.Overrides) != 0 {
+		t.Fatalf("derived child = %+v, want an unlocked child bound to titler", child)
 	}
-	if got.ID != systemAgent.ID || !got.System || got.SystemKey != systemAgent.SystemKey {
-		t.Fatalf("system identity changed: %+v", got)
+	if child.Name != "Titler (özel)" || child.Soul != builtin.Soul {
+		t.Fatalf("derived child name=%q soul inherited=%v", child.Name, child.Soul == builtin.Soul)
 	}
-	if got.Soul != def.SystemPrompt || got.Model != def.SuggestedModel || got.AllowedTools != def.AllowedTools {
-		t.Fatalf("defaults not restored: %+v", got)
+	if serving, _ := wsp.DB.FindAgentBySystemKey("titler"); serving.ID != child.ID {
+		t.Fatalf("role should resolve to the customisation, got %q", serving.ID)
 	}
-	stored, err := wsp.DB.GetAgent(context.Background(), systemAgent.ID)
-	if err != nil {
-		t.Fatalf("read restored system agent: %v", err)
+
+	// A second bound customisation is refused while this one is enabled.
+	rec = httptest.NewRecorder()
+	s.handleDeriveAgent(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+builtin.ID+"/derive", builtin.ID, []byte(`{"bindRole":true}`)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("second bound derive: expected 409, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if stored.Soul != def.SystemPrompt || stored.Model != def.SuggestedModel {
-		t.Fatalf("restored defaults not persisted: soul=%q model=%q", stored.Soul, stored.Model)
+
+	// Editing the child pins an override.
+	rec = httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+child.ID, child.ID, []byte(`{"soul":"MUTATED"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update child: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	updated, _ := wsp.DB.GetAgent(context.Background(), child.ID)
+	if updated.Soul != "MUTATED" || len(updated.Overrides) != 1 || updated.Overrides[0] != "soul" {
+		t.Fatalf("override not recorded: soul=%q overrides=%v", updated.Soul, updated.Overrides)
+	}
+
+	// Restore drops it.
+	rec = httptest.NewRecorder()
+	s.handleRestoreAgentDefaults(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+child.ID+"/restore-default", child.ID, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var restored db.Agent
+	if err := json.Unmarshal(rec.Body.Bytes(), &restored); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if restored.Soul != builtin.Soul || len(restored.Overrides) != 0 {
+		t.Fatalf("restore did not clear overrides: soul=%q overrides=%v", restored.Soul, restored.Overrides)
 	}
 }
 
-func TestHandleRestoreSystemAgentDefaultWithoutSystemKey(t *testing.T) {
-	s, wsp, _ := systemAgentAPIFixture(t)
+func TestHandleRestoreDefaultsOnLockedAndRoot(t *testing.T) {
+	s, wsp, builtin := systemAgentAPIFixture(t)
+	rec := httptest.NewRecorder()
+	s.handleRestoreAgentDefaults(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+builtin.ID+"/restore-default", builtin.ID, nil))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("locked built-in: expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
 	regular, err := wsp.DB.CreateAgent(context.Background(), db.Agent{Name: "Regular"})
 	if err != nil {
 		t.Fatalf("create regular agent: %v", err)
 	}
-	rec := httptest.NewRecorder()
-	s.handleRestoreSystemAgent(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+regular.ID+"/restore-default", regular.ID, nil))
+	rec = httptest.NewRecorder()
+	s.handleRestoreAgentDefaults(rec, systemAgentAPIRequest(wsp, http.MethodPost, "/api/agents/"+regular.ID+"/restore-default", regular.ID, nil))
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("root agent: expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -100,8 +128,23 @@ func TestHandleDeleteSystemAgentConflict(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "system agent cannot be deleted; disable it instead") {
+	if !strings.Contains(rec.Body.String(), "built-in agent cannot be deleted") {
 		t.Fatalf("expected actionable error, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleUpdateLockedAgentConflict: every profile write to a built-in is a
+// 409, and the tools endpoint follows the same rule.
+func TestHandleUpdateLockedAgentConflict(t *testing.T) {
+	s, wsp, systemAgent := systemAgentAPIFixture(t)
+	rec := httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+systemAgent.ID, systemAgent.ID, []byte(`{"soul":"x"}`)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	stored, _ := wsp.DB.GetAgent(context.Background(), systemAgent.ID)
+	if stored.Soul != systemAgent.Soul {
+		t.Fatal("locked agent was modified")
 	}
 }
 
@@ -132,8 +175,42 @@ func TestHandleUpdateAgentRejectsSystemIdentityChanges(t *testing.T) {
 				t.Fatalf("read agent after rejected update: %v", err)
 			}
 			if stored.System != systemAgent.System || stored.SystemKey != systemAgent.SystemKey {
-				t.Fatalf("system identity persisted after rejected update: system=%v systemKey=%q", stored.System, stored.SystemKey)
+				t.Fatalf("system identity persisted after rejected update: system=%v systemKey=%q", stored.System, systemAgent.SystemKey)
 			}
 		})
+	}
+}
+
+// TestHandleUpdateAgentReparentAndReset covers the parentId/resetFields patch
+// fields end to end, including the cycle guard's status code.
+func TestHandleUpdateAgentReparentAndReset(t *testing.T) {
+	s, wsp, _ := systemAgentAPIFixture(t)
+	ctx := context.Background()
+	base, _ := wsp.DB.CreateAgent(ctx, db.Agent{Name: "Base", Soul: "base soul", Provider: "claude-cli", ThinkingLevel: "high"})
+	kid, _ := wsp.DB.CreateAgent(ctx, db.Agent{Name: "Kid", Soul: "kid soul", Provider: "claude-cli", ThinkingLevel: "high"})
+
+	rec := httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+kid.ID, kid.ID, []byte(`{"parentId":"`+base.ID+`"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reparent: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+kid.ID, kid.ID, []byte(`{"resetFields":["soul"]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reset: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	got, _ := wsp.DB.GetAgent(ctx, kid.ID)
+	if got.Soul != "base soul" {
+		t.Fatalf("soul after reset = %q, want inherited", got.Soul)
+	}
+	rec = httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+base.ID, base.ID, []byte(`{"parentId":"`+kid.ID+`"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("cycle: expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	s.handleUpdateAgent(rec, systemAgentAPIRequest(wsp, http.MethodPut, "/api/agents/"+kid.ID, kid.ID, []byte(`{"resetFields":["bogus"]}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown reset key: expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

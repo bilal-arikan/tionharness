@@ -5,10 +5,12 @@ import type { Agent, AgentPatch } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
+import { eligibleParents, indexAgents, lineageOf } from '@/shared/lib/agentLineage'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { AgentBulkEditPanel } from './AgentBulkEditPanel'
+import { AgentLineageStripes } from './AgentLineageStripes'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
@@ -46,10 +48,18 @@ interface Props {
     /** Coordinator defaults for the sessions the new agent opens. Optional so
      * callers that never expose the toggle keep the plain four-arg shape. */
     coordinator?: { mode: boolean; workflow: string; prompt: string },
+    /** Create as a CHILD of this agent (inherits provider/model/… from it). */
+    parentId?: string,
   ) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<{ agent: Agent; warning?: string }>
   /** Clone the agent (full profile + tool config) into a new "(kopya)". */
   onDuplicateAgent: (id: string) => Promise<string | undefined>
+  /** Derive a child that inherits every field; bindRole takes over the parent's
+   * system role (how a locked built-in is customised). */
+  onDeriveAgent?: (
+    id: string,
+    opts: { name?: string; bindRole?: boolean },
+  ) => Promise<string | undefined>
   onDeleteAgent: (id: string) => Promise<void>
   /** Re-fetch the agent roster from the server. */
   onRefresh?: () => void | Promise<void>
@@ -71,6 +81,7 @@ export function AgentsView({
   onCreateAgent,
   onUpdateAgent,
   onDuplicateAgent,
+  onDeriveAgent,
   onDeleteAgent,
   onRefresh,
   onError,
@@ -128,6 +139,9 @@ export function AgentsView({
   const [coordinatorMode, setCoordinatorMode] = useState(false)
   const [coordinatorWorkflow, setCoordinatorWorkflow] = useState('')
   const [coordinatorPrompt, setCoordinatorPrompt] = useState('')
+  // "" = start from scratch; otherwise the new agent inherits from this one and
+  // the provider/model/coordinator inputs are hidden (they come from the parent).
+  const [createParentId, setCreateParentId] = useState('')
 
   // Selection is controlled by the parent (deep-link aware) when provided,
   // otherwise tracked internally.
@@ -149,15 +163,36 @@ export function AgentsView({
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
+  const byId = useMemo(() => indexAgents(agents), [agents])
   const regularAgents = useMemo(() => agents.filter((a) => !a.system), [agents])
-  const systemAgents = useMemo(() => agents.filter((a) => a.system), [agents])
+  // System section, GROUPED: each locked built-in first, then the workspace
+  // customisations bound to its role (indented, with the lineage stripe), so
+  // "which row serves this role" reads top-down without a second column.
+  const systemRows = useMemo(() => {
+    const builtins = agents.filter((a) => a.system && a.locked)
+    const custom = agents.filter((a) => a.system && !a.locked)
+    const placed = new Set<string>()
+    const rows: Agent[] = []
+    for (const b of builtins) {
+      rows.push(b)
+      for (const c of custom) {
+        if (c.systemKey === b.systemKey) {
+          rows.push(c)
+          placed.add(c.id)
+        }
+      }
+    }
+    // Legacy: a customisation whose built-in is not seeded yet.
+    for (const c of custom) if (!placed.has(c.id)) rows.push(c)
+    return rows
+  }, [agents])
   const orderedIds = useMemo(() => regularAgents.map((a) => a.id), [regularAgents])
   const bulkDelete = async () => {
     const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
     if (ids.length === 0) return
     if (
       !confirm(
-        `${ids.length} ajan silinsin mi?\n\nSohbet geçmişleri KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip oldukları görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
+        `${ids.length} ajan silinsin mi?\n\nSohbet geçmişleri KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip oldukları görevler kalıcı olarak silinir. Bu ajanlardan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
       )
     )
       return
@@ -168,28 +203,34 @@ export function AgentsView({
 
   const bulkAgents = regularAgents.filter((agent) => sel.selected.has(agent.id))
 
-  const canSubmit = name.trim() !== '' && model !== null
+  const canSubmit = name.trim() !== '' && (createParentId !== '' || model !== null)
 
   const submit = () => {
-    if (!canSubmit || model === null) return
-    onCreateAgent(name.trim(), soul.trim(), provider, model, {
-      mode: coordinatorMode,
-      workflow: coordinatorMode ? coordinatorWorkflow : '',
-      prompt: coordinatorMode ? coordinatorPrompt : '',
-    })
+    if (!canSubmit) return
+    if (createParentId) {
+      onCreateAgent(name.trim(), soul.trim(), '', '', undefined, createParentId)
+    } else {
+      if (model === null) return
+      onCreateAgent(name.trim(), soul.trim(), provider, model, {
+        mode: coordinatorMode,
+        workflow: coordinatorMode ? coordinatorWorkflow : '',
+        prompt: coordinatorMode ? coordinatorPrompt : '',
+      })
+    }
     setName('')
     setSoul('')
     setModel(null)
     setCoordinatorMode(false)
     setCoordinatorWorkflow('')
     setCoordinatorPrompt('')
+    setCreateParentId('')
     setShowForm(false)
   }
 
   const restoreDefault = async (agent: Agent) => {
     if (
       !confirm(
-        `"${agent.name}" sistem ajanı derlenmiş varsayılan ayarlarına döndürülsün mü? Mevcut profil değişiklikleri silinir ve bu işlem geri alınamaz.`,
+        `"${agent.name}" ajanının tüm override'ları kaldırılsın mı? Her alan yeniden ebeveyninden devralınır; bu işlem geri alınamaz.`,
       )
     )
       return
@@ -215,77 +256,97 @@ export function AgentsView({
     }
   }
 
-  const rosterItem = (a: Agent) => (
-    <div
-      key={a.id}
-      data-testid="agent-roster-item"
-      data-agent-id={a.id}
-      className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-        a.disabled ? 'opacity-50' : ''
-      } ${
-        sel.isSelected(a.id)
-          ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
-          : selectedId === a.id
-            ? SELECTED_ITEM_CLS
-            : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-      }`}
-    >
-      <button
-        onClick={(e) => {
-          if (!a.system && sel.handleClick(e, a.id, orderedIds, selectedId)) return
-          select(a.id)
-        }}
-        data-testid="agent-roster-select"
+  const rosterItem = (a: Agent) => {
+    const lineage = lineageOf(a, byId)
+    return (
+      <div
+        key={a.id}
+        data-testid="agent-roster-item"
         data-agent-id={a.id}
-        className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+        data-lineage-depth={lineage.length}
+        className={`group mb-1 flex w-full items-stretch rounded-lg pr-1 text-sm transition ${
+          a.disabled ? 'opacity-50' : ''
+        } ${
+          sel.isSelected(a.id)
+            ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+            : selectedId === a.id
+              ? SELECTED_ITEM_CLS
+              : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+        }`}
       >
-        <AgentIdentity
-          agent={a}
-          size="md"
-          active={defaultAgentId === a.id}
-          nameSuffix={
-            <>
-              {a.disabled && !a.system && (
-                <span className="ml-1.5 shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px]">
-                  devre dışı
-                </span>
-              )}
-              <SystemAgentStatusBadge agent={a} />
-              {a.coordinatorMode && (
-                <span
-                  data-testid="agent-coordinator-badge"
-                  className="ml-1.5 shrink-0 text-[11px]"
-                  title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
-                >
-                  🕸
-                </span>
-              )}
-              <span
-                className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
-                title="Ajan ID (klasör adı)"
-              >
-                {a.id}
-              </span>
-            </>
-          }
-          subtitle={
-            resolveModelLabel(catalog, a.provider, a.model) +
-            (defaultAgentId === a.id ? ' · varsayılan' : '')
-          }
-        />
-      </button>
-      {defaultAgentId === a.id && (
-        <span
-          data-testid="agent-default-indicator"
+        <button
+          onClick={(e) => {
+            if (!a.system && sel.handleClick(e, a.id, orderedIds, selectedId)) return
+            select(a.id)
+          }}
+          data-testid="agent-roster-select"
           data-agent-id={a.id}
-          title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
-          className="ml-1 shrink-0 p-1 text-[var(--color-accent)]"
+          className="flex min-w-0 flex-1 items-stretch gap-2 py-1 pl-2 pr-1 text-left"
         >
-          ★
-        </span>
-      )}
-    </div>
-  )
+          {/* Inheritance marker: one colour bar per ancestor, root outermost. */}
+          <AgentLineageStripes lineage={lineage} className="my-0.5" />
+          <span className="flex min-w-0 flex-1 items-center py-1">
+            <AgentIdentity
+              agent={a}
+              size="md"
+              active={defaultAgentId === a.id}
+              nameSuffix={
+                <>
+                  {a.disabled && !a.system && (
+                    <span className="ml-1.5 shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px]">
+                      devre dışı
+                    </span>
+                  )}
+                  <SystemAgentStatusBadge agent={a} />
+                  {a.coordinatorMode && (
+                    <span
+                      data-testid="agent-coordinator-badge"
+                      className="ml-1.5 shrink-0 text-[11px]"
+                      title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
+                    >
+                      🕸
+                    </span>
+                  )}
+                  <span
+                    className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
+                    title="Ajan ID (klasör adı)"
+                  >
+                    {a.id}
+                  </span>
+                </>
+              }
+              subtitle={
+                resolveModelLabel(catalog, a.provider, a.model) +
+                (defaultAgentId === a.id ? ' · varsayılan' : '') +
+                (lineage.length > 0 ? ` · ← ${lineage[lineage.length - 1].name}` : '')
+              }
+            />
+          </span>
+        </button>
+        {defaultAgentId === a.id && (
+          <span
+            data-testid="agent-default-indicator"
+            data-agent-id={a.id}
+            title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
+            className="ml-1 shrink-0 self-center p-1 text-[var(--color-accent)]"
+          >
+            ★
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // Inheritance context for the selected agent's form.
+  const selectedLineage = selected ? lineageOf(selected, byId) : []
+  const selectedParent = selected?.parentId ? (byId.get(selected.parentId) ?? null) : null
+  const selectedParentOptions = selected ? eligibleParents(selected, agents) : []
+  const selectedRoleCustomization =
+    selected?.locked && selected.systemKey
+      ? (agents.find(
+          (a) => a.system && !a.locked && a.systemKey === selected.systemKey && !a.disabled,
+        ) ?? null)
+      : null
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -330,62 +391,94 @@ export function AgentsView({
               data-testid="agent-create-name-input"
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]"
             />
+            <label className="block space-y-1 text-xs text-[var(--color-text-dim)]">
+              <span>Kalıtım (ebeveyn ajan)</span>
+              <select
+                data-testid="agent-create-parent-select"
+                value={createParentId}
+                onChange={(e) => setCreateParentId(e.target.value)}
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+              >
+                <option value="">— Sıfırdan —</option>
+                {agents
+                  .filter((a) => !a.deleted)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.locked ? ' (yerleşik)' : ''} · {a.id}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <PromptEditor
               value={soul}
               onChange={setSoul}
-              placeholder="Karakter / sistem promptu (soul)"
+              placeholder={
+                createParentId
+                  ? 'Soul (boş bırakırsan ebeveyninkini devralır)'
+                  : 'Karakter / sistem promptu (soul)'
+              }
               rows={3}
               data-testid="agent-create-soul-textarea"
             />
-            <div data-testid="agent-create-provider-wrap" className="contents">
-              <ProviderInstanceModelSelect
-                providerInstanceId={provider}
-                model={model}
-                onChange={(_kindId, instanceId, m) => {
-                  setProvider(instanceId)
-                  setModel(m)
-                }}
-              />
-            </div>
-            <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--color-text)]">
-              <input
-                type="checkbox"
-                data-testid="agent-create-coordinator-mode"
-                checked={coordinatorMode}
-                onChange={(e) => setCoordinatorMode(e.target.checked)}
-                className="mt-0.5 accent-[var(--color-accent)]"
-              />
-              <span>
-                Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
-              </span>
-            </label>
-            {coordinatorMode && (
+            {createParentId ? (
+              <p className="text-xs text-[var(--color-text-dim)]">
+                Sağlayıcı, model, düşünme seviyesi, araçlar ve yetenekler ebeveynden devralınır;
+                oluşturduktan sonra ayarlar ekranında alan alan override edebilirsin.
+              </p>
+            ) : (
               <>
-                <CoordinatorWorkflowPicker
-                  value={coordinatorWorkflow}
-                  onChange={setCoordinatorWorkflow}
-                  groupName="agent-create-recipe"
-                />
-                <PromptEditor
-                  data-testid="agent-create-coordinator-prompt-textarea"
-                  value={coordinatorPrompt}
-                  onChange={setCoordinatorPrompt}
-                  placeholder="Koordinatör promptu"
-                  rows={3}
-                />
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
-                  kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon
-                  yönergesi (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır — soul'a
-                  değil: mod kapalıyken hiç enjekte edilmez, dolayısıyla{' '}
-                  <strong>sıfır token</strong> maliyeti olur.
-                </p>
+                <div data-testid="agent-create-provider-wrap" className="contents">
+                  <ProviderInstanceModelSelect
+                    providerInstanceId={provider}
+                    model={model}
+                    onChange={(_kindId, instanceId, m) => {
+                      setProvider(instanceId)
+                      setModel(m)
+                    }}
+                  />
+                </div>
+                <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--color-text)]">
+                  <input
+                    type="checkbox"
+                    data-testid="agent-create-coordinator-mode"
+                    checked={coordinatorMode}
+                    onChange={(e) => setCoordinatorMode(e.target.checked)}
+                    className="mt-0.5 accent-[var(--color-accent)]"
+                  />
+                  <span>
+                    Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
+                  </span>
+                </label>
+                {coordinatorMode && (
+                  <>
+                    <CoordinatorWorkflowPicker
+                      value={coordinatorWorkflow}
+                      onChange={setCoordinatorWorkflow}
+                      groupName="agent-create-recipe"
+                    />
+                    <PromptEditor
+                      data-testid="agent-create-coordinator-prompt-textarea"
+                      value={coordinatorPrompt}
+                      onChange={setCoordinatorPrompt}
+                      placeholder="Koordinatör promptu"
+                      rows={3}
+                    />
+                    <p className="text-xs text-[var(--color-text-dim)]">
+                      Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
+                      kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon
+                      yönergesi (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır —
+                      soul'a değil: mod kapalıyken hiç enjekte edilmez, dolayısıyla{' '}
+                      <strong>sıfır token</strong> maliyeti olur.
+                    </p>
+                  </>
+                )}
               </>
             )}
             <Button
               onClick={submit}
               disabled={!canSubmit}
-              title={model === null ? 'Önce bir model seçin' : undefined}
+              title={!createParentId && model === null ? 'Önce bir model seçin' : undefined}
               data-testid="agent-create-submit"
               className="w-full"
             >
@@ -396,12 +489,15 @@ export function AgentsView({
 
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {regularAgents.map(rosterItem)}
-          {systemAgents.length > 0 && (
+          {systemRows.length > 0 && (
             <>
-              <h3 className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+              <h3
+                className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
+                title="Uygulamanın kendi işleri (başlık, sıkıştırma, worker profilleri) için kullandığı yerleşik ajanlar ve onların workspace özelleştirmeleri"
+              >
                 Sistem ajanları
               </h3>
-              {systemAgents.map(rosterItem)}
+              {systemRows.map(rosterItem)}
             </>
           )}
           {agents.length === 0 && (
@@ -490,13 +586,22 @@ export function AgentsView({
                 onSetDefault={() => onSetDefault(selected.id)}
                 onSave={(p) => onUpdateAgent(selected.id, p)}
                 onDuplicate={() => onDuplicateAgent(selected.id)}
+                onDerive={onDeriveAgent ? (opts) => onDeriveAgent(selected.id, opts) : undefined}
+                lineage={selectedLineage}
+                parent={selectedParent}
+                parentOptions={selectedParentOptions}
+                roleCustomization={selectedRoleCustomization}
+                onSelectAgent={select}
                 onDelete={
-                  selected.system
+                  selected.locked
                     ? undefined
                     : async () => {
+                        const roleNote = selected.system
+                          ? '\n\nBu bir sistem rolü özelleştirmesi: silinince rol yerleşik tanıma döner.'
+                          : ''
                         if (
                           confirm(
-                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
+                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.${roleNote}`,
                           )
                         ) {
                           await onDeleteAgent(selected.id)
@@ -504,8 +609,10 @@ export function AgentsView({
                         }
                       }
                 }
-                onRestoreDefault={selected.system ? () => restoreDefault(selected) : undefined}
-                onToggleDisabled={selected.system ? () => toggleDisabled(selected) : undefined}
+                onRestoreDefault={selected.parentId ? () => restoreDefault(selected) : undefined}
+                onToggleDisabled={
+                  selected.system && !selected.locked ? () => toggleDisabled(selected) : undefined
+                }
                 systemActionPending={systemActionPending}
               />
             ) : (

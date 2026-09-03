@@ -33,11 +33,19 @@ export const agentApi = {
     coordinatorMode?: boolean
     coordinatorWorkflow?: string
     coordinatorPrompt?: string
+    // When set, the agent is created as a CHILD inheriting every field from
+    // this agent; only the name and a non-empty soul are pinned on top.
+    parentId?: string
   }) =>
     req<Agent>('/api/agents', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Create a child that inherits every field from `id`. bindRole makes it the
+  // workspace's customisation of the parent's system role — the way a locked
+  // built-in is customised. Returns the created child.
+  deriveAgent: (id: string, opts: { name?: string; bindRole?: boolean } = {}) =>
+    req<Agent>(`/api/agents/${id}/derive`, { method: 'POST', body: JSON.stringify(opts) }),
   // Returns the updated agent plus an optional warning when the model is not in
   // the price table (P1.3 — unknown model advisory).
   updateAgent: (id: string, patch: AgentPatch) =>
@@ -51,20 +59,18 @@ export const agentApi = {
     try {
       return await req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' })
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === 'system agent cannot be deleted; disable it instead'
-      ) {
-        throw new Error('Sistem ajanı silinemez. Bunun yerine ajanı devre dışı bırakın.', {
-          cause: error,
-        })
+      if (error instanceof Error && error.message.startsWith('built-in agent cannot be deleted')) {
+        throw new Error(
+          'Yerleşik ajan silinemez. Değiştirmek için "Özelleştir" ile kalıtım alan bir kopya oluşturun.',
+          { cause: error },
+        )
       }
       throw error
     }
   },
 
-  // Restore the editable profile fields of a built-in system agent. Its enabled
-  // state is intentionally preserved by the backend.
+  // Drop every override on a derived agent so it inherits its parent again.
+  // 409 on a locked built-in, 404 on a root agent.
   restoreDefaultAgent: (id: string) =>
     req<Agent>(`/api/agents/${id}/restore-default`, { method: 'POST' }),
 

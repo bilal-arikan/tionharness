@@ -47,12 +47,31 @@ func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
 	if err := d.persistAgentLocked(a); err != nil {
 		return Agent{}, err
 	}
-	// Backfill on the RETURNED value only (not before persistAgentLocked above):
-	// callers should see a populated ProviderInstanceID, but a mutation that
-	// didn't touch Provider/ProviderInstanceID must not silently widen the
-	// on-disk write beyond what the patch actually changed (_Docs/71 §3, "no
-	// bulk write").
-	return a.backfillProviderInstance(), nil
+	// Resolve on the RETURNED value only (not before persistAgentLocked above):
+	// callers should see the effective row (inheritance folded, populated
+	// ProviderInstanceID), but a mutation that didn't touch a field must not
+	// silently widen the on-disk write beyond what the patch actually changed
+	// (_Docs/71 §3, "no bulk write").
+	return d.resolveAgentLocked(a), nil
+}
+
+// mutateAgentLockedErr is mutateAgentLocked for mutators that validate under
+// the lock: fn may refuse the write, in which case nothing is persisted.
+func (d *DB) mutateAgentLockedErr(id string, fn func(*Agent) error) (Agent, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.agents[id]
+	if !ok {
+		return Agent{}, ErrNotFound
+	}
+	if err := fn(&a); err != nil {
+		return Agent{}, err
+	}
+	a.UpdatedAt = now()
+	if err := d.persistAgentLocked(a); err != nil {
+		return Agent{}, err
+	}
+	return d.resolveAgentLocked(a), nil
 }
 
 // CreateAgent inserts a new agent and returns the stored row.
@@ -102,7 +121,23 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return a, d.persistAgentLocked(a)
+	// Inheritance: the parent must exist; overrides must name real fields. A
+	// brand-new row cannot form a cycle, so only existence is checked here.
+	if err := d.checkParentLocked("", a.ParentID); err != nil {
+		return Agent{}, err
+	}
+	if err := ValidateOverrideKeys(a.Overrides); err != nil {
+		return Agent{}, err
+	}
+	if a.ParentID == "" {
+		a.Overrides = nil
+	} else {
+		a.Overrides = normalizeOverrides(a.Overrides)
+	}
+	if err := d.persistAgentLocked(a); err != nil {
+		return Agent{}, err
+	}
+	return d.resolveAgentLocked(a), nil
 }
 
 // DeleteAgent marks an agent deleted and drops the forward-looking records that
@@ -128,7 +163,11 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	if !ok {
 		return ErrNotFound
 	}
-	if a.System {
+	// A built-in (locked) row is owned by the compiled registry and re-seeded on
+	// boot, so deleting it would only ever be undone. A workspace customisation
+	// of a system role (System && !Locked) IS deletable: the role falls back to
+	// the built-in, and the soft-deleted row keeps its sessions renderable.
+	if a.Locked {
 		return ErrSystemAgentDelete
 	}
 	a.Deleted = true
@@ -136,6 +175,12 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	a.UpdatedAt = a.DeletedAt
 	d.agents[id] = a
 	if err := atomicWriteJSON(d.dir(dirAgents, id+".json"), a); err != nil {
+		return err
+	}
+	// Children keep their effective values: they are re-pointed at this agent's
+	// own parent (or become roots), with the removed layer's contribution folded
+	// into their overrides.
+	if err := d.reparentChildrenLocked(a); err != nil {
 		return err
 	}
 	// Cascade: schedules deliver prompts to this agent, so they can no longer fire.
@@ -208,7 +253,7 @@ func (d *DB) GetAgent(ctx context.Context, id string) (Agent, error) {
 	if !ok {
 		return Agent{}, ErrNotFound
 	}
-	return a.backfillProviderInstance(), nil
+	return d.resolveAgentLocked(a), nil
 }
 
 // ListAgents returns the live agents, newest first. Deleted agents are excluded:
@@ -235,7 +280,7 @@ func (d *DB) listAgents(includeDeleted bool) ([]Agent, error) {
 		if a.Deleted && !includeDeleted {
 			continue
 		}
-		out = append(out, a.backfillProviderInstance())
+		out = append(out, d.resolveAgentLocked(a))
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
 	return out, nil
@@ -280,10 +325,27 @@ type AgentProfilePatch struct {
 	// Agent.CoordinatorPrompt). Pointer so clearing it ("") is distinguishable
 	// from "not in this patch".
 	CoordinatorPrompt *string
+	// ParentID re-parents the agent (see Agent.ParentID); "" detaches it into a
+	// root that keeps its effective values. Validated for existence and cycles.
+	ParentID *string
+	// ResetFields lists override keys (InheritableFieldKeys) to drop so those
+	// fields inherit again. Applied after the field writes above, so a patch
+	// cannot both set and reset the same field meaningfully — reset wins.
+	ResetFields []string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
 // it. Only non-nil patch fields are written.
+//
+// Inheritance rules (see agent_inherit.go):
+//   - a Locked (built-in) agent refuses every patch with ErrAgentLocked;
+//   - on a child, every field the patch touches becomes an OVERRIDE, and
+//     ResetFields drops overrides (the field goes back to inheriting; its raw
+//     value is refreshed from the parent so the on-disk row stays readable);
+//   - ParentID "" → X turns a root into a child that keeps behaving exactly as
+//     before (every field becomes an override, to be reset one by one);
+//     X → "" materialises the effective values into a root; X → Y keeps the
+//     override set and re-resolves the rest against Y.
 func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatch) (Agent, error) {
 	// Validate before mutating: an unknown inbound policy must fail the write, not
 	// be stored and then blow up on every later delivery.
@@ -292,59 +354,153 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 			return Agent{}, err
 		}
 	}
-	return d.mutateAgentLocked(agentID, func(a *Agent) {
+	if err := ValidateOverrideKeys(p.ResetFields); err != nil {
+		return Agent{}, err
+	}
+	return d.mutateAgentLockedErr(agentID, func(a *Agent) error {
+		if a.Locked {
+			return ErrAgentLocked
+		}
+		// Parent change first, so the field writes below are classified against
+		// the tree the agent ends up in.
+		if p.ParentID != nil && *p.ParentID != a.ParentID {
+			if err := d.checkParentLocked(a.ID, *p.ParentID); err != nil {
+				return err
+			}
+			switch {
+			case a.ParentID == "":
+				// root → child: keep behaviour, own everything until reset.
+				a.ParentID = *p.ParentID
+				a.Overrides = InheritableFieldKeys()
+			case *p.ParentID == "":
+				// child → root: freeze the effective values.
+				*a = materialize(d.resolveAgentLocked(*a))
+			default:
+				a.ParentID = *p.ParentID
+			}
+		}
+		// A disabled customisation coming back must not compete with another
+		// enabled customisation of the same role.
+		if p.Disabled != nil && !*p.Disabled && a.Disabled && a.System && a.SystemKey != "" {
+			if d.systemRoleTakenLocked(a.SystemKey, a.ID) {
+				return ErrSystemRoleTaken
+			}
+		}
+		mark := func(key string) {
+			if a.ParentID != "" {
+				a.Overrides = withOverride(a.Overrides, key)
+			}
+		}
 		if p.Name != nil {
 			a.Name = *p.Name
 		}
 		if p.Soul != nil {
 			a.Soul = *p.Soul
+			mark("soul")
 		}
 		if p.Identity != nil {
 			a.Identity = *p.Identity
+			mark("identity")
 		}
 		if p.Provider != nil {
 			a.Provider = *p.Provider
+			mark("provider")
 		}
 		if p.ProviderInstanceID != nil {
 			a.ProviderInstanceID = *p.ProviderInstanceID
+			mark("provider")
 		}
 		if p.Model != nil {
 			a.Model = *p.Model
+			mark("model")
 		}
 		if p.ThinkingLevel != nil {
 			a.ThinkingLevel = *p.ThinkingLevel
+			mark("thinkingLevel")
 		}
 		if p.NativeWebSearch != nil {
 			v := *p.NativeWebSearch
 			a.NativeWebSearch = &v
+			mark("nativeWebSearch")
 		}
 		if p.PermissionMode != nil {
 			a.PermissionMode = *p.PermissionMode
+			mark("permissionMode")
 		}
 		if p.InboundPolicy != nil {
 			a.InboundPolicy = *p.InboundPolicy
+			mark("inboundPolicy")
 		}
 		if p.Avatar != nil {
 			a.Avatar = *p.Avatar
+			mark("avatar")
 		}
 		if p.Color != nil {
 			a.Color = *p.Color
+			mark("color")
 		}
 		if p.Skills != nil {
 			a.Skills = *p.Skills
+			mark("skills")
 		}
 		if p.Disabled != nil {
 			a.Disabled = *p.Disabled
 		}
 		if p.CoordinatorMode != nil {
 			a.CoordinatorMode = *p.CoordinatorMode
+			mark("coordinatorMode")
 		}
 		if p.CoordinatorWorkflow != nil {
 			a.CoordinatorWorkflow = *p.CoordinatorWorkflow
+			mark("coordinatorWorkflow")
 		}
 		if p.CoordinatorPrompt != nil {
 			a.CoordinatorPrompt = *p.CoordinatorPrompt
+			mark("coordinatorPrompt")
 		}
+		if len(p.ResetFields) > 0 && a.ParentID != "" {
+			d.resetOverridesLocked(a, p.ResetFields)
+		}
+		if a.ParentID == "" {
+			a.Overrides = nil
+		}
+		return nil
+	})
+}
+
+// resetOverridesLocked drops the named overrides from a and refreshes their
+// raw values from the parent's effective row. Caller holds d.mu.
+func (d *DB) resetOverridesLocked(a *Agent, keys []string) {
+	parent, ok := d.agents[a.ParentID]
+	var parentEffective Agent
+	if ok {
+		parentEffective = d.resolveAgentLocked(parent)
+	}
+	for _, key := range keys {
+		a.Overrides = withoutOverride(a.Overrides, key)
+		if !ok {
+			continue
+		}
+		for _, f := range inheritableFields {
+			if f.Key == key {
+				f.copy(a, &parentEffective)
+			}
+		}
+	}
+}
+
+// ClearAgentOverrides makes a child inherit every field again. A root agent is
+// returned unchanged; a locked built-in refuses with ErrAgentLocked.
+func (d *DB) ClearAgentOverrides(ctx context.Context, agentID string) (Agent, error) {
+	return d.mutateAgentLockedErr(agentID, func(a *Agent) error {
+		if a.Locked {
+			return ErrAgentLocked
+		}
+		if a.ParentID == "" {
+			return nil
+		}
+		d.resetOverridesLocked(a, InheritableFieldKeys())
+		return nil
 	})
 }
 
@@ -599,7 +755,7 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	// the header answers "which model?" in O(1) without scanning messages.
 	if s.Model == "" && s.AgentID != "" {
 		if a, ok := d.agents[s.AgentID]; ok {
-			s.Model = a.Model
+			s.Model = d.resolveAgentLocked(a).Model
 		}
 	}
 	// Seed coordinator mode from the agent's default, so an agent configured as a
@@ -613,10 +769,12 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	// degrades to a plain worker at the depth limit. Without this exemption the db
 	// would silently re-enable a mode the spawner deliberately withheld.
 	if !s.CoordinatorMode && s.AgentID != "" && s.CoordinatorSessionID == "" && s.CoordinatorDepth == 0 {
-		if a, ok := d.agents[s.AgentID]; ok && a.CoordinatorMode {
-			s.CoordinatorMode = true
-			if s.CoordinatorWorkflow == "" {
-				s.CoordinatorWorkflow = a.CoordinatorWorkflow
+		if raw, ok := d.agents[s.AgentID]; ok {
+			if a := d.resolveAgentLocked(raw); a.CoordinatorMode {
+				s.CoordinatorMode = true
+				if s.CoordinatorWorkflow == "" {
+					s.CoordinatorWorkflow = a.CoordinatorWorkflow
+				}
 			}
 		}
 	}

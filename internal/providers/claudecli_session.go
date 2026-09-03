@@ -56,11 +56,20 @@ type cliTextBlock struct {
 // Turns are serialised by mu (the CLI handles one turn at a time). It is created
 // and owned by a CLISessionPool.
 type CLISession struct {
-	mu          sync.Mutex
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	stdout      *bufio.Reader
-	stderr      *bytes.Buffer
+	mu     sync.Mutex
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+	stderr *bytes.Buffer
+	// lines is fed by the ONE reader goroutine of this process (startReader). It
+	// used to be a goroutine per Turn over the shared bufio.Reader: the previous
+	// turn's goroutine stayed blocked in ReadString after delivering its result and
+	// consumed the first line(s) of the NEXT turn — buffering one into its dead
+	// channel and dropping the next — so when the stolen line was the `result`,
+	// the turn waited until the caller's deadline (live, 2026-09-03). A single
+	// reader per process makes every line reach whichever Turn is running.
+	lines       chan sessionReadItem
+	readerOnce  sync.Once
 	sysFilePath string // temp --append-system-prompt-file, removed on Close
 	fingerprint string // launch config hash; mismatch ⇒ stale ⇒ restart
 	model       string
@@ -124,6 +133,21 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 		return nil, fmt.Errorf("cli session is closed")
 	}
 
+	s.readerOnce.Do(s.startReader)
+	// Anything already buffered arrived BEFORE this turn's input is written, so it
+	// belongs to the previous turn (a trailing rate_limit_event, a late summary) —
+	// or is the stream's EOF. Drop the former, surface the latter.
+	for drained := false; !drained; {
+		select {
+		case it := <-s.lines:
+			if it.err != nil {
+				return nil, fmt.Errorf("cli session stream already ended: %v %s", it.err, strings.TrimSpace(s.stderr.String()))
+			}
+		default:
+			drained = true
+		}
+	}
+
 	var in cliUserInput
 	in.Type = "user"
 	in.Message.Role = "user"
@@ -137,23 +161,7 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 	}
 
 	p := newCLIParser(s.model, onEvent)
-
-	lines := make(chan sessionReadItem, 1)
-	readerDone := make(chan struct{})
-	defer close(readerDone)
-	go func() {
-		for {
-			ln, rerr := s.stdout.ReadString('\n')
-			select {
-			case lines <- sessionReadItem{ln, rerr}:
-			case <-readerDone:
-				return
-			}
-			if rerr != nil {
-				return
-			}
-		}
-	}()
+	lines := s.lines
 
 	startupWindow := cliStartupTimeout()
 	startup := time.NewTimer(startupWindow)
@@ -224,6 +232,44 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 	return resp, err
 }
 
+// startReader launches the process's single stdout reader (see CLISession.lines).
+// It runs until the stream ends and then parks the terminal error in the channel,
+// so a later Turn learns the process is gone instead of blocking on a dead pipe.
+// The buffer absorbs lines emitted between turns; a full buffer merely pauses
+// reading until the next Turn drains it.
+func (s *CLISession) startReader() {
+	s.lines = make(chan sessionReadItem, 256)
+	go func() {
+		for {
+			ln, rerr := s.stdout.ReadString('\n')
+			s.lines <- sessionReadItem{ln, rerr}
+			if rerr != nil {
+				return
+			}
+		}
+	}()
+}
+
+// killProcessLocked terminates the process tree and reports failure only when the
+// process is STILL alive afterwards. On Windows taskkill (proc.KillTree) already
+// ends the root, and a second TerminateProcess on the exited handle returns
+// "access denied" — a phantom failure this used to propagate as "could NOT be
+// killed" (live, 2026-09-03).
+func (s *CLISession) killProcessLocked() error {
+	if s.cmd == nil || s.cmd.Process == nil {
+		return nil
+	}
+	proc.KillTree(s.cmd) // reap MCP servers / tool subprocesses holding the pipes
+	err := s.cmd.Process.Kill()
+	if err == nil || errors.Is(err, os.ErrProcessDone) {
+		return nil
+	}
+	if !processIsAlive(s.cmd.Process.Pid) {
+		return nil
+	}
+	return err
+}
+
 // abortTurnLocked tears the persistent process down from INSIDE Turn (s.mu is
 // already held, so Close/closeChecked would deadlock), marks the session closed so
 // the pool drops it, reports the watchdog kill when reason is set, and returns the
@@ -231,13 +277,7 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, req Request, onEve
 // folded into the returned error, because a process we could not kill still holds
 // the pipes this session will never read again.
 func (s *CLISession) abortTurnLocked(req Request, reason string, window time.Duration, cause error) error {
-	var killErr error
-	if s.cmd != nil && s.cmd.Process != nil {
-		proc.KillTree(s.cmd) // reap MCP servers / tool subprocesses holding the pipes
-		if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			killErr = err
-		}
-	}
+	killErr := s.killProcessLocked()
 	if s.stdin != nil {
 		_ = s.stdin.Close()
 	}
@@ -280,14 +320,11 @@ func (s *CLISession) closeChecked() error {
 	if s.stdin != nil {
 		_ = s.stdin.Close() // EOF lets the CLI exit cleanly
 	}
-	if s.cmd != nil && s.cmd.Process != nil {
-		// Reap the descendants (MCP servers, tool subprocesses) first: they inherit
-		// the session's pipes and would otherwise survive the kill and keep them
-		// open. Then kill the direct child and report a real failure.
-		proc.KillTree(s.cmd)
-		if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			return err // leave closed=false + temp file intact so a retry can re-kill
-		}
+	// Reap the descendants (MCP servers, tool subprocesses) first: they inherit
+	// the session's pipes and would otherwise survive the kill and keep them
+	// open. Then kill the direct child and report a real failure.
+	if err := s.killProcessLocked(); err != nil {
+		return err // leave closed=false + temp file intact so a retry can re-kill
 	}
 	s.closed = true
 	if s.sysFilePath != "" {

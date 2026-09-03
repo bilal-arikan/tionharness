@@ -730,6 +730,7 @@ export default function App() {
             onCreateAgent={ctl.createAgent}
             onUpdateAgent={ctl.updateAgent}
             onDuplicateAgent={ctl.duplicateAgent}
+            onDeriveAgent={ctl.deriveAgent}
             onDeleteAgent={ctl.deleteAgent}
             onRefresh={() =>
               api

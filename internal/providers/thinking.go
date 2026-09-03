@@ -156,10 +156,37 @@ func SupportsStructuredOutputs(model string) bool {
 
 // SupportsSystemInMessages reports whether the model accepts mid-conversation
 // {"role":"system"} entries in the messages array (the cache-safe, non-spoofable
-// operator channel). Claude Opus 4.8 only.
+// operator channel): Claude Opus 4.8, Opus 5 and the Fable/Mythos 5.x class —
+// NOT Sonnet 5 (folded into the preceding user turn there).
 func SupportsSystemInMessages(model string) bool {
 	m := strings.ToLower(model)
-	return strings.Contains(m, "opus-4-8") || strings.Contains(m, "opus-4.8")
+	if strings.Contains(m, "fable") || strings.Contains(m, "mythos") {
+		return true
+	}
+	for _, s := range []string{"opus-4-8", "opus-4.8", "opus-5"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// SupportsThinkingBinding reports whether the model enforces "preserved
+// thinking" (Claude Fable 5.1 / Mythos 5.1): a thinking block's signature is
+// bound to the conversation prefix that produced it, so any edit to an earlier
+// turn — a moved dynamic block, a pruned tool result, an activated tool schema,
+// an in-flight compaction — invalidates every later block and returns 400 on
+// enforced organizations. The anthropic client sends the binding controls
+// (block_binding.prefix_mismatch_behavior = drop_block + its beta) for exactly
+// this class so such edits degrade to a re-plan instead of failing the turn.
+func SupportsThinkingBinding(model string) bool {
+	m := strings.ToLower(model)
+	for _, s := range []string{"fable-5-1", "fable-5.1", "mythos-5-1", "mythos-5.1"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // SupportsDynamicWebTools reports whether the model accepts the _20260209 web

@@ -216,6 +216,7 @@ export interface SessionDebugEvent {
     | 'build'
     | 'cli_compaction'
     | 'lifecycle'
+    | 'thinking_dropped'
   sessionId?: string
   turnId?: string
   agentId?: string
@@ -231,6 +232,8 @@ export interface SessionDebugEvent {
   think?: number
   cacheRead?: number
   cacheWrite?: number
+  // llm_call: provider round-trips this call aggregates; thinking_dropped: dropped block count.
+  calls?: number
   outBytes?: number
   savedBytes?: number
   stop?: string

@@ -38,7 +38,7 @@ func mapCCModel(cc string) (provider, model, warn string) {
 	case strings.Contains(s, "haiku"):
 		return "claude-cli", "claude-haiku-4-5-20251001", ""
 	case strings.Contains(s, "fable"):
-		return "claude-cli", "claude-fable-5", ""
+		return "claude-cli", "claude-fable-5-1", ""
 	}
 	return "", "", "CC model \"" + cc + "\" not recognised — set provider/model after install"
 }

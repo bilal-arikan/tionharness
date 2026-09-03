@@ -104,7 +104,6 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			SuggestedModel: "haiku",
 			Provider:       "claude-cli",
 			AllowedTools:   "[]",
-			Disabled:       true,
 		},
 		{
 			SystemKey:      "recipe-optimizer",

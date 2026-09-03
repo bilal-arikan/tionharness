@@ -10,7 +10,7 @@ var claudeAliasModels = map[string]string{
 	"haiku":  "claude-haiku-4-5-20251001",
 	"sonnet": "claude-sonnet-5",
 	"opus":   "claude-opus-5",
-	"fable":  "claude-fable-5",
+	"fable":  "claude-fable-5-1",
 }
 
 // NativeClaudeModel returns the Messages API model id for a claude-cli alias.
