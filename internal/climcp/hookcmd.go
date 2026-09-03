@@ -1,14 +1,14 @@
-package agent
+package climcp
 
 import (
 	"runtime"
 	"strings"
 )
 
-// cliHookCommand adapts a TionHarness hook command to the interpreter Claude Code
+// HookCommand adapts a TionHarness hook command to the interpreter Claude Code
 // will actually spawn it with.
 //
-// The two engines disagree about the shell, exactly the way cliMatcherRegex's two
+// The two engines disagree about the shell, exactly the way MatcherRegex's two
 // engines disagree about the matcher dialect:
 //
 //   - TionHarness's own execHook runs a hook through powershell.exe on Windows and
@@ -32,7 +32,7 @@ import (
 //
 // Stdin is inherited by the wrapped process, so the hook payload still reaches the
 // script — the contract execHook and the CLI share.
-func cliHookCommand(command string) string {
+func HookCommand(command string) string {
 	cmd := strings.TrimSpace(command)
 	if cmd == "" || runtime.GOOS != "windows" {
 		return command

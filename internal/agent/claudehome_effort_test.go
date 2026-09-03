@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,8 +90,8 @@ func TestCLIEffortLevel(t *testing.T) {
 		"low":     "low",
 	}
 	for in, want := range cases {
-		if got := cliEffortLevel(in); got != want {
-			t.Errorf("cliEffortLevel(%q) = %q, want %q", in, got, want)
+		if got := climcp.EffortLevel(in); got != want {
+			t.Errorf("climcp.EffortLevel(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

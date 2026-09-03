@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -21,7 +22,7 @@ import (
 //
 // The server-discovery logic is duplicated rather than shared with climcp.go on
 // purpose: there, building the map is interleaved with assembling the claude
-// allow/disallow lists and with the JSON-only cliMCPServer type, so extracting a
+// allow/disallow lists and with the JSON-only climcp.Server type, so extracting a
 // common helper would mean editing climcp.go's control flow — explicitly out of
 // scope (no behaviour change is allowed on the claude path). The duplication is
 // small and mechanical; the shared parts that ARE already factored out
@@ -116,9 +117,9 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 			servers[key] = entry
 		}
 		for _, t := range inter.CoreToolNames {
-			allowed = append(allowed, "mcp__"+interactionCoreKey+"__"+t)
+			allowed = append(allowed, "mcp__"+climcp.InteractionCoreKey+"__"+t)
 		}
-		allowed = append(allowed, "mcp__"+interactionExtendedKey)
+		allowed = append(allowed, "mcp__"+climcp.InteractionExtendedKey)
 		disallowed = append(disallowed, codexAdvisorySuppressions()...)
 	}
 
@@ -144,9 +145,9 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 
 func interactionTierEnabled(key string, inter tools.InteractionEndpoint) bool {
 	switch key {
-	case interactionCoreKey:
+	case climcp.InteractionCoreKey:
 		return len(inter.CoreToolNames) > 0
-	case interactionExtendedKey:
+	case climcp.InteractionExtendedKey:
 		return len(inter.ExtendedToolNames) > 0
 	default:
 		return false
@@ -181,13 +182,13 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 	base := trimTrailingSlash(inter.URL)
 	authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
 	return map[string]providers.CLIMCPServer{
-		interactionCoreKey: {
+		climcp.InteractionCoreKey: {
 			Transport:  db.MCPTransportHTTP,
 			URL:        base + "/core?full=1",
 			Headers:    authHeader,
 			AlwaysLoad: true,
 		},
-		interactionExtendedKey: {
+		climcp.InteractionExtendedKey: {
 			Transport: db.MCPTransportHTTP,
 			URL:       base + "/extended?full=1",
 			Headers:   authHeader,

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -15,7 +16,7 @@ import (
 // the bare tool name and renders with the same cards as the native tool path (todo
 // checklist, artifact card, ask).
 const (
-	interactionToolPrefix = "mcp__tionharness_interaction__"
+	interactionToolPrefix = climcp.InteractionToolPrefix
 	extendedToolPrefix    = "mcp__tionharness_extended__"
 )
 

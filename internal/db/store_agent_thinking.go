@@ -8,7 +8,7 @@ import "context"
 // drift apart:
 //
 //   - The CLI providers mapped "" onto Claude Code's effortLevel "high"
-//     (agent.cliEffortLevel), so "high" is what preserves their behaviour.
+//     (climcp.EffortLevel), so "high" is what preserves their behaviour.
 //   - Every other provider mapped "" onto a thinking budget of 0
 //     (agent.thinkingBudgetForLevel), i.e. reasoning off.
 //

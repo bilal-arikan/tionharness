@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -23,13 +24,13 @@ func seedGateServers(t *testing.T, rt *Runtime, ctx context.Context) {
 	}
 }
 
-func readCLIConfig(t *testing.T, path string) cliMCPConfig {
+func readCLIConfig(t *testing.T, path string) climcp.Config {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	var cfg cliMCPConfig
+	var cfg climcp.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("parse config: %v", err)
 	}
@@ -308,7 +309,7 @@ func TestCodexValidatorFreshTurnMountsOnlyUnityMCP(t *testing.T) {
 	if _, ok := spec.Servers["unity-mcp"]; !ok {
 		t.Fatalf("unity-mcp missing: %v", spec.Servers)
 	}
-	for _, forbidden := range []string{"playwright", "codebase-memory-mcp", interactionCoreKey, interactionExtendedKey} {
+	for _, forbidden := range []string{"playwright", "codebase-memory-mcp", climcp.InteractionCoreKey, climcp.InteractionExtendedKey} {
 		if _, ok := spec.Servers[forbidden]; ok {
 			t.Fatalf("forbidden server %q mounted: %v", forbidden, spec.Servers)
 		}

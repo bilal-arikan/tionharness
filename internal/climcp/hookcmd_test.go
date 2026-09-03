@@ -1,4 +1,4 @@
-package agent
+package climcp
 
 import (
 	"runtime"
@@ -19,7 +19,7 @@ func TestCLIHookCommandWrapsPowerShellSource(t *testing.T) {
 		`if($c -and -not ($c -like 'rtk *')){ $j.tool_input.command='rtk '+$c; ` +
 		`@{updatedInput=$j.tool_input}|ConvertTo-Json -Compress }`
 
-	got := cliHookCommand(src)
+	got := HookCommand(src)
 	if !strings.HasPrefix(got, "powershell.exe -NoProfile -NonInteractive -Command ") {
 		t.Fatalf("PowerShell source was not wrapped for the CLI's POSIX shell\ngot: %s", got)
 	}
@@ -51,7 +51,7 @@ func TestCLIHookCommandLeavesExecutableInvocationsAlone(t *testing.T) {
 		`rtk hook claude --json`,
 		`/usr/bin/env python3 hook.py`,
 	} {
-		if got := cliHookCommand(cmd); got != cmd {
+		if got := HookCommand(cmd); got != cmd {
 			t.Errorf("command was rewritten but should pass through\n in: %s\nout: %s", cmd, got)
 		}
 	}
@@ -59,7 +59,7 @@ func TestCLIHookCommandLeavesExecutableInvocationsAlone(t *testing.T) {
 
 // An empty command carries no dialect to translate.
 func TestCLIHookCommandEmpty(t *testing.T) {
-	if got := cliHookCommand(""); got != "" {
+	if got := HookCommand(""); got != "" {
 		t.Errorf("empty command became %q", got)
 	}
 }

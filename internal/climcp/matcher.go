@@ -1,8 +1,8 @@
-package agent
+package climcp
 
 import "strings"
 
-// cliMatcherRegex translates a TionHarness hook matcher into the regex Claude Code
+// MatcherRegex translates a TionHarness hook matcher into the regex Claude Code
 // expects in its settings hooks block.
 //
 // TionHarness's NATIVE matcher (hookMatches) is a COMMA-separated list of
@@ -29,11 +29,11 @@ import "strings"
 // (non-bridged) turns are unaffected: the bridged alternative simply never matches
 // a tool that isn't present.
 var shellBridgedForms = map[string]string{
-	"Bash":       interactionToolPrefix + "Bash",
-	"PowerShell": interactionToolPrefix + "PowerShell",
+	"Bash":       InteractionToolPrefix + "Bash",
+	"PowerShell": InteractionToolPrefix + "PowerShell",
 }
 
-func cliMatcherRegex(matcher string) string {
+func MatcherRegex(matcher string) string {
 	m := strings.TrimSpace(matcher)
 	if m == "" {
 		return ""

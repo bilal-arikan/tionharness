@@ -465,7 +465,7 @@ func (t *Tunables) ClaudePersistentSession() bool {
 }
 
 // SetClaudeCLIToolAllowlist toggles pinning claude-cli's built-in tool menu to
-// the per-turn native allowlist (`--tools`). See cliNativeToolAllowlist.
+// the per-turn native allowlist (`--tools`). See climcp.NativeToolAllowlist.
 func (t *Tunables) SetClaudeCLIToolAllowlist(enabled bool) {
 	t.mu.Lock()
 	t.cliToolAllowlist = enabled

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -171,7 +172,7 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	if t.isCLI {
 		// Both CLI transports consume the product's resolved reasoning tier.
 		// Provider-specific encoding stays below the Request boundary.
-		t.req.CLIEffortLevel = cliEffortLevel(t.agent.ThinkingLevel)
+		t.req.CLIEffortLevel = climcp.EffortLevel(t.agent.ThinkingLevel)
 		// The config home and the credential heal below are claude-specific: both
 		// name a claude-home and the CLI's own .credentials.json. A second
 		// CLI transport must NOT inherit them, so they stay behind a narrow concrete
@@ -333,7 +334,7 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 	// menu is left untouched (the suppression list alone applies, as before).
 	if t.inter.URL != "" && t.r.tun.ClaudeCLIToolAllowlist() {
 		t.req.CLIRestrictNativeTools = true
-		t.req.CLINativeTools = cliNativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled())
+		t.req.CLINativeTools = climcp.NativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled())
 	}
 	if path == "" && len(disallowed) == 0 {
 		return noop
@@ -346,7 +347,7 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 	// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
 	// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours
 	// the same blocks/hooks the native loop does. "" when there is nothing.
-	settingsPath, settingsCleanup, serr := t.r.writeCLISettings(t.ctx, disallowed, cliEffortLevel(t.agent.ThinkingLevel))
+	settingsPath, settingsCleanup, serr := t.r.writeCLISettings(t.ctx, disallowed, climcp.EffortLevel(t.agent.ThinkingLevel))
 	if serr != nil {
 		t.r.logger.Warn("cli settings write failed", "error", serr)
 	}
@@ -356,7 +357,7 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 		ConfigPath:       path,
 		AllowedTools:     allowed,
 		DisallowedTools:  disallowed,
-		PermissionPrompt: promptToolForMode(t.agent.PermissionMode, t.inter),
+		PermissionPrompt: climcp.PromptToolForMode(t.agent.PermissionMode, t.inter),
 		SettingsPath:     settingsPath,
 	})
 	return func() {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bilal-arikan/tionharness/internal/climcp"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -60,7 +61,7 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
 
-	core, ok := spec.Servers[interactionCoreKey]
+	core, ok := spec.Servers[climcp.InteractionCoreKey]
 	if !ok {
 		t.Fatalf("core server entry missing: %v", spec.Servers)
 	}
@@ -77,7 +78,7 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 		t.Errorf("an HTTP tier must not carry a command, got %q", core.Command)
 	}
 
-	ext, ok := spec.Servers[interactionExtendedKey]
+	ext, ok := spec.Servers[climcp.InteractionExtendedKey]
 	if !ok {
 		t.Fatalf("extended server entry missing: %v", spec.Servers)
 	}
@@ -88,9 +89,9 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 	// Tool ids must stay identical to the claude path so mcp.SplitNamespaced and
 	// the existing trace stripping keep working unchanged.
 	wantAllowed := map[string]bool{
-		"mcp__" + interactionCoreKey + "__Bash":     true,
-		"mcp__" + interactionCoreKey + "__ask_user": true,
-		"mcp__" + interactionExtendedKey:            true,
+		"mcp__" + climcp.InteractionCoreKey + "__Bash":     true,
+		"mcp__" + climcp.InteractionCoreKey + "__ask_user": true,
+		"mcp__" + climcp.InteractionExtendedKey:            true,
 	}
 	got := map[string]bool{}
 	for _, a := range spec.AllowedTools {
