@@ -1,4 +1,4 @@
-package agent
+package trajectory
 
 import (
 	"sort"
@@ -120,9 +120,4 @@ func RecipeStatsFromIndex(rows []db.TrajectoryIndexEntry) []RecipeStats {
 		return out[i].Version < out[j].Version
 	})
 	return out
-}
-
-// RecipeStats is RecipeStatsFromIndex for the API layer.
-func (r *Runtime) RecipeStats(rows []db.TrajectoryIndexEntry) []RecipeStats {
-	return RecipeStatsFromIndex(rows)
 }

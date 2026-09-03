@@ -8,6 +8,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Trajectory binder (Rota F1a).
@@ -63,9 +64,9 @@ func (r *Runtime) EnsureTrajectory(ctx context.Context, rootID string) (db.Traje
 		return db.Trajectory{}, err
 	}
 	spec, ref := r.recipeSpecFor(root)
-	created, err := r.db.CreateTrajectory(ctx, trajSeed(root, spec, ref))
+	created, err := r.db.CreateTrajectory(ctx, trajectory.Seed(root, spec, ref))
 	if err == nil {
-		r.logger.Info("trajectory seeded", "trajectory", created.ID, "root", rootID, "recipe", ref, "phases", len(trajPhases(&created)))
+		r.logger.Info("trajectory seeded", "trajectory", created.ID, "root", rootID, "recipe", ref, "phases", len(trajectory.Phases(&created)))
 		return created, nil
 	}
 	if errors.Is(err, db.ErrConflict) {
@@ -105,13 +106,13 @@ func (r *Runtime) AdoptTrajectoryRecipe(ctx context.Context, sessionID string) e
 		return err
 	}
 	spec, ref := r.recipeSpecFor(sess)
-	if spec == nil || len(trajPhases(&t)) > 0 {
+	if spec == nil || len(trajectory.Phases(&t)) > 0 {
 		return nil
 	}
 	_, err = r.db.UpdateTrajectory(ctx, t.ID, 0, func(t *db.Trajectory) error {
 		t.TemplateRef = ref
-		trajApplyRecipe(t, spec)
-		trajDeriveStatus(t)
+		trajectory.ApplyRecipe(t, spec)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 	return err
@@ -159,15 +160,15 @@ func (r *Runtime) bindSpawn(ev SpawnEvent) {
 	}
 	at := ev.At * 1000
 	r.updateTrajectoryByRoot(ctx, ev.RootID, func(t *db.Trajectory) error {
-		trajAutoStartPhase(t, at)
-		coordNode := trajSessionNodeID(ev.CoordinatorID)
-		if trajNodePtr(t, coordNode) == nil {
+		trajectory.AutoStartPhase(t, at)
+		coordNode := trajectory.SessionNodeID(ev.CoordinatorID)
+		if trajectory.NodePtr(t, coordNode) == nil {
 			// A sub-coordinator the binder never saw spawn (trajectory created
 			// mid-tree): give it a vertex so the edge below is valid.
-			trajAddNode(t, db.TrajectoryNode{
+			trajectory.AddNode(t, db.TrajectoryNode{
 				ID: coordNode, Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
-				RefKind: "session", RefID: ev.CoordinatorID, PhaseID: trajActivePhase(t),
-				Lane: trajNextLane(t), State: db.TrajStateActive, StartMs: at,
+				RefKind: "session", RefID: ev.CoordinatorID, PhaseID: trajectory.ActivePhase(t),
+				Lane: trajectory.NextLane(t), State: db.TrajStateActive, StartMs: at,
 			})
 		}
 		label := ev.AgentName
@@ -180,13 +181,13 @@ func (r *Runtime) bindSpawn(ev SpawnEvent) {
 			state = db.TrajStatePending
 			reason = "queued for a free worker slot"
 		}
-		trajAddNode(t, db.TrajectoryNode{
-			ID: trajSessionNodeID(ev.WorkerID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
-			Label: label, RefKind: "session", RefID: ev.WorkerID, PhaseID: trajActivePhase(t),
-			Lane: trajNextLane(t), State: state, Reason: reason, StartMs: at,
+		trajectory.AddNode(t, db.TrajectoryNode{
+			ID: trajectory.SessionNodeID(ev.WorkerID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
+			Label: label, RefKind: "session", RefID: ev.WorkerID, PhaseID: trajectory.ActivePhase(t),
+			Lane: trajectory.NextLane(t), State: state, Reason: reason, StartMs: at,
 		})
-		trajAddEdge(t, coordNode, trajSessionNodeID(ev.WorkerID), db.TrajEdgeSpawned, db.TrajOriginObserved)
-		trajDeriveStatus(t)
+		trajectory.AddEdge(t, coordNode, trajectory.SessionNodeID(ev.WorkerID), db.TrajEdgeSpawned, db.TrajOriginObserved)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
@@ -199,7 +200,7 @@ func (r *Runtime) bindReport(ev ReportEvent) {
 	}
 	at := ev.At * 1000
 	r.updateTrajectoryByRoot(ctx, coord.RootSession(), func(t *db.Trajectory) error {
-		w := trajNodePtr(t, trajSessionNodeID(ev.WorkerID))
+		w := trajectory.NodePtr(t, trajectory.SessionNodeID(ev.WorkerID))
 		if w == nil {
 			return nil
 		}
@@ -215,8 +216,8 @@ func (r *Runtime) bindReport(ev ReportEvent) {
 			w.StartMs = at
 		}
 		w.EndMs = at
-		trajAddEdge(t, w.ID, trajSessionNodeID(ev.CoordinatorID), db.TrajEdgeReported, db.TrajOriginObserved)
-		trajDeriveStatus(t)
+		trajectory.AddEdge(t, w.ID, trajectory.SessionNodeID(ev.CoordinatorID), db.TrajEdgeReported, db.TrajOriginObserved)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
@@ -228,7 +229,7 @@ func (r *Runtime) bindStall(ev StallEvent) {
 		return
 	}
 	r.updateTrajectoryByRoot(ctx, coord.RootSession(), func(t *db.Trajectory) error {
-		if n := trajNodePtr(t, trajSessionNodeID(ev.CoordinatorID)); n != nil {
+		if n := trajectory.NodePtr(t, trajectory.SessionNodeID(ev.CoordinatorID)); n != nil {
 			n.Reason = "stall halt: " + ev.Reason
 		}
 		return nil
@@ -269,18 +270,18 @@ func (r *Runtime) onSessionChangeForTrajectory(ev db.SessionChangeEvent) {
 		}
 		at := nowMs()
 		r.updateTrajectoryByRoot(ctx, s.ID, func(t *db.Trajectory) error {
-			if n := trajNodePtr(t, trajSessionNodeID(s.ID)); n != nil && n.State == db.TrajStateActive {
+			if n := trajectory.NodePtr(t, trajectory.SessionNodeID(s.ID)); n != nil && n.State == db.TrajStateActive {
 				n.State = db.TrajStateDone
 				n.EndMs = at
 			}
 			if t.IsTerminal() {
 				return nil
 			}
-			trajDeriveStatus(t)
+			trajectory.DeriveStatus(t)
 			switch t.Status {
 			case db.TrajStatusDone, db.TrajStatusFailed:
 			default:
-				if len(trajPhases(t)) > 0 {
+				if len(trajectory.Phases(t)) > 0 {
 					t.Status = db.TrajStatusAbandoned
 				} else {
 					t.Status = db.TrajStatusDone
@@ -312,8 +313,8 @@ func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) bool {
 	at := s.CreatedAt * 1000
 	bound := false
 	r.updateTrajectoryByRoot(ctx, trigger.RootSession(), func(t *db.Trajectory) error {
-		from := trajSessionNodeID(trigger.ID)
-		if trajNodePtr(t, from) == nil {
+		from := trajectory.SessionNodeID(trigger.ID)
+		if trajectory.NodePtr(t, from) == nil {
 			return nil
 		}
 		bound = true
@@ -321,12 +322,12 @@ func (r *Runtime) bindForkedSession(ctx context.Context, s db.Session) bool {
 		if o.Kind == db.OriginAutomation && o.EntityID != "" {
 			label = o.EntityID + " → " + s.Title
 		}
-		trajAddNode(t, db.TrajectoryNode{
-			ID: trajSessionNodeID(s.ID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
-			Label: label, RefKind: "session", RefID: s.ID, PhaseID: trajActivePhase(t),
-			Lane: trajNextLane(t), State: db.TrajStateActive, StartMs: at,
+		trajectory.AddNode(t, db.TrajectoryNode{
+			ID: trajectory.SessionNodeID(s.ID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
+			Label: label, RefKind: "session", RefID: s.ID, PhaseID: trajectory.ActivePhase(t),
+			Lane: trajectory.NextLane(t), State: db.TrajStateActive, StartMs: at,
 		})
-		trajAddEdge(t, from, trajSessionNodeID(s.ID), edge, db.TrajOriginObserved)
+		trajectory.AddEdge(t, from, trajectory.SessionNodeID(s.ID), edge, db.TrajOriginObserved)
 		return nil
 	})
 	return bound
@@ -363,27 +364,27 @@ func (r *Runtime) bindFlowRunToTrajectory(run db.FlowRun) {
 		state = db.TrajStateFailed
 	}
 	r.updateTrajectoryByRoot(ctx, trig.RootSession(), func(t *db.Trajectory) error {
-		from := trajSessionNodeID(trig.ID)
-		if trajNodePtr(t, from) == nil {
+		from := trajectory.SessionNodeID(trig.ID)
+		if trajectory.NodePtr(t, from) == nil {
 			return nil
 		}
-		id := trajFlowRunNodeID(run.ID)
-		n := trajNodePtr(t, id)
+		id := trajectory.FlowRunNodeID(run.ID)
+		n := trajectory.NodePtr(t, id)
 		if n == nil {
-			trajAddNode(t, db.TrajectoryNode{
+			trajectory.AddNode(t, db.TrajectoryNode{
 				ID: id, Kind: db.TrajNodeFlowRun, Origin: db.TrajOriginObserved,
-				Label: transcript.Title, RefKind: "flowrun", RefID: run.ID, PhaseID: trajActivePhase(t),
-				Lane: trajNextLane(t), State: state, StartMs: run.CreatedAt * 1000,
+				Label: transcript.Title, RefKind: "flowrun", RefID: run.ID, PhaseID: trajectory.ActivePhase(t),
+				Lane: trajectory.NextLane(t), State: state, StartMs: run.CreatedAt * 1000,
 			})
-			trajAddEdge(t, from, id, db.TrajEdgeSpawned, db.TrajOriginObserved)
-			n = trajNodePtr(t, id)
+			trajectory.AddEdge(t, from, id, db.TrajEdgeSpawned, db.TrajOriginObserved)
+			n = trajectory.NodePtr(t, id)
 		}
 		n.State = state
 		n.Reason = run.Error
 		if state != db.TrajStateActive {
 			n.EndMs = run.UpdatedAt * 1000
 		}
-		trajDeriveStatus(t)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
@@ -406,26 +407,26 @@ func (r *Runtime) bindAskToTrajectory(ask db.SessionAsk) {
 	// hangs where the asking session is.
 	_, gatePhase, isGate := GateAskRef(ask)
 	r.updateTrajectoryByRoot(ctx, sess.RootSession(), func(t *db.Trajectory) error {
-		from := trajSessionNodeID(sess.ID)
-		asker := trajNodePtr(t, from)
+		from := trajectory.SessionNodeID(sess.ID)
+		asker := trajectory.NodePtr(t, from)
 		if asker == nil {
 			return nil
 		}
 		label, phaseID, gateValue := ask.Kind, asker.PhaseID, ask.Kind
 		if isGate {
 			label, gateValue = "kapı: "+gatePhase, gatePhase
-			if trajNodePtr(t, trajPhaseNodeID(gatePhase)) != nil {
-				phaseID = trajPhaseNodeID(gatePhase)
+			if trajectory.NodePtr(t, trajectory.PhaseNodeID(gatePhase)) != nil {
+				phaseID = trajectory.PhaseNodeID(gatePhase)
 			}
 		}
-		trajAddNode(t, db.TrajectoryNode{
-			ID: trajGateNodeID(ask.ID), Kind: db.TrajNodeGate, Origin: db.TrajOriginObserved,
+		trajectory.AddNode(t, db.TrajectoryNode{
+			ID: trajectory.GateNodeID(ask.ID), Kind: db.TrajNodeGate, Origin: db.TrajOriginObserved,
 			Label: label, RefKind: "ask", RefID: ask.ID, PhaseID: phaseID,
 			Lane: asker.Lane, State: db.TrajStateActive, Gate: &db.TrajectoryGate{Kind: "human", Value: gateValue},
 			StartMs: at,
 		})
-		trajAddEdge(t, from, trajGateNodeID(ask.ID), db.TrajEdgeBlockedBy, db.TrajOriginObserved)
-		trajDeriveStatus(t)
+		trajectory.AddEdge(t, from, trajectory.GateNodeID(ask.ID), db.TrajEdgeBlockedBy, db.TrajOriginObserved)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
@@ -440,7 +441,7 @@ func (r *Runtime) releaseAskInTrajectory(ask db.SessionAsk, status string) {
 	}
 	at := nowMs()
 	r.updateTrajectoryByRoot(ctx, sess.RootSession(), func(t *db.Trajectory) error {
-		g := trajNodePtr(t, trajGateNodeID(ask.ID))
+		g := trajectory.NodePtr(t, trajectory.GateNodeID(ask.ID))
 		if g == nil || g.State != db.TrajStateActive {
 			return nil
 		}
@@ -454,7 +455,7 @@ func (r *Runtime) releaseAskInTrajectory(ask db.SessionAsk, status string) {
 		if t.Status == db.TrajStatusWaiting {
 			t.Status = db.TrajStatusRunning
 		}
-		trajDeriveStatus(t)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }

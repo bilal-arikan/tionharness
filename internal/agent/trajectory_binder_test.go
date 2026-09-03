@@ -12,6 +12,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 const testRecipeSkill = `---
@@ -87,10 +88,10 @@ func TestTrajectorySeededFromRecipeAtCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("trajectory not seeded at create: %v", err)
 	}
-	if tr.TemplateRef != "plan-dev-test@3" || tr.Status != db.TrajStatusPlanned || len(trajPhases(&tr)) != 3 {
+	if tr.TemplateRef != "plan-dev-test@3" || tr.Status != db.TrajStatusPlanned || len(trajectory.Phases(&tr)) != 3 {
 		t.Fatalf("seeded trajectory = %+v", tr)
 	}
-	if n := trajNodePtr(&tr, "s:"+sess.ID); n == nil || n.Lane != 0 {
+	if n := trajectory.NodePtr(&tr, "s:"+sess.ID); n == nil || n.Lane != 0 {
 		t.Fatalf("root node = %+v", n)
 	}
 	// A worker session is never a root: no trajectory of its own.
@@ -118,12 +119,12 @@ func TestTrajectoryBindsSpawnAndReport(t *testing.T) {
 	}
 	waitWorkersSettled(t, rt, coord)
 	tr := waitTrajectory(t, rt, coord, func(tr db.Trajectory) bool {
-		n := trajNodePtr(&tr, "s:"+res.SessionID)
+		n := trajectory.NodePtr(&tr, "s:"+res.SessionID)
 		return n != nil && n.State != db.TrajStateActive
 	})
 	drainSpawns(t, rt)
 
-	w := trajNodePtr(&tr, "s:"+res.SessionID)
+	w := trajectory.NodePtr(&tr, "s:"+res.SessionID)
 	if w.Kind != db.TrajNodeSession || w.Origin != db.TrajOriginObserved || w.RefID != res.SessionID || w.Lane != 1 || w.PhaseID != "p:plan" || w.Label != res.AgentName {
 		t.Fatalf("worker node = %+v", w)
 	}
@@ -135,8 +136,8 @@ func TestTrajectoryBindsSpawnAndReport(t *testing.T) {
 	if w.State == db.TrajStateFailed && w.Reason == "" {
 		t.Fatalf("a failed worker must carry the reported status as reason: %+v", w)
 	}
-	if trajActivePhase(&tr) != "p:plan" || tr.Status != db.TrajStatusRunning {
-		t.Fatalf("phase/status after first spawn = %s / %s", trajActivePhase(&tr), tr.Status)
+	if trajectory.ActivePhase(&tr) != "p:plan" || tr.Status != db.TrajStatusRunning {
+		t.Fatalf("phase/status after first spawn = %s / %s", trajectory.ActivePhase(&tr), tr.Status)
 	}
 	var spawned, reported bool
 	for _, e := range tr.Edges {
@@ -173,7 +174,7 @@ func TestTrajectoryBindsSpawnAndReport(t *testing.T) {
 	if tr.Status != db.TrajStatusAbandoned {
 		t.Fatalf("status after archiving the root = %s, want abandoned", tr.Status)
 	}
-	if n := trajNodePtr(&tr, "s:"+coord); n.State != db.TrajStateDone || n.EndMs == 0 {
+	if n := trajectory.NodePtr(&tr, "s:"+coord); n.State != db.TrajStateDone || n.EndMs == 0 {
 		t.Fatalf("root node after archive = %+v", n)
 	}
 }
@@ -195,7 +196,7 @@ func TestTrajectoryAgentPlannedThroughTool(t *testing.T) {
 	}
 	waitWorkersSettled(t, rt, coord)
 	waitTrajectory(t, rt, coord, func(tr db.Trajectory) bool {
-		n := trajNodePtr(&tr, "s:"+res.SessionID)
+		n := trajectory.NodePtr(&tr, "s:"+res.SessionID)
 		return n != nil && n.State != db.TrajStateActive
 	})
 	drainSpawns(t, rt)
@@ -224,8 +225,8 @@ func TestTrajectoryAgentPlannedThroughTool(t *testing.T) {
 		t.Fatalf("phase active = %+v", out)
 	}
 	tr, _ := rt.db.GetTrajectoryByRoot(ctx, coord)
-	if tr.Status != db.TrajStatusRunning || trajActivePhase(&tr) != "p:research" {
-		t.Fatalf("after phase active: %s / %s", tr.Status, trajActivePhase(&tr))
+	if tr.Status != db.TrajStatusRunning || trajectory.ActivePhase(&tr) != "p:research" {
+		t.Fatalf("after phase active: %s / %s", tr.Status, trajectory.ActivePhase(&tr))
 	}
 	if out := call(map[string]any{"action": "phase", "id": "ghost", "state": "done"}); !out.IsError {
 		t.Fatalf("unknown phase must error, got %+v", out)
@@ -234,7 +235,7 @@ func TestTrajectoryAgentPlannedThroughTool(t *testing.T) {
 		t.Fatalf("finish = %+v", out)
 	}
 	tr, _ = rt.db.GetTrajectoryByRoot(ctx, coord)
-	if tr.Status != db.TrajStatusDone || trajNodePtr(&tr, "p:research").State != db.TrajStateDone || trajNodePtr(&tr, "s:"+coord).State != db.TrajStateDone {
+	if tr.Status != db.TrajStatusDone || trajectory.NodePtr(&tr, "p:research").State != db.TrajStateDone || trajectory.NodePtr(&tr, "s:"+coord).State != db.TrajStateDone {
 		t.Fatalf("after finish: %+v", tr)
 	}
 	// A worker that is not a coordinator has no trajectory runner → no tool.
@@ -265,7 +266,7 @@ func TestTrajectoryAskGate(t *testing.T) {
 	}
 	rt.bindAskToTrajectory(ask)
 	tr, _ := rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	g := trajNodePtr(&tr, "g:"+ask.ID)
+	g := trajectory.NodePtr(&tr, "g:"+ask.ID)
 	if g == nil || g.State != db.TrajStateActive || g.Gate == nil || g.Gate.Kind != "human" || tr.Status != db.TrajStatusWaiting {
 		t.Fatalf("gate after ask = %+v / status %s", g, tr.Status)
 	}
@@ -280,7 +281,7 @@ func TestTrajectoryAskGate(t *testing.T) {
 	}
 	rt.ReleaseAsk(ask, db.SessionAskTimeout)
 	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	g = trajNodePtr(&tr, "g:"+ask.ID)
+	g = trajectory.NodePtr(&tr, "g:"+ask.ID)
 	if g.State != db.TrajStateSkipped || g.Reason != db.SessionAskTimeout || tr.Status == db.TrajStatusWaiting {
 		t.Fatalf("gate after release = %+v / status %s", g, tr.Status)
 	}
@@ -288,7 +289,7 @@ func TestTrajectoryAskGate(t *testing.T) {
 	rev := tr.Revision
 	rt.ReleaseAsk(ask, db.SessionAskResolved)
 	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	if g := trajNodePtr(&tr, "g:"+ask.ID); g.State != db.TrajStateSkipped {
+	if g := trajectory.NodePtr(&tr, "g:"+ask.ID); g.State != db.TrajStateSkipped {
 		t.Fatalf("second release changed the gate: %+v (rev %d → %d)", g, rev, tr.Revision)
 	}
 }
@@ -315,22 +316,22 @@ func TestTrajectoryFlowRunBinding(t *testing.T) {
 	}
 	rt.bindFlowRunToTrajectory(run)
 	tr, _ := rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	n := trajNodePtr(&tr, "r:"+run.ID)
+	n := trajectory.NodePtr(&tr, "r:"+run.ID)
 	if n == nil || n.Kind != db.TrajNodeFlowRun || n.State != db.TrajStateActive || n.RefID != run.ID || n.Lane == 0 {
 		t.Fatalf("flowrun node = %+v", n)
 	}
 	run.Status, run.Error = db.FlowFailure, "boom"
 	rt.bindFlowRunToTrajectory(run)
 	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	if n := trajNodePtr(&tr, "r:"+run.ID); n.State != db.TrajStateFailed || n.Reason != "boom" {
+	if n := trajectory.NodePtr(&tr, "r:"+run.ID); n.State != db.TrajStateFailed || n.Reason != "boom" {
 		t.Fatalf("flowrun node after failure = %+v", n)
 	}
-	if got := len(tr.Nodes); got != len(trajPhases(&tr))+1+2+1 { // phases + root + watcher/optimizer + run
+	if got := len(tr.Nodes); got != len(trajectory.Phases(&tr))+1+2+1 { // phases + root + watcher/optimizer + run
 		t.Fatalf("re-emitting the run must not duplicate the node: %d nodes", got)
 	}
 	// Transcript sessions of a triggered flow are represented by the run, not a
 	// second session node.
-	if trajNodePtr(&tr, "s:"+transcript.ID) != nil {
+	if trajectory.NodePtr(&tr, "s:"+transcript.ID) != nil {
 		t.Fatal("flow transcript session must not be bound as a session node")
 	}
 	orphan, _ := rt.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flow.ID})
@@ -356,7 +357,7 @@ func TestTrajectoryForkedSessionBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr, _ := rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	n := trajNodePtr(&tr, "s:"+fired.ID)
+	n := trajectory.NodePtr(&tr, "s:"+fired.ID)
 	if n == nil || n.Label != "AUT9 → Docs" || n.Lane == 0 {
 		t.Fatalf("fired session node = %+v", n)
 	}
@@ -381,7 +382,7 @@ func TestTrajectoryForkedSessionBinding(t *testing.T) {
 		t.Fatalf("a session forked into a trajectory must not seed its own, got err=%v", err)
 	}
 	tr, _ = rt.db.GetTrajectoryByRoot(ctx, sess.ID)
-	if trajNodePtr(&tr, "s:"+coordFired.ID) == nil {
+	if trajectory.NodePtr(&tr, "s:"+coordFired.ID) == nil {
 		t.Fatalf("forked coordinator session missing from the trigger's trajectory: %+v", tr.Nodes)
 	}
 	// A trigger with no trajectory of its own (a plain chat) binds nothing, so the

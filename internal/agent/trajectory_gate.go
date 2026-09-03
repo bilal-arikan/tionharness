@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Phase gates (Rota F5, brief §5 / §11 F5). A declared phase may carry a gate:
@@ -173,7 +174,7 @@ func (r *Runtime) ResolvePhaseGate(ctx context.Context, ask db.SessionAsk, answe
 	approved := gateApproved(answer)
 	r.ReleaseAsk(ask, db.SessionAskResolved)
 	_, err := r.db.UpdateTrajectory(ctx, tid, 0, func(t *db.Trajectory) error {
-		n := trajNodePtr(t, trajPhaseNodeID(phaseID))
+		n := trajectory.NodePtr(t, trajectory.PhaseNodeID(phaseID))
 		if n == nil {
 			return fmt.Errorf("phase %q not on trajectory %s", phaseID, tid)
 		}
@@ -185,7 +186,7 @@ func (r *Runtime) ResolvePhaseGate(ctx context.Context, ask db.SessionAsk, answe
 			n.State = db.TrajStateActive
 			n.Reason = "kapı reddedildi: " + strings.TrimSpace(answer)
 		}
-		trajDeriveStatus(t)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 	if err != nil {
@@ -219,7 +220,7 @@ func (r *Runtime) SetTrajectoryPhase(ctx context.Context, trajectoryID, phaseID,
 		return db.Trajectory{}, err
 	}
 	if state == db.TrajStateDone && !force {
-		if p := trajNodePtr(&t, trajPhaseNodeID(strings.TrimSpace(phaseID))); p != nil && p.Gate != nil && p.State != db.TrajStateDone {
+		if p := trajectory.NodePtr(&t, trajectory.PhaseNodeID(strings.TrimSpace(phaseID))); p != nil && p.Gate != nil && p.State != db.TrajStateDone {
 			pass, pending, why := r.checkPhaseGate(ctx, t, *p)
 			if pending {
 				return t, fmt.Errorf("%w: phase %q — answer the card on session %s", ErrGatePending, phaseID, t.RootSessionID)
@@ -233,21 +234,21 @@ func (r *Runtime) SetTrajectoryPhase(ctx context.Context, trajectoryID, phaseID,
 		}
 	}
 	return r.db.UpdateTrajectory(ctx, trajectoryID, expectedRev, func(t *db.Trajectory) error {
-		if err := trajSetPhaseState(t, phaseID, state, reason, nowMs()); err != nil {
+		if err := trajectory.SetPhaseState(t, phaseID, state, reason, nowMs()); err != nil {
 			return err
 		}
-		trajDeriveStatus(t)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
 
-// PlanTrajectory replaces the declared phase list (see trajApplyPlan).
+// PlanTrajectory replaces the declared phase list (see trajectory.ApplyPlan).
 func (r *Runtime) PlanTrajectory(ctx context.Context, trajectoryID string, plan []TrajectoryPlanPhase, expectedRev uint64) (db.Trajectory, error) {
 	return r.db.UpdateTrajectory(ctx, trajectoryID, expectedRev, func(t *db.Trajectory) error {
-		if err := trajApplyPlan(t, plan); err != nil {
+		if err := trajectory.ApplyPlan(t, plan); err != nil {
 			return err
 		}
-		trajDeriveStatus(t)
+		trajectory.DeriveStatus(t)
 		return nil
 	})
 }
@@ -276,7 +277,7 @@ func (r *Runtime) FinishTrajectory(ctx context.Context, trajectoryID, status, re
 				n.EndMs = at
 			}
 		}
-		if n := trajNodePtr(t, trajSessionNodeID(t.RootSessionID)); n != nil {
+		if n := trajectory.NodePtr(t, trajectory.SessionNodeID(t.RootSessionID)); n != nil {
 			n.EndMs = at
 			n.State = db.TrajStateDone
 			if final == db.TrajStatusFailed {

@@ -1,4 +1,4 @@
-package agent
+package trajectory
 
 import (
 	"testing"
@@ -37,7 +37,7 @@ func TestSummarizeTrajectory(t *testing.T) {
 			return 100, 0.01, true
 		}
 	}
-	s := summarizeTrajectory(summaryFixture(), cost, 2000)
+	s := Summarize(summaryFixture(), cost, 2000)
 	if s.DurationSec != 400 { // last EndMs 1400s − CreatedAt 1000s
 		t.Fatalf("duration = %d", s.DurationSec)
 	}
@@ -65,7 +65,7 @@ func TestSummarizeTrajectory(t *testing.T) {
 	// A live run closes its duration at now.
 	live := summaryFixture()
 	live.Status = db.TrajStatusRunning
-	if ls := summarizeTrajectory(live, nil, 3000); ls.DurationSec != 2000 || ls.Tokens != 0 || !ls.Priced {
+	if ls := Summarize(live, nil, 3000); ls.DurationSec != 2000 || ls.Tokens != 0 || !ls.Priced {
 		t.Fatalf("live summary = %+v", ls)
 	}
 }

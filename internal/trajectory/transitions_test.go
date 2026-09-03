@@ -1,4 +1,4 @@
-package agent
+package trajectory
 
 import (
 	"testing"
@@ -18,21 +18,21 @@ func trajSnapshot(id, status string, phases map[string]string) db.Trajectory {
 // enter / exit per phase and one end transition; delete forgets; an unknown
 // trajectory's first update is a baseline too (boot case).
 func TestTrajectoryTransitionDiffer(t *testing.T) {
-	var d trajTransitionDiffer
+	var d TransitionDiffer
 	ev := func(op string, tr db.Trajectory) db.TrajectoryChangeEvent {
 		return db.TrajectoryChangeEvent{TrajectoryID: tr.ID, RootSessionID: tr.RootSessionID, Op: op, Trajectory: tr}
 	}
-	if got := d.diff(ev(db.TrajectoryOpCreate, trajSnapshot("RTA1", db.TrajStatusPlanned, map[string]string{"plan": "pending", "code": "pending"}))); len(got) != 0 {
+	if got := d.Diff(ev(db.TrajectoryOpCreate, trajSnapshot("RTA1", db.TrajStatusPlanned, map[string]string{"plan": "pending", "code": "pending"}))); len(got) != 0 {
 		t.Fatalf("create must be a baseline, got %+v", got)
 	}
-	got := d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "active", "code": "pending"})))
-	if len(got) != 1 || got[0].Kind != TrajTransitionPhase || got[0].PhaseID != "plan" || got[0].Event != db.TrajEventEnter {
+	got := d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "active", "code": "pending"})))
+	if len(got) != 1 || got[0].Kind != TransitionPhase || got[0].PhaseID != "plan" || got[0].Event != db.TrajEventEnter {
 		t.Fatalf("plan enter = %+v", got)
 	}
 	if got[0].RecipeSlug() != "plan-dev" {
 		t.Fatalf("recipe slug = %q", got[0].RecipeSlug())
 	}
-	got = d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "done", "code": "active"})))
+	got = d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "done", "code": "active"})))
 	if len(got) != 2 {
 		t.Fatalf("plan exit + code enter expected, got %+v", got)
 	}
@@ -49,23 +49,23 @@ func TestTrajectoryTransitionDiffer(t *testing.T) {
 		t.Fatalf("transitions = %+v", got)
 	}
 	// Same snapshot again: nothing new.
-	if got := d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "done", "code": "active"}))); len(got) != 0 {
+	if got := d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusRunning, map[string]string{"plan": "done", "code": "active"}))); len(got) != 0 {
 		t.Fatalf("no change must yield nothing, got %+v", got)
 	}
-	got = d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusDone, map[string]string{"plan": "done", "code": "done"})))
-	if len(got) != 2 || got[1].Kind != TrajTransitionEnd || got[1].Status != db.TrajStatusDone {
+	got = d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusDone, map[string]string{"plan": "done", "code": "done"})))
+	if len(got) != 2 || got[1].Kind != TransitionEnd || got[1].Status != db.TrajStatusDone {
 		t.Fatalf("code exit + end expected, got %+v", got)
 	}
 	// Terminal → terminal never re-ends.
-	if got := d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusDone, map[string]string{"plan": "done", "code": "done"}))); len(got) != 0 {
+	if got := d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA1", db.TrajStatusDone, map[string]string{"plan": "done", "code": "done"}))); len(got) != 0 {
 		t.Fatalf("second terminal snapshot must be silent, got %+v", got)
 	}
-	d.diff(ev(db.TrajectoryOpDelete, db.Trajectory{ID: "RTA1"}))
+	d.Diff(ev(db.TrajectoryOpDelete, db.Trajectory{ID: "RTA1"}))
 	if _, ok := d.memo["RTA1"]; ok {
 		t.Fatal("delete must forget the trajectory")
 	}
 	// Unknown id on update: baseline, no announcement.
-	if got := d.diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA9", db.TrajStatusDone, map[string]string{"plan": "done"}))); len(got) != 0 {
+	if got := d.Diff(ev(db.TrajectoryOpUpdate, trajSnapshot("RTA9", db.TrajStatusDone, map[string]string{"plan": "done"}))); len(got) != 0 {
 		t.Fatalf("first sight of an existing trajectory must be a baseline, got %+v", got)
 	}
 }

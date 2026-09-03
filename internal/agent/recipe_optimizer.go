@@ -15,6 +15,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/insight"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Recipe optimizer (Rota F4, brief §7.2–7.4). The one LLM pass of the Rota
@@ -141,7 +142,7 @@ func (r *Runtime) MaybeOptimizeRecipe(ctx context.Context, slug, trigger string)
 func (r *Runtime) recipeStatsFor(ctx context.Context, slug string) (RecipeStats, bool) {
 	var agg RecipeStats
 	found := false
-	for _, st := range RecipeStatsFromIndex(r.db.ListTrajectories(ctx, db.TrajectoryFilter{})) {
+	for _, st := range trajectory.RecipeStatsFromIndex(r.db.ListTrajectories(ctx, db.TrajectoryFilter{})) {
 		if st.Slug != slug {
 			continue
 		}
@@ -182,7 +183,7 @@ func (r *Runtime) RunRecipeOptimizer(ctx context.Context, slug, trigger string) 
 		body = ""
 	}
 	rows := r.db.ListTrajectories(ctx, db.TrajectoryFilter{})
-	stats := RecipeStatsFromIndex(rows)
+	stats := trajectory.RecipeStatsFromIndex(rows)
 	var mine []RecipeStats
 	for _, st := range stats {
 		if st.Slug == slug {

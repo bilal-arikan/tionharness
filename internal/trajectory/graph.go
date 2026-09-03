@@ -1,4 +1,10 @@
-package agent
+// Package trajectory holds the pure Rota graph logic — node ids, phase
+// activation, recipe seeding, plan application, status derivation, rendering,
+// the deterministic run summary, transition diffing and recipe statistics.
+// It depends on db (the Trajectory model) and skills (recipe specs) only; the
+// runtime binder in internal/agent owns persistence, queues and hooks.
+// Extracted from internal/agent on 2026-09-03 (_Docs/81, step 2).
+package trajectory
 
 import (
 	"fmt"
@@ -21,22 +27,22 @@ import (
 // Node id prefixes. One namespace per kind so an observed session and a
 // declared phase can never collide and a reader can tell the kind from the id.
 const (
-	trajPhasePrefix     = "p:"
-	trajSessionPrefix   = "s:"
-	trajFlowRunPrefix   = "r:"
-	trajGatePrefix      = "g:"
-	trajAutomationPfx   = "a:"
-	trajOptimizerNodeID = "o:optimizer"
-	trajLaneMetaKey     = "lanes" // Meta: next free lane (0 = root's lane)
+	PhasePrefix     = "p:"
+	SessionPrefix   = "s:"
+	FlowRunPrefix   = "r:"
+	GatePrefix      = "g:"
+	AutomationPfx   = "a:"
+	OptimizerNodeID = "o:optimizer"
+	LaneMetaKey     = "lanes" // Meta: next free lane (0 = root's lane)
 )
 
-func trajPhaseNodeID(phaseID string) string     { return trajPhasePrefix + phaseID }
-func trajSessionNodeID(sessionID string) string { return trajSessionPrefix + sessionID }
-func trajFlowRunNodeID(runID string) string     { return trajFlowRunPrefix + runID }
-func trajGateNodeID(askID string) string        { return trajGatePrefix + askID }
+func PhaseNodeID(phaseID string) string     { return PhasePrefix + phaseID }
+func SessionNodeID(sessionID string) string { return SessionPrefix + sessionID }
+func FlowRunNodeID(runID string) string     { return FlowRunPrefix + runID }
+func GateNodeID(askID string) string        { return GatePrefix + askID }
 
-// trajNodeIndex returns the index of node id in t.Nodes, -1 when absent.
-func trajNodeIndex(t *db.Trajectory, id string) int {
+// NodeIndex returns the index of node id in t.Nodes, -1 when absent.
+func NodeIndex(t *db.Trajectory, id string) int {
 	for i := range t.Nodes {
 		if t.Nodes[i].ID == id {
 			return i
@@ -45,27 +51,27 @@ func trajNodeIndex(t *db.Trajectory, id string) int {
 	return -1
 }
 
-// trajNodePtr returns a pointer to the node with id, nil when absent.
-func trajNodePtr(t *db.Trajectory, id string) *db.TrajectoryNode {
-	if i := trajNodeIndex(t, id); i >= 0 {
+// NodePtr returns a pointer to the node with id, nil when absent.
+func NodePtr(t *db.Trajectory, id string) *db.TrajectoryNode {
+	if i := NodeIndex(t, id); i >= 0 {
 		return &t.Nodes[i]
 	}
 	return nil
 }
 
-// trajAddNode appends n unless a node with the same id exists; reports whether
+// AddNode appends n unless a node with the same id exists; reports whether
 // it was added. An observer that fires twice for one fact (a retried spawn, a
 // re-emitted run status) must not duplicate the vertex.
-func trajAddNode(t *db.Trajectory, n db.TrajectoryNode) bool {
-	if trajNodeIndex(t, n.ID) >= 0 {
+func AddNode(t *db.Trajectory, n db.TrajectoryNode) bool {
+	if NodeIndex(t, n.ID) >= 0 {
 		return false
 	}
 	t.Nodes = append(t.Nodes, n)
 	return true
 }
 
-// trajAddEdge appends the edge unless an identical one exists.
-func trajAddEdge(t *db.Trajectory, from, to, kind, origin string) bool {
+// AddEdge appends the edge unless an identical one exists.
+func AddEdge(t *db.Trajectory, from, to, kind, origin string) bool {
 	for _, e := range t.Edges {
 		if e.From == from && e.To == to && e.Kind == kind {
 			return false
@@ -75,23 +81,23 @@ func trajAddEdge(t *db.Trajectory, from, to, kind, origin string) bool {
 	return true
 }
 
-// trajNextLane hands out the next drawing row and bumps the counter kept in
+// NextLane hands out the next drawing row and bumps the counter kept in
 // Meta. Lane 0 belongs to the root session (and the declared phase row), so the
 // counter starts at 1.
-func trajNextLane(t *db.Trajectory) int {
+func NextLane(t *db.Trajectory) int {
 	if t.Meta == nil {
 		t.Meta = map[string]string{}
 	}
-	next, _ := strconv.Atoi(t.Meta[trajLaneMetaKey])
+	next, _ := strconv.Atoi(t.Meta[LaneMetaKey])
 	if next < 1 {
 		next = 1
 	}
-	t.Meta[trajLaneMetaKey] = strconv.Itoa(next + 1)
+	t.Meta[LaneMetaKey] = strconv.Itoa(next + 1)
 	return next
 }
 
-// trajPhases returns the declared phase nodes in graph order.
-func trajPhases(t *db.Trajectory) []db.TrajectoryNode {
+// Phases returns the declared phase nodes in graph order.
+func Phases(t *db.Trajectory) []db.TrajectoryNode {
 	var out []db.TrajectoryNode
 	for _, n := range t.Nodes {
 		if n.Kind == db.TrajNodePhase {
@@ -101,8 +107,8 @@ func trajPhases(t *db.Trajectory) []db.TrajectoryNode {
 	return out
 }
 
-// trajActivePhase returns the id of the phase currently active ("" when none).
-func trajActivePhase(t *db.Trajectory) string {
+// ActivePhase returns the id of the phase currently active ("" when none).
+func ActivePhase(t *db.Trajectory) string {
 	for _, n := range t.Nodes {
 		if n.Kind == db.TrajNodePhase && n.State == db.TrajStateActive {
 			return n.ID
@@ -111,13 +117,13 @@ func trajActivePhase(t *db.Trajectory) string {
 	return ""
 }
 
-// trajActivatePhase makes phase node id the active one: the previously active
+// ActivatePhase makes phase node id the active one: the previously active
 // phase (if another) is closed as done, the target's StartMs is stamped once.
 // Returns an error when id is not a phase node.
-func trajActivatePhase(t *db.Trajectory, id string, nowMs int64) error {
-	target := trajNodePtr(t, id)
+func ActivatePhase(t *db.Trajectory, id string, nowMs int64) error {
+	target := NodePtr(t, id)
 	if target == nil || target.Kind != db.TrajNodePhase {
-		return fmt.Errorf("phase %q is not declared on this trajectory", strings.TrimPrefix(id, trajPhasePrefix))
+		return fmt.Errorf("phase %q is not declared on this trajectory", strings.TrimPrefix(id, PhasePrefix))
 	}
 	for i := range t.Nodes {
 		n := &t.Nodes[i]
@@ -139,23 +145,23 @@ func trajActivatePhase(t *db.Trajectory, id string, nowMs int64) error {
 	return nil
 }
 
-// trajAutoStartPhase activates the first pending phase when the trajectory has
+// AutoStartPhase activates the first pending phase when the trajectory has
 // declared phases but none is active yet — the moment the first worker spawns
 // the plan is evidently under way even if the agent never called the tool.
-func trajAutoStartPhase(t *db.Trajectory, nowMs int64) {
-	if trajActivePhase(t) != "" {
+func AutoStartPhase(t *db.Trajectory, nowMs int64) {
+	if ActivePhase(t) != "" {
 		return
 	}
-	for _, p := range trajPhases(t) {
+	for _, p := range Phases(t) {
 		if p.State == db.TrajStatePending {
-			_ = trajActivatePhase(t, p.ID, nowMs)
+			_ = ActivatePhase(t, p.ID, nowMs)
 			return
 		}
 	}
 }
 
-// trajOpenGate reports whether an observed gate (a durable ask) is still open.
-func trajOpenGate(t *db.Trajectory) bool {
+// OpenGate reports whether an observed gate (a durable ask) is still open.
+func OpenGate(t *db.Trajectory) bool {
 	for _, n := range t.Nodes {
 		if n.Kind == db.TrajNodeGate && n.State == db.TrajStateActive {
 			return true
@@ -164,19 +170,19 @@ func trajOpenGate(t *db.Trajectory) bool {
 	return false
 }
 
-// trajDeriveStatus recomputes Trajectory.Status from the graph. Terminal
+// DeriveStatus recomputes Trajectory.Status from the graph. Terminal
 // statuses set explicitly (done/failed/abandoned) are kept: the derivation only
 // moves a live trajectory between planned / running / waiting, and closes it
 // when every required declared phase has finished.
-func trajDeriveStatus(t *db.Trajectory) {
+func DeriveStatus(t *db.Trajectory) {
 	if t.IsTerminal() {
 		return
 	}
-	if trajOpenGate(t) {
+	if OpenGate(t) {
 		t.Status = db.TrajStatusWaiting
 		return
 	}
-	phases := trajPhases(t)
+	phases := Phases(t)
 	if len(phases) > 0 {
 		allClosed := true
 		for _, p := range phases {
@@ -218,10 +224,10 @@ func trajDeriveStatus(t *db.Trajectory) {
 	}
 }
 
-// trajPhaseFromSpec builds a declared phase node from a recipe phase.
-func trajPhaseFromSpec(p skills.PhaseSpec) db.TrajectoryNode {
+// PhaseFromSpec builds a declared phase node from a recipe phase.
+func PhaseFromSpec(p skills.PhaseSpec) db.TrajectoryNode {
 	n := db.TrajectoryNode{
-		ID: trajPhaseNodeID(p.ID), Kind: db.TrajNodePhase, Origin: db.TrajOriginDeclared,
+		ID: PhaseNodeID(p.ID), Kind: db.TrajNodePhase, Origin: db.TrajOriginDeclared,
 		Label: p.Label, Profile: p.Profile, Optional: p.Optional, State: db.TrajStatePending,
 	}
 	if n.Label == "" {
@@ -233,84 +239,84 @@ func trajPhaseFromSpec(p skills.PhaseSpec) db.TrajectoryNode {
 	return n
 }
 
-// trajRootNode is the observed node for the root session (lane 0, active).
-func trajRootNode(root db.Session) db.TrajectoryNode {
+// RootNode is the observed node for the root session (lane 0, active).
+func RootNode(root db.Session) db.TrajectoryNode {
 	return db.TrajectoryNode{
-		ID: trajSessionNodeID(root.ID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
+		ID: SessionNodeID(root.ID), Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
 		Label: root.Title, RefKind: "session", RefID: root.ID, Lane: 0,
 		State: db.TrajStateActive, StartMs: root.CreatedAt * 1000,
 	}
 }
 
-// trajSeed builds the initial graph for a root session: its own node plus, when
+// Seed builds the initial graph for a root session: its own node plus, when
 // a recipe with a structured plan is given, the declared phases (next-chained),
 // per-phase and trajectory-wide watcher automations as ghosts, and the optimizer.
 // ref is the versioned recipe ref recorded as TemplateRef ("" = agent-planned).
-func trajSeed(root db.Session, spec *skills.RecipeSpec, ref string) db.Trajectory {
+func Seed(root db.Session, spec *skills.RecipeSpec, ref string) db.Trajectory {
 	t := db.Trajectory{
 		RootSessionID: root.ID,
 		TemplateRef:   ref,
 		Status:        db.TrajStatusPlanned,
-		Nodes:         []db.TrajectoryNode{trajRootNode(root)},
+		Nodes:         []db.TrajectoryNode{RootNode(root)},
 		Edges:         []db.TrajectoryEdge{},
-		Meta:          map[string]string{trajLaneMetaKey: "1"},
+		Meta:          map[string]string{LaneMetaKey: "1"},
 	}
 	if spec == nil {
 		return t
 	}
-	trajApplyRecipe(&t, spec)
+	ApplyRecipe(&t, spec)
 	return t
 }
 
-// trajApplyRecipe adds a recipe's declared nodes to a graph that has none yet.
-func trajApplyRecipe(t *db.Trajectory, spec *skills.RecipeSpec) {
+// ApplyRecipe adds a recipe's declared nodes to a graph that has none yet.
+func ApplyRecipe(t *db.Trajectory, spec *skills.RecipeSpec) {
 	prev := ""
 	for _, p := range spec.Phases {
-		n := trajPhaseFromSpec(p)
-		if !trajAddNode(t, n) {
+		n := PhaseFromSpec(p)
+		if !AddNode(t, n) {
 			continue
 		}
 		if prev != "" {
-			trajAddEdge(t, prev, n.ID, db.TrajEdgeNext, db.TrajOriginDeclared)
+			AddEdge(t, prev, n.ID, db.TrajEdgeNext, db.TrajOriginDeclared)
 		}
 		prev = n.ID
 		for _, w := range p.Watchers {
-			trajAddWatcher(t, w, n.ID)
+			AddWatcher(t, w, n.ID)
 		}
 	}
 	for _, w := range spec.Watchers {
-		trajAddWatcher(t, w, "")
+		AddWatcher(t, w, "")
 	}
 	if opt := strings.TrimSpace(spec.Optimizer); opt != "" {
-		trajAddNode(t, db.TrajectoryNode{
-			ID: trajOptimizerNodeID, Kind: db.TrajNodeOptimizer, Origin: db.TrajOriginDeclared,
+		AddNode(t, db.TrajectoryNode{
+			ID: OptimizerNodeID, Kind: db.TrajNodeOptimizer, Origin: db.TrajOriginDeclared,
 			Label: opt, RefKind: "agent", RefID: opt, State: db.TrajStateGhost,
 		})
 	}
 }
 
-// trajAddWatcher adds a ghost automation node for a recipe watcher, hung under
+// AddWatcher adds a ghost automation node for a recipe watcher, hung under
 // phaseID ("" = trajectory-wide). The watcher string is an automation id or
 // name; it is recorded as RefID as written — F2 resolves and fires it.
-func trajAddWatcher(t *db.Trajectory, watcher, phaseID string) {
+func AddWatcher(t *db.Trajectory, watcher, phaseID string) {
 	watcher = strings.TrimSpace(watcher)
 	if watcher == "" {
 		return
 	}
-	id := trajAutomationPfx + watcher
+	id := AutomationPfx + watcher
 	if phaseID != "" {
-		id += "@" + strings.TrimPrefix(phaseID, trajPhasePrefix)
+		id += "@" + strings.TrimPrefix(phaseID, PhasePrefix)
 	}
-	trajAddNode(t, db.TrajectoryNode{
+	AddNode(t, db.TrajectoryNode{
 		ID: id, Kind: db.TrajNodeAutomation, Origin: db.TrajOriginDeclared,
 		Label: watcher, RefKind: "automation", RefID: watcher, PhaseID: phaseID,
 		State: db.TrajStateGhost,
 	})
 }
 
-// TrajectoryPlanPhase is one phase of an agent-declared plan (trajectory tool,
+// PlanPhase is one phase of an agent-declared plan (trajectory tool,
 // action "plan"). Mirrors skills.PhaseSpec minus the recipe-only knobs.
-type TrajectoryPlanPhase struct {
+type PlanPhase struct {
 	ID       string `json:"id"`
 	Label    string `json:"label,omitempty"`
 	Profile  string `json:"profile,omitempty"`
@@ -319,12 +325,12 @@ type TrajectoryPlanPhase struct {
 	GateVal  string `json:"gateValue,omitempty"`
 }
 
-// trajApplyPlan replaces the declared phase list with plan. Phases that already
+// ApplyPlan replaces the declared phase list with plan. Phases that already
 // exist keep their state; a phase that is active or done cannot be dropped (the
 // plan may only grow past what has happened); pending phases not in the plan
 // are removed together with their edges. The next-chain is rebuilt in plan
 // order.
-func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
+func ApplyPlan(t *db.Trajectory, plan []PlanPhase) error {
 	if len(plan) == 0 {
 		return fmt.Errorf("a plan needs at least one phase")
 	}
@@ -334,10 +340,10 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 		if !skills.ValidPhaseID(p.ID) {
 			return fmt.Errorf("phases[%d]: id %q must be lowercase [a-z0-9_-], 1..64 chars", i, p.ID)
 		}
-		if keep[trajPhaseNodeID(p.ID)] {
+		if keep[PhaseNodeID(p.ID)] {
 			return fmt.Errorf("phases[%d]: duplicate id %q", i, p.ID)
 		}
-		keep[trajPhaseNodeID(p.ID)] = true
+		keep[PhaseNodeID(p.ID)] = true
 		if p.GateKind != "" {
 			known := false
 			for _, k := range skills.GateKinds {
@@ -350,9 +356,9 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 			}
 		}
 	}
-	for _, n := range trajPhases(t) {
+	for _, n := range Phases(t) {
 		if !keep[n.ID] && n.State != db.TrajStatePending && n.State != db.TrajStateGhost {
-			return fmt.Errorf("phase %q is %s and cannot be dropped from the plan", strings.TrimPrefix(n.ID, trajPhasePrefix), n.State)
+			return fmt.Errorf("phase %q is %s and cannot be dropped from the plan", strings.TrimPrefix(n.ID, PhasePrefix), n.State)
 		}
 	}
 	// Drop pending phases not in the plan and every edge touching them, and
@@ -384,13 +390,13 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 	}
 	prev := ""
 	for _, p := range plan {
-		id := trajPhaseNodeID(strings.TrimSpace(p.ID))
-		n := trajNodePtr(t, id)
+		id := PhaseNodeID(strings.TrimSpace(p.ID))
+		n := NodePtr(t, id)
 		if n == nil {
 			t.Nodes = append(t.Nodes, db.TrajectoryNode{
 				ID: id, Kind: db.TrajNodePhase, Origin: db.TrajOriginDeclared, State: db.TrajStatePending,
 			})
-			n = trajNodePtr(t, id)
+			n = NodePtr(t, id)
 		}
 		n.Label = strings.TrimSpace(p.Label)
 		if n.Label == "" {
@@ -404,7 +410,7 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 			n.Gate = nil
 		}
 		if prev != "" {
-			trajAddEdge(t, prev, id, db.TrajEdgeNext, db.TrajOriginDeclared)
+			AddEdge(t, prev, id, db.TrajEdgeNext, db.TrajOriginDeclared)
 		}
 		prev = id
 	}
@@ -412,7 +418,7 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 	// reader that walks Nodes sees the plan before the observations.
 	order := map[string]int{}
 	for i, p := range plan {
-		order[trajPhaseNodeID(strings.TrimSpace(p.ID))] = i
+		order[PhaseNodeID(strings.TrimSpace(p.ID))] = i
 	}
 	sort.SliceStable(t.Nodes, func(i, j int) bool {
 		pi, iok := order[t.Nodes[i].ID]
@@ -425,16 +431,16 @@ func trajApplyPlan(t *db.Trajectory, plan []TrajectoryPlanPhase) error {
 	return nil
 }
 
-// trajSetPhaseState applies a phase transition requested by the agent. active
-// goes through trajActivatePhase (closing the previous one); done / skipped /
+// SetPhaseState applies a phase transition requested by the agent. active
+// goes through ActivatePhase (closing the previous one); done / skipped /
 // failed stamp EndMs and the reason.
-func trajSetPhaseState(t *db.Trajectory, phaseID, state, reason string, nowMs int64) error {
-	id := trajPhaseNodeID(strings.TrimSpace(phaseID))
+func SetPhaseState(t *db.Trajectory, phaseID, state, reason string, nowMs int64) error {
+	id := PhaseNodeID(strings.TrimSpace(phaseID))
 	switch state {
 	case db.TrajStateActive:
-		return trajActivatePhase(t, id, nowMs)
+		return ActivatePhase(t, id, nowMs)
 	case db.TrajStateDone, db.TrajStateSkipped, db.TrajStateFailed:
-		n := trajNodePtr(t, id)
+		n := NodePtr(t, id)
 		if n == nil || n.Kind != db.TrajNodePhase {
 			return fmt.Errorf("phase %q is not declared on this trajectory", strings.TrimSpace(phaseID))
 		}
@@ -450,8 +456,8 @@ func trajSetPhaseState(t *db.Trajectory, phaseID, state, reason string, nowMs in
 	}
 }
 
-// trajPhaseGlyph is the one-character state marker used by the text renders.
-func trajPhaseGlyph(state string) string {
+// PhaseGlyph is the one-character state marker used by the text renders.
+func PhaseGlyph(state string) string {
 	switch state {
 	case db.TrajStateActive:
 		return "●"
@@ -466,15 +472,15 @@ func trajPhaseGlyph(state string) string {
 	}
 }
 
-// trajPhaseLine renders "plan ✓ → code ● (coder) → review ○ [gate verdict …]".
-func trajPhaseLine(t *db.Trajectory) string {
-	phases := trajPhases(t)
+// PhaseLine renders "plan ✓ → code ● (coder) → review ○ [gate verdict …]".
+func PhaseLine(t *db.Trajectory) string {
+	phases := Phases(t)
 	if len(phases) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(phases))
 	for _, p := range phases {
-		s := strings.TrimPrefix(p.ID, trajPhasePrefix) + " " + trajPhaseGlyph(p.State)
+		s := strings.TrimPrefix(p.ID, PhasePrefix) + " " + PhaseGlyph(p.State)
 		var tags []string
 		if p.Profile != "" {
 			tags = append(tags, p.Profile)
@@ -497,15 +503,15 @@ func trajPhaseLine(t *db.Trajectory) string {
 	return strings.Join(parts, " → ")
 }
 
-// trajRender is the full text view the trajectory tool returns for "get".
-func trajRender(t *db.Trajectory) string {
+// Render is the full text view the trajectory tool returns for "get".
+func Render(t *db.Trajectory) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Trajectory %s — status %s, revision %d", t.ID, t.Status, t.Revision)
 	if t.TemplateRef != "" {
 		fmt.Fprintf(&b, ", recipe %s", t.TemplateRef)
 	}
 	b.WriteString("\n")
-	if line := trajPhaseLine(t); line != "" {
+	if line := PhaseLine(t); line != "" {
 		b.WriteString("Phases: " + line + "\n")
 	} else {
 		b.WriteString("Phases: none declared (call trajectory{action:\"plan\"} to announce them)\n")
@@ -545,8 +551,8 @@ func trajRender(t *db.Trajectory) string {
 			b.WriteString("\n")
 		}
 	}
-	for _, p := range trajPhases(t) {
-		writeGroup("Under "+strings.TrimPrefix(p.ID, trajPhasePrefix), byPhase[p.ID])
+	for _, p := range Phases(t) {
+		writeGroup("Under "+strings.TrimPrefix(p.ID, PhasePrefix), byPhase[p.ID])
 	}
 	writeGroup("Unassigned to a phase", byPhase[""])
 	if len(gates) > 0 {

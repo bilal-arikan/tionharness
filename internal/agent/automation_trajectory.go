@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Trajectory-triggered automations (Rota F2).
@@ -194,7 +195,7 @@ func (e *AutomationEngine) trajectoryVars(a db.Automation, tr TrajectoryTransiti
 	if tr.Status != "" {
 		v["status"] = tr.Status
 	}
-	v["phases"] = trajPhaseLine(&t)
+	v["phases"] = trajectory.PhaseLine(&t)
 	return v
 }
 
@@ -210,25 +211,25 @@ func (e *AutomationEngine) markTrajectoryAutomation(ctx context.Context, tr Traj
 	e.rt.updateTrajectoryByRoot(ctx, tr.Trajectory.RootSessionID, func(t *db.Trajectory) error {
 		id := nodeID
 		if id == "" {
-			id = trajAutomationPfx + a.ID
+			id = trajectory.AutomationPfx + a.ID
 			if tr.Kind == TrajTransitionPhase {
 				id += "@" + tr.PhaseID
 			}
 		}
-		n := trajNodePtr(t, id)
+		n := trajectory.NodePtr(t, id)
 		if n == nil {
 			phase := ""
 			if tr.Kind == TrajTransitionPhase {
-				phase = trajPhaseNodeID(tr.PhaseID)
-				if trajNodePtr(t, phase) == nil {
+				phase = trajectory.PhaseNodeID(tr.PhaseID)
+				if trajectory.NodePtr(t, phase) == nil {
 					phase = ""
 				}
 			}
-			trajAddNode(t, db.TrajectoryNode{
+			trajectory.AddNode(t, db.TrajectoryNode{
 				ID: id, Kind: db.TrajNodeAutomation, Origin: db.TrajOriginObserved,
-				RefKind: "automation", PhaseID: phase, Lane: trajNextLane(t), State: db.TrajStateGhost,
+				RefKind: "automation", PhaseID: phase, Lane: trajectory.NextLane(t), State: db.TrajStateGhost,
 			})
-			n = trajNodePtr(t, id)
+			n = trajectory.NodePtr(t, id)
 		}
 		if a.ID != "" {
 			n.RefID = a.ID
@@ -245,15 +246,15 @@ func (e *AutomationEngine) markTrajectoryAutomation(ctx context.Context, tr Traj
 		}
 		n.EndMs = at
 		if sessionID != "" {
-			sess := trajSessionNodeID(sessionID)
-			if trajNodePtr(t, sess) == nil {
-				trajAddNode(t, db.TrajectoryNode{
+			sess := trajectory.SessionNodeID(sessionID)
+			if trajectory.NodePtr(t, sess) == nil {
+				trajectory.AddNode(t, db.TrajectoryNode{
 					ID: sess, Kind: db.TrajNodeSession, Origin: db.TrajOriginObserved,
 					RefKind: "session", RefID: sessionID, PhaseID: n.PhaseID,
-					Lane: trajNextLane(t), State: db.TrajStateActive, StartMs: at,
+					Lane: trajectory.NextLane(t), State: db.TrajStateActive, StartMs: at,
 				})
 			}
-			trajAddEdge(t, id, sess, db.TrajEdgeFired, db.TrajOriginObserved)
+			trajectory.AddEdge(t, id, sess, db.TrajEdgeFired, db.TrajOriginObserved)
 		}
 		return nil
 	})

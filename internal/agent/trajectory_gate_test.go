@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 func gateTrajectory(t *testing.T, rt *Runtime, gate *db.TrajectoryGate) (db.Session, db.Trajectory) {
@@ -45,8 +46,8 @@ func TestPhaseGateArtifactAndVerdict(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := rt.SetTrajectoryPhase(ctx, tr.ID, "plan", db.TrajStateDone, "", 0, false)
-	if err != nil || trajNodePtr(&got, "p:plan").State != db.TrajStateDone {
-		t.Fatalf("artifact gate must pass with the artifact: %v / %+v", err, trajNodePtr(&got, "p:plan"))
+	if err != nil || trajectory.NodePtr(&got, "p:plan").State != db.TrajStateDone {
+		t.Fatalf("artifact gate must pass with the artifact: %v / %+v", err, trajectory.NodePtr(&got, "p:plan"))
 	}
 
 	rt2 := lifecycleRuntime(t)
@@ -60,8 +61,8 @@ func TestPhaseGateArtifactAndVerdict(t *testing.T) {
 	}
 	// A fresh verdict gate on the next phase passes once the transcript says so.
 	_, _ = rt2.db.UpdateTrajectory(ctx, tr2.ID, 0, func(t *db.Trajectory) error {
-		trajNodePtr(t, "p:code").Gate = &db.TrajectoryGate{Kind: "verdict", Value: "verdict: pass"}
-		return trajSetPhaseState(t, "code", db.TrajStateActive, "", 1)
+		trajectory.NodePtr(t, "p:code").Gate = &db.TrajectoryGate{Kind: "verdict", Value: "verdict: pass"}
+		return trajectory.SetPhaseState(t, "code", db.TrajStateActive, "", 1)
 	})
 	if _, err := rt2.db.AddMessage(ctx, db.Message{SessionID: root2.ID, Role: "user", Text: "validator says VERDICT: PASS (3 tests green)"}); err != nil {
 		t.Fatal(err)
@@ -106,7 +107,7 @@ func TestPhaseGateHuman(t *testing.T) {
 		t.Fatalf("gate ask = %+v (ok=%v tid=%s phase=%s)", gate, ok, tid, phase)
 	}
 	got, _ := rt.db.GetTrajectory(ctx, tr.ID)
-	gn := trajNodePtr(&got, "g:"+gate.ID)
+	gn := trajectory.NodePtr(&got, "g:"+gate.ID)
 	if got.Status != db.TrajStatusWaiting || gn == nil || gn.PhaseID != "p:plan" || gn.Label != "kapı: plan" {
 		t.Fatalf("waiting graph = %s / %+v", got.Status, gn)
 	}
@@ -119,10 +120,10 @@ func TestPhaseGateHuman(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = rt.db.GetTrajectory(ctx, tr.ID)
-	if p := trajNodePtr(&got, "p:plan"); p.State != db.TrajStateActive || !strings.Contains(p.Reason, "reddedildi") || got.Status != db.TrajStatusRunning {
+	if p := trajectory.NodePtr(&got, "p:plan"); p.State != db.TrajStateActive || !strings.Contains(p.Reason, "reddedildi") || got.Status != db.TrajStatusRunning {
 		t.Fatalf("after rejection = %+v / %s", p, got.Status)
 	}
-	if g := trajNodePtr(&got, "g:"+gate.ID); g.State != db.TrajStateDone {
+	if g := trajectory.NodePtr(&got, "g:"+gate.ID); g.State != db.TrajStateDone {
 		t.Fatalf("gate node after answer = %+v", g)
 	}
 	// Approval closes the phase.
@@ -140,7 +141,7 @@ func TestPhaseGateHuman(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = rt.db.GetTrajectory(ctx, tr.ID)
-	if p := trajNodePtr(&got, "p:plan"); p.State != db.TrajStateDone || p.Reason != "kapı onaylandı" {
+	if p := trajectory.NodePtr(&got, "p:plan"); p.State != db.TrajStateDone || p.Reason != "kapı onaylandı" {
 		t.Fatalf("after approval = %+v", p)
 	}
 	// The root transcript carries the decision.

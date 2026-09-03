@@ -25,6 +25,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/secrets"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
@@ -171,7 +172,7 @@ type Runtime struct {
 	trajWork trajectoryQueue
 	// trajTransitions diffs trajectory snapshots into phase / end transitions
 	// for the automation engine (Rota F2); the hook is wired by the manager.
-	trajTransitions    trajTransitionDiffer
+	trajTransitions    trajectory.TransitionDiffer
 	trajTransitionHook func(context.Context, TrajectoryTransition)
 	trajTransitionMu   sync.RWMutex
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 func TestTrajectoryRuleMatches(t *testing.T) {
@@ -63,7 +64,7 @@ func waitNode(t *testing.T, rt *Runtime, root, nodeID string) db.TrajectoryNode 
 	for {
 		tr, err := rt.db.GetTrajectoryByRoot(context.Background(), root)
 		if err == nil {
-			if n := trajNodePtr(&tr, nodeID); n != nil && n.State != db.TrajStateGhost {
+			if n := trajectory.NodePtr(&tr, nodeID); n != nil && n.State != db.TrajStateGhost {
 				return *n
 			}
 		}
@@ -112,7 +113,7 @@ func TestTrajectoryTransitionsFireAutomationsOntoGraph(t *testing.T) {
 	// plan → done, code → active: exit(plan) + enter(code). Nothing watches plan's
 	// exit or code's entry, so the graph must stay quiet.
 	_, err = rt.db.UpdateTrajectory(ctx, tr.ID, 0, func(t *db.Trajectory) error {
-		_ = trajSetPhaseState(t, "code", db.TrajStateActive, "", 1)
+		_ = trajectory.SetPhaseState(t, "code", db.TrajStateActive, "", 1)
 		return nil
 	})
 	if err != nil {
@@ -120,7 +121,7 @@ func TestTrajectoryTransitionsFireAutomationsOntoGraph(t *testing.T) {
 	}
 	// code → done: exit(code) fires the docs watcher and the explicit rule.
 	if _, err := rt.db.UpdateTrajectory(ctx, tr.ID, 0, func(t *db.Trajectory) error {
-		return trajSetPhaseState(t, "code", db.TrajStateDone, "", 2)
+		return trajectory.SetPhaseState(t, "code", db.TrajStateDone, "", 2)
 	}); err != nil {
 		t.Fatal(err)
 	}

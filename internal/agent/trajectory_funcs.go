@@ -8,6 +8,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Trajectory tool runner + situation block (Rota F1a).
@@ -30,7 +31,7 @@ func (r *Runtime) trajectoryFuncsFor(sess db.Session) *tools.TrajectoryFuncs {
 			if err != nil {
 				return "", err
 			}
-			return trajRender(&t), nil
+			return trajectory.Render(&t), nil
 		},
 	}
 	if root != sess.ID {
@@ -54,7 +55,7 @@ func (r *Runtime) trajectoryFuncsFor(sess db.Session) *tools.TrajectoryFuncs {
 			return "", err
 		}
 		return fmt.Sprintf("Plan recorded on %s (revision %d).\nPhases: %s\nCall trajectory{action:\"phase\", id, state:\"active\"} when you start a phase.",
-			updated.ID, updated.Revision, trajPhaseLine(&updated)), nil
+			updated.ID, updated.Revision, trajectory.PhaseLine(&updated)), nil
 	}
 	f.Phase = func(ctx context.Context, id, state, reason string, force bool) (string, error) {
 		t, err := r.EnsureTrajectory(ctx, root)
@@ -69,7 +70,7 @@ func (r *Runtime) trajectoryFuncsFor(sess db.Session) *tools.TrajectoryFuncs {
 			return "", err
 		}
 		return fmt.Sprintf("Phase %s is now %s (trajectory %s, revision %d).\nPhases: %s",
-			strings.TrimSpace(id), state, updated.ID, updated.Revision, trajPhaseLine(&updated)), nil
+			strings.TrimSpace(id), state, updated.ID, updated.Revision, trajectory.PhaseLine(&updated)), nil
 	}
 	f.Finish = func(ctx context.Context, status, reason string) (string, error) {
 		var final string
@@ -120,9 +121,9 @@ func (r *Runtime) coordinatorTrajectoryBlock(ctx context.Context, coordSessionID
 		fmt.Fprintf(&b, ", recipe %s", t.TemplateRef)
 	}
 	b.WriteString("\n")
-	if line := trajPhaseLine(&t); line != "" {
+	if line := trajectory.PhaseLine(&t); line != "" {
 		b.WriteString("Phases: " + line + "\n")
-		active := trajActivePhase(&t)
+		active := trajectory.ActivePhase(&t)
 		var running, done, failed int
 		for _, n := range t.Nodes {
 			if n.Kind != db.TrajNodeSession || n.Lane == 0 || n.PhaseID != active {
@@ -139,7 +140,7 @@ func (r *Runtime) coordinatorTrajectoryBlock(ctx context.Context, coordSessionID
 		}
 		if active != "" {
 			fmt.Fprintf(&b, "Active phase %s: %d worker(s) running, %d done, %d failed.\n",
-				strings.TrimPrefix(active, trajPhasePrefix), running, done, failed)
+				strings.TrimPrefix(active, trajectory.PhasePrefix), running, done, failed)
 		}
 		if root == sess.ID {
 			b.WriteString("When you move to the next phase call trajectory{action:\"phase\", id, state:\"active\"}; " +
@@ -149,7 +150,7 @@ func (r *Runtime) coordinatorTrajectoryBlock(ctx context.Context, coordSessionID
 		b.WriteString("No phases declared. If the work has distinct steps, announce them once with " +
 			"trajectory{action:\"plan\", phases:[{id, profile}]}; otherwise ignore this block.\n")
 	}
-	if trajOpenGate(&t) {
+	if trajectory.OpenGate(&t) {
 		b.WriteString("A human gate is OPEN: the trajectory is waiting for an answer.\n")
 	}
 	b.WriteString("</trajectory>")

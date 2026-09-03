@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/trajectory"
 )
 
 // Curator (Rota F3, brief §7.4–7.5): the weekly, idle-triggered, LLM-free
@@ -126,7 +127,7 @@ func (r *Runtime) RunCurator(ctx context.Context, trigger string, apply bool) (d
 		}
 	}
 	// Recipes: from the trajectory index summaries.
-	for _, st := range RecipeStatsFromIndex(r.db.ListTrajectories(ctx, db.TrajectoryFilter{})) {
+	for _, st := range trajectory.RecipeStatsFromIndex(r.db.ListTrajectories(ctx, db.TrajectoryFilter{})) {
 		if st.TemplateRef == "" || st.Summarized < curatorMinRuns {
 			continue
 		}
