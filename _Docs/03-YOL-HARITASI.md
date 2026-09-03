@@ -1,5 +1,7 @@
 # TionHarness — Yol Haritası (Aşama Aşama)
 
+> **Özet (2026-09-03):** Projenin faz-faz gelişim planını (Faz 0 İskelet → Faz 9 Masaüstü Paketleme) ve canlı backlog listesini (external-agent-oss/the external agent-Agent incelemelerinden türeyen P0–P4 maddeleri, mimari sıçrama, araç/yetki katmanı) tutar. Durum: **kısmen tarihsel, kısmen canlı** — Faz 0–8 tamamlandı ✅, Faz 6 (Memory) sonradan tamamen kaldırıldı (2026-07-05), Faz 9'da yalnız CI/paketleme kalemi açık. En önemli kararlar: MVP-önce-büyüt ilkesi, Wails yerine native WebView2, pasif kanban pano pivotu (2026-06-18). Backlog maddelerinin çoğu ✅ işaretli; güncel ilerleme günlüğü için `05-ILERLEME.md`'ye bakılmalı.
+
 > İlke: **MVP ile başla, katman katman büyüt.** Her faz çalışan ve test edilebilir bir çıktı verir.
 
 ```mermaid

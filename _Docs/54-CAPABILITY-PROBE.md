@@ -1,5 +1,16 @@
 # 54 — Capability Probe → Context Genişletme (+ per-workspace codebase-memory store)
 
+> **Özet (2026-09-03):** Uygulanmış ve aktif genel bir katmandır — cihazda opsiyonel bir
+> harici yetenek (codebase-memory-mcp, rtk/sqz token-optimizer) tespit edildiğinde ajanın
+> cachelenebilir statik prompt prefix'ine kısa bir bilgi bloğu enjekte eder. Genişletme tek
+> nokta: `internal/agent/capabilities.go`'daki `Capability` slice'ına yeni bir kayıt eklemek
+> yeterli. Önemli kararlar: per-workspace codebase-memory store 2026-08-11'de kaldırıldı
+> (sunucu tek-hesap-tek-cache-root kuralı getirdiği için), canlılık üç durumla derecelendirilir
+> (alive/unknown/dead), ve harici araç sürüm/güncelleme kontrolü (`internal/exttools`) aynı
+> dokümanda platform-bazlı (Windows/Linux/macOS) update stratejileriyle birlikte anlatılır.
+> Dayandığı dosyalar: `internal/agent/capabilities.go`, `internal/agent/capabilities_tokenopt.go`,
+> `internal/exttools/*.go`.
+
 > Generic bir katman: cihazda/işlemde bir **opsiyonel harici yetenek** mevcutsa,
 > ajanın **cachelenebilir statik** sistem-prompt prefix'ine kısa bir bilgi bloğu
 > enjekte edilir. Müşteriler: `codebase-memory-mcp` (kod bilgi-grafiği) ve

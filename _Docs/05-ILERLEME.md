@@ -1,5 +1,29 @@
 # TionHarness — İlerleme Takibi
 
+> **Özet (2026-09-03):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Ajan verimliliği: CLAUDE.md küçültme, proje skill'leri, LF normalizasyonu, kırık testler (2026-09-03) ✅
+
+Claude Code'un bu depoda daha tutarlı/hızlı çalışması için tek turda uygulanan paket:
+**(1)** kök `CLAUDE.md` 25,6 KB → ~5 KB; nadiren gereken referans (internal/db haritası,
+codebase-memory `project`, deferred araçlar, Playwright, kısmi commit, `website/`)
+`_Docs/80-AJAN-REFERANSI.md`'ye taşındı (ölçüm: proje CLAUDE.md her oturuma +10k token
+ekliyordu). **(2)** `.claude/skills/{test,run-app,docs-update}` ve `.claude/launch.json`
+(`tionharness` :8080, `frontend-dev` :5173); `scripts/test.sh fast|full` — fast yalnız
+main'den beri değişen Go paketleri + gerekiyorsa vitest, full teslim kapısı, ikisi de
+`git diff --check` ile biter. **(3)** 36 dokümana başlığın altına 3–5 satırlık
+`> **Özet (tarih):**` bloğu eklendi (indeks 84 satır, 80/81 yeni). **(4)** Satır sonları:
+depo `core.autocrlf=false` + `core.eol=lf`, 685 çalışma-kopyası dosyası LF'e çevrildi
+(içerik değişmedi; `gofmt -l internal/agent` 300+ dosyadan sıfıra indi). **(5)** HEAD'de
+düşen 12 test düzeltildi: `internal/insight` lens frontmatter'ı `prefilter:` iç bloğunu
+okuyamıyordu (Rota R6 frontmatter değişikliği; `skills.FrontmatterNested` + `parsePrefilter`),
+`internal/tools` sandbox grep'i üst dizindeki `%TEMP%\.gitignore` (`target/`) yüzünden
+sonuç gizliyordu (`--no-ignore-parent`). **(6)** `TestSystemAgentKeysGolden` (sistem ajanı
+anahtar sırası + görsel kimlik). **(7)** Global: `SessionStart` hook'u `cmd.exe` sarmalayıcı
+yüzünden interaktif moda düşüp cp1254 banner basıyordu → exe doğrudan çağrılıyor;
+`heimdall`/`streamable-mcp-server` bu proje için `disabledMcpServers`. **(8)** Paket bölme
+uygulanmadı; ölçüm + sıralı plan `_Docs/81-PAKET-BOLME-PLANI.md`.
+
 ## claude-cli token maliyeti: prefix anatomisi + üç kaldıraç (2026-09-03) ✅
 
 30 günlük `session-usage` verisi harcamanın ~%90'ının yeniden gönderilen prefix

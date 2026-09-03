@@ -258,6 +258,11 @@ func buildRGArgs(args grepArgs, mode string, targets []string) ([]string, bool) 
 	if args.NoIgnore {
 		out = append(out, "--no-ignore")
 	}
+	// The sandbox root is the search boundary: an ignore file in an ANCESTOR
+	// directory (a stray %TEMP%\.gitignore listing target/, a home-level
+	// .ignore) must not silently hide results inside the root. Only ignore
+	// files at or below the root apply.
+	out = append(out, "--no-ignore-parent")
 	for _, dir := range heavySearchDirs {
 		if !explicitlyReferencesDir(dir, args.Path, args.Glob) {
 			out = append(out, "--glob", "!"+dir+"/")

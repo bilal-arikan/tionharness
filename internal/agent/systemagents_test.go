@@ -119,3 +119,28 @@ func TestSystemAgentDefaultsReturnsCopy(t *testing.T) {
 		t.Fatal("registry mutated through list accessor")
 	}
 }
+
+// TestSystemAgentKeysGolden is the golden list of built-in system agent keys.
+// Adding or renaming one must update this list, the prompt-registry ownership
+// (prompts_test.go TestSystemAgentOwnership), _Docs/74 and, when the agent is a
+// worker profile, defaultSubagentProfiles — the failure message says so.
+func TestSystemAgentKeysGolden(t *testing.T) {
+	want := []string{
+		"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight",
+		"recipe-optimizer", "stall-judge", "insight-applier",
+		"subagent-explore", "subagent-planner", "subagent-coder", "subagent-reviewer",
+		"subagent-validator", "subagent-config",
+	}
+	defs := SystemAgentDefaults()
+	if len(defs) != len(want) {
+		t.Fatalf("system agent count = %d, want %d — update the golden list, prompts_test ownership map and _Docs/74", len(defs), len(want))
+	}
+	for i, def := range defs {
+		if def.SystemKey != want[i] {
+			t.Fatalf("system agent %d = %q, want %q (golden order)", i, def.SystemKey, want[i])
+		}
+		if def.Avatar == "" || def.Color == "" {
+			t.Fatalf("system agent %q has no visual identity", def.SystemKey)
+		}
+	}
+}

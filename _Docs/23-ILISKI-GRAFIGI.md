@@ -1,5 +1,16 @@
 # 23 — İlişki Grafiği (Relation Graph)
 
+> **Özet (2026-09-03):** Workspace'teki ajan/görev/akış/skill/MCP ilişkilerini tek
+> bakışta gösteren salt-okunur ağ görünümü ("Ağ" — NavRail), `vis-network` (vis.js) +
+> forceAtlas2 fizik motoruyla çizilir. Durum: uygulanmış ve olgun. En önemli kararlar:
+> ajan düğümleri **tanım değil canlı çalışan örnek** başına çizilir (`agent:<id>#<sessionID>`),
+> board sütunlarına göre görevler kümelenir ve aktif çalışan ajan güncel görevine
+> canlı bağlanır, yerleşim (koordinat/zoom/kamera) `localStorage`'da three-way merge
+> ile kalıcılaşır. Eski React Flow tabanlı sürüm ve hafıza bilgi grafiği (memory
+> kaldırılınca) tamamen çıkarıldı. Dayandığı dosyalar: `internal/api/graph.go`,
+> `frontend/src/features/network/*` (`VisNetworkGraph.tsx`, `relationGraph.ts`,
+> `networkFilter.ts`, `networkLayoutStorage.ts`).
+
 Agent-MCP'nin "Multi-Agent Collaboration Network" görselleştirmesinden esinlenen,
 entity'ler arası ilişkileri tek bakışta gösteren **salt-okunur** workspace ağ görünümü.
 Görselleştirme, Agent-MCP'nin de kullandığı **`vis-network` (vis.js)** ile yapılır —

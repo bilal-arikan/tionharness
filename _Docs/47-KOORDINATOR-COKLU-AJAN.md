@@ -1,5 +1,16 @@
 # 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
 
+> **Özet (2026-09-03):** TionHarness'e Claude Code'un koordinatör moduna denk çok-ajan
+> koordinasyon katmanını tasarlayan ve **büyük ölçüde uygulanmış** (M2 tam, F0-F5) çok
+> uzun bir doküman. Dört koordinasyon yöntemi tanımlar: M1 (paralel fan-out, sync),
+> M2 (koordinatör-işçi, async notify-back — bu dokümanın asıl konusu), M3 (peer/takım
+> mesajlaşma), M4 (deterministik flow). Anahtar bileşenler: `spawn_worker`/`send_to_worker`/
+> `stop_worker`/`list_workers` araçları, `CoordinationEngine` + per-session tur kuyruğu,
+> `<task-notification>` geri bildirim formatı, sınırsız derinlikte koordinatör ağacı
+> (rol≠ebeveynlik). Dayandığı dosyalar: `internal/agent/coordination.go`, `subagent.go`,
+> `spawn.go`, `internal/prompts/defaults/coordinator.md`. §1-§13 tek-seviyeli tasarımın
+> tarihçesidir, §14+ güncel ağaç modelini anlatır.
+
 > **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
 > edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
 > kitabının hemen ardından girer, boşken sıfır token maliyeti olur. Bkz. **§16**.

@@ -1,5 +1,15 @@
 # 33 — Dış Ajan Otomasyonu (TionHarness'i Dışarıdan Sürmek)
 
+> **Özet (2026-09-03):** TionHarness'i harici bir ajanın (chrome-mcp, playwright-mcp veya
+> düz HTTP istemcisi) uçtan uca sürmesi için referans dokümandır; uygulanmış ve güncel.
+> İki yol tanımlar — varsayılan **HTTP API** (auth yok, workspace `X-Workspace-Id`/query ile
+> kapsamlanır, SSE ile tur akışı) ve ikincil **UI tıklama** (`data-testid` seçici haritası,
+> hash-tabanlı deep-link). Kritik kurallar: Türkçe karakterler için gövdeyi UTF-8 bayt
+> dizisi olarak göndermek gerekir (PowerShell double-encode tuzağı), API yanıtları daima
+> `done`/`error` event'i ile tamamlanma sinyali verir, ve otonom turlar bir "boot sırası"
+> (yönelim→hatırlama→görev seç→smoke test→iş→kapanış) disiplinine tabidir. Dayandığı
+> dosyalar: `internal/api/server.go`, `chat.go`, `scripts\e2e-smoke.ps1`.
+
 > TionHarness'i **harici bir ajanın** (chrome-mcp, playwright-mcp veya düz HTTP istemcisi)
 > baştan sona kontrol etmesi için referans. İki yol vardır; çoğu senaryoda **API yolu**
 > tercih edilir, UI yolu yalnızca gerçek tarayıcı/oturum gerektiğinde kullanılır.

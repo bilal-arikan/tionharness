@@ -1,5 +1,14 @@
 # 45 — Çoklu Seçim (Ctrl/Cmd+Click) ve Toplu Eylemler
 
+> **Özet (2026-09-03):** Uygulanmış, tamamen **frontend-only** bir özelliktir (2026-06-29,
+> yeni backend yok) — listelerde Ctrl/Cmd+Click ve Shift+Click ile çoklu seçim yapıp toplu
+> eylem (sil, taşı, ata, gruplama vb.) uygulama. Çekirdek: liste-agnostik `useMultiSelect`
+> hook'u + sticky `SelectionBar` bileşeni; her liste kendi `handleClick`/`isSelected`
+> entegrasyonunu yapar. On bir liste bağlanmış (Sohbet/Ajanlar/Board/Hafıza/Artifact/
+> Skills/Flows/Araçlar/Aktivite); toplu eylemler mevcut tekil API'leri `Promise.all` ile
+> çağırır, yeni endpoint yoktur. Dayandığı dosyalar: `frontend/src/hooks/useMultiSelect.ts`,
+> `frontend/src/components/common/SelectionBar.tsx`.
+
 > **Numara notu:** Eski adı `40-COKLU-SECIM.md` idi; `40-PLAN-MODE.md` ile numara
 > çakıştığı için 2026-07-02'de **45**'e taşındı.
 

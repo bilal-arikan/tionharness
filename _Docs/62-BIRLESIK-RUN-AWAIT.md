@@ -1,5 +1,7 @@
 # 62 — Birleşik Run (C+D) · `await-input` keystone
 
+> **Özet (2026-09-03):** Flow'ların çalışırken kalıcı olarak girdi bekleyebilmesini (durable await-input) sağlayan uygulanmış bir özelliktir; goroutine bloklamayan, restart-safe, CAS korumalı bir suspend/resume mekanizmasıdır (`orchestration.NodeAwaitInput`, `db.MarkFlowRunWaiting`/`ClaimWaitingFlowRun`, `POST /api/flow-runs/{id}/input`). Doküman zamanla genişletilmiş: peer/ajan köprüsü, timeout/GC süpürücü, subflow/spawn/join async kompozisyonu, koşu soyağacı (lineage) katman 1-4 ve ilgili UI (RunTreeView) hep buraya eklendi. En önemli kararlar: session interaction (ask/permission) ile flow await'i bilinçli olarak ayrı durability modelleri olarak tutuldu (birleştirilmedi), reuse-continuation launcher'lar (`deliverPrompt`/`schedule_wake`) `LaunchRun`'a bilinçli olarak katlanmadı. Dayandığı ana dosyalar: `internal/orchestration/engine.go`, `internal/agent/flow.go`, `internal/agent/launch.go`, `internal/db/store_flow*.go`.
+
 > Session ⇄ flow birleşiminin (Model C: ortak Run substratı, Model D: çapraz-driver
 > kompozisyon) **yürütülebilir çekirdeği**: flow'un durable olarak **girdi bekleyebilmesi**.
 > Bir flow `[agent] → [await-input] → [agent]` artık **scripted bir konuşmadır** =

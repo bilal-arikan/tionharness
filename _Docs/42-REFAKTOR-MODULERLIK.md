@@ -1,5 +1,15 @@
 # 42 — Refaktör: Modülerlik / Soyutlama / Generic Yapı
 
+> **Özet (2026-09-03):** Tarihsel bir refaktör raporudur (2026-07-01) — davranış
+> değiştirmeden kod tabanını modülerleştirmek amacıyla yapılmış, **tamamlanmış** bir
+> çalışmayı belgeler. Üç faz izler: (1) tekrar eden store/handler kodunu generic
+> yardımcılara indirger (`internal/db/filestore.go`, `internal/api/httphelpers.go`,
+> `internal/providers/kind.go`), (2) ortak yapı taşları çıkarır (`internal/tools/
+> toolbuilder.go`, `internal/agent/toolsetup_selfmanage.go`), (3) god-dosyaları böler
+> (`market.go`, `mcp_interaction.go`, frontend `appPanels.tsx`). Doğrulama: `go build`
+> yeşil, 572 test geçti. Bilinçli atlanan kalemler (Runtime facade ayrımı, App.tsx
+> context'i) de gerekçesiyle listelenir.
+
 **Tarih:** 2026-07-01
 **Amaç:** Kod tabanını daha **modüler, soyutlanabilir ve generic** hale getirmek. Kötü mimariden değil, **ölçekten** kaynaklanan tekrar (duplication) ve tanrı-dosyalar (God files) hedeflendi. Davranış değişmedi — saf refaktör.
 

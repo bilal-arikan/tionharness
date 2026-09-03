@@ -1,5 +1,15 @@
 # TionHarness — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
+> **Özet (2026-09-03):** Uygulanmış ve aktif bir sistemdir — her oturumun `debug.jsonl`
+> dosyasına append-only, yapılandırılmış debug olayları (turn/llm_call/tool/hook/error/
+> compaction/recovery/cache_break/pressure/lifecycle vb., 16+ tip) yazılır; amaç token/
+> gecikme optimizasyonu ve ajanın kendi metriklerini okuyup kendini iyileştirebilmesidir.
+> En önemli noktalar: tek emit huni `internal/agent/debugjournal.go emitDebug`, okuma
+> araçları `read_session_debug` (ajan) + `GET /api/sessions/{id}/debug` (API) + UI Debug
+> modalı, ve anomali tespiti (`GetDebugSummary`) sonuçları otomatik bildirime dönüşür.
+> Dayandığı dosyalar: `internal/db/debug_journal.go`, `internal/agent/debugjournal.go`,
+> `internal/tools/builtin_debug.go`, `frontend/src/features/sessions/SessionDebugCard.tsx`.
+
 > Son güncelleme: **2026-09-01**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
 > debug akışı (`debug.jsonl`) yazılır. Amaç: debug, token/gecikme optimizasyonu

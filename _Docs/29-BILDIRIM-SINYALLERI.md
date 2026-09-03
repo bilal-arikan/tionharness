@@ -1,5 +1,17 @@
 # Generic Bildirim Sinyalleri (nav + workspace)
 
+> **Özet (2026-09-03):** Nav görünümleri ve workspace'ler için üç dik sinyalin
+> (busy/unread/dirty) tek generic sisteme toplandığı doküman — NavRail nokta
+> göstergeleri, çapraz-workspace "çalışıyor" nabzı, tab başlığı/taskbar rozeti ve
+> masaüstü toast'ları (tek funnel + tek registry) kapsar. Durum: uygulanmış ve
+> olgun. En önemli kararlar: `busy` sinyalinin merkezî kaynağı **turn kuyruğu**
+> (`turnqueue.Queue.BusySessionIDs`) — yeni bir tur yolu eklerken ek kayıt gerekmez,
+> slotu almak yeterli; masaüstü bildirim ana anahtarı workspace-override'lı 3-durumlu
+> (`inherit`/`on`/`off`); tip-bazlı susturma tek registry'den (`NOTIFY_TYPES`) türer.
+> Dayandığı dosyalar: `internal/api/running_sessions.go`, `internal/api/activity.go`,
+> `internal/events/types.go`, `frontend/src/shared/lib/{notifyBus,notifyTypes}.ts`,
+> `frontend/src/app/useWorkspaceActivity.ts`.
+
 > "Dışarıya ve kullanıcıya haber verme" katmanı tek bir generic sisteme toplandı.
 > Son güncelleme: **2026-07-24** (çapraz-workspace "çalışıyor" nabzı eklendi)
 

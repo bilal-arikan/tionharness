@@ -1,5 +1,7 @@
 # TionHarness — Veri Modeli
 
+> **Özet (2026-09-03):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır. Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+
 > ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
 > entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
 > entity-başına **JSON dosyaları** (oturumlar `session.jsonl`) olarak saklanıyor. Diske

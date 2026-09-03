@@ -1,5 +1,7 @@
 # TionHarness — Insight App-Fix Backlog
 
+> **Özet (2026-09-03):** Bu dosya bir uygulama değil, retrospektif tarayıcı (`_Docs/60`) tarafından oturum loglarından otomatik üretilen açık hata/iyileştirme kayıtlarının kuyruğudur. Her giriş bir `insight-sig` markörüyle tekilleştirilir ve tekrar taramada mükerrer eklenmez. Baskın tema: `Bash` aracının context'te devre dışıyken modele hâlâ önerilmesi (birçok tekrar eden kayıt), deferred/MCP araçların şema yüklenmeden çağrılabilir görünmesi, Windows'a özgü shell/path sorunları ve flow node referans doğrulamasının run-time yerine önceden yapılmaması. Durum tarihsel/canlı bir birikimdir; her madde henüz çözülmemiş bir bulgudur, uygulanmış bir karar değil.
+
 Auto-appended by the retrospective scanner (_Docs/60). Each entry carries a
 stable `insight-sig` marker so re-scans never duplicate it.
 

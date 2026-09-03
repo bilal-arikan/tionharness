@@ -1,5 +1,16 @@
 # TionHarness — `schedule_wake`: Ajanın Kendi Sohbetine Geri Dönmesi
 
+> **Özet (2026-09-03):** Tek-seferlik alt-süreç olarak çalışan `claude-cli` ajanının
+> "5 dakika sonra devam edeceğim" deyip gerçekte hiç uyanmaması sorununu çözen
+> `schedule_wake` aracı ve altyapısı — DB'ye one-shot `Schedule` satırı yazar,
+> `time.AfterFunc` ile zamanlar, tetiklenince aynı sohbet oturumuna geçmiş-duyarlı
+> tam bir tur olarak enjekte eder (at-most-once teslim garantili). Durum: uygulanmış
+> ve olgun; bekleme banner'ı + iptal, async `ask_user` desteği, ve dokümanın devamında
+> **ayrı** iki özellik daha var — tekrarlayan zamanlamalarda `expires_at` son tarihi
+> ve zamanlama başına `sessionMode` (reuse/spawn). Dayandığı dosyalar:
+> `internal/agent/scheduler.go`, `internal/agent/runtime.go` (`ScheduleWake`),
+> `internal/tools/builtin_wake.go`, `internal/db/models_task.go` (`Schedule`).
+
 ## Neden gerekti?
 
 TionHarness'in `claude-cli` sağlayıcısı `claude -p --output-format stream-json` ile çalışır — her tur bir **tek-seferlik alt süreç**; tamamlanınca ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `claude /loop` harness bağlamında anlamlıdır; bu harness TionHarness'te yoktur. Sonuç: ajan "bekliyorum, 5 dakika sonra devam edeceğim" deyip `ScheduleWakeup` çağırıyordu, fakat hiçbir şey olmuyor, sohbet orada bitiyordu.

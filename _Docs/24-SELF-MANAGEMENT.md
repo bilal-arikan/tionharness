@@ -1,5 +1,17 @@
 # 24 — Self-Management + Ayarlar Alt Sistemi
 
+> **Özet (2026-09-03):** Bir ajanın TionHarness'in kendisini (agents, flows,
+> schedules, hooks, MCP sunucuları, workspaces, tasks, skills, app-ayarları)
+> araçlarla yönetmesini sağlayan geniş tool ailesi + canlı ayarlar köprüsü. Durum:
+> uygulanmış ve olgun. En önemli kararlar: provenance guard'ı **workspace hariç**
+> tüm entity türlerinden kaldırıldı (ajan artık kullanıcı-oluşturduğu varlıkları da
+> düzenleyip silebilir; workspace silme yıkıcılığı yüzünden istisna kaldı), tüm
+> self-management araçları tek `SelfManageEnabled()` bayrağıyla kapatılıp lazy
+> yüklenir, `update_settings` değişikliği restart olmadan canlı uygular. Dayandığı
+> dosyalar: `internal/tools/builtin_{agentmgmt,flowmgmt,schedulemgmt,taskmgmt,
+> hookmgmt,mcpmgmt,workspacemgmt,artifactmgmt,skillmgmt,settings}.go`,
+> `internal/settings/validate.go`.
+
 Bir ajanın **TionHarness'in kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
 uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 

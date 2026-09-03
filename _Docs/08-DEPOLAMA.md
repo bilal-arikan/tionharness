@@ -1,5 +1,7 @@
 # TionHarness — Depolama Katmanı (Dosya Sistemi)
 
+> **Özet (2026-09-03):** Dosya-tabanlı depolama tasarımını anlatır — SQLite'tan tamamen dosya sistemine geçiş, bellek-içi maps + atomik diske yazma (write-through), her workspace için `store/` altında entity-başına JSON + oturum-başına JSONL, insan-okunabilir prefix'li ID şeması (`WS`/`AGT`/`SES`/`TSK`/…), oturum header/transkript ayrımı ve tur-içi crash kurtarma (`inflight.json` sidecar). Durum: **uygulandı, canlı mimari**. En önemli kararlar: hiçbir veritabanı bağımlılığı yok (CGO-suz, tek binary hedefi), transkript yazımının oturum-başına ayrı mutex ile (global kilit değil) yapılması, aktivite sinyalinin WAL ile çökmeye dayanıklı teslimi. Dayandığı dosyalar: `internal/db/db.go`, `store.go`, `transcript_lock.go`, `inflight.go`.
+
 > Son güncelleme: **2026-06-19**
 > TionHarness'in kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.

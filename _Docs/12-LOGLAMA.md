@@ -1,5 +1,14 @@
 # TionHarness — Loglama Sistemi
 
+> **Özet (2026-09-03):** Uygulama loglaması: tek `slog.Logger` bellek-içi ring buffer +
+> stdout + disk dosyasına tee'lenir, `GET /api/logs` ile filtrelenip UI'a (LogsPanel) ve
+> dış araçlara sunulur, `/api/events` üzerinden `log` SSE olayıyla canlı akar. Durum:
+> uygulanmış ve olgun — kaynak alanları (component/session/agent/workspace), HTTP
+> panic-recovery, frontend hata köprüsü (ErrorBoundary + global handler) ve akıllı
+> gürültü azaltma (başarılı GET/HEAD loglanmaz) hepsi devrede. Kalan işler: log
+> rotation/boyut sınırı ve bearer auth ile ağa açma. Dayandığı dosyalar:
+> `internal/logbuf`, `internal/api/logs.go`, `internal/app/app.go` (`SetupLogging`).
+
 > Son güncelleme: **2026-07-13**
 > Uygulama logları bir **bellek-içi ring buffer**'a yakalanır, **stdout'a** ve
 > **disk dosyasına** yazılır, `GET /api/logs` ile UI'a + dış araçlara sunulur ve

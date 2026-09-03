@@ -1,5 +1,7 @@
 # TionHarness — Workspace İzolasyonu
 
+> **Özet (2026-09-03):** Workspace'lerin fiziksel izolasyonunu (her workspace kendi `store/` dizini + kendi Runtime + kendi Scheduler'ı) ve buna bağlı özellikleri anlatır: yeni workspace başlangıç ekibi (CEO+PM otomasyonu), workspace-özel tema/görünüm, şablon olarak dışa/içe aktarım, çoklu pencere + deep-link, "okunmadı" rozet senkronu ve workspace ayarları (`ws-settings.json`: instructions enjeksiyonu, terse/caveman mod). Durum: **uygulandı, canlı**. En önemli kararlar: tek depo+filtre yerine fiziksel ayrı dizin (sızıntı riskini sıfırlar), fs/shell araçlarının artık workspace köküne kilitli OLMAMASI (güvenlik yalnız izin moduna dayanır), URL hash'inin tek doğru navigasyon kaynağı olması. Dayandığı dosyalar: `internal/workspace/manager.go`, `internal/workspace/settings.go`.
+
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
 

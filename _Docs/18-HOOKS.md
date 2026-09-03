@@ -1,5 +1,18 @@
 # 18 — Hooks (Araç + Yaşam Döngüsü) — Faz P4 + Lifecycle Parite
 
+> **Özet (2026-09-03):** Kullanıcı-tanımlı dış komutların (audit, güvenlik politikası,
+> otomatik onay, sqz/rtk gibi araçlar) native araç döngüsünde ve oturum yaşam
+> döngüsünde çalışmasını sağlayan hook sistemi — Claude Code'un tam 9-olaylık hook
+> sözleşmesiyle (PreToolUse/PostToolUse/UserPromptSubmit/SessionStart/Stop/
+> SubagentStop/PreCompact/Notification/SessionEnd) uyumlu. Durum: uygulanmış ve
+> olgun; native↔claude-cli arasında matcher (virgül→regex) ve komut (PowerShell↔
+> POSIX) lehçe köprüleri var, "interpreter hatası ≠ engelle" güvenlik düzeltmesi
+> uygulandı (sözdizimi hatası artık bir hook'u sessizce kilitli bırakmıyor). Ajan
+> kendi hook'larını `list/create/update/delete_hook` ile yönetebilir. Dayandığı
+> dosyalar: `internal/agent/hooks.go`, `internal/db/models_hook.go`,
+> `internal/db/store_hook.go`, `internal/agent/toolloop.go`, `internal/agent/climcp_matcher.go`,
+> `internal/agent/climcp_hookcmd.go`.
+
 > Kullanıcı-tanımlı dış komutların, native araç döngüsünde her araç çağrısının
 > **ve** turun/oturumun yaşam-döngüsü noktalarında çalışması. Claude Code'un **tam
 > 9-olaylık** hook sözleşmesiyle uyumlu — aynı script'ler (ör. **sqz**, **caveman**)

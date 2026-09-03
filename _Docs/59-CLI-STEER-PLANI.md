@@ -1,5 +1,7 @@
 # TionHarness — claude-cli Canlı Steer (Yönlendirme) Planı
 
+> **Özet (2026-09-03):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask"/"read-only" izin modunda çalışır, "auto" modda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır.
+
 > ## ⚠️ Güncelleme (2026-07-13): "auto" modda steer YAPISAL OLARAK ÇALIŞMAZ
 > claude-cli steer teslimi **tamamen** `callPermission` (permission-prompt tool)
 > sınırına bağlı. Ama bu araç yalnız **"ask"/"read-only"** modunda bağlanıyor

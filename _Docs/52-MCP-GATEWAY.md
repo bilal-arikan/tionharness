@@ -1,5 +1,16 @@
 # 52 — Go-Native MCP Gateway Entegrasyonu (Planlama)
 
+> **Özet (2026-09-03):** MCP gateway desenini (dinamik araç aktivasyonu, `list_changed`
+> push) TionHarness'in kendi Interaction MCP sunucusuna kazandırma planı — **büyük ölçüde
+> uygulanmış** (Faz 0-4 tamamlandı: config kararlılığı, stateful streaming server, dinamik
+> extended yüzeyi, meta-araç konsolidasyonu, token ölçümü). Hibrit MCP kapsamı (`scope=
+> shared|scoped`) zaten koddadır (`internal/mcp/pool.go`, `manager.go`). Kritik bulgu:
+> persistent CLI oturumu + MCP birlikteyken eskiden her tur cold-restart oluyordu (config
+> temp-yol churn'ü); wildcard allowlist + içerik-hash fingerprint + session-ömürlü token ile
+> düzeltildi. Harici `/mcp/gateway` sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
+> dosyalar: `internal/interaction/server.go`, `internal/agent/climcp.go`,
+> `internal/providers/claudecli_session.go`.
+
 > **UYGULANDI (2026-07-13) — Hibrit MCP kapsamı.** Havuz artık per-sunucu `scope`
 > alanını gerçekten kullanıyor: `scope="shared"` (varsayılan) eski davranış — workspace
 > geneli tek paylaşımlı bağlantı; `scope="scoped"` her `(session,agent)` için ayrı canlı

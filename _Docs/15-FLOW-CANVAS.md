@@ -1,6 +1,16 @@
 # 15 — Görsel Flow Builder (React Flow Canvas)
 
-> Faz 7 orchestration akışlarının düzenleyicisi, form/liste editöründen **sürükle-bırak
+> **Özet (2026-09-03):** Orchestration akışlarının görsel düzenleyicisi — React Flow
+> tabanlı sürükle-bırak node-graph canvas'ı (agent/branch/parallel/delay/transform/loop/
+> start-end/coordinator node tipleri), koşu izleme (RunView, canlı node/step streaming)
+> ve şablon galerisini kapsar. Durum: uygulanmış ve olgun, sık genişletilen bir alan
+> (en son eklenenler: accumulate/cache modu, döngü node'u, coordinator node'u ile
+> dinamik worker fan-out, koşu silme/saklama). En önemli kararlar: veri modeli
+> `orchestration.Graph{Start,Nodes[]}` backend'de neredeyse değişmeden kalır (yalnız
+> kozmetik `X,Y`), döngüler motor tarafından bilerek desteklenir (acyclic zorunluluğu
+> yok), her koşu artık kendi oturumunda izlenir. Dayandığı dosyalar:
+> `frontend/src/components/flow/*`, `frontend/src/lib/flowGraph.ts`,
+> `internal/orchestration/*`, `internal/agent/flow*.go`.
 > node-graph canvas**'a yükseltildi. Referans: React Flow tabanlı node-graph builder deseni,
 > ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/arsiv/14-PROVIDER-MIMARISI-INCELEME.md` çizgisi.
 

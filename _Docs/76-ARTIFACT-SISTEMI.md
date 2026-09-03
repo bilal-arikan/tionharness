@@ -1,5 +1,7 @@
 # Artifact Sistemi: Görsel Üzerine Çizim
 
+> **Özet (2026-09-03):** Uygulanmış bir özelliktir (TSK476/TSK477) — image türü artifact'lar üzerine tarayıcıda çizim yapıp yeni bir türetilmiş (`derivedFromArtifactId`) artifact olarak kaydetme akışını anlatır. Önemli kurallar: parent session kimliği ve dosya yolu güvenlik için istemciden değil sunucuda parent kayıttan çözülür, kaynak dosya boyutu/piksel sınırları ve encode fallback'leri (WebP→PNG) katıdır, hatalar sessizce yutulmaz (staging cleanup + `AggregateError`). Ayrıca Artifacts ekranında aynı artifact'ı override eden ayrı bir "yerinde düzenleme" akışı da vardır. Dayandığı dosyalar: `ImageAnnotator.tsx`, `ArtifactPreviewModal.tsx`, `internal/api/artifacts_test.go`, `store_artifact_derived_test.go`.
+
 Bu belge artifact önizlemesinden açılan görsel işaretleme akışını ve türetilmiş
 artifact kalıcılık sözleşmesini tanımlar. Özellik TSK476 (`32ed34a3`) ile
 tamamlandı; yaşam döngüsü, erişilebilirlik ve büyük görsel korumaları TSK477

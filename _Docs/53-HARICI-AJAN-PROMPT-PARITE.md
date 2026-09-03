@@ -1,5 +1,14 @@
 # 53 — the external agent project Sistem-Promptu Paritesi (karşılaştırma notu)
 
+> **Özet (2026-09-03):** the external agent project'ın tam sistem promptu ile TionHarness'in kendi prompt
+> kurgusunu karşılaştıran, **uygulanmış** bir parite dokümanıdır — TionHarness "lean prefix
+> → skill'e devret" ilkesini izler (the external agent project'ın ~28K karakterlik statik promptunun
+> aksine). Alınanlar: session self-management, environment marker, shell-tool gate
+> duyurusu (ajan-filtreli); bilinçli dışlananlar: datatable/spreadsheet, `_displayName`/
+> `_intent` metadata, `~/.external-agent/docs`. `render_template`/`html-preview` sonradan
+> TionHarness-native karşılığıyla uygulandı. Guard testi (`internal/workspace/
+> defaults_test.go`) desteklenmeyen the external agent project-ism'lerin geri sızmasını engeller.
+
 the external agent project'ın (`external-agent-oss`) tam sistem promptu referans alınarak TionHarness'in
 kendi prompt kurgusuyla kısa karşılaştırması: neyi aldık, neyi bilinçli almadık, neyi
 farklı çözdük. İlgili: [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACHE-PARITE.md)

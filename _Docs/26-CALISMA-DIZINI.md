@@ -1,5 +1,18 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
+> **Özet (2026-09-03):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
+> çalışma dizinini (`Session.WorkingDir`) seçebilmesini sağlayan mekanik (the external agent project
+> ilhamlı) — Composer'daki klasör rozeti, workspace varsayılan dizini, spawn/handoff
+> seeding'i ve otonom turlar için `autonomousConfine` freni. Durum: uygulanmış ve
+> olgun. En önemli/kritik karar: **confine yalnız fs araçlarını kilitler, shell'i
+> KİLİTLEMEZ** — `shell`/`powershell` aracı `Sandbox.Resolve`'dan hiç geçmediği için
+> confined bir turda bile shell ile sandbox dışına yazılabilir; bu bilinçli olarak
+> "belgelenmiş, kısıtlanmamış" bırakılmıştır (statik komut ayrıştırması güvenilir
+> değil). Ayrıca Windows'a özgü NT/device-namespace yol kaçışları (`\\?\`, ADS)
+> ayrıca reddedilir. Dayandığı dosyalar: `internal/agent/workdir_ctx.go`,
+> `internal/api/workdir_context.go`, `internal/tools/sandbox.go`,
+> `internal/tools/builtin_shell.go`, `internal/tools/builtin_shell_harden.go`.
+
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
 > mekaniğinin TionHarness'e uyarlaması.
 

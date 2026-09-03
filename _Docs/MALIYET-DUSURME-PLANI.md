@@ -1,5 +1,7 @@
 # TionHarness Maliyet Düşürme Planı
 
+> **Özet (2026-09-03):** LLM maliyetlerini düşürmeye yönelik bir bulgu+plan dokümanıdır; kısmen uygulanmış durumda. Kök nedenler: claude-cli sarmalayıcısının her turda yeni subprocess başlatıp prompt-cache'i kırması, MCP/araç şişkinliği (140 araç), native yolda lazy-tool aktivasyonunun her tur sıfırlanması ve `ExtendedPromptCache`'in eskiden kapalı olması. Yapılmış önemli düzeltmeler: `claudePersistentSession` ve `ExtendedPromptCache` artık varsayılan açık, yardımcı (title/summary/compaction) çağrılar köprüsüz+native Anthropic API'ye yönlendiriliyor, claude-cli yerleşik araç allowlist'i taban token'ı ~36k'dan ~11k'ya indiriyor. Açık kalan maddeler: MCP sunucu satırlarını ajan bazında kapatma, TTL 1h→5m seçeneği, büyük araç sonuçlarını dosyaya taşıma. Dayandığı dosyalar: `internal/settings/settings.go`, `internal/agent/climcp.go`, `internal/agent/toolloop.go`, `internal/providers/anthropic.go`.
+
 Tarih: 2026-07-05 · Kaynak: 21 ajanlık ultracode incelemesi (kod + oturum logu + Anthropic dokümanları), tüm bulgular koda karşı adversarial olarak doğrulandı.
 
 ## Ölçülen Sorun

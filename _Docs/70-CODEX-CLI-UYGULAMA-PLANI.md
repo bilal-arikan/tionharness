@@ -1,5 +1,7 @@
 # 70 — Codex CLI Sağlayıcı: Uygulama Planı
 
+> **Özet (2026-09-03):** `69-CODEX-CLI-SAGLAYICI.md`'nin fizibilite bulgularını dosya dosya, faz faz (Faz 0-5) uygulama planına döker ve büyük ölçüde uygulanmıştır (§8 "Gerçekleşen durum" bölümü planla gerçeği karşılaştırır). Temel karar: yeni somut tip yerine `CLIProvider`/`CLIMCPSpec` arayüzü eklenip `*providers.ClaudeCLI` tip assertion'ları kaldırıldı, böylece codex-cli mevcut `ProviderKind` soyutlamasına claude-cli ile aynı yüzeyden takılıyor. Uygulamada plandan sapan noktalar: `Order: 8` (1 değil), arayüz adı `ConfigureCLIMCP`, ayrı bir `AuthProber` yerine iki farklı somut auth-probe fonksiyonu. Canlı Q1-Q8 doğrulamasında iki gerçek boşluk bulundu (Q3: hook'lar tetiklenmiyor, Q7: lazy tool loading re-list yapmıyor — Q7 bu turda düzeltildi). Dayandığı dosyalar: `internal/providers/codexcli*.go`, `internal/agent/codexhome.go`, `internal/agent/codexmcp.go`.
+
 > **Ön koşul:** `69-CODEX-CLI-SAGLAYICI.md` (fizibilite + referans) okunmuş olmalı.
 > Bu dosya "nasıl yapılır"ı anlatır: dosya dosya, faz faz.
 >

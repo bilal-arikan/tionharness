@@ -47,6 +47,32 @@ func FrontmatterList(raw string, keys ...string) []string {
 	return fm.list(keys...)
 }
 
+// FrontmatterBlock returns the dedented raw text of a nested mapping block
+// (`key:` followed by an indented block) from raw markdown frontmatter, or ""
+// when the key is absent or scalar. Callers that need the block's own keys
+// re-parse it with FrontmatterNested.
+func FrontmatterBlock(raw string, keys ...string) string {
+	fm, _ := parseFrontmatter(raw)
+	for _, k := range keys {
+		if v, ok := fm.blocks[strings.ToLower(k)]; ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// FrontmatterNested wraps a nested block (see FrontmatterBlock) as its own
+// frontmatter document so FrontmatterField/FrontmatterList can read the block's
+// keys. Returns "" when the block is absent, which every reader treats as "no
+// value" — the same result as a missing key.
+func FrontmatterNested(raw string, keys ...string) string {
+	block := FrontmatterBlock(raw, keys...)
+	if strings.TrimSpace(block) == "" {
+		return ""
+	}
+	return "---\n" + block + "\n---\n"
+}
+
 // FrontmatterBody returns the markdown body (frontmatter stripped) of raw text.
 // Exposed for the ingest adapters.
 func FrontmatterBody(raw string) string {

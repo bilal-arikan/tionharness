@@ -1,5 +1,7 @@
 # TionHarness — Mimari
 
+> **Özet (2026-09-03):** Sistemin katmanlı mimarisini anlatır — frontend (React+Vite, go:embed ile binary'ye gömülü), API katmanı (stdlib `net/http` ServeMux + SSE), Agent Runtime (`internal/agent`, ajan-başına goroutine + tool loop + compaction), Orchestration (flow motoru), Providers (6+ kind: anthropic/claude-cli/minimax/openrouter/zai/…) ve dosya-tabanlı DB (`internal/db`). Durum: **uygulandı**, Faz 0–8 tamam; memory katmanı 2026-07-05'te tamamen kaldırıldı. En önemli kararlar: SSE (WebSocket değil) canlı akış için, arayüz-odaklı Provider soyutlaması, restart-safe run state, kod İngilizce/doküman Türkçe kuralı. Dayandığı paketler: `internal/api`, `internal/agent`, `internal/orchestration`, `internal/providers`, `internal/db`, `internal/mcp`, `internal/tools`.
+
 ## Yüksek Seviye Mimari
 
 ```mermaid

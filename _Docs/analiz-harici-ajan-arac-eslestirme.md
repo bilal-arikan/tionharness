@@ -1,5 +1,7 @@
 # Analiz: External Agent `session-tools-core` Araç Envanteri ve TionHarness Eşleştirmesi
 
+> **Özet (2026-09-03):** Salt-okuma karşılaştırma analizidir (kod değiştirilmedi) — External Agent OSS'in 25 `session-tools-core` aracını TionHarness'in ~80 builtin aracıyla eşleştirir. Sonuç: iki ürün farklı felsefede (External Agent oturum-yardımcısı, TionHarness multi-agent platform yönetimi), örtüşme `spawn_session`/`list_sessions`/mesajlaşmada yoğunlaşıyor. En değerli boşluklar `config_validate`, `skill_validate`, `mermaid_validate` doğrulama araçları ile `transform_data`/`render_template`/ucuz `call_llm` katmanı olarak belirlenmiş; bunların aksiyon karşılığı ayrı `41-ARAC-BOSLUKLARI-YAPILACAKLAR.md` dosyasındadır ve bazıları (config_validate, skill_validate, mermaid_validate) bu analizden sonra zaten eklenmiştir.
+
 > Kaynaklar: External Agent OSS (`external-agent-project/external-agent-oss`, `main`) — tek kaynak dosyası
 > `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). TionHarness (yerel) —
 > `internal/tools/builtin_*.go` ve interaction köprüsü (`internal/api/mcp_interaction.go`).

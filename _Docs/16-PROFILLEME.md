@@ -1,5 +1,14 @@
 # TionHarness — Profilleme (pprof) Rehberi
 
+> **Özet (2026-09-03):** Go `net/http/pprof` tabanlı performans teşhis rehberi — varsayılan
+> kapalı, `TIONHARNESS_PPROF=1` ile yalnız loopback'te açılır (heap/CPU/goroutine/mutex
+> profilleri). Durum: hem yöntem dokümanı hem de gerçek vaka kayıtları içerir — "boşta
+> CPU %3,6" (activity polling'in tam-store taraması → O(1) atomic sayaç, ~9800× hızlanma)
+> ve "59 sn'lik boot" (soğuk dosya açma / Windows Defender gecikmesi → paralel yükleme,
+> ~3-6× hızlanma) vakaları çözülmüş ve koda yansımıştır. Dayandığı dosyalar:
+> `cmd/tionharness/pprof.go`, `internal/db/loadpar.go`, `internal/db/db.go`
+> (`runningFlowRuns` atomic sayaç), `internal/db/store_runcount.go`.
+
 > Performans darboğazlarını **tahmin etmeden** bulmak için. Önce profil, sonra optimize.
 
 ## Felsefe

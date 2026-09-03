@@ -1,5 +1,7 @@
 # TionHarness — Teknoloji Seçimleri
 
+> **Özet (2026-09-03):** Backend/frontend/masaüstü için yapılan teknoloji seçimlerini, ilk plan ile gerçekte kullanılan kararları karşılaştıran bir tablo halinde sunar (ör. planlanan chi/sqlite/sqlc yerine gerçekte stdlib ServeMux + dosya-tabanlı depolama + elle yazılmış store kullanıldı). Durum: **uygulandı** — "Uygulanan Durum" tablosu güncel gerçeği yansıtır, üstteki ilk plan tablosu tarihsel referanstır. En önemli ilke: bağımlılığı ancak gerçekten gerektiğinde ekle, CGO gerektiren kütüphanelerden kaçın (çapraz derleme için). Dayandığı dosyalar: `go.mod`, `internal/providers/kind_*.go`, `internal/web/embed.go`.
+
 Her seçim, TypeScript dünyasındaki karşılığının Go ekosistemindeki en uygun eşleniğidir.
 
 > ⚠️ **GÜNCEL (2026-06-15):** **Depolama SQLite'tan dosya sistemine taşındı.** Aşağıdaki

@@ -1,5 +1,15 @@
 # 41 — Araç Boşlukları ve Yapılacaklar (the external agent project ↔ TionHarness)
 
+> **Özet (2026-09-03):** the external agent project (Claude Code tabanlı) ile TionHarness builtin araç
+> envanterinin karşılaştırmasından çıkan **backlog** dokümanıdır — kısmen uygulanmış,
+> kısmen açık. Dalga 1-2 tamamlandı (`WebSearch`, `transform_data`, `PowerShell`,
+> `get_session_info`, `update_user_preferences`, `render_template`); açık kalanlar
+> `call_llm` (P1), güvenli credential-giriş UI'ı, `Monitor`, `EnterWorktree`/`ExitWorktree`
+> ve `NotebookEdit` (P3-P4). Ayrıca bilinçli kapsam-dışı bırakılanlar (OAuth trigger'lar,
+> messaging kanalları, `browser_tool`) ve mevcut araçlara eklenen özellikler (Edit/Write
+> tazelik guard'ı, Read offset/limit, Grep/Glob genişletmeleri) listelenir. Dayandığı
+> dosyalar: `internal/tools/builtin_*.go`, `internal/tools/classify.go`, `toolsetup.go`.
+
 > **Amaç:** the external agent project (Claude Code tabanlı) araç envanteri ile TionHarness builtin araçlarının
 > karşılaştırmasından çıkan **eksik araçları** ve **mevcut araç iyileştirmelerini** açıklamalarıyla
 > birlikte tek bir yapılacaklar listesinde toplamak.

@@ -83,13 +83,7 @@ func ParseLens(raw, path string) (Lens, error) {
 		Scope:       skills.FrontmatterList(raw, "scope"),
 		Prompt:      skills.FrontmatterBody(raw),
 		Path:        path,
-		Prefilter: Prefilter{
-			RequiresAny: skills.FrontmatterList(raw, "requiresAny"),
-			RequiresAll: skills.FrontmatterList(raw, "requiresAll"),
-			Excludes:    skills.FrontmatterList(raw, "excludes"),
-			MinCount:    parseMinCount(skills.FrontmatterField(raw, "minCount")),
-			MinTokens:   atoiSafe(skills.FrontmatterField(raw, "minTokens")),
-		},
+		Prefilter:   parsePrefilter(raw),
 	}
 	// enabled defaults to true; only an explicit "false" disables the lens.
 	l.Enabled = !strings.EqualFold(strings.TrimSpace(skills.FrontmatterField(raw, "enabled")), "false")
@@ -276,4 +270,23 @@ func unquoteYAML(s string) string {
 		}
 	}
 	return s
+}
+
+// parsePrefilter reads the prefilter keys. They live under a nested
+// `prefilter:` mapping in every shipped lens; the frontmatter parser keeps
+// nested mappings as raw blocks (skills.FrontmatterNested re-wraps one so its
+// keys are readable), and a flat top-level spelling is still honoured for
+// hand-written lenses that predate the nesting.
+func parsePrefilter(raw string) Prefilter {
+	src := skills.FrontmatterNested(raw, "prefilter")
+	if src == "" {
+		src = raw
+	}
+	return Prefilter{
+		RequiresAny: skills.FrontmatterList(src, "requiresAny"),
+		RequiresAll: skills.FrontmatterList(src, "requiresAll"),
+		Excludes:    skills.FrontmatterList(src, "excludes"),
+		MinCount:    parseMinCount(skills.FrontmatterField(src, "minCount")),
+		MinTokens:   atoiSafe(skills.FrontmatterField(src, "minTokens")),
+	}
 }
