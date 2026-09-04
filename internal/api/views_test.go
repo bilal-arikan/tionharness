@@ -401,3 +401,51 @@ func TestGetViewMissingRunIs404(t *testing.T) {
 		t.Fatalf("status %d (want 404): %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestGetViewGraphContract pins the whole-map endpoint: root + eleven buckets +
+// members, nested ref objects, edges from the sessions bucket and the owning
+// agent to the same session, and never a null array.
+func TestGetViewGraphContract(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+	agent, err := database.CreateAgent(ctx, db.Agent{Name: "builder"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	session, err := database.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "map"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetViewGraph, database, "/api/views/graph", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeView(t, rec.Body.Bytes())
+	nodes, _ := got["nodes"].([]any)
+	edges, _ := got["edges"].([]any)
+	if len(nodes) < 12 || len(edges) < 11 {
+		t.Fatalf("nodes=%d edges=%d: %s", len(nodes), len(edges), rec.Body.String())
+	}
+	sessionKey := "session:" + session.ID
+	agentKey := "agent:" + agent.ID
+	seenSessionParents := map[string]bool{}
+	for _, raw := range edges {
+		edge := raw.(map[string]any)
+		source := edge["source"].(map[string]any)
+		target := edge["target"].(map[string]any)
+		if target["kind"].(string)+":"+target["id"].(string) == sessionKey {
+			seenSessionParents[source["kind"].(string)+":"+source["id"].(string)] = true
+		}
+	}
+	if !seenSessionParents["category:sessions"] || !seenSessionParents[agentKey] {
+		t.Fatalf("session parents=%v, want sessions category + %s", seenSessionParents, agentKey)
+	}
+	if !strings.Contains(rec.Body.String(), `"label"`) {
+		t.Fatalf("handles must carry labels: %s", rec.Body.String())
+	}
+}

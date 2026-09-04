@@ -1,225 +1,199 @@
 // @vitest-environment jsdom
 
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ViewRef } from '@/types'
-import { ExplorerView } from './ExplorerView'
+import type { ViewGraphResult, ViewRef } from '@/types'
+
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
+interface GraphProps {
+  workspaceId: string
+  layoutId?: string
+  nodes: { id: string }[]
+  canonicalReady: boolean
+  focusNodeId?: string | null
+  focusTick?: number
+  onSelect?: (id: string | null) => void
+  onNodeDoubleClick?: (id: string) => void
+  mode?: string
+}
 
 const mocks = vi.hoisted(() => ({
-  graphState: {} as Record<string, unknown>,
-  refreshFocused: vi.fn(),
-  graphProps: {} as Record<string, unknown>,
-  viewPanelProps: {} as Record<string, unknown>,
+  viewGraph: vi.fn(),
+  graphProps: [] as GraphProps[],
+  viewPanelTargets: [] as string[],
 }))
 
+vi.mock('@/api', () => ({ api: { viewGraph: mocks.viewGraph } }))
 vi.mock('@/shared/hooks/useRefreshTrigger', () => ({ useRefreshTrigger: () => 0 }))
+vi.mock('@/shared/hooks/useMediaQuery', () => ({ useIsMobile: () => false }))
+vi.mock('@/features/network/VisNetworkGraph', () => ({
+  VisNetworkGraph: (props: GraphProps) => {
+    mocks.graphProps.push(props)
+    return <div data-testid="network" data-layout={props.layoutId} />
+  },
+}))
 vi.mock('@/features/view/ViewPanel', () => ({
-  ViewPanel: (props: Record<string, unknown>) => {
-    mocks.viewPanelProps = props
-    return <div>detail panel</div>
+  ViewPanel: ({ target }: { target: ViewRef }) => {
+    const key = `${target.kind}:${target.id}`
+    mocks.viewPanelTargets.push(key)
+    return <div data-testid="view-panel">{key}</div>
   },
 }))
-vi.mock('./ExplorerGraph', () => ({
-  ExplorerGraph: (props: Record<string, unknown>) => {
-    mocks.graphProps = props
-    return <div>graph canvas</div>
-  },
-}))
-vi.mock('./useExplorerGraph', () => ({ useExplorerGraph: () => mocks.graphState }))
 
-const rootRef: ViewRef = { kind: 'workspace', id: 'root' }
-const roots: ReturnType<typeof createRoot>[] = []
-const reactTestEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean
+import { ExplorerView } from './ExplorerView'
+
+const ROOT: ViewRef = { kind: 'workspace', id: 'workspace' }
+const sessions: ViewRef = { kind: 'category', id: 'sessions' }
+const s1: ViewRef = { kind: 'session', id: 'SES1' }
+const graph: ViewGraphResult = {
+  nodes: [
+    { label: 'workspace', ref: ROOT },
+    { label: 'Oturumlar', ref: sessions },
+    { label: 'session:SES1 Fix login', ref: s1 },
+  ],
+  edges: [
+    { source: ROOT, target: sessions },
+    { source: sessions, target: s1 },
+  ],
 }
-reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
-function renderView() {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  roots.push(root)
-  act(() => root.render(<ExplorerView onError={() => {}} />))
-  return container
+const roots = new Set<Root>()
+
+async function mount(
+  props: Partial<Parameters<typeof ExplorerView>[0]> = {},
+): Promise<{ host: HTMLElement; root: Root }> {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  roots.add(root)
+  await act(async () =>
+    root.render(<ExplorerView workspaceId="ws1" onError={() => {}} {...props} />),
+  )
+  return { host, root }
+}
+
+function latestGraphProps(): GraphProps {
+  const props = mocks.graphProps.at(-1)
+  if (!props) throw new Error('VisNetworkGraph not rendered')
+  return props
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.graphState = {
-    nodes: [],
-    edges: [],
-    select: vi.fn(),
-    focus: vi.fn(),
-    selectedRef: rootRef,
-    focusLoading: false,
-    focusError: undefined,
-    deepLinkError: undefined,
-    fallbackToRoot: vi.fn(),
-    refreshFocused: mocks.refreshFocused,
+  mocks.viewGraph.mockReset()
+  mocks.viewGraph.mockResolvedValue(graph)
+  mocks.graphProps.length = 0
+  mocks.viewPanelTargets.length = 0
+  window.matchMedia = vi
+    .fn()
+    .mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia
+})
+
+afterEach(async () => {
+  for (const root of [...roots]) {
+    await act(async () => root.unmount())
+    roots.delete(root)
   }
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({
-      matches: false,
-      media: '',
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  )
+  document.body.innerHTML = ''
 })
 
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
-  vi.unstubAllGlobals()
-})
-
-describe('ExplorerView focus request status', () => {
-  it('shows loading status over the graph', () => {
-    mocks.graphState.focusLoading = true
-
-    const container = renderView()
-
-    expect(container.querySelector('[role="status"]')?.textContent).toContain(
-      'Odak çevresi yükleniyor',
-    )
-    expect(container.textContent).toContain('graph canvas')
-  })
-
-  it('shows focus errors instead of presenting an empty graph as a leaf', () => {
-    mocks.graphState.focusError = 'network unavailable'
-
-    const container = renderView()
-
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Odak çevresi yüklenemedi: network unavailable',
+describe('ExplorerView', () => {
+  it('renders the whole map on its own layout scope with the root selected', async () => {
+    const { host } = await mount()
+    const props = latestGraphProps()
+    expect(props.layoutId).toBe('explorer:ws1')
+    expect(props.workspaceId).toBe('ws1')
+    expect(props.mode).toBe('relation')
+    expect(props.canonicalReady).toBe(true)
+    expect(props.nodes.map((n) => n.id)).toContain('session:SES1')
+    expect(host.textContent).toContain('3 düğüm · 2 bağlantı')
+    expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe(
+      'workspace:workspace',
     )
   })
 
-  it('retries the active focus request', () => {
-    mocks.graphState.focusError = 'network unavailable'
-    const container = renderView()
-    const retry = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Tekrar dene'),
-    )
-    mocks.refreshFocused.mockClear()
-
-    act(() => retry?.click())
-
-    expect(mocks.refreshFocused).toHaveBeenCalledOnce()
+  it('a click selects, focuses the camera, updates the panel and the URL', async () => {
+    const onFocusNode = vi.fn()
+    const { host } = await mount({ onFocusNode, onOpenSession: () => {} })
+    await act(async () => latestGraphProps().onSelect?.('session:SES1'))
+    const props = latestGraphProps()
+    expect(props.focusNodeId).toBe('session:SES1')
+    expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe('session:SES1')
+    expect(onFocusNode).toHaveBeenLastCalledWith('session:SES1')
+    expect(host.textContent).toContain('Sohbeti aç · SES1')
+    // Clicking empty canvas (deselect) keeps the selection.
+    await act(async () => latestGraphProps().onSelect?.(null))
+    expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe('session:SES1')
   })
 
-  it('offers a workspace-root fallback for an invalid deep-link', () => {
-    mocks.graphState.deepLinkError = 'Geçersiz odak bağlantısı: galaxy:x'
-    const container = renderView()
-
-    act(() => {
-      ;[...container.querySelectorAll('button')]
-        .find((button) => button.textContent?.includes('Workspace köküne dön'))
-        ?.click()
-    })
-
-    expect(mocks.graphState.fallbackToRoot).toHaveBeenCalledOnce()
+  it('double click on a session opens its transcript; other kinds are ignored', async () => {
+    const onOpenSession = vi.fn()
+    await mount({ onOpenSession })
+    await act(async () => latestGraphProps().onNodeDoubleClick?.('session:SES1'))
+    expect(onOpenSession).toHaveBeenCalledWith('SES1')
+    await act(async () => latestGraphProps().onNodeDoubleClick?.('category:sessions'))
+    expect(onOpenSession).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps search selection separate from focus and focuses on double click', () => {
-    const ref: ViewRef = { kind: 'agent', id: 'AG1' }
-    mocks.graphState.nodes = [{ id: 'agent:AG1', data: { ref, label: 'Builder', selected: false } }]
-    const container = renderView()
-    const input = container.querySelector('input')!
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setter.call(input, 'build')
+  it('search lists matches and picking one selects it', async () => {
+    const { host } = await mount()
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="Haritada ara"]')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(input, 'login')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    const result = container.querySelector('[role="option"]') as HTMLButtonElement
-
-    act(() => result.click())
-    expect(mocks.graphState.select).toHaveBeenCalledWith(ref)
-    expect(mocks.graphState.focus).not.toHaveBeenCalled()
-
-    act(() => result.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
-    expect(mocks.graphState.focus).toHaveBeenCalledWith(ref)
+    const options = host.querySelectorAll('[role="option"]')
+    expect(options).toHaveLength(1)
+    expect(options[0].textContent).toContain('Fix login')
+    await act(async () => (options[0] as HTMLButtonElement).click())
+    expect(latestGraphProps().focusNodeId).toBe('session:SES1')
+    // The canvas gets the dimmed data too.
+    const dimmed = latestGraphProps().nodes as { id: string; opacity?: number }[]
+    expect(dimmed.find((n) => n.id === 'category:sessions')!.opacity).toBe(0.15)
   })
 
-  it('shows the selected node in the existing detail panel', () => {
-    const selectedRef: ViewRef = { kind: 'skill', id: 'reviewer' }
-    mocks.graphState.selectedRef = selectedRef
+  it('restores a deep link and offers the root when the node is missing', async () => {
+    const { host } = await mount({ focusNode: 'session:SES1' })
+    expect(latestGraphProps().focusNodeId).toBe('session:SES1')
+    expect(host.querySelector('[role="alert"]')).toBeNull()
 
-    renderView()
-
-    expect(mocks.viewPanelProps.target).toEqual(selectedRef)
+    const onFocusNode = vi.fn()
+    const second = await mount({ focusNode: 'session:GONE', onFocusNode })
+    const alert = second.host.querySelector('[role="alert"]')!
+    expect(alert.textContent).toContain('session:GONE')
+    await act(async () => (alert.querySelector('button') as HTMLButtonElement).click())
+    expect(onFocusNode).toHaveBeenLastCalledWith(null)
+    expect(second.host.querySelector('[role="alert"]')).toBeNull()
   })
 
-  it('opens every overflow handle in a selectable list', () => {
-    const container = renderView()
-    const handles = [
-      { label: 'Agent A', ref: { kind: 'agent' as const, id: 'A' } },
-      { label: 'Agent B', ref: { kind: 'agent' as const, id: 'B' } },
-    ]
+  it('shows a retryable error when the map fails to load', async () => {
+    mocks.viewGraph.mockRejectedValueOnce(new Error('offline'))
+    const onError = vi.fn()
+    const { host } = await mount({ onError })
+    const alert = host.querySelector('[role="alert"]')!
+    expect(alert.textContent).toContain('offline')
+    expect(onError).toHaveBeenCalledWith('offline')
+    await act(async () => (alert.querySelector('button') as HTMLButtonElement).click())
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(latestGraphProps().canonicalReady).toBe(true)
+  })
 
-    act(() => {
-      ;(
-        mocks.graphProps.onOverflowClick as (
-          side: 'parents' | 'children',
-          items: typeof handles,
-        ) => void
-      )('parents', handles)
+  it('opens the detail drawer on narrow screens after a selection and closes on Escape', async () => {
+    window.matchMedia = vi
+      .fn()
+      .mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia
+    const { host } = await mount()
+    await act(async () => latestGraphProps().onSelect?.('category:sessions'))
+    const dialog = host.querySelector('[role="dialog"]')!
+    expect(dialog).not.toBeNull()
+    expect(dialog.textContent).toContain('category:sessions')
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     })
-
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Kalan üst bağlantılar',
-    )
-    expect(container.textContent).toContain('Agent A')
-    expect(container.textContent).toContain('Agent B')
-  })
-
-  it('announces focus changes with node name and child count', () => {
-    mocks.graphState.nodes = [
-      {
-        id: 'agent:A',
-        data: { ref: { kind: 'agent', id: 'A' }, label: 'Ajan A', focus: true, childCount: 3 },
-      },
-    ]
-
-    const container = renderView()
-
-    expect(container.querySelector('[aria-live="polite"]')?.textContent).toContain(
-      'Harita odağı Ajan A. 3 alt bağlantı.',
-    )
-  })
-
-  it('uses a detail drawer at the narrow breakpoint and returns focus on Escape', () => {
-    vi.mocked(window.matchMedia).mockReturnValue({
-      matches: true,
-      media: '(max-width: 1023px)',
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })
-    vi.useFakeTimers()
-    const container = renderView()
-    const trigger = document.createElement('button')
-    document.body.appendChild(trigger)
-    trigger.focus()
-
-    act(() => (mocks.graphProps.onNodeClick as (ref: ViewRef) => void)(rootRef))
-    act(() => vi.advanceTimersByTime(250))
-    expect(container.querySelector('[aria-label="Seçili düğüm detayı"]')).not.toBeNull()
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Düğüm detayını kapat')
-
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
-    act(() => vi.runAllTimers())
-    expect(container.querySelector('[aria-label="Seçili düğüm detayı"]')).toBeNull()
-    expect(document.activeElement).toBe(trigger)
-    vi.useRealTimers()
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
   })
 })

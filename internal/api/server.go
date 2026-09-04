@@ -797,6 +797,10 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 
 	// Projection layer: the compact, context-cheap summary of a large entity —
 	// the same bytes the agent gets and the Bağlam panel shows (_Docs/66).
+	// Whole-workspace structural map for the Explorer network (_Docs/68). Registered
+	// before the {kind}/{id} pattern only for readability; "graph" is a literal
+	// segment and never collides with a two-segment ref.
+	mux.HandleFunc("GET /api/views/graph", s.handleGetViewGraph)
 	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
 	// Explorer map drill-down: the structural child handles of a node (_Docs/68).
 	mux.HandleFunc("GET /api/views/{kind}/{id}/children", s.handleGetViewChildren)

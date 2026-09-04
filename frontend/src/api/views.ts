@@ -1,6 +1,7 @@
 // Projection layer (internal/view): the compact summary of a large entity.
 import type {
   ViewChildrenResult,
+  ViewGraphResult,
   ViewLevel,
   ViewNeighborhoodResult,
   ViewRef,
@@ -29,6 +30,12 @@ export const viewApi = {
     return req<ViewChildrenResult>(
       `/api/views/${encodeURIComponent(ref.kind)}/${encodeURIComponent(ref.id)}/children?${q}`,
     )
+  },
+
+  // viewGraph fetches the whole structural map in one call — the Explorer
+  // network's data source. Uncapped: the physics layout owns the visual budget.
+  viewGraph(signal?: AbortSignal): Promise<ViewGraphResult> {
+    return req<ViewGraphResult>('/api/views/graph', { signal })
   },
 
   viewNeighborhood(ref: ViewRef, signal?: AbortSignal): Promise<ViewNeighborhoodResult> {

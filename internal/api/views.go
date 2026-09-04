@@ -136,3 +136,27 @@ func (s *Server) handleGetViewNeighborhood(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, neighborhood)
 }
+
+// handleGetViewGraph exposes the whole structural map of the active workspace:
+//
+//	GET /api/views/graph
+//
+// Every node reachable from the workspace root plus every parent -> child edge,
+// uncapped, so the Explorer screen can lay the entire hierarchy out as one
+// force-directed network instead of paging through neighborhoods.
+func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
+	graph, err := s.viewProjector(r).Graph(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Never emit null arrays: an empty workspace still has a root node, and an
+	// edge-less graph is [] not null.
+	if graph.Nodes == nil {
+		graph.Nodes = []view.Handle{}
+	}
+	if graph.Edges == nil {
+		graph.Edges = []view.GraphEdge{}
+	}
+	writeJSON(w, http.StatusOK, graph)
+}

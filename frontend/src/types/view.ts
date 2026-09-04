@@ -82,6 +82,20 @@ export interface ViewNeighborhoodResult {
   hiddenChildCount: number
 }
 
+// ViewGraphEdge is one parent -> child structural relationship of the whole map.
+export interface ViewGraphEdge {
+  source: ViewRef
+  target: ViewRef
+}
+
+// ViewGraphResult is the entire structural map of the workspace
+// (GET /api/views/graph): every node reachable from the root plus every edge,
+// uncapped. The Explorer screen lays it out as one force-directed network.
+export interface ViewGraphResult {
+  nodes: ViewHandle[]
+  edges: ViewGraphEdge[]
+}
+
 // refToString spells a ref the way handles and the get_view tool do.
 export function refToString(ref: ViewRef): string {
   return `${ref.kind}:${ref.id}${ref.sub ? `#${ref.sub}` : ''}`

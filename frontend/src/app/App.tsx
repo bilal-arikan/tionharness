@@ -775,9 +775,10 @@ export default function App() {
             />
           </Suspense>
         )}
-        {view === 'explorer' && (
+        {view === 'explorer' && activeWorkspaceId !== null && (
           <Suspense fallback={<LoadingState label="Harita yükleniyor…" className="flex-1" />}>
             <ExplorerView
+              workspaceId={activeWorkspaceId}
               onError={setError}
               onOpenSession={(sid) => {
                 setView('chat')

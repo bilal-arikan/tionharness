@@ -1,219 +1,167 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
-import type { ViewHandle, ViewNeighborhoodResult, ViewRef } from '@/types'
+import type { ViewGraphResult, ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
-import { buildFocusGraph, ROOT_REF } from './explorerModel'
+import { seedLayout } from './explorerSeed'
+import { graphToVis, resolveExplorerTheme, ROOT_KEY, ROOT_REF } from './explorerVis'
 
 interface Options {
-  search: string
   onError?: (msg: string) => void
+  search: string
+  // Deep link: the node to select + focus on entry (a ref string), and the
+  // callback that mirrors every user selection back into the URL.
   initialFocus?: string | null
   onFocus?: (refString: string | null) => void
 }
 
-interface CacheEntry {
-  data?: ViewNeighborhoodResult
-  loading: boolean
-  error?: string
-}
+// useExplorerGraph owns the Explorer network's data: one whole-map fetch
+// (GET /api/views/graph), the selected node, and the camera focus request the
+// canvas honours. Selection == focus here: a single click both opens the node in
+// the side panel and glides the camera to it.
+export function useExplorerGraph({ onError, search, initialFocus, onFocus }: Options) {
+  const [graph, setGraph] = useState<ViewGraphResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const parsedInitial = initialFocus ? parseRef(initialFocus) : null
+  const [selectedRef, setSelectedRef] = useState<ViewRef>(() => parsedInitial ?? ROOT_REF)
+  const [focus, setFocus] = useState<{ key: string | null; tick: number }>(() => ({
+    key: parsedInitial ? refToString(parsedInitial) : null,
+    tick: 0,
+  }))
+  const [themeVersion, setThemeVersion] = useState(0)
+  const requestRef = useRef<AbortController | null>(null)
+  const sequenceRef = useRef(0)
 
-export function useExplorerGraph({ search, onError, initialFocus, onFocus }: Options) {
-  const parsedInitialFocus = initialFocus ? parseRef(initialFocus) : ROOT_REF
-  const initialRef = () => parsedInitialFocus ?? ROOT_REF
-  const [focusRef, setFocusRef] = useState<ViewRef>(initialRef)
-  const [selectedRef, setSelectedRef] = useState<ViewRef>(initialRef)
-  const [lineage, setLineage] = useState<ViewHandle[]>(() => [
-    { ref: initialRef(), label: initialRef().id },
-  ])
-  const focusRefCurrent = useRef(focusRef)
-  const lineageRef = useRef(lineage)
+  const load = useCallback(() => {
+    requestRef.current?.abort()
+    const controller = new AbortController()
+    requestRef.current = controller
+    const sequence = ++sequenceRef.current
+    setLoading(true)
+    api
+      .viewGraph(controller.signal)
+      .then((result) => {
+        if (sequenceRef.current !== sequence) return
+        setGraph(result)
+        setError(undefined)
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted || sequenceRef.current !== sequence) return
+        const message = err instanceof Error ? err.message : String(err)
+        setError(message)
+        onError?.(message)
+      })
+      .finally(() => {
+        if (sequenceRef.current === sequence) setLoading(false)
+      })
+  }, [onError])
+
+  useEffect(() => {
+    // The fetch is the effect; its loading flag is set synchronously on purpose.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load()
+    return () => requestRef.current?.abort()
+  }, [load])
+
+  // URL navigation (back/forward, a pasted link) is external state: mirror it
+  // into selection + focus. An unparsable ref falls back to the root and reports.
   const [deepLinkError, setDeepLinkError] = useState<string | undefined>(() =>
-    initialFocus && !parsedInitialFocus ? `Geçersiz odak bağlantısı: ${initialFocus}` : undefined,
+    initialFocus && !parsedInitial ? `Geçersiz odak bağlantısı: ${initialFocus}` : undefined,
   )
-  const [cache, setCache] = useState<Record<string, CacheEntry>>({})
-  const cacheRef = useRef(cache)
-  const activeRequest = useRef<AbortController | null>(null)
-  const deepLinkRequest = useRef<AbortController | null>(null)
-  const deepLinkSequence = useRef(0)
-  const sequenceByKey = useRef<Record<string, number>>({})
   useEffect(() => {
-    cacheRef.current = cache
-  }, [cache])
-
-  useEffect(() => {
-    deepLinkRequest.current?.abort()
-    const sequence = deepLinkSequence.current + 1
-    deepLinkSequence.current = sequence
-    const next = initialFocus ? parseRef(initialFocus) : ROOT_REF
-    if (!next) {
-      // URL navigation is external state; mirror it atomically into graph state.
+    if (!initialFocus) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDeepLinkError(undefined)
+      return
+    }
+    const next = parseRef(initialFocus)
+    if (!next) {
       setDeepLinkError(`Geçersiz odak bağlantısı: ${initialFocus}`)
-      setFocusRef((current) =>
-        refToString(current) === refToString(ROOT_REF) ? current : ROOT_REF,
-      )
-      setSelectedRef((current) =>
-        refToString(current) === refToString(ROOT_REF) ? current : ROOT_REF,
-      )
-      setLineage([{ ref: ROOT_REF, label: ROOT_REF.id }])
-      focusRefCurrent.current = ROOT_REF
-      lineageRef.current = [{ ref: ROOT_REF, label: ROOT_REF.id }]
+      setSelectedRef(ROOT_REF)
       return
     }
     setDeepLinkError(undefined)
-    setFocusRef((current) => (refToString(current) === refToString(next) ? current : next))
-    setSelectedRef((current) => (refToString(current) === refToString(next) ? current : next))
-    focusRefCurrent.current = next
-    if (!initialFocus || refToString(next) === refToString(ROOT_REF)) {
-      const rootLineage = [{ ref: ROOT_REF, label: ROOT_REF.id }]
-      setLineage(rootLineage)
-      lineageRef.current = rootLineage
-      return
-    }
+    const key = refToString(next)
+    setSelectedRef((current) => (refToString(current) === key ? current : next))
+    setFocus((current) => (current.key === key ? current : { key, tick: current.tick + 1 }))
+  }, [initialFocus])
 
-    const controller = new AbortController()
-    deepLinkRequest.current = controller
-    const targetLineage = [{ ref: next, label: next.id }]
-    setLineage(targetLineage)
-    lineageRef.current = targetLineage
+  // A deep-linked node that the loaded map does not contain is an error the user
+  // can see (and escape from), not a silent root selection.
+  const selectedKey = refToString(selectedRef)
+  const refByKey = useMemo(() => {
+    const map = new Map<string, ViewRef>()
+    for (const handle of graph?.nodes ?? []) map.set(refToString(handle.ref), handle.ref)
+    return map
+  }, [graph])
+  const missingFocus =
+    graph !== null && initialFocus && !deepLinkError && !refByKey.has(selectedKey)
+      ? `Odak düğümü haritada yok: ${selectedKey}`
+      : undefined
 
-    const resolveLineage = async () => {
-      const path = new Set<string>()
-      const findRootPath = async (ref: ViewRef): Promise<ViewHandle[] | null> => {
-        const key = refToString(ref)
-        if (key === refToString(ROOT_REF)) return [{ ref: ROOT_REF, label: ROOT_REF.id }]
-        if (path.has(key)) return null
-        path.add(key)
-        try {
-          const cached = cacheRef.current[key]?.data
-          const data = cached ?? (await api.viewNeighborhood(ref, controller.signal))
-          if (controller.signal.aborted || deepLinkSequence.current !== sequence) return null
-          if (!cached) {
-            cacheRef.current = { ...cacheRef.current, [key]: { data, loading: false } }
-            setCache(cacheRef.current)
-          }
-          const parents = [...data.parents].sort((a, b) =>
-            refToString(a.ref).localeCompare(refToString(b.ref)),
-          )
-          for (const parent of parents) {
-            const parentPath = await findRootPath(parent.ref)
-            if (parentPath) return [...parentPath, data.focus]
-          }
-          return null
-        } finally {
-          path.delete(key)
-        }
-      }
-
-      try {
-        const resolved = await findRootPath(next)
-        if (controller.signal.aborted || deepLinkSequence.current !== sequence) return
-        if (!resolved) throw new Error(`Odak köke bağlanamadı: ${refToString(next)}`)
-        lineageRef.current = resolved
-        setLineage(resolved)
-      } catch (error) {
-        if (controller.signal.aborted || deepLinkSequence.current !== sequence) return
-        const message = error instanceof Error ? error.message : String(error)
-        setDeepLinkError(message)
-        onError?.(message)
-      }
-    }
-    void resolveLineage()
-    return () => controller.abort()
-  }, [initialFocus, onError])
-
-  const fetchFocus = useCallback(
-    async (ref: ViewRef, force = false) => {
-      const key = refToString(ref)
-      if (!force && cacheRef.current[key]?.data) return
-      activeRequest.current?.abort()
-      const controller = new AbortController()
-      activeRequest.current = controller
-      const sequence = (sequenceByKey.current[key] ?? 0) + 1
-      sequenceByKey.current[key] = sequence
-      setCache((current) => ({
-        ...current,
-        [key]: { ...current[key], loading: true, error: undefined },
-      }))
-      try {
-        const data = await api.viewNeighborhood(ref, controller.signal)
-        if (sequenceByKey.current[key] !== sequence) return
-        setCache((current) => ({ ...current, [key]: { data, loading: false } }))
-      } catch (error) {
-        if (controller.signal.aborted || sequenceByKey.current[key] !== sequence) return
-        const message = error instanceof Error ? error.message : String(error)
-        setCache((current) => ({ ...current, [key]: { loading: false, error: message } }))
-        onError?.(message)
-      }
-    },
-    [onError],
-  )
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchFocus(focusRef)
-    return () => activeRequest.current?.abort()
-  }, [fetchFocus, focusRef])
-
-  const select = useCallback((ref: ViewRef) => setSelectedRef(ref), [])
-  const focus = useCallback(
+  const select = useCallback(
     (ref: ViewRef) => {
-      deepLinkRequest.current?.abort()
-      deepLinkSequence.current += 1
-      const nextKey = refToString(ref)
-      const currentKey = refToString(focusRefCurrent.current)
-      const currentData = cacheRef.current[currentKey]?.data
-      const current = lineageRef.current
-      const nextLineage = (() => {
-        const existingIndex = current.findIndex((item) => refToString(item.ref) === nextKey)
-        if (existingIndex >= 0) return current.slice(0, existingIndex + 1)
-
-        const target = [...(currentData?.parents ?? []), ...(currentData?.children ?? [])].find(
-          (item) => refToString(item.ref) === nextKey,
-        )
-        const currentIndex = current.findIndex((item) => refToString(item.ref) === currentKey)
-        if (target && currentIndex === current.length - 1) return [...current, target]
-        return [{ ref, label: target?.label || ref.id }]
-      })()
-      lineageRef.current = nextLineage
-      focusRefCurrent.current = ref
-      setLineage(nextLineage)
-      setDeepLinkError(undefined)
-      setFocusRef(ref)
+      const key = refToString(ref)
       setSelectedRef(ref)
-      onFocus?.(refToString(ref) === refToString(ROOT_REF) ? null : refToString(ref))
+      setFocus((current) => ({ key, tick: current.tick + 1 }))
+      onFocus?.(key === ROOT_KEY ? null : key)
     },
     [onFocus],
   )
-  const fallbackToRoot = useCallback(() => focus(ROOT_REF), [focus])
-  const refreshFocused = useCallback(() => void fetchFocus(focusRef, true), [fetchFocus, focusRef])
+  const selectKey = useCallback(
+    (key: string) => {
+      const ref = refByKey.get(key)
+      if (ref) select(ref)
+    },
+    [refByKey, select],
+  )
+  const fallbackToRoot = useCallback(() => select(ROOT_REF), [select])
 
-  const focusKey = refToString(focusRef)
-  const entry = cache[focusKey]
-  const graph = useMemo(
-    () =>
-      entry?.data
-        ? buildFocusGraph({
-            neighborhood: entry.data,
-            lineage,
-            selectedKey: refToString(selectedRef),
-            search,
-            loading: entry.loading,
-          })
-        : { nodes: [], edges: [] },
-    [entry, lineage, search, selectedRef],
+  // Theme presets are applied as inline root tokens; data-theme additionally
+  // distinguishes light mode. Node colors are baked into the vis data, so
+  // re-map when either changes.
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeVersion((v) => v + 1))
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'data-theme'],
+    })
+    return () => observer.disconnect()
+  }, [])
+
+  const layout = useMemo(() => (graph ? seedLayout(graph, ROOT_KEY) : null), [graph])
+  const { nodes, edges } = useMemo(() => {
+    if (!graph || !layout) return { nodes: [], edges: [] }
+    // themeVersion is a re-map trigger, not an input.
+    void themeVersion
+    return graphToVis(graph, {
+      selectedKey,
+      search,
+      theme: resolveExplorerTheme(),
+      layout,
+    })
+  }, [graph, layout, selectedKey, search, themeVersion])
+  const canonicalNodeIds = useMemo(
+    () => (graph ? graph.nodes.map((handle) => refToString(handle.ref)) : []),
+    [graph],
   )
 
   return {
-    ...graph,
-    select,
-    focus,
+    graph,
+    nodes,
+    edges,
+    canonicalNodeIds,
+    ready: graph !== null,
+    loading,
+    error,
+    deepLinkError: deepLinkError ?? missingFocus,
     selectedRef,
-    focusRef,
-    focusLoading: entry?.loading ?? false,
-    focusError: entry?.error,
-    deepLinkError,
+    selectedKey,
+    focusKey: focus.key,
+    focusTick: focus.tick,
+    select,
+    selectKey,
     fallbackToRoot,
-    refreshFocused,
+    refresh: load,
   }
 }

@@ -187,6 +187,17 @@ const vis = vi.hoisted(() => {
       if (options.scale !== undefined) this.scale = options.scale
       if (options.position !== undefined) this.viewPosition = options.position
     }
+    readonly focusCalls: Array<{ id: string; options?: unknown }> = []
+    readonly selectNodesCalls: string[][] = []
+
+    focus(id: string, options?: unknown) {
+      this.focusCalls.push({ id, options })
+    }
+
+    selectNodes(ids: string[]) {
+      this.selectNodesCalls.push(ids)
+    }
+
     getConnectedNodes() {
       return []
     }
@@ -647,6 +658,86 @@ describe('VisNetworkGraph layout lifecycle', () => {
     latestNetwork().setPosition('b', { x: 11, y: 12 })
     window.dispatchEvent(new Event('pagehide'))
     expect(readNetworkPositions('workspace-b')).toEqual({ b: { x: 11, y: 12 } })
+    await unmount(root)
+  })
+})
+
+describe('VisNetworkGraph explorer props', () => {
+  it('scopes persistence to layoutId instead of the workspace id', async () => {
+    writeNetworkPositions('explorer:workspace', { a: { x: 7, y: 8 } })
+    writeNetworkPositions('workspace', { a: { x: 1, y: 2 } })
+    const { root } = await mount(
+      <VisNetworkGraph
+        workspaceId="workspace"
+        layoutId="explorer:workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+      />,
+    )
+    const network = latestNetwork()
+    expect(network.moveNodeCalls).toContainEqual({ id: 'a', x: 7, y: 8 })
+    network.setPosition('a', { x: 70, y: 80 })
+    await unmount(root)
+    expect(readNetworkPositions('explorer:workspace')).toEqual({ a: { x: 70, y: 80 } })
+    expect(readNetworkPositions('workspace')).toEqual({ a: { x: 1, y: 2 } })
+  })
+
+  it('honours each focus request once, waits for the node and never zooms out', async () => {
+    const element = (focusNodeId: string | null, focusTick: number, nodes = [node('a')]) => (
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={nodes}
+        edges={[]}
+        canonicalNodeIds={nodes.map((n) => n.id as string)}
+        canonicalReady
+        focusNodeId={focusNodeId}
+        focusTick={focusTick}
+      />
+    )
+    const { root } = await mount(element('b', 1))
+    const network = latestNetwork()
+    network.scale = 1.6
+    expect(network.focusCalls).toHaveLength(0)
+
+    // The node arrives later: the pending request fires exactly once.
+    await render(root, element('b', 1, [node('a'), node('b')]))
+    expect(network.focusCalls).toEqual([
+      {
+        id: 'b',
+        options: { scale: 1.6, animation: { duration: 400, easingFunction: 'easeInOutQuad' } },
+      },
+    ])
+    expect(network.selectNodesCalls).toEqual([['b']])
+    // A data refresh does not re-focus.
+    await render(root, element('b', 1, [node('a'), node('b'), node('c')]))
+    expect(network.focusCalls).toHaveLength(1)
+    // A repeat click (same node, new tick) does; below scale 1 it zooms in to 1.
+    network.scale = 0.4
+    await render(root, element('b', 2, [node('a'), node('b'), node('c')]))
+    expect(network.focusCalls).toHaveLength(2)
+    expect((network.focusCalls[1].options as { scale: number }).scale).toBe(1)
+    await unmount(root)
+  })
+
+  it('forwards a double click on a node and ignores one on empty canvas', async () => {
+    const onNodeDoubleClick = vi.fn()
+    const { root } = await mount(
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+        onNodeDoubleClick={onNodeDoubleClick}
+      />,
+    )
+    const network = latestNetwork()
+    network.emit('doubleClick', { nodes: ['a'] })
+    network.emit('doubleClick', { nodes: [] })
+    expect(onNodeDoubleClick).toHaveBeenCalledTimes(1)
+    expect(onNodeDoubleClick).toHaveBeenCalledWith('a')
     await unmount(root)
   })
 })

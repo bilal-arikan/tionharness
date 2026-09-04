@@ -1,243 +1,143 @@
 // @vitest-environment jsdom
 
 import { act, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ViewNeighborhoodResult, ViewRef } from '@/types'
+import type { ViewGraphResult, ViewRef } from '@/types'
+
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
+const mocks = vi.hoisted(() => ({ viewGraph: vi.fn() }))
+vi.mock('@/api', () => ({ api: { viewGraph: mocks.viewGraph } }))
+
 import { useExplorerGraph } from './useExplorerGraph'
 
-const mocks = vi.hoisted(() => ({ viewNeighborhood: vi.fn() }))
-vi.mock('@/api', () => ({ api: { viewNeighborhood: mocks.viewNeighborhood } }))
-
-type GraphState = ReturnType<typeof useExplorerGraph>
-let latest: GraphState
-const roots: ReturnType<typeof createRoot>[] = []
-const reactTestEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean
-}
-reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
-
-function neighborhood(ref: ViewRef): ViewNeighborhoodResult {
-  return {
-    focus: { ref, label: ref.id },
-    parents: [],
-    children: [],
-    hiddenParentCount: 0,
-    hiddenChildCount: 0,
-  }
+const ROOT: ViewRef = { kind: 'workspace', id: 'workspace' }
+const sessions: ViewRef = { kind: 'category', id: 'sessions' }
+const s1: ViewRef = { kind: 'session', id: 'SES1' }
+const graph: ViewGraphResult = {
+  nodes: [
+    { label: 'workspace', ref: ROOT },
+    { label: 'Oturumlar', ref: sessions },
+    { label: 'session:SES1 Fix', ref: s1 },
+  ],
+  edges: [
+    { source: ROOT, target: sessions },
+    { source: sessions, target: s1 },
+  ],
 }
 
-function Harness({
-  initialFocus,
-  onFocus,
-  onError,
-}: {
-  initialFocus?: string | null
-  onFocus?: (ref: string | null) => void
-  onError?: (message: string) => void
-}) {
-  const state = useExplorerGraph({ search: '', initialFocus, onFocus, onError })
-  useEffect(() => {
-    latest = state
-  })
+type Result = ReturnType<typeof useExplorerGraph>
+type Options = Parameters<typeof useExplorerGraph>[0]
+
+const roots = new Set<Root>()
+let latest: Result | null = null
+
+function Probe({ options, report }: { options: Options; report: (result: Result) => void }) {
+  const result = useExplorerGraph(options)
+  useEffect(() => report(result))
   return null
 }
 
-function renderHarness(
-  initialFocus?: string | null,
-  onFocus?: (ref: string | null) => void,
-  onError?: (message: string) => void,
-) {
-  const container = document.createElement('div')
-  const root = createRoot(container)
-  roots.push(root)
-  act(() =>
-    root.render(<Harness initialFocus={initialFocus} onFocus={onFocus} onError={onError} />),
-  )
-  return root
+async function mount(options: Options) {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  roots.add(root)
+  const report = (result: Result) => {
+    latest = result
+  }
+  const render = async (next: Options) => {
+    await act(async () => root.render(<Probe options={next} report={report} />))
+  }
+  await render(options)
+  return { render, root }
 }
 
 beforeEach(() => {
-  mocks.viewNeighborhood.mockImplementation(async (ref: ViewRef) => neighborhood(ref))
+  mocks.viewGraph.mockReset()
+  mocks.viewGraph.mockResolvedValue(graph)
+  latest = null
 })
 
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount())
-  vi.clearAllMocks()
+afterEach(async () => {
+  for (const root of [...roots]) {
+    await act(async () => root.unmount())
+    roots.delete(root)
+  }
 })
 
-describe('useExplorerGraph focus deep-links', () => {
-  it('uses workspace root when the URL has no focus', async () => {
-    renderHarness()
-    await act(async () => {})
-
-    expect(mocks.viewNeighborhood).toHaveBeenCalledWith(
-      { kind: 'workspace', id: 'workspace' },
-      expect.any(AbortSignal),
-    )
+describe('useExplorerGraph', () => {
+  it('loads the whole map once, maps it to vis data and selects the root by default', async () => {
+    await mount({ search: '' })
+    expect(mocks.viewGraph).toHaveBeenCalledTimes(1)
+    expect(latest!.ready).toBe(true)
+    expect(latest!.nodes.map((n) => n.id)).toEqual([
+      'workspace:workspace',
+      'category:sessions',
+      'session:SES1',
+    ])
+    expect(latest!.edges).toHaveLength(2)
+    expect(latest!.canonicalNodeIds).toHaveLength(3)
+    expect(latest!.selectedKey).toBe('workspace:workspace')
+    expect(latest!.focusKey).toBeNull()
   })
 
-  it('restores a valid focus and reports focus changes for URL sync', async () => {
+  it('select focuses the node, bumps the tick on repeat clicks and mirrors to the URL', async () => {
     const onFocus = vi.fn()
-    renderHarness('agent:AG1', onFocus)
-    await act(async () => {})
-    expect(latest.focusRef).toEqual({ kind: 'agent', id: 'AG1' })
-
-    await act(async () => latest.focus({ kind: 'skill', id: 'reviewer' }))
-    expect(onFocus).toHaveBeenCalledWith('skill:reviewer')
+    await mount({ search: '', onFocus })
+    await act(async () => latest!.selectKey('session:SES1'))
+    expect(latest!.selectedRef).toEqual(s1)
+    expect(latest!.focusKey).toBe('session:SES1')
+    const tick = latest!.focusTick
+    expect(onFocus).toHaveBeenLastCalledWith('session:SES1')
+    await act(async () => latest!.selectKey('session:SES1'))
+    expect(latest!.focusTick).toBe(tick + 1)
+    await act(async () => latest!.fallbackToRoot())
+    expect(onFocus).toHaveBeenLastCalledWith(null)
+    expect(latest!.nodes.find((n) => n.id === 'workspace:workspace')!.borderWidth).toBe(4)
+    // An unknown key is ignored rather than selecting a phantom node.
+    await act(async () => latest!.selectKey('session:NOPE'))
+    expect(latest!.selectedKey).toBe('workspace:workspace')
   })
 
-  it('restores the complete root-to-focus lineage for a deep-link', async () => {
-    const root = { kind: 'workspace' as const, id: 'workspace' }
-    const category = { kind: 'category' as const, id: 'agents' }
-    const agent = { kind: 'agent' as const, id: 'AG1' }
-    mocks.viewNeighborhood.mockImplementation(async (ref: ViewRef) => {
-      const data = neighborhood(ref)
-      if (ref.id === 'SES1') data.parents = [{ ref: agent, label: 'Agent One' }]
-      if (ref.id === 'AG1') data.parents = [{ ref: category, label: 'Agents' }]
-      if (ref.id === 'agents') data.parents = [{ ref: root, label: 'workspace' }]
-      return data
-    })
+  it('restores a deep link, follows URL changes and flags a node the map lacks', async () => {
+    const { render } = await mount({ search: '', initialFocus: 'session:SES1' })
+    expect(latest!.selectedKey).toBe('session:SES1')
+    expect(latest!.focusKey).toBe('session:SES1')
+    expect(latest!.deepLinkError).toBeUndefined()
 
-    renderHarness('session:SES1')
-    await act(async () => {})
+    await render({ search: '', initialFocus: 'session:GONE' })
+    expect(latest!.selectedKey).toBe('session:GONE')
+    expect(latest!.deepLinkError).toContain('session:GONE')
 
-    expect(latest.nodes.map((node) => node.id)).toEqual(
-      expect.arrayContaining([
-        'workspace:workspace',
-        'category:agents',
-        'agent:AG1',
-        'session:SES1',
-      ]),
-    )
-    expect(latest.edges.map((edge) => edge.id)).toEqual(
-      expect.arrayContaining([
-        'workspace:workspace->category:agents',
-        'category:agents->agent:AG1',
-        'agent:AG1->session:SES1',
-      ]),
-    )
+    await render({ search: '', initialFocus: 'garbage' })
+    expect(latest!.deepLinkError).toContain('Geçersiz')
+    expect(latest!.selectedKey).toBe('workspace:workspace')
+
+    await render({ search: '', initialFocus: null })
+    expect(latest!.deepLinkError).toBeUndefined()
   })
 
-  it('shows malformed refs and falls back to root without hiding the error', async () => {
-    const onFocus = vi.fn()
-    renderHarness('galaxy:x', onFocus)
-    await act(async () => {})
-
-    expect(latest.deepLinkError).toContain('galaxy:x')
-    expect(latest.focusRef).toEqual({ kind: 'workspace', id: 'workspace' })
-    await act(async () => latest.fallbackToRoot())
-    expect(onFocus).toHaveBeenCalledWith(null)
-  })
-
-  it('ignores stale responses after rapid focus changes', async () => {
-    const resolvers = new Map<string, (value: ViewNeighborhoodResult) => void>()
-    mocks.viewNeighborhood.mockImplementation(
-      (ref: ViewRef) =>
-        new Promise<ViewNeighborhoodResult>((resolve) => resolvers.set(ref.id, resolve)),
-    )
-    renderHarness()
-    act(() => latest.focus({ kind: 'agent', id: 'A' }))
-    act(() => latest.focus({ kind: 'agent', id: 'B' }))
-
-    await act(async () => resolvers.get('A')?.(neighborhood({ kind: 'agent', id: 'A' })))
-    expect(latest.focusRef).toEqual({ kind: 'agent', id: 'B' })
-    expect(latest.nodes).toEqual([])
-
-    await act(async () => resolvers.get('B')?.(neighborhood({ kind: 'agent', id: 'B' })))
-    expect(latest.nodes.some((node) => node.id === 'agent:B')).toBe(true)
-  })
-
-  it('stops cyclic ancestry and ignores an obsolete deep-link resolver', async () => {
+  it('reports a failed load and recovers on refresh', async () => {
     const onError = vi.fn()
-    const cyclicA = { kind: 'agent' as const, id: 'A' }
-    const cyclicB = { kind: 'agent' as const, id: 'B' }
-    mocks.viewNeighborhood.mockImplementation(async (ref: ViewRef) => {
-      const data = neighborhood(ref)
-      if (ref.id === 'A') data.parents = [{ ref: cyclicB, label: 'B' }]
-      if (ref.id === 'B') data.parents = [{ ref: cyclicA, label: 'A' }]
-      return data
-    })
-    const root = renderHarness('agent:A', undefined, onError)
-    await act(async () => {})
-
-    expect(latest.deepLinkError).toBe('Odak köke bağlanamadı: agent:A')
-    expect(onError).toHaveBeenCalledWith('Odak köke bağlanamadı: agent:A')
-    expect(mocks.viewNeighborhood.mock.calls.length).toBeLessThanOrEqual(3)
-
-    const staleResolvers: Array<(value: ViewNeighborhoodResult) => void> = []
-    mocks.viewNeighborhood.mockImplementation((ref: ViewRef) =>
-      ref.id === 'A'
-        ? new Promise<ViewNeighborhoodResult>((resolve) => staleResolvers.push(resolve))
-        : Promise.resolve(neighborhood(ref)),
-    )
-    act(() => root.render(<Harness initialFocus="workspace:workspace" onError={onError} />))
-    await act(async () => {})
-    act(() => root.render(<Harness initialFocus="agent:A" onError={onError} />))
-    await act(async () => {})
-    act(() => root.render(<Harness initialFocus="workspace:workspace" onError={onError} />))
-    await act(async () => {})
-    await act(async () => {
-      for (const resolve of staleResolvers) resolve(neighborhood(cyclicA))
-    })
-
-    expect(latest.focusRef).toEqual({ kind: 'workspace', id: 'workspace' })
-    expect(latest.nodes.some((node) => node.id === 'agent:A')).toBe(false)
-    expect(latest.deepLinkError).toBeUndefined()
+    mocks.viewGraph.mockRejectedValueOnce(new Error('boom'))
+    await mount({ search: '', onError })
+    expect(latest!.error).toBe('boom')
+    expect(latest!.ready).toBe(false)
+    expect(onError).toHaveBeenCalledWith('boom')
+    await act(async () => latest!.refresh())
+    expect(latest!.error).toBeUndefined()
+    expect(latest!.ready).toBe(true)
   })
 
-  it('keeps ancestors through child navigation and trims them when returning', async () => {
-    const root = { kind: 'workspace' as const, id: 'workspace' }
-    const branch = { kind: 'category' as const, id: 'agents' }
-    const leaf = { kind: 'agent' as const, id: 'A' }
-    mocks.viewNeighborhood.mockImplementation(async (ref: ViewRef) => {
-      const data = neighborhood(ref)
-      if (ref.id === 'workspace') data.children = [{ ref: branch, label: 'Agents' }]
-      if (ref.id === 'agents') {
-        data.parents = [{ ref: root, label: 'workspace' }]
-        data.children = [{ ref: leaf, label: 'Agent A' }]
-      }
-      if (ref.id === 'A') data.parents = [{ ref: branch, label: 'Agents' }]
-      return data
-    })
-    renderHarness()
-    await act(async () => {})
-    await act(async () => latest.focus(branch))
-    await act(async () => {})
-    await act(async () => latest.focus(leaf))
-    await act(async () => {})
-
-    expect(latest.nodes.map((node) => node.id)).toEqual(
-      expect.arrayContaining(['workspace:workspace', 'category:agents', 'agent:A']),
-    )
-    await act(async () => latest.focus(branch))
-    await act(async () => {})
-    expect(latest.nodes.find((node) => node.id === 'agent:A')?.data.depth).toBe(2)
-    expect(latest.nodes.some((node) => node.id === 'workspace:workspace')).toBe(true)
-  })
-
-  it('uses current lineage during rapid focus transitions', async () => {
-    const branch = { kind: 'category' as const, id: 'agents' }
-    const leaf = { kind: 'agent' as const, id: 'A' }
-    mocks.viewNeighborhood.mockImplementation(async (ref: ViewRef) => {
-      const data = neighborhood(ref)
-      if (ref.id === 'workspace') data.children = [{ ref: branch, label: 'Agents' }]
-      if (ref.id === 'agents') data.children = [{ ref: leaf, label: 'Agent A' }]
-      return data
-    })
-    renderHarness()
-    await act(async () => {})
-
-    act(() => latest.focus(branch))
-    await act(async () => {})
-    act(() => {
-      latest.focus(leaf)
-      latest.focus(branch)
-    })
-    await act(async () => {})
-
-    expect(latest.focusRef).toEqual(branch)
-    expect(latest.nodes.some((node) => node.id === 'workspace:workspace')).toBe(true)
-    expect(latest.nodes.some((node) => node.id === 'agent:A')).toBe(true)
+  it('dims non-matching nodes when the search changes', async () => {
+    const { render } = await mount({ search: '' })
+    await render({ search: 'fix' })
+    const byId = new Map(latest!.nodes.map((n) => [n.id, n.opacity]))
+    expect(byId.get('session:SES1')).toBe(1)
+    expect(byId.get('category:sessions')).toBe(0.15)
   })
 })

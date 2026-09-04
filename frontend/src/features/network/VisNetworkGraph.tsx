@@ -74,6 +74,17 @@ interface Props {
   // Low-power rendering (phones): drop shadows, curved edges, improvedLayout and
   // hover to keep pan/zoom smooth. See buildOptions.
   lite?: boolean
+  // Layout persistence namespace. Defaults to the workspace id; a second screen
+  // sharing this component (the Explorer map) passes its own key so the two
+  // screens' saved positions never garbage-collect each other.
+  layoutId?: string
+  // Camera focus request: when `focusNodeId` names a node in the graph the
+  // camera glides to it and vis selects it. `focusTick` lets the host re-request
+  // the same node (a second click on it) — the effect keys on both.
+  focusNodeId?: string | null
+  focusTick?: number
+  // Double click on a node (vis 'doubleClick' with a node under the pointer).
+  onNodeDoubleClick?: (id: string) => void
 }
 
 interface ThemeColors {
@@ -183,7 +194,12 @@ export function VisNetworkGraph({
   onSelect,
   highlightNeighbors = false,
   lite = false,
+  layoutId,
+  focusNodeId = null,
+  focusTick = 0,
+  onNodeDoubleClick,
 }: Props) {
+  const layoutKey = layoutId ?? workspaceId
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
   const nodesDSRef = useRef<DataSet<Node> | null>(null)
@@ -192,7 +208,7 @@ export function VisNetworkGraph({
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
   const populatedRef = useRef(false)
-  const initialLayoutRef = useRef(readNetworkLayout(workspaceId))
+  const initialLayoutRef = useRef(readNetworkLayout(layoutKey))
   const persistedPositionsRef = useRef<NetworkPositions>(initialLayoutRef.current.positions)
   const preserveViewportRef = useRef(initialLayoutRef.current.viewport !== undefined)
   const physicsActiveRef = useRef(false)
@@ -206,6 +222,7 @@ export function VisNetworkGraph({
   const temporaryFixedRef = useRef<Map<string, Node['fixed']>>(new Map())
   const fitCleanupRef = useRef<() => void>(() => {})
   const onSelectRef = useRef(onSelect)
+  const onNodeDoubleClickRef = useRef(onNodeDoubleClick)
   // Original edge colors, kept so blurNode can restore exactly what the mapper
   // set (per-edge opacity/width) after a hover dim.
   const baseEdgeColorRef = useRef<Map<string, Edge['color']>>(new Map())
@@ -220,6 +237,7 @@ export function VisNetworkGraph({
     canonicalNodeIdsRef.current = canonicalNodeIds
     canonicalReadyRef.current = canonicalReady
     onSelectRef.current = onSelect
+    onNodeDoubleClickRef.current = onNodeDoubleClick
     highlightRef.current = highlightNeighbors
   })
 
@@ -227,9 +245,9 @@ export function VisNetworkGraph({
   useEffect(() => {
     if (!containerRef.current) return
     const setupGenerations = setupGenerationByWorkspaceRef.current
-    const generation = (setupGenerations.get(workspaceId) ?? 0) + 1
-    setupGenerations.set(workspaceId, generation)
-    const persistedLayout = readNetworkLayout(workspaceId)
+    const generation = (setupGenerations.get(layoutKey) ?? 0) + 1
+    setupGenerations.set(layoutKey, generation)
+    const persistedLayout = readNetworkLayout(layoutKey)
     persistedPositionsRef.current = persistedLayout.positions
     preserveViewportRef.current = persistedLayout.viewport !== undefined
     physicsActiveRef.current = false
@@ -303,6 +321,10 @@ export function VisNetworkGraph({
     network.once('stabilizationIterationsDone', completeInitialViewport)
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
     network.on('deselectNode', () => onSelectRef.current?.(null))
+    network.on('doubleClick', (p: { nodes: string[] }) => {
+      const id = p.nodes[0]
+      if (id !== undefined) onNodeDoubleClickRef.current?.(id)
+    })
     network.on('zoom', captureRuntimeViewport)
     network.on('dragEnd', captureRuntimeViewport)
     const capturePositions = (): NetworkPositions => {
@@ -315,7 +337,7 @@ export function VisNetworkGraph({
       physicsActive: boolean,
     ) => {
       const layout = writeNetworkLayout(
-        workspaceId,
+        layoutKey,
         { positions, physicsActive, viewport: runtimeViewport },
         localStorage,
         nodeIds,
@@ -404,9 +426,9 @@ export function VisNetworkGraph({
       populatedRef.current = false
       baseEdgeColors.clear()
       queueMicrotask(() => {
-        if (!ready || setupGenerations.get(workspaceId) !== generation) return
+        if (!ready || setupGenerations.get(layoutKey) !== generation) return
         writeNetworkLayout(
-          workspaceId,
+          layoutKey,
           { positions, physicsActive, viewport },
           localStorage,
           nodeIds,
@@ -414,7 +436,7 @@ export function VisNetworkGraph({
         )
       })
     }
-  }, [workspaceId])
+  }, [layoutKey])
 
   // Theme presets are applied as inline root tokens; data-theme additionally
   // distinguishes light mode. Re-resolve both without polling when either changes.
@@ -589,7 +611,29 @@ export function VisNetworkGraph({
         .map((node) => node.id as string)
       if (newNodeIds.length > 0) settleNewNodes(newNodeIds, true)
     }
-  }, [nodes, edges, workspaceId, canonicalNodeIds, canonicalReady])
+  }, [nodes, edges, layoutKey, canonicalNodeIds, canonicalReady])
+
+  // Camera focus. Runs after the data sync above (effect order), so a node that
+  // arrived in the same render is already in the DataSet. Zoom never drops below
+  // the current scale — focusing should bring a node closer, not zoom out — and
+  // the resulting camera is captured so it persists like a manual pan.
+  const handledFocusRef = useRef('')
+  useEffect(() => {
+    const net = networkRef.current
+    const nds = nodesDSRef.current
+    if (!net || !nds || !focusNodeId) return
+    const request = `${focusTick}:${focusNodeId}`
+    // Each request is honoured once. `nodes` is a dependency only so a request
+    // made before its node arrived (a deep link) fires once the node exists —
+    // a later data refresh must not yank the camera back.
+    if (handledFocusRef.current === request || !nds.get(focusNodeId)) return
+    handledFocusRef.current = request
+    net.selectNodes([focusNodeId])
+    net.focus(focusNodeId, {
+      scale: Math.max(net.getScale(), 1),
+      animation: { duration: 400, easingFunction: 'easeInOutQuad' },
+    })
+  }, [focusNodeId, focusTick, nodes])
 
   // Visual option changes preserve the current physics state and restored layout.
   useEffect(() => {
