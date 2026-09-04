@@ -12,26 +12,69 @@ const OPTIONS: { value: IdleCutoff; label: string }[] = [
 interface Props {
   cutoff: IdleCutoff
   onCutoff: (v: IdleCutoff) => void
+  // Collapse stretches of the window where no lane did anything (default on).
+  collapseGaps: boolean
+  onCollapseGaps: (v: boolean) => void
+  // Spend time on a log scale so long sessions stop eating the panel (default on).
+  normalizeBars: boolean
+  onNormalizeBars: (v: boolean) => void
 }
 
-export function RotaToolbar({ cutoff, onCutoff }: Props) {
+export function RotaToolbar({
+  cutoff,
+  onCutoff,
+  collapseGaps,
+  onCollapseGaps,
+  normalizeBars,
+  onNormalizeBars,
+}: Props) {
   return (
-    <span className="flex items-center gap-1" title="Boşta şeritleri bu pencerede tut">
-      <span className="text-[var(--color-text-dim)]">pencere</span>
-      {OPTIONS.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onCutoff(o.value)}
-          className={`rounded px-1.5 py-0.5 ${
-            cutoff === o.value
-              ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </span>
+    <>
+      <span className="flex items-center gap-1" title="Boşta şeritleri bu pencerede tut">
+        <span className="text-[var(--color-text-dim)]">pencere</span>
+        {OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onCutoff(o.value)}
+            className={`rounded px-1.5 py-0.5 ${
+              cutoff === o.value
+                ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={collapseGaps}
+        onClick={() => onCollapseGaps(!collapseGaps)}
+        title="Hiçbir şeritte iş olmayan zaman aralıklarını kırp"
+        className={`rounded px-1.5 py-0.5 ${
+          collapseGaps
+            ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+            : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+        }`}
+      >
+        boşluk kırp
+      </button>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={normalizeBars}
+        onClick={() => onNormalizeBars(!normalizeBars)}
+        title="Uzun süreleri logaritmik ölçekte göster — kısa oturumlar okunur kalır, başlangıç/bitiş noktaları tam yerinde durur"
+        className={`rounded px-1.5 py-0.5 ${
+          normalizeBars
+            ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+            : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+        }`}
+      >
+        süre log
+      </button>
+    </>
   )
 }

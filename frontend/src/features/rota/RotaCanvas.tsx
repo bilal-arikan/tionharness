@@ -7,6 +7,8 @@
 import { useMemo } from 'react'
 import type { RotaBar, RotaEdge, RotaLayout, RotaMark, RotaRow } from './rotaLayout'
 import { laneOriginGlyph } from './rotaLabels'
+import { buildTimeScale, formatGapSpan } from './rotaTimeScale'
+import { formatWait } from './rotaWaits'
 
 // What the side panel can project from either canvas: a session / flow run
 // bar, a whole trajectory (phase header click), an automation ghost.
@@ -24,13 +26,31 @@ interface Props {
   onOpenFlowRun?: (flowId: string) => void
   // Zoom into a lane's trajectory (the ◈ glyph).
   onOpenTrajectory?: (trajectoryId: string) => void
+  // Collapse stretches of the past window where no lane did anything.
+  collapseGaps?: boolean
+  // Spend time on a log scale, so long sessions stop eating the panel while
+  // short ones stay readable (rotaTimeScale.ts).
+  normalizeBars?: boolean
+  // How many times wider than the panel the time axis is drawn (rotaZoom.ts).
+  // 1 fits the panel; above that the scroll container pans the canvas.
+  zoom?: number
 }
 
-export const ROW_H = 30
-const LABEL_W = 220
-const FUTURE_W = 170
-const TOP_H = 26
-const PAD_R = 12
+// Row pitch and label column are deliberately tight: the canvas is a density
+// view, and every pixel of padding is one fewer lane on screen.
+export const ROW_H = 22
+/** Lane label column. Exported because the zoom anchor has to know which part
+ *  of the canvas does not scale. */
+export const ROTA_LABEL_W = 180
+const LABEL_W = ROTA_LABEL_W
+const FUTURE_W = 140
+const TOP_H = 20
+const PAD_R = 8
+/** Floor for a wait segment: a wait long enough to draw stays visible even when
+ *  the window spans days and its true width would round to zero. */
+const WAIT_MIN_PX = 3
+/** Floor for a session bar, so an instant session is still clickable. */
+const MIN_BAR_PX = 3
 
 const EDGE_COLOR: Record<RotaEdge['kind'], string> = {
   spawned: '#f97316',
@@ -76,19 +96,33 @@ export function RotaCanvas({
   onOpenSession,
   onOpenFlowRun,
   onOpenTrajectory,
+  collapseGaps = true,
+  normalizeBars = true,
+  zoom = 1,
 }: Props) {
   const { rows, bars, edges, marks, future, t0, now, t1 } = layout
   // Past window fills what is left after the label column and the future
   // strip; never below a minimum so a very long history still scrolls.
-  const pastW = Math.max(240, width - LABEL_W - FUTURE_W - PAD_R)
-  const pastSpan = Math.max(1, now - t0)
+  // Zoom stretches the past axis only; the label column and the future strip
+  // keep their pixel widths so labels stay put and readable at every level.
+  const pastW = Math.max(240, width - LABEL_W - FUTURE_W - PAD_R) * zoom
   const futureSpan = Math.max(1, t1 - now)
+  // The past is piecewise (dead air collapsed to a sliver when asked for);
+  // the future strip stays linear.
+  const scale = useMemo(
+    () =>
+      buildTimeScale(layout, {
+        x0: LABEL_W,
+        width: pastW,
+        collapse: collapseGaps,
+        logDuration: normalizeBars,
+      }),
+    [layout, pastW, collapseGaps, normalizeBars],
+  )
   const x = (t: number) =>
-    t <= now
-      ? LABEL_W + ((t - t0) / pastSpan) * pastW
-      : LABEL_W + pastW + ((t - now) / futureSpan) * FUTURE_W
+    t <= now ? scale.x(t) : LABEL_W + pastW + ((t - now) / futureSpan) * FUTURE_W
   const xNow = LABEL_W + pastW
-  const height = TOP_H + Math.max(1, rows.length) * ROW_H + 8
+  const height = TOP_H + Math.max(1, rows.length) * ROW_H + 6
   const svgW = LABEL_W + pastW + FUTURE_W + PAD_R
   const rowY = useMemo(
     () => new Map(rows.map((r) => [r.id, TOP_H + r.y * ROW_H + ROW_H / 2])),
@@ -109,6 +143,21 @@ export function RotaCanvas({
         if (e.target === e.currentTarget) onSelect(null)
       }}
     >
+      <defs>
+        {/* Wait stretches: same bar, dimmed and hatched, so the lane still
+            reads as one run and the state colours keep their meaning. */}
+        <pattern
+          id="rota-wait-hatch"
+          width={5}
+          height={5}
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(45)"
+        >
+          <rect width={5} height={5} fill="var(--color-surface)" opacity={0.55} />
+          <line x1={0} y1={0} x2={0} y2={5} stroke="var(--color-surface)" strokeWidth={2} />
+        </pattern>
+      </defs>
+
       {/* Lane backgrounds + labels */}
       {rows.map((r) => (
         <g key={r.id}>
@@ -127,6 +176,31 @@ export function RotaCanvas({
           />
         </g>
       ))}
+
+      {/* Collapsed dead air: a few-pixel sliver per skipped stretch. Too narrow
+          for a hatch to read, so it is a dimmed band with a dashed seam. */}
+      {scale.segments
+        .filter((seg) => seg.gap)
+        .map((seg) => (
+          <g key={`gap:${seg.start}`}>
+            <rect
+              x={seg.x0}
+              y={TOP_H - 6}
+              width={seg.width}
+              height={height - TOP_H + 6}
+              fill="var(--color-surface-2)"
+            />
+            <line
+              x1={seg.x0 + seg.width / 2}
+              x2={seg.x0 + seg.width / 2}
+              y1={TOP_H - 6}
+              y2={height}
+              stroke="var(--color-border)"
+              strokeDasharray="2 3"
+            />
+            <title>{`${formatGapSpan(seg.end - seg.start)} boş · kırpıldı`}</title>
+          </g>
+        ))}
 
       {/* Future strip */}
       <rect
@@ -161,6 +235,12 @@ export function RotaCanvas({
       {/* Time ticks (past) */}
       <text x={LABEL_W + 2} y={TOP_H - 9} fill="var(--color-text-dim)">
         {fmtClock(t0)}
+        {scale.collapsedSec > 0 && (
+          <tspan fill="var(--color-text-dim)">
+            {' '}
+            · {formatGapSpan(scale.collapsedSec)} kırpıldı
+          </tspan>
+        )}
       </text>
 
       {/* Edges */}
@@ -193,10 +273,12 @@ export function RotaCanvas({
         const cy = rowY.get(b.rowId)
         if (cy === undefined) return null
         const run = b.kind === 'flowrun'
-        const h = run ? 6 : 12
-        const y = run ? cy + 6 : cy - h / 2
+        const h = run ? 5 : 11
+        const y = run ? cy + 5 : cy - h / 2
+        // Both ends come off the same axis, so a bar starts and ends exactly
+        // where its timestamps say — the log axis bends the axis, not the bar.
         const x1 = x(b.start)
-        const x2 = Math.max(x1 + 3, x(b.end))
+        const x2 = Math.max(x1 + MIN_BAR_PX, x(b.end))
         const sel = isSel(run ? 'flowrun' : 'session', run ? b.run!.runId : b.rowId)
         return (
           <g
@@ -226,6 +308,31 @@ export function RotaCanvas({
               stroke={sel ? 'var(--color-text)' : 'none'}
               strokeWidth={sel ? 1.5 : 0}
             />
+            {b.waits?.map((w) => {
+              // Waits ride the same axis as the bar, so no extra mapping.
+              const wx1 = Math.max(x1, x(w.start))
+              const wx2 = Math.min(x2, x(w.end))
+              // A wait that cleared the minimum duration deserves to be seen:
+              // over a multi-day window a 20-minute wait is sub-pixel, so it
+              // gets a floor and is nudged back inside the bar when the floor
+              // would push it past the end.
+              const ww = Math.max(WAIT_MIN_PX, wx2 - wx1)
+              const wx = Math.min(wx1, Math.max(x1, x2 - ww))
+              if (wx2 <= wx1 || x2 - x1 < WAIT_MIN_PX) return null
+              return (
+                <rect
+                  key={`wait:${w.start}`}
+                  x={wx}
+                  y={y}
+                  width={Math.min(ww, x2 - wx)}
+                  height={h}
+                  rx={2}
+                  fill="url(#rota-wait-hatch)"
+                >
+                  <title>{formatWait(w)}</title>
+                </rect>
+              )
+            })}
             {b.live && !run && (
               <circle cx={x2 - 3} cy={cy} r={3} fill="#fff" opacity={0.9}>
                 <animate
@@ -290,9 +397,9 @@ function RowLabel({
   onOpenTrajectory?: (id: string) => void
 }) {
   const s = row.session
-  const y = TOP_H + row.y * ROW_H + ROW_H / 2 + 4
+  const y = TOP_H + row.y * ROW_H + ROW_H / 2 + 3.5
   const indent = row.depth === 0 ? 8 : 26
-  const label = (s.title || s.id).slice(0, row.depth === 0 ? 26 : 22)
+  const label = (s.title || s.id).slice(0, row.depth === 0 ? 22 : 19)
   return (
     <text x={indent} y={y} fill="var(--color-text)" className="cursor-pointer" onClick={onClick}>
       <title>{`${s.id} · ${s.kind}${s.origin ? ` · ${s.origin.kind}` : ''}${row.trajectory ? ` · rota ${row.trajectory.trajectoryId} rev ${row.trajectory.revision}` : ''}`}</title>
