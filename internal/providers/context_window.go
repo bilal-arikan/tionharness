@@ -111,6 +111,13 @@ func MaxOutputFor(provider, model string) int {
 		// is moot — return unknown and let the caller leave MaxTokens unset.
 		return 0
 	}
+	// A locally served open-weight model must fit prompt and generation in one
+	// loaded context, so it gets its own (much smaller) cap — checked before the
+	// hosted families, which would otherwise claim a hosted ceiling for a distill
+	// whose slug contains "deepseek" or "qwen".
+	if _, out, ok := localWindowFor(provider, m); ok {
+		return out
+	}
 	switch {
 	case gptFamily(m):
 		return maxOutGPT
@@ -144,6 +151,11 @@ func ContextWindowFor(provider, model string) int {
 	if m == "" {
 		// claude-cli "default": resolves to the live session model — unknown here.
 		return 0
+	}
+	// Same precedence as MaxOutputFor: a local endpoint serves the window it was
+	// loaded with, not the family maximum a hosted provider would grant.
+	if win, _, ok := localWindowFor(provider, m); ok {
+		return win
 	}
 	switch {
 	case gptFamily(m):
@@ -196,6 +208,13 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 	m := strings.ToLower(strings.TrimSpace(model))
 	if m == "" {
 		return 0
+	}
+	// Local windows are small (32K, not 1M), so the raw-transcript share must be
+	// larger than the long-context families' 0.35 or compaction would fire after
+	// barely 11K tokens and thrash. 0.50 leaves half the loaded context for the
+	// system prompt, tool schemas and the generation itself.
+	if _, _, ok := localWindowFor(provider, m); ok {
+		return 0.50
 	}
 	switch {
 	case gptFamily(m):

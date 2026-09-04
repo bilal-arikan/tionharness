@@ -249,7 +249,8 @@ func AllPrices() map[string]map[string]Price {
 
 // PriceFor returns the list price for a provider+model and whether one is known.
 // minimax-anthropic shares the minimax table (same models, Anthropic-protocol
-// transport). Unknown provider/model and all claude-cli models return ok=false
+// transport); lmstudio is locally hosted and therefore free (a known zero, see
+// below). Unknown provider/model and all claude-cli models return ok=false
 // (unpriced — subscription or custom endpoint).
 func PriceFor(provider, model string) (Price, bool) {
 	switch provider {
@@ -257,6 +258,13 @@ func PriceFor(provider, model string) (Price, bool) {
 		provider = "minimax"
 	case "deepseek-anthropic":
 		provider = "deepseek"
+	case "lmstudio":
+		// A model running on the user's own machine is not metered: every token is
+		// free regardless of the model id. That is a KNOWN price of zero, not an
+		// unknown one, so it returns ok=true — otherwise the budget screens would
+		// flag local spend as "unpriced" and offer a subscription-equivalent
+		// estimate for hardware the user already owns.
+		return Price{}, true
 	}
 	models, ok := priceTable[provider]
 	if !ok {

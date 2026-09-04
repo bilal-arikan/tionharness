@@ -15,10 +15,10 @@ func instanceOf(kindID string, values map[string]string) Instance {
 // kinds in Order and carries the expected built-in trio.
 func TestCatalogDerivedFromKinds(t *testing.T) {
 	cat := Catalog()
-	if len(cat) != 11 {
-		t.Fatalf("catalog: want 11 entries, got %d", len(cat))
+	if len(cat) != 12 {
+		t.Fatalf("catalog: want 12 entries, got %d", len(cat))
 	}
-	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic", "openrouter", "zai", "deepseek", "deepseek-anthropic", "codex-cli", "openai-compat", "anthropic-compat"}
+	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic", "openrouter", "zai", "deepseek", "deepseek-anthropic", "codex-cli", "openai-compat", "anthropic-compat", "lmstudio"}
 	for i, id := range wantOrder {
 		if cat[i].ID != id {
 			t.Errorf("catalog[%d].ID = %q, want %q", i, cat[i].ID, id)

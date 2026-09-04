@@ -283,8 +283,8 @@ type oaiResp struct {
 // tool-use: req.Tools are offered in OpenAI tools format and any tool_calls the
 // model returns are surfaced as Response.ToolCalls (StopReason StopToolUse).
 func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, error) {
-	if m.apiKey == "" {
-		return nil, fmt.Errorf("%s: missing API key", m.name)
+	if err := m.checkAuth(); err != nil {
+		return nil, err
 	}
 
 	model := req.Model
@@ -301,7 +301,7 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 		Tools:           toOAITools(req.Tools),
 		ReasoningEffort: m.effortFor(req),
 	}
-	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
+	headers := m.authHeaders()
 
 	var parsed oaiResp
 	status, raw, retryAfter, err := postJSON(ctx, m.client, m.name, m.baseURL+"/chat/completions", headers, body, &parsed)
@@ -364,8 +364,8 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 // Tool-call deltas are not assembled here — the agent loop routes tool turns
 // through Complete — so every chunk is treated as a text delta.
 func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(StreamDelta)) (*Response, error) {
-	if m.apiKey == "" {
-		return nil, fmt.Errorf("%s: missing API key", m.name)
+	if err := m.checkAuth(); err != nil {
+		return nil, err
 	}
 	model := req.Model
 	if model == "" {
@@ -382,7 +382,7 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 		StreamOptions:   &oaiStreamOpts{IncludeUsage: true},
 		ReasoningEffort: m.effortFor(req),
 	}
-	headers := map[string]string{"Authorization": "Bearer " + m.apiKey}
+	headers := m.authHeaders()
 
 	var sb, thinkSB strings.Builder
 	filt := &thinkFilter{}

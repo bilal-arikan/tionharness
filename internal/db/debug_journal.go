@@ -108,7 +108,8 @@ var debugEnumValues = map[string]map[string]struct{}{
 		"user_cancel": {}, "queue_cleared": {},
 	},
 	"Provider": {
-		"anthropic": {}, "claude-cli": {}, "codex-cli": {}, "ollama": {}, "openai": {}, "openrouter": {},
+		"anthropic": {}, "claude-cli": {}, "codex-cli": {}, "lmstudio": {}, "ollama": {},
+		"openai": {}, "openrouter": {},
 	},
 	"Signal": {
 		"boundary": {}, "compact_boundary": {}, "compact_result": {}, "post": {},
