@@ -1,6 +1,260 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## LM Studio ile yerel model desteği (2026-09-04) ✅
+
+Kullanıcının kendi makinesinde çalışan açık ağırlıklı modeller (Qwen3, Llama,
+Mistral, Gemma) artık birinci sınıf sağlayıcı: **LM Studio** kind'ı eklendi.
+
+- **Yeni kind:** `internal/providers/kind_lmstudio.go` (Order 11, `TransportAPI`).
+  Yeni bir taşıma yazılmadı — mevcut `OpenAICompat` istemcisi (tool-use + akış)
+  yeniden kullanıldı, dolayısıyla yerel model native ajan döngüsünü barındırılan
+  bir sağlayıcıyla aynı şekilde sürer. Varsayılan taban URL
+  `http://localhost:1234/v1`; model listesi öneri olarak sunulur,
+  `AllowCustomModel` ile kullanıcı indirdiği herhangi bir modeli yazabilir.
+- **Anahtarsız çalışma (asıl engel):** `openai_compat_auth.go` eklendi.
+  `checkAuth`/`authHeaders` çifti, taban URL'in **host'una** bakarak (kind adına
+  değil) loopback/özel ağ hedeflerinde API anahtarını isteğe bağlı yapar ve
+  anahtar yokken `Authorization` başlığını hiç göndermez — bazı yerel sunucular
+  boş `Bearer ` değerini hata sayar. Barındırılan uç noktalar anahtarsız
+  çağrıda eskisi gibi "missing API key" ile hızlı başarısız olur; bir `lmstudio`
+  örneği uzak bir kimlik doğrulayan vekil sunucuya yönlendirilirse yine anahtar
+  ister.
+- **Yerel bağlam boyutlandırma:** `context_window_local.go`. Yerel sunucu, model
+  ailesinin azami penceresini değil **yüklendiği** pencereyi sunar (LM Studio
+  varsayılanı çoğu dosya için 32K; yükseltmek GB'larca KV önbellek maliyeti
+  demektir), bu yüzden değerler kasıtlı olarak muhafazakâr. `ContextWindowFor`,
+  `MaxOutputFor` ve `AdaptiveBudgetFraction` yerel dalı barındırılan aile
+  tablosundan **önce** danışır; aksi halde `deepseek-r1-distill-qwen-32b` gibi
+  bir slug barındırılan DeepSeek V4'ün 1M penceresini iddia eder ve sıkıştırma
+  sunucu isteği reddettikten sonra tetiklenirdi. Yerel ham transkript payı 0.50
+  (uzun-bağlam ailelerinin 0.35'i 32K pencerede ~11K'da sıkıştırma tetikler).
+- **Sıfır maliyet:** `PriceFor("lmstudio", …)` `ok=true` + sıfır fiyat döner.
+  "Bilinmiyor" dönseydi bütçe ekranları kullanıcının kendi donanımını
+  fiyatlanmamış harcama sayıp abonelik-eşdeğeri tahmin önerirdi.
+- **Uzun istek bütçesi:** manifest'te `RequestTimeoutSecs: 1800`. Barındırılan
+  120 sn varsayılanı, büyük bir modelin yerel prompt işleme süresinde sıradan
+  turları iptal ederdi.
+- **Frontend:** değişiklik gerekmedi — sağlayıcı ayar formu manifest'in
+  `Fields` listesinden render edilir, kind sabit kodlanmaz.
+- **Canlı doğrulama (2026-09-04):** Bionic 1.1.1 (LM Studio altyapısı) +
+  `qwen3-8b` (Q4_K_M, 5.03 GB) ile gerçek uçtan uca tur koşuldu:
+  anahtarsız yerel uç noktaya bağlanma, düz tamamlama ve **tool-calling**
+  (`call=get_weather input={"city":"Istanbul"} stop=tool_use`) çalışıyor.
+  `lmstudio_live_test.go` bu turu `LMSTUDIO_LIVE_MODEL` ile geçitler.
+  İki operasyonel bulgu kayda değer: (1) yerelde yaygın olan **akıl-yürüten**
+  modeller (Qwen3, DeepSeek-R1 distill'leri) çıktı bütçesini görünür cevaptan
+  ÖNCE düşünme bloğuna harcar — 64 token'lık bir bütçe cevabı kırpmaz, `usage`
+  `reasoning_tokens=62` ile **boş** cevap ve `finish_reason="length"` üretir; bu
+  bozuk taşımayla birebir aynı görünür, bu yüzden canlı test 2048 token bütçe
+  kullanır. (2) LM Studio/Bionic elle yerleştirilen bir `.gguf` dosyasını
+  `download-jobs-info.json`'daki bayat indirme kaydı yüzünden "yarım" sayıp
+  yok sayabilir; kayıt temizlenince model normal indekslenir.
+- **Testler:** `kind_lmstudio_test.go` (10 test) manifest seçimlerini,
+  anahtarsız `Available`/`Build`'i, taban URL varsayılanını, sıfır fiyatı, yerel
+  pencereleri, katalog metadata'sını, host tabanlı yerel tespiti ve iki
+  regresyon korumasını (barındırılan uç nokta hâlâ anahtar ister; barındırılan
+  boyutlandırma yerel tablodan etkilenmez) sabitler. `scripts/test.sh full`
+  temiz.
+
+## Rota kanvasında yoğunluk + yakınlaştırma (2026-09-04) ✅
+
+- **Sıkılaştırma:** satır adımı `ROW_H` 30 → 22, etiket sütunu 220 → 180,
+  gelecek şeridi 170 → 140, üst boşluk 26 → 20, sağ boşluk 12 → 8; oturum
+  çubuğu 12 → 11, akış koşusu 6 → 5 px. Etiket kırpma sınırı yeni sütuna göre
+  düşürüldü. Aynı 900 px yükseklikte görünen şerit **27 → 37**.
+- **Yakınlaştırma:** `rotaZoom.ts` (saf) + `RotaZoomControl.tsx`. Zoom yalnız
+  geçmiş eksenini çarpar (`pastW * zoom`, 1x–8x); etiket sütunu, gelecek şeridi
+  ve satır adımı piksel boyutunu korur, kanvas taşınca mevcut kap yatay kaydırır.
+  Ctrl/⌘ + tekerlek imlecin altındaki anı sabit tutar; `+`/`-` adımlar, `0`
+  panele sığdırır.
+- `anchoredScrollLeft` ölçeklenmeyen etiket sütununu hesaba katar — oranı ham
+  kanvas konumuna uygulamak etiket genişliğiyle büyüyen bir kayma bırakıyordu
+  (ölçüldü: 23 px → 7 px, kalanı ölçümdeki etiket yuvarlaması).
+- **Uygulama notu:** tekerlek işleyicisi kaydırma düzeltmesini `setZoom`
+  güncelleyicisinin içinde yapmıyordu — güncelleyici saf olmalı (React iki kez
+  çağırabilir), düzeltme tam bir kez çalışmalı. Zoom bir ref'ten okunur, hedef
+  kaydırma `pendingScroll` ref'ine yazılıp `useLayoutEffect`'te uygulanır; o
+  noktada kanvas yeni genişlikte commit edilmiştir, yoksa `scrollLeft` eski dar
+  `scrollWidth`'e kırpılıyor ve kaydırma hiç uygulanmıyordu (ilk sürümde oldu).
+- **Açık kalan:** yakınlaştırılıp sağa kaydırıldığında etiket sütunu da kayıyor;
+  sticky yapmak ayrı bir iş.
+- `rotaZoom.test.ts` (12 test). `scripts/test.sh full` yeşil.
+- Doküman: `_Docs/78-ROTA-EKRANI.md` §1, §4 testleri ve yeni §15.
+
+## Rota'da süre log ekseni (2026-09-04) ✅
+
+Piksel başına saniye sabitti; çok günlük bir pencerede çubukların çoğu 2-3
+piksele yuvarlanırken tek bir uzun oturum paneli yiyordu. Ölçüldü (WS1, "tümü",
+83 çubuk): p75 7.9 px, p90 33.5 px, en geniş 438 px.
+
+- **Önce çubuk genişliğini sıkıştırmayı denedim, yanlıştı.** Bu, çubuğun ucunun
+  `end` zamanına oturmaması demekti: kenarlar/işaretler gerçek eksende kalırken
+  çubuk kalmıyordu, ve büyüyen çubuklar hem "şimdi" çizgisini hem birbirini
+  aşıyordu (ölçüldü: 4 çubuk taşıyordu, en kötüsü 172 px). Tavan koymak taşmayı
+  çözdü ama hizasızlığı çözmedi. Doğrusu eksenin kendisini dönüştürmek.
+- `rotaTimeScale.ts`'e `logDuration` eklendi, `rotaBarScale.ts` tamamen
+  kaldırıldı. `measure(sec)` = `KNEE * log1p(sec / KNEE)` — sıfırda sonlu, tek
+  yönlü artan, sıra korunur.
+- `LOG_KNEE_SEC` = 5 dk. İlk deneme 60 sn'ydi; çoğu oturum zaten dakikalarca
+  sürdüğü için sıradan şeritler de uzunlarla birlikte sıkışıyordu.
+- **Dilimleme:** canlı aralık her olay anında (`eventInstants`: çubuk başı/sonu,
+  işaret, kenar) kesilir, her dilim kendi süresiyle ölçülür. Bütün aralığı tek
+  seferde ölçmek paneli erken saniyelere harcıyor, pencere sonundaki kısa bir
+  oturumu gerçek süresinden bağımsız eziyordu — ilk sürümde p75 7.9'dan 4 px'e
+  **düştü**, dilimlemeyle düzeldi.
+- Boşluk kırpma ile birlikte çalışır: kırpılan dilimler sabit genişliğini korur.
+- **Ölçülen sonuç:** p75 7.9 → 12.7 px, p90 33.5 → 54.4 px, en geniş 438 → 400
+  px. Eksenden taşan çubuk 0, çakışma 0, başlangıç/bitiş noktaları tam yerinde.
+- Anahtar "çubuk eşitle" → **"süre log"** olarak adlandırıldı (artık çubuk değil
+  eksen dönüşüyor). `RotaPanel`'de `useState(true)` — varsayılan açık.
+- `rotaTimeScale.test.ts` log ekseni testleri (uçların sabitlenmesi, tek yönlü
+  artış, uzun aralığın kısaya göre çok daha fazla sıkışması, boşluk kırpmayla
+  birlikte çalışma, kapalıyken doğrusal). `scripts/test.sh full` yeşil.
+- Doküman: `_Docs/78-ROTA-EKRANI.md` §1, §4 testleri ve yeniden yazılan §14.
+
+## Rota çubuklarında worker bekleme aralıkları (2026-09-04) ✅
+
+Koordinatör çubuğu kesintisiz tek parça çiziliyordu; uzun bir koordinatör
+oturumunun büyük kısmı worker'dan cevap beklemekle geçtiği halde çubuk "bu
+oturum boyunca çalıştı" diye okunuyordu. Bekleme aralıkları artık aynı çubuğun
+üstünde soluk/çizgili bir örtü.
+
+- `frontend/src/features/rota/rotaWaits.ts` (saf) beklemeyi **üye şeritlerin
+  ömründen** türetir: `waitSpans` örtüşen worker ömürlerini birleştirir, uç uca
+  değenleri tek sürekli bekleme sayar, `peak` eşzamanlılığı birleştirmeden ayrı
+  bir geçişte ölçer (aksi halde uç uca devir anlık 2 eşzamanlılık gibi görünür).
+  Eşik 60 sn. `clipWaits` beklemeyi koordinatörün çubuğuna kırpar.
+- Liveness'tan değil, çünkü `AwaitingWorkers` yalnız "şu an"ı yanıtlar ve dünkü
+  bir çubuğu boyayamaz; üye şeridin ömrü ise geriye dönük çalışır.
+- `layoutRota` beklemeyi `RotaBar.waits`'e yalnız kök şeritler için koyar;
+  `RotaCanvas` `#rota-wait-hatch` örtüsüyle çizer, taban genişlik 3 px (10
+  günlük pencerede 19 dk piksel altı kalıyordu).
+- **Bilinçli sınır:** `run_subagent` koordinatörün kendi turunun içinde senkron
+  çalışır, ayrı oturum yaratmaz, dolayısıyla görünmez. Ölçüldü — `WS5/SES906`:
+  14 `run_subagent`, 8 tur (411–1568 sn), sıfır çocuk oturum. Bu oturumun
+  çubuğu tek parça kalır; kapsamak için step zamanlarının veri yoluna
+  taşınması gerekir (`_Docs/77` R10 sözleşmesi).
+- `rotaWaits.test.ts` (12 test). `scripts/test.sh full` yeşil; tarayıcıda WS5'te
+  doğrulandı ("1 worker · 19 dk bekleme").
+- Doküman: `_Docs/78-ROTA-EKRANI.md` §1, §4 testleri ve yeni §13.
+
+## Rota'ya çip süzgeci ve oturuma gitme düğmeleri (2026-09-04) ✅
+
+F0 kanvasının tek süzgeci boşta-şerit penceresiydi ve kanvastan oturuma geçmenin
+tek yolu keşfedilmeyen çift tık / Enter'dı. İkisi de kapatıldı.
+
+- **Çip süzgeci** başlığın altında, Sohbet listesindekinin aynısı: çip sözlüğü ve
+  yüklemi `features/sessions/sessionKindMeta`'dan paylaşılıyor (`SESSION_CHIPS`,
+  `sessionMatchesChips`, `nextChipsOff`), tıklama sözleşmesi de aynı — düz tık
+  değiştirir, Ctrl yalnız onu seçer, Shift diğerlerini tersler.
+- `frontend/src/features/rota/rotaChips.ts` yalnız Rota'ya özgü iki şeyi taşır:
+  şekil adaptörü (lane deposu `category`/`executionType` taşımaz; subagent
+  `origin.kind`'dan, worker `rootSessionId`'den, çalışan `live.state`'ten
+  türetilir) ve ağaç kuralı — eşleşmeyen bir kök, üyelerinden biri eşleşiyorsa
+  yine çizilir, yoksa tutulan worker'ın spawn kenarı boşluğa bakardı.
+- `layoutRota` yeni `laneFilter` seçeneği alır, pencere süzgeciyle VE'lenir.
+  Rozetler seçim uygulanmadan sayılır (kapalı çip neyi gizlediğini söyler).
+- Seçim `useRotaChips` ile `localStorage`'ta, Sohbet listesinden **ayrı
+  anahtar** (`tionharness.rotaChipsOff`): Rota'da Worker'ı kapatmak Sohbet
+  listesini değiştirmemeli. Bir çip kapalıyken "süzgeci sıfırla" belirir.
+- **Oturuma gitme:** seçim yapılınca sağ panelin üstünde "Sohbette aç" (seçili
+  şeridin kendi oturumu) ve worker şeritlerinde ek olarak "↰ Asıl oturum"
+  (`rootSessionId`'nin gösterdiği kök) düğmeleri.
+- `rotaChips.test.ts` (10 test). `scripts/test.sh full` yeşil; tarayıcıda
+  doğrulandı: Sohbet çipi kapatılınca 80 → 10 şerit, kök şerit üyeleri için
+  korundu, "Sohbette aç" → `SES140` (şeridin kendisi), "↰ Asıl oturum" →
+  `SES138` (kök).
+- Doküman: `_Docs/78-ROTA-EKRANI.md` §1, §3 tablosu, §4 testleri ve yeni §12.
+
+## Rota kanvasında boş zaman aralıklarını kırpma (2026-09-04) ✅
+
+Rota'nın F0 workspace kanvasında geçmiş penceresi düz doğrusaldı, bu yüzden
+"tümü" süzgecinde 12 günlük bir depoda bütün çubuklar sağ kenarda birkaç piksele
+sıkışıyor, aradaki ölü hava tuvalin neredeyse tamamını yiyordu. Zaman → piksel
+eşlemesi artık **parçalı doğrusal**: hiçbir şeritte çubuk, kenar ya da işaret
+olmayan aralıklar birkaç piksellik (4 px) sönük bir dilime iner.
+
+- Yeni saf modül `frontend/src/features/rota/rotaTimeScale.ts`: `findGaps`
+  (5 dk eşiği, etkinliğin iki yanına 30 sn tampon, pencere başı/sonu ölü hava
+  dahil), `buildTimeScale` (dilim başına sabit genişlik, kalanı gerçek saniyeler
+  paylaşır; dilimler panelin yarısını aşacaksa doğrusala düşer), `formatGapSpan`.
+- `RotaCanvas` ölçeği `useMemo` ile kurar, her kırpılan aralığı sönük dilim +
+  kesik dikiş çizgisi olarak çizer ve `t0` etiketine "· 12 gün 1 sa kırpıldı" ekler.
+  Gelecek şeridi doğrusal kaldı.
+- `RotaToolbar`'a `role="switch"` "boşluk kırp" düğmesi; `RotaPanel`'de
+  `useState(true)` — **varsayılan açık**, pencere süzgeciyle aynı kalıp.
+- `rotaTimeScale.test.ts` (11 test) boşluk bulma, eşik altı aralıkların
+  korunması, tek yönlü artan ve uçtan uca döşeyen dilimler, doğrusala düşüş.
+  `scripts/test.sh full` yeşil; tarayıcıda 83 oturumluk depoda açık/kapalı fark
+  doğrulandı.
+- Doküman: `_Docs/78-ROTA-EKRANI.md` §1, §3 tablosu, §4 testleri ve yeni §11.
+
+## Sistem ajanı özelleştirmesinin workspace kapsamı görünür oldu (2026-09-04) ✅
+
+Kilitli yerleşikten `bindRole` ile türetilen özelleştirme zaten **aktif workspace'in**
+ajan deposuna yazılıyordu (`wsp.DB.DeriveAgent`), yani başından beri workspace'e özgü.
+Görünmeyen şey kapsamın kendisiydi: çocuk `Titler (özel)` adıyla listelenip Ayarlar gibi
+app genelinde duran bir ekrandan düzenlenince, değişiklik tüm workspace'leri etkiliyor
+gibi okunuyordu. Kapsam üç yerde açık hale getirildi:
+
+- Varsayılan ad artık workspace'i taşıyor: `Titler (TionHarnessRepo)`
+  (`internal/api/agent_derive_name.go` + `customizationName` testi). Workspace adı
+  boşsa eski `(özel)` ekine düşülür.
+- `Ayarlar ▸ Sistem Ajanları` ekranının üstüne, aktif workspace'in adını
+  `GET /api/workspace-settings`'ten okuyan bir kapsam şeridi eklendi
+  (`system-agents-scope-note`, testi `SystemAgentsPanel.test.tsx`).
+- Kilitli ajanın salt-okunur notu kopyanın yalnız bu workspace'e özgü olduğunu,
+  diğer workspace'lerin yerleşik tanımı kullanmaya devam ettiğini söylüyor.
+
+Davranış değişmedi — yalnız adlandırma ve anlatım. Ayrıntı →
+`_Docs/74-SISTEM-AJANLARI.md` §UI davranışı ▸ Özelleştirme workspace'e özgüdür.
+
+## Ayarlar ▸ Sistem Ajanları ekranı (2026-09-04) ✅
+
+Sistem ajanları artık Ajanlar ekranına gitmeden **Ayarlar** içinden de düzenlenebiliyor:
+yeni `Sistem Ajanları` kategorisi (`frontend/src/features/settings/SystemAgentsPanel.tsx`).
+Uygulamanın kendi davranışını ayarlamak (hangi model başlık üretir, hangi worker profili
+ne yapar) ayar işidir; ekranı oraya taşımak yerine **aynı parçalardan** ikinci bir giriş
+noktası kuruldu.
+
+Panel, Ajanlar ekranının iki bölmeli şeklini yeniden üretir (solda roster, sağda form)
+ama yalnız sistem ajanlarını gösterir. Yeni bir liste/form mantığı yazılmadı: bölümleme
+`agentRoster.ts`'in `groupSystemAgents`'ı, rozetler `SystemAgentStatusBadge`, düzenleme
+`AgentSettingsForm` — yani Özelleştir, devre dışı bırak, override sıfırlama ve
+özelleştirmeyi silme davranışları iki ekranda birebir aynı.
+
+`SettingsPanel.tsx`'te büyüyen `cat !== 'x' && cat !== 'y' && …` zinciri iki kümeye
+sadeleştirildi: `SELF_MANAGED_CATS` (kendi API'siyle anında kaydeden paneller — bu
+ekranda başlıktaki "Kaydedilmemiş değişiklik" yazısı ve **Kaydet** düğmesi gösterilmez)
+ve `READ_ONLY_CATS` (yalnız okuyan kategoriler). Yeni kategori ilkine girer; `secrets`
+ve `exttools` davranışları değişmedi.
+
+Testler: `SystemAgentsPanel.test.tsx` (3 vaka — yalnız sistem ajanlarının listelenmesi
+ve iki bölüme ayrılması, ilk satırın seçili gelmesi + tıklamayla değişmesi, yükleme
+hatasının `onError`'a bildirilmesi). `scripts/test.sh fast`: 724 test geçti.
+
+Ayrıntı → `_Docs/74-SISTEM-AJANLARI.md` §UI davranışı ▸ Ayarlar ▸ Sistem Ajanları ekranı.
+
+## Roster'da ayrı "Sistem worker'ları" bölümü (2026-09-04) ✅
+
+Ajanlar ekranındaki tek "Sistem ajanları" listesi ikiye bölündü: uygulamanın kendi
+işlerini yapan servis ajanları (titler, compaction, insight …) ve `spawn_worker` /
+`run_subagent`'ın seçtiği worker profilleri ("Sistem worker'ları": explore, planner,
+coder, reviewer, validator, config). 14 satırlık düz liste artık iki başlık altında;
+hangi satırın delegasyonda kullanılabileceği tek bakışta okunuyor.
+
+Ayrım `systemKey`'in `subagent-` önekine bakar (`internal/agent/systemagents.go`
+bu anahtarı zaten üretiyor, yeni alan eklenmedi). Bir özelleştirme bağlı olduğu
+yerleşikle aynı `systemKey`'i taşıdığı için ikinci bir arama olmadan aynı bölüme
+düşer; bölüm içi gruplama (yerleşik + altında rolü devralan çocuklar + kalıtım
+şeridi) korundu. Mantık `AgentsView.tsx` içinden ayrı bir modüle çıkarıldı:
+`frontend/src/features/agents/agentRoster.ts` (`groupSystemAgents`,
+`isWorkerSystemAgent`), testi `agentRoster.test.ts` (yerleşiği tohumlanmamış legacy
+özelleştirme dâhil 4 vaka).
+
+Ayrıntı → `_Docs/74-SISTEM-AJANLARI.md` §UI davranışı.
 
 ## Taşma-öncesi araç çıktısı budaması (2026-09-04) ✅
 
@@ -11653,3 +11907,35 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
 - **Test:** `TestAutoContinueSkipsStoppedAndCutShortTurns` (store'suz runtime ile: dürtme
   yazılsaydı panik ederdi) + `TestDeadlineExpired`. `go test ./internal/agent/ -count=1`
   yeşil.
+
+## Harita ekranı vis-network ağ görünümüne geçti (2026-09-04) ✅
+
+- **İstek:** Harita'nın (explorer) üç-kolon React Flow odak grafiği yerine Ağ ekranındaki
+  düğümlerle bir ağ görünümü: merkezde workspace, çevresinde bağlı gruplar, her grup bir
+  üste bağlı; fiziksel hareket; tıklanan düğüm odaklanır. Kullanıcı kararları: tüm ağ önden
+  yüklenir, tek tık = odak + seç (sağ panel kalır), sürekli fizik + kalıcı layout, arama +
+  URL deep-link + mobil çekmece korunur (klavye ok-gezinmesi bırakıldı).
+- **Backend — `internal/view/graph.go`:** `Projector.Graph(ctx)` kökten BFS ile tüm
+  düğüm + kenarları tek `structuralCache` anlık görüntüsünden üretir (cap yok, ziyaret
+  kümesi döngü/self-loop'u keser, `Ref.String` sıralı deterministik çıktı; skill/insight
+  kaynağı yoksa kovacık boş kalır). `session→rota`, `rota→bağlı varlık` kenarları dahil.
+  Route: `GET /api/views/graph` (`handleGetViewGraph`, null dizi asla dönmez).
+  Testler: `graph_test.go` (ağaç+çoklu-parent+döngü+self-loop+sıralama+JSON şekli,
+  rota kenarları, kaynak yokluğu, store yokluğu), `TestGetViewGraphContract`.
+- **Frontend — `features/explorer` yeniden yazıldı:** `ExplorerGraph/ExplorerNode/
+  explorerModel` silindi. Yeni: `explorerSeed.ts` (radyal tohum yerleşimi + derinlik),
+  `explorerVis.ts` (ViewGraph → vis node/edge; derinliğe göre boyut/kütle, kind'e göre
+  şekil/renk, arama soldurma, seçim halkası, döngü kesik kenar), `useExplorerGraph.ts`
+  (tek fetch, seçim=odak, deep-link, tema değişiminde yeniden eşleme), `ExplorerSearch.tsx`,
+  `ExplorerDetailDrawer.tsx`, `ExplorerView.tsx`. `VisNetworkGraph` üç ek prop aldı:
+  `layoutId` (kalıcılık ad alanı — Ağ ile Harita kayıtları birbirini budamaz),
+  `focusNodeId`+`focusTick` (her istek bir kez işlenir; düğüm sonradan gelirse bekler;
+  yenileme kamerayı geri çekmez; zoom `max(mevcut,1)`), `onNodeDoubleClick`.
+  `ExplorerView` artık `workspaceId` prop'u alır (`App.tsx`).
+- **Testler:** `explorerSeed.test.ts`, `explorerVis.test.ts`, `useExplorerGraph.test.tsx`,
+  `ExplorerView.test.tsx`, `VisNetworkGraph.test.tsx` (+3 senaryo).
+- **Bilinen dış durum:** `frontend` `tsc -b` bu sırada `features/rota/*` altındaki
+  (başka bir oturumun devam eden) değişiklikleri yüzünden kırmızı; bu iş kapsamı dışı.
+- **Doküman:** `_Docs/68` Durum + §7.0 (eski tasarım §7.1'e tarihçe olarak taşındı),
+  `_Docs/00` indeks satırı; `.claude/launch.json`'a `tionharness-scratch` (8090 + scratch
+  veri dizini) yapılandırması eklendi.

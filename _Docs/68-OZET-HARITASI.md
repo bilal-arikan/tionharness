@@ -3,7 +3,10 @@
 > **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06) + **TSK66 genişletmesi** ✅ (2026-08-06:
 > single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları) +
 > **TSK487 odak grafiği tasarımı** ✅ + **TSK492 klavye, responsive ve erişilebilirlik** ✅
-> (2026-08-30).
+> (2026-08-30) + **vis-network ağ görünümü** ✅ (2026-09-04: React Flow üç-kolon odak grafiği
+> kaldırıldı; tüm workspace tek çağrıyla (`GET /api/views/graph`) yüklenir ve Ağ ekranındaki
+> aynı fizik motoruyla merkezde workspace, çevresinde 11 grup, her üye kendi grubuna bağlı
+> olarak çizilir — bkz. §7.0).
 > Kalan opsiyonel: MCP resource tree + büyük-workspace performansı (sigma.js) — ihtiyaç
 > kanıtlanınca.
 > **Önkoşul okuma:** `_Docs/66-VIEW-KATMANI.md` (bu özelliğin motoru), `internal/view/*`,
@@ -123,6 +126,38 @@ derinlik/çocuk cap'i şart (§8.1).
   → alt resource'lar) → herhangi bir MCP istemcisi (Claude Code dahil) gezer.
 
 ## 7. Frontend (`features/explorer`)
+
+### 7.0 Güncel tasarım (2026-09-04): tek fizik ağı
+
+Harita artık Ağ ekranıyla aynı `VisNetworkGraph` bileşenini (vis-network, sürekli
+forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıldı.
+
+- **Veri:** `GET /api/views/graph` (`Projector.Graph`, `internal/view/graph.go`) kökten
+  BFS ile ulaşılabilen **tüm** düğümleri ve parent→child kenarları tek seferde döndürür;
+  cap yok, ziyaret kümesi döngü/self-loop'u keser, çıktı `Ref.String` sırasıyla
+  deterministiktir. Skill/insight kaynağı yoksa o kovacık boş kalır, harita düşmez.
+  `session → rota` ve `rota → bağlı varlık` kenarları da dahildir.
+- **Yerleşim:** `explorerSeed.ts` radyal tohum verir (kök 0,0; 11 grup 340px halkada;
+  her alt ağaç kendi grubunun açısal dilimi içinde, derinlik başına +190px). Fizik bunu
+  düzeltir; `explorer:<workspaceId>` anahtarıyla konum + kamera `localStorage`'a yazılır
+  (`VisNetworkGraph` `layoutId` prop'u — Ağ ekranının kayıtları ile çakışmaz).
+- **Görsel dil (`explorerVis.ts`):** derinlik 0 büyük accent daire (kütle 12), derinlik 1
+  gruplar renkli orta daire (kütle 4), üyeler Ağ'daki şekillerle (session=box,
+  flowrun/rota=diamond, skill=star, automation=triangle, artifact=square,
+  insight=hexagon). Kenar uzunluğu hub'a yakınlıkla artar; döngü/self-loop kesik +
+  warning rengi. Etiketten `kind:ID` öneki soyulur, ref tooltip'te kalır.
+- **Etkileşim:** **tek tık = seç + kameraya odakla + sağ panelde `◱ Özet`**
+  (`focusNodeId`/`focusTick`: aynı düğüme ikinci tık da odaklar; veri yenilenmesi
+  kamerayı geri çekmez; zoom asla düşürülmez). **Çift tık** oturum düğümünde sohbeti
+  açar. Boş tuvale tık seçimi bozmaz. Yoğunluk kaydırıcısı fizik sıkışıklığını ayarlar.
+- **Korunanlar:** harita-içi arama (eşleşmeyen düğüm/kenar solar, sonuç listesi tık =
+  odak), URL deep-link (`?node=`; haritada olmayan ref görünür hata + "köke dön"),
+  dar ekranda `ExplorerDetailDrawer` (modal dialog semantiği). Klavye ok-gezinmesi ve
+  `+N` taşma listesi kaldırıldı (canvas tabanlı; tüm düğümler zaten görünür).
+- **Dosyalar:** `ExplorerView.tsx` (kabuk), `ExplorerSearch.tsx`, `ExplorerDetailDrawer.tsx`,
+  `explorerVis.ts`, `explorerSeed.ts`, `useExplorerGraph.ts` (+ testler).
+
+### 7.1 Eski tasarım (TSK487/TSK492, 2026-08-30 — tarihçe)
 
 TSK487 ile ekran tek-hop odak grafiğine geçti: parent solda, focus ortada, child
 sağda deterministik üç kolondur. Tek tık yalnız seçer ve mevcut `ViewPanel` detayını

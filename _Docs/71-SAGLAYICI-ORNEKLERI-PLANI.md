@@ -1,6 +1,9 @@
 # 71 — Sağlayıcı Örnekleri (Provider Instances): Uygulama Planı
 
 > **Durum: BİTTİ (Faz 0-5, 2026-08-18) — K1/K2/K3 kararları onaylandı, K4 kapsam dışı bırakıldı (bkz. §8).**
+> Plan sonrası eklenen kind'lar bu dokümanda yaşamaya devam eder: yerel (local)
+> sağlayıcılar için **LM Studio** kind'ı ve anahtarsız/muhafazakâr-pencere
+> davranışı §12'de (2026-09-04).
 > Bugünkü "provider = sabit kind id" modeli **taslak (kind) → örnek (instance)**
 > modeline çevrildi. Aynı kind'dan **birden fazla**, farklı token/config taşıyan
 > sağlayıcı; sağlayıcı ayarları **uygulama geneli**; ajan oluştururken bu
@@ -490,6 +493,72 @@ kayıt, ayar formu, API DTO'su ve UI otomatik türer:
 6. Test: en az `Available`/`Build` için birim test + `Catalog()` sıralaması
    bozulmadığını doğrulayan bir satır (bkz. `kind_test.go`
    `TestCatalogDerivedFromKinds`'daki `wantOrder` listesini güncelle).
+
+---
+
+## 12. Yerel (local) sağlayıcılar — LM Studio
+
+**Durum: canlı (2026-09-04).** `lmstudio` kind'ı (`kind_lmstudio.go`, Order 11),
+kullanıcının kendi makinesinde çalışan açık ağırlıklı modelleri (Qwen3, Llama,
+Mistral, Gemma) LM Studio'nun OpenAI-uyumlu yerel sunucusu üzerinden sunar.
+
+Yeni bir taşıma yazılmadı: paylaşılan `OpenAICompat` istemcisi (tool-use + akış)
+yeniden kullanıldı, dolayısıyla yerel bir model native ajan döngüsünü
+barındırılan bir OpenAI-uyumlu sağlayıcıyla aynı şekilde sürer. Yerel bir uç
+noktayı *yerel* yapan üç fark, `openai-compat` taslağından ayrılmasının da
+gerekçesidir:
+
+| Konu | Barındırılan kind | `lmstudio` |
+|---|---|---|
+| API anahtarı | Zorunlu (`NeedsKey`, `Required`) | İsteğe bağlı — yalnız kimlik doğrulayan bir vekil sunucu arkasındaysa |
+| İstek bütçesi | 120 sn (model sınıfına göre uzun bütçe) | `RequestTimeoutSecs: 1800` |
+| Fiyat | `priceTable` araması | Bilinen **sıfır** (`PriceFor` `ok=true` döner) |
+| Bağlam penceresi | Aile azamisi (1M'e kadar) | Yüklenen boyut (varsayılan 32K) |
+
+### 12.1 Anahtarsız çalışma
+
+`openai_compat_auth.go`: `checkAuth`/`authHeaders`/`localEndpoint`. Karar taban
+URL'in **host'una** göre verilir, kind adına göre değil — bu yüzden loopback'e
+yönlendirilmiş bir `openai-compat` örneği de anahtarsız çalışır, uzak bir vekil
+sunucuya yönlendirilmiş bir `lmstudio` örneği ise yine anahtar ister. Anahtar
+yokken `Authorization` başlığı **hiç gönderilmez**: bazı yerel sunucular boş
+`Bearer ` değerini yok saymak yerine hata sayar. Barındırılan uç noktalar
+anahtarsız çağrıda eskisi gibi "missing API key" ile hızlı başarısız olur
+(`TestRemoteStillRequiresKey`).
+
+### 12.2 Muhafazakâr yerel boyutlandırma
+
+`context_window_local.go`. Yerel sunucu, modelin azami penceresini değil
+**yüklendiği** pencereyi sunar: LM Studio bağlam uzunluğunu yükleme anında
+seçer ve KV önbellek belleği bu uzunlukla ölçeklendiği için varsayılan çoğu
+dosyada 32K'dır; bu sınırın üstündeki bir istek sunucu tarafından reddedilir
+veya sessizce kırpılır. Bu yüzden değerler kasıtlı olarak muhafazakârdır —
+buradaki tehlikeli yön fazla tahmindir.
+
+`ContextWindowFor`, `MaxOutputFor` ve `AdaptiveBudgetFraction` yerel dalı
+barındırılan aile tablosundan **önce** danışır. Sıralama önemlidir:
+`deepseek-r1-distill-qwen-32b` yerelde bir Qwen modelidir, barındırılan DeepSeek
+V4 değil — tersi sırada 1M pencere iddia edilir ve sıkıştırma ancak sunucu
+isteği reddettikten sonra tetiklenirdi. Yerel ham transkript payı **0.50**;
+uzun-bağlam ailelerinin 0.35'i 32K pencerede ~11K token'da sıkıştırma tetikler.
+
+Yerel tablo yalnız yerel kind'lara uygulanır (`localProvider`), böylece aynı
+açık ağırlıkları sunan barındırılan bir uç nokta (OpenRouter üzerinden Qwen)
+kendi büyük penceresini korur (`TestHostedSizingUnaffectedByLocalTable`).
+
+### 12.3 Başka bir yerel çalışma zamanı eklemek
+
+Ollama, llama.cpp ve vLLM da OpenAI-uyumlu `/v1/chat/completions` sunar, yani
+gereken tek şey `kind_lmstudio.go` kalıbında yeni bir `kind_*.go` (kendi
+varsayılan portuyla) ve `localProvider`'a kind slug'ının eklenmesidir. Model
+aile tablosu slug tabanlıdır, dolayısıyla paylaşılır.
+
+### 12.4 Model seçimi notu
+
+Ajan döngüsü araçları yoğun kullanır ve küçük modellerde tool-calling
+güvenilirliği düşer. Yerelde gerçek ajan işi için `qwen3-coder-30b` /
+`qwen3-32b` sınıfı uygundur; 8B modeller özetleyici veya alt-ajan rolünde
+değerlidir. Katalogdaki öneri listesi bu ayrımı açıklamalarında taşır.
 
 ---
 

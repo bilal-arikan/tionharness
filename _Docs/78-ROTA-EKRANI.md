@@ -42,6 +42,10 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 - **Çubuk** = oturumun ömrü (`createdAt → updatedAt`; canlıysa "şimdi"ye kadar
   uzar ve ucunda yanıp sönen nokta). Renk: canlı = vurgu, `completed` = yeşil,
   `failed/killed/timeout` = kırmızı, arşiv = soluk.
+- **Bekleme aralıkları (2026-09-04):** bir koordinatörün çubuğunda worker'a iş
+  verip beklediği aralıklar soluk/çizgili çizilir; çubuk aynı çubuk kalır,
+  durum renkleri anlamını korur. Yalnız **spawn edilen** worker'lar için —
+  `run_subagent` ayrı oturum yaratmadığından görünmez. Ayrıntı §13.
 - **Kenarlar:** `spawned` (turuncu, koordinatör → worker, worker'ın
   `createdAt`'inde), `reported` (mor kesik, tamamlanmış worker → koordinatör,
   `updatedAt`'te), `forked_from` (mor, handoff/spawn/otomasyon → yeni oturum).
@@ -50,14 +54,37 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
   atlanan (sebep tooltip'te), ✕ koordinatör stall halt.
 - **Gelecek şeridi:** "şimdi" çizgisinin sağında kurulu zamanlayıcılar (⏰,
   `ws:schedule_armed`), ufuk 30 dk; ötesi kenara kırpılır.
+- **Süre log ekseni (2026-09-04, varsayılan açık):** zaman → piksel eşlemesinde
+  süre logaritmik harcanır; kısa oturumlar okunur genişlikte kalır, çok uzun
+  olanlar paneli yemez. **Eksenin kendisi** dönüştüğü için çubuk, kenar, işaret
+  ve bekleme dilimi aynı eşlemeyi izler: her başlangıç ve bitiş tam
+  zamanındadır. Üst çubuktaki "süre log" anahtarıyla kapatılır. Ayrıntı §14.
+- **Boşluk kırpma (2026-09-04, varsayılan açık):** geçmiş penceresinde hiçbir
+  şeritte çubuk/kenar/işaret olmayan aralıklar birkaç piksellik (4 px) sönük
+  bir dilime indirilir; zaman → piksel eşlemesi böylece **parçalı doğrusal**
+  olur. Bir
+  gecelik boşluk yoksa görünüm eskisi gibi düz doğrusaldır. Üst çubuktaki
+  "boşluk kırp" anahtarıyla kapatılır; kapalıyken 12 günlük boşluk ekseni
+  yutup asıl işi birkaç piksele sıkıştırır. Ayrıntı §11.
 - **Üst çubuk:** bağlantı noktası (yeşil = akış bağlı), sayaçlar, spawn/kuyruk
-  kapasitesi (`/api/workspace/liveness`), boşta-şerit penceresi (1 sa / 6 sa /
-  24 sa / tümü), `#seq · r<revizyon>`.
+  kapasitesi (`/api/workspace/liveness`), **yakınlık** kontrolü, boşta-şerit
+  penceresi (1 sa / 6 sa / 24 sa / tümü), `#seq · r<revizyon>`.
+- **Yakınlaştırma (2026-09-04):** zaman ekseni panelin 1x–8x'i kadar geniş
+  çizilir, kanvas yatay kaydırılır. Etiket sütunu ve gelecek şeridi ölçeklenmez.
+  Ctrl/⌘ + tekerlek imlecin altındaki anı sabit tutarak yakınlaştırır; `+`/`-`
+  adımlar, `0` panele sığdırır. Ayrıntı §15.
+- **Çip süzgeci (2026-09-04):** başlığın altında, Sohbet listesindekiyle **aynı
+  çipler** (`SESSION_CHIPS`) ve aynı tıklama sözleşmesi — düz tık değiştirir,
+  Ctrl yalnız onu seçer, Shift diğerlerini tersler. Ayrıntı §12.
 - **Sağ panel:** seçim yoksa tetik / koordinasyon / kurulu zamanlayıcı listesi;
-  seçim varsa `ViewPanel` (get_view card: `session` veya `flowrun`).
+  seçim varsa üstte **"Sohbette aç"** (seçili şeridin kendi oturumu) ve worker
+  şeridinde ek olarak **"↰ Asıl oturum"** (bağlı olduğu kök), altında
+  `ViewPanel` (get_view card: `session` veya `flowrun`).
 
 Etkileşim: tık = seç, çift tık = oturumu Sohbet'te / akış koşusunu Akışlar'da
 aç, ↑↓ şeritler arasında gez, Enter aç, Esc seçimi bırak (Harita sözleşmesi).
+Çift tık ve Enter keşfedilir değildi; sağ paneldeki iki düğme aynı işi görünür
+kılar (§12).
 
 ## 2. Veri yolu (F0)
 
@@ -103,12 +130,34 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 | Faz sütunu yok, yalnız zaman | ✅ F1b (◈ → rota-içi görünüm) | §6 |
 | Mini rota (sohbet başlığı), RunView gömme | ✅ F1b / F5 | §6, §10 |
 | Maliyet / süre | ✅ F3 (özet çipleri; ayrı alt şerit yok) | §8 |
-| Şerit patlaması için demet katlama (`+N`) | ❌ açık | pencere süzgeci + son-200 seed |
+| Şerit patlaması için demet katlama (`+N`) | ❌ açık | pencere süzgeci + çip süzgeci + son-200 seed |
+| Boş zaman aralıkları ekseni yutuyor | ✅ 2026-09-04 | §11 |
 | Worker alt-ağacı katlama | ❌ açık | — |
 | Mobilde sağ panel gizli (`md:` altı), kanvas yatay kaydırır | tasarım kararı | — |
 
 ## 4. Testler (F0 + F1a)
 
+- `frontend/src/features/rota/rotaZoom.test.ts` — aralık sınırlama ve bozuk
+  girdi, adımların iki yönde yürümesi ve uçlarda durması, tekerlekten gelen ara
+  değerden adıma oturma, tüm adımların erişilebilirliği, imleç sabitleme
+  (yakınlaşma/uzaklaşma, sol kenarı geçmeme, **ölçeklenmeyen etiket sütununun
+  hesaba katılması**), `formatZoom`.
+- `frontend/src/features/rota/rotaWaits.test.ts` — tek worker'ın aralığı,
+  örtüşenlerin birleşmesi + peak eşzamanlılık, bitişik worker'ların tek sürekli
+  bekleme okunması, aradaki boşluğun ikiye bölmesi, canlı worker'ın "şimdi"ye
+  açık kalması, eşik altı ve worker'sız kökler, şerit süzgecine uyum,
+  `clipWaits`, `layoutRota`'nın beklemeyi yalnız köke koyması.
+- `frontend/src/features/rota/rotaChips.test.ts` — çip yüklemi (worker'ın hem
+  tür hem kapsam çipini istemesi, subagent'ın `origin.kind`'dan sınıflanması,
+  arşiv/çalışan kapsamları), ağaç kuralı (eşleşen üyesi olan kök kalır, hiç
+  eşleşmeyen kök düşer), `layoutRota` satırlarının daralması, çip sayaçları.
+- `frontend/src/features/rota/rotaTimeScale.test.ts` — boşluk bulma (eşiğin
+  altındakiler kalır, baş/son ölü hava sayılır, işaret/kenar anı canlı tutar),
+  parçalı ölçek (dilim genişliği sabit, tek yönlü artan, pencere dışı kırpılır),
+  dilimler paneli uçtan uca döşer, dilimler panelin yarısını yiyecekse doğrusala
+  düşüş, `formatGapSpan`; **log ekseni** (pencere uçlarının sabitlenmesi, tek
+  yönlü artış, uzun aralığın kısaya göre çok daha fazla sıkışması, boşluk
+  kırpmayla birlikte çalışma, kapalıyken doğrusal eşleme).
 - `frontend/src/features/rota/rotaLayout.test.ts` — satır sırası ve derinlik,
   spawn/report/fork kenar zamanları, canlı/biten çubuklar, işaret şeridi, gelecek
   ufku kırpma, pencere kapalıyken tümü, boş depo.
@@ -517,3 +566,189 @@ kapısının gerçek doğrulaması, reçete sürüm geçmişinin seed ledger'ın
 tutulması, küratör önerisini tek tıkla uygulama, zamanlama/hook kartlarında
 pin düğmesi, faz kuralı modalında faz kimliği seçici, `rollback_version`
 uygulaması.
+
+## 11. Boşluk kırpma — boş zaman aralıklarını daralt (2026-09-04)
+
+**Sorun.** F0 kanvasının geçmiş penceresi düz doğrusaldı: `t0 → şimdi` arası
+piksellere orantılı bölünüyordu. "tümü" penceresinde 12 günlük bir depoda
+oturumların çoğu son birkaç saatte olduğu için bütün çubuklar sağ kenarda
+birkaç piksele sıkışıyor, aradaki ölü hava tuvalin %90'ını yiyordu.
+
+**Çözüm.** Zaman → piksel eşlemesi parçalı doğrusal oldu.
+`frontend/src/features/rota/rotaTimeScale.ts` (saf, DOM'suz):
+
+- `findGaps(layout, minGapSec)` — çubuk aralıklarını, işaret ve kenar anlarını
+  birleştirip `[t0, şimdi]` içindeki boş aralıkları çıkarır. Eşik altı
+  (`MIN_GAP_SEC` = 5 dk) aralıklar dokunulmaz; her etkinliğin iki yanına
+  30 sn tampon konur ki çubuk ucu ile kırpma işareti bitişmesin. Pencerenin
+  başındaki ve sonundaki ölü hava da sayılır.
+- `buildTimeScale(layout, {x0, width, collapse})` — her boşluğa sabit
+  `GAP_PX` = 4 px verir (dilime harcanan her piksel gerçek etkinlikten
+  gider; 4 px kesintiyi göstermeye yetiyor), kalan genişliği gerçek saniyeler paylaşır ve
+  `x(t)` ile `segments` döndürür. Kırpılacak bir şey yoksa (ya da anahtar
+  kapalıysa) bu tam olarak eski doğrusal eşlemedir. **Emniyet:** dilimlerin
+  toplamı panelin yarısını aşacaksa doğrusala düşer — çok sayıda kısa boşluk
+  asıl etkinliği sıfıra sıkıştırmasın.
+- `formatGapSpan(sn)` — "2 sa 15 dk" / "1 gün 1 sa".
+
+`RotaCanvas` ölçeği `useMemo` ile kurar; kırpılan her aralık sönük bir dilim +
+kesik dikey dikiş çizgisi olarak çizilir (4 px'te tarama deseni okunmuyor) (tooltip: ne kadarın gizlendiği), üst
+çubuktaki `t0` etiketine "· 12 gün 1 sa kırpıldı" eklenir. Gelecek şeridi
+doğrusal kalır — 30 dk ufkunda kırpacak boşluk yok.
+
+`RotaToolbar`'a `role="switch"` bir "boşluk kırp" düğmesi geldi; durum
+`RotaPanel`'de `useState(true)` — **varsayılan açık**, pencere süzgeciyle aynı
+kalıp (kalıcı değil, oturum başına).
+
+**Kapsam.** Yalnız F0 workspace kanvası. Rota-içi görünüm (`RotaTrajectoryView`)
+faz sütunlarına göre yerleşir, zaman ekseni yoktur; orada kırpılacak bir şey yok.
+
+## 12. Çip süzgeci ve oturuma gitme düğmeleri (2026-09-04)
+
+**Çip süzgeci.** F0 kanvasının tek süzgeci boşta-şerit penceresiydi; 80 şeritli
+bir depoda "yalnız otomasyonlar" ya da "yalnız worker'lar" demenin yolu yoktu.
+Başlığın altına Sohbet listesindekinin **aynısı** bir çip şeridi geldi:
+
+- Çip sözlüğü ve yüklemi paylaşılıyor — `features/sessions/sessionKindMeta`'nın
+  `SESSION_CHIPS` / `sessionMatchesChips` / `nextChipsOff`'u. Bir çip iki ekranda
+  aynı şeyi demek zorunda; kopyalanmış ikinci bir liste ayrışırdı.
+- `frontend/src/features/rota/rotaChips.ts` yalnız Rota'ya özgü iki şeyi taşır:
+  **şekil adaptörü** (`laneChipShape` — lane deposu `category`/`executionType`
+  taşımaz, o yüzden subagent `origin.kind`'dan, worker `rootSessionId`'den,
+  çalışan `live.state ?? runState`'ten türetilir) ve **ağaç kuralı**
+  (`laneChipFilter` — eşleşmeyen bir kök, üyelerinden biri eşleşiyorsa yine
+  çizilir; yoksa tutulan worker'ın spawn kenarı çizilmemiş bir şeride bakardı).
+- `laneChipCounts` rozetleri seçim uygulanmadan sayar, yani kapalı bir çip neyi
+  gizlediğini söylemeye devam eder. Sayım sınıflandırmadan doğrudan yapılır:
+  `laneMatchesChips`'i tek çiple yoklamak her worker'ı sıfır sayardı, çünkü
+  yüklem tür **ve** kapsam çipini birlikte ister. Bunun sonucu olarak `worker`
+  anahtarı çift rol oynar (hem tür hem kapsam) ve rozeti ikisinin toplamıdır.
+- `layoutRota` yeni bir `laneFilter` seçeneği alır; pencere süzgeciyle
+  **VE**'lenir. Ağaç kuralını kuran çağıran taraftır, layout değil.
+- Seçim `useRotaChips` ile `localStorage`'ta (`tionharness.rotaChipsOff`).
+  Sohbet listesinden **ayrı anahtar**: Rota'da Worker'ı kapatmak Sohbet listesini
+  değiştirmemeli. Sidebar'daki gibi **kapalı** çipler saklanır, böylece sonradan
+  eklenen bir çip seçili başlar. Bir çip kapalıyken "süzgeci sıfırla" belirir.
+
+**Oturuma gitme.** Kanvastan oturuma geçmenin tek yolu çift tık / Enter'dı.
+Seçim yapılınca sağ panelin üstünde iki düğme çıkar: **"Sohbette aç"** seçili
+şeridin kendi oturumunu açar; şerit bir worker ise ayrıca **"↰ Asıl oturum"**
+çıkar ve `rootSessionId`'nin gösterdiği kök oturuma gider — worker'ın kendi
+thread'i koşunun bir parçası, asıl konuşma kökte.
+
+**Kapsam.** Yalnız F0 workspace kanvası; rota-içi görünümde (`RotaTrajectoryView`)
+çip şeridi gizlenir, orada süzülecek şerit yok.
+
+## 13. Bekleme aralıklarını çubukta göstermek (2026-09-04)
+
+**Sorun.** Bir koordinatörün çubuğu kesintisiz tek parça çiziliyordu, oysa uzun
+bir koordinatör oturumunun büyük kısmı worker'lardan cevap beklemekle geçer.
+Çubuğa bakınca "bu oturum 4 saat çalıştı" okunuyordu; gerçekte 4 saatin çoğu
+bekleme olabilir.
+
+**Ne yapıldı.** `frontend/src/features/rota/rotaWaits.ts` (saf, DOM'suz)
+koordinatörün bekleme aralıklarını **üye şeritlerin ömründen** türetir:
+
+- `waitSpans(state, rootId, now, keep)` — üyelerin `[createdAt, bitiş]`
+  aralıklarını birleştirir. Örtüşenler tek aralık olur; uç uca değen iki worker
+  da **tek sürekli bekleme**dir, çünkü koordinatör arada turu geri almamıştır.
+  `peak` (o aralıktaki en yüksek eşzamanlı worker sayısı) birleştirmeden **ayrı**
+  bir geçişte ölçülür: birleştirme sweep'inden saymak, uç uca devri anlık 2
+  eşzamanlılık gibi gösterirdi. Eşik `MIN_WAIT_SEC` = 60 sn. Süzgeç `keep` ile
+  paylaşılır, böylece bir bekleme hiç çizilmemiş bir şeride işaret etmez.
+- `clipWaits` beklemeleri koordinatörün kendi çubuğuna kırpar (bir worker
+  arşivlenmiş koordinatörden uzun yaşayabilir).
+- `layoutRota` beklemeyi `RotaBar.waits`'e koyar, **yalnız kök şeritlerde**;
+  bir üye şeridin kendi worker'ı yoktur.
+- `RotaCanvas` bunları çubuğun üstüne çizgili bir örtü olarak çizer
+  (`#rota-wait-hatch`). Taban genişlik `WAIT_MIN_PX` = 3 px: 10 günlük bir
+  pencerede 19 dk'lık bekleme piksel altı kalır, oysa eşiği geçtiği için
+  görünmeyi hak eder. Taban çubuğun sonunu taşıracaksa içeri kaydırılır.
+  Tooltip: "2 worker · 18 dk bekleme".
+
+**Neden liveness'tan değil.** `liveness.AwaitingWorkers` yalnız "şu an"ı
+yanıtlar; dünkü bir çubuğu boyayamaz. Üye şeridin ömrü ise depoda duruyor ve
+geriye dönük çalışıyor.
+
+**Bilinçli sınır — `run_subagent`.** Bir `run_subagent` çağrısı koordinatörün
+**kendi turunun içinde** senkron çalışır ve ayrı oturum yaratmaz; dolayısıyla ne
+`awaiting_workers` olur ne de lane deposunda bir üye şerit belirir. Örnek:
+`WS5/SES906` — 14 `run_subagent`, 8 tur (411–1568 sn), **sıfır** çocuk oturum.
+Bu oturumun çubuğu tek parça kalır. Bu aralıkları da boyamak için step
+zamanlarının (`messages.jsonl`'deki `steps[].tool == 'run_subagent'`) oturum
+başlığına ya da yeni bir uca yayınlanması, oradan lane deposuna taşınması
+gerekir — `_Docs/77` R10 veri yolu sözleşmesine dokunan ayrı bir iş.
+
+## 14. Süre log ekseni (2026-09-04)
+
+**Sorun.** Piksel başına saniye sabitti. Çok günlük bir pencerede bu kanvası
+uçlarda okunamaz yapıyor: çubukların çoğu 2-3 piksele yuvarlanırken tek bir uzun
+oturum paneli yiyor. Ölçüldü (WS1, "tümü", 83 çubuk): p75 **7.9 px**, p90
+**33.5 px**, en geniş **438 px**.
+
+**Neden çubuk genişliği değil, eksen.** İlk yaklaşım çubuk genişliklerini ayrıca
+sıkıştırmaktı. Bu, çubuğun **ucunun** `end` zamanına oturmaması demekti: kenarlar
+ve işaretler gerçek eksende kalırken çubuk kalmıyordu, ve büyüyen çubuklar hem
+"şimdi" çizgisini hem birbirini aşabiliyordu (ölçüldü: 4 çubuk taşıyordu, en
+kötüsü 172 px). Tavan koymak taşmayı çözdü ama hizasızlığı çözmedi. Doğru çözüm
+eksenin kendisini dönüştürmek: o zaman **her şey** aynı eşlemeyi izler.
+
+**Ne yapıldı.** `rotaTimeScale.ts`'e `logDuration` seçeneği eklendi;
+`rotaBarScale.ts` tamamen kaldırıldı (artık çubuk-içi normalizasyon yok).
+
+- `measure(sec, log)` — süreyi eksenin birimlerine çevirir.
+  `LOG_KNEE_SEC * log1p(sec / LOG_KNEE_SEC)`: sıfırda sonlu ve tek yönlü artan,
+  yani sıra ve "sonraki daha sağda" her zaman korunur.
+- `LOG_KNEE_SEC` = **5 dk**. Diz noktasının altı fiilen doğrusaldır. İlk deneme
+  60 sn'ydi; çoğu oturum zaten dakikalarca sürdüğü için sıradan şeritler de uzun
+  olanlarla birlikte sıkışıyordu — amacın tam tersi.
+- **Dilimleme.** Canlı bir aralık, `eventInstants` ile her olay anında (çubuk
+  başı/sonu, işaret, kenar) kesilir ve **her dilim kendi süresiyle** ölçülür.
+  Bütün bir aralığı tek seferde ölçmek paneli erken saniyelere harcar, pencere
+  sonundaki kısa bir oturum gerçekte ne kadar sürdüğünden bağımsız ezilirdi
+  (ilk sürümde tam bu oldu: p75 7.9 → 4 px'e **düştü**).
+- Boşluk kırpma (§12) ile birlikte çalışır: kırpılan dilimler sabit `GAP_PX`
+  genişliğini korur, log yalnız canlı dilimlerin içinde işler.
+
+**Ölçülen sonuç** (aynı kanvas): p75 **7.9 → 12.7 px**, p90 **33.5 → 54.4 px**,
+en geniş **438 → 400 px**. Yani kısa ve orta şeritler okunur hale geldi, en uzun
+olan geri çekildi. Zaman ekseninden taşan çubuk **0**, çubuk çakışması **0**.
+
+**Hiza.** Çubuğun iki ucu da aynı eksenden gelir, dolayısıyla başlangıç ve bitiş
+noktaları tam zamanındadır. Kenarlar, işaretler, bekleme dilimleri (§13) ve
+"şimdi" çizgisi aynı eşlemeyi paylaşır. Anahtarı kapatmak doğrusal eksene döner.
+
+## 15. Yoğunluk ve yakınlaştırma (2026-09-04)
+
+**Sıkılaştırma.** Kanvas bir yoğunluk görünümü; satır başına harcanan her piksel
+ekranda bir eksik şerit demek. Ölçüler daraltıldı: satır adımı `ROW_H` 30 → 22,
+etiket sütunu 220 → 180, gelecek şeridi 170 → 140, üst boşluk 26 → 20, sağ
+boşluk 12 → 8; oturum çubuğu 12 → 11, akış koşusu çubuğu 6 → 5 px. Etiket
+kırpma sınırı de yeni sütun genişliğine göre düşürüldü (26/22 → 22/19 karakter).
+Aynı 900 px yükseklikte görünen şerit sayısı **27 → 37**.
+
+**Yakınlaştırma.** `rotaZoom.ts` (saf) + `RotaZoomControl.tsx`:
+
+- Zoom **yalnız geçmiş eksenini** çarpar (`pastW * zoom`). Etiket sütunu, gelecek
+  şeridi ve satır adımı piksel boyutlarını korur, böylece metin her seviyede
+  okunur kalır ve etiketler çubuklarından ayrılmaz. Kanvas panelden genişleyince
+  mevcut kaydırma kabı onu yatay kaydırır.
+- Adımlar `ZOOM_STEPS` = 1, 1.5, 2, 3, 4, 6, 8. `stepZoom` tekerlekten gelen ara
+  bir değerden (örn. 2.4) doğru adıma oturur.
+- **Ctrl/⌘ + tekerlek** sürekli yakınlaştırır ve `anchoredScrollLeft` ile
+  imlecin altındaki anı sabit tutar. Klavye: `+`/`-` adımlar, `0` panele sığdırır.
+- `anchoredScrollLeft` **ölçeklenmeyen etiket sütununu** (`fixedLeft`) hesaba
+  katar: oranı ham kanvas konumuna uygulamak, etiket genişliğiyle büyüyen bir
+  kayma bırakıyordu (ölçüldü: 23 px, düzeltmeden sonra 7 px — kalanı ölçüm
+  sırasındaki etiket yuvarlaması).
+
+**Uygulama notu.** Tekerlek işleyicisi kaydırma düzeltmesini `setZoom`
+güncelleyicisinin **içinde** yapmıyor: güncelleyici saf olmak zorunda (React onu
+iki kez çağırabilir), oysa düzeltme tam bir kez çalışmalı. Zoom bir ref'ten
+okunur, hedef kaydırma `pendingScroll` ref'ine yazılır ve `useLayoutEffect`
+içinde uygulanır — o noktada kanvas yeni genişlikte commit edilmiştir, yoksa
+`scrollLeft` eski (dar) `scrollWidth`'e kırpılır. İlk sürümde bu yüzden kaydırma
+hiç uygulanmıyordu.
+
+**Açık kalan.** Yakınlaştırılıp sağa kaydırıldığında etiket sütunu da kayar;
+sabitlemek (sticky) ayrı bir iş.

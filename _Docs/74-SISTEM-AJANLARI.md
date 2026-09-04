@@ -201,13 +201,63 @@ Rotalar `internal/api/server.go` (`registerAgentRoutes`); hata eşlemesi
 
 ## UI davranışı
 
-"Sistem ajanları" bölümü **gruplanır**: her kilitli yerleşik, hemen altında rolü devralan
+Roster'da sistem ajanları **iki ayrı bölüme** ayrılır: "Sistem ajanları" (uygulamanın
+kendi işleri — titler, compaction, insight …) ve "Sistem worker'ları"
+(`subagent-` önekli profiller: explore, planner, coder, reviewer, validator, config).
+Ayrım `systemKey`'in `subagent-` önekine bakar; bir özelleştirme bağlı olduğu yerleşikle
+aynı `systemKey`'i taşıdığı için otomatik olarak aynı bölüme düşer
+(`frontend/src/features/agents/agentRoster.ts`).
+
+Her bölüm kendi içinde **gruplanır**: her kilitli yerleşik, hemen altında rolü devralan
 özelleştirme(ler) ve soldaki kalıtım şeridiyle. Rozetler: 🔒 *yerleşik*, *rolü sağlıyor*
 (etkin özelleştirme), *yerleşik tanım etkin* (devre dışı özelleştirme)
 (`frontend/src/features/agents/SystemAgentStatusBadge.tsx`). Kilitli ajanın formu
 salt-okunurdur ve **Özelleştir** / **Özelleştirmeyi aç** sunar; özelleştirmede alan alan
 "devralındı / override" rozeti ve "devral" sıfırlaması vardır
 (`AgentSettingsForm.tsx`, `FieldOverrideBadge.tsx`, `AgentLineageChips.tsx`).
+
+### Ayarlar ▸ Sistem Ajanları ekranı (2026-09-04)
+
+Aynı düzenleme, **Ayarlar** ekranında da bağımsız bir kategori olarak durur:
+`Ayarlar ▸ Sistem Ajanları` (`frontend/src/features/settings/SystemAgentsPanel.tsx`).
+Ajanlar ekranına gitmeden uygulamanın kendi davranışını (hangi model başlık üretir,
+hangi worker profili ne yapar) buradan ayarlamak içindir.
+
+Panel, Ajanlar ekranının iki bölmeli şeklini yeniden üretir — solda roster, sağda
+seçili ajanın formu — ama **yalnız sistem ajanlarıyla** sınırlıdır: `groupSystemAgents`
+ile aynı "Servisler" / "Worker'lar" ayrımını, `AgentSettingsForm` ile aynı düzenleme
+formunu (Özelleştir, devre dışı bırak, override sıfırlama, özelleştirmeyi silme)
+kullanır. Ortak parçaları paylaştığı için iki ekran arasında davranış farkı yoktur;
+sıradan ajanlar bu panelde hiç görünmez.
+
+Kaydetme app-settings taslağından bağımsızdır: her düzenleme kendi `/api/agents`
+çağrısıyla anında yazılır, bu yüzden kategori `SettingsPanel.tsx` içindeki
+`SELF_MANAGED_CATS` kümesindedir — başlıktaki "Kaydedilmemiş değişiklik" yazısı ve
+**Kaydet** düğmesi bu ekranda gösterilmez (`secrets` ve `exttools` ile aynı davranış).
+
+### Özelleştirme workspace'e özgüdür (2026-09-04)
+
+Kilitli yerleşik tanımlar **koddan** gelir ve her workspace'te aynıdır; ondan kalıtım
+alan özelleştirme ise **aktif workspace'in ajan deposuna** yazılır
+(`<workspace>/store/agents`, `wsp.DB.DeriveAgent` — `internal/api/agent_inherit.go`).
+Yani bir rolü özelleştirmek yalnız o workspace'i etkiler; diğer workspace'ler rolü
+yerleşik tanımdan çözmeye devam eder. Bu, kalıtım modelinin doğal sonucudur — ayrı bir
+kapsam alanı yoktur, kapsamı **hangi workspace'in deposuna yazıldığı** belirler.
+
+Kapsam üç yerde görünür kılınır:
+
+- **Varsayılan ad workspace'i taşır.** `bindRole` ile türetilen çocuğun adı artık
+  `<Yerleşik adı> (<workspace adı>)` olur — ör. `Titler (TionHarnessRepo)`. Eski
+  `(özel)` eki app genelinde bir değişiklik izlenimi veriyordu; workspace adı yoksa
+  (isim zorunlu olmadan önce yazılmış kayıt) eski ek geri düşer
+  (`internal/api/agent_derive_name.go`).
+- **Panel başlığındaki şerit.** `Ayarlar ▸ Sistem Ajanları` ekranının üstünde, aktif
+  workspace'in adıyla birlikte kapsamı söyleyen bir bilgi şeridi durur
+  (`system-agents-scope-note`; ad `GET /api/workspace-settings`'ten okunur). Ayarlar
+  ekranı app genelinde olduğu için bu şerit ekranın en gerekli parçasıdır.
+- **Kilitli ajan notu.** Yerleşik ajanın salt-okunur formundaki açıklama, kopyanın
+  yalnız bu workspace'e özgü olduğunu ve diğer workspace'lerin yerleşik tanımı
+  kullanmaya devam ettiğini söyler (`agent-locked-note`).
 
 ## Sistem ajanı varsayılan ajan olamaz
 
