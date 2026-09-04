@@ -30,6 +30,7 @@ import { StepKindsPanel } from './StepKindsPanel'
 import { HooksPanel } from './HooksPanel'
 import { ExternalToolsPanel } from './ExternalToolsPanel'
 import { SecretsPanel } from './SecretsPanel'
+import { SystemAgentsPanel } from './SystemAgentsPanel'
 
 interface Props {
   onError: (msg: string) => void
@@ -58,6 +59,16 @@ interface Props {
 }
 
 const ALL_CATS: Cat[] = APP_CATS.map((c) => c.key)
+
+// Categories whose panel owns its own persistence entirely: they save through
+// their own API on each edit, so the header's app-settings draft indicator and
+// Save button would be misleading noise.
+const SELF_MANAGED_CATS = new Set<Cat>(['secrets', 'exttools', 'sysagents'])
+
+// Categories that only READ app settings (no editable field): the draft state is
+// still meaningful, but there is nothing here to save.
+const READ_ONLY_CATS = new Set<Cat>(['about', 'commands', 'stepkinds', 'hooks'])
+
 function isCat(v: string | null | undefined): v is Cat {
   return !!v && (ALL_CATS as string[]).includes(v)
 }
@@ -303,7 +314,7 @@ export function SettingsPanel({
               c={c}
               active={cat === c.key}
               onClick={() => setCat(c.key)}
-              dirty={c.key !== 'about' && c.key !== 'secrets' && !!dirtyApp}
+              dirty={c.key !== 'about' && !SELF_MANAGED_CATS.has(c.key) && !!dirtyApp}
             />
           ))}
         </aside>
@@ -323,7 +334,7 @@ export function SettingsPanel({
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            {cat !== 'secrets' && cat !== 'exttools' && (
+            {!SELF_MANAGED_CATS.has(cat) && (
               <span
                 className={`text-xs ${
                   numberValidity.hasInvalid
@@ -338,16 +349,11 @@ export function SettingsPanel({
                     : 'Kayıtlı'}
               </span>
             )}
-            {cat !== 'about' &&
-              cat !== 'commands' &&
-              cat !== 'stepkinds' &&
-              cat !== 'hooks' &&
-              cat !== 'exttools' &&
-              cat !== 'secrets' && (
-                <Button onClick={save} disabled={!dirty || saving || numberValidity.hasInvalid}>
-                  {saving ? 'Kaydediliyor…' : 'Kaydet'}
-                </Button>
-              )}
+            {!READ_ONLY_CATS.has(cat) && !SELF_MANAGED_CATS.has(cat) && (
+              <Button onClick={save} disabled={!dirty || saving || numberValidity.hasInvalid}>
+                {saving ? 'Kaydediliyor…' : 'Kaydet'}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -355,6 +361,9 @@ export function SettingsPanel({
           // Secrets manages its own list/forms; render full-bleed (the tool
           // catalog "Araçlar & MCP" now lives as a top-level NavRail view).
           <SecretsPanel onError={onError} />
+        ) : cat === 'sysagents' ? (
+          // Two-pane roster + settings form of its own; render full-bleed.
+          <SystemAgentsPanel onError={onError} />
         ) : (
           <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
             {!draft ? (

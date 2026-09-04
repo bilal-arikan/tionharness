@@ -522,7 +522,7 @@ export function AgentSettingsForm({
                 data-testid="agent-customize"
                 onClick={() => derive(true)}
                 disabled={deriving}
-                title="Bu yerleşik ajanın rolünü devralan bir kopya oluştur; kopyada override ettiğin değerler uygulamada bu rol için kullanılır"
+                title="Bu yerleşik ajanın rolünü devralan, yalnız bu workspace'e özgü bir kopya oluştur; kopyada override ettiğin değerler uygulamada bu rol için kullanılır"
                 className="flex items-center gap-1.5 rounded border border-[var(--color-accent)] px-3 py-1.5 text-sm text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] disabled:opacity-50"
               >
                 <Wand2 size={14} /> Özelleştir
@@ -620,7 +620,9 @@ export function AgentSettingsForm({
                 <>
                   Değiştirmek için <strong>Özelleştir</strong> ile kalıtım alan bir kopya oluştur ve
                   yalnız istediğin alanları override et; kopya etkin olduğu sürece uygulama rolü
-                  ondan çözer, devre dışı bırakınca yerleşik tanıma döner.
+                  ondan çözer, devre dışı bırakınca yerleşik tanıma döner. Kopya{' '}
+                  <strong>yalnız bu workspace'e özgüdür</strong> — diğer workspace'ler rolü yerleşik
+                  tanımdan çözmeye devam eder.
                 </>
               )}
             </p>

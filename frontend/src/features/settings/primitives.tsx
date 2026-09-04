@@ -23,6 +23,7 @@ export type Cat =
   | 'secrets'
   | 'context'
   | 'tools'
+  | 'sysagents'
   | 'hooks'
   | 'exttools'
   | 'sound'

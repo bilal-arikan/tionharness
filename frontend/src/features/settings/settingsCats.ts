@@ -12,6 +12,7 @@ import {
   Archive,
   ScanSearch,
   Volume2,
+  Bot,
 } from 'lucide-react'
 // Settings category tables. Split out so primitives.tsx exports only components
 // (fast refresh).
@@ -23,6 +24,8 @@ export const APP_CATS: CatMeta[] = [
   { key: 'secrets', label: 'Sırlar', icon: Shield },
   { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
+  // The agents the app runs for itself (titler, compaction, insight, workers).
+  { key: 'sysagents', label: 'Sistem Ajanları', icon: Bot },
   { key: 'hooks', label: 'Hooks', icon: Webhook },
   { key: 'exttools', label: 'Harici Araçlar', icon: ScanSearch },
   // Dedicated audio page: sound effects, speech input (STT) + output (TTS).

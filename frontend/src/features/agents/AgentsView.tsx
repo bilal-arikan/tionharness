@@ -11,6 +11,7 @@ import { AgentActivityPanel } from './AgentActivityPanel'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { AgentBulkEditPanel } from './AgentBulkEditPanel'
 import { AgentLineageStripes } from './AgentLineageStripes'
+import { groupSystemAgents } from './agentRoster'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
@@ -68,6 +69,15 @@ interface Props {
   /** Open a run on the Activity screen with it pre-selected. */
   onOpenExecution?: (sessionId: string) => void
 }
+
+const rosterSectionHeading = (label: string, hint: string) => (
+  <h3
+    className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
+    title={hint}
+  >
+    {label}
+  </h3>
+)
 
 // AgentsView is the two-pane "Ajanlar" screen: a roster on the left, and the
 // selected agent's editable settings on the right (replacing the modal).
@@ -165,27 +175,11 @@ export function AgentsView({
   const sel = useMultiSelect()
   const byId = useMemo(() => indexAgents(agents), [agents])
   const regularAgents = useMemo(() => agents.filter((a) => !a.system), [agents])
-  // System section, GROUPED: each locked built-in first, then the workspace
-  // customisations bound to its role (indented, with the lineage stripe), so
-  // "which row serves this role" reads top-down without a second column.
-  const systemRows = useMemo(() => {
-    const builtins = agents.filter((a) => a.system && a.locked)
-    const custom = agents.filter((a) => a.system && !a.locked)
-    const placed = new Set<string>()
-    const rows: Agent[] = []
-    for (const b of builtins) {
-      rows.push(b)
-      for (const c of custom) {
-        if (c.systemKey === b.systemKey) {
-          rows.push(c)
-          placed.add(c.id)
-        }
-      }
-    }
-    // Legacy: a customisation whose built-in is not seeded yet.
-    for (const c of custom) if (!placed.has(c.id)) rows.push(c)
-    return rows
-  }, [agents])
+  // System section, split into services vs worker profiles and GROUPED: each
+  // locked built-in first, then the workspace customisations bound to its role
+  // (indented, with the lineage stripe), so "which row serves this role" reads
+  // top-down without a second column.
+  const systemGroups = useMemo(() => groupSystemAgents(agents), [agents])
   const orderedIds = useMemo(() => regularAgents.map((a) => a.id), [regularAgents])
   const bulkDelete = async () => {
     const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
@@ -489,15 +483,22 @@ export function AgentsView({
 
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {regularAgents.map(rosterItem)}
-          {systemRows.length > 0 && (
+          {systemGroups.services.length > 0 && (
             <>
-              <h3
-                className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
-                title="Uygulamanın kendi işleri (başlık, sıkıştırma, worker profilleri) için kullandığı yerleşik ajanlar ve onların workspace özelleştirmeleri"
-              >
-                Sistem ajanları
-              </h3>
-              {systemRows.map(rosterItem)}
+              {rosterSectionHeading(
+                'Sistem ajanları',
+                'Uygulamanın kendi işleri (başlık, sıkıştırma, insight) için kullandığı yerleşik ajanlar ve onların workspace özelleştirmeleri',
+              )}
+              {systemGroups.services.map(rosterItem)}
+            </>
+          )}
+          {systemGroups.workers.length > 0 && (
+            <>
+              {rosterSectionHeading(
+                "Sistem worker'ları",
+                "spawn_worker ve run_subagent'ın seçtiği yerleşik worker profilleri (explore, planner, coder, …) ve onların workspace özelleştirmeleri",
+              )}
+              {systemGroups.workers.map(rosterItem)}
             </>
           )}
           {agents.length === 0 && (

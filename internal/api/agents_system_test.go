@@ -33,7 +33,7 @@ func systemAgentAPIFixture(t *testing.T) (*Server, *workspace.Workspace, db.Agen
 	}
 	s := newTestServer()
 	s.runs = newChatRuns()
-	wsp := &workspace.Workspace{Meta: workspace.Meta{ID: "WS1"}, DB: database}
+	wsp := &workspace.Workspace{Meta: workspace.Meta{ID: "WS1", Name: "Atölye"}, DB: database}
 	return s, wsp, *systemAgent
 }
 
@@ -63,7 +63,7 @@ func TestHandleDeriveAgentBindsRole(t *testing.T) {
 	if child.ParentID != builtin.ID || !child.System || child.SystemKey != "titler" || child.Locked || len(child.Overrides) != 0 {
 		t.Fatalf("derived child = %+v, want an unlocked child bound to titler", child)
 	}
-	if child.Name != "Titler (özel)" || child.Soul != builtin.Soul {
+	if child.Name != "Titler (Atölye)" || child.Soul != builtin.Soul {
 		t.Fatalf("derived child name=%q soul inherited=%v", child.Name, child.Soul == builtin.Soul)
 	}
 	if serving, _ := wsp.DB.FindAgentBySystemKey("titler"); serving.ID != child.ID {

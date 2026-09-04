@@ -45,6 +45,11 @@ type deriveAgentReq struct {
 // handleDeriveAgent creates a child that inherits every field from the target
 // agent. With bindRole the child also takes over the parent's system role —
 // the supported way to customise a built-in (locked) agent.
+//
+// The child is written to the REQUEST's workspace store, so a role
+// customisation is workspace-local by construction: other workspaces still
+// resolve the role from the built-in. Its default name says so
+// (customizationName).
 func (s *Server) handleDeriveAgent(w http.ResponseWriter, r *http.Request) {
 	req, ok := bindJSONStrict[deriveAgentReq](w, r)
 	if !ok {
@@ -62,7 +67,7 @@ func (s *Server) handleDeriveAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" && req.BindRole {
-		name = parent.Name + " (özel)"
+		name = customizationName(parent.Name, wsp.Name)
 	}
 	child, err := wsp.DB.DeriveAgent(r.Context(), parentID, db.DeriveAgentOptions{Name: name, BindRole: req.BindRole})
 	if writeAgentWriteError(w, err, "agent not found") {
