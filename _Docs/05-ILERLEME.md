@@ -1,6 +1,37 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Yerel sunucu erişilebilirlik rozeti (2026-09-04) ✅
+
+Yerel bir sağlayıcı örneği doğru yapılandırılmış olsa da arkasındaki uygulama
+(LM Studio / Bionic) kapalıyken kullanılamaz. Önceki durumda bu ancak bir ajan
+turu harcandıktan sonra anlaşılıyordu.
+
+- **Ölçülen davranış (yoklama öncesi):** `Available()` `true` kalıyor, tur
+  `~4 sn` içinde `dial tcp [::1]:1234: connectex: ... bağlantı kurulamadı` ile
+  düşüyor, `errclass` bunu `errUnknown` sayıyor — **terminal, yeniden denenmez**.
+  Bu doğru davranış (bağlantı reddi geçici dalgalanma değil), ama geri bildirim
+  turdan sonra geliyordu.
+- **`local_health.go`:** uç noktanın model listesine 800 ms zaman aşımlı istek,
+  sonuç 5 sn önbellekte. Herhangi bir HTTP yanıtı (401/404 dahil) erişilebilir
+  sayılır — soru "bir sunucu dinliyor mu", "bu yol/kimlik doğru mu" değil.
+  Yalnız yerel kind'lar yoklanır; barındırılan bir API'ye her katalog kurulumunda
+  istek atmak gerçek maliyettir. Karar yine host'a göre verilir.
+- **`Available()` değiştirilmedi:** senkron ve G/Ç'siz kalması gereken saf bir
+  yapılandırma kontrolü. Erişilebilirlik `Registry.Reachable(id) *bool` olarak
+  ayrı taşınır; API katmanı (`providerInstanceResp`) bunu `/api/providers`
+  yanıtına ekler.
+- **Üç durumlu alan kasıtlı:** alan yok = "yoklanmadı" (her barındırılan kind),
+  `false` = "kapalı". Birleştirmek çalışan her Anthropic/OpenRouter örneğini
+  çevrimdışı gösterirdi. Ayarlar ▸ Sağlayıcılar yalnız açık `false` durumunda
+  "⚠ sunucu kapalı" rozeti gösterir.
+- **Testler:** `local_health_test.go` (8 test: erişilebilir/erişilemez, 401/404
+  erişilebilir sayılır, önbellek TTL'i, yalnız-yerel kapsamı, uzak host'lu yerel
+  kind), `providers_test.go` API testi, `ProviderInstanceList.test.tsx` (3 rozet
+  durumu). Gerçek uygulamada da doğrulandı: sunucu kapalıyken
+  `reachable=false`, açıkken `reachable=true`. `scripts/test.sh full` temiz
+  (763 test).
 
 ## LM Studio ile yerel model desteği (2026-09-04) ✅
 

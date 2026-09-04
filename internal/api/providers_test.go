@@ -596,3 +596,70 @@ func TestInstallProviderPack_MissingBaseURLRejected(t *testing.T) {
 		t.Fatal("expected an error installing a provider pack with an empty baseUrl")
 	}
 }
+
+// TestProviders_ListReportsLocalReachability pins the runtime annotation the
+// list handler adds on top of the stored DTO: a local instance carries a
+// reachability verdict, a hosted one carries none. The distinction matters in
+// the UI — absent means "not applicable", not "down" — so a hosted provider
+// must never be reported as unreachable just because it was not probed.
+func TestProviders_ListReportsLocalReachability(t *testing.T) {
+	s, _ := newWorkspaceServer(t)
+	h := s.Routes()
+
+	var local struct {
+		ID string `json:"id"`
+	}
+	// Port 1 has no listener, so the probe must come back false rather than
+	// optimistically true.
+	rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
+		KindID: "lmstudio",
+		Label:  "Yerel",
+		Config: map[string]string{"baseUrl": "http://127.0.0.1:1/v1"},
+	}, &local)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create local status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var hosted struct {
+		ID string `json:"id"`
+	}
+	rec = doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{
+		KindID:  "anthropic",
+		Label:   "Barındırılan",
+		Secrets: map[string]string{"key": "sk-test"},
+	}, &hosted)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create hosted status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var list []struct {
+		ID        string `json:"id"`
+		KindID    string `json:"kindId"`
+		Reachable *bool  `json:"reachable"`
+	}
+	rec = doJSON(t, h, http.MethodGet, "/api/providers", nil, &list)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d", rec.Code)
+	}
+
+	var sawLocal, sawHosted bool
+	for _, p := range list {
+		switch p.ID {
+		case local.ID:
+			sawLocal = true
+			if p.Reachable == nil {
+				t.Error("local instance has no reachability verdict")
+			} else if *p.Reachable {
+				t.Error("local instance reported reachable with no listener on the port")
+			}
+		case hosted.ID:
+			sawHosted = true
+			if p.Reachable != nil {
+				t.Errorf("hosted instance carries reachable=%v; hosted liveness must not be probed", *p.Reachable)
+			}
+		}
+	}
+	if !sawLocal || !sawHosted {
+		t.Fatalf("list missing instances (local=%v hosted=%v)", sawLocal, sawHosted)
+	}
+}

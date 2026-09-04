@@ -58,6 +58,17 @@ export function ProviderInstanceList({
                     devre dışı
                   </span>
                 )}
+                {/* Local servers only: `reachable` is absent for hosted kinds, so
+                    an explicit false is the one case worth flagging — the
+                    instance is configured correctly but its app is closed. */}
+                {inst.reachable === false && (
+                  <span
+                    className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-warning)]"
+                    title="Yerel model sunucusu yanıt vermiyor. LM Studio / Bionic açık ve yerel sunucusu başlatılmış olmalı."
+                  >
+                    ⚠ sunucu kapalı
+                  </span>
+                )}
               </div>
               <span
                 className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${

@@ -546,14 +546,47 @@ Yerel tablo yalnız yerel kind'lara uygulanır (`localProvider`), böylece aynı
 açık ağırlıkları sunan barındırılan bir uç nokta (OpenRouter üzerinden Qwen)
 kendi büyük penceresini korur (`TestHostedSizingUnaffectedByLocalTable`).
 
-### 12.3 Başka bir yerel çalışma zamanı eklemek
+### 12.3 Sunucu kapalıyken: erişilebilirlik yoklaması
+
+Yerel bir uç noktayı barındırılan bir uç noktadan ayıran son fark: sunucuyu
+kullanıcı açıp kapatır. Doğru yapılandırılmış bir örnek, arkasındaki uygulama
+kapalıyken kullanılamaz durumdadır.
+
+`Available()` bu soruyu **cevaplayamaz** — senkron, her katalog kurulumunda
+çağrılır ve G/Ç yapmamalıdır. Bu yüzden erişilebilirlik ayrı taşınır:
+`local_health.go` uç noktanın model listesine kısa süreli (800 ms) bir istek
+atar ve sonucu 5 saniye önbellekte tutar. UI durumu, yerel sunucunun değiştiğinden
+çok daha sık sorar.
+
+- **Herhangi bir HTTP yanıtı erişilebilir sayılır** — 401/404 dahil. Soru
+  "bir sunucu dinliyor mu", "bu yol/kimlik doğru mu" değil. Yalnız taşıma
+  hatası (bağlantı reddi, DNS, zaman aşımı) erişilemez demektir.
+- **Yalnız yerel kind'lar yoklanır** (`localProvider`); barındırılan bir
+  sağlayıcının canlılığı bu katmanın işi değildir ve her katalog kurulumunda
+  uzak bir API'ye istek atmak gerçek bir maliyettir.
+- Karar yine **host'a** göre verilir: uzak bir vekile yönlendirilmiş bir
+  `lmstudio` örneği yoklanmaz.
+
+`Registry.Reachable(id)` `*bool` döner ve API katmanı
+(`providerInstanceResp`) bunu `/api/providers` yanıtına ekler. **Üç durumlu
+olması kasıtlıdır:** `nil`/alan yok = "yoklanmadı" (her barındırılan kind),
+`false` = "kapalı". İkisini birleştirmek çalışan her Anthropic/OpenRouter
+örneğini çevrimdışı gösterirdi. Ayarlar ▸ Sağlayıcılar listesi yalnız açık
+`false` durumunda "⚠ sunucu kapalı" rozeti gösterir.
+
+Yoklama olmasa da başarısızlık zaten temizdi: `~4 sn` içinde
+`dial tcp ... connectex: ... bağlantı kurulamadı` ile düşer, `errclass`'ta
+`errUnknown` olarak **terminal** sayılır ve yeniden denenmez (bağlantı reddi
+geçici bir dalgalanma değildir). Rozet bunu turdan **önce** görünür kılar.
+
+### 12.4 Başka bir yerel çalışma zamanı eklemek
 
 Ollama, llama.cpp ve vLLM da OpenAI-uyumlu `/v1/chat/completions` sunar, yani
 gereken tek şey `kind_lmstudio.go` kalıbında yeni bir `kind_*.go` (kendi
 varsayılan portuyla) ve `localProvider`'a kind slug'ının eklenmesidir. Model
 aile tablosu slug tabanlıdır, dolayısıyla paylaşılır.
 
-### 12.4 Model seçimi notu
+### 12.5 Model seçimi notu
 
 Ajan döngüsü araçları yoğun kullanır ve küçük modellerde tool-calling
 güvenilirliği düşer. Yerelde gerçek ajan işi için `qwen3-coder-30b` /

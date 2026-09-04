@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -354,6 +355,27 @@ func (r *Registry) FirstAvailableOfKind(kind string) string {
 		}
 	}
 	return ""
+}
+
+// Reachable probes a local instance's server and returns the verdict, or nil
+// when the instance is not a local endpoint (every hosted kind). Probes are
+// cached, so listing providers repeatedly costs one request per server per few
+// seconds rather than one per call.
+//
+// It is separate from Available on purpose: Available is a synchronous, pure
+// configuration check called on every catalog build and must never do I/O,
+// while a local instance can be fully configured (Available) yet unusable
+// because the app behind it is closed.
+func (r *Registry) Reachable(id string) *bool {
+	inst, k, err := r.resolveInstance(id)
+	if err != nil {
+		return nil
+	}
+	got, ok := LocalEndpointReachable(context.Background(), k.Manifest().Kind, r.resolve(inst))
+	if !ok {
+		return nil
+	}
+	return &got
 }
 
 func (r *Registry) Available(id string) bool {

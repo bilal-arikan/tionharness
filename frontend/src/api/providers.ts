@@ -48,6 +48,11 @@ export interface ProviderInstance {
   config: Record<string, string>
   secretsSet: Record<string, boolean>
   createdAt: string
+  // Whether a LOCAL model server (LM Studio) is answering right now. Absent for
+  // hosted providers, whose liveness is not probed — so `undefined` means "not
+  // applicable", not "down". A local instance can be fully configured yet
+  // unusable because the app behind it is closed.
+  reachable?: boolean
 }
 
 // UpsertProviderInput mirrors settings.ProviderInstanceInput. Secrets follow

@@ -122,10 +122,30 @@ func (s *Server) handleListProviderKinds(w http.ResponseWriter, _ *http.Request)
 	writeJSON(w, http.StatusOK, out)
 }
 
+// providerInstanceResp is a stored instance DTO plus the runtime facts the
+// store cannot know. The store is persistence — it holds what the user
+// configured — while whether that configuration currently works is a property
+// of the running system, so the two are joined here rather than in the store.
+type providerInstanceResp struct {
+	settings.ProviderInstanceDTO
+	// Reachable reports whether a LOCAL model server is answering right now.
+	// A pointer so the UI can tell "not reachable" from "not applicable": it is
+	// nil (omitted) for every hosted kind, whose liveness is not probed. A local
+	// instance can be fully configured yet unusable because the app behind it is
+	// closed, and no stored field can express that.
+	Reachable *bool `json:"reachable,omitempty"`
+}
+
 // handleListProviders returns every configured provider instance (secrets
-// masked to a per-key boolean, never plaintext or ciphertext).
+// masked to a per-key boolean, never plaintext or ciphertext), each annotated
+// with local-server reachability where that applies.
 func (s *Server) handleListProviders(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.providerStore.DTOs())
+	dtos := s.providerStore.DTOs()
+	out := make([]providerInstanceResp, len(dtos))
+	for i, d := range dtos {
+		out[i] = providerInstanceResp{ProviderInstanceDTO: d, Reachable: s.providers.Reachable(d.ID)}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleGetProvider returns one provider instance by id.
