@@ -30,6 +30,13 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
+// backgroundTurnDrainGrace bounds how long CloseMCP waits for the in-flight
+// background turns (spawn / worker / inbox delivery) to unwind before the caller
+// closes the workspace DB under them. Same value as sessionTeardownGrace in
+// internal/api/session_teardown.go; the constant is duplicated on purpose because
+// internal/agent may not import internal/api (scripts/depcheck.sh).
+const backgroundTurnDrainGrace = 15 * time.Second
+
 // Runtime owns the lifecycle of all autonomous agent workers.
 type Runtime struct {
 	db        *db.DB
@@ -308,6 +315,22 @@ type Runtime struct {
 	spawnDone   chan struct{}
 	spawnClose  sync.Once
 
+	// spawnLifeMu / spawnClosing / spawnWG form the shutdown barrier for background
+	// TURN goroutines (spawn, worker, inbox delivery) — the same contract as
+	// coordLifeMu/coordWG above, applied to the fire-and-forget turns. Every one of
+	// them is launched through startBackgroundTurn, which calls Add(1) on the
+	// STARTING goroutine, before the `go`, so a turn that is about to launch can
+	// never be missed. stopSpawnQueue alone only stops the dispatcher: the turns it
+	// had already launched kept writing to a DB the workspace manager was closing.
+	spawnLifeMu  sync.Mutex
+	spawnClosing bool
+	spawnWG      sync.WaitGroup
+
+	// spawnDrainGrace overrides backgroundTurnDrainGrace. Test seam only — a turn
+	// that never unwinds must not make the suite sit out the production grace. Zero
+	// means "use the constant".
+	spawnDrainGrace time.Duration
+
 	// mcpPool holds this workspace's persistent MCP connections (one live session
 	// per enabled server). It replaces dial-per-operation: the per-turn catalog
 	// builds reuse live sessions (no gateway session churn) and a server's
@@ -459,6 +482,25 @@ func (r *Runtime) CancelSession(id string) bool {
 		run.cancel()
 	}
 	return len(runs) > 0
+}
+
+// cancelAllSessions cancels every registered autonomous turn in the workspace. It
+// is the reason closeBackgroundTurns usually finishes in milliseconds instead of
+// riding out the whole grace: a cancelled turn stops at its next context check and
+// unwinds, whereas an uncancelled one would keep running to completion while the
+// DB waits to close.
+func (r *Runtime) cancelAllSessions() {
+	r.activeMu.Lock()
+	var runs []*sessionRun
+	for _, list := range r.activeSessions {
+		runs = append(runs, list...)
+	}
+	r.activeMu.Unlock()
+	// Cancel outside the lock, for the same reason as CancelSession: a cancel func
+	// may synchronously run deferred work that takes the same mutex.
+	for _, run := range runs {
+		run.cancel()
+	}
 }
 
 // untrackSession removes ALL of a session's registrations at once, whoever put
@@ -710,9 +752,17 @@ func (r *Runtime) MCPPool() *mcp.Pool { return r.mcpPool }
 
 // CloseMCP terminates this workspace's persistent MCP connections. Called when
 // the workspace is deleted or the manager shuts down.
+//
+// The order is the contract: the caller closes the workspace DB the moment this
+// returns, so every goroutine that may still write to it has to be shut out and
+// drained here. Background TURNS go first (they are the ones holding a live db
+// handle), then the spawn dispatcher, then the coordinator drains — the queue
+// drop notifications raised in step 2 can arm a drain, so draining coordinators
+// before stopping the queue would leave one behind.
 func (r *Runtime) CloseMCP() {
-	r.closeCoordinatorDrains()
+	r.closeBackgroundTurns()
 	r.stopSpawnQueue()
+	r.closeCoordinatorDrains()
 	if r.mcpPool != nil {
 		r.mcpPool.Close()
 	}
@@ -748,6 +798,65 @@ func (r *Runtime) closeCoordinatorDrains() {
 	}
 	r.coordLifeMu.Unlock()
 	r.coordWG.Wait()
+}
+
+// startBackgroundTurn launches one fire-and-forget TURN goroutine (spawn, worker
+// or inbox delivery) under the runtime's shutdown barrier, so CloseMCP can wait
+// for it before the workspace DB is closed. Returns false once CloseMCP has
+// started, in which case NOTHING was launched and the caller owns undoing its own
+// bookkeeping — the spawn slot, the session registration, the worker ctl — exactly
+// as with startCoordinatorDrain.
+func (r *Runtime) startBackgroundTurn(fn func()) bool {
+	r.spawnLifeMu.Lock()
+	defer r.spawnLifeMu.Unlock()
+	if r.spawnClosing {
+		return false
+	}
+	r.spawnWG.Add(1)
+	go func() {
+		defer r.spawnWG.Done()
+		fn()
+	}()
+	return true
+}
+
+// backgroundTurnsClosing reports whether the barrier is shut, so an entry point can
+// refuse before it does any DB work (see SpawnSession).
+func (r *Runtime) backgroundTurnsClosing() bool {
+	r.spawnLifeMu.Lock()
+	defer r.spawnLifeMu.Unlock()
+	return r.spawnClosing
+}
+
+// closeBackgroundTurns shuts the door on new background turns, cancels the running
+// ones and waits a bounded time for them to unwind. Idempotent.
+func (r *Runtime) closeBackgroundTurns() {
+	r.spawnLifeMu.Lock()
+	r.spawnClosing = true
+	r.spawnLifeMu.Unlock()
+	// Cancel with the mutex RELEASED, and wait with it released too: a turn that is
+	// opening a child worker blocks in startBackgroundTurn on this very mutex, and a
+	// Wait holding it would wait for that turn forever — a deadlock.
+	r.cancelAllSessions()
+
+	grace := r.spawnDrainGrace
+	if grace <= 0 {
+		grace = backgroundTurnDrainGrace
+	}
+	done := make(chan struct{})
+	go func() {
+		r.spawnWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(grace):
+		// Deliberately loud rather than silent: the caller is about to close the DB
+		// under whatever is still running, and this line is the only trace of why the
+		// resulting "database is closed" writes happened.
+		r.logger.Error("workspace close: background turns did not drain",
+			"grace", grace, "active", r.spawnActive.Load())
+	}
 }
 
 // CloseSessionMCP terminates the MCP connections scoped to one session and
