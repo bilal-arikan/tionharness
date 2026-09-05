@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -794,6 +795,39 @@ func (c *chatRuns) sessionRunInfo(wsID, sessionID string) (runInfo, bool) {
 		return info, true
 	}
 	return runInfo{}, false
+}
+
+// sessionRuns returns EVERY live run registered for a session, regardless of
+// generation, oldest registration first.
+//
+// sessionRunInfo answers a different question — "which run currently owns the
+// session?" — and deliberately skips superseded ones. But a superseded predecessor
+// is not finished: the generation fence only blocks its durable writes, while its
+// goroutine, provider subprocess and tools keep running. Anything that must make a
+// session go QUIET (stop, teardown) has to see those too, or it leaves a detached
+// process alive against a session that is being stopped or deleted.
+func (c *chatRuns) sessionRuns(wsID, sessionID string) []*chatRun {
+	if wsID == "" || sessionID == "" {
+		return nil
+	}
+	c.mu.Lock()
+	out := make([]*chatRun, 0, 1)
+	for _, run := range c.runs {
+		if run.sessionID != sessionID || run.workspaceID != wsID {
+			continue
+		}
+		out = append(out, run)
+	}
+	c.mu.Unlock()
+	// Map iteration order is random; a stable order keeps the "which run would not
+	// stop?" error deterministic for the same registry state.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].startedAt.Equal(out[j].startedAt) {
+			return out[i].id < out[j].id
+		}
+		return out[i].startedAt.Before(out[j].startedAt)
+	})
+	return out
 }
 
 func (r *chatRun) setActivityTracker(tracker *agent.ActivityTracker, idle time.Duration) {

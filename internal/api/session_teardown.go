@@ -157,7 +157,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	// call. A cancelled turn simply stops emitting, so the journal is the one place
 	// the delete is recorded as its cause.
 	auto := autonomousRunsOf(wsp)
-	_, hadChatTurn := s.runs.sessionRunInfo(wsID, sessionID)
+	hadChatTurn := len(s.runs.sessionRuns(wsID, sessionID)) > 0
 	hadAutonomous := auto != nil && auto.IsSessionActive(sessionID)
 	turnStopStart := time.Now()
 	if err := s.stopInflightTurn(wsID, sessionID, auto, time.Until(deadline)); err != nil {
@@ -261,11 +261,12 @@ func (s *Server) finishSessionRuntime(wsp *workspace.Workspace, sessionID string
 	s.hub.Drop(wsp.ID, sessionID)
 }
 
-// stopInflightTurn cancels the session's live turn and blocks until it actually
-// finishes (run.done closes on unregister) or the grace window elapses. Returns an
-// error only when a turn is still running after grace — the signal that it could not
-// be stopped. Loops so a straggler direct/autonomous run settling right after the
-// first is also caught; the frozen inbox guarantees no NEW queued turn starts meanwhile.
+// stopInflightTurn cancels ALL of the session's live turns and blocks until each
+// actually finishes (run.done closes on unregister) or the grace window elapses.
+// Returns an error naming the run that is still running after grace — the signal that
+// it could not be stopped. Loops so a straggler direct/autonomous run settling right
+// after the first is also caught; the frozen inbox guarantees no NEW queued turn
+// starts meanwhile.
 //
 // Both registries are swept, because they are disjoint. chatRuns holds chat turns
 // plus the autonomous CLI turns that were given an Interaction endpoint
@@ -285,23 +286,31 @@ func (s *Server) stopInflightTurn(wsID, sessionID string, auto autonomousRuns, g
 		if auto != nil {
 			auto.CancelSession(sessionID)
 		}
-		if info, live := s.runs.sessionRunInfo(wsID, sessionID); live {
-			// A run that vanished between the snapshot and the lookup finished on its
-			// own; fall through to the autonomous check.
-			if run := s.runs.get(info.RunID); run != nil {
-				run.cancel()
-				remaining := time.Until(deadline)
-				if remaining <= 0 {
-					return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
-				}
-				select {
-				case <-run.done:
-					// Re-check for a straggler run before declaring the session quiet.
-					continue
-				case <-time.After(remaining):
-					return fmt.Errorf("in-flight turn %s did not stop within %s", info.RunID, grace)
-				}
+		// Cancel EVERY run registered for the session, not just the one that owns the
+		// current generation. A superseded predecessor stays registered and keeps
+		// running — the generation fence stops its durable writes, not its goroutine,
+		// provider subprocess or tools — so waiting only on the current run declared
+		// the session quiet while a detached process was still alive.
+		live := s.runs.sessionRuns(wsID, sessionID)
+		for _, run := range live {
+			run.cancel()
+		}
+		for _, run := range live {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return fmt.Errorf("in-flight turn %s did not stop within %s", run.id, grace)
 			}
+			select {
+			case <-run.done:
+			case <-time.After(remaining):
+				return fmt.Errorf("in-flight turn %s did not stop within %s", run.id, grace)
+			}
+		}
+		if len(live) > 0 {
+			// Re-check for a straggler run before declaring the session quiet: the runs
+			// waited on above are gone from the registry (done closes after unregister),
+			// so this re-sweep only catches one that appeared meanwhile.
+			continue
 		}
 		if auto == nil || !auto.IsSessionActive(sessionID) {
 			return nil

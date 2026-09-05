@@ -623,7 +623,9 @@ type sessionControlReq struct {
 
 // handleSessionControl stops or steers a session's in-flight turn WITHOUT the
 // client needing the runId — the queue runs turns server-side, so control is
-// session-scoped now. It resolves the session's live run and forwards to it.
+// session-scoped now. "stop" cancels every run the session has registered (a
+// superseded one included); "steer" resolves the run that owns the session and
+// forwards the guidance to it.
 func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	req, ok := bindJSON[sessionControlReq](w, r)
@@ -633,22 +635,42 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 	if s.rejectImmutableSession(w, r, sessionID, "session control (stop/steer)") {
 		return
 	}
-	info, live := s.runs.sessionRunInfo(ws(r).ID, sessionID)
-	var run *chatRun
-	if live {
-		run = s.runs.get(info.RunID)
-	}
-	if run == nil {
+	if req.Action == "stop" {
+		// Cancel EVERY run registered for this session, not only the current-generation
+		// one sessionRunInfo reports. A superseded predecessor keeps executing — the
+		// generation fence blocks its durable writes, not its goroutine, provider
+		// subprocess or tools — so cancelling just the visible run left the older
+		// turn's process running after the user pressed stop.
+		runs := s.runs.sessionRuns(ws(r).ID, sessionID)
+		for _, run := range runs {
+			run.cancel()
+		}
+		if len(runs) > 0 {
+			writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+			return
+		}
 		// No chat run: the turn may still be an AUTONOMOUS one (schedule / wake /
 		// spawn / coordination), which the runtime tracks separately and which never
-		// enters chatRuns. "stop" can cancel those; "steer" has no such channel.
-		if req.Action == "stop" && ws(r).Runtime.CancelSession(sessionID) {
+		// enters chatRuns.
+		if ws(r).Runtime.CancelSession(sessionID) {
 			// A cancelled autonomous turn leaves no trace of WHY it stopped — the
 			// context just dies. Record the cause in the transcript.
 			s.recordAutonomousStop(ws(r), sessionID)
 			writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
 			return
 		}
+		writeError(w, http.StatusNotFound, "no in-flight turn for this session")
+		return
+	}
+	// Steer targets the run that OWNS the session turn — a superseded run's output is
+	// fenced, so guidance sent to it could never reach the transcript.
+	info, live := s.runs.sessionRunInfo(ws(r).ID, sessionID)
+	var run *chatRun
+	if live {
+		run = s.runs.get(info.RunID)
+	}
+	if run == nil {
+		// An autonomous turn has no steer channel, so there is nothing to forward to.
 		if !live {
 			writeError(w, http.StatusNotFound, "no in-flight turn for this session")
 			return
@@ -657,8 +679,6 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch req.Action {
-	case "stop":
-		run.cancel()
 	case "steer":
 		if req.Text == "" {
 			writeError(w, http.StatusBadRequest, "steer text is required")
