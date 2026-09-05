@@ -75,6 +75,12 @@ func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turn
 	if err != nil {
 		return rel, err
 	}
+	// Being the one choke point every inbound command passes through also makes
+	// this the place to lift an archived session back into the active list — see
+	// sessionreactivate.go. Detached from ctx: the slot is already held, so the
+	// tiny metadata write must not be skipped just because the caller's run
+	// context is about to be cancelled.
+	r.reactivateArchivedSession(context.WithoutCancel(ctx), sessionID, kind)
 	if resetCap {
 		slot := r.coordSlotFor(sessionID)
 		slot.mu.Lock()
