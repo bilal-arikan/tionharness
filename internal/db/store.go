@@ -892,11 +892,15 @@ func (d *DB) SetSessionSummary(ctx context.Context, sessionID, summary string, m
 	return foldIndex, nil
 }
 
-// SetSessionTitle persists a (re)generated title for a session.
+// SetSessionTitle persists a (re)generated title for a session. Does not bump
+// UpdatedAt: like tagging, a title is metadata, not activity. UpdatedAt is the
+// session's LAST ACTIVITY stamp (AddMessage sets it to the message's CreatedAt),
+// and the rota screen draws a session's bar from CreatedAt to it — so titling a
+// long-finished session afterwards (manual rename or a generated title) used to
+// stretch its bar all the way to "now".
 func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.Title = title
-		s.UpdatedAt = now()
 	})
 }
 
