@@ -699,7 +699,11 @@ closed** — canlı bir tur/subprocess durdurulamazsa delete 409 ile iptal edili
 tam olarak korunur (kuyruk geri yüklenir, worker devam eder). Sıra: kuyruğu `closing`
 bayrağıyla **dondur** (yeni dispatch durur ama mesajlar korunur) → Interaction MCP
 çağrı kapısını kapat (yeni CLI/bridge çağrıları `session closing` ile reddedilir) →
-uçuştaki turu iptal edip `run.done`'u bekle (yalnız `chatRuns` değil: aynı fazda
+uçuştaki **tüm** turları iptal edip her birinin `run.done`'unu bekle (2026-09-06:
+`stopInflightTurn` artık `sessionRuns` ile oturumun kuşağa bakmaksızın kayıtlı her
+run'ını süpürüyor — superseded bir öncül hâlâ kayıtlıdır ve koşmaya devam eder, kuşak
+çiti yalnız kalıcı yazımlarını keser; yalnız güncel kuşağın run'ını beklemek oturumu
+"sessiz" ilan ederken ayrık bir süreci canlı bırakıyordu. Yalnız `chatRuns` da değil: aynı fazda
 `Runtime.CancelSession` ile ajan runtime'ının **otonom tur kayıtları** da süpürülür ve
 `IsSessionActive` yanlışa dönene kadar beklenir — otonom bir tur `chatRuns`'a ancak CLI
 sağlayıcı + Interaction endpoint varsa yazılır, yerel/native sağlayıcıda hiç görünmez,

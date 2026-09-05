@@ -2,6 +2,44 @@
 
 > **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Stop ve teardown artık superseded (kuşak dışı) run'ları da iptal edip bekliyor (2026-09-06) ✅
+
+TSK830. Bir oturumda yeni tur eskisini geçersiz kıldığında (superseded), eski
+run kayıtta kalmaya devam ediyordu: **kuşak çiti (generation fence) yalnız onun
+kalıcı yazımlarını engelliyor**, goroutine'ini, sağlayıcı alt sürecini ve
+araçlarını değil. Oturumu sessizleştirmesi gereken iki yol — kullanıcının Stop'u
+ve oturum silme (teardown) — yalnız `sessionRunInfo`'nun bildirdiği güncel
+kuşağın run'ına bakıyordu; sonuçta Stop'a basıldıktan ya da oturum silindikten
+sonra eski turun süreci ayrık (detached) biçimde yaşamaya devam edebiliyordu.
+
+- **`internal/api/chat_control.go`**: yeni `(*chatRuns).sessionRuns(wsID,
+  sessionID) []*chatRun` — kuşağa bakmadan oturumun **tüm** canlı run'larını
+  döner, `startedAt` (eşitlikte `id`) sırasıyla; map yineleme sırası rastgele
+  olduğu için hata mesajı böylece deterministik kalır. `sessionRunInfo`
+  değiştirilmedi: o hâlâ "oturumu şu an hangi run sahipleniyor?" sorusunu
+  yanıtlar ve superseded olanları kasten atlar.
+- **`internal/api/session_teardown.go`**: `stopInflightTurn` her sweep'te tüm
+  run'ları önce iptal eder, sonra her birinin `run.done`'ını **ortak** deadline
+  içinde bekler; duran olmazsa `in-flight turn <runID> did not stop within
+  <grace>` hatası döner. Sweep, aradan yeni bir straggler girerse diye döngüde
+  yinelenir. `prepareSessionRuntimeLocked` içinde `hadChatTurn` artık
+  `len(sessionRuns(...)) > 0`.
+- **`internal/api/inbox.go`**: `handleSessionControl` içinde `"stop"` ayrı,
+  erken dönüşlü bir bloğa alındı ve oturumun tüm run'larını iptal eder. Hiç chat
+  run'ı yoksa eski otonom yol korunur (`Runtime.CancelSession` + gerekçenin
+  transkripte yazılması, yoksa 404). `"steer"` davranışı bilerek değişmedi:
+  yönlendirme yalnız oturumu sahiplenen run'a gider, çünkü superseded bir run'ın
+  çıktısı zaten çitle kesilmiştir.
+- **Testler** (`internal/api/superseded_run_stop_test.go`, yeni):
+  `TestStopInflightTurn_CancelsAndWaitsForSupersededRun`,
+  `TestStopInflightTurn_TimesOutOnStuckSupersededRun`,
+  `TestSessionControlStopCancelsSupersededRun`. Üçünün de boş yere geçmediği,
+  bağımsız doğrulayıcının uyguladığı revert mutasyonuyla kanıtlandı — eski kodda
+  üçü de düşüyor.
+
+Doğrulama sınırı: **`-race` bu makinede çalıştırılamadı (cgo/gcc yok)**;
+eşzamanlılık kanıtı yalnız testlerin deterministik senkronizasyonuna dayanıyor.
+
 ## Yerel sunucu erişilebilirlik rozeti (2026-09-04) ✅
 
 Yerel bir sağlayıcı örneği doğru yapılandırılmış olsa da arkasındaki uygulama
