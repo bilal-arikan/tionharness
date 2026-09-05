@@ -278,7 +278,16 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		visited: childVisited,
 		calls:   cur.calls,
 	})
-	childMeta := subagentSessionMeta(parentSessionID, agent, ephemeral, spec)
+	// The child's title names the session it was delegated from. A lookup failure
+	// is not fatal to the run, but it is not swallowed either: it is logged and the
+	// title falls back to the parent id.
+	parentTitle := ""
+	if parentSession, err := r.db.GetSession(ctx, parentSessionID); err != nil {
+		r.logger.Warn("subagent parent session lookup failed; titling the child from the parent id", "session", parentSessionID, "error", err)
+	} else {
+		parentTitle = parentSession.Title
+	}
+	childMeta := subagentSessionMeta(parentSessionID, parentTitle, agent, ephemeral, spec)
 	stampRetryLineage(&childMeta, retryOfID, attempt)
 	child, err := r.db.CreateChildSession(ctx, childMeta)
 	if err != nil {
@@ -398,18 +407,55 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	}, nil
 }
 
-func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec tools.RunAgentSpec) db.Session {
+func subagentSessionMeta(parentID, parentTitle string, agent db.Agent, ephemeral bool, spec tools.RunAgentSpec) db.Session {
 	contextMode := strings.TrimSpace(spec.Context)
 	if contextMode == "" {
 		contextMode = db.ContextIsolated
 	}
-	s := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal}
+	s := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal, Title: subagentTitle(agent, spec, parentID, parentTitle)}
 	if ephemeral {
 		s.TargetProfile = strings.TrimSpace(spec.Target)
 	} else {
 		s.TargetAgentID = agent.ID
 	}
 	return s
+}
+
+// maxParentRefRunes bounds the delegating session's label inside a child title:
+// long enough to recognize the parent thread, short enough that the target and
+// the task stay readable in the session list.
+const maxParentRefRunes = 28
+
+// subagentTitle names a delegated run so the session list reads it like any other
+// session instead of falling back to a "new chat" placeholder: the target agent,
+// a short snippet of the task, and the session the work was delegated FROM.
+// This is the single place the delegated-session title format is built.
+func subagentTitle(agent db.Agent, spec tools.RunAgentSpec, parentID, parentTitle string) string {
+	name := strings.TrimSpace(agent.Name)
+	if name == "" {
+		name = strings.TrimSpace(spec.Target)
+	}
+	task := spawnTitle(strings.TrimSpace(spec.Task))
+	title := "🧩 " + task
+	if name != "" {
+		title = "🧩 " + name + " — " + task
+	}
+	if parent := subagentParentRef(parentID, parentTitle); parent != "" {
+		title += " ⤴ " + parent
+	}
+	return title
+}
+
+// subagentParentRef labels the delegating session for a child title: its title
+// when it has one, otherwise its raw id — an untitled parent (a session titled
+// only after its first turn) is still worth naming by id, so the fallback is
+// explicit rather than dropped. Only when BOTH are empty does the caller fall
+// back to the parentless title form.
+func subagentParentRef(parentID, parentTitle string) string {
+	if t := strings.TrimSpace(parentTitle); t != "" {
+		return truncateRunes(t, maxParentRefRunes)
+	}
+	return strings.TrimSpace(parentID)
 }
 
 // initializeChildSession commits the opening user turn before exposing the child
