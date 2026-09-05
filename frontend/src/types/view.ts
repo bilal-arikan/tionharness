@@ -91,9 +91,36 @@ export interface ViewGraphEdge {
 // ViewGraphResult is the entire structural map of the workspace
 // (GET /api/views/graph): every node reachable from the root plus every edge,
 // uncapped. The Explorer screen lays it out as one force-directed network.
+// ViewGraphLive is one session executing right now: running, or a coordinator
+// idle while one of its direct workers runs. The map glows these and hangs the
+// driving agent's avatar off them; the entry (and the glow) is gone once the
+// session stops.
+export interface ViewGraphLiveAgent {
+  id: string
+  name: string
+  emoji?: string
+  color?: string
+}
+export interface ViewGraphLive {
+  session: ViewRef
+  state: 'running' | 'awaiting-workers'
+  agent: ViewGraphLiveAgent
+}
+
+// ViewGraphMeta is a session's facet data for the map's filters.
+export interface ViewGraphMeta {
+  kind?: string
+  agentId?: string
+  tags?: string[]
+  archived?: boolean
+}
+
 export interface ViewGraphResult {
   nodes: ViewHandle[]
   edges: ViewGraphEdge[]
+  live?: ViewGraphLive[]
+  // Keyed by refToString of the session.
+  meta?: Record<string, ViewGraphMeta>
 }
 
 // refToString spells a ref the way handles and the get_view tool do.

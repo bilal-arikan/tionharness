@@ -442,8 +442,14 @@ func TestGetViewGraphContract(t *testing.T) {
 			seenSessionParents[source["kind"].(string)+":"+source["id"].(string)] = true
 		}
 	}
-	if !seenSessionParents["category:sessions"] || !seenSessionParents[agentKey] {
-		t.Fatalf("session parents=%v, want sessions category + %s", seenSessionParents, agentKey)
+	kindGroupParent := false
+	for parent := range seenSessionParents {
+		if strings.HasPrefix(parent, "category:skind:") {
+			kindGroupParent = true
+		}
+	}
+	if !kindGroupParent || !seenSessionParents[agentKey] {
+		t.Fatalf("session parents=%v, want a session-kind group + %s", seenSessionParents, agentKey)
 	}
 	if !strings.Contains(rec.Body.String(), `"label"`) {
 		t.Fatalf("handles must carry labels: %s", rec.Body.String())

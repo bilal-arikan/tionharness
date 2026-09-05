@@ -1,6 +1,9 @@
 package tools
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Functional categories for built-in tools, used by the workspace tools screen to
 // group an otherwise-flat list (~85 built-ins) into navigable sections. The key is
@@ -139,6 +142,30 @@ var orderedCategories = []string{
 func Categories() []string {
 	out := make([]string, len(orderedCategories))
 	copy(out, orderedCategories)
+	return out
+}
+
+// CategoryTools is one functional category with the built-in tool names in it,
+// sorted. The view layer (Explorer map, Araçlar node) shows exactly this.
+type CategoryTools struct {
+	Key   string
+	Tools []string
+}
+
+// BuiltinToolsByCategory lists every category in display order with its tool
+// names sorted. Empty categories are kept so the map's shape does not change
+// with the tool list.
+func BuiltinToolsByCategory() []CategoryTools {
+	byCat := map[string][]string{}
+	for name, cat := range builtinCategory {
+		byCat[cat] = append(byCat[cat], name)
+	}
+	out := make([]CategoryTools, 0, len(orderedCategories))
+	for _, cat := range orderedCategories {
+		names := byCat[cat]
+		sort.Strings(names)
+		out = append(out, CategoryTools{Key: cat, Tools: names})
+	}
 	return out
 }
 

@@ -31,7 +31,18 @@ const POOL_STATS_POLL_MS = 10000
 
 // useToolsPanelState holds all state, data loading, and mutation handlers for
 // the ToolsPanel screen (extracted so the component file stays readable).
-export function useToolsPanelState(onError: (msg: string) => void) {
+const TOOLS_GROUP_KEY = 'tionharness.toolsGroup'
+
+export interface ToolsPanelStateOptions {
+  // Deep-linked group (undefined = not controlled by the URL).
+  group?: string | null
+  onGroupChange?: (key: string | null) => void
+}
+
+export function useToolsPanelState(
+  onError: (msg: string) => void,
+  options: ToolsPanelStateOptions = {},
+) {
   const [servers, setServers] = useState<MCPServer[]>([])
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
@@ -78,22 +89,32 @@ export function useToolsPanelState(onError: (msg: string) => void) {
       else next.add(tier)
       return next
     })
-  // Collapsed group labels (accordion). Persisted so the choice sticks.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+  // Selected group (null = every group). A group is a category key for built-ins
+  // or "mcp:<server>" for a server. Persisted so the choice sticks; a deep link
+  // (#/w/{ws}/tools/{group}) overrides it and every change is reported back so
+  // the URL follows.
+  const [activeGroup, setActiveGroupState] = useState<string | null>(() => {
+    if (options.group !== undefined && options.group !== null) return options.group
     try {
-      return new Set<string>(JSON.parse(localStorage.getItem('tionharness.toolsCollapsed') || '[]'))
+      return localStorage.getItem(TOOLS_GROUP_KEY)
     } catch {
-      return new Set<string>()
+      return null
     }
   })
-  const toggleGroup = (label: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(label)) next.delete(label)
-      else next.add(label)
-      localStorage.setItem('tionharness.toolsCollapsed', JSON.stringify([...next]))
-      return next
-    })
+  useEffect(() => {
+    if (options.group === undefined) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveGroupState(options.group)
+  }, [options.group])
+  const setActiveGroup = (key: string | null) => {
+    setActiveGroupState(key)
+    try {
+      if (key) localStorage.setItem(TOOLS_GROUP_KEY, key)
+      else localStorage.removeItem(TOOLS_GROUP_KEY)
+    } catch {
+      // Persistence is best-effort when storage is blocked by browser policy.
+    }
+    options.onGroupChange?.(key)
   }
 
   const loadServers = useCallback(() => {
@@ -397,14 +418,14 @@ export function useToolsPanelState(onError: (msg: string) => void) {
         byCategory.get(key)!.push(t)
       }
     }
-    const out: { label: string; tools: WorkspaceTool[] }[] = []
+    const out: { key: string; label: string; tools: WorkspaceTool[] }[] = []
     // Built-in categories in fixed order; any unknown key appended after, by label.
     const seen = new Set<string>()
     const emit = (cat: string) => {
       const list = byCategory.get(cat)
       if (!list || !list.length || seen.has(cat)) return
       seen.add(cat)
-      out.push({ label: CATEGORY_LABELS[cat] ?? cat, tools: list })
+      out.push({ key: cat, label: CATEGORY_LABELS[cat] ?? cat, tools: list })
     }
     for (const cat of CATEGORY_ORDER) emit(cat)
     for (const cat of [...byCategory.keys()].sort((a, b) =>
@@ -414,17 +435,24 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     }
     // MCP servers after built-ins, alphabetical.
     for (const [server, list] of [...byServer.entries()].sort((a, b) => compareText(a[0], b[0]))) {
-      out.push({ label: server, tools: list })
+      out.push({ key: `mcp:${server}`, label: server, tools: list })
     }
     return out
   }, [filtered])
+  // The groups actually listed: the selected one, or all when nothing is
+  // selected or the selection has no member under the current filters.
+  const visibleGroups = useMemo(() => {
+    if (!activeGroup) return groups
+    const picked = groups.filter((g) => g.key === activeGroup)
+    return picked.length > 0 ? picked : groups
+  }, [groups, activeGroup])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk enable/disable + NameOnly.
   // Plain click still opens the tool's detail; modifier-click selects instead.
   const sel = useMultiSelect()
   const orderedNames = useMemo(
-    () => groups.flatMap((g) => (collapsed.has(g.label) ? [] : g.tools.map((t) => t.name))),
-    [groups, collapsed],
+    () => visibleGroups.flatMap((g) => g.tools.map((t) => t.name)),
+    [visibleGroups],
   )
   const bulkSetEnabled = async (enabled: boolean) => {
     if (sel.count === 0) return
@@ -500,8 +528,9 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     statusFilter,
     setStatusFilter,
     toggleVisFilter,
-    collapsed,
-    toggleGroup,
+    activeGroup,
+    setActiveGroup,
+    visibleGroups,
     toggleTool,
     setToolVisibility,
     setServerVisibility,

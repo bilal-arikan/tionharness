@@ -11970,3 +11970,167 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
 - **Doküman:** `_Docs/68` Durum + §7.0 (eski tasarım §7.1'e tarihçe olarak taşındı),
   `_Docs/00` indeks satırı; `.claude/launch.json`'a `tionharness-scratch` (8090 + scratch
   veri dizini) yapılandırması eklendi.
+
+## Rota araç çubuğu tercihleri kalıcı (2026-09-04) ✅
+
+- **İstek:** Rota ekranında seçilen filtreler ekran yeniden açıldığında korunsun.
+  Chip seçimi zaten `useRotaChips` ile `localStorage`'daydı; boşta kesme (`cutoff`),
+  boşluk katlama (`collapseGaps`) ve log süre ekseni (`normalizeBars`) her açılışta
+  varsayılana dönüyordu.
+- **Fix:** `features/rota/rotaPrefs.ts` (saf parse/serialize; bozuk/eksik kayıt alan alan
+  varsayılana düşer, tümü sıfırlanmaz; anahtar `tionharness.rotaPrefs`) +
+  `useRotaPrefs.ts` (mount'ta oku, her değişimde yaz; `useRotaChips` kalıbı).
+  `RotaPanel` üç `useState` yerine bu hook'u kullanır. Zoom bilerek oturum kapsamlı
+  kaldı (panel genişliğine bağlı).
+- **Yan düzeltme:** `rotaZoom.ts` `MIN_ZOOM` tipi `number`'a genişletildi — `as const`
+  dizi ilk elemanı literal `1` olduğundan `useState(MIN_ZOOM)` diğer adımları
+  reddediyor ve `tsc -b` kırmızıydı.
+- **Test:** `rotaPrefs.test.ts` (round-trip + bozuk/kısmi girdi). `git diff --check` temiz.
+
+## Harita fiziği dinlenir (2026-09-05) ✅
+
+- **Sorun:** kök sabitlendikten sonra da harita hiç durmuyordu. Sebep derinlik başına
+  çekim değil; `VisNetworkGraph` Ağ ekranı için `minVelocity: 0` ile **hiç oturmayan**
+  bir simülasyon kurar (canlı pano akışı bilerek sürekli kıpırdar). Harita bu ayarı
+  miras alıyordu.
+- **Fix:** `VisNetworkGraph`'a `settle` prop'u: `minVelocity 0.75` (vis varsayılanı) +
+  `damping 0.55` (hafif yaprak düğümlerin hub çevresinde salınımını söndürür).
+  Oturunca simülasyon durur; sürükleme veya veri değişimi yeniden başlatır. Ağ ekranı
+  değişmedi (`settle` varsayılan `false`). `ExplorerView` `settle` geçer.
+- **Test:** `VisNetworkGraph.test.tsx` (`settle` ile 0.75/0.55, onsuz 0; option
+  yenilemede korunur), `ExplorerView.test.tsx` prop kontrolü.
+
+## Harita: ağaç fiziği + dinlenme, Araçlar/Bütçe alt düğümleri, kart/sütun şekilleri (2026-09-05) ✅
+
+- **Hareket:** `settle` (minVelocity 0.75) yetmedi. İki fix: (1) `VisNetworkGraph`
+  `mode="tree"` — vis `repulsion` çözücüsü; çekim yalnız kenar yayları, itme yalnız
+  `nodeDistance` içinde, `centralGravity 0`. Kullanıcının sorusu ("her grup yalnız üst
+  düğümün çekiminden etkilensin"): forceAtlas2'de her düğüm herkesi iter, tam
+  ebeveyn-yalnız çekim yok; `repulsion` çözücüsü en yakın şey — kısa menzilli itme +
+  yay. (2) **Dinlenme:** `settle` modunda `stabilized` → fizik kapalı, `dragStart`
+  (düğüm) → açık + `startSimulation`, sonra yine kapalı. Yenileme, tema, seçim halkası
+  artık resmi oynatamaz.
+- **Araçlar düğümü (backend):** `view.ToolGroupsSource` (+ `Sources.ToolGroups`),
+  `tools.BuiltinToolsByCategory()` → `viewprojector.go` her zaman bağlar.
+  `tools#group:<kategori>` ve `tools#mcp:<id>` çocukları (`toolsChildren`),
+  `projectToolsSub` (grup: araç adları, kapalılar işaretli; MCP: taşıma + hedef).
+  Genel bakışa "yerleşik gruplar: files(11), …" satırı. Alt araçlar gösterilmez.
+- **Bütçe düğümü (backend):** `budget#provider:<ad>` çocukları (`budgetChildren`,
+  maliyet sırasına göre; bugün harcaması olmayan sağlayıcı düğüm değil),
+  `projectBudgetSub` (yalnız o sağlayıcının satırları). `IsExpandable`: tools/budget
+  `Sub==""` iken açılır. `expand` testi ipucu `expand{kind:"budget"}` oldu.
+- **Frontend:** `explorerVis.nodeRole` + `ROLE_LABEL` + `nodeLabelOfKind`; şekiller:
+  sütun kare, kart kesik kutu, araç grubu altıgen, MCP üçgen, sağlayıcı yeşil nokta.
+  Araç grubu etiketi `CATEGORY_LABELS` ile Türkçe. `ExplorerSearch` rol etiketi alır.
+- **Testler:** `internal/view/toolgroups_test.go` (children sırası/etiket, sub
+  projeksiyonlar, hatalı sub, boş bütçe, Graph'ta yapraklar), `explorerVis.test.ts`
+  (rol/şekil/etiket), `VisNetworkGraph.test.tsx` (tree çözücü, dinlenme/uyanma, settle
+  dışında dinlenme yok). `fakeStore.usage` alanı eklendi.
+
+## Harita: yoğunluk kalıcı + "ekranında aç" butonu (2026-09-05) ✅
+
+- **Yoğunluk:** `features/network/useStoredDensity.ts` — kaydırıcı değeri
+  `localStorage`'da (`tionharness.explorerDensity`, Ağ için
+  `tionharness.networkDensity`); aralık dışı/bozuk değer 1'e düşer. Ekran değişince
+  sıfırlanmıyor; Ağ ekranı da aynı hook'u kullanır.
+- **Ekranında aç:** `features/explorer/explorerNavigation.ts` `screenForRef(ref)` —
+  düğümü sahibi olan ekrana ve (varsa) ön-seçim id'sine eşler: session→Sohbet,
+  agent→Ajanlar, artifact→Artifactlar, automation/schedule→Otomasyon,
+  trajectory→Rota, kart/sütun/pano→Görevler, kategori→ilgili ekran, budget/tools→
+  kendi ekranları, logs→Workspace▸Logs, flowrun→Akışlar (run deep-link yok).
+  Sağ panelin üstündeki buton (`{Ekran} ekranında aç · id`) `App`'te
+  `useAppNavigation`'ın artık döndürdüğü `applyRoute` ile paylaşılan link yolundan
+  gider — ayrı bir dispatch yazılmadı. Eski yalnız-oturum "Sohbeti aç" butonu bunun
+  içinde eridi; çift tık davranışı değişmedi.
+- **Test:** `explorerNavigation.test.ts`, `useStoredDensity.test.ts`,
+  `ExplorerView.test.tsx` (buton + hedef, yoğunluk remount).
+
+## Harita: canlı katman (parlama + ajan avatarı) ve Ağ filtrelerinin taşınması (2026-09-05) ✅
+
+- **İstek:** çalışan oturum parlasın, onu çalıştıran ajanın resimli düğümü oturuma
+  bağlı belirsin, oturum bitince ikisi de kaybolsun; Ağ ekranındaki filtrelerden
+  taşınabilenler Harita'ya gelsin (hedef: Ağ ekranını gereksizleştirip kaldırmak).
+- **Backend:** `internal/view/graph_live.go` — `LiveSource`/`RunningSet`,
+  `GraphLive{session,state,agent{id,name,emoji,color}}`, `GraphMeta{kind,agentId,tags,
+  archived}`; `Graph` yanıtına `live` + `meta` eklendi (null dizi/harita asla dönmez).
+  `awaiting-workers` kuralı Ağ ile aynı (worker'ı koşan koordinatör canlı). Arşivli ve
+  ajanı silinmiş oturum canlı sayılmaz. `tools.ViewSources.Running` (düz map, nil
+  arayüz tuzağı yok) → `views.go` `s.liveSessions(ws).RunningSet()` ile bağlar.
+  Test: `graph_live_test.go`.
+- **Frontend:** `explorerLive.ts` (avatar düğümleri + bağlar, `panelRefFor`),
+  `explorerFilter.ts` (saf fasetler + erişilebilirlik budaması + kalıcılık),
+  `useExplorerFilter.ts`, `ExplorerFilters.tsx` (katman/Canlı/tür/ajan/etiket çipleri,
+  N/M düğüm sayacı, temizle). `explorerVis`: `live-agent` rolü = circularImage
+  (`relationGraph.agentAvatarDataUrl` dışa açıldı), canlı oturum gölge+kalın çerçeve,
+  oturum→avatar oksuz kısa kalın bağ. `useExplorerGraph`: augment → filter → seed →
+  vis; `visibleGraph`, `facets`, `buckets`, `liveCount`, `panelRef` döner. Arama ve
+  sayaçlar görünen grafı okur; `canonicalNodeIds` tam grafı (kalıcılık GC).
+- **Testler:** `explorerLive.test.ts`, `explorerFilter.test.ts`, `explorerVis.test.ts`
+  (parlama/avatar/bağ), `useExplorerGraph.test.tsx` (canlı + filtre + panelRef),
+  `ExplorerView.test.tsx` (filtre satırı + kalıcılık).
+- **Ağ ekranı:** henüz kaldırılmadı (kullanıcı onayı bekliyor); `VisNetworkGraph`
+  ortak bileşen olarak kalacak. Taşınmayan tek Ağ özelliği: canlı pano-sütun
+  akışı (`mode="live"` sütun çapaları) — Harita'da pano sütunları zaten düğüm.
+
+## Ağ ekranı kaldırıldı; "ekranında aç" gerçek buton oldu (2026-09-05) ✅
+
+- **Kaldırılanlar:** NavRail "Ağ" girişi (`View` birliği, `navItems`, `viewRegistry`,
+  `url.ts` VIEWS), `App.tsx` dalı, `lazyPanels`, `features/network/NetworkPanel*`,
+  `NetworkFilters`, `networkFilter`, `relationGraph`, `api/graph.ts` (+ barrel),
+  `types/graph.ts` içindeki `WorkspaceGraph*` tipleri (`BoardColumnDef` kaldı),
+  `SIGNAL_NETWORK` (olay→sinyal eşlemesi sadeleşti), backend `GET /api/graph`
+  (`internal/api/graph.go` + 3 test), `focus_view` enum'unda `network` → `explorer`.
+  `#/w/<ws>/network` URL'si artık bilinmeyen görünüm olarak varsayılana düşer.
+- **Kalanlar (`features/network/`):** `VisNetworkGraph` (tuval; `mode="live"` kodu
+  duruyor, kullanıcı yok), `networkLayoutStorage`, `networkPhysicsState`,
+  `useStoredDensity`, yeni `agentAvatar.ts` (`relationGraph`'tan taşındı).
+  Oturum-tür etiketleri `explorerFilter.SESSION_KIND_LABEL`'a taşındı.
+- **Buton:** Harita sağ panelindeki "{Ekran} ekranında aç" artık tam genişlikte accent
+  dolgulu, ikonlu gerçek buton (metin bağlantısı değil).
+- **Doküman:** `_Docs/23` başına KALDIRILDI notu, `_Docs/00` indeks satırı.
+
+## Harita ikonu, pano kartı ve araç grubu deep-link'i, Araçlar grup seçici (2026-09-05) ✅
+
+- **İkon:** NavRail "Harita" girişi `lucide` `Orbit` (gezegen + yörünge) ikonuna geçti.
+- **Pano kartı deep-link:** `#/w/{ws}/board/{taskId}` — `useDeepLinks.boardTarget`,
+  `useAppNavigation` (`applyRoute` + `routeIdForView('board')`), `TaskBoard`
+  `focusTaskId`/`onFocusTask`: görev listesi yüklenip kart bulununca editör açılır;
+  her id bir kez tüketilir (yenileme kapatılan editörü geri açmaz), editör kapanınca
+  URL id'si temizlenir. Harita'da bir kart seçilip "Görevler ekranında aç" denince
+  Görevler açılır **ve** o kart açılır (`screenForRef` board#<taskId> → id).
+- **Araçlar ekranı grup seçici:** sol listedeki katlanır (accordion) grup başlıkları
+  kaldırıldı; üstte "Tümü" + grup başına seçilebilir buton satırı var. Seçili grup
+  listeyi o gruba daraltır, tekrar tıklama Tümü'ye döner. Seçim `localStorage`
+  (`tionharness.toolsGroup`) ile kalıcı ve `#/w/{ws}/tools/{group}` ile deep-link
+  (`group` = kategori anahtarı veya `mcp:<sunucu>`). Harita'daki araç grubu düğümü
+  "Araçlar & MCP ekranında aç" ile o grubu seçili açar. `useToolsPanelState` artık
+  `{ group, onGroupChange }` seçeneği alır; `groups` `key` taşır, `visibleGroups`
+  listelenen alt kümedir (seçili grup filtreyle boşsa tümü gösterilir).
+- **Test:** `url.test.ts` (board/tools id'leri), `explorerNavigation.test.ts` güncellendi.
+
+## Harita: fiziğin çabuk durması geri alındı (2026-09-05) ✅
+
+- **İstek:** düğümlerin hızla durup donması istenmedi; sürekli, yumuşak hareket geri geldi.
+- **Fix:** `ExplorerView` artık `VisNetworkGraph`'a `settle` geçmiyor → `minVelocity 0`,
+  simülasyon hiç oturmuyor; `mode="tree"` (yay + kısa menzilli itme) ve sabit kök
+  korunuyor, bu yüzden hareket artık sürüklenme değil yerinde salınım. `settle`
+  yeteneği bileşende duruyor, istenirse tek prop ile geri açılır.
+- **Test:** `ExplorerView.test.tsx` `settle` beklentisi `undefined`.
+
+## Harita: oturumlar tür gruplarına, oradan oturumlara bağlanıyor (2026-09-05) ✅
+
+- **İstek:** Oturumlar düğümü, pano→sütun→kart gibi önce kategorilere sonra asıl
+  oturumlara bağlansın.
+- **Backend:** `categorySessionKindPrefix = "skind:"`; Oturumlar kovacığının çocukları
+  artık tür grupları (`category:skind:chat` … sabit sıra: chat, task, flow,
+  flow-coordinator, schedule, spawned, subagent, worker, inbox, other; boş kind →
+  `other`; yalnız canlı oturumu olan türler), her grubun çocukları o türün arşivsiz
+  oturumları. `categoryMeta`: bucket birimi "tür", grup "OTURUM TÜRÜ:<tür>"/"oturum".
+  `structuralCache.nodes` ikinci seviye kategorileri (tür grubu, pano sütunu) de
+  genişletir → Neighborhood/parent taraması bu grupları görür. Ajan→oturum kenarı
+  aynen duruyor (oturum çok-ebeveynli kalır).
+- **Frontend:** `nodeRole 'session-kind'` (sky nokta, orta boy/kütle, etiket
+  `SESSION_KIND_LABEL` ile Türkçe, `other` → Diğer), "Sohbet ekranında aç" hedefi.
+- **Testler:** `children_test` (grup → oturum, cap grup üstünde), `graph_test`
+  (bucket→grup→oturum kenarları), `api/views_test` (ebeveyn `category:skind:*`),
+  `explorerVis.test`, `explorerNavigation.test`.

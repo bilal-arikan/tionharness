@@ -271,7 +271,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     }
   }
   // Cross-window panel refresh: every event may move rows / status /
-  // memberships inside one or more panels (TaskBoard, NetworkPanel,
+  // memberships inside one or more panels (TaskBoard, ExplorerView,
   // ExecutionsPanel, useActivity, ...). We hand the event to a central mapper
   // that returns the set of signal keys panels subscribe to (board / network /
   // activity / executions / agents / flows / schedules / artifacts) and bump

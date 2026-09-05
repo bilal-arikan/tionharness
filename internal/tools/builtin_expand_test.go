@@ -41,7 +41,7 @@ func TestExpandWorkspaceListsElevenBuckets(t *testing.T) {
 		t.Errorf("workspace should expand into 11 buckets:\n%s", out)
 	}
 	// The category buckets are themselves expandable; the hint must steer to expand.
-	for _, want := range []string{`expand{kind:"category",id:"sessions"}`, `expand{kind:"board",id:"board"}`, `get_view{kind:"budget"`, `get_view{kind:"logs"`} {
+	for _, want := range []string{`expand{kind:"category",id:"sessions"}`, `expand{kind:"board",id:"board"}`, `expand{kind:"budget"`, `get_view{kind:"logs"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing hint %q:\n%s", want, out)
 		}

@@ -1,12 +1,11 @@
 // The primary view list, shared by the desktop rail and the mobile bottom bar.
 // Split out so NavRail.tsx exports only components (fast refresh).
 import {
+  Orbit,
   LayoutDashboard,
   MessageSquare,
   Users,
-  Share2,
   Waypoints,
-  Map as MapIcon,
   LayoutGrid,
   Clock,
   GitBranch,
@@ -25,9 +24,8 @@ export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIco
   { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
-  { key: 'network', label: 'Ağ', icon: Share2 },
   { key: 'rota', label: 'Rota', icon: Waypoints },
-  { key: 'explorer', label: 'Harita', icon: MapIcon },
+  { key: 'explorer', label: 'Harita', icon: Orbit },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },
   { key: 'schedules', label: 'Otomasyon', icon: Clock },
   { key: 'flows', label: 'Akışlar', icon: GitBranch },

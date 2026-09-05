@@ -721,6 +721,98 @@ describe('VisNetworkGraph explorer props', () => {
     await unmount(root)
   })
 
+  it('lets a settling graph come to rest while the live graph keeps ticking', async () => {
+    const element = (settle: boolean) => (
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+        settle={settle}
+      />
+    )
+    const { root } = await mount(element(false))
+    const live = latestNetwork()
+    expect(live.initialOptions.physics?.minVelocity).toBe(0)
+    await unmount(root)
+
+    const settled = await mount(element(true))
+    const network = latestNetwork()
+    expect(network.initialOptions.physics?.minVelocity).toBe(0.75)
+    expect(network.initialOptions.physics?.forceAtlas2Based?.damping).toBe(0.55)
+    // Option refreshes keep the rest threshold.
+    await render(settled.root, element(true))
+    const last = network.setOptionsCalls.at(-1)
+    expect(last?.physics?.minVelocity).toBe(0.75)
+    await unmount(settled.root)
+  })
+
+  it('tree mode uses short-range repulsion with edge springs only', async () => {
+    const { root } = await mount(
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+        mode="tree"
+        density={1}
+      />,
+    )
+    const physics = latestNetwork().initialOptions.physics
+    expect(physics?.solver).toBe('repulsion')
+    expect(physics?.repulsion).toMatchObject({ centralGravity: 0, nodeDistance: 140 })
+    await unmount(root)
+  })
+
+  it('rests once stabilized in settle mode and wakes for a node drag', async () => {
+    const { root } = await mount(
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+        settle
+      />,
+    )
+    const network = latestNetwork()
+    const physicsCalls = () =>
+      network.setOptionsCalls
+        .map((o) => o.physics && (o.physics as { enabled?: boolean }).enabled)
+        .filter((v) => v !== undefined)
+    expect(network.startSimulationCalls).toBe(1)
+    network.emit('stabilized', { iterations: 5 })
+    expect(physicsCalls().at(-1)).toBe(false)
+    // Dragging empty canvas does not wake it; dragging a node does.
+    network.emit('dragStart', { nodes: [] })
+    expect(physicsCalls().at(-1)).toBe(false)
+    network.emit('dragStart', { nodes: ['a'] })
+    expect(physicsCalls().at(-1)).toBe(true)
+    expect(network.startSimulationCalls).toBe(2)
+    network.emit('stabilized', { iterations: 3 })
+    expect(physicsCalls().at(-1)).toBe(false)
+    await unmount(root)
+  })
+
+  it('never rests outside settle mode', async () => {
+    const { root } = await mount(
+      <VisNetworkGraph
+        workspaceId="workspace"
+        nodes={[node('a')]}
+        edges={[]}
+        canonicalNodeIds={['a']}
+        canonicalReady
+      />,
+    )
+    const network = latestNetwork()
+    const before = network.setOptionsCalls.length
+    network.emit('stabilized', { iterations: 5 })
+    expect(network.setOptionsCalls.length).toBe(before)
+    await unmount(root)
+  })
+
   it('forwards a double click on a node and ignores one on empty canvas', async () => {
     const onNodeDoubleClick = vi.fn()
     const { root } = await mount(

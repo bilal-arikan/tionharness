@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Map as MapIcon, MessageSquare, RefreshCw } from 'lucide-react'
+import { ExternalLink, Map as MapIcon, MessageSquare, RefreshCw } from 'lucide-react'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { refToString } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { VisNetworkGraph } from '@/features/network/VisNetworkGraph'
+import { useStoredDensity } from '@/features/network/useStoredDensity'
 import { ExplorerDetailDrawer } from './ExplorerDetailDrawer'
+import { ExplorerFilters } from './ExplorerFilters'
+import { useExplorerFilter } from './useExplorerFilter'
+import { screenForRef, type ExplorerTarget } from './explorerNavigation'
 import { ExplorerSearch, type ExplorerSearchResult } from './ExplorerSearch'
-import { displayLabel, KIND_LABEL, ROOT_KEY } from './explorerVis'
+import { displayLabel, nodeLabelOfKind, ROOT_KEY } from './explorerVis'
 import { useExplorerGraph } from './useExplorerGraph'
 
 interface Props {
@@ -16,6 +20,8 @@ interface Props {
   // Open a session transcript (wired by App to setView('chat') + selectSession):
   // a double click on a session node jumps to its conversation.
   onOpenSession?: (sessionId: string) => void
+  // Open the screen that owns the selected node (the side panel's top button).
+  onOpenTarget?: (target: ExplorerTarget) => void
   // Deep-link: the selected node's ref string, restored from the URL on entry and
   // reported back on every selection so the map is shareable/restorable.
   focusNode?: string | null
@@ -34,11 +40,14 @@ export function ExplorerView({
   workspaceId,
   onError,
   onOpenSession,
+  onOpenTarget,
   focusNode,
   onFocusNode,
 }: Props) {
   const [search, setSearch] = useState('')
-  const [density, setDensity] = useState(1)
+  // Persisted per browser: leaving the screen must not reset the packing.
+  const [density, setDensity] = useStoredDensity('tionharness.explorerDensity')
+  const [filter, setFilter, clearFilter] = useExplorerFilter()
   const [detailOpen, setDetailOpen] = useState(false)
   const isMobile = useIsMobile()
   const {
@@ -50,14 +59,24 @@ export function ExplorerView({
     loading,
     error,
     deepLinkError,
-    selectedRef,
+    panelRef,
+    visibleGraph,
+    facets,
+    buckets,
+    liveCount,
     selectedKey,
     focusKey,
     focusTick,
     selectKey,
     fallbackToRoot,
     refresh,
-  } = useExplorerGraph({ onError, search, initialFocus: focusNode, onFocus: onFocusNode })
+  } = useExplorerGraph({
+    onError,
+    search,
+    filter,
+    initialFocus: focusNode,
+    onFocus: onFocusNode,
+  })
 
   const isNarrowScreen = () =>
     typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
@@ -89,28 +108,37 @@ export function ExplorerView({
 
   const searchResults = useMemo<ExplorerSearchResult[]>(() => {
     const needle = search.trim().toLowerCase()
-    if (!needle || !graph) return []
-    return graph.nodes.flatMap((handle) => {
+    if (!needle || !visibleGraph) return []
+    return visibleGraph.nodes.flatMap((handle) => {
       const key = refToString(handle.ref)
       const label = key === ROOT_KEY ? 'Workspace' : displayLabel(handle)
       if (!label.toLowerCase().includes(needle) && !key.toLowerCase().includes(needle)) return []
-      return [{ key, label, kind: handle.ref.kind, selected: key === selectedKey }]
+      return [{ key, label, kindLabel: nodeLabelOfKind(handle.ref), selected: key === selectedKey }]
     })
-  }, [graph, search, selectedKey])
+  }, [visibleGraph, search, selectedKey])
 
-  const selectedHandle = graph?.nodes.find((handle) => refToString(handle.ref) === selectedKey)
+  const selectedHandle = visibleGraph?.nodes.find(
+    (handle) => refToString(handle.ref) === selectedKey,
+  )
   const selectionAnnouncement = selectedHandle
-    ? `Seçili düğüm ${displayLabel(selectedHandle)} (${KIND_LABEL[selectedHandle.ref.kind]}).`
+    ? `Seçili düğüm ${displayLabel(selectedHandle)} (${nodeLabelOfKind(selectedHandle.ref)}).`
     : ''
 
-  const openSessionButton = selectedRef.kind === 'session' && onOpenSession && (
-    <button
-      onClick={() => onOpenSession(selectedRef.id)}
-      className="flex items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-    >
-      <MessageSquare size={13} />
-      Sohbeti aç · {selectedRef.id}
-    </button>
+  // Top of the side panel: jump to the screen that owns the selected node. A
+  // session goes to its transcript, an agent to its card, a card to the board…
+  const selectedTarget = onOpenTarget ? screenForRef(panelRef) : null
+  const openSessionButton = selectedTarget && (
+    <div className="border-b border-[var(--color-border)] px-3 py-2">
+      <button
+        onClick={() => onOpenTarget?.(selectedTarget)}
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-semibold text-[var(--color-on-accent)] shadow-sm transition hover:brightness-110 active:brightness-95"
+      >
+        {selectedTarget.view === 'chat' ? <MessageSquare size={14} /> : <ExternalLink size={14} />}
+        <span className="truncate">
+          {selectedTarget.label} ekranında aç{selectedTarget.id ? ` · ${selectedTarget.id}` : ''}
+        </span>
+      </button>
+    </div>
   )
 
   return (
@@ -170,6 +198,19 @@ export function ExplorerView({
         </div>
       </header>
 
+      {graph && visibleGraph && (
+        <ExplorerFilters
+          filter={filter}
+          onChange={setFilter}
+          onClear={clearFilter}
+          buckets={buckets}
+          facets={facets}
+          liveCount={liveCount}
+          visibleCount={visibleGraph.nodes.length}
+          totalCount={graph.nodes.length}
+        />
+      )}
+
       <div className="flex min-h-0 flex-1">
         <div
           className="relative min-h-0 min-w-0 flex-1 bg-[var(--color-bg)]"
@@ -187,7 +228,7 @@ export function ExplorerView({
             edges={edges}
             canonicalNodeIds={canonicalNodeIds}
             canonicalReady={ready}
-            mode="relation"
+            mode="tree"
             density={density}
             onSelect={handleSelect}
             onNodeDoubleClick={handleDoubleClick}
@@ -236,7 +277,7 @@ export function ExplorerView({
               hideHandles: the map is the navigator, the panel only shows the
               projection. fillHeight: the panel owns its scrolling. */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <ViewPanel key={selectedKey} target={selectedRef} embedded hideHandles fillHeight />
+            <ViewPanel key={selectedKey} target={panelRef} embedded hideHandles fillHeight />
           </div>
         </aside>
 
@@ -245,7 +286,7 @@ export function ExplorerView({
           <div className="flex min-h-0 flex-1 flex-col">
             <ViewPanel
               key={`drawer:${selectedKey}`}
-              target={selectedRef}
+              target={panelRef}
               embedded
               hideHandles
               fillHeight

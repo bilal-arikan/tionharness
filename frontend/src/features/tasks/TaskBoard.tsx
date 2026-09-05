@@ -51,9 +51,13 @@ const nowSec = () => Math.floor(Date.now() / 1000)
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
+  // Deep link: the card to open in its editor once the board has loaded
+  // (#/w/{ws}/board/{taskId}); cleared through onFocusTask when the editor closes.
+  focusTaskId?: string | null
+  onFocusTask?: (id: string | null) => void
 }
 
-export function TaskBoard({ agents, onError }: Props) {
+export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
@@ -68,6 +72,25 @@ export function TaskBoard({ agents, onError }: Props) {
   )
   // Left-side column editor panel.
   const [editorOpen, setEditorOpen] = useState(false)
+  // Deep-linked card: opened once per id, after the task list has it. Tracking
+  // the consumed id keeps a later reload from re-opening an editor the user
+  // closed; the URL id itself is cleared when that editor closes.
+  const focusConsumedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusTaskId) {
+      focusConsumedRef.current = null
+      return
+    }
+    if (focusConsumedRef.current === focusTaskId) return
+    if (!tasks.some((t) => t.id === focusTaskId)) return
+    focusConsumedRef.current = focusTaskId
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setModal({ mode: 'edit', taskId: focusTaskId })
+  }, [focusTaskId, tasks])
+  const closeModal = () => {
+    setModal(null)
+    if (focusTaskId) onFocusTask?.(null)
+  }
   // Transient hint under the filter bar: a card that a drag pushed out of the
   // current filter would otherwise just vanish silently.
   const [hint, setHint] = useState<{ text: string; undo?: () => void } | null>(null)
@@ -776,7 +799,7 @@ export function TaskBoard({ agents, onError }: Props) {
           columns={columns}
           tasks={tasks}
           defaultBoardState={columns[0]?.key}
-          onClose={() => setModal(null)}
+          onClose={closeModal}
           onSaved={onSaved}
           onReplaceTemp={onReplaceTemp}
           onDeleted={onDeleted}

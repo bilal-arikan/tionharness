@@ -15,6 +15,12 @@ import (
 type ToolsInput struct {
 	MCPServers []db.MCPServer
 	ToolConfig db.WorkspaceToolConfig
+	// Groups are the built-in tool groups (from Sources.ToolGroups; nil when no
+	// source is attached). They are the map's children of this node.
+	Groups []ToolGroup
+	// Sub selects one child slice ("group:<key>" / "mcp:<id>") instead of the
+	// whole surface — see projectToolsSub.
+	Sub string
 	// Now is the clock used for the asOf stamp. Zero means time.Now().
 	Now time.Time
 }
@@ -26,6 +32,9 @@ const toolsServerRows = 12
 // ProjectTools renders the workspace tool surface: how many MCP servers are
 // configured and enabled, and how many tools are switched off workspace-wide.
 func ProjectTools(in ToolsInput, level Level) (View, error) {
+	if in.Sub != "" {
+		return projectToolsSub(in, level)
+	}
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -79,6 +88,13 @@ func ProjectTools(in ToolsInput, level Level) (View, error) {
 		v.Elided, v.ElidedUnit = dropped, "MCP sunucu"
 	}
 
+	if len(in.Groups) > 0 {
+		groups := make([]string, 0, len(in.Groups))
+		for _, g := range in.Groups {
+			groups = append(groups, fmt.Sprintf("%s(%d)", toolGroupLabel(g), len(g.Tools)))
+		}
+		l.add("yerleşik gruplar: %s", strings.Join(clipList(groups, toolsServerRows), ", "))
+	}
 	if disabledTools > 0 {
 		l.add("kapalı araçlar: %s", strings.Join(clipList(in.ToolConfig.DisabledTools, toolsServerRows), ", "))
 	}

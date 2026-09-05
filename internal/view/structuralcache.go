@@ -136,7 +136,25 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 		return c.agentSessionChildren(ctx, ref.ID)
 	case KindSession:
 		return c.sessionWorkerChildren(ctx, ref.ID)
-	case KindBudget, KindTools, KindFlowRun, KindSchedule,
+	case KindTools:
+		if ref.Sub != "" {
+			return nil, nil
+		}
+		in, err := c.p.loadTools(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return c.p.toolsChildren(in), nil
+	case KindBudget:
+		if ref.Sub != "" {
+			return nil, nil
+		}
+		in, err := c.p.loadBudget(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return budgetChildren(in), nil
+	case KindFlowRun, KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		return nil, nil
 	default:
@@ -148,11 +166,12 @@ func (c *structuralCache) children(ctx context.Context, ref Ref) ([]Handle, erro
 func (c *structuralCache) categoryMembers(ctx context.Context, id string) ([]Handle, error) {
 	switch id {
 	case CategorySessions:
+		// One group per session kind; the sessions themselves sit under the group.
 		sessions, err := c.allSessions(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("view: category sessions: %w", err)
 		}
-		return sessionHandleList(liveSessions(sessions)), nil
+		return sessionKindGroupHandles(liveSessions(sessions)), nil
 	case CategoryFlows:
 		runs, err := c.allFlowRuns(ctx)
 		if err != nil {
@@ -196,6 +215,13 @@ func (c *structuralCache) categoryMembers(ctx context.Context, id string) ([]Han
 			return nil, fmt.Errorf("view: category %s: %w", id, err)
 		}
 		return columnCardHandles(tasks, key), nil
+	}
+	if key, found := cutSessionKindPrefix(id); found {
+		sessions, err := c.allSessions(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("view: category %s: %w", id, err)
+		}
+		return sessionHandleList(sessionsOfKind(liveSessions(sessions), key)), nil
 	}
 	return nil, fmt.Errorf("view: unknown category %q", id)
 }
@@ -273,12 +299,16 @@ func (c *structuralCache) nodes(ctx context.Context) ([]Handle, error) {
 		nodes = append(nodes, children...)
 	}
 
-	// Sessions can also parent worker sessions, and agents parent their sessions.
-	// Both kinds are already present through root categories; expanding them here
-	// is enough to discover every incoming structural edge without recursion.
+	// Second-level groups (session-kind groups, board columns) parent the
+	// entities; sessions can also parent worker sessions, and agents parent their
+	// sessions. Expanding these discovered nodes once is enough to find every
+	// incoming structural edge without recursion.
 	base := uniqueSortedHandles(nodes)
 	for _, node := range base {
-		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindSession {
+		if node.Ref.Kind != KindAgent && node.Ref.Kind != KindSession && node.Ref.Kind != KindCategory {
+			continue
+		}
+		if node.Ref.Kind == KindCategory && !isSecondLevelCategory(node.Ref.ID) {
 			continue
 		}
 		children, err := c.children(ctx, node.Ref)

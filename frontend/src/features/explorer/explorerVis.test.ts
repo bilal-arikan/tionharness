@@ -2,11 +2,14 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ViewGraphResult, ViewRef } from '@/types'
+import { augmentLive } from './explorerLive'
 import { seedLayout } from './explorerSeed'
 import {
   displayLabel,
   graphToVis,
   kindColor,
+  nodeLabelOfKind,
+  nodeRole,
   ROOT_KEY,
   ROOT_REF,
   resolveExplorerTheme,
@@ -92,6 +95,8 @@ describe('graphToVis', () => {
     expect(bucket.size).toBeGreaterThan(member.size!)
     expect(root.mass).toBeGreaterThan(bucket.mass!)
     expect(root.x).toBe(0)
+    expect(root.fixed).toEqual({ x: true, y: true })
+    expect(member.fixed).toBeUndefined()
     expect(member.shape).toBe('box')
     expect(byId.get('flowrun:RUN1')!.shape).toBe('diamond')
     expect(member.label).toBe('Fix login')
@@ -133,6 +138,133 @@ describe('graphToVis', () => {
       items.map((item) => Object.fromEntries(Object.entries(item).filter(([k]) => k !== 'title')))
     expect(strip(a.nodes)).toEqual(strip(b.nodes))
     expect(a.edges).toEqual(b.edges)
+  })
+})
+
+describe('sub-node roles', () => {
+  const board: ViewRef = { kind: 'board', id: 'board' }
+  const column: ViewRef = { kind: 'category', id: 'col:done' }
+  const card: ViewRef = { kind: 'board', id: 'board', sub: 'T1' }
+  const tools: ViewRef = { kind: 'tools', id: 'tools' }
+  const group: ViewRef = { kind: 'tools', id: 'tools', sub: 'group:files' }
+  const mcp: ViewRef = { kind: 'tools', id: 'tools', sub: 'mcp:M1' }
+  const budget: ViewRef = { kind: 'budget', id: 'budget' }
+  const provider: ViewRef = { kind: 'budget', id: 'budget', sub: 'provider:anthropic' }
+  const roleGraph: ViewGraphResult = {
+    nodes: [
+      { label: 'workspace', ref: ROOT_REF },
+      { label: 'Pano', ref: board },
+      { label: 'done (2 kart)', ref: column },
+      { label: 'Ship it', ref: card },
+      { label: 'Araçlar', ref: tools },
+      { label: 'files (11 araç)', ref: group },
+      { label: 'MCP linear [aktif]', ref: mcp },
+      { label: 'Bütçe', ref: budget },
+      { label: 'anthropic · $2.50 · 2 model', ref: provider },
+    ],
+    edges: [
+      { source: ROOT_REF, target: board },
+      { source: ROOT_REF, target: tools },
+      { source: ROOT_REF, target: budget },
+      { source: board, target: column },
+      { source: column, target: card },
+      { source: tools, target: group },
+      { source: tools, target: mcp },
+      { source: budget, target: provider },
+    ],
+  }
+
+  it('groups sessions by kind under the bucket, localized like the kind chips', () => {
+    const kind: ViewRef = { kind: 'category', id: 'skind:chat' }
+    const other: ViewRef = { kind: 'category', id: 'skind:other' }
+    expect(nodeRole(kind)).toBe('session-kind')
+    expect(nodeLabelOfKind(kind)).toBe('Oturum türü')
+    expect(displayLabel({ label: 'chat (5 oturum)', ref: kind })).toBe('Sohbet (5 oturum)')
+    expect(displayLabel({ label: 'other (2 oturum)', ref: other })).toBe('Diğer (2 oturum)')
+    expect(kindColor(kind)).toBe('#38bdf8')
+  })
+
+  it('classifies roles and localizes their labels', () => {
+    expect(nodeRole(column)).toBe('board-column')
+    expect(nodeRole(card)).toBe('board-card')
+    expect(nodeRole(group)).toBe('tool-group')
+    expect(nodeRole(mcp)).toBe('tool-mcp')
+    expect(nodeRole(provider)).toBe('budget-provider')
+    expect(nodeRole(tools)).toBeNull()
+    expect(nodeLabelOfKind(card)).toBe('Kart')
+    expect(nodeLabelOfKind(tools)).toBe('Araçlar')
+    // Tool groups swap the backend key for the tools screen's Turkish label.
+    expect(displayLabel({ label: 'files (11 araç)', ref: group })).toBe('Dosya & Kabuk (11 araç)')
+    expect(displayLabel({ label: 'MCP linear [aktif]', ref: mcp })).toBe('MCP linear [aktif]')
+  })
+
+  it('gives every role its own shape so columns, cards, groups, servers and providers differ', () => {
+    const { nodes } = graphToVis(roleGraph, {
+      selectedKey: null,
+      search: '',
+      theme,
+      layout: seedLayout(roleGraph, ROOT_KEY),
+    })
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    expect(byId.get('category:col:done')!.shape).toBe('square')
+    expect(byId.get('category:col:done')!.color).toMatchObject({ background: '#10b981' })
+    const cardNode = byId.get('board:board#T1')!
+    expect(cardNode.shape).toBe('box')
+    expect(cardNode.shapeProperties).toMatchObject({ borderDashes: [4, 3] })
+    expect(byId.get('tools:tools#group:files')!.shape).toBe('hexagon')
+    expect(byId.get('tools:tools#mcp:M1')!.shape).toBe('triangle')
+    expect(byId.get('budget:budget#provider:anthropic')!.shape).toBe('dot')
+    expect(byId.get('budget:budget#provider:anthropic')!.color).toMatchObject({
+      background: '#16a34a',
+    })
+  })
+})
+
+describe('live layer rendering', () => {
+  const live = augmentLive({
+    nodes: graph.nodes,
+    edges: graph.edges,
+    live: [
+      {
+        session: s1,
+        state: 'running',
+        agent: { id: 'AG1', name: 'builder', emoji: '🔧', color: '#ff0000' },
+      },
+      {
+        session: s2,
+        state: 'awaiting-workers',
+        agent: { id: 'AG1', name: 'builder', color: '#ff0000' },
+      },
+    ],
+  })
+
+  it('glows live sessions in the agent color and draws avatar nodes tethered to them', () => {
+    const { nodes, edges } = graphToVis(live.graph, {
+      selectedKey: null,
+      search: '',
+      theme,
+      layout: seedLayout(live.graph, ROOT_KEY),
+      liveState: live.liveState,
+      liveAgents: live.liveAgents,
+    })
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    const running = byId.get('session:SES1')!
+    expect(running.shadow).toMatchObject({ enabled: true, color: '#ff0000', size: 28 })
+    expect(running.color).toMatchObject({ border: '#ff0000' })
+    expect(running.borderWidth).toBe(3)
+    const awaiting = byId.get('session:SES2')!
+    expect(awaiting.shadow).toMatchObject({ enabled: true, color: theme.warning })
+    expect(byId.get('flowrun:RUN1')!.shadow).toBeUndefined()
+
+    const avatar = byId.get('agent:AG1#live:SES1')!
+    expect(avatar.shape).toBe('circularImage')
+    expect(String(avatar.image)).toMatch(/^data:image\/svg\+xml/)
+    expect(avatar.color).toMatchObject({ background: '#ff0000' })
+    expect(avatar.label).toBe('builder')
+    const tether = edges.find((e) => e.id === 'session:SES1->agent:AG1#live:SES1')!
+    expect(tether.arrows).toBeUndefined()
+    expect(tether.length).toBe(60)
+    expect(tether.color).toMatchObject({ color: '#ff0000' })
   })
 })
 

@@ -3,7 +3,7 @@
 // event type wants to nudge the panels subscribed to that key; the panels read
 // the current tick via useRefreshTrigger(key) and re-fetch on every change.
 //
-// This replaces the per-panel api.subscribeEvents dance (TaskBoard, NetworkPanel,
+// This replaces the per-panel api.subscribeEvents dance (TaskBoard, ExplorerView,
 // ExecutionsPanel, useActivity) with a single dispatcher in App.tsx and a
 // "dumb consumer" hook in each panel — the panels no longer need to know about
 // event types, debounce, or the EventSource itself.

@@ -133,6 +133,31 @@ describe('useExplorerGraph', () => {
     expect(latest!.ready).toBe(true)
   })
 
+  it('adds the live layer, filters it and projects an avatar as its agent', async () => {
+    mocks.viewGraph.mockResolvedValue({
+      ...graph,
+      live: [{ session: s1, state: 'running', agent: { id: 'AG1', name: 'builder' } }],
+      meta: { 'session:SES1': { kind: 'chat', agentId: 'AG1' } },
+    })
+    const { render } = await mount({ search: '' })
+    expect(latest!.liveCount).toBe(1)
+    expect(latest!.nodes.map((n) => n.id)).toContain('agent:AG1#live:SES1')
+    expect(latest!.canonicalNodeIds).toContain('agent:AG1#live:SES1')
+    expect(latest!.buckets.map((b) => b.key)).toEqual(['category:sessions'])
+    expect(latest!.facets.kinds).toEqual(['chat'])
+    await act(async () => latest!.selectKey('agent:AG1#live:SES1'))
+    expect(latest!.selectedKey).toBe('agent:AG1#live:SES1')
+    expect(latest!.panelRef).toEqual({ kind: 'agent', id: 'AG1' })
+    await render({
+      search: '',
+      filter: { hiddenBuckets: [], liveOnly: false, kinds: ['task'], agentIds: [], tags: [] },
+    })
+    expect(latest!.visibleGraph!.nodes.map((h) => h.ref.id)).not.toContain('SES1')
+    expect(latest!.nodes.map((n) => n.id)).not.toContain('agent:AG1#live:SES1')
+    // Persistence GC still sees every node, filtered or not.
+    expect(latest!.canonicalNodeIds).toContain('session:SES1')
+  })
+
   it('dims non-matching nodes when the search changes', async () => {
     const { render } = await mount({ search: '' })
     await render({ search: 'fix' })

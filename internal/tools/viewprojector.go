@@ -31,6 +31,10 @@ type ViewSources struct {
 	// store), so the agent projection can mark it. Empty = unknown, and the marker
 	// is simply omitted.
 	DefaultAgentID string
+	// Running is the set of session ids executing right now (runtime liveness),
+	// for the Explorer map's live layer. Nil = nothing live / not known. A plain
+	// map on purpose: a nil interface value would be a non-nil interface.
+	Running map[string]bool
 }
 
 // ViewProjector builds the projection resolver for a workspace with every
@@ -45,6 +49,11 @@ func ViewProjector(database *db.DB, wsName string, src ViewSources) *view.Projec
 	if src.Logs != nil {
 		s.Logs = src.Logs
 	}
+	// Built-in tool groups are static code (categories.go): always attached.
+	s.ToolGroups = builtinToolGroups{}
+	if src.Running != nil {
+		s.Live = view.RunningSet(src.Running)
+	}
 	// The findings sidecar lives next to the workspace store. A store that will
 	// not open degrades the insight nodes to "unavailable" — it must not take the
 	// rest of the map down with it.
@@ -57,6 +66,19 @@ func ViewProjector(database *db.DB, wsName string, src ViewSources) *view.Projec
 		WithName(wsName).
 		WithDefaultAgent(src.DefaultAgentID).
 		WithSources(s)
+}
+
+// builtinToolGroups adapts categories.go to view.ToolGroupsSource. Labels are
+// the category keys; the UI localizes them (toolMeta.ts CATEGORY_LABELS).
+type builtinToolGroups struct{}
+
+func (builtinToolGroups) ToolGroups() []view.ToolGroup {
+	cats := BuiltinToolsByCategory()
+	out := make([]view.ToolGroup, 0, len(cats))
+	for _, c := range cats {
+		out = append(out, view.ToolGroup{Key: c.Key, Label: c.Key, Tools: c.Tools})
+	}
+	return out
 }
 
 // viewFindingsSource adapts *insight.FindingStore to view.FindingsSource.

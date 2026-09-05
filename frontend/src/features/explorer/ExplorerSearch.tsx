@@ -1,11 +1,9 @@
 import { Search, X } from 'lucide-react'
-import type { ViewKind } from '@/types'
-import { KIND_LABEL } from './explorerVis'
-
 export interface ExplorerSearchResult {
   key: string
   label: string
-  kind: ViewKind
+  // Already localized: the kind label, or the finer role label for sub nodes.
+  kindLabel: string
   selected: boolean
 }
 
@@ -57,7 +55,7 @@ export function ExplorerSearch({ value, onChange, results, onPick }: Props) {
             >
               <span className="min-w-0 flex-1 truncate">{result.label}</span>
               <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
-                {KIND_LABEL[result.kind]}
+                {result.kindLabel}
               </span>
             </button>
           ))}

@@ -16,6 +16,9 @@ type BudgetInput struct {
 	Rollup billing.Rollup
 	// Day is the calendar day (YYYY-MM-DD) the rollup covers, shown verbatim.
 	Day string
+	// Sub selects one provider's share ("provider:<name>") instead of the whole
+	// day — see projectBudgetSub.
+	Sub string
 	// Now is the clock used for the asOf stamp. Zero means time.Now().
 	Now time.Time
 }
@@ -27,6 +30,9 @@ const budgetModelRows = 6
 // ProjectBudget renders today's spend broken down by model. Every figure is
 // carried straight from the rollup: the projection adds no arithmetic of its own.
 func ProjectBudget(in BudgetInput, level Level) (View, error) {
+	if in.Sub != "" {
+		return projectBudgetSub(in, level)
+	}
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()

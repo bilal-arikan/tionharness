@@ -1,4 +1,4 @@
-import { Search, Plug, ChevronRight, Check, Ban } from 'lucide-react'
+import { Search, Plug, Check, Ban } from 'lucide-react'
 import { VISIBILITY_TIERS, toolLabel } from './toolMeta'
 import { toolIcon } from '@/shared/lib/toolIcons'
 import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
@@ -9,6 +9,9 @@ import { ServerManagement } from './ServerManagement'
 
 interface Props {
   onError: (msg: string) => void
+  // Deep-linked tool group (#/w/{ws}/tools/{group}); undefined = uncontrolled.
+  group?: string | null
+  onGroupChange?: (key: string | null) => void
 }
 
 // ToolsPanel is the workspace-wide tools screen. The left column lists every
@@ -16,7 +19,7 @@ interface Props {
 // origin and filterable; clicking a tool shows its details on the right, where
 // it can be activated/deactivated for the whole workspace. The right column also
 // hosts MCP server management when no tool is selected.
-export function ToolsPanel({ onError }: Props) {
+export function ToolsPanel({ onError, group, onGroupChange }: Props) {
   const {
     servers,
     testing,
@@ -51,8 +54,9 @@ export function ToolsPanel({ onError }: Props) {
     statusFilter,
     setStatusFilter,
     toggleVisFilter,
-    collapsed,
-    toggleGroup,
+    activeGroup,
+    setActiveGroup,
+    visibleGroups,
     toggleTool,
     setToolVisibility,
     setServerVisibility,
@@ -81,7 +85,7 @@ export function ToolsPanel({ onError }: Props) {
     bulkSetVisibility,
     selected,
     params,
-  } = useToolsPanelState(onError)
+  } = useToolsPanelState(onError, { group, onGroupChange })
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -193,66 +197,100 @@ export function ToolsPanel({ onError }: Props) {
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
-          {groups.map((g) => {
-            const isCollapsed = collapsed.has(g.label)
-            return (
-              <div key={g.label} className="mb-1">
+        {/* Group picker: one button per group, "Tümü" shows every group. Replaces
+            the old fold-in/out accordion — a selected group narrows the list. */}
+        {groups.length > 0 && (
+          <div
+            className="flex flex-wrap gap-1 border-b border-[var(--color-border)] px-2 py-2"
+            role="group"
+            aria-label="Araç grupları"
+          >
+            <button
+              data-testid="tools-group-all"
+              onClick={() => setActiveGroup(null)}
+              aria-pressed={activeGroup === null}
+              className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                activeGroup === null
+                  ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              Tümü
+            </button>
+            {groups.map((g) => {
+              const on = activeGroup === g.key
+              return (
                 <button
+                  key={g.key}
                   data-testid="tools-group-toggle"
-                  data-group={g.label}
-                  onClick={() => toggleGroup(g.label)}
-                  className="flex w-full items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                  data-group={g.key}
+                  onClick={() => setActiveGroup(on ? null : g.key)}
+                  aria-pressed={on}
+                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+                    on
+                      ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                  }`}
                 >
-                  <ChevronRight
-                    size={12}
-                    className={`flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
-                  />
                   <span className="truncate">{g.label}</span>
-                  <span className="ml-auto font-normal tabular-nums opacity-70">
-                    {g.tools.length}
-                  </span>
+                  <span className="tabular-nums opacity-70">{g.tools.length}</span>
                 </button>
-                {!isCollapsed &&
-                  g.tools.map((t) => {
-                    const active = selectedName === t.name
-                    const ToolIcon = toolIcon(t.name)
-                    return (
-                      <button
-                        key={t.name}
-                        data-testid="tools-list-item"
-                        data-tool-name={t.name}
-                        onClick={(e) => {
-                          if (sel.handleClick(e, t.name, orderedNames, selectedName)) return
-                          setSelectedName(t.name)
-                        }}
-                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
-                          sel.isSelected(t.name)
-                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-accent)]'
-                            : active
-                              ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                              : 'hover:bg-[var(--color-surface-2)]'
+              )
+            })}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto py-2">
+          {visibleGroups.map((g) => {
+            return (
+              <div key={g.key} className="mb-1">
+                {visibleGroups.length > 1 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                    <span className="truncate">{g.label}</span>
+                    <span className="ml-auto font-normal tabular-nums opacity-70">
+                      {g.tools.length}
+                    </span>
+                  </div>
+                )}
+                {g.tools.map((t) => {
+                  const active = selectedName === t.name
+                  const ToolIcon = toolIcon(t.name)
+                  return (
+                    <button
+                      key={t.name}
+                      data-testid="tools-list-item"
+                      data-tool-name={t.name}
+                      onClick={(e) => {
+                        if (sel.handleClick(e, t.name, orderedNames, selectedName)) return
+                        setSelectedName(t.name)
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition ${
+                        sel.isSelected(t.name)
+                          ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-accent)]'
+                          : active
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'hover:bg-[var(--color-surface-2)]'
+                      }`}
+                    >
+                      <span
+                        title={t.enabled ? 'Aktif' : 'Devre dışı'}
+                        className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                          t.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'
                         }`}
+                      />
+                      <ToolIcon
+                        size={14}
+                        className={`shrink-0 ${active ? '' : 'text-[var(--color-text-dim)]'}`}
+                      />
+                      <span
+                        className={`min-w-0 truncate ${t.enabled ? '' : 'text-[var(--color-text-dim)]'}`}
                       >
-                        <span
-                          title={t.enabled ? 'Aktif' : 'Devre dışı'}
-                          className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                            t.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-border)]'
-                          }`}
-                        />
-                        <ToolIcon
-                          size={14}
-                          className={`shrink-0 ${active ? '' : 'text-[var(--color-text-dim)]'}`}
-                        />
-                        <span
-                          className={`min-w-0 truncate ${t.enabled ? '' : 'text-[var(--color-text-dim)]'}`}
-                        >
-                          {toolLabel(t)}
-                        </span>
-                        <VisibilityBadge visibility={t.visibility} className="ml-auto" />
-                      </button>
-                    )
-                  })}
+                        {toolLabel(t)}
+                      </span>
+                      <VisibilityBadge visibility={t.visibility} className="ml-auto" />
+                    </button>
+                  )
+                })}
               </div>
             )
           })}

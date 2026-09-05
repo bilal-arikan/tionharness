@@ -20,7 +20,7 @@ type focusViewInput struct {
 // sync with the frontend View union (lib/url.ts VIEWS); an unknown view is
 // rejected so a typo can't emit a navigation the UI silently ignores.
 var focusableViews = map[string]bool{
-	"chat": true, "executions": true, "agents": true, "network": true,
+	"chat": true, "executions": true, "agents": true, "explorer": true,
 	"board": true, "schedules": true, "memory": true, "flows": true,
 	"artifacts": true, "skills": true, "market": true, "budget": true,
 	"prompts": true, "workspace": true, "settings": true,
@@ -48,7 +48,7 @@ func (FocusViewTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "view": { "type": "string", "enum": ["chat","executions","agents","network","board","schedules","memory","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
+    "view": { "type": "string", "enum": ["chat","executions","agents","explorer","board","schedules","memory","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
     "sessionId": { "type": "string", "description": "Optional session to select (chat/executions views). Defaults to the current session." },
     "agentId": { "type": "string", "description": "Optional agent to select (agents/memory views). Defaults to the responding agent." }
   },

@@ -28,6 +28,8 @@ export interface AppNavigationParams {
   explorerNode: string | null
   flowsTab: string | null
   rotaTrajectory: string | null
+  boardTarget: string | null
+  toolsGroup: string | null
   pendingRouteRef: MutableRefObject<Route | null>
   switchWorkspace: (id: string) => void
   selectSession: (id: string, messageId?: string) => void
@@ -40,6 +42,8 @@ export interface AppNavigationParams {
   setExplorerNode: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
   setRotaTrajectory: (id: string | null) => void
+  setBoardTarget: (id: string | null) => void
+  setToolsGroup: (id: string | null) => void
 }
 
 export function useAppNavigation(p: AppNavigationParams) {
@@ -57,6 +61,8 @@ export function useAppNavigation(p: AppNavigationParams) {
     setExplorerNode,
     setFlowsTab,
     setRotaTrajectory,
+    setBoardTarget,
+    setToolsGroup,
   } = p
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
@@ -91,6 +97,10 @@ export function useAppNavigation(p: AppNavigationParams) {
         setFlowsTab(r.id)
       } else if (r.view === 'rota') {
         setRotaTrajectory(r.id)
+      } else if (r.view === 'board') {
+        setBoardTarget(r.id)
+      } else if (r.view === 'tools') {
+        setToolsGroup(r.id)
       }
     },
     [
@@ -107,6 +117,8 @@ export function useAppNavigation(p: AppNavigationParams) {
       setExplorerNode,
       setFlowsTab,
       setRotaTrajectory,
+      setBoardTarget,
+      setToolsGroup,
     ],
   )
 
@@ -125,7 +137,12 @@ export function useAppNavigation(p: AppNavigationParams) {
       flowsTab: p.flowsTab,
       explorerNode: p.explorerNode,
       rotaTrajectory: p.rotaTrajectory,
+      boardTask: p.boardTarget,
+      toolsGroup: p.toolsGroup,
     }),
   }
   useUrlSync(route, !!p.activeWorkspaceId, applyRoute)
+  // Exposed so in-app "open in its screen" jumps (the map's side panel) take the
+  // exact path a shared link takes, instead of re-implementing the dispatch.
+  return { applyRoute }
 }

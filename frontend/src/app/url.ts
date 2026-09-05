@@ -16,7 +16,6 @@ import type { View } from './NavRail'
 const VIEWS: View[] = [
   'chat',
   'agents',
-  'network',
   'rota',
   'explorer',
   'board',
@@ -150,11 +149,19 @@ export function routeIdForView(
     flowsTab: string | null
     explorerNode: string | null
     rotaTrajectory?: string | null
+    boardTask?: string | null
+    toolsGroup?: string | null
   },
 ): string | null {
   switch (view) {
     case 'chat':
       return state.sessionId
+    case 'board':
+      // #/w/{ws}/board/{taskId} opens that card's editor on entry.
+      return state.boardTask ?? null
+    case 'tools':
+      // #/w/{ws}/tools/{group} pre-selects a tool group (category key or mcp:<server>).
+      return state.toolsGroup ?? null
     case 'agents':
       return state.agentId
     case 'artifacts':

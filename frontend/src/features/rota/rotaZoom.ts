@@ -10,7 +10,8 @@
 /** Zoom levels, coarse enough that a click always makes a visible difference. */
 export const ZOOM_STEPS = [1, 1.5, 2, 3, 4, 6, 8] as const
 
-export const MIN_ZOOM = ZOOM_STEPS[0]
+// Widened to number: a literal `1` type makes useState<MIN_ZOOM> reject every other step.
+export const MIN_ZOOM: number = ZOOM_STEPS[0]
 export const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1]
 
 /** Clamp an arbitrary factor into range (wheel zoom is continuous). */

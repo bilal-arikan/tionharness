@@ -20,6 +20,12 @@ type GraphEdge struct {
 type Graph struct {
 	Nodes []Handle    `json:"nodes"`
 	Edges []GraphEdge `json:"edges"`
+	// Live is the sessions executing right now (see GraphLive); empty, never
+	// null, when nothing runs or no live source is attached.
+	Live []GraphLive `json:"live"`
+	// Meta carries per-session facet data (kind / agent / tags / archived) keyed
+	// by Ref.String, for the map's filters.
+	Meta map[string]GraphMeta `json:"meta"`
 }
 
 // Graph walks the structural tree from the workspace root once, breadth first,
@@ -63,7 +69,16 @@ func (p *Projector) Graph(ctx context.Context) (Graph, error) {
 		}
 	}
 
-	out := Graph{Nodes: make([]Handle, 0, len(nodes)), Edges: make([]GraphEdge, 0, len(edges))}
+	live, meta, err := p.graphLive(ctx, cache)
+	if err != nil {
+		return Graph{}, err
+	}
+	out := Graph{
+		Nodes: make([]Handle, 0, len(nodes)),
+		Edges: make([]GraphEdge, 0, len(edges)),
+		Live:  live,
+		Meta:  meta,
+	}
 	for _, handle := range nodes {
 		out.Nodes = append(out.Nodes, handle)
 	}

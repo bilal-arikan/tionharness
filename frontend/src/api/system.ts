@@ -30,7 +30,7 @@ import { req } from './client'
 // Connection is multiplexed at the module level: the first subscriber creates
 // the single EventSource, additional subscribers share it, and the source is
 // closed when the last subscriber unsubscribes. This keeps N mounted panels
-// (NetworkPanel + TaskBoard + future listeners) from holding N independent
+// (ExplorerView + TaskBoard + future listeners) from holding N independent
 // HTTP/1.1 SSE keep-alives against the backend.
 type EventCb = (e: AppEvent) => void
 type LogCb = (e: LogEntry) => void

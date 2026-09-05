@@ -66,7 +66,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [20-SCHEDULE-WAKE.md](20-SCHEDULE-WAKE.md) | `schedule_wake`: ajanın kendi sohbetine geri dönmesi |
 | [21-MARKET.md](21-MARKET.md) | Uygulama içi market sistemi (marketplace) |
 | [22-SPAWN-SESSION.md](22-SPAWN-SESSION.md) | Spawn session (fire-and-forget paralel işçi) |
-| [23-ILISKI-GRAFIGI.md](23-ILISKI-GRAFIGI.md) | İlişki grafiği: workspace ağı (vis-network) |
+| [23-ILISKI-GRAFIGI.md](23-ILISKI-GRAFIGI.md) | **KALDIRILDI (2026-09-05)** — İlişki grafiği / Ağ ekranı. Yerini Harita aldı (`68`): canlı katman + filtreler oraya taşındı; `VisNetworkGraph` ortak tuval olarak yaşıyor |
 | [24-SELF-MANAGEMENT.md](24-SELF-MANAGEMENT.md) | Self-management + ayarlar alt sistemi |
 | [25-SUBAGENT-ISOLATION.md](25-SUBAGENT-ISOLATION.md) | Generic ajan yürütme çekirdeği + alt-ajan (subagent) izolasyonu |
 | [26-CALISMA-DIZINI.md](26-CALISMA-DIZINI.md) | Çalışma dizini (working directory) — oturum-başına cwd |

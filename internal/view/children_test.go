@@ -22,6 +22,7 @@ type fakeStore struct {
 	artifacts    []db.Artifact
 	automations  []db.Automation
 	trajectories []db.Trajectory
+	usage        []db.Usage
 }
 
 func (s *fakeStore) ListSessions(_ context.Context, agentID string) ([]db.Session, error) {
@@ -64,7 +65,7 @@ func (s *fakeStore) ListSchedules(context.Context) ([]db.Schedule, error) { retu
 func (s *fakeStore) GetSchedule(context.Context, string) (db.Schedule, error) {
 	return db.Schedule{}, nil
 }
-func (s *fakeStore) UsageForDay(context.Context, string) ([]db.Usage, error) { return nil, nil }
+func (s *fakeStore) UsageForDay(context.Context, string) ([]db.Usage, error) { return s.usage, nil }
 func (s *fakeStore) GetAgent(_ context.Context, id string) (db.Agent, error) {
 	for _, agent := range s.agents {
 		if agent.ID == id {
@@ -141,7 +142,17 @@ func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
 }
 
 func TestChildrenSessionsCategoryExcludesArchived(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions})
+	p := childrenFixture()
+	// The sessions bucket groups by kind first; the fixture's sessions carry no
+	// kind, so they all land in one "other" group that counts the live ones.
+	groups, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions})
+	if err != nil {
+		t.Fatalf("group children: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Ref.ID != "skind:other" || groups[0].Label != "other (4 oturum)" {
+		t.Fatalf("session kind groups = %+v, want one 'other (4 oturum)' group", groups)
+	}
+	hs, err := p.Children(context.Background(), groups[0].Ref)
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
@@ -268,7 +279,7 @@ func TestChildrenCapsAtTopN(t *testing.T) {
 		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
 	}
 	p := NewProjector(&fakeStore{sessions: sessions})
-	hs, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions})
+	hs, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: "skind:other"})
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
@@ -301,7 +312,7 @@ func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
 		t.Fatalf("root neighborhood parents=%d children=%d", len(root.Parents), len(root.Children))
 	}
 
-	category, err := p.Neighborhood(ctx, Ref{Kind: KindCategory, ID: CategorySessions})
+	category, err := p.Neighborhood(ctx, Ref{Kind: KindCategory, ID: "skind:other"})
 	if err != nil {
 		t.Fatalf("category neighborhood: %v", err)
 	}

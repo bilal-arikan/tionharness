@@ -2,12 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
 import type { ViewGraphResult, ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
+import {
+  applyExplorerFilter,
+  emptyExplorerFilter,
+  explorerFacets,
+  type ExplorerFilter,
+} from './explorerFilter'
+import { augmentLive, panelRefFor } from './explorerLive'
 import { seedLayout } from './explorerSeed'
-import { graphToVis, resolveExplorerTheme, ROOT_KEY, ROOT_REF } from './explorerVis'
+import { graphToVis, kindColor, resolveExplorerTheme, ROOT_KEY, ROOT_REF } from './explorerVis'
+import type { ExplorerBucket } from './ExplorerFilters'
+
+const EMPTY_FILTER = emptyExplorerFilter()
 
 interface Options {
   onError?: (msg: string) => void
   search: string
+  // Facet filter (explorerFilter); omitted = everything visible.
+  filter?: ExplorerFilter
   // Deep link: the node to select + focus on entry (a ref string), and the
   // callback that mirrors every user selection back into the URL.
   initialFocus?: string | null
@@ -15,10 +27,17 @@ interface Options {
 }
 
 // useExplorerGraph owns the Explorer network's data: one whole-map fetch
-// (GET /api/views/graph), the selected node, and the camera focus request the
-// canvas honours. Selection == focus here: a single click both opens the node in
-// the side panel and glides the camera to it.
-export function useExplorerGraph({ onError, search, initialFocus, onFocus }: Options) {
+// (GET /api/views/graph), the live layer derived from it, the filter, the
+// selected node, and the camera focus request the canvas honours. Selection ==
+// focus here: a single click both opens the node in the side panel and glides
+// the camera to it.
+export function useExplorerGraph({
+  onError,
+  search,
+  filter = EMPTY_FILTER,
+  initialFocus,
+  onFocus,
+}: Options) {
   const [graph, setGraph] = useState<ViewGraphResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -86,14 +105,36 @@ export function useExplorerGraph({ onError, search, initialFocus, onFocus }: Opt
     setFocus((current) => (current.key === key ? current : { key, tick: current.tick + 1 }))
   }, [initialFocus])
 
+  // Live layer (avatar nodes off executing sessions) over the raw map, then the
+  // filter over that. Both are pure and cheap relative to the physics.
+  const live = useMemo(() => (graph ? augmentLive(graph) : null), [graph])
+  const visible = useMemo(
+    () => (live ? applyExplorerFilter(live.graph, filter, live.liveState, ROOT_KEY) : null),
+    [live, filter],
+  )
+  const facets = useMemo(
+    () => (graph ? explorerFacets(graph) : { kinds: [], agents: [], tags: [] }),
+    [graph],
+  )
+  // Layer chips: the root's direct children, in the order the backend lists them.
+  const buckets = useMemo<ExplorerBucket[]>(() => {
+    if (!graph) return []
+    const byKey = new Map(graph.nodes.map((h) => [refToString(h.ref), h]))
+    return graph.edges
+      .filter((e) => refToString(e.source) === ROOT_KEY)
+      .map((e) => byKey.get(refToString(e.target)))
+      .filter((h): h is NonNullable<typeof h> => !!h)
+      .map((h) => ({ key: refToString(h.ref), label: h.label, color: kindColor(h.ref) }))
+  }, [graph])
+
   // A deep-linked node that the loaded map does not contain is an error the user
   // can see (and escape from), not a silent root selection.
   const selectedKey = refToString(selectedRef)
   const refByKey = useMemo(() => {
     const map = new Map<string, ViewRef>()
-    for (const handle of graph?.nodes ?? []) map.set(refToString(handle.ref), handle.ref)
+    for (const handle of live?.graph.nodes ?? []) map.set(refToString(handle.ref), handle.ref)
     return map
-  }, [graph])
+  }, [live])
   const missingFocus =
     graph !== null && initialFocus && !deepLinkError && !refByKey.has(selectedKey)
       ? `Odak düğümü haritada yok: ${selectedKey}`
@@ -129,25 +170,32 @@ export function useExplorerGraph({ onError, search, initialFocus, onFocus }: Opt
     return () => observer.disconnect()
   }, [])
 
-  const layout = useMemo(() => (graph ? seedLayout(graph, ROOT_KEY) : null), [graph])
+  const layout = useMemo(() => (visible ? seedLayout(visible, ROOT_KEY) : null), [visible])
   const { nodes, edges } = useMemo(() => {
-    if (!graph || !layout) return { nodes: [], edges: [] }
+    if (!visible || !layout || !live) return { nodes: [], edges: [] }
     // themeVersion is a re-map trigger, not an input.
     void themeVersion
-    return graphToVis(graph, {
+    return graphToVis(visible, {
       selectedKey,
       search,
       theme: resolveExplorerTheme(),
       layout,
+      liveState: live.liveState,
+      liveAgents: live.liveAgents,
     })
-  }, [graph, layout, selectedKey, search, themeVersion])
+  }, [visible, layout, live, selectedKey, search, themeVersion])
   const canonicalNodeIds = useMemo(
-    () => (graph ? graph.nodes.map((handle) => refToString(handle.ref)) : []),
-    [graph],
+    () => (live ? live.graph.nodes.map((handle) => refToString(handle.ref)) : []),
+    [live],
   )
 
   return {
     graph,
+    // The map as drawn (live layer + filter applied): search and counts read this.
+    visibleGraph: visible,
+    facets,
+    buckets,
+    liveCount: live?.liveState.size ?? 0,
     nodes,
     edges,
     canonicalNodeIds,
@@ -156,6 +204,8 @@ export function useExplorerGraph({ onError, search, initialFocus, onFocus }: Opt
     error,
     deepLinkError: deepLinkError ?? missingFocus,
     selectedRef,
+    // What the side panel projects: a live avatar node shows its agent's card.
+    panelRef: panelRefFor(selectedRef),
     selectedKey,
     focusKey: focus.key,
     focusTick: focus.tick,

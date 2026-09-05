@@ -1,5 +1,11 @@
 # 23 — İlişki Grafiği (Relation Graph)
 
+> **KALDIRILDI (2026-09-05):** Ağ ekranı, `GET /api/graph`, `NetworkPanel`/`NetworkFilters`/
+> `relationGraph` silindi. Canlı ajan örnekleri (parlama + avatar), katman/tür/ajan/etiket
+> filtreleri ve yoğunluk kaydırıcısı **Harita** ekranına taşındı — bkz. `68-OZET-HARITASI.md`
+> §7.0. `VisNetworkGraph`, `networkLayoutStorage`, `networkPhysicsState` ve `agentAvatar`
+> `features/network/` altında ortak tuval bileşenleri olarak kaldı. Aşağısı tarihçedir.
+
 > **Özet (2026-09-03):** Workspace'teki ajan/görev/akış/skill/MCP ilişkilerini tek
 > bakışta gösteren salt-okunur ağ görünümü ("Ağ" — NavRail), `vis-network` (vis.js) +
 > forceAtlas2 fizik motoruyla çizilir. Durum: uygulanmış ve olgun. En önemli kararlar:

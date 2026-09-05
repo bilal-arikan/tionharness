@@ -69,7 +69,25 @@ func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 			return nil, err
 		}
 		return capHandles(nodes, categoryTopN), nil
-	case KindBudget, KindTools, KindFlowRun, KindSchedule,
+	case KindTools:
+		if ref.Sub != "" {
+			return nil, nil // one group / one MCP server is a leaf
+		}
+		hs, err := p.newStructuralCache().children(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+		return capHandles(hs, categoryTopN), nil
+	case KindBudget:
+		if ref.Sub != "" {
+			return nil, nil // one provider is a leaf
+		}
+		hs, err := p.newStructuralCache().children(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+		return capHandles(hs, categoryTopN), nil
+	case KindFlowRun, KindSchedule,
 		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
 		// there is nothing structural to expand into.
@@ -191,7 +209,9 @@ func IsExpandable(ref Ref) bool {
 	switch ref.Kind {
 	case KindSpace, KindCategory, KindAgent, KindSession, KindTrajectory:
 		return true
-	case KindBoard:
+	case KindBoard, KindTools, KindBudget:
+		// The whole board / tool surface / day's budget drill into columns,
+		// groups+servers and providers; one card / group / provider is a leaf.
 		return ref.Sub == ""
 	default:
 		return false
@@ -395,6 +415,88 @@ func capHandles(hs []Handle, n int) []Handle {
 		return hs[:n]
 	}
 	return hs
+}
+
+// cutSessionKindPrefix splits an "skind:<kind>" category id.
+func cutSessionKindPrefix(id string) (key string, ok bool) {
+	const p = categorySessionKindPrefix
+	if len(id) > len(p) && id[:len(p)] == p {
+		return id[len(p):], true
+	}
+	return "", false
+}
+
+// isSecondLevelCategory reports whether a category id names a group that sits
+// under a bucket (a session-kind group, a board column) rather than a bucket.
+func isSecondLevelCategory(id string) bool {
+	if _, ok := cutColumnPrefix(id); ok {
+		return true
+	}
+	_, ok := cutSessionKindPrefix(id)
+	return ok
+}
+
+// sessionKindOf is the group key of a session: its kind, "other" when unset.
+func sessionKindOf(s db.Session) string {
+	if s.Kind == "" {
+		return "other"
+	}
+	return s.Kind
+}
+
+// sessionKindOrder fixes the display order of the kind groups; unknown kinds
+// follow alphabetically.
+var sessionKindOrder = []string{
+	"chat", "task", "flow", "flow-coordinator", "schedule", "spawned", "subagent",
+	"worker", "inbox", "other",
+}
+
+// sessionKindGroupHandles is the sessions bucket's structural children: one
+// category node per kind that has at least one live session, in display order.
+func sessionKindGroupHandles(sessions []db.Session) []Handle {
+	counts := map[string]int{}
+	for _, s := range sessions {
+		counts[sessionKindOf(s)]++
+	}
+	rank := map[string]int{}
+	for i, k := range sessionKindOrder {
+		rank[k] = i
+	}
+	kinds := make([]string, 0, len(counts))
+	for k := range counts {
+		kinds = append(kinds, k)
+	}
+	sort.Slice(kinds, func(i, j int) bool {
+		ri, iok := rank[kinds[i]]
+		rj, jok := rank[kinds[j]]
+		if iok != jok {
+			return iok
+		}
+		if iok && ri != rj {
+			return ri < rj
+		}
+		return kinds[i] < kinds[j]
+	})
+	hs := make([]Handle, 0, len(kinds))
+	for _, k := range kinds {
+		hs = append(hs, Handle{
+			Label: fmt.Sprintf("%s (%d oturum)", k, counts[k]),
+			Ref:   Ref{Kind: KindCategory, ID: categorySessionKindPrefix + k},
+			Level: LevelCard,
+		})
+	}
+	return hs
+}
+
+// sessionsOfKind filters a snapshot to one kind group, preserving order.
+func sessionsOfKind(sessions []db.Session, kind string) []db.Session {
+	out := make([]db.Session, 0, len(sessions))
+	for _, s := range sessions {
+		if sessionKindOf(s) == kind {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // cutColumnPrefix splits a "col:<key>" category id.

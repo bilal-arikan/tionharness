@@ -30,6 +30,14 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
   )
+  // Task card to open on the board (deep-link aware): #/w/{ws}/board/{taskId}.
+  const [boardTarget, setBoardTarget] = useState<string | null>(
+    INITIAL_ROUTE.view === 'board' ? INITIAL_ROUTE.id : null,
+  )
+  // Selected tool group on the Tools screen (deep-link aware): #/w/{ws}/tools/{group}.
+  const [toolsGroup, setToolsGroup] = useState<string | null>(
+    INITIAL_ROUTE.view === 'tools' ? INITIAL_ROUTE.id : null,
+  )
   // Zoomed trajectory on the Rota screen (deep-link aware): #/w/{ws}/rota/{RTA}.
   const [rotaTrajectory, setRotaTrajectory] = useState<string | null>(
     INITIAL_ROUTE.view === 'rota' ? INITIAL_ROUTE.id : null,
@@ -100,6 +108,10 @@ export function useDeepLinks(setView: (v: View) => void) {
     setFlowsTab,
     rotaTrajectory,
     setRotaTrajectory,
+    boardTarget,
+    setBoardTarget,
+    toolsGroup,
+    setToolsGroup,
     openTrajectory,
     artifactTarget,
     setArtifactTarget,

@@ -40,12 +40,13 @@ func TestGraphWalksWholeTreeOnceAndTerminatesCycles(t *testing.T) {
 	}
 
 	sessions := Ref{Kind: KindCategory, ID: CategorySessions}
+	kindGroup := Ref{Kind: KindCategory, ID: "skind:other"}
 	agent := Ref{Kind: KindAgent, ID: "AG1"}
 	cycA := Ref{Kind: KindSession, ID: "CYC-A"}
 	cycB := Ref{Kind: KindSession, ID: "CYC-B"}
 	self := Ref{Kind: KindSession, ID: "SELF"}
 	for _, want := range []GraphEdge{
-		{sessions, cycA}, {agent, cycA}, // multi-parent
+		{sessions, kindGroup}, {kindGroup, cycA}, {agent, cycA}, // bucket -> kind group -> session; multi-parent
 		{cycA, cycB}, {cycB, cycA}, // cycle
 		{self, self}, // self-loop
 	} {

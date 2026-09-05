@@ -16,13 +16,14 @@ import { useServerNow } from './useServerNow'
 import { layoutRota } from './rotaLayout'
 import { RotaCanvas, type RotaSelection } from './RotaCanvas'
 import { RotaActivity } from './RotaActivity'
-import { RotaToolbar, type IdleCutoff } from './RotaToolbar'
+import { RotaToolbar } from './RotaToolbar'
 import { RotaChipFilter } from './RotaChipFilter'
 import { RotaZoomControl } from './RotaZoomControl'
 import { MIN_ZOOM, anchoredScrollLeft, clampZoom, stepZoom } from './rotaZoom'
 import { ROTA_LABEL_W } from './RotaCanvas'
 import { laneChipCounts, laneChipFilter } from './rotaChips'
 import { useRotaChips } from './useRotaChips'
+import { useRotaPrefs } from './useRotaPrefs'
 import { RotaTrajectoryView } from './RotaTrajectoryView'
 
 interface Props {
@@ -50,13 +51,16 @@ export function RotaPanel({
   const lanes = useLanes()
   const now = useServerNow(5000)
   const [selected, setSelected] = useState<RotaSelection | null>(null)
-  const [cutoff, setCutoff] = useState<IdleCutoff>(21600)
-  // Dead air in the time axis is collapsed by default: an idle night otherwise
-  // squashes the minutes that carry work into a few pixels.
-  const [collapseGaps, setCollapseGaps] = useState(true)
-  // Duration is spent on a log axis by default: over a multi-day window most
-  // bars otherwise round to a couple of pixels next to one very long lane.
-  const [normalizeBars, setNormalizeBars] = useState(true)
+  // Toolbar preferences persist per browser (useRotaPrefs): the idle cutoff,
+  // gap collapsing (an idle night otherwise squashes the minutes that carry
+  // work into a few pixels) and the log duration axis (over a multi-day window
+  // most bars otherwise round to a couple of pixels next to one very long lane).
+  const {
+    prefs: { cutoff, collapseGaps, normalizeBars },
+    setCutoff,
+    setCollapseGaps,
+    setNormalizeBars,
+  } = useRotaPrefs()
   // Time-axis zoom; 1 fits the panel, above that the canvas host scrolls.
   const [zoom, setZoom] = useState(MIN_ZOOM)
   const zoomRef = useRef(zoom)

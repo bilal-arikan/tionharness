@@ -8,9 +8,6 @@ export const FlowsPanel = lazy(() =>
   import('@/features/flows/FlowsPanel').then((m) => ({ default: m.FlowsPanel })),
 )
 // The collaboration network panel also pulls in React Flow — load it on demand.
-export const NetworkPanel = lazy(() =>
-  import('@/features/network/NetworkPanel').then((m) => ({ default: m.NetworkPanel })),
-)
 // The Rota (trajectory) view is its own chunk so the lane store + panels only
 // load when the user opens it (_Docs/77 R10).
 export const RotaPanel = lazy(() =>

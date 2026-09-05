@@ -53,7 +53,8 @@ kullanılabilir ama veri modeli ve etkileşim farklı → ayrı feature klasör�
 
 ```
 workspace (root)
-├── Oturumlar (category)      → session:SES*  → (coordinator/worker alt düğümleri)
+├── Oturumlar (category)      → category:skind:<tür> (oturum türü grubu, 2026-09-05)
+│                              → session:SES*  → (coordinator/worker alt düğümleri)
 ├── Akışlar (category)        → flowrun:RUN*  → (node alt düğümleri, Sub)
 ├── Pano (board)              → board#<sütun> → kart (task) düğümleri
 ├── Ajanlar (category)        → agent:AGT*    → o ajanın oturumları
@@ -61,9 +62,10 @@ workspace (root)
 ├── Otomasyonlar (category)   → automation:AUT* (yaprak — tetik/durum/hata)
 ├── Skill'ler (category)      → skill:<slug> (yaprak — katalog girişi)
 ├── İçgörüler (category)      → insight:FND* (yaprak — bulgu özeti)
-├── Günlükler (logs, yaprak)  → process log kuyruğu inline (budget gibi)
-├── Bütçe (budget)            → gün/model kırılımı
-└── Araçlar (tools)           → workspace-aktif araç seti / MCP sunucuları
+├── Günlükler (logs, yaprak)  → process log kuyruğu inline
+├── Bütçe (budget)            → budget#provider:<ad> (sağlayıcı başına yaprak, 2026-09-05)
+└── Araçlar (tools)           → tools#group:<kategori> (yerleşik araç grubu) +
+                                tools#mcp:<id> (MCP sunucusu) — yapraklar, 2026-09-05
 ```
 
 TSK66 notları:
@@ -137,7 +139,11 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   cap yok, ziyaret kümesi döngü/self-loop'u keser, çıktı `Ref.String` sırasıyla
   deterministiktir. Skill/insight kaynağı yoksa o kovacık boş kalır, harita düşmez.
   `session → rota` ve `rota → bağlı varlık` kenarları da dahildir.
-- **Yerleşim:** `explorerSeed.ts` radyal tohum verir (kök 0,0; 11 grup 340px halkada;
+- **Yerleşim:** kök düğüm fizik için sabittir (`fixed`; sürüklenebilir) — sabit çapa
+  olmayınca tüm alan sürekli kayıp dönüyordu. Harita `VisNetworkGraph`'ı `settle`
+  prop'uyla açar: Ağ ekranının kalıcı hareketi (`minVelocity: 0`) yerine vis'in dinlenme
+  eşiği (`0.75`) + daha sert sönüm (`damping 0.55`); simülasyon oturunca kendiliğinden
+  durur, sürükleme veya yeni veri yeniden uyandırır. `explorerSeed.ts` radyal tohum verir (kök 0,0; 11 grup 340px halkada;
   her alt ağaç kendi grubunun açısal dilimi içinde, derinlik başına +190px). Fizik bunu
   düzeltir; `explorer:<workspaceId>` anahtarıyla konum + kamera `localStorage`'a yazılır
   (`VisNetworkGraph` `layoutId` prop'u — Ağ ekranının kayıtları ile çakışmaz).
@@ -146,10 +152,39 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   flowrun/rota=diamond, skill=star, automation=triangle, artifact=square,
   insight=hexagon). Kenar uzunluğu hub'a yakınlıkla artar; döngü/self-loop kesik +
   warning rengi. Etiketten `kind:ID` öneki soyulur, ref tooltip'te kalır.
+- **Fizik modu `tree` (2026-09-05):** `VisNetworkGraph` `mode="tree"` = vis
+  `repulsion` çözücüsü: çekim yalnız kenar yayları (parent↔child), itme yalnız
+  `nodeDistance` (140/yoğunluk) yarıçapı içinde; merkezî çekim 0. Bir alt ağaç yalnız
+  kendi ebeveynini ve komşularını hisseder. **Dinlenme kapalı (2026-09-05, kullanıcı
+  kararı):** Harita `settle` geçmez; fizik Ağ'daki gibi sürekli akar (`minVelocity 0`).
+  `settle` prop'u `VisNetworkGraph`'ta duruyor (stabilized → fizik kapalı, dragStart →
+  açık) ama şu an kullanıcısı yok.
+- **Alt düğüm rolleri (`nodeRole`, 2026-09-05):** pano sütunu = kare (sütun rengi),
+  kart = kesik çerçeveli kutu (oturum kutusu düz kalır), araç grubu = altıgen,
+  MCP sunucusu = üçgen (Ağ ile aynı), sağlayıcı = yeşil nokta. Araç grubu etiketi
+  `toolMeta.ts` `CATEGORY_LABELS` ile Türkçeleşir; tooltip/arama listesi rol adını
+  gösterir (Pano sütunu / Kart / Araç grubu / MCP sunucusu / Sağlayıcı).
 - **Etkileşim:** **tek tık = seç + kameraya odakla + sağ panelde `◱ Özet`**
   (`focusNodeId`/`focusTick`: aynı düğüme ikinci tık da odaklar; veri yenilenmesi
   kamerayı geri çekmez; zoom asla düşürülmez). **Çift tık** oturum düğümünde sohbeti
   açar. Boş tuvale tık seçimi bozmaz. Yoğunluk kaydırıcısı fizik sıkışıklığını ayarlar.
+- **Canlı katman (2026-09-05):** `GET /api/views/graph` `live[]` (çalışan oturumlar +
+  worker bekleyen koordinatörler, sürücü ajanın ad/emoji/renk'i; kaynak `Sources.Live`
+  = runtime liveness `RunningSet`) ve `meta{}` (oturum kind/agentId/tags/archived) taşır.
+  `explorerLive.augmentLive` her canlı oturum için `agent:<AGT>#live:<SES>` avatar
+  düğümü (circularImage, ajan rengi) + oturum→avatar kısa bağ üretir; oturum düğümü
+  ajan renginde gölge ile **parlar** (`running` tam, `awaiting-workers` warning tonu).
+  Oturum durunca bir sonraki yenilemede kayıt gider, avatar ve parlama silinir.
+  Avatar tıklanınca panel ajan kartını gösterir (`panelRefFor`).
+- **Filtre çubuğu (2026-09-05, Ağ'dan taşındı):** `ExplorerFilters` + `explorerFilter.ts`:
+  katman çipleri (kökün 11 çocuğu; gizlenen kovacığın yalnız onun ulaştığı alt ağacı
+  düşer), **Canlı** (yalnız çalışan oturumlar), tür / ajan / etiket (oturum `meta`'sı).
+  Fasetler AND, faset içi OR; kökten ulaşılamayan düğüm atılır. `localStorage`
+  (`tionharness.explorerFilter`) ile kalıcı. Kalıcılık GC'si (`canonicalNodeIds`)
+  filtrelenmemiş grafı görür.
+- **Ekranında aç (2026-09-05):** sağ panelin üstündeki buton seçili düğümü sahibi
+  olan ekranda açar (`explorerNavigation.screenForRef` → `App` `applyRoute`).
+  Yoğunluk kaydırıcısı `useStoredDensity` ile kalıcıdır.
 - **Korunanlar:** harita-içi arama (eşleşmeyen düğüm/kenar solar, sonuç listesi tık =
   odak), URL deep-link (`?node=`; haritada olmayan ref görünür hata + "köke dön"),
   dar ekranda `ExplorerDetailDrawer` (modal dialog semantiği). Klavye ok-gezinmesi ve

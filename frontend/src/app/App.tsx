@@ -10,7 +10,7 @@ import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
-import { FlowsPanel, NetworkPanel, RotaPanel, ExplorerView } from './lazyPanels'
+import { FlowsPanel, RotaPanel, ExplorerView } from './lazyPanels'
 import { useWorkspaceSignals } from './useWorkspaceSignals'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
@@ -522,7 +522,7 @@ export default function App() {
   useUnreadBadge(unreadTotal)
 
   // URL ↔ state sync (canonical route + applyRoute for back/forward/deep links).
-  useAppNavigation({
+  const { applyRoute } = useAppNavigation({
     view,
     setView,
     activeWorkspaceId,
@@ -536,6 +536,8 @@ export default function App() {
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
     rotaTrajectory: links.rotaTrajectory,
+    boardTarget: links.boardTarget,
+    toolsGroup: links.toolsGroup,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -548,6 +550,8 @@ export default function App() {
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
     setRotaTrajectory: links.setRotaTrajectory,
+    setBoardTarget: links.setBoardTarget,
+    setToolsGroup: links.setToolsGroup,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -748,18 +752,6 @@ export default function App() {
             }}
           />
         )}
-        {view === 'network' && activeWorkspaceId !== null && (
-          <Suspense fallback={<LoadingState label="Ağ yükleniyor…" className="flex-1" />}>
-            <NetworkPanel
-              workspaceId={activeWorkspaceId}
-              onError={setError}
-              onOpenSession={(sid) => {
-                setView('chat')
-                ctl.selectSession(sid)
-              }}
-            />
-          </Suspense>
-        )}
         {view === 'rota' && activeWorkspaceId !== null && (
           <Suspense fallback={<LoadingState label="Rota yükleniyor…" className="flex-1" />}>
             <RotaPanel
@@ -786,10 +778,20 @@ export default function App() {
               }}
               focusNode={links.explorerNode}
               onFocusNode={links.setExplorerNode}
+              onOpenTarget={(target) =>
+                applyRoute({ workspaceId: activeWorkspaceId, view: target.view, id: target.id })
+              }
             />
           </Suspense>
         )}
-        {view === 'board' && <TaskBoard agents={ctl.agents} onError={setError} />}
+        {view === 'board' && (
+          <TaskBoard
+            agents={ctl.agents}
+            onError={setError}
+            focusTaskId={links.boardTarget}
+            onFocusTask={links.setBoardTarget}
+          />
+        )}
         {view === 'schedules' && (
           <AutomationBoard agents={ctl.agents} focusId={links.scheduleTarget} onError={setError} />
         )}
@@ -818,7 +820,13 @@ export default function App() {
         {view === 'skills' && (
           <SkillsPanel onError={setError} onOpenTrajectory={links.openTrajectory} />
         )}
-        {view === 'tools' && <ToolCatalogPanel onError={setError} />}
+        {view === 'tools' && (
+          <ToolCatalogPanel
+            onError={setError}
+            group={links.toolsGroup}
+            onGroupChange={links.setToolsGroup}
+          />
+        )}
         {view === 'market' && (
           <MarketPanel
             onError={setError}

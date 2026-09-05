@@ -14,7 +14,11 @@ import {
   wakeSettledNetwork,
 } from './networkPhysicsState'
 
-export type VisMode = 'relation' | 'live'
+// 'relation' = free force cloud (forceAtlas2); 'live' = board-column flow;
+// 'tree' = a hierarchy: attraction only along edges (parent <-> child springs)
+// plus SHORT-RANGE repulsion between neighbours, so a subtree feels only its
+// own parent and its siblings instead of every node on the canvas.
+export type VisMode = 'relation' | 'live' | 'tree'
 
 // Cap the framing zoom: vis-network's fit() zooms right up to the content, so a
 // graph with only a handful of nodes ends up uncomfortably close. After every
@@ -85,6 +89,10 @@ interface Props {
   focusTick?: number
   // Double click on a node (vis 'doubleClick' with a node under the pointer).
   onNodeDoubleClick?: (id: string) => void
+  // Let the simulation come to rest (minVelocity > 0, stronger damping) instead
+  // of the live screen's perpetual motion. The Explorer map wants a still
+  // picture once the physics has done its job.
+  settle?: boolean
 }
 
 interface ThemeColors {
@@ -123,8 +131,10 @@ function buildOptions(
   physicsEnabled = false,
   improvedLayoutEnabled = !lite,
   stabilizationFit = true,
+  settle = false,
 ): Options {
   const d = Math.min(2, Math.max(0.4, density))
+  const tree = mode === 'tree'
   return {
     autoResize: true,
     nodes: {
@@ -143,7 +153,17 @@ function buildOptions(
     },
     physics: {
       enabled: physicsEnabled,
-      solver: 'forceAtlas2Based',
+      solver: tree ? 'repulsion' : 'forceAtlas2Based',
+      // Tree mode: no long-range field at all. Springs (per-edge `length`) hold
+      // each child to its parent; `nodeDistance` is the radius inside which two
+      // nodes push apart, so only siblings and near neighbours interact.
+      repulsion: {
+        nodeDistance: 140 / d,
+        centralGravity: 0,
+        springLength: 130 / d,
+        springConstant: 0.05,
+        damping: 0.6,
+      },
       forceAtlas2Based: {
         // Stronger repulsion in live mode so the many nodes sharing one anchor
         // (run-history cards on "Geçmiş", instances on "Çalışıyor") push apart
@@ -154,15 +174,19 @@ function buildOptions(
         centralGravity: mode === 'live' ? 0.004 : 0.012 * d,
         springLength: 110 / d,
         springConstant: 0.08,
-        damping: 0.4,
+        // A settling graph damps harder so the light leaf nodes stop bouncing
+        // around their hub instead of trading energy back and forth forever.
+        damping: settle ? 0.55 : 0.4,
         // avoidOverlap pushed to the max in live mode: box cards with long titles
         // were overlapping at the shared anchors; 1 keeps them clear of each other.
         avoidOverlap: mode === 'live' ? 1 : 0.6,
       },
       maxVelocity: 50,
-      // Keep the live graph ticking instead of declaring it settled shortly
-      // after a restored layout receives its wake velocity.
-      minVelocity: 0,
+      // Live mode keeps ticking instead of declaring itself settled shortly
+      // after a restored layout receives its wake velocity. A settling graph
+      // uses the vis default threshold: once every node is slower than this the
+      // simulation stops on its own and only a drag or new data wakes it.
+      minVelocity: settle ? 0.75 : 0,
       // Fewer settle iterations on mobile so the initial simulation burst is short.
       stabilization: { enabled: true, iterations: lite ? 120 : 300, fit: stabilizationFit },
     },
@@ -198,6 +222,7 @@ export function VisNetworkGraph({
   focusNodeId = null,
   focusTick = 0,
   onNodeDoubleClick,
+  settle = false,
 }: Props) {
   const layoutKey = layoutId ?? workspaceId
   const containerRef = useRef<HTMLDivElement>(null)
@@ -207,6 +232,7 @@ export function VisNetworkGraph({
   const modeRef = useRef(mode)
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
+  const settleRef = useRef(settle)
   const populatedRef = useRef(false)
   const initialLayoutRef = useRef(readNetworkLayout(layoutKey))
   const persistedPositionsRef = useRef<NetworkPositions>(initialLayoutRef.current.positions)
@@ -232,6 +258,7 @@ export function VisNetworkGraph({
   // once, outside React) always see the latest props. Handlers fire after commit.
   useEffect(() => {
     liteRef.current = lite
+    settleRef.current = settle
     nodesRef.current = nodes
     edgesRef.current = edges
     canonicalNodeIdsRef.current = canonicalNodeIds
@@ -281,6 +308,7 @@ export function VisNetworkGraph({
         preserveViewportRef.current,
         !liteRef.current && !hasRestoredVisibleNode,
         !preserveViewportRef.current,
+        settleRef.current,
       ),
     )
     networkRef.current = network
@@ -324,6 +352,22 @@ export function VisNetworkGraph({
     network.on('doubleClick', (p: { nodes: string[] }) => {
       const id = p.nodes[0]
       if (id !== undefined) onNodeDoubleClickRef.current?.(id)
+    })
+    // Rest when stable (settle mode): once vis reports the simulation settled
+    // the physics is switched OFF, so nothing — a refresh, a re-styled node, a
+    // theme swap — can nudge the picture. A drag switches it back on so the
+    // neighbours react, and the next 'stabilized' turns it off again. New
+    // nodes go through settleNewNodes, which enables physics itself.
+    network.on('stabilized', () => {
+      if (!settleRef.current || !physicsActiveRef.current) return
+      network.setOptions({ physics: { enabled: false } })
+      physicsActiveRef.current = false
+    })
+    network.on('dragStart', (p: { nodes: string[] }) => {
+      if (!settleRef.current || p.nodes.length === 0 || physicsActiveRef.current) return
+      network.setOptions({ physics: { enabled: true } })
+      physicsActiveRef.current = true
+      network.startSimulation()
     })
     network.on('zoom', captureRuntimeViewport)
     network.on('dragEnd', captureRuntimeViewport)
@@ -456,6 +500,7 @@ export function VisNetworkGraph({
           physicsActiveRef.current,
           false,
           !preserveViewportRef.current,
+          settleRef.current,
         ),
       )
     })
@@ -650,9 +695,10 @@ export function VisNetworkGraph({
         physicsActiveRef.current,
         false,
         !preserveViewportRef.current,
+        settle,
       ),
     )
-  }, [mode, density, lite])
+  }, [mode, density, lite, settle])
 
   return <div ref={containerRef} className="h-full w-full" />
 }

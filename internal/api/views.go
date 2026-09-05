@@ -27,6 +27,8 @@ func (s *Server) viewProjector(r *http.Request) *view.Projector {
 	src := tools.ViewSources{Logs: s.logs, DefaultAgentID: ws(r).Settings().DefaultAgentId}
 	if rt := ws(r).Runtime; rt != nil {
 		src.Skills = rt.Skills()
+		// Explorer live layer: which sessions are executing right now.
+		src.Running = s.liveSessions(ws(r)).RunningSet()
 	}
 	return tools.ViewProjector(ws(r).DB, ws(r).Name, src)
 }
@@ -157,6 +159,12 @@ func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	if graph.Edges == nil {
 		graph.Edges = []view.GraphEdge{}
+	}
+	if graph.Live == nil {
+		graph.Live = []view.GraphLive{}
+	}
+	if graph.Meta == nil {
+		graph.Meta = map[string]view.GraphMeta{}
 	}
 	writeJSON(w, http.StatusOK, graph)
 }

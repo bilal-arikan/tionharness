@@ -414,7 +414,6 @@ func (s *Server) Routes() http.Handler {
 	s.registerTTSRoutes(mux)
 	s.registerSTTRoutes(mux)
 	s.registerSettingsRoutes(mux)
-	s.registerGraphRoutes(mux)
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 	s.registerWebRoutes(mux)

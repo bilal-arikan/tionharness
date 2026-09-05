@@ -19,6 +19,8 @@ interface GraphProps {
   onSelect?: (id: string | null) => void
   onNodeDoubleClick?: (id: string) => void
   mode?: string
+  settle?: boolean
+  density?: number
 }
 
 const mocks = vi.hoisted(() => ({
@@ -83,6 +85,7 @@ function latestGraphProps(): GraphProps {
 }
 
 beforeEach(() => {
+  localStorage.clear()
   mocks.viewGraph.mockReset()
   mocks.viewGraph.mockResolvedValue(graph)
   mocks.graphProps.length = 0
@@ -101,12 +104,55 @@ afterEach(async () => {
 })
 
 describe('ExplorerView', () => {
+  it('remembers the density slider across remounts', async () => {
+    const first = await mount()
+    const slider = first.host.querySelector<HTMLInputElement>('input[type="range"]')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(slider, '1.6')
+      slider.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(latestGraphProps().density).toBe(1.6)
+    await act(async () => first.root.unmount())
+    roots.delete(first.root)
+    await mount()
+    expect(latestGraphProps().density).toBe(1.6)
+  })
+
+  it('offers the Network facets as a filter row and remembers them', async () => {
+    mocks.viewGraph.mockResolvedValue({
+      ...graph,
+      live: [{ session: s1, state: 'running', agent: { id: 'AG1', name: 'builder' } }],
+      meta: { 'session:SES1': { kind: 'chat', agentId: 'AG1', tags: ['t'] } },
+    })
+    const first = await mount()
+    const group = first.host.querySelector('[aria-label="Harita filtreleri"]')!
+    expect(group.textContent).toContain('Oturumlar')
+    expect(group.textContent).toContain('Canlı · 1')
+    expect(group.textContent).toContain('#t')
+    const liveChip = [...group.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Canlı'),
+    )!
+    await act(async () => liveChip.click())
+    expect(liveChip.getAttribute('aria-pressed')).toBe('true')
+    expect(first.host.textContent).toContain('1 filtre · temizle')
+    await act(async () => first.root.unmount())
+    roots.delete(first.root)
+    const second = await mount()
+    const again = [...second.host.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Canlı'),
+    )!
+    expect(again.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('renders the whole map on its own layout scope with the root selected', async () => {
     const { host } = await mount()
     const props = latestGraphProps()
     expect(props.layoutId).toBe('explorer:ws1')
     expect(props.workspaceId).toBe('ws1')
-    expect(props.mode).toBe('relation')
+    expect(props.mode).toBe('tree')
+    // Continuous physics: the map never switches itself off (user choice, 2026-09-05).
+    expect(props.settle).toBeUndefined()
     expect(props.canonicalReady).toBe(true)
     expect(props.nodes.map((n) => n.id)).toContain('session:SES1')
     expect(host.textContent).toContain('3 düğüm · 2 bağlantı')
@@ -117,13 +163,21 @@ describe('ExplorerView', () => {
 
   it('a click selects, focuses the camera, updates the panel and the URL', async () => {
     const onFocusNode = vi.fn()
-    const { host } = await mount({ onFocusNode, onOpenSession: () => {} })
+    const onOpenTarget = vi.fn()
+    const { host } = await mount({ onFocusNode, onOpenTarget })
+    // The root already offers its screen.
+    expect(host.textContent).toContain('Workspace ekranında aç')
     await act(async () => latestGraphProps().onSelect?.('session:SES1'))
     const props = latestGraphProps()
     expect(props.focusNodeId).toBe('session:SES1')
     expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe('session:SES1')
     expect(onFocusNode).toHaveBeenLastCalledWith('session:SES1')
-    expect(host.textContent).toContain('Sohbeti aç · SES1')
+    expect(host.textContent).toContain('Sohbet ekranında aç · SES1')
+    const open = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Sohbet ekranında aç'),
+    )!
+    await act(async () => open.click())
+    expect(onOpenTarget).toHaveBeenCalledWith({ view: 'chat', id: 'SES1', label: 'Sohbet' })
     // Clicking empty canvas (deselect) keeps the selection.
     await act(async () => latestGraphProps().onSelect?.(null))
     expect(host.querySelector('[data-testid="view-panel"]')!.textContent).toBe('session:SES1')

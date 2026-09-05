@@ -10,7 +10,6 @@ export type View =
   | 'dashboard'
   | 'chat'
   | 'agents'
-  | 'network'
   | 'rota'
   | 'explorer'
   | 'board'

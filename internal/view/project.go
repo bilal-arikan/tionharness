@@ -89,6 +89,10 @@ type Sources struct {
 	Skills   SkillsSource
 	Findings FindingsSource
 	Logs     LogsSource
+	// ToolGroups lists the built-in tool groups the Araçlar node drills into.
+	ToolGroups ToolGroupsSource
+	// Live reports the sessions executing right now (Explorer live layer).
+	Live LiveSource
 }
 
 // SkillsSource enumerates and resolves the workspace skill catalog.
@@ -230,12 +234,14 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level) (View, er
 		if err != nil {
 			return View{}, err
 		}
+		in.Sub = ref.Sub
 		return ProjectBudget(in, level)
 	case KindTools:
 		in, err := p.loadTools(ctx)
 		if err != nil {
 			return View{}, err
 		}
+		in.Sub = ref.Sub
 		return ProjectTools(in, level)
 	case KindCategory:
 		members, err := p.categoryMembers(ctx, ref.ID)
@@ -479,7 +485,11 @@ func (p *Projector) loadTools(ctx context.Context) (ToolsInput, error) {
 	if err != nil {
 		return ToolsInput{}, fmt.Errorf("view: tools config: %w", err)
 	}
-	return ToolsInput{MCPServers: servers, ToolConfig: cfg}, nil
+	in := ToolsInput{MCPServers: servers, ToolConfig: cfg}
+	if p.sources.ToolGroups != nil {
+		in.Groups = p.sources.ToolGroups.ToolGroups()
+	}
+	return in, nil
 }
 
 // loadArtifact reads one artifact for its metadata projection. A missing id or

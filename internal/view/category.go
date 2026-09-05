@@ -22,6 +22,10 @@ const (
 	CategoryInsights    = "insights"
 	// categoryColumnPrefix marks a board-column category: ID = "col:in_progress".
 	categoryColumnPrefix = "col:"
+	// categorySessionKindPrefix marks a session-kind group under the sessions
+	// bucket: ID = "skind:chat". Sessions hang off their kind group the way cards
+	// hang off their board column (2026-09-05).
+	categorySessionKindPrefix = "skind:"
 )
 
 // categoryTopN is the per-node child cap (see _Docs/68 §8.1): a category lists at
@@ -117,7 +121,7 @@ func ProjectCategory(in CategoryInput, level Level) (View, error) {
 func categoryMeta(id string) (label, unit string, ok bool) {
 	switch id {
 	case CategorySessions:
-		return "OTURUMLAR", "oturum", true
+		return "OTURUMLAR", "tür", true
 	case CategoryFlows:
 		return "AKIŞLAR", "koşu", true
 	case CategoryAgents:
@@ -133,6 +137,9 @@ func categoryMeta(id string) (label, unit string, ok bool) {
 	}
 	if key, found := strings.CutPrefix(id, categoryColumnPrefix); found && key != "" {
 		return "SÜTUN:" + key, "kart", true
+	}
+	if key, found := strings.CutPrefix(id, categorySessionKindPrefix); found && key != "" {
+		return "OTURUM TÜRÜ:" + key, "oturum", true
 	}
 	return "", "", false
 }

@@ -17,11 +17,11 @@ func sessionMemberHandles(n int) []Handle {
 }
 
 func TestCategoryHeaderCountsMembers(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(12)}, LevelCard)
+	v, err := ProjectCategory(CategoryInput{ID: "skind:chat", Members: sessionMemberHandles(12)}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
-	if !strings.Contains(v.Header, "OTURUMLAR · 12 oturum") {
+	if !strings.Contains(v.Header, "OTURUM TÜRÜ:chat · 12 oturum") {
 		t.Errorf("category header wrong: %q", v.Header)
 	}
 	if len(v.Handles) != 12 {
@@ -30,7 +30,7 @@ func TestCategoryHeaderCountsMembers(t *testing.T) {
 }
 
 func TestCategoryCapsAtTopNAndCountsElided(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(categoryTopN + 7)}, LevelCard)
+	v, err := ProjectCategory(CategoryInput{ID: "skind:chat", Members: sessionMemberHandles(categoryTopN + 7)}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestCategoryTinyIsHeaderOnly(t *testing.T) {
 // text), so card and full used to render identical DSL and the panel's `full`
 // button did nothing.
 func TestCategoryFullListsMembersCardDoesNot(t *testing.T) {
-	in := CategoryInput{ID: CategorySessions, Members: []Handle{
+	in := CategoryInput{ID: "skind:chat", Members: []Handle{
 		{Label: "auth refactor", Ref: Ref{Kind: KindSession, ID: "SES1"}},
 		{Label: "board planner", Ref: Ref{Kind: KindSession, ID: "SES2"}},
 	}}
@@ -121,7 +121,7 @@ func TestCategoryFullElisionAddsToTopNOverflow(t *testing.T) {
 		})
 	}
 
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: members}, LevelFull)
+	v, err := ProjectCategory(CategoryInput{ID: "skind:chat", Members: members}, LevelFull)
 	if err != nil {
 		t.Fatalf("full: %v", err)
 	}
