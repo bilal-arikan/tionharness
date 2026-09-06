@@ -105,13 +105,6 @@ type runSubagentInput struct {
 	Boundaries   string `json:"boundaries"`
 	RetryOf      string `json:"retry_of"`
 
-	// Wait is a dead axis kept only for compatibility. The schema is
-	// additionalProperties:false, so a frozen prompt epoch that still emits
-	// wait:"sync" would hard-fail the whole call if the field were dropped. It is
-	// accepted and ignored; the removed "async" value is refused loudly rather
-	// than silently downgraded to a blocking run.
-	Wait string `json:"wait"`
-
 	// Fan-out axes. Tasks is the multi-task form; the single-task fields above
 	// become its per-leg defaults.
 	Tasks          []fanOutTaskInput `json:"tasks"`
@@ -161,7 +154,6 @@ func (RunSubagentTool) Def() providers.ToolDef {
     "output_format": { "type": "string", "description": "Optional reply structure (e.g. \"bulleted file:line list\")." },
     "boundaries": { "type": "string", "description": "Optional scope limits — what to exclude / NOT touch." },
     "retry_of": { "type": "string", "description": "Session id of a FINISHED subagent run of yours that this call retries. The failed transcript is kept and linked; pair it with a different target/model/context to retry the task a different way." },
-    "wait": { "type": "string", "enum": ["sync"], "description": "Deprecated and ignored — run_subagent is always synchronous." },
     "tasks": {
       "type": "array",
       "description": "Fan-out: run SEVERAL subagents from one call. Mutually exclusive with \"task\". The top-level target/context/model/objective/output_format/boundaries become the per-task defaults, so the common shape — one target, several tasks — needs no repetition.",
@@ -218,13 +210,6 @@ func (RunSubagentTool) Call(ctx context.Context, input json.RawMessage) (string,
 	// for with no way to notice.
 	if !oneOfEnum(spec.Context, "isolated", "inherited") {
 		return "", fmt.Errorf("\"context\" must be one of isolated, inherited; got %q", spec.Context)
-	}
-	// "wait" no longer exists as a behaviour; only the historical "sync" value is
-	// tolerated so a frozen prompt keeps working. "async" is refused instead of
-	// ignored — a caller that asked for a detached run must not silently get a
-	// blocking one.
-	if w := strings.ToLower(strings.TrimSpace(in.Wait)); w != "" && w != "sync" {
-		return "", fmt.Errorf(`"wait":"async" is no longer supported — run_subagent is always synchronous; break the work into smaller sync calls or hand long-running work to a coordinator worker`)
 	}
 	spec, err = buildFanOutSpec(in, spec)
 	if err != nil {

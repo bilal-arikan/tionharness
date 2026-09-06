@@ -70,10 +70,9 @@ graph TD
 
 **Bekleme ekseni yoktur: `run_subagent` daima senkrondur.** Çağrı, alt-ajan
 bitene kadar bloklar ve final metnini döndürür; detached/arka plan modu yoktur.
-Şemadaki `wait` alanı tek sürümlük geçiş için hâlâ kabul ediliyor ama
-**kullanımdan kaldırıldı ve etkisiz**: `wait:"sync"` ya da alanın hiç verilmemesi
-aynı senkron davranışı verir, `wait:"async"` hata döndürür. Hiçbir prompt modele
-bu alanı göndermesini söylemez. Turdan uzun sürecek iş için ya görev kendi içinde
+Geçiş dönemi boyunca no-op olarak kabul edilen `wait` alanı **2026-09-06'da
+şemadan tamamen kaldırıldı** (TSK747); araç girdisinde böyle bir eksen yoktur.
+Turdan uzun sürecek iş için ya görev kendi içinde
 tamamlanan birkaç küçük `run_subagent` çağrısına bölünür ya da koordinatör moduna
 geçilip (`set_coordinator_mode`) `spawn_worker` ile arka plan işçisi başlatılır.
 
@@ -401,10 +400,15 @@ edilebilir kılar. Testler: `internal/agent/subagent_title_test.go`.
 ## Senkron-tek mod (async ve `stop_subagent` kaldırıldı)
 
 `run_subagent` artık **her zaman senkron** çalışır ve `stop_subagent` aracı
-silindi. Şemadaki `wait` alanı tek sürümlük geçiş için kabul edilmeye devam
-ediyor, ama **kullanımdan kaldırılmış ve etkisiz** bir alandır: `wait:"sync"`
-(veya alanın hiç verilmemesi) çalışır, `wait:"async"` hata döndürür. Bir sonraki
-sürümde alan tamamen kalkacak.
+silindi. Geçiş sürümünde no-op olarak kabul edilen `wait` alanı **2026-09-06'da
+(TSK747) şemadan, girdi yapısından ve doğrulamadan tamamen silindi**. Alan
+kaldırıldığında geriye dönük bir kırılma oluşmaz: araç girdisi
+`encoding/json`'un varsayılan gevşek çözümlemesiyle okunur
+(`internal/tools/toolbuilder.go:25`), dolayısıyla donmuş bir prompt epoch'undan
+gelen fazladan bir `wait` anahtarı hata üretmez, sessizce yok sayılır. Ayrıca
+donmuş araç şemaları yalnız bellekte tutulur — `prompt_epoch.json` yan
+dosyasında araç dizisi kalıcılaşmadığı için yeniden başlatmadan sonra şema her
+zaman canlı kayıttan üretilir.
 
 Gerekçe: durdurulabilir bir alt-ajan koşusunun tek üreticisi async daldı. Senkron
 çağıran, çocuğu koşarken araç çağrısının içinde bloklu bekler; o turda ikinci bir

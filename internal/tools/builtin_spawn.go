@@ -41,9 +41,9 @@ type spawnSessionInput struct {
 
 // SpawnSessionTool lets an agent launch a brand-new, independent session for
 // another agent and walk away — a fire-and-forget parallel worker. Unlike
-// run_subagent's synchronous mode (same turn, returns the reply), spawn opens a
+// run_subagent (always synchronous: same turn, returns the reply), spawn opens a
 // FRESH session and runs the turn in the background; the spawner does not wait.
-// It backs run_subagent's wait:"async" mode and is the building block for
+// It is the detached counterpart of run_subagent and the building block for
 // autonomous "swarm" fan-out.
 //
 // A per-turn budget caps how many spawns one turn may launch, complementing the
