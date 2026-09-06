@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -27,10 +26,6 @@ func TestRunSubagentRejectsOutOfEnumAxes(t *testing.T) {
 		{"unknown context", `{"target":"explore","task":"x","context":"inherit"}`, `"context" must be one of isolated, inherited`},
 		{"upper-case context passes", `{"target":"explore","task":"x","context":"INHERITED"}`, "subagents are not available in this context"},
 		{"unset axes pass", `{"target":"explore","task":"x"}`, "subagents are not available in this context"},
-		// "wait" is a dead axis: the historical "sync" value stays accepted so a
-		// frozen prompt keeps working, "async" is refused rather than downgraded.
-		{"wait sync passes", `{"target":"explore","task":"x","wait":"sync"}`, "subagents are not available in this context"},
-		{"wait async refused", `{"target":"explore","task":"x","wait":"async"}`, "always synchronous"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,31 +50,6 @@ func TestRunSubagentPassesValidAxesThrough(t *testing.T) {
 	}
 	if got.Context != "inherited" {
 		t.Fatalf("spec reached the runner as context=%q", got.Context)
-	}
-}
-
-// TestRunSubagentWaitSyncIsIgnored: the deprecated axis must not reach the runner
-// in any shape — a call carrying wait:"sync" produces the same spec as one that
-// omits it.
-func TestRunSubagentWaitSyncIsIgnored(t *testing.T) {
-	call := func(input string) RunAgentSpec {
-		t.Helper()
-		var got RunAgentSpec
-		ctx := WithRunAgent(context.Background(), func(_ context.Context, s RunAgentSpec) (RunAgentResult, error) {
-			got = s
-			return RunAgentResult{AgentName: "x"}, nil
-		})
-		if _, err := NewRunSubagentTool().Call(ctx, json.RawMessage(input)); err != nil {
-			t.Fatalf("call: %v", err)
-		}
-		return got
-	}
-	withWait := call(`{"target":"explore","task":"x","wait":"sync"}`)
-	without := call(`{"target":"explore","task":"x"}`)
-	// DeepEqual rather than ==: RunAgentSpec carries the fan-out task slice and is
-	// no longer a comparable struct.
-	if !reflect.DeepEqual(withWait, without) {
-		t.Fatalf("wait:\"sync\" changed the spec: %+v vs %+v", withWait, without)
 	}
 }
 
