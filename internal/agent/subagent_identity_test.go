@@ -13,7 +13,7 @@ import (
 // so a child row without one renders anonymous.
 func TestSubagentSessionMetaOwnsTargetAgent(t *testing.T) {
 	agent := db.Agent{ID: "AGT7", Name: "Kâşif"}
-	meta := subagentSessionMeta("SES1", agent, false, tools.RunAgentSpec{Target: "Kâşif", Task: "graf taramasını çalıştır"})
+	meta := subagentSessionMeta("SES1", "", agent, false, tools.RunAgentSpec{Target: "Kâşif", Task: "graf taramasını çalıştır"})
 
 	if meta.AgentID != agent.ID {
 		t.Fatalf("AgentID = %q, want %q", meta.AgentID, agent.ID)
@@ -31,7 +31,7 @@ func TestSubagentSessionMetaOwnsTargetAgent(t *testing.T) {
 // identified by its profile alone — setting an AgentID there would point at an
 // agent that cannot be resolved.
 func TestSubagentSessionMetaKeepsProfileTargetAgentless(t *testing.T) {
-	meta := subagentSessionMeta("SES1", db.Agent{Name: "subagent:coder"}, true, tools.RunAgentSpec{Target: "coder", Task: "testi düzelt"})
+	meta := subagentSessionMeta("SES1", "", db.Agent{Name: "subagent:coder"}, true, tools.RunAgentSpec{Target: "coder", Task: "testi düzelt"})
 
 	if meta.AgentID != "" {
 		t.Fatalf("AgentID = %q, want empty for an ephemeral profile", meta.AgentID)
@@ -44,7 +44,7 @@ func TestSubagentSessionMetaKeepsProfileTargetAgentless(t *testing.T) {
 // Every delegated run is named from its target and task, so the session list
 // never falls back to its "new chat" placeholder for one.
 func TestSubagentSessionMetaTitlesFromTargetAndTask(t *testing.T) {
-	meta := subagentSessionMeta("SES1", db.Agent{ID: "AGT7", Name: "Kâşif"}, false, tools.RunAgentSpec{Target: "Kâşif", Task: "graf taramasını çalıştır"})
+	meta := subagentSessionMeta("SES1", "", db.Agent{ID: "AGT7", Name: "Kâşif"}, false, tools.RunAgentSpec{Target: "Kâşif", Task: "graf taramasını çalıştır"})
 
 	if meta.Title == "" {
 		t.Fatal("Title is empty; a delegated run must be named")
@@ -60,7 +60,7 @@ func TestSubagentSessionMetaTitlesFromTargetAndTask(t *testing.T) {
 // A task spanning several lines must still yield a single-line title.
 func TestSubagentTitleIsSingleLineAndBounded(t *testing.T) {
 	task := "ilk satır\nikinci satır" + strings.Repeat(" uzun", 60)
-	title := subagentTitle(db.Agent{Name: "Kâşif"}, tools.RunAgentSpec{Task: task})
+	title := subagentTitle(db.Agent{Name: "Kâşif"}, tools.RunAgentSpec{Task: task}, "", "")
 
 	if strings.Contains(title, "\n") {
 		t.Errorf("title = %q, want a single line", title)
@@ -76,7 +76,7 @@ func TestSubagentTitleIsSingleLineAndBounded(t *testing.T) {
 // With no agent name to use (an ephemeral clone whose name was not set), the
 // title falls back to the requested target rather than losing the identity.
 func TestSubagentTitleFallsBackToSpecTarget(t *testing.T) {
-	title := subagentTitle(db.Agent{}, tools.RunAgentSpec{Target: "coder", Task: "testi düzelt"})
+	title := subagentTitle(db.Agent{}, tools.RunAgentSpec{Target: "coder", Task: "testi düzelt"}, "", "")
 
 	if !strings.Contains(title, "coder") {
 		t.Errorf("title = %q, want it to name the requested target", title)
