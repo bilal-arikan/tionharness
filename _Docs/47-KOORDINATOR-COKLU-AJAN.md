@@ -12,7 +12,9 @@
 > `user`/`peer`/`worker`/`spawn` turlarını kapsar, koordinatör/wake/otomasyon turlarını
 > bilerek kapsamaz. Dayandığı dosyalar: `internal/agent/coordination.go`, `subagent.go`,
 > `spawn.go`, `internal/prompts/defaults/coordinator.md`. §1-§13 tek-seviyeli tasarımın
-> tarihçesidir, §14+ güncel ağaç modelini anlatır.
+> tarihçesidir, §14+ güncel ağaç modelini anlatır. §20: M1 fan-out'u artık **seçici
+> stratejiler** taşıyor (`majority`, `reviewer-selects`) — tek `run_subagent` çağrısı
+> kazananı kendisi döndürür, koordinatör N cevabı bağlamına alıp elemez.
 
 > **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
 > edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
@@ -1937,3 +1939,29 @@ optimizer: recipe-optimizer
 - Gönderilen `plan-dev-test` (plan → code → review → ship?) ve `fanout`
   (dispatch → synthesize) reçetelerine `version: 1` + `phases` eklendi; diğerleri
   düzyazı olarak kaldı.
+
+## 20. M1 fan-out'a seçici stratejiler (TSK835, 2026-09-06)
+
+§11'de "prompt-seviyesi, aynı araçlarla" diye listelenen iki desen —
+**Generate-And-Filter** (fan-out + koordinatör rubric) ve **Tournament**
+(ardışık judge) — artık M1'de **birinci-sınıf strateji** olarak var. Tek
+`run_subagent` çağrısı N alternatif rotayı koşup **kazananı kendisi** döndürüyor;
+koordinatörün N cevabı kendi bağlamına alıp elemesi gerekmiyor.
+
+| `strategy` | Ne yapar | Ne zaman |
+|------------|----------|----------|
+| `majority` | Aynı soru N rotada koşulur, en çok bacağın verdiği cevap döner (self-consistency) | Cevap **kısa ve kısıtlı** olduğunda: sınıflandırma, evet/hayır, tek dosya adı |
+| `reviewer-selects` | Tüm adaylar koşulur, yerleşik salt-okunur `reviewer` profili birini seçer | Cevap **serbest metin** olduğunda: taslak, analiz, yama önerisi |
+
+Koordinatör açısından iki pratik sonuç:
+
+- **Bağlam tasarrufu asıl kazanç.** İkisi de yalnız kazananın yanıtını tam basar;
+  kaybedenler tek satır + artifact id olarak görünür. `all` ile koşup elemek,
+  delege etmenin kaçınmak için var olduğu yığını koordinatörün bağlamına geri
+  koyardı.
+- **`majority` `output_format` olmadan çalışmaz** ve reddedilir: yanıtlar
+  normalize metin olarak karşılaştırılır, kısıtlanmamış serbest metin bacaklar
+  pratikte hiç anlaşamaz. Serbest metinde `reviewer-selects` kullan.
+- Hakem **tur bütçesine yazılır** (gerçek bir alt-ajan koşusudur) ve düşerse
+  çağrı düşer — `all` gibi hepsini döndürmez. Gerekçe ve tüm tasarım kararları:
+  `_Docs/25-SUBAGENT-ISOLATION.md` "Seçici stratejiler: açık tasarım kararları".

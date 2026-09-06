@@ -3,6 +3,15 @@
 > **Durum:** **UYGULANDI (2026-06-19).** Yol haritasında **Faz A2** — A2.0–A2.4
 > tamamlandı, `go build`/`go vet`/`go test ./...` + frontend `tsc -b` yeşil.
 > Erken notlarda `12-SUBAGENT-ISOLATION.md` adıyla anılmıştı; kalıcı numara **25**.
+>
+> **Özet (2026-09-06):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
+> da miras bağlam, yerleşik profil ya da mevcut ajan, bloklayan çağrı, geri dönen
+> yalnız final sonuç + artifact **referansları**. Tek çağrıdan **fan-out/fan-in**
+> (`tasks[]` + `strategy` + `max_concurrency`) destekler; stratejiler iki ailedir:
+> *toplayıcı* (`all`, `first-success` — bacakları raporlar) ve *seçici*
+> (`majority`, `reviewer-selects` — birini kazanan ilan edip yalnız onun yanıtını
+> basar, TSK835). Bütçe/derinlik/döngü guard'ları tek yerde (`runAgent`); her
+> çakışma öncelik kuralı değil **hata**dır.
 
 ## Amaç
 
@@ -498,7 +507,7 @@ sonuçları adı konmuş bir stratejiyle döndürüyor.
 | Alan | Anlam |
 |------|-------|
 | `tasks[]` | Çoklu biçim. `task` ile **birlikte kullanılamaz**. Her eleman `{task}` zorunlu, `{target,context,model,objective,output_format,boundaries}` isteğe bağlı |
-| `strategy` | `all` (varsayılan) \| `first-success` |
+| `strategy` | `all` (varsayılan) \| `first-success` \| `majority` \| `reviewer-selects` |
 | `max_concurrency` | Aynı anda koşacak bacak sayısı (varsayılan `DefaultFanOutConcurrency` = 4) |
 
 Üst düzey `target/context/model/objective/output_format/boundaries` bacakların
@@ -514,7 +523,10 @@ yapmazdı. `retry_of` + `tasks` de reddedilir: retry **tek** bitmiş koşuyu hed
 Bilinmeyen `strategy`, boş `task`, hiçbir yerde `target` olmaması ve bacaktaki
 geçersiz `context` de aynı şekilde reddedilir (`buildFanOutSpec`).
 
-**Stratejiler**
+**Stratejiler — iki aile.** *Toplayıcı* stratejiler bacakları raporlar, yargılamaz;
+*seçici* (rank-and-pick) stratejiler bacaklardan birini **kazanan ilan eder**.
+
+Toplayıcılar (`internal/tools/subagent_fanout.go`):
 
 - **`all`** — her bacağı bekler, hepsini **girdi sırasında** raporlar. Başarısız
   bacak raporlanır ama çağrıyı düşürmez; **hepsi** başarısızsa çağrı hata döner
@@ -523,6 +535,83 @@ geçersiz `context` de aynı şekilde reddedilir (`buildFanOutSpec`).
 - **`first-success`** — ilk başarılı bacakta kalanları iptal eder. İptal için
   çağıranın ctx'i değil **ayrı bir alt-context** kullanılır; çağıranın turunu
   düşürmek fan-out'un işi değildir.
+
+Seçiciler (`internal/tools/subagent_aggregate.go` + `internal/agent/subagent_aggregate.go`,
+TSK835, 2026-09-06):
+
+- **`majority`** — aynı soru N alternatif rotada koşulur, en çok bacağın verdiği
+  cevap döner.
+- **`reviewer-selects`** — tüm adaylar koşulur, ayrı bir **reviewer** alt-ajanı
+  birini seçer.
+
+### Seçici stratejiler: açık tasarım kararları
+
+Karar noktalarının hepsi kodda da yorumla gerekçelendirilmiştir; buradaki liste
+özetidir.
+
+**`majority` — "aynı cevap" nedir?** Yanıtlar **normalize metin** olarak
+karşılaştırılır (trim + küçük harf + iç boşlukların tek boşluğa indirgenmesi),
+anlamsal olarak değil. Anlamsal karşılaştırma bir yargıç turu demektir; o zaten
+`reviewer-selects`'tir ve ikisini birden yapmak `majority`'yi anlamsız kılardı.
+Normalize eşitlik ucuz, kesin ve tekrarlanabilirdir — bedeli yalnız **kısa ve
+kısıtlı** cevaplarda çalışmasıdır, bu yüzden `majority` her bacakta
+**`output_format` zorunlu** kılar (`validateAggregateStrategy`). Şema-tipli yanıt
+zorunluluğu değerlendirildi ve reddedildi: bacaklara "tek kelimeyle cevapla"
+demek aynı karşılaştırılabilirliği tek cümleyle sağlıyor.
+
+**`majority` — beraberlik nasıl bozulur?** En büyük sınıf kazanır; eşit boyuttaki
+sınıflar arasında **ilk üyesinin girdi indeksi en küçük** olan kazanır. Bacakları
+çağıran numaraladı ve elde tek kararlı sıralama sinyali budur; map iterasyonuna
+bırakmak aynı girdinin koşudan koşuya farklı kazanan seçmesi demekti.
+
+**`majority` — çoğunluk oluşmazsa?** **Hata.** En büyük sınıf tek üyeliyse (her
+bacak farklı cevap verdi ya da yalnız biri hayatta kaldı) "en büyük sınıfı yine de
+döndür" yapılmaz: çağıran `majority`'yi tam da **doğrulama** almak için seçti;
+rastgele tek cevabı "çoğunluk" etiketiyle döndürmek hiç gerçekleşmemiş bir
+mutabakatı iddia etmek olurdu. Hata metni kaç cevabın karşılaştırıldığını ve
+`all` ile yeniden koşma yolunu söyler.
+
+**`reviewer-selects` — hakem kim?** Her zaman yerleşik, salt-okunur `reviewer`
+profili; çağıranın seçebileceği bir hakem alanı **yok**. N cevaptan en iyisini
+seçmek genel bir iştir ve kimsenin istemediği bir eksen eklemek API yüzeyi
+büyütür; alan uzmanı bir hakem gerekiyorsa `all` koşulup kendi turunda yargılanır.
+Hakem sıradan bir alt-ajan koşusudur: **aynı tur bütçesine** yazılır ve aynı
+guard'lardan geçer (doğrusu budur — gerçekten bir koşu daha), yani bütçesi ancak
+yeten bir fan-out hakemini kaybedebilir; hata metni bunu açıkça söyler.
+
+**`reviewer-selects` — adaylar hakemin bağlamına sığmazsa?** Yargılama kopyası
+aday başına `maxReviewerCandidateChars` (4000) karakterde **görünür bir işaretle**
+kesilir; çağrı düşürülmez, hiçbir şey sessizce atılmaz. Hakemin bağlam penceresi
+buradan bilinemez, dolayısıyla sabit aday-başı bütçe tek dürüst sınırdır. Kesme
+çağırana **ulaşmaz**: kazanan, kısaltılmış yargı kopyası değil **tam özgün
+yanıtıyla** döner.
+
+**`reviewer-selects` — hakem düşerse?** **Hata**, `all` gibi hepsini döndürmek
+değil. Tek cevap vaat eden bir stratejiden N cevap dönerse tek cevaba göre
+kurulmuş çağıran (ya da prompt) yığını bulgu diye okur. N aday koşusu kaybedilir;
+bu, sözleşme hakkında yalan söylememenin bedelidir ve hata metni kaç aday
+olduğunu + `all` ile yeniden koşma yolunu söyler. Hakemin **okunamayan hükmü**
+(sayı içermeyen, aralık dışı ya da cevap üretmemiş bacağı gösteren yanıt) de aynı
+şekilde hatadır — "o zaman ilkini al" yedeği, fazladan bir ajan koşusu satın
+alınmasının tam olarak engellemek istediği rastgele seçim olurdu.
+
+**Seçicilerde yalnız kazananın yanıtı basılır.** Stratejinin bütün amacı N cevabı
+bire indirmektir; kaybedenlerin metnini geri yapıştırmak çağırana tam da
+delege ederek kaçındığı yığını vermek olurdu. Kaybedenler yine de **tek satırla**
+raporlanır (`majority`'de "çoğunlukla aynı" / `DISSENTED`, `reviewer-selects`'te
+"not selected") ve ürettikleri artifact id'leri listelenir — koşan ya da yazılan
+hiçbir şey rapordan kaybolmaz.
+
+**Ön koşullar çağrı anında reddedilir.** İki seçici de en az **2 task** ister
+(tek cevap neyle karşılaştırılacak?), `majority` ayrıca her bacakta
+`output_format` ister. İkisi de N alt-ajan koşup parası ödendikten *sonra* değil,
+`buildFanOutSpec` içinde önden reddedilir.
+
+**Toplayıcılar bit bit aynı kaldı.** `aggregateFanOut` `all`/`first-success`
+(ve boş strateji) için hemen `nil` döner; yeni doğrulamalar da yalnız seçicilerde
+çalışır. Bilinmeyen strateji `default:` dalında **hata**dır — sessiz `default`
+gelecekteki bir stratejinin adı başka şey vaat ederken `all` gibi davranmasına
+izin verirdi.
 
 **Sıra girdi sırasıdır, bitiş sırası değil.** Bacakları çağıran numaraladı; koşudan
 koşuya kendini yeniden dizen bir liste ne "ikincisi" diye atıfla anılabilir ne de
@@ -540,14 +629,16 @@ borçlandırmak yanlış olurdu. `legSpec` fan-out eksenlerini düşürür, böy
 bacak aynı çağrı üzerinden yeni bir fan-out'a giremez. `max_concurrency` bir
 verimlilik ayarıdır; toplam harcamayı sınırlayan hâlâ `DelegationMaxCalls`'tır.
 
-**Kapsam dışı (ayrı kart):** `majority` ve `reviewer-selects`. İkisi de serbest
-metin yanıtlarda "aynı cevap" tanımı gerektirir; bu bir yargıç turu (ek LLM çağrısı)
-ya da zorunlu yapılandırılmış çıktı demektir — ürün kararı olarak ayrıldı.
-
 Testler: `internal/tools/subagent_fanout_test.go` (varsayılan miras, dokuz reddetme
 vakası, tekil çağrının dokunulmadan kalması, sıra + SKIPPED render'ı),
 `internal/agent/subagent_fanout_test.go` (hepsi-başarısız, bütçe paylaşımı,
-dispatcher'ın guard'lanmaması, `legSpec`, `firstError`).
+dispatcher'ın guard'lanmaması, `legSpec`, `firstError`),
+`internal/tools/subagent_aggregate_test.go` (normalize eşitlik, beraberlik
+bozma determinizmi, çoğunluksuzluk hatası, oy vermeyen bacaklar, hakem prompt'u
+numaralandırma/kesme, hüküm ayrıştırma, ön koşullar, seçici render'ı ve
+`all`/`first-success` için **golden string** regresyon testi),
+`internal/agent/subagent_aggregate_test.go` (toplayıcıların hiç değişmemesi,
+kazanan işaretleme, hakem düşünce çağrının düşmesi, bilinmeyen strateji).
 
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi

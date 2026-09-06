@@ -90,8 +90,8 @@ func TestFanOutRefusesAmbiguousAndInertCalls(t *testing.T) {
 		},
 		{
 			name: "unknown strategy",
-			in:   runSubagentInput{Target: "explore", Strategy: "majority", Tasks: []fanOutTaskInput{{Task: "x"}}},
-			want: "must be one of all, first-success",
+			in:   runSubagentInput{Target: "explore", Strategy: "vote", Tasks: []fanOutTaskInput{{Task: "x"}}},
+			want: "must be one of all, first-success, majority, reviewer-selects",
 		},
 		{
 			name: "blank task in a leg",
