@@ -748,6 +748,34 @@ Normal turn completion `ask_user` çağrılarını iptal etmez. Testler:
 `session_teardown_test.go` (stop/timeout/freeze/resume, bridge drain/reject/fail-closed,
 geç yazım sonrası dizinin yeniden oluşmaması). `go build`/`go vet` temiz, 403 test geçiyor.
 
+## Workspace kapanışı — arka plan turlarının drenajı (2026-09-06, TSK759)
+
+Tek bir oturumun teardown'ı yukarıdaki gibi fail-closed'ken, **workspace** kapanışı
+uçuştaki fire-and-forget turları görmüyordu: `stopSpawnQueue` yalnız dağıtıcıyı
+durdurur, daha önce başlatılmış spawn/worker/inbox turları workspace yöneticisi DB'yi
+kapatırken yazmaya devam ederdi ("database is closed").
+
+`Runtime` artık bu turlar için de koordinatör drain'lerindekinin aynısı bir kapanış
+bariyeri tutuyor (`internal/agent/runtime.go`): her arka plan turu
+`startBackgroundTurn` üzerinden başlar; `Add(1)` `go`'dan **önce**, başlatan
+goroutine'de çağrılır, böylece başlamak üzere olan bir tur sayılmadan kaçamaz.
+`CloseMCP` sırası sözleşmedir: önce `closeBackgroundTurns` (kapıyı kapat →
+`cancelAllSessions` → sınırlı bekleme), sonra `stopSpawnQueue`, en son
+`closeCoordinatorDrains` — kuyruk düşme bildirimleri yeni bir drain armlayabildiği
+için koordinatörleri kuyruktan önce drenaj etmek birini arkada bırakırdı. Bekleme
+sınırı `backgroundTurnDrainGrace`=15sn, yani `sessionTeardownGrace` ile aynı değer;
+`internal/agent` `internal/api`'yi import edemediği için (`scripts/depcheck.sh`)
+sabit bilinçli olarak kopyalanmıştır. Süre dolarsa sessizce geçilmez, `logger.Error`
+basılır: DB o turların altından kapanacaktır ve bu satır tek izdir.
+
+İptal ve bekleme mutex **bırakılmış** halde yapılır: çocuk worker açan bir tur
+`startBackgroundTurn` içinde aynı mutex'te bloke olur, kilidi tutarak `Wait` etmek
+deadlock olurdu. Boş slot bulan `SpawnSession` kuyruğa uğramadan `launchSpawn`'a
+gittiği için o yola da `backgroundTurnsClosing()` guard'ı kondu; bariyer kapalıyken
+hiçbir şey başlatılmaz ve çağıran kendi kaydını (slot, session kaydı, worker ctl)
+geri alır. Test: `internal/agent/runtime_close_test.go`; üretim gecikmesini
+beklememek için `spawnDrainGrace` test dikişi var.
+
 ## Slash komutları hub'a taşındı (durable, 2026-08-04)
 
 `/compact` (+ `/refresh-context`, `/tools`, `/board`, `/flows`) event-sourcing
