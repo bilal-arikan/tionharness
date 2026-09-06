@@ -1,11 +1,13 @@
 # TionHarness — claude-cli Canlı Steer (Yönlendirme) Planı
 
-> **Özet (2026-09-06):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask"/"read-only" izin modunda çalışır, "auto" modda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır. TSK762 araştırması (2026-09-06) taşıyıcı × izin modu destek matrisini kod kanıtıyla doğruladı: aşağıdaki **"Doğrulanmış durum"** bölümü gerçek davranıştır, onun dışındaki bölümler plan/tasarım metnidir. TSK899 (2026-09-06) native yoldaki iki sessiz kayıp yolunu kapattı: araçsız tur da `foldSteer()` ile steer'i drain ediyor, tur sonu fallback `run.steer` kanalını kurtarıyor ve dolu steer buffer'ı artık sessizce düşürülmek yerine `503` döndürüyor.
+> **Özet (2026-09-06):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask" izin modunda çalışır, "read-only" ve "auto" modlarda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır. TSK762 araştırması (2026-09-06) taşıyıcı × izin modu destek matrisini kod kanıtıyla doğruladı: aşağıdaki **"Doğrulanmış durum"** bölümü gerçek davranıştır, onun dışındaki bölümler plan/tasarım metnidir. TSK899 (2026-09-06) native yoldaki iki sessiz kayıp yolunu kapattı: araçsız tur da `foldSteer()` ile steer'i drain ediyor, tur sonu fallback `run.steer` kanalını kurtarıyor ve dolu steer buffer'ı artık sessizce düşürülmek yerine `503` döndürüyor. TSK900 (2026-09-06) `read-only` yanlış raporlamasını kapattı: canlı steer artık yalnız claude-cli + **`ask`** modunda destekli; `read-only` ve `auto` dürüstçe `"unsupported"` döner.
 
 > ## ⚠️ Güncelleme (2026-07-13): "auto" modda steer YAPISAL OLARAK ÇALIŞMAZ
 > claude-cli steer teslimi **tamamen** `callPermission` (permission-prompt tool)
 > sınırına bağlı. Ama bu araç yalnız **"ask"/"read-only"** modunda bağlanıyor
-> (`climcp.go` `promptToolForMode`). **"auto"** modda CLI
+> (`climcp.go` `promptToolForMode`). (**TSK900 ile kapatıldı:** araç read-only'de de
+> bağlı olmasına rağmen o modda teslim yolu yok — aşağıdaki matris satırına bakın;
+> canlı steer yalnız **"ask"** modunda destekli.) **"auto"** modda CLI
 > `--dangerously-skip-permissions` ile çalışır → permission-prompt tool'u **HİÇ**
 > çağrılmaz → `callPermission` hiç tetiklenmez → `pendingSteer` tur ortasında **hiç**
 > teslim edilmez. Aşağıdaki "Enjeksiyon kanalı — kritik incelik" bölümü yalnız
@@ -26,9 +28,9 @@
 > Test: `steer_cli_test.go` `TestSteerableForTurn`.
 
 > Durum: **UYGULANDI — SINIRLAMAYLA** (2026-07-11, Faz 1 + 3; 2026-07-13 revizyonu).
-> Canlı steer yalnız **"ask" / "read-only"** izin modunda çalışır; **"auto" modda
-> yapısal olarak desteklenmez** (yukarıdaki uyarıya bakın) → backend `"unsupported"`
-> döner ve mesaj kuyruğa alınır. Amaç: claude-cli ajanlarında da
+> Canlı steer yalnız **"ask"** izin modunda çalışır; **"read-only" ve "auto"
+> modlarda yapısal olarak desteklenmez** (yukarıdaki uyarıya ve matrise bakın) →
+> backend `"unsupported"` döner ve mesaj kuyruğa alınır. Amaç: claude-cli ajanlarında da
 > **gerçek mid-turn steer** (turu durdurmadan, çalışan tura rehberlik enjekte
 > etme) desteği — önceden yalnız native (anthropic/minimax) provider'larda çalışıyordu.
 >
@@ -57,7 +59,7 @@
 | native (doğrudan API), **araçlı** tur | **DESTEKLİ** — çalışıyor | `drainSteer`, `internal/agent/toolloop_phases.go:609` |
 | native, **araçsız** tur | **DESTEKLİ** (TSK899 ile düzeltildi) | `runPlain` da `foldSteer()` çağırıyor: `internal/agent/steer.go:44`, `internal/agent/toolloop_phases.go:294`; sağlayıcı çağrısından sonra gelen mesajı tur sonunda `recoverUndeliveredSteer` kanaldan kurtarıp kuyruğun **başına** koyuyor (`internal/api/steer_recovery.go`) |
 | claude-cli + `ask` | **SINIRLI DESTEK** — kod yolu var, etkisi uçtan uca doğrulanmadı | permission-prompt aracı yalnız gated (write/exec) araç sınırında fire eder: `internal/climcp/climcp.go:97-102`, `internal/api/mcp_interaction_tools.go` `callPermission` |
-| claude-cli + `read-only` | `steerableForTurn` **`true`** dönüyor, pratikte **DESTEKLENMİYOR** | read-only'de prompt'a ulaşan tek çağrı `ExitPlanMode` — `internal/climcp/climcp.go:92-94` |
+| claude-cli + `read-only` | **DESTEKLENMİYOR** — `steerableForTurn` artık `false` (TSK900) | Permission-prompt aracı bağlı (`climcp.go:97-102`) ama `read-only` ayrıca `--permission-mode plan` koşuyor (`claudecli.go:203-216`): CLI mutasyonları kendi bloklar, köprülenmiş/harici MCP araçları `--allowedTools`'ta (`climcp.go:178,215-229`), dolayısıyla prompt'a ulaşan tek çağrı `ExitPlanMode`. `callPermission` onu `steerContext()`'e uğramadan `callExitPlan`'a sapıtıyor (`mcp_interaction_tools.go:99-101`), steer ise yalnız `callPermission`'ın allow yollarında enjekte ediliyor (`:118,131,133`). Boundary yok ⇒ `inbox.go` `"unsupported"` döndürür, mesaj kuyruğa alınır. |
 | claude-cli + `auto` (**VARSAYILAN**) | **YAPISAL OLARAK DESTEKLENMİYOR** — enjeksiyon noktası yok; backend `"unsupported"` dönüp mesajı kuyruğa alıyor | auto modda permission-prompt aracı hiç bağlanmıyor: `internal/climcp/climcp.go:97-102`; varsayılan mod `internal/db/store.go:84`, `internal/settings/settings.go:400` |
 | codex-cli (her mod) | **YAPISAL OLARAK DESTEKLENMİYOR** | `exec --json` + `cmd.Stdin = strings.NewReader(prompt)` prompt bitince EOF verir, ikinci mesaj için kanal yok — `internal/providers/codexcli.go:153`, `:512`; gerçek steer için app-server (JSON-RPC) moduna geçiş gerekir |
 
@@ -80,8 +82,9 @@ dayanağı olarak kullanılmamalı.
 
 - **TSK899 — KAPATILDI (2026-09-06).** İki sessiz kayıp yolu da kapandı;
   ayrıntı aşağıdaki "TSK899 düzeltmesi" notunda.
-- **TSK900** — `read-only` modda `steerableForTurn` yanlış rapor veriyor:
-  `true` dönüyor ama teslim yolu yok.
+- **TSK900 — KAPATILDI (2026-09-06).** `read-only` modda `steerableForTurn` artık
+  `false` dönüyor; teslim yolu olmayan mod için backend dürüstçe `"unsupported"`
+  veriyor. Ayrıntı aşağıdaki "TSK900 düzeltmesi" notunda.
 - **TSK901** — kuyruktaki mesajı steer'e çevirme ucu:
   `POST /api/sessions/{id}/queue/{msgId}/steer` + frontend bağlantısı
   (`frontend/src/features/chat/PendingTray.tsx:16`,
@@ -116,7 +119,33 @@ Testler: `internal/agent/steer_plain_test.go`
 `TestSessionSteerReportsFullQueue`, `TestSessionSteerAcceptedWhenQueueHasRoom`,
 `TestChatControlSteerReportsFullQueue`).
 
-TSK900 ve TSK901 bu düzeltmenin kapsamı dışında ve **hâlâ açık**.
+TSK900 ve TSK901 bu düzeltmenin kapsamı dışındaydı; TSK900 aynı gün ayrıca
+kapatıldı (aşağıya bakın), TSK901 **hâlâ açık**.
+
+### TSK900 düzeltmesi — `read-only` artık dürüst rapor veriyor (2026-09-06)
+
+Matriste "`steerableForTurn` `true` dönüyor, pratikte DESTEKLENMİYOR" olarak
+kayıtlı tutarsızlık kapatıldı. `steerableForTurn` (`internal/api/chat_control.go`)
+claude-cli için artık yalnız `mode == "ask"` durumunda `true` dönüyor; `read-only`
+ve `auto` için `handleSessionControl` (`internal/api/inbox.go`) `"unsupported"`
+verip mesajı kuyruğa alıyor — kullanıcı "steered" yanıtı alıp hiçbir şey olmadığını
+görmüyor.
+
+Kartın öncülü kısmen yanlıştı: permission-prompt aracı `read-only` modda da
+**bağlı** (`internal/climcp/climcp.go:97-102`). Gerçek sebep `read-only`'nin
+ayrıca `--permission-mode plan` koşması: mutasyonları CLI kendi blokluyor,
+köprülenmiş MCP araçları `--allowedTools` üzerinden geçiyor, prompt'a ulaşan tek
+çağrı `ExitPlanMode` kalıyor ve `callPermission` onu `steerContext()`'e uğramadan
+`callExitPlan`'a sapıtıyor (`internal/api/mcp_interaction_tools.go:99-101`).
+
+**Bilinen sınır:** plan onaylanıp CLI plan modundan çıkarsa steer teknik olarak
+teslim edilebilir hale gelir, ama `steerable` tur kurulumunda bir kez hesaplanıyor
+(`chat_turn_phases.go:196`) ve o an bu bilinemez — yaygın durumda dürüst cevap
+`false`.
+
+Testler: `internal/api/steer_cli_test.go` (`TestSteerableForTurn` read-only vakası
+`false`'a çevrildi; yeni `TestSteerableForTurnReadOnlyCLI` hem `read-only=false`
+hem `ask=true` yönünü pinliyor).
 
 ## Arka plan
 
