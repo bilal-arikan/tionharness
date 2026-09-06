@@ -186,6 +186,8 @@ non-nil olduğu için `emitStep` oradaki sıralayıcı yayına düşüyor.
 Doküman: `_Docs/59-CLI-STEER-PLANI.md` ("Doğrulanmış durum" matrisi + yeni
 "TSK899 düzeltmesi" notu). TSK900 (read-only'de `steerableForTurn` yanlış rapor)
 ve TSK901 (kuyruktaki mesajı steer'e çevirme) hâlâ açık.
+**(2026-09-06 itibarıyla geçersiz:** ikisi de aynı gün kapandı — TSK900
+`c98bba38`, TSK901 `0168e5af`.)
 
 Commit: `b18bd1a2` (`task/tsk899`).
 
