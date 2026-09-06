@@ -172,7 +172,7 @@ func (RunSubagentTool) Def() providers.ToolDef {
         "additionalProperties": false
       }
     },
-    "strategy": { "type": "string", "enum": ["all", "first-success"], "description": "How a \"tasks\" fan-out is aggregated. \"all\" (default): wait for every task, report each in input order (a failed task is reported, it does not fail the call). \"first-success\": return as soon as one task succeeds and cancel the rest — use it when the tasks are alternative routes to the SAME answer." },
+    "strategy": { "type": "string", "enum": ["all", "first-success", "majority", "reviewer-selects"], "description": "How a \"tasks\" fan-out is aggregated. \"all\" (default): wait for every task, report each in input order (a failed task is reported, it does not fail the call). \"first-success\": return as soon as one task succeeds and cancel the rest — for alternative routes to the SAME answer. \"majority\": run the SAME question down 2+ routes and return the answer most of them gave; replies are compared as text (case and whitespace ignored), so every task MUST set an \"output_format\" that constrains the answer (e.g. \"one word: yes or no\"), and if no two tasks agree the call fails. \"reviewer-selects\": run 2+ candidates, then a separate read-only reviewer subagent picks one (it costs one extra subagent run, and if the reviewer fails so does the call). \"majority\"/\"reviewer-selects\" print only the WINNER's reply in full; the other tasks are listed but their replies are not — re-run with \"all\" to read them." },
     "max_concurrency": { "type": "integer", "minimum": 1, "description": "How many fan-out tasks run at once (default 4). The per-turn delegation budget still applies on top." }
   },
   "required": ["target"],

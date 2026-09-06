@@ -98,6 +98,11 @@ func (r *Runtime) runAgentFanOut(ctx context.Context, caller db.Agent, parentReq
 	if succeeded == 0 {
 		return tools.RunAgentResult{}, fmt.Errorf("all %d subagent tasks failed; first error: %s", len(legs), firstError(outcomes))
 	}
+	// Rank-and-pick strategies elect a winner from the legs that answered. This
+	// runs only for those strategies; "all"/"first-success" pass straight through.
+	if err := r.aggregateFanOut(ctx, caller, parentReq, autonomous, spec, outcomes); err != nil {
+		return tools.RunAgentResult{}, err
+	}
 	r.logger.Info("subagent fan-out", "tasks", len(legs), "strategy", spec.Strategy, "succeeded", succeeded, "concurrency", limit)
 	return tools.RunAgentResult{FanOut: outcomes, Strategy: spec.Strategy}, nil
 }

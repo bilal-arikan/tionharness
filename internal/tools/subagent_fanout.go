@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// Fan-out strategies. The set is deliberately small: these two are the ones whose
-// meaning is unambiguous for free-text replies. Rank-and-pick strategies
-// (majority, reviewer-selects) need a judging turn to define "same answer" and are
-// tracked separately.
+// Collecting fan-out strategies: they report the legs, they do not judge them.
+// The rank-and-pick strategies that DO elect a winner (majority,
+// reviewer-selects) live in subagent_aggregate.go, together with the definitions
+// of "the same answer" and "no winner" they each need.
 const (
 	// StrategyAll waits for every task and reports them all, in input order.
 	StrategyAll = "all"
@@ -47,6 +47,13 @@ type FanOutOutcome struct {
 	Error     string
 	Skipped   bool
 	Artifacts []SubagentArtifact
+
+	// Winner marks the leg a rank-and-pick strategy elected as THE answer. Always
+	// false for the collecting strategies, which elect nobody.
+	Winner bool
+	// Agreement is how many successful legs gave this leg's answer, counting
+	// itself. Only StrategyMajority fills it in; 0 everywhere else.
+	Agreement int
 }
 
 // fanOutTaskInput is the wire shape of one element of the "tasks" array.
@@ -87,8 +94,8 @@ func buildFanOutSpec(in runSubagentInput, base RunAgentSpec) (RunAgentSpec, erro
 	if strategy == "" {
 		strategy = StrategyAll
 	}
-	if strategy != StrategyAll && strategy != StrategyFirstSuccess {
-		return RunAgentSpec{}, fmt.Errorf("\"strategy\" must be one of %s, %s; got %q", StrategyAll, StrategyFirstSuccess, strategy)
+	if err := validateStrategy(strategy); err != nil {
+		return RunAgentSpec{}, err
 	}
 	if in.MaxConcurrency < 0 {
 		return RunAgentSpec{}, fmt.Errorf("\"max_concurrency\" must be positive; got %d", in.MaxConcurrency)
@@ -116,6 +123,9 @@ func buildFanOutSpec(in runSubagentInput, base RunAgentSpec) (RunAgentSpec, erro
 		}
 		legs = append(legs, leg)
 	}
+	if err := validateAggregateStrategy(strategy, legs); err != nil {
+		return RunAgentSpec{}, err
+	}
 	base.Tasks = legs
 	base.Strategy = strategy
 	base.MaxConcurrency = in.MaxConcurrency
@@ -135,21 +145,91 @@ func orFallback(v, fallback string) string {
 // Legs are printed in INPUT order regardless of the order they finished in:
 // the caller numbered them, and a result list that reshuffles itself run to run
 // cannot be referred to ("the second one") or diffed between turns.
+//
+// A rank-and-pick strategy prints only the WINNER's reply in full. Its whole
+// purpose is to turn N answers into one, and pasting the losing replies back
+// would hand the caller the same pile of text it delegated in order to avoid.
+// The losers are still listed — one status line plus any artifact they produced —
+// so nothing that ran or was written disappears from the report.
 func formatFanOut(res RunAgentResult) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Fan-out of %d subagent tasks (strategy: %s)", len(res.FanOut), res.Strategy)
+	if verdict := fanOutVerdict(res); verdict != "" {
+		b.WriteString(verdict)
+	}
+	condensed := isRankAndPick(res.Strategy)
 	for _, o := range res.FanOut {
 		switch {
 		case o.Skipped:
 			fmt.Fprintf(&b, "\n\n--- [%d] %s — SKIPPED (another task already succeeded)", o.Index+1, o.Target)
 		case o.Error != "":
 			fmt.Fprintf(&b, "\n\n--- [%d] %s — FAILED: %s", o.Index+1, o.Target, o.Error)
+		case condensed && !o.Winner:
+			fmt.Fprintf(&b, "\n\n--- [%d] %s — %s", o.Index+1, o.AgentName, notSelectedNote(res.Strategy, o))
+			for _, a := range o.Artifacts {
+				fmt.Fprintf(&b, "\n  artifact %s — %s (%s)", a.ID, a.Title, a.Kind)
+			}
 		default:
-			fmt.Fprintf(&b, "\n\n--- [%d] %s:\n%s", o.Index+1, o.AgentName, o.Reply)
+			fmt.Fprintf(&b, "\n\n--- [%d] %s%s:\n%s", o.Index+1, o.AgentName, winnerNote(res.Strategy, o), o.Reply)
 			for _, a := range o.Artifacts {
 				fmt.Fprintf(&b, "\n  artifact %s — %s (%s)", a.ID, a.Title, a.Kind)
 			}
 		}
 	}
 	return b.String()
+}
+
+// fanOutVerdict adds the one-line summary a rank-and-pick strategy owes the
+// caller: which leg won and on what grounds.
+func fanOutVerdict(res RunAgentResult) string {
+	if !isRankAndPick(res.Strategy) {
+		return ""
+	}
+	for _, o := range res.FanOut {
+		if !o.Winner {
+			continue
+		}
+		if res.Strategy == StrategyMajority {
+			return fmt.Sprintf(" — winner: [%d], agreed on by %d of %d tasks", o.Index+1, o.Agreement, countAnswered(res.FanOut))
+		}
+		return fmt.Sprintf(" — winner: [%d], chosen by the reviewer", o.Index+1)
+	}
+	return ""
+}
+
+// winnerNote labels the leg whose reply is printed in full.
+func winnerNote(strategy string, o FanOutOutcome) string {
+	if !o.Winner {
+		return ""
+	}
+	if strategy == StrategyMajority {
+		return " — MAJORITY ANSWER"
+	}
+	return " — SELECTED by the reviewer"
+}
+
+// notSelectedNote says why a successful leg's reply is not printed, and — for
+// majority — whether it agreed with the winner or dissented, which is the part
+// the caller actually needs in order to trust the verdict.
+func notSelectedNote(strategy string, o FanOutOutcome) string {
+	const suffix = "reply not shown; re-run with strategy \"all\" to read it"
+	if strategy == StrategyMajority {
+		if o.Agreement > 1 {
+			return fmt.Sprintf("agreed with the majority (%s)", suffix)
+		}
+		return fmt.Sprintf("DISSENTED (%s)", suffix)
+	}
+	return fmt.Sprintf("not selected (%s)", suffix)
+}
+
+// countAnswered is how many legs actually produced an answer — the denominator a
+// majority is a majority OF.
+func countAnswered(outcomes []FanOutOutcome) int {
+	n := 0
+	for _, o := range outcomes {
+		if o.Error == "" && !o.Skipped {
+			n++
+		}
+	}
+	return n
 }
