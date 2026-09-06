@@ -19,6 +19,15 @@ interface Props {
   onRemove: (id: string) => void
   // Promote a waiting message to dispatch next ("öne al"). Optional.
   onSendNext?: (id: string) => void
+  // Convert a waiting message into live guidance for the turn already running
+  // ("şimdi yönlendir"). Optional.
+  onSteerNow?: (id: string) => void
+  // Whether a turn is actually streaming for this session. With no running turn
+  // there is nothing to steer, so the action is shown disabled (with the reason)
+  // rather than hidden — the button must not appear and vanish as turns come and
+  // go. Whether THIS turn's provider can carry a steer is only known server-side;
+  // a turn that cannot answers "unsupported" and the message stays queued.
+  canSteer?: boolean
   // Clear the whole waiting queue. Optional; shown when 2+ queue items wait.
   onClear?: () => void
 }
@@ -29,7 +38,14 @@ import { ComposerCard } from './ComposerCard'
 // PendingTray lists the session's WAITING backend queue (+ any steers) above the
 // composer. Queue items show their position (#N), can be promoted to run next,
 // removed individually, or cleared all at once.
-export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
+export function PendingTray({
+  items,
+  onRemove,
+  onSendNext,
+  onSteerNow,
+  canSteer = false,
+  onClear,
+}: Props) {
   if (items.length === 0) return null
   const queueCount = items.filter((it) => it.kind === 'queue').length
   let qIndex = 0
@@ -110,6 +126,21 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
               {it.kind === 'steer' ? 'Yönlendir' : `Sırada #${pos}`}
             </span>
             <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
+            {it.kind === 'queue' && onSteerNow && (
+              <button
+                onClick={() => onSteerNow(it.id)}
+                disabled={!canSteer}
+                title={
+                  canSteer
+                    ? 'Şimdi yönlendir (bu mesajı sıradan alıp çalışan tura ilet)'
+                    : 'Yönlendirilecek çalışan bir tur yok — mesaj sırada kalır'
+                }
+                data-testid={`pending-steer-${it.id}`}
+                className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-warning)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[var(--color-text-dim)]"
+              >
+                <CornerDownRight size={14} />
+              </button>
+            )}
             {it.kind === 'queue' && onSendNext && pos > 1 && (
               <button
                 onClick={() => onSendNext(it.id)}

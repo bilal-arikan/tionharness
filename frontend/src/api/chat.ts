@@ -177,6 +177,14 @@ export const chatApi = {
       method: 'POST',
     }),
 
+  // Convert a waiting message into live guidance for the turn already running.
+  // Atomic server-side: on any refusal ("unsupported", a full steer buffer, ...)
+  // the message stays queued, so it is never lost and never runs twice.
+  steerQueued: (sessionId: string, clientMsgId: string) =>
+    req<{ result: string }>(`/api/sessions/${sessionId}/queue/${clientMsgId}/steer`, {
+      method: 'POST',
+    }),
+
   // Stop or steer a session's in-flight turn WITHOUT a runId (the queue runs turns
   // server-side, so control is session-scoped now).
   sessionControl: (sessionId: string, action: 'stop' | 'steer', text?: string) =>

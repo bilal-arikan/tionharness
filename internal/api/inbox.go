@@ -664,18 +664,9 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 	}
 	// Steer targets the run that OWNS the session turn — a superseded run's output is
 	// fenced, so guidance sent to it could never reach the transcript.
-	info, live := s.runs.sessionRunInfo(ws(r).ID, sessionID)
-	var run *chatRun
-	if live {
-		run = s.runs.get(info.RunID)
-	}
+	run, reason := s.steerTargetRun(ws(r).ID, sessionID)
 	if run == nil {
-		// An autonomous turn has no steer channel, so there is nothing to forward to.
-		if !live {
-			writeError(w, http.StatusNotFound, "no in-flight turn for this session")
-			return
-		}
-		writeError(w, http.StatusNotFound, "run already finished")
+		writeError(w, http.StatusNotFound, reason)
 		return
 	}
 	switch req.Action {
@@ -684,32 +675,24 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "steer text is required")
 			return
 		}
-		// Native providers drain the steer CHANNEL between tool-loop iterations
-		// (see agent/toolloop.go drainSteer). CLI providers (claude-cli, codex-cli)
-		// run their own subprocess loop with no such drain point, so instead stash
-		// the guidance on the run; on claude-cli it is delivered at the next tool
-		// boundary as the Interaction MCP permission tool's additionalContext (see
-		// callPermission). If the turn ends with no tool call, runChatTurn enqueues
-		// the leftover as the next message (steer_undelivered fallback).
-		if run.providerOf() == "claude-cli" || run.providerOf() == "codex-cli" {
-			// Only claude-cli in "ask" mode has a boundary that carries a steer (see
-			// steerableForTurn): "auto" runs with bypass and never calls the
-			// permission-prompt tool, "read-only" runs in plan mode where the only call
-			// reaching the prompt is ExitPlanMode (routed to callExitPlan, which never
-			// delivers a steer), and codex has no such boundary in ANY mode. Without one
-			// the message would only surface at turn end as a re-queued message, so tell
-			// the client it's unsupported — it queues the message and shows a hint
-			// instead of us pretending it landed.
-			if !run.steerableFor() {
-				writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
-				return
-			}
-			run.setSteer(req.Text)
-			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
+		// The provider-specific delivery rules (native steer channel vs the
+		// claude-cli tool-boundary stash) live in deliverSteer, shared with the
+		// queue-conversion endpoint. If the turn ends with the guidance still
+		// undelivered, runChatTurn enqueues it as the next message
+		// (steer_undelivered fallback).
+		switch deliverSteer(run, req.Text) {
+		case steerUnsupported:
+			// No boundary can carry this steer — tell the client instead of
+			// pretending it landed; it queues the message and shows a hint.
+			writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
 			return
-		}
-		if !run.trySteer(req.Text) {
+		case steerBufferFull:
 			writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
+			return
+		case steerStashed:
+			// Accepted, but only reaches the model at the next claude-cli tool
+			// boundary — reported as "steered" rather than a plain "ok".
+			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return
 		}
 	default:
