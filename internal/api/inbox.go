@@ -692,11 +692,14 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 		// callPermission). If the turn ends with no tool call, runChatTurn enqueues
 		// the leftover as the next message (steer_undelivered fallback).
 		if run.providerOf() == "claude-cli" || run.providerOf() == "codex-cli" {
-			// In "auto" (bypass) mode the CLI never calls the permission-prompt tool,
-			// so there is no boundary to carry the steer. codex has NO such boundary in
-			// ANY mode (see steerableForTurn), so it always falls into this branch. — it would only surface at
-			// turn end as a re-queued message. Tell the client it's unsupported so it
-			// queues the message and shows a hint, instead of us pretending it landed.
+			// Only claude-cli in "ask" mode has a boundary that carries a steer (see
+			// steerableForTurn): "auto" runs with bypass and never calls the
+			// permission-prompt tool, "read-only" runs in plan mode where the only call
+			// reaching the prompt is ExitPlanMode (routed to callExitPlan, which never
+			// delivers a steer), and codex has no such boundary in ANY mode. Without one
+			// the message would only surface at turn end as a re-queued message, so tell
+			// the client it's unsupported — it queues the message and shows a hint
+			// instead of us pretending it landed.
 			if !run.steerableFor() {
 				writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
 				return

@@ -51,9 +51,10 @@ func activeRun(t *testing.T, s *Server) *chatRun {
 
 // TestAutonomousInteractionRecordsSteerable verifies the autonomous turn writes
 // the same steer deliverability the chat path does. Before this, the field stayed
-// false and a steer aimed at an autonomous claude-cli turn in ask/read-only mode
-// was rejected as "unsupported" even though the permission-prompt boundary that
-// carries it exists in exactly those modes.
+// false and a steer aimed at an autonomous claude-cli turn in "ask" mode was
+// rejected as "unsupported" even though the permission-prompt boundary that
+// carries it exists there. The want is derived from steerableForTurn so the two
+// paths cannot drift apart.
 func TestAutonomousInteractionRecordsSteerable(t *testing.T) {
 	cases := []struct {
 		provider string
