@@ -5,9 +5,14 @@ import "strings"
 // parseSimpleTOML extracts top-level `key = value` pairs from a minimal TOML
 // document — enough for Claude Code slash commands (description = "…", prompt =
 // """…""") without pulling in a TOML dependency (go.mod stays at uuid+cron). It
-// supports single-/double-quoted single-line values and triple-quoted ("""…""" or
-// '''…''') multi-line values. Tables ([section]) and arrays are ignored. Keys are
-// lower-cased; later duplicates win.
+// supports single-/double-quoted single-line values, plus multi-line values
+// opened by either triple-quote delimiter:
+//
+//	"""…"""
+//	'''…'''
+//
+// Tables ([section]) and arrays are ignored. Keys are lower-cased; later
+// duplicates win.
 func parseSimpleTOML(raw string) map[string]string {
 	out := map[string]string{}
 	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
@@ -52,8 +57,12 @@ func parseSimpleTOML(raw string) map[string]string {
 	return out
 }
 
-// tripleQuote returns the triple-quote delimiter a value opens with ("\"\"\"" or
-// "'''"), or "" when it isn't a multi-line string.
+// tripleQuote returns the triple-quote delimiter a value opens with:
+//
+//	"""
+//	'''
+//
+// or "" when it isn't a multi-line string.
 func tripleQuote(v string) string {
 	switch {
 	case strings.HasPrefix(v, `"""`):
