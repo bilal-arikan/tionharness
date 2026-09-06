@@ -1114,9 +1114,19 @@ func (m *Manager) Close() {
 	m.bgMu.Unlock()
 	m.bg.Wait()
 
+	// Snapshot under the lock, tear down OUTSIDE it — like Delete and
+	// RestoreFromArchive already do. CloseMCP now waits for the in-flight background
+	// turns, and such a turn may reach back into the manager (settings bridge, task
+	// lookups): holding the write lock across that wait would deadlock the shutdown
+	// against the very turns it is waiting for.
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	open := make([]*Workspace, 0, len(m.workspaces))
 	for _, ws := range m.workspaces {
+		open = append(open, ws)
+	}
+	m.mu.Unlock()
+
+	for _, ws := range open {
 		ws.Scheduler.Stop()
 		if ws.InsightCron != nil {
 			ws.InsightCron.Stop()

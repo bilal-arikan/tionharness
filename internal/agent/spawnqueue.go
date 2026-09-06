@@ -110,6 +110,9 @@ func (r *Runtime) takeQueuedSpawn() (spawnQueueItem, bool) {
 	return spawnQueueItem{}, false
 }
 
+// stopSpawnQueue stops the dispatcher loop and drops what is still queued. It does
+// NOT wait for the turns launchSpawn already started — that is closeBackgroundTurns,
+// which CloseMCP runs first (see the order there).
 func (r *Runtime) stopSpawnQueue() {
 	r.spawnClose.Do(func() {
 		q := &r.spawnQueue

@@ -211,8 +211,16 @@ func (r *Runtime) deliverToInbox(ctx context.Context, fromAgentID, fromName stri
 	// behind any other turn on the inbox session — left that window uncancellable.
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	run := r.trackSession(inbox.ID, cancelRun)
-	// Fire-and-forget: process detached from the caller's context.
-	go r.runInboxDelivery(runCtx, cancelRun, run, target, inbox.ID, text)
+	// Fire-and-forget, but under the shutdown barrier: the delivery turn writes to
+	// the workspace DB, so CloseMCP has to be able to wait for it.
+	if !r.startBackgroundTurn(func() {
+		r.runInboxDelivery(runCtx, cancelRun, run, target, inbox.ID, text)
+	}) {
+		cancelRun()
+		run.release()
+		r.releaseSpawnSlot()
+		return errSpawnQueueShutdown
+	}
 	return nil
 }
 

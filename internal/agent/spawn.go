@@ -188,6 +188,14 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		}
 	}
 
+	// Shutdown guard: refuse once the workspace is tearing down. enqueueSpawn already
+	// rejects on a closed queue, but a spawn that finds a FREE slot never goes through
+	// the queue — it goes straight to launchSpawn, which would write a new session into
+	// a DB that is about to close. This is that path's counterpart.
+	if r.backgroundTurnsClosing() {
+		return SpawnResult{}, errSpawnQueueShutdown
+	}
+
 	// Concurrency guard: refuse once the cap of simultaneously-running spawns is
 	// reached. The slot is released when the background turn finishes. Depth-aware
 	// so a deep coordinator branch cannot drain the pool that shallower work — and
@@ -342,7 +350,18 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		// very next iteration. Registering the ctl and the session cancel BEFORE the
 		// goroutine starts is what makes that stop land.
 		runCtx, cancelRun, ctl := r.newWorkerRun(session.ID)
-		go r.runWorkerRegistered(runCtx, cancelRun, agent, session.ID, prompt, coordID, ctl)
+		if !r.startBackgroundTurn(func() {
+			r.runWorkerRegistered(runCtx, cancelRun, agent, session.ID, prompt, coordID, ctl)
+		}) {
+			// Nothing was launched, so every registration newWorkerRun made is ours to
+			// undo — including the slot the turn would have released.
+			cancelRun()
+			ctl.run.release()
+			r.workerCancels.CompareAndDelete(session.ID, ctl)
+			close(ctl.done)
+			r.releaseSpawnSlot()
+			return SpawnResult{}, errSpawnQueueShutdown
+		}
 	} else {
 		// The cancel func is registered HERE, not inside runSpawn: SpawnSession hands
 		// the session id back to its caller the moment this returns, and a caller may
@@ -352,7 +371,14 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		// answered "already finished" for a run that kept going.
 		runCtx, cancelRun := context.WithCancel(context.Background())
 		run := r.trackSession(session.ID, cancelRun)
-		go r.runSpawn(runCtx, cancelRun, run, agent, session.ID, prompt, opts)
+		if !r.startBackgroundTurn(func() {
+			r.runSpawn(runCtx, cancelRun, run, agent, session.ID, prompt, opts)
+		}) {
+			cancelRun()
+			run.release()
+			r.releaseSpawnSlot()
+			return SpawnResult{}, errSpawnQueueShutdown
+		}
 	}
 
 	return SpawnResult{SessionID: session.ID, AgentName: agent.Name}, nil

@@ -1033,7 +1033,19 @@ func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, worker
 	// coordinator's tool loop immediately, and a stop_worker in the next iteration
 	// must be able to cancel this turn even while it is still queued.
 	runCtx, cancelRun, ctl := r.newWorkerRun(workerSessionID)
-	go r.runWorkerRegistered(runCtx, cancelRun, agent, workerSessionID, message, coordSessionID, ctl)
+	if !r.startBackgroundTurn(func() {
+		r.runWorkerRegistered(runCtx, cancelRun, agent, workerSessionID, message, coordSessionID, ctl)
+	}) {
+		// The workspace is closing and no turn was launched: undo everything this call
+		// registered, in the reverse order the turn itself would have released it.
+		cancelRun()
+		ctl.run.release()
+		r.workerCancels.CompareAndDelete(workerSessionID, ctl)
+		close(ctl.done)
+		slot.workers.Add(-1)
+		r.releaseSpawnSlot()
+		return errSpawnQueueShutdown
+	}
 	return nil
 }
 
