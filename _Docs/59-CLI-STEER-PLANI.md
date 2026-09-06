@@ -1,6 +1,6 @@
 # TionHarness — claude-cli Canlı Steer (Yönlendirme) Planı
 
-> **Özet (2026-09-06):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask"/"read-only" izin modunda çalışır, "auto" modda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır. TSK762 araştırması (2026-09-06) taşıyıcı × izin modu destek matrisini kod kanıtıyla doğruladı: aşağıdaki **"Doğrulanmış durum"** bölümü gerçek davranıştır, onun dışındaki bölümler plan/tasarım metnidir.
+> **Özet (2026-09-06):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask"/"read-only" izin modunda çalışır, "auto" modda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır. TSK762 araştırması (2026-09-06) taşıyıcı × izin modu destek matrisini kod kanıtıyla doğruladı: aşağıdaki **"Doğrulanmış durum"** bölümü gerçek davranıştır, onun dışındaki bölümler plan/tasarım metnidir. TSK899 (2026-09-06) native yoldaki iki sessiz kayıp yolunu kapattı: araçsız tur da `foldSteer()` ile steer'i drain ediyor, tur sonu fallback `run.steer` kanalını kurtarıyor ve dolu steer buffer'ı artık sessizce düşürülmek yerine `503` döndürüyor.
 
 > ## ⚠️ Güncelleme (2026-07-13): "auto" modda steer YAPISAL OLARAK ÇALIŞMAZ
 > claude-cli steer teslimi **tamamen** `callPermission` (permission-prompt tool)
@@ -55,7 +55,7 @@
 | Taşıyıcı × izin modu | Mid-turn steer | Kanıt |
 |---|---|---|
 | native (doğrudan API), **araçlı** tur | **DESTEKLİ** — çalışıyor | `drainSteer`, `internal/agent/toolloop_phases.go:609` |
-| native, **araçsız** tur | **DESTEKLENMİYOR — bilinen bug:** mesaj sessizce kayboluyor | `runPlain` `drainSteer` çağırmıyor; `internal/api/chat_stream.go:72-79` fallback'i yalnız CLI `pendingSteer` alanını kurtarıyor, `run.steer` **kanalını** boşaltmıyor |
+| native, **araçsız** tur | **DESTEKLİ** (TSK899 ile düzeltildi) | `runPlain` da `foldSteer()` çağırıyor: `internal/agent/steer.go:44`, `internal/agent/toolloop_phases.go:294`; sağlayıcı çağrısından sonra gelen mesajı tur sonunda `recoverUndeliveredSteer` kanaldan kurtarıp kuyruğun **başına** koyuyor (`internal/api/steer_recovery.go`) |
 | claude-cli + `ask` | **SINIRLI DESTEK** — kod yolu var, etkisi uçtan uca doğrulanmadı | permission-prompt aracı yalnız gated (write/exec) araç sınırında fire eder: `internal/climcp/climcp.go:97-102`, `internal/api/mcp_interaction_tools.go` `callPermission` |
 | claude-cli + `read-only` | `steerableForTurn` **`true`** dönüyor, pratikte **DESTEKLENMİYOR** | read-only'de prompt'a ulaşan tek çağrı `ExitPlanMode` — `internal/climcp/climcp.go:92-94` |
 | claude-cli + `auto` (**VARSAYILAN**) | **YAPISAL OLARAK DESTEKLENMİYOR** — enjeksiyon noktası yok; backend `"unsupported"` dönüp mesajı kuyruğa alıyor | auto modda permission-prompt aracı hiç bağlanmıyor: `internal/climcp/climcp.go:97-102`; varsayılan mod `internal/db/store.go:84`, `internal/settings/settings.go:400` |
@@ -78,15 +78,45 @@ dayanağı olarak kullanılmamalı.
 
 ### Bilinen sınırlar / açık kartlar
 
-- **TSK899** — araçsız turda `drainSteer` hiç çağrılmadığı için steer kaybı;
-  ayrıca `internal/api/inbox.go:708-711` kanal buffer'ı doluyken mesajı
-  **sessizce düşürüyor** (kullanıcıya haber gitmiyor).
+- **TSK899 — KAPATILDI (2026-09-06).** İki sessiz kayıp yolu da kapandı;
+  ayrıntı aşağıdaki "TSK899 düzeltmesi" notunda.
 - **TSK900** — `read-only` modda `steerableForTurn` yanlış rapor veriyor:
   `true` dönüyor ama teslim yolu yok.
 - **TSK901** — kuyruktaki mesajı steer'e çevirme ucu:
   `POST /api/sessions/{id}/queue/{msgId}/steer` + frontend bağlantısı
   (`frontend/src/features/chat/PendingTray.tsx:16`,
   `frontend/src/features/chat/ChatView.tsx:458`).
+
+### TSK899 düzeltmesi — steer artık sessizce kaybolmuyor (2026-09-06)
+
+Yukarıdaki matriste "native araçsız → HAYIR (bug)" olarak kayıtlı davranış
+düzeltildi. Üç değişiklik:
+
+1. **Araçsız tur da drain ediyor.** Drain + enjeksiyon mantığı tek bir
+   `foldSteer()` metoduna taşındı (`internal/agent/steer.go`); native araç
+   döngüsü her sağlayıcı çağrısından önce (`toolloop_phases.go:614`), araçsız
+   yol da tek çağrısından önce (`toolloop_phases.go:294`) onu çağırıyor. Steer
+   rolü (`steerRoleFor`) artık `prepare()` içinde çözülüyor, çünkü araçsız yol
+   native döngünün kurulumuna hiç uğramıyor.
+2. **Tur sonu fallback kanalı da kurtarıyor.** `recoverUndeliveredSteer`
+   (`internal/api/steer_recovery.go`) yalnız claude-cli `pendingSteer`
+   alanını değil, `run.steer` **kanalını** da boşaltıyor; kurtarılan mesajlar
+   kuyruğun **başına** (sonuna değil) konuyor — kullanıcı onları bu turu
+   yönlendirmek için yazmıştı, sonradan kuyruğa aldıklarından önce gelmeliler.
+3. **Buffer dolu = `503`, sessiz düşürme değil.** `handleSessionControl`
+   (`internal/api/inbox.go`) ve chat-control steer ucu (`chat_control.go`)
+   artık `run.trySteer` başarısız olduğunda `503` + `steerBufferFullMsg`
+   dönüyor. Gerekçe: dolu buffer "tur rehberliği tüketmiyor" demektir; mesajı
+   sessizce kuyruğa almak steer'i yeni mesajla karıştırırdı.
+
+Testler: `internal/agent/steer_plain_test.go`
+(`TestPlainTurnFoldsPendingSteer`, `TestPlainTurnLeavesLateSteerOnChannel`),
+`internal/api/steer_recovery_test.go`
+(`TestRecoverUndeliveredSteerRequeuesChannelMessages`,
+`TestSessionSteerReportsFullQueue`, `TestSessionSteerAcceptedWhenQueueHasRoom`,
+`TestChatControlSteerReportsFullQueue`).
+
+TSK900 ve TSK901 bu düzeltmenin kapsamı dışında ve **hâlâ açık**.
 
 ## Arka plan
 
@@ -97,6 +127,8 @@ Steer (Yönlendir) = tur çalışırken kullanıcı yeni bir mesaj yazınca, tur
   `drainSteer` her iterasyon başında `run.steer` kanalını boşaltıp mesajı
   `req.Messages`'a (operator/system rolü) enjekte eder. Araçsız turda enjeksiyon
   noktası yok ve mesaj kayboluyor → yukarıdaki "Doğrulanmış durum" bölümü, TSK899.
+  **(2026-09-06 itibarıyla geçersiz:** araçsız yol da `foldSteer()` ile drain
+  ediyor — "TSK899 düzeltmesi" notuna bakın.)
 - **claude-cli yolu**: ÇALIŞMAZ. CLI kendi alt-süreç döngüsünü çalıştırır;
   `drainSteer` çağrılmaz. Geçici çözüm (2026-07-11): `handleSessionControl`
   claude-cli için `{"result":"unsupported"}` döner → frontend mesajı **kuyruğa**

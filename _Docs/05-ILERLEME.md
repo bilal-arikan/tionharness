@@ -1,6 +1,49 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-06):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-06):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Steer mesajları artık araçsız turda ve buffer dolduğunda sessizce kaybolmuyor (2026-09-06) ✅
+
+TSK899. TSK762 araştırmasının bulduğu iki sessiz kayıp yolu kapatıldı. Birincisi:
+`drainSteer` yalnız native araç döngüsünün içinde koştuğu için **araçsız** bir tur
+bekleyen steer'i isteğe hiç katmıyordu; tur sonundaki `steer_undelivered`
+fallback'i de yalnız claude-cli `pendingSteer` alanını kurtarıyor, `run.steer`
+**kanalını** boşaltmıyordu — yani kullanıcının yazdığı yönlendirme ne teslim
+ediliyor ne kuyruğa düşüyordu. İkincisi: kanal buffer'ı doluyken steer çıplak bir
+`select` `default`'una düşüp sessizce atılıyordu.
+
+- **`internal/agent/steer.go`**: drain + enjeksiyon mantığı `foldSteer()`
+  metoduna toplandı; adım yayını `emitStep` üzerinden yapılıyor (native yolda
+  sıralayıcı `emit`, araçsız yolda çağıranın `onStep`'i, otonom turda hiçbiri).
+- **`internal/agent/toolloop_phases.go`**: `foldSteer()` iki yoldan da çağrılıyor
+  — native döngüde her sağlayıcı çağrısından önce (`:614`), `runPlain`'de tek
+  çağrısından önce (`:294`). `steerRoleFor` artık `prepare()` içinde çözülüyor,
+  çünkü araçsız yol native döngünün kurulumuna hiç uğramıyor.
+- **`internal/api/steer_recovery.go`** (yeni): `recoverUndeliveredSteer` hem
+  `run.steer` kanalını (`takeSteerQueue`) hem CLI `pendingSteer` stash'ini
+  boşaltıyor ve mesajları kuyruğun **başına** koyuyor — kullanıcı onları bu turu
+  yönlendirmek için yazdı, sonradan kuyruğa aldıklarından önce gelmeliler.
+- **`internal/api/inbox.go` + `chat_control.go`**: dolu buffer artık `503` +
+  `steerBufferFullMsg`. Sessizce kuyruğa almak yerine hata dönmenin gerekçesi:
+  dolu buffer "tur rehberliği tüketmiyor" demektir ve sessiz requeue steer'i yeni
+  mesajla karıştırırdı.
+- **Testler**: `internal/agent/steer_plain_test.go` (yeni) —
+  `TestPlainTurnFoldsPendingSteer`, `TestPlainTurnLeavesLateSteerOnChannel`;
+  `internal/api/steer_recovery_test.go` (yeni) —
+  `TestRecoverUndeliveredSteerRequeuesChannelMessages`,
+  `TestSessionSteerReportsFullQueue`, `TestSessionSteerAcceptedWhenQueueHasRoom`,
+  `TestChatControlSteerReportsFullQueue`.
+
+Bilinen sınır: testler `foldSteer()`'i yalnız araçsız yoldan tatıyor; **native**
+yolda doğrudan tatan bir test yok. İki yolun eşdeğerliği testle değil, argümanla
+garanti ediliyor: iki yol da aynı metodu çağırıyor ve native yolda `t.emit`
+non-nil olduğu için `emitStep` oradaki sıralayıcı yayına düşüyor.
+
+Doküman: `_Docs/59-CLI-STEER-PLANI.md` ("Doğrulanmış durum" matrisi + yeni
+"TSK899 düzeltmesi" notu). TSK900 (read-only'de `steerableForTurn` yanlış rapor)
+ve TSK901 (kuyruktaki mesajı steer'e çevirme) hâlâ açık.
+
+Commit: `b18bd1a2` (`task/tsk899`).
 
 ## `run_subagent` şemasından `wait` alanı tamamen kaldırıldı (2026-09-06) ✅
 
