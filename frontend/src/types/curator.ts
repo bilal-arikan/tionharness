@@ -1,9 +1,9 @@
 // Curator report (Rota F3), mirroring internal/db/store_curator.go.
 
-export type CuratorActionKind = 'archive' | 'suggest'
-export type CuratorEntity = 'automation' | 'schedule' | 'hook' | 'recipe'
+type CuratorActionKind = 'archive' | 'suggest'
+type CuratorEntity = 'automation' | 'schedule' | 'hook' | 'recipe'
 // exhausted | expired | one_shot_done | never_fired | unfired_watcher | ghost_phase
-export type CuratorReason = string
+type CuratorReason = string
 
 export interface CuratorAction {
   kind: CuratorActionKind

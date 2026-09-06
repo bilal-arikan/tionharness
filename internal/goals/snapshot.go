@@ -43,7 +43,6 @@ type AgentGenome struct {
 	ThinkingLevel       string   `json:"thinkingLevel,omitempty"`
 	NativeWebSearch     *bool    `json:"nativeWebSearch,omitempty"`
 	PermissionMode      string   `json:"permissionMode,omitempty"`
-	InboundPolicy       string   `json:"inboundPolicy,omitempty"`
 	MCPEnabled          bool     `json:"mcpEnabled"`
 	ToolOverridesHash   string   `json:"toolOverridesHash"`
 	VisibleToolCount    int      `json:"visibleToolCount"` // -1 when unknown
@@ -188,7 +187,6 @@ func Diff(a, b ConfigSnapshot) []SnapshotChange {
 		add("agent", id, "thinkingLevel", ga.ThinkingLevel, gb.ThinkingLevel)
 		add("agent", id, "nativeWebSearch", boolPtr(ga.NativeWebSearch), boolPtr(gb.NativeWebSearch))
 		add("agent", id, "permissionMode", ga.PermissionMode, gb.PermissionMode)
-		add("agent", id, "inboundPolicy", ga.InboundPolicy, gb.InboundPolicy)
 		add("agent", id, "tools", fmt.Sprintf("%v/%s", ga.MCPEnabled, ga.ToolOverridesHash), fmt.Sprintf("%v/%s", gb.MCPEnabled, gb.ToolOverridesHash))
 		add("agent", id, "allowedTools", ga.AllowedToolsHash, gb.AllowedToolsHash)
 		add("agent", id, "skills", joinSorted(ga.Skills), joinSorted(gb.Skills))

@@ -7,7 +7,6 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/liveness"
-	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // Liveness composes the workspace's liveness snapshot (_Docs/77 R2) from the
@@ -130,13 +129,4 @@ func (r *Runtime) emitLiveness(sessionID string) {
 	}
 	r.emitWorkspaceEvent(events.TypeWSLiveness,
 		map[string]string{"sessionId": sessionID, "busy": strconv.FormatBool(p.Busy)}, p)
-}
-
-// turnKindLabel is a small helper for tests/logs: the kind of the running turn
-// in a session, "" when idle.
-func (r *Runtime) turnKindLabel(sessionID string) turnqueue.Kind {
-	if snap := r.turns.Snapshot(sessionID); snap.Running != nil {
-		return snap.Running.Kind
-	}
-	return ""
 }

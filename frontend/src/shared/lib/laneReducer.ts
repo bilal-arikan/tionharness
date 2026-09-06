@@ -58,7 +58,7 @@ function pushRing<T>(ring: readonly T[], item: T, cap: number): T[] {
 }
 
 // laneSessionFromHeader maps a REST session header to a lane session.
-export function laneSessionFromHeader(s: Session, live?: LaneLive): LaneSession {
+function laneSessionFromHeader(s: Session, live?: LaneLive): LaneSession {
   return {
     id: s.id,
     kind: s.kind,
@@ -121,7 +121,7 @@ export function seedSessions(state: LaneState, sessions: readonly Session[]): La
 
 // liveFromEvent converts a ws:liveness signal to a lane live entry, or
 // undefined when the session went idle.
-export function liveFromEvent(d: LivenessData): LaneLive | undefined {
+function liveFromEvent(d: LivenessData): LaneLive | undefined {
   if (d.busy)
     return { state: d.kind || 'running', reason: d.label, since: d.since, waiting: d.waiting }
   if (d.waiting > 0) return { state: 'queued', waiting: d.waiting }

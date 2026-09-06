@@ -52,7 +52,7 @@ const SQZ_HOOK: HookInput = {
 // (2026-07-31, WS10/SES63). rtk is now wired by the shellCommandRewrite SETTING,
 // which additionally limits rewriting to the commands measured to benefit.
 
-export type RecVariant = 'accent' | 'warning'
+type RecVariant = 'accent' | 'warning'
 
 // Navigation helpers a rule's action may use.
 export interface RecNav {
@@ -78,7 +78,7 @@ export interface RecContext {
 }
 
 // Static, probe-free metadata so a rule can be listed (settings panel) without a ctx.
-export interface RecMeta {
+interface RecMeta {
   key: string
   icon: LucideIcon
   title: string

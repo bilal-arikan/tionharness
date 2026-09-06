@@ -229,7 +229,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
 ]
 
 // flatEmojis is the full list across all categories, used for global search.
-export const ALL_EMOJIS: EmojiEntry[] = EMOJI_CATEGORIES.flatMap((c) => c.emojis)
+const ALL_EMOJIS: EmojiEntry[] = EMOJI_CATEGORIES.flatMap((c) => c.emojis)
 
 // searchEmojis returns entries whose char or keywords contain the query.
 export function searchEmojis(query: string): EmojiEntry[] {

@@ -13,7 +13,7 @@ const STORAGE_KEY = 'tionharness.uiLocale'
 
 // cachedLocale returns the last locale this device rendered in, or null when the
 // app has never run here (or storage is unavailable, e.g. a hardened webview).
-export function cachedLocale(): Locale | null {
+function cachedLocale(): Locale | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
     return isLocale(v) ? v : null
@@ -34,7 +34,7 @@ export function cacheLocale(locale: Locale) {
 
 // browserLocale reads the navigator's preferred language, used only when this
 // device has no cache yet. Matches on the primary subtag so 'en-GB' finds 'en'.
-export function browserLocale(): Locale | null {
+function browserLocale(): Locale | null {
   const langs =
     typeof navigator === 'undefined' ? [] : (navigator.languages ?? [navigator.language])
   for (const tag of langs) {

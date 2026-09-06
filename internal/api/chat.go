@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"strings"
 	"time"
 
@@ -9,12 +8,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
-
-// withTurnID mirrors withSessionID (workdir_context.go): a package-name-safe
-// wrapper for handleChat, whose local `agent` variable shadows the agent package.
-func withTurnID(ctx context.Context, id string) context.Context {
-	return agent.WithTurnID(ctx, id)
-}
 
 // inflightRecorder accumulates a NON-STREAMING turn's persistable trace and
 // snapshots it to the session's inflight sidecar on a throttle — crash-recovery

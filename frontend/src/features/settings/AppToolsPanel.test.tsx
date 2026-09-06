@@ -18,23 +18,18 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-describe('ToolsPanel deprecated timeouts', () => {
-  it('explains legacy fields without rendering mutable hard-cap controls', () => {
+describe('ToolsPanel spawn limits', () => {
+  it('renders no wall-clock hard-cap controls', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
     roots.push(root)
-    const draft = {
-      spawnTimeoutMin: 20,
-      scheduleTimeoutMin: 60,
-    } as AppSettings
+    const draft = {} as AppSettings
 
     act(() => root.render(<ToolsPanel draft={draft} set={vi.fn()} setDraft={vi.fn()} />))
 
-    expect(container.textContent).toContain('spawnTimeoutMin')
-    expect(container.textContent).toContain('scheduleTimeoutMin')
-    expect(container.textContent).toContain('deprecated ve etkisizdir')
-    expect(container.textContent).toContain('0 = disabled')
+    expect(container.textContent).toContain('semantic boşta penceresiyle')
+    expect(container.textContent).not.toContain('spawnTimeoutMin')
     expect(container.textContent).not.toContain('Spawn süresi — üst sınır')
     expect(container.textContent).not.toContain('Zamanlama süresi (dk)')
   })

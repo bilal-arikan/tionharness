@@ -441,9 +441,3 @@ func writeProviderInstanceFiles(path string, list []ProviderInstance) error {
 // currentTime is a thin indirection over time.Now so tests can't be broken by
 // switching the underlying clock later; kept trivial on purpose.
 func currentTime() time.Time { return time.Now() }
-
-// sortInstancesByID is used by tests that need deterministic ordering; kept
-// here rather than in the _test.go file so it stays next to the type it sorts.
-func sortInstancesByID(list []ProviderInstance) {
-	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
-}

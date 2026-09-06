@@ -4,8 +4,8 @@ import type { ButtonHTMLAttributes } from 'react'
 // small size scale. Centralises the className strings that were previously
 // copy-pasted across ~15 panels so accent/danger styling and sizing stay
 // consistent and re-theme cleanly.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger'
-export type ButtonSize = 'sm' | 'md' | 'lg'
+type ButtonVariant = 'primary' | 'secondary' | 'danger'
+type ButtonSize = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-[var(--color-accent)] font-medium text-[var(--color-on-accent)] hover:opacity-90',

@@ -43,13 +43,3 @@ type funcTool struct {
 	def providers.ToolDef
 	fn  func(ctx context.Context, input json.RawMessage) (string, error)
 }
-
-func (t funcTool) Def() providers.ToolDef { return t.def }
-func (t funcTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
-	return t.fn(ctx, input)
-}
-
-// NewFuncTool builds a Tool from a definition and a call function.
-func NewFuncTool(def providers.ToolDef, fn func(ctx context.Context, input json.RawMessage) (string, error)) Tool {
-	return funcTool{def: def, fn: fn}
-}

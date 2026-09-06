@@ -17,10 +17,10 @@ func TestProjectIDForPath(t *testing.T) {
 	cases := map[string]string{
 		"":    "",
 		"   ": "",
-		`C:/Users/user/Desktop/Projects/TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
-		`C:\Users\user\Desktop\Projects\TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
+		`C:/Users/user/Desktop/Projects/TionHarness`:                   "C-Users-user-Desktop-Projects-TionHarness",
+		`C:\Users\user\Desktop\Projects\TionHarness`:                   "C-Users-user-Desktop-Projects-TionHarness",
 		`C:\Users\user\AppData\Local\Programs\@external-agentelectron`: "C-Users-user-AppData-Local-Programs-external-agentelectron",
-		`/home/user/my-repo`:                                        "home-user-my-repo",
+		`/home/user/my-repo`:                                           "home-user-my-repo",
 	}
 	for in, want := range cases {
 		if got := projectIDForPath(in); got != want {
@@ -104,14 +104,6 @@ func TestCodebaseMemoryStateNilPool(t *testing.T) {
 	if got := r.codebaseMemoryState("codebase-memory-mcp"); got != mcp.ServerUnknown {
 		t.Errorf("nil pool should be ServerUnknown, got %v", got)
 	}
-}
-
-// cbmRuntime builds a Runtime whose codebase-memory feature toggle is on.
-func cbmRuntime(t *testing.T) *Runtime {
-	t.Helper()
-	r := &Runtime{workDir: filepath.Join(t.TempDir(), "workspace")}
-	r.codebaseMemoryEnabled.Store(true)
-	return r
 }
 
 func TestEnsureCodebaseIndexedSkipsConcurrentSamePath(t *testing.T) {

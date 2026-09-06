@@ -191,12 +191,12 @@ Canlı veride iki kayıp bulundu; ikisi de **ajanın hiç çalışamaması** dem
    `Provider`) ve bütün `Registry.Get` çağrıları bunu kullanır. Kind-anahtarlı
    okuyucular (§4.1) `Agent.Provider`'ı okumaya devam eder.
 
-Mevcut kurulumlar için `providers.json` bir daha migrate edilmez (dosya var),
-onları **`cmd/repair-provider-migration`** onarır (varsayılan kuru çalışma,
-`-apply` ile yazar, idempotent): eksik `-anthropic` örneklerini şifreli
-kimliği yeniden kullanarak ekler, örneği kaybolmuş ajanları kendi kind'ının
-varsayılan örneğine bağlar, ve config evi taşınmasından kalan claude-cli
-resume kayıtlarını düzeltir (bkz. `51-CLAUDE-CONFIG-BIRLESIK.md`).
+Mevcut kurulumlar için `providers.json` bir daha migrate edilmez (dosya var).
+Geçiş dönemindeki onarım aracı `cmd/repair-provider-migration` ve `Settings`
+üzerindeki eski tipli sağlayıcı alanları (Minimax/OpenRouter/Z.ai/DeepSeek/
+`customProviders`/`claudeConfigDir`) **2026-09-06'da kaldırıldı**: boot tohumu
+(`MigrateFromSettings`) artık yalnız anthropic / claude-cli / codex-cli örneklerini
+türetir, claude-cli config evi `defaultClaudeConfigDir()` ile sabittir.
 
 `openai-compat` / `anthropic-compat` iki **yeni generic kind**'dır: bugünkü
 `buildCustom()` fonksiyonunun (registry.go) kind'laştırılmış hâli. Bu ikisi

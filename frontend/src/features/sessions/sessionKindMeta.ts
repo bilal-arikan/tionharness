@@ -17,7 +17,7 @@ import {
 // kind, so the sessions sidebar, the bulk overview table and the agent activity
 // rail all render the same icon, label, id trimming and status pill.
 
-export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
+const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   chat: { label: 'Sohbet', icon: MessageSquare },
   task: { label: 'Görev', icon: LayoutGrid },
   flow: { label: 'Akış', icon: GitBranch },
@@ -55,7 +55,7 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
 export const WORKER_CHIP = 'worker'
 export const SUBAGENT_CHIP = 'subagent'
 export const ARCHIVED_CHIP = 'archived'
-export const OTHER_CHIP = 'other'
+const OTHER_CHIP = 'other'
 // The two live-state scope chips. `running` is the session's OWN turn streaming;
 // `awaiting-workers` is the coordinator shape: its own turn is idle but at least
 // one worker below it is live. They are mutually exclusive by construction (see
@@ -132,7 +132,7 @@ export function nextChipsOff(chipsOff: string[], key: string, mode: ChipClickMod
 // kindChipKey maps a Session.Kind to the chip that owns it. Every kind lands on
 // a chip: an unrecognised one falls to the "Diğer" catch-all rather than
 // becoming unfilterable.
-export function kindChipKey(kind: string): string {
+function kindChipKey(kind: string): string {
   if (kind === '' || kind === 'chat') return 'chat'
   // The "Otomasyon" chip is an umbrella over event-triggered automations
   // (persistent thread 'automation' and their one-shot 'automation-run' fires)

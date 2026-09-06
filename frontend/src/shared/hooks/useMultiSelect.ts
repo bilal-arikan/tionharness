@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // Modifier-key shape extracted from a mouse/keyboard event. We only read the
 // three flags we care about so callers can pass a real React.MouseEvent or a
 // hand-built object (tests).
-export interface ClickModifiers {
+interface ClickModifiers {
   ctrlKey: boolean
   metaKey: boolean
   shiftKey: boolean

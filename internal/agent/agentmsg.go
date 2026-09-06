@@ -105,9 +105,6 @@ func (r *Runtime) DeliverAgentMessage(ctx context.Context, fromAgentID, toRef, s
 	if err != nil {
 		return "", err
 	}
-	if receipt.Status == db.DeliveryHeld {
-		return heldNotice(receipt), nil
-	}
 	return fmt.Sprintf("Message delivered to %q (inbox, receipt %s). It processes it in the background; the reply is NOT relayed here — it may message you back with send_message.", target.Name, receipt.ID), nil
 }
 
@@ -119,36 +116,26 @@ func (r *Runtime) broadcastAgentMessage(ctx context.Context, fromAgentID, fromNa
 	if err != nil {
 		return "", err
 	}
-	delivered, skipped, held := 0, 0, 0
+	delivered, skipped := 0, 0
 	for _, a := range agents {
 		if a.ID == fromAgentID {
 			continue
 		}
-		receipt, err := r.deliverOne(ctx, fromAgentID, fromName, a, summary, message)
+		_, err := r.deliverOne(ctx, fromAgentID, fromName, a, summary, message)
 		if err != nil {
 			skipped++
 			r.logger.Warn("broadcast: delivery skipped", "to", a.ID, "error", err)
 			continue
 		}
-		if receipt.Status == db.DeliveryHeld {
-			held++
-			continue
-		}
 		delivered++
 	}
 	if delivered == 0 {
-		if held > 0 {
-			return fmt.Sprintf("Broadcast delivered to no one right now: %d recipient(s) hold incoming messages for approval, %d refused/failed.", held, skipped), nil
-		}
 		if skipped > 0 {
 			return "", fmt.Errorf("broadcast reached no one (%d recipient(s) over the delivery limit); try again shortly", skipped)
 		}
 		return "", fmt.Errorf("no other agents in this workspace to broadcast to")
 	}
 	out := fmt.Sprintf("Broadcast delivered to %d agent(s); each processes it in its own inbox in the background.", delivered)
-	if held > 0 {
-		out += fmt.Sprintf(" %d held for approval (not delivered yet).", held)
-	}
 	if skipped > 0 {
 		out += fmt.Sprintf(" %d skipped (refused or over the delivery limit).", skipped)
 	}
@@ -176,9 +163,6 @@ func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, 
 	})
 	if err != nil {
 		return db.AgentMessage{}, err
-	}
-	if receipt.Status == db.DeliveryHeld {
-		return receipt, nil
 	}
 	if err := r.deliverToInbox(ctx, fromAgentID, fromName, target, summary, message); err != nil {
 		return db.AgentMessage{}, r.dropDelivery(ctx, receipt.ID, err)

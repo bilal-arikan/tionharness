@@ -5,7 +5,7 @@
 // here so the same category reads with the same hue everywhere it appears.
 
 // Neutral slate used when a category is unknown / unmapped.
-export const CATEGORY_FALLBACK = '#94a3b8'
+const CATEGORY_FALLBACK = '#94a3b8'
 
 // Call-origin colors — used by the Budget breakdown (one hue per call kind).
 export const KIND_COLORS: Record<string, string> = {
@@ -28,7 +28,7 @@ export function kindColor(kind: string): string {
 // Context-bucket role colors — used by the session context-usage bar + legend.
 // `user` intentionally maps to the live accent token so the user's own share
 // matches the app accent.
-export const ROLE_COLORS: Record<string, string> = {
+const ROLE_COLORS: Record<string, string> = {
   summary: '#f59e0b', // amber — folded history
   user: 'var(--color-accent)',
   // Machine-injected prompts that ride the "user" role on the wire but are not

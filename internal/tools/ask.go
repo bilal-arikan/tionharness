@@ -53,11 +53,6 @@ func multiAskerFrom(ctx context.Context) MultiAskFunc {
 	return fn
 }
 
-// AskerFrom is the exported view of askerFrom: it lets the permission gate (in
-// the agent package) reuse the interactive ask channel to prompt for tool
-// approval. Returns nil on autonomous runs with no open client connection.
-func AskerFrom(ctx context.Context) AskFunc { return askerFrom(ctx) }
-
 // autonomousKey marks a context as belonging to a non-interactive (autonomous)
 // run — schedule, flow, delegate, etc.
 type autonomousKey struct{}

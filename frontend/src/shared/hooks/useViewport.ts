@@ -1,10 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import {
-  classifyViewport,
-  type ViewportAspect,
-  type ViewportClass,
-  type ViewportTier,
-} from '@/shared/lib/viewport'
+import { classifyViewport, type ViewportClass, type ViewportTier } from '@/shared/lib/viewport'
 
 // One window-level subscription shared by every consumer: the viewport is
 // classified on resize and listeners are only notified when the TIER or ASPECT
@@ -14,7 +9,7 @@ import {
 const FALLBACK: ViewportClass = { tier: 'wide', aspect: 'landscape' }
 
 let current: ViewportClass = FALLBACK
-let listeners = new Set<() => void>()
+const listeners = new Set<() => void>()
 let installed = false
 let frame = 0
 
@@ -68,10 +63,6 @@ export function useViewportTier(): ViewportTier {
   return useViewport().tier
 }
 
-export function useViewportAspect(): ViewportAspect {
-  return useViewport().aspect
-}
-
 // useViewportAttribute mirrors the classification onto <html data-viewport
 // data-aspect> so plain CSS (styles/layout.css) can key the reading measure,
 // column transitions and drawer behaviour off the same tiers the JS shell uses.
@@ -83,12 +74,4 @@ export function useViewportAttribute() {
     root.dataset.viewport = tier
     root.dataset.aspect = aspect
   }, [tier, aspect])
-}
-
-// Test hook: reset the module store between cases.
-export function __resetViewportStoreForTests() {
-  listeners = new Set()
-  installed = false
-  current = FALLBACK
-  frame = 0
 }

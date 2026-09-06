@@ -3,11 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 // Collapsed nodes of the map: a node the user folded from the side panel hides
 // everything only it reaches (its subtree). Persisted per browser and
 // workspace so a fold survives leaving the screen, like the layout does.
-export function explorerCollapseKey(workspaceId: string): string {
+function explorerCollapseKey(workspaceId: string): string {
   return `tionharness.explorerCollapsed.${encodeURIComponent(workspaceId)}`
 }
 
-export function parseCollapsed(raw: string | null | undefined): string[] {
+function parseCollapsed(raw: string | null | undefined): string[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)

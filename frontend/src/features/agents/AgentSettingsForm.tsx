@@ -85,8 +85,7 @@ interface Props {
 }
 
 // Field units of this form that can be inherited. "tools" and "allowedTools"
-// are handled by the instant-save tools section; "inboundPolicy" has no editor
-// here yet.
+// are handled by the instant-save tools section.
 const FORM_OVERRIDE_KEYS: AgentOverrideKey[] = [
   'soul',
   'identity',

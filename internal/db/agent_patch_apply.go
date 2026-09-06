@@ -42,10 +42,6 @@ func applyInheritablePatch(a *Agent, p AgentProfilePatch, mark func(key string))
 		a.PermissionMode = *p.PermissionMode
 		mark("permissionMode")
 	}
-	if p.InboundPolicy != nil {
-		a.InboundPolicy = *p.InboundPolicy
-		mark("inboundPolicy")
-	}
 	if p.Avatar != nil {
 		a.Avatar = *p.Avatar
 		mark("avatar")

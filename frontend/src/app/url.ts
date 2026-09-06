@@ -91,7 +91,7 @@ export function parseRoute(hash: string): Route {
 // isView reports whether a string is a known NavRail view. Legacy slugs are NOT
 // views — routeFromEvent maps them separately so a stale backend event target
 // (target.view === 'executions') still routes instead of being dropped.
-export function isView(v: string | null | undefined): v is View {
+function isView(v: string | null | undefined): v is View {
   return !!v && (VIEWS as string[]).includes(v)
 }
 

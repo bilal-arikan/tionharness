@@ -82,7 +82,7 @@ export function parseArgs(args?: string): string[] {
 
 // parseJsonObject safely turns an MCPServer env/headers JSON string into a
 // Record<string,string>. Anything malformed or non-object (null, array) yields {}.
-export function parseJsonObject(raw?: string): Record<string, string> {
+function parseJsonObject(raw?: string): Record<string, string> {
   if (!raw) return {}
   try {
     const parsed = JSON.parse(raw)

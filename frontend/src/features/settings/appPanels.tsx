@@ -3,8 +3,7 @@
 // (`import { ProfilePanel, … } from './settings/appPanels'`) keep working. The
 // simple stateless categories are pure draft+setter forms; the stateful ones
 // (providers, commands, step kinds, workspace) live in their own files too.
-export type { PanelProps } from './settingsPanelShared'
-export { SubHead } from './settingsPanelShared'
+
 export { ProfilePanel } from './ProfilePanel'
 export { NotificationsPanel } from './NotificationsPanel'
 export { SoundPanel } from './SoundPanel'

@@ -91,17 +91,6 @@ func lessonTokensMergeable(a, b map[string]struct{}) bool {
 	return textutil.Overlap(a, b) >= lessonMergeOverlap && textutil.Jaccard(a, b) >= lessonMergeJaccard
 }
 
-// lessonsMergeable is the full write-time predicate. Lessons of DIFFERENT tools
-// never merge: the same words mean different things per tool ("queue full" on
-// send_to_worker is not "queue full" on a shell command), and keeping them apart
-// costs one extra row while fusing them loses a distinct rule.
-func lessonsMergeable(a, b Lesson) bool {
-	if a.Tool != b.Tool {
-		return false
-	}
-	return lessonTokensMergeable(lessonTopicTokens(a), lessonTopicTokens(b))
-}
-
 // collapseLessons folds every group of mergeable lessons into one row and
 // returns the collapsed slice plus groupOf, mapping each input index to its
 // survivor's index in the output. Grouping is TRANSITIVE (a↔b and b↔c put all

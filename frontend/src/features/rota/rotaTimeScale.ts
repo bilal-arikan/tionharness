@@ -22,7 +22,7 @@ export interface RotaGap {
 
 /** One piece of the piecewise-linear mapping: [start,end] seconds occupying
  *  [x0,x0+width] pixels. `gap` pieces are the collapsed ones. */
-export interface ScaleSegment {
+interface ScaleSegment {
   start: number
   end: number
   x0: number
@@ -41,7 +41,7 @@ export interface RotaTimeScale {
 
 /** Gaps shorter than this stay as they are: collapsing them would only add
  *  visual noise without buying back meaningful width. */
-export const MIN_GAP_SEC = 5 * 60
+const MIN_GAP_SEC = 5 * 60
 
 /** Pixels a collapsed gap keeps: just enough for the hatched sliver to read as
  *  a break, since every pixel spent here is one the real activity loses. */
@@ -72,7 +72,7 @@ function measure(sec: number, log: boolean): number {
  *  events is measured on its own — that is what keeps a short session readable
  *  wherever it sits in the window, instead of being squashed just because the
  *  window's earlier seconds already spent the panel. */
-export function eventInstants(layout: RotaLayout): number[] {
+function eventInstants(layout: RotaLayout): number[] {
   const { t0, now } = layout
   const set = new Set<number>()
   const add = (t: number) => {

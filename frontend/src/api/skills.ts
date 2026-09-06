@@ -4,7 +4,7 @@ import { req } from './client'
 // SkillImportResult mirrors the backend skills.ImportResult (SK-IMP): the new
 // slug, which CC frontmatter fields were carried over, the bundled files copied,
 // and warnings about unsupported CC features that were dropped.
-export interface SkillImportResult {
+interface SkillImportResult {
   slug: string
   name: string
   mappedFields: string[]

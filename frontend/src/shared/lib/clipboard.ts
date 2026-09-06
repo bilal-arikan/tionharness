@@ -18,7 +18,7 @@ import {
 //
 // Returns true on success, false when neither path could copy (caller decides how
 // to surface the failure).
-export async function copyText(text: string): Promise<boolean> {
+async function copyText(text: string): Promise<boolean> {
   if (!text) return false
 
   // Preferred path: async Clipboard API (secure contexts).

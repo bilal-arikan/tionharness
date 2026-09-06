@@ -290,7 +290,6 @@ func (s *Server) applySettings() {
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)
-	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
 	s.tun.SetAutoTagSessions(cur.AutoTagSessions)
 	s.tun.SetDebugJournal(cur.DebugJournalEnabled, cur.DebugJournalCap)
 	// The debug journal has a second funnel that cannot reach the tunables: the
@@ -315,15 +314,11 @@ func (s *Server) applySettings() {
 	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnQueueMax, cur.SpawnMaxPerTurn)
-	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetFlowRunRetention(cur.FlowRunRetention)
-	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
 	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
 	providers.SetCodexIdleOutputTimeout(time.Duration(cur.CodexStdoutIdleSec) * time.Second)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
-	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
-	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)
 	s.tun.SetTurnIdleWatchdogMinutes(cur.TurnIdleWatchdogMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
@@ -391,10 +386,6 @@ func (s *Server) Routes() http.Handler {
 	// Advisory release-feed check for the "newer version available" banner.
 	// Cached server-side (24h) so the UI can call it freely.
 	mux.HandleFunc("GET /api/version/update", s.handleUpdateCheck)
-	// In-memory store footprint per workspace — the measurement baseline for the
-	// message lazy-loading work. Global (not workspace-scoped) on purpose: the
-	// question it answers is "what does the PROCESS hold?".
-	mux.HandleFunc("GET /api/debug/store-stats", s.handleStoreStats)
 
 	s.registerWorkspaceRoutes(mux)
 	s.registerAgentRoutes(mux)
@@ -858,11 +849,6 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	// Locate the artifact on disk (copy-path action).
 	mux.HandleFunc("GET /api/artifacts/{id}/path", s.handleArtifactPath)
 
-	// Inbound-message hold queue (agent_messages.go): list what a "hold" policy
-	// has parked, then release (deliver now) or refuse it.
-	mux.HandleFunc("GET /api/agent-messages/held", s.handleListHeldAgentMessages)
-	mux.HandleFunc("POST /api/agent-messages/{id}/release", s.handleReleaseAgentMessage)
-	mux.HandleFunc("POST /api/agent-messages/{id}/refuse", s.handleRefuseAgentMessage)
 }
 
 // registerSkillRoutes registers the file-based skill catalog (reusable agent
@@ -1053,8 +1039,6 @@ func workspaceOptionalPath(path string) bool {
 	case path == "/health":
 		return true
 	case path == "/api/version" || path == "/api/version/update":
-		return true
-	case path == "/api/debug/store-stats":
 		return true
 	}
 	return false

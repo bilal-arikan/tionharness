@@ -132,34 +132,12 @@ sayaç dosyası + mevcut `WS<n>` metalarının maks'ını alarak rewind'i önler
 (`internal/workspace/id.go`). Workspace ID'si dizin adıdır (`workspaces/<id>/`);
 entity dosyalarının **içine gömülü değildir** (workspace'ler izole).
 
-### Eski UUID → yeni şema migration aracı (`cmd/migrate-ids`)
+### Eski UUID → yeni şema migrasyonu (tarihçe)
 
-Tek-seferlik, **idempotent** dönüştürücü. Strateji: her UUID global benzersiz bir
-token olduğundan, (1) tüm migratable entity'ler için eski→yeni ID haritası kurar,
-(2) bu token'ları workspace ağacındaki **tüm metin dosyalarında** birebir değiştirir
-— her cross-reference'ı (AgentID, SessionID, OwnerAgentID, `Task.Dependencies`,
-`Flow.Graph` düğüm ID'leri, içerik-dosyası yolları…) alan-alan saymadan yakalar —
-ve (3) ID ile adlandırılmış dosya/klasörleri yeniden adlandırır (entity JSON,
-session klasörleri, artifact içerik dosyaları, upload klasörleri, usage dosyaları).
-Sayaç dosyalarını (`counters.json` / `ws-counter.json`) ileri taşır → çalışan
-uygulama numaralamaya kaldığı yerden devam eder.
-
-- **Varsayılan dry-run** (hiçbir şey değişmez); `-apply` ile uygulanır ve önce
-  tüm `dataDir` zaman damgalı yedeklenir (`-backup=false` ile atlanır).
-- **Junction/symlink güvenli:** içerik-rewrite yalnız `store/` üzerinde çalışır
-  (tüm ID referansları orada); workspace içerik dizini (artifacts/uploads) bir
-  reparse-point (junction) ise — örn. sandbox gerçek bir projeye bağlıyken —
-  ona dalınmaz, yedekleme de junction'ları atlar (uyarı basar). Junctioned
-  workspace'in `artifacts/uploads` alt-klasörleri yine sığ olarak yeniden adlanır.
-- **Uygulama KAPALIYKEN çalıştırın** (write-through dosyalar değişeceğinden).
-- Mesaj (`msg`) ve task `Run` ID'leri UUID'de kalır (migrate edilmez); onlara
-  yapılan referanslar yine token-replacement ile düzeltilir.
-- Kullanım:
-  ```powershell
-  go run ./cmd/migrate-ids                          # dry-run (~/.tionharness)
-  go run ./cmd/migrate-ids -apply                   # uygula (önce yedek)
-  go run ./cmd/migrate-ids -data D:\sg -apply -workspaces=false
-  ```
+UUID'li eski depolar prefix'li şemaya tek seferlik `cmd/migrate-ids` aracıyla taşındı;
+migrasyon dalgası tamamlanınca araç **2026-09-06'da kaldırıldı** (eski sürüm
+tarihçesinde `git log -- cmd/migrate-ids`). Yeni kurulumlar doğrudan prefix'li ID
+üretir; UUID'li bir depo bir daha desteklenmez.
 
 > Eski yol `{wsID}/tionharness.db` idi; artık `{wsID}/store/` dizini.
 

@@ -38,14 +38,6 @@ func newScriptedProvider(turns ...*providers.Response) *scriptedProvider {
 
 func (p *scriptedProvider) Name() string { return "scripted" }
 
-// push appends more turns to the script (used when a test drives several turns
-// against one provider instance).
-func (p *scriptedProvider) push(turns ...*providers.Response) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.queue = append(p.queue, turns...)
-}
-
 func (p *scriptedProvider) Complete(_ context.Context, req providers.Request) (*providers.Response, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

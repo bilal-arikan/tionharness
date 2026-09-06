@@ -60,7 +60,7 @@ export interface GoalFitness {
   bySnapshot: SnapshotFitness[]
 }
 
-export interface SnapshotRow {
+interface SnapshotRow {
   hash: string
   firstSeen: number
   lastSeen: number
@@ -90,7 +90,7 @@ export interface EvolutionResult {
 }
 
 // Evolver bookkeeping for one goal (db.EvolutionGoalState).
-export interface EvolutionGoalState {
+interface EvolutionGoalState {
   lastAt: number
   sessionsSeen: number
   trigger?: string

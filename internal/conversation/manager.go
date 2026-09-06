@@ -40,22 +40,6 @@ const compactMaxOutputTokens = 8192
 // repeated folds erode early context. Two named placeholders ({{summary}},
 // {{messages}}) mark the data slots; reactive.go reuses the same template.
 
-// CompactionPromptText returns the conversation-compaction prompt as
-// human-readable reference text — the {{summary}}/{{messages}} data slots are
-// shown as labels rather than filled in. Exposed so the UI can display the
-// ACTUAL summarization prompt read-only.
-func CompactionPromptText() string {
-	return prompts.Render(prompts.Default("compact"), map[string]string{
-		"summary":  "‹the running summary so far›",
-		"messages": "‹the new messages to fold in›",
-	})
-}
-
-// CompactPromptDefault returns the compiled-in compaction prompt template RAW
-// (with its {{summary}}/{{messages}} slots). It is the fallback when the
-// per-workspace "compact" override is missing, blank, or malformed.
-func CompactPromptDefault() string { return prompts.Default("compact") }
-
 // compactPromptCtxKey carries a per-workspace compaction template on the turn
 // context so the shared (global) Manager and the package-level compaction core
 // can honor a workspace's edited "compact" prompt without a per-workspace Manager.

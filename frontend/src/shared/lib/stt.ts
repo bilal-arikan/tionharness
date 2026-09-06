@@ -44,7 +44,7 @@ export function setSttModel(v: string) {
 }
 
 // browserSttSupported reports whether the browser has Web Speech recognition.
-export function browserSttSupported(): boolean {
+function browserSttSupported(): boolean {
   if (typeof window === 'undefined') return false
   const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }
   return !!(w.SpeechRecognition ?? w.webkitSpeechRecognition)
@@ -76,8 +76,4 @@ export function resolveSttEngine(): 'server' | 'browser' | 'none' {
   if (pref === 'server') return serverOk ? 'server' : browserOk ? 'browser' : 'none'
   if (pref === 'browser') return browserOk ? 'browser' : serverOk ? 'server' : 'none'
   return serverOk ? 'server' : browserOk ? 'browser' : 'none'
-}
-
-export function sttAvailable(): boolean {
-  return resolveSttEngine() !== 'none'
 }

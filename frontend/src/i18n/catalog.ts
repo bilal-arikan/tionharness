@@ -10,7 +10,7 @@
 // ever grow past a few hundred KB, switch the glob below to `eager: false` and
 // wire i18next's backend plugin — nothing else here depends on the timing.
 
-import { LOCALE_CODES, type Locale } from './locales'
+import { LOCALE_CODES } from './locales'
 
 type Catalog = Record<string, unknown>
 type LocaleResources = Record<string, Catalog>
@@ -19,9 +19,6 @@ const modules = import.meta.glob<Catalog>('./locales/*/*.json', {
   eager: true,
   import: 'default',
 })
-
-// NAMESPACE_SEP mirrors i18next's default ':' separator (t('chat:composer.send')).
-export const NAMESPACE_SEP = ':'
 
 // DEFAULT_NAMESPACE holds strings shared across features (actions, states, units).
 // Feature-local strings belong in a namespace named after the feature folder.
@@ -65,4 +62,4 @@ export function allNamespaces(resources: Record<string, LocaleResources>): strin
   return [...set].sort()
 }
 
-export type { Catalog, LocaleResources, Locale }
+export type { LocaleResources }

@@ -35,6 +35,3 @@ func sessionFrom(ctx context.Context) SessionSink {
 	s, _ := ctx.Value(sessionKey{}).(SessionSink)
 	return s
 }
-
-// HasSessionSink reports whether a session sink is attached to ctx.
-func HasSessionSink(ctx context.Context) bool { return sessionFrom(ctx) != nil }

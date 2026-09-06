@@ -2,11 +2,11 @@
 // internal/insight.
 import type { SeedDefaultState } from './seed'
 
-export type InsightChannel = 'app-fix' | 'workspace-opt' | 'recipe-opt' | 'evolution'
+type InsightChannel = 'app-fix' | 'workspace-opt' | 'recipe-opt' | 'evolution'
 
 /** Workspace-evolver proposal (_Docs/83 E2, insight.EvolutionProposal): one
  * measured change to one field of one entity toward a goal. Suggestion-only. */
-export interface EvolutionProposal {
+interface EvolutionProposal {
   goalId: string
   surface: string
   entityId: string
@@ -26,7 +26,7 @@ export interface EvolutionProposal {
 
 // Recipe optimizer proposal (Rota F4, insight.RecipeProposal): one measured,
 // conditional change to one coordinator recipe. Suggestion-only in v1.
-export interface RecipeProposal {
+interface RecipeProposal {
   slug: string
   version?: string
   // prune_phase | make_optional | prune_watcher | change_profile | add_gate |
@@ -38,7 +38,7 @@ export interface RecipeProposal {
   evidence: string
 }
 
-export interface LensPrefilter {
+interface LensPrefilter {
   requiresAny?: string[]
   requiresAll?: string[]
   excludes?: string[]
@@ -114,15 +114,6 @@ export interface InsightSettings {
   autoVerifyDays?: number
   /** DISMISSED/VERIFIED finding untouched for N days → deleted. 0 = default (45). */
   pruneDays?: number
-}
-
-export interface InsightScanResult {
-  sessions: number
-  analyzed: number
-  skipped: number
-  prefiltered: number
-  findings: number
-  errors?: string[]
 }
 
 /** One fleet-merged app-fix finding plus the workspaces it surfaced in. */

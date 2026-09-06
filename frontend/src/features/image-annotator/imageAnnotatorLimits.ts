@@ -1,4 +1,4 @@
-export const ACCEPTED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const
+const ACCEPTED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const
 export const MAX_SOURCE_BYTES = 20_971_520
 export const MAX_SOURCE_DIMENSION = 8192
 export const MAX_SOURCE_PIXELS = 40_000_000

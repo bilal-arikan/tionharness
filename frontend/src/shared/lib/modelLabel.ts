@@ -93,38 +93,3 @@ export function resolveModelLabel(
   // never configured with — a plausible lie is worse than an admitted gap.
   return '(model belirtilmemiş)'
 }
-
-// cliProductName maps a provider id to the human-readable name of the local CLI
-// binary behind it, for the full (non-compact) runtime badge. Providers with no
-// CLI install (empty cliVersion) never reach this — see resolveRuntimeBadge.
-function cliProductName(providerId: string): string {
-  if (providerId === 'codex-cli') return 'Codex CLI'
-  return 'Claude Code'
-}
-
-// resolveRuntimeBadge renders the runtime behind a provider entry as one short
-// label — the two keyless CLI transports have one: "Claude Code v2.1.220 · Max"
-// or "Codex CLI v0.147.0 · Chatgpt".
-//
-// The CLI install is a property of the machine, not of the model, so this
-// belongs next to the provider (Settings, model picker) rather than on an agent's
-// identity line — that line names the model that answered.
-//
-// `compact` drops the product-name prefix ("v2.1.220 · Max") for tight lines.
-// Callers using it should put the full label in a title.
-export function resolveRuntimeBadge(
-  entry: CatalogEntry | undefined,
-  opts?: { compact?: boolean },
-): string {
-  if (!entry) return ''
-  const parts: string[] = []
-  if (entry.cliVersion) {
-    parts.push(
-      opts?.compact ? `v${entry.cliVersion}` : `${cliProductName(entry.id)} v${entry.cliVersion}`,
-    )
-  }
-  if (entry.subscription) {
-    parts.push(entry.subscription.charAt(0).toUpperCase() + entry.subscription.slice(1))
-  }
-  return parts.join(' · ')
-}

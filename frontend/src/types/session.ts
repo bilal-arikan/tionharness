@@ -1,7 +1,7 @@
 // Sessions plus the rich detail/context model behind the session info panel.
 
 // Session origin kinds (db.Origin* constants).
-export type SessionOriginKind =
+type SessionOriginKind =
   | 'user'
   | 'spawn'
   | 'coordinator'
@@ -126,7 +126,7 @@ export interface WorkdirInfo {
 }
 
 // ProgressTodo is one persisted checklist item (durable todo_write entry).
-export interface ProgressTodo {
+interface ProgressTodo {
   content: string
   status: 'pending' | 'in_progress' | 'completed'
   category?: string
@@ -134,14 +134,14 @@ export interface ProgressTodo {
 }
 
 // ProgressLogEntry is one line of the rolling progress journal.
-export interface ProgressLogEntry {
+interface ProgressLogEntry {
   ts: number
   sessionId?: string
   note: string
 }
 
 // ProgressRecord is the decoded persistent-progress file (todos + log).
-export interface ProgressRecord {
+interface ProgressRecord {
   version: number
   updatedAt: number
   sessionId?: string
@@ -158,7 +158,7 @@ export interface SessionProgress {
 }
 
 // BrowseEntry is one selectable directory in the folder picker.
-export interface BrowseEntry {
+interface BrowseEntry {
   name: string
   path: string
 }
@@ -300,7 +300,7 @@ export interface CLIOverhead {
 // fresh. anthropic caches the Tools + System prefix (when ExtendedPromptCache is
 // on); claude-cli --resume keeps System + the first cachedMsgCount messages warm
 // server-side and sends only the newest delta. mode "none" = nothing cached.
-export interface CachePreview {
+interface CachePreview {
   mode: 'anthropic' | 'claude-resume' | 'none'
   note: string
   systemCached: boolean
@@ -314,7 +314,7 @@ export interface CachePreview {
 }
 
 // A labelled bucket of the live context window (summary or a message role).
-export interface ContextFiller {
+interface ContextFiller {
   label: string
   role: string
   tokens: number
@@ -322,7 +322,7 @@ export interface ContextFiller {
 }
 
 // An agent that took part in a session, with per-agent turn/token counts.
-export interface SessionAgentStat {
+interface SessionAgentStat {
   agentId: string
   name: string
   avatar?: string
@@ -414,7 +414,7 @@ export interface SessionInfo {
 }
 
 // RunningTurn describes an in-flight turn behind the Session Info panel's process card.
-export interface RunningTurn {
+interface RunningTurn {
   runId: string
   startedAt: number // unix seconds
   autonomous: boolean

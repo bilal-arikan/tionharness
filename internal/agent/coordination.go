@@ -198,23 +198,6 @@ func (c *workerCtl) cancel() {
 	}
 }
 
-// sessionIsCoordinator reports whether the session stamped on ctx may drive
-// workers (db.Session.IsCoordinator). False when no session is stamped or it
-// can't be loaded. Note this is TRUE for a mid-level node too: since the
-// unlimited-depth rework a worker session that has coordinator mode on drives its
-// own workers while still reporting up to its parent.
-func (r *Runtime) sessionIsCoordinator(ctx context.Context) bool {
-	sid := SessionIDFrom(ctx)
-	if sid == "" {
-		return false
-	}
-	s, err := r.db.GetSession(ctx, sid)
-	if err != nil {
-		return false
-	}
-	return s.IsCoordinator()
-}
-
 // withCoordination wires the coordination runner for one turn. It always installs
 // the runner (when a session is stamped on ctx) but populates only the functions
 // this session may actually use; buildRegistry then registers each tool from the
@@ -944,9 +927,6 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	})
 	if err != nil {
 		return tools.SendResult{}, err
-	}
-	if receipt.Status == db.DeliveryHeld {
-		return tools.SendResult{Held: true, ReceiptID: receipt.ID}, nil
 	}
 
 	// Backpressure instead of rejection: a worker mid-turn no longer loses the

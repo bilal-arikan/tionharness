@@ -171,15 +171,9 @@ dışı — gerekçeleri aşağıdaki ölçüm bölümünde. Ayrıca kabuk opera
 (`|`, `&&`, `;`, `$(…)`) atlanır — orada ilk token artık neyin çalıştığını anlatmıyor.
 
 Listede olmayan bir aile "rtk başarısız olur" demek değil, **"henüz ölçülmedi"** demektir.
-Genişletmek için ölçüm aracını kullan:
-
-```powershell
-python scripts/rtk_eval.py scripts/rtk_eval.spec.tsv
-```
-
-`scripts/rtk_eval.py` her komutu ham ve rtk-yeniden-yazılmış hâlde koşar, dördünü de
-(`ham / sqz / rtk / rtk+sqz`) **tiktoken** ile sayar ve kararı basar. `spec` dosyası
-kararların dayandığı komutları kaydeder — yolları kendi makinene göre düzenle.
+Ölçüm scripti (`scripts/rtk_eval.py` + `.spec.tsv`) 2026-09-06'da kaldırıldı; yeni bir
+aile ölçülecekse komutu ham ve `rtk` ile koşup çıktıyı tiktoken ile saymak yeterlidir
+(tarihçe: `git log -- scripts/rtk_eval.py`).
 
 ### Ölçüm sonuçları (2026-07-28, rtk 0.44.1)
 

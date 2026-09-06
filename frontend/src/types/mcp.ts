@@ -37,7 +37,7 @@ export interface MCPImportResult {
 
 // Live MCP connection-pool snapshot (GET /api/mcp-servers/pool): per-server
 // aggregates plus the scoped-connection idle-eviction window (reaper).
-export interface MCPPoolServerStat {
+interface MCPPoolServerStat {
   server: string
   live: number // alive connections right now
   total: number // pool entries (alive or reconnecting)
@@ -47,13 +47,6 @@ export interface MCPPoolServerStat {
 export interface MCPPoolStats {
   idleSec: number // scoped idle-eviction window in seconds (0 = disabled)
   servers: MCPPoolServerStat[]
-}
-
-// A tool advertised to the model (built-in or MCP-sourced).
-export interface ToolDef {
-  name: string
-  description: string
-  inputSchema?: unknown
 }
 
 export interface MCPTestResult {

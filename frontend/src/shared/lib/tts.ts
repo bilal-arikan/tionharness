@@ -54,19 +54,11 @@ export function setTtsAutoRead(on: boolean) {
 
 // Resolved voice language: an explicit TTS choice, else the composer's dictation
 // language, else '' (let the engine pick its default voice).
-export function ttsLang(): string {
+function ttsLang(): string {
   try {
     return localStorage.getItem(LANG_KEY) || localStorage.getItem(STT_LANG_KEY) || ''
   } catch {
     return ''
-  }
-}
-
-export function setTtsLang(v: string) {
-  try {
-    localStorage.setItem(LANG_KEY, v)
-  } catch {
-    // best-effort
   }
 }
 
@@ -309,7 +301,7 @@ async function speakServer(clean: string, onEnd?: () => void): Promise<boolean> 
 
 // stripForSpeech reduces assistant markdown to spoken prose. Order matters:
 // fenced code first (multi-line), then inline constructs, then leftover markers.
-export function stripForSpeech(md: string): string {
+function stripForSpeech(md: string): string {
   let t = md
   // Fenced code / preview blocks (``` or ~~~), including datatable/mermaid/html.
   t = t.replace(/```[\s\S]*?```/g, ' ')

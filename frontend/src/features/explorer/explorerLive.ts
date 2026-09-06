@@ -8,7 +8,7 @@ import { refToString } from '@/types'
 // session starts and vanish — together with the session's glow — on the refresh
 // after it stops. Pure, no DOM.
 
-export const LIVE_SUB_PREFIX = 'live:'
+const LIVE_SUB_PREFIX = 'live:'
 
 // liveAgentRef is the ref of the avatar node for a live session: the agent's
 // id with a `live:<session>` sub, so the same agent driving two sessions gets

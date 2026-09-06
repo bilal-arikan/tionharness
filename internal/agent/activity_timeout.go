@@ -298,14 +298,6 @@ func ObserveActivityStep(ctx context.Context, st TurnStep) bool {
 	return t != nil && t.ObserveStep(st)
 }
 
-// TouchActivity remains for callers that can independently verify real progress.
-// New step paths should use ObserveActivityStep so duplicates are rejected.
-func TouchActivity(ctx context.Context) {
-	if t := ActivityTrackerFrom(ctx); t != nil {
-		t.Progress("verified_progress")
-	}
-}
-
 // WithOperationLease bounds one opaque non-streaming provider/tool operation.
 // Its completion is progress; periodic heartbeat cannot extend this lease.
 func WithOperationLease(ctx context.Context) (context.Context, func()) {

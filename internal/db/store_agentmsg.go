@@ -18,7 +18,7 @@ func (d *DB) persistAgentMessageLocked(m AgentMessage) error {
 // layer only validates that the status is one of the four.
 func (d *DB) CreateAgentMessage(ctx context.Context, m AgentMessage) (AgentMessage, error) {
 	switch m.Status {
-	case DeliveryAccepted, DeliveryHeld, DeliveryRefused, DeliveryDropped:
+	case DeliveryAccepted, DeliveryRefused, DeliveryDropped:
 	default:
 		return AgentMessage{}, fmt.Errorf("invalid delivery status %q", m.Status)
 	}
@@ -35,16 +35,6 @@ func (d *DB) GetAgentMessage(ctx context.Context, id string) (AgentMessage, erro
 	return dbGet(d, d.agentMessages, id)
 }
 
-// ListHeldAgentMessages returns the still-held messages, oldest first. Pass an
-// empty toAgentID for every recipient.
-func (d *DB) ListHeldAgentMessages(ctx context.Context, toAgentID string) ([]AgentMessage, error) {
-	return dbFilter(d, d.agentMessages,
-		func(m AgentMessage) bool {
-			return m.Status == DeliveryHeld && (toAgentID == "" || m.ToAgentID == toAgentID)
-		},
-		func(a, b AgentMessage) bool { return a.CreatedAt < b.CreatedAt }), nil
-}
-
 // ListAgentMessagesFrom returns the receipts for messages a given sender sent,
 // newest first — the sender's "what happened to my messages" view.
 func (d *DB) ListAgentMessagesFrom(ctx context.Context, fromAgentID string) ([]AgentMessage, error) {
@@ -54,34 +44,6 @@ func (d *DB) ListAgentMessagesFrom(ctx context.Context, fromAgentID string) ([]A
 	return dbFilter(d, d.agentMessages,
 		func(m AgentMessage) bool { return m.FromAgentID == fromAgentID },
 		func(a, b AgentMessage) bool { return a.CreatedAt > b.CreatedAt }), nil
-}
-
-// ResolveHeldAgentMessage CAS-transitions a HELD receipt to a terminal status
-// (accepted after approval, refused/dropped after rejection). Exactly one caller
-// wins the race; resolving a receipt that is no longer held is an error, so a
-// double release can never deliver the same message twice.
-func (d *DB) ResolveHeldAgentMessage(ctx context.Context, id, status, reason string) (AgentMessage, error) {
-	switch status {
-	case DeliveryAccepted, DeliveryRefused, DeliveryDropped:
-	default:
-		return AgentMessage{}, fmt.Errorf("invalid resolution status %q", status)
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	m, ok := d.agentMessages[id]
-	if !ok {
-		return AgentMessage{}, ErrNotFound
-	}
-	if m.Status != DeliveryHeld {
-		return AgentMessage{}, fmt.Errorf("agent message %s is not held (status %q)", id, m.Status)
-	}
-	m.Status = status
-	m.Reason = reason
-	m.UpdatedAt = now()
-	if err := d.persistAgentMessageLocked(m); err != nil {
-		return AgentMessage{}, err
-	}
-	return m, nil
 }
 
 // MarkAgentMessageDropped downgrades an already-recorded receipt to "dropped"

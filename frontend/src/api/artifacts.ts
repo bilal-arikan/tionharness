@@ -17,7 +17,7 @@ export interface ArtifactPage {
 
 // asArtifactPage normalizes either wire shape (unwrapped legacy array or paged
 // envelope) to the paged form.
-export function asArtifactPage(r: Artifact[] | ArtifactPage): ArtifactPage {
+function asArtifactPage(r: Artifact[] | ArtifactPage): ArtifactPage {
   return Array.isArray(r)
     ? { items: r, total: r.length, offset: 0, limit: r.length, hasMore: false }
     : r

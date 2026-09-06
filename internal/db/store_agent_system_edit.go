@@ -35,11 +35,6 @@ func (d *DB) updateBuiltinSystemAgent(ctx context.Context, locked Agent, p Agent
 		// boot would silently revert.
 		return Agent{}, ErrAgentLocked
 	}
-	if p.InboundPolicy != nil {
-		if _, err := ValidateInboundPolicy(*p.InboundPolicy); err != nil {
-			return Agent{}, err
-		}
-	}
 	if err := ValidateOverrideKeys(p.ResetFields); err != nil {
 		return Agent{}, err
 	}

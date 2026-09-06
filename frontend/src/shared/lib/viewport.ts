@@ -27,8 +27,8 @@ export const TIER_MIN_WIDTH: Record<Exclude<ViewportTier, 'narrow'>, number> = {
 
 // Width / height ratio thresholds for the aspect axis. 1280x1024 (1.25) still
 // counts as square; 16:10 and wider is landscape; taller than 9:10 is portrait.
-export const ASPECT_PORTRAIT_MAX = 0.9
-export const ASPECT_SQUARE_MAX = 1.25
+const ASPECT_PORTRAIT_MAX = 0.9
+const ASPECT_SQUARE_MAX = 1.25
 
 export interface ViewportClass {
   tier: ViewportTier
@@ -58,7 +58,7 @@ export function classifyViewport(width: number, height: number): ViewportClass {
 // rail + list + content must share <= 1279px, so a 640px list column (the drag
 // maximum) would leave the content pane unusable; the cap is applied on top of
 // the persisted width, which is kept intact for wider tiers.
-export const LIST_COLUMN_MAX_BY_TIER: Record<ViewportTier, number> = {
+const LIST_COLUMN_MAX_BY_TIER: Record<ViewportTier, number> = {
   narrow: Number.POSITIVE_INFINITY, // mobile drawers size themselves via CSS
   square: 256,
   wide: Number.POSITIVE_INFINITY,

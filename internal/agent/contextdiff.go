@@ -242,24 +242,6 @@ func (c *ContextChange) appendArea(a ContextArea) {
 	c.Areas = append(c.Areas, a)
 }
 
-// merge folds another change into c (system + tools into one step/note). nil
-// operands are ignored.
-func mergeContextChanges(a, b *ContextChange) *ContextChange {
-	switch {
-	case a == nil:
-		return b
-	case b == nil:
-		return a
-	}
-	a.Added += b.Added
-	a.Removed += b.Removed
-	a.Truncated += b.Truncated
-	for _, area := range b.Areas {
-		a.appendArea(area)
-	}
-	return a
-}
-
 // Empty reports whether the change carries nothing worth surfacing.
 func (c *ContextChange) Empty() bool {
 	return c == nil || (len(c.Areas) == 0 && c.Truncated == 0)

@@ -51,23 +51,6 @@ const (
 	AutoCompactAuto    = "auto"
 )
 
-// CustomProvider is a user-added OpenAI- or Anthropic-compatible endpoint. Its
-// ID is used as a provider identifier (Agent.Provider) and must not collide
-// with a built-in. KeyEnc is AES-GCM and never serialized to the API.
-type CustomProvider struct {
-	ID           string `json:"id"`
-	Label        string `json:"label"`
-	Kind         string `json:"kind"`         // "openai" | "anthropic"
-	BaseURL      string `json:"baseUrl"`      // API base (no trailing path)
-	DefaultModel string `json:"defaultModel"` // applied when a request omits one
-	Models       string `json:"models"`       // optional model-id suggestions (comma/newline)
-	KeyEnc       string `json:"keyEnc"`       // AES-GCM, never exposed
-	// Reasoning: endpoint accepts a reasoning-effort control (see market.ProviderPayload).
-	Reasoning bool `json:"reasoning,omitempty"`
-	// PromptCache: "native" | "auto" | "none" | "" (unknown) — see market.ProviderPayload.
-	PromptCache string `json:"promptCache,omitempty"`
-}
-
 // Settings is the full, persisted configuration document. The encrypted
 // Anthropic key lives in AnthropicKeyEnc and is never serialized to the API
 // (json tag "-"); clients see only AnthropicKeySet via the DTO.
@@ -92,8 +75,7 @@ type Settings struct {
 	// ClaudeCLIPath and CodexCLIPath: no live functional reader remains outside
 	// MigrateFromSettings (kept for that one-time boot migration; never exposed
 	// to the API — see DTO/Patch below).
-	ClaudeCLIPath   string `json:"claudeCliPath"`   // "" = auto-detect on PATH
-	ClaudeConfigDir string `json:"claudeConfigDir"` // CLAUDE_CONFIG_DIR for claude-cli; "" = inherit ~/.claude
+	ClaudeCLIPath string `json:"claudeCliPath"` // "" = auto-detect on PATH
 	// claude-cli credential injected into the subprocess env so an isolated config
 	// dir authenticates without an interactive in-dir `claude login`. The token is
 	// AES-GCM encrypted (never serialized to the API); the kind selects the env var:
@@ -112,27 +94,6 @@ type Settings struct {
 	CodexConfigDir string `json:"codexConfigDir"` // CODEX_HOME for codex-cli; "" = inherit ~/.codex
 
 	AnthropicKeyEnc string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
-
-	// MiniMax (OpenAI-compatible) provider.
-	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
-	MinimaxBaseURL string `json:"minimaxBaseUrl"`
-
-	// OpenRouter (OpenAI-compatible) provider — one key, hundreds of models.
-	OpenRouterKeyEnc  string `json:"openrouterKeyEnc"` // AES-GCM, never exposed
-	OpenRouterBaseURL string `json:"openrouterBaseUrl"`
-
-	// Z.ai GLM (Anthropic-compatible) provider — GLM family, one key.
-	ZAIKeyEnc  string `json:"zaiKeyEnc"` // AES-GCM, never exposed
-	ZAIBaseURL string `json:"zaiBaseUrl"`
-
-	// DeepSeek (OpenAI-compatible) provider — DeepSeek V4 family, one key.
-	DeepSeekKeyEnc  string `json:"deepseekKeyEnc"` // AES-GCM, never exposed
-	DeepSeekBaseURL string `json:"deepseekBaseUrl"`
-
-	// CustomProviders are user-added OpenAI- or Anthropic-compatible endpoints
-	// (OpenRouter, Gemini, Kimi, Ollama, ...). Each is selectable as a provider
-	// id alongside the built-ins; the key is AES-GCM encrypted like the others.
-	CustomProviders []CustomProvider `json:"customProviders"`
 
 	// Anthropic beta capabilities (anthropic provider only; claude-cli ignores).
 	// (The 1M-context beta was retired — 1M is GA since 2026-03, no toggle needed.)
@@ -236,12 +197,6 @@ type Settings struct {
 	// soon as a turn makes no tool progress. 0 max selects the built-in default (3).
 	AutonomousAutoContinue    bool `json:"autonomousAutoContinue"`
 	AutonomousAutoContinueMax int  `json:"autonomousAutoContinueMax"`
-
-	// FileFreshnessGuard (Claude Code parity). When on, the built-in Edit and Write
-	// tools enforce a read-before-write / not-modified-since-read check: an edit (or
-	// overwrite of an existing file) errors unless the file was read this session and
-	// is unchanged since, so an out-of-band edit is never silently clobbered.
-	FileFreshnessGuard bool `json:"fileFreshnessGuard"`
 
 	// AutoTagSessions (event-driven auto-tagging). When on, the runtime derives
 	// well-known session tags from turn outcomes + session state — "tool-error" (a
@@ -352,10 +307,8 @@ type Settings struct {
 	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 16)
 	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 16)
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)
-	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`        // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	FlowRunRetention       int `json:"flowRunRetention"`       // finished flow run TREES kept per flow (0 = unlimited); older ones are pruned every 10 min (_Docs/77 R8)
-	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled; default 3); reclaims a turn whose provider stream stalled
 	// CodexStdoutIdleSec is the codex-cli stdout-silence watchdog, in SECONDS: a
 	// codex subprocess that has started streaming and then emits NOTHING for this
@@ -366,12 +319,7 @@ type Settings struct {
 	// too coarse to fit under a 3-minute ceiling with any margin
 	// (0 = disabled, no stdout-silence watchdog).
 	CodexStdoutIdleSec int `json:"codexStdoutIdleSec"`
-	IdleResumeMax      int `json:"idleResumeMax"`      // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
-	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
-	// TurnWatchdogMin is a deprecated absolute limit retained for storage/API
-	// compatibility. Active queued-turn cancellation is semantic-idle based
-	// (0 = disabled, also the default).
-	TurnWatchdogMin int `json:"turnWatchdogMin"`
+	IdleResumeMax      int `json:"idleResumeMax"` // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 	// TurnIdleWatchdogMin cancels a queued turn that emits NOTHING (no step, no
 	// token) for this long. Wall clock cannot tell a wedged turn from a slow one;
 	// silence can, so this is the measure that reclaims a hang quickly while a
@@ -451,7 +399,6 @@ func Default() Settings {
 
 		DefaultPermissionMode: "auto",
 		ClaudeCLIPath:         "",
-		ClaudeConfigDir:       defaultClaudeConfigDir(),
 		ClaudeCliAuthKind:     "",
 		CodexCLIPath:          "",
 		CodexConfigDir:        defaultCodexConfigDir(),
@@ -483,10 +430,6 @@ func Default() Settings {
 		// themselves instead of leaving the work half-done. Bounded at 3 turns.
 		AutonomousAutoContinue:    true,
 		AutonomousAutoContinueMax: 3,
-
-		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
-		// clobber a file changed out-of-band since it was last read.
-		FileFreshnessGuard: true,
 
 		// Extended prompt caching (1h TTL) on by default: cache reads bill at
 		// ~0.1× the input price, so with the static/dynamic prompt split every
@@ -563,10 +506,8 @@ func Default() Settings {
 		SpawnMaxConcurrent:     16,
 		SpawnQueueMax:          16,
 		SpawnMaxPerTurn:        4,
-		SpawnTimeoutMin:        0,
 		SpawnIdleTimeoutMin:    5,
 		FlowRunRetention:       0,
-		ChatTurnTimeoutMin:     0,
 		ChatTurnIdleTimeoutMin: 3,
 		// 90 seconds: longer than a normal quiet gap inside a codex turn (a tool call
 		// that prints nothing while it works), yet comfortably under the 3-minute
@@ -575,8 +516,6 @@ func Default() Settings {
 		// generic turn cancel that would otherwise always fire first.
 		CodexStdoutIdleSec:  90,
 		IdleResumeMax:       1,
-		ScheduleTimeoutMin:  0,
-		TurnWatchdogMin:     0,
 		TurnIdleWatchdogMin: 20,
 
 		ShellDefaultTimeoutSec: 30,
@@ -615,19 +554,14 @@ type DTO struct {
 	UILanguage  string `json:"uiLanguage"`
 
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	ClaudeConfigDir       string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
 	// AnthropicKeySet reflects AnthropicKeyEnc, which stays live: it seeds the
 	// default "anthropic" provider instance from ANTHROPIC_API_KEY at boot
 	// (internal/app/app.go) and from a manual key entry via Patch.AnthropicKey,
 	// which app.go also calls internally at boot — not just an API-facing field.
-	// Every other legacy typed provider field (Minimax/OpenRouter/ZAI/DeepSeek/
-	// CustomProviders/ClaudeCLIPath/CodexCLIPath/CodexConfigDir) was removed
-	// from the DTO/Patch: they have no live reader/writer left outside
-	// MigrateFromSettings, which
-	// reads the underlying Settings struct fields directly (kept for that
-	// one-time boot migration; never exposed to the API).
+	// ClaudeCLIPath/CodexCLIPath/CodexConfigDir are not on the DTO/Patch: their
+	// only reader is MigrateFromSettings (one-time boot seed of providers.json).
 	AnthropicKeySet bool `json:"anthropicKeySet"`
 
 	ExtendedPromptCache        bool `json:"extendedPromptCache"`
@@ -666,8 +600,7 @@ type DTO struct {
 	AutonomousAutoContinue    bool `json:"autonomousAutoContinue"`
 	AutonomousAutoContinueMax int  `json:"autonomousAutoContinueMax"`
 
-	FileFreshnessGuard bool `json:"fileFreshnessGuard"`
-	AutoTagSessions    bool `json:"autoTagSessions"`
+	AutoTagSessions bool `json:"autoTagSessions"`
 
 	DebugJournalEnabled bool `json:"debugJournalEnabled"`
 	DebugJournalCap     int  `json:"debugJournalCap"`
@@ -717,15 +650,11 @@ type DTO struct {
 	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`
 	SpawnQueueMax          int `json:"spawnQueueMax"`
 	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`
-	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`
 	FlowRunRetention       int `json:"flowRunRetention"`
-	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"`
 	CodexStdoutIdleSec     int `json:"codexStdoutIdleSec"`
 	IdleResumeMax          int `json:"idleResumeMax"`
-	ScheduleTimeoutMin     int `json:"scheduleTimeoutMin"`
-	TurnWatchdogMin        int `json:"turnWatchdogMin"`
 	TurnIdleWatchdogMin    int `json:"turnIdleWatchdogMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
@@ -762,7 +691,6 @@ func (s Settings) ToDTO() DTO {
 		UILanguage:  s.UILanguage,
 
 		DefaultPermissionMode: s.DefaultPermissionMode,
-		ClaudeConfigDir:       s.ClaudeConfigDir,
 		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
 		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
@@ -803,8 +731,7 @@ func (s Settings) ToDTO() DTO {
 		AutonomousAutoContinue:    s.AutonomousAutoContinue,
 		AutonomousAutoContinueMax: s.AutonomousAutoContinueMax,
 
-		FileFreshnessGuard: s.FileFreshnessGuard,
-		AutoTagSessions:    s.AutoTagSessions,
+		AutoTagSessions: s.AutoTagSessions,
 
 		DebugJournalEnabled: s.DebugJournalEnabled,
 		DebugJournalCap:     s.DebugJournalCap,
@@ -842,15 +769,11 @@ func (s Settings) ToDTO() DTO {
 		SpawnMaxConcurrent:     s.SpawnMaxConcurrent,
 		SpawnQueueMax:          s.SpawnQueueMax,
 		SpawnMaxPerTurn:        s.SpawnMaxPerTurn,
-		SpawnTimeoutMin:        s.SpawnTimeoutMin,
 		SpawnIdleTimeoutMin:    s.SpawnIdleTimeoutMin,
 		FlowRunRetention:       s.FlowRunRetention,
-		ChatTurnTimeoutMin:     s.ChatTurnTimeoutMin,
 		ChatTurnIdleTimeoutMin: s.ChatTurnIdleTimeoutMin,
 		CodexStdoutIdleSec:     s.CodexStdoutIdleSec,
 		IdleResumeMax:          s.IdleResumeMax,
-		ScheduleTimeoutMin:     s.ScheduleTimeoutMin,
-		TurnWatchdogMin:        s.TurnWatchdogMin,
 		TurnIdleWatchdogMin:    s.TurnIdleWatchdogMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
@@ -889,7 +812,6 @@ type Patch struct {
 	UILanguage  *string `json:"uiLanguage"`
 
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
-	ClaudeConfigDir       *string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
 	AnthropicKey          *string `json:"anthropicKey"`       // write-only
@@ -930,8 +852,7 @@ type Patch struct {
 	AutonomousAutoContinue    *bool `json:"autonomousAutoContinue"`
 	AutonomousAutoContinueMax *int  `json:"autonomousAutoContinueMax"`
 
-	FileFreshnessGuard *bool `json:"fileFreshnessGuard"`
-	AutoTagSessions    *bool `json:"autoTagSessions"`
+	AutoTagSessions *bool `json:"autoTagSessions"`
 
 	DebugJournalEnabled *bool `json:"debugJournalEnabled"`
 	DebugJournalCap     *int  `json:"debugJournalCap"`
@@ -969,15 +890,11 @@ type Patch struct {
 	SpawnMaxConcurrent     *int `json:"spawnMaxConcurrent"`
 	SpawnQueueMax          *int `json:"spawnQueueMax"`
 	SpawnMaxPerTurn        *int `json:"spawnMaxPerTurn"`
-	SpawnTimeoutMin        *int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin    *int `json:"spawnIdleTimeoutMin"`
 	FlowRunRetention       *int `json:"flowRunRetention"`
-	ChatTurnTimeoutMin     *int `json:"chatTurnTimeoutMin"`
 	ChatTurnIdleTimeoutMin *int `json:"chatTurnIdleTimeoutMin"`
 	CodexStdoutIdleSec     *int `json:"codexStdoutIdleSec"`
 	IdleResumeMax          *int `json:"idleResumeMax"`
-	ScheduleTimeoutMin     *int `json:"scheduleTimeoutMin"`
-	TurnWatchdogMin        *int `json:"turnWatchdogMin"`
 	TurnIdleWatchdogMin    *int `json:"turnIdleWatchdogMin"`
 
 	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`

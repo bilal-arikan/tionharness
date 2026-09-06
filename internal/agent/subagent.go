@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
-	"github.com/bilal-arikan/tionharness/internal/prompts"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -83,17 +82,6 @@ func (r *Runtime) subagentProfile(target string) (SubagentProfile, bool) {
 		p.SystemPrompt = r.readPrompt(systemKey)
 	}
 	return p, true
-}
-
-// SubagentProfiles returns the built-in profiles with their DEFAULT prompts
-// (sorted-free; for display). Live resolution goes through subagentProfile.
-func SubagentProfiles() []SubagentProfile {
-	out := make([]SubagentProfile, 0, len(defaultSubagentProfiles))
-	for _, p := range defaultSubagentProfiles {
-		p.SystemPrompt = prompts.Default("subagent-" + p.ID)
-		out = append(out, p)
-	}
-	return out
 }
 
 // subStepSink collects a subagent's nested activity trace so the parent tool loop

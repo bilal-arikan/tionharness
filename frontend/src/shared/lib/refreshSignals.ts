@@ -35,13 +35,6 @@ export function bumpSignal(key: string): void {
   refresh(key)
 }
 
-// getSignalTick returns the current tick for `key`. Useful in effects that
-// don't need reactivity (manual reads) — useSyncExternalStore consumers should
-// prefer the hook.
-export function getSignalTick(key: string): number {
-  return ticks.get(key) ?? 0
-}
-
 // subscribeSignal registers `cb` to be invoked on every tick change for `key`.
 // Returns an unsubscribe function. Cached snapshot is required for
 // useSyncExternalStore to avoid spurious re-renders.

@@ -91,7 +91,7 @@ export function mediaUrl(path: string): string {
   return `/api/files?path=${encodeURIComponent(clean)}`
 }
 
-export type SegmentKind = 'text' | 'path' | 'url'
+type SegmentKind = 'text' | 'path' | 'url'
 
 export interface PathSegment {
   text: string

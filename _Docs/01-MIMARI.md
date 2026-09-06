@@ -94,7 +94,7 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
 - **Web (`internal/web`):** `embed.go` — `//go:embed all:dist` ile derleme anında `frontend/dist/` SPA'sini binary'ye gömer; `Handler()` ile SPA + fallback to `index.html` sunar. Ayrı statik sunum/CDN gerekmez.
-- **Prefix'li ID'ler (`internal/workspace/id.go`):** Workspace'ler `WS<n>`, ajan ve oturum kayıtları `AGT<n>`/`SES<n>` biçiminde monoton insan-okunabilir ID'ler alır; `ws-counter.json` ile yeniden başlamada sayaç korunur. Tek seferlik migrasyon: `cmd/migrate-ids/`.
+- **Prefix'li ID'ler (`internal/workspace/id.go`):** Workspace'ler `WS<n>`, ajan ve oturum kayıtları `AGT<n>`/`SES<n>` biçiminde monoton insan-okunabilir ID'ler alır; `ws-counter.json` ile yeniden başlamada sayaç korunur. (UUID'li eski depoların tek seferlik migrasyon aracı 2026-09-06'da kaldırıldı.)
 
 ## Dizin Yapısı
 
@@ -105,8 +105,7 @@ TionHarness/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
 ├── cmd/
 │   ├── tionharness/main.go          # Bassiz giris (internal/app.Bootstrap)
-│   ├── tionharness-desktop/       # Native WebView2 masaustu penceresi (_Docs/32)
-│   └── migrate-ids/             # Tek-seferlik WS/AGT/SES prefix'li ID migrasyon araci
+│   └── tionharness-desktop/       # Native WebView2 masaustu penceresi (_Docs/32)
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
 │   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (task/run/schedule/usage/mcp/flow/artifact/hook/automation/lessons/search)

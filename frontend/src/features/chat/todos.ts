@@ -53,7 +53,7 @@ interface TodoDismissalStorage {
 }
 
 // Status is included so an agent reopening an item produces a different, visible list.
-export function todoListSignature(todos: TodoItem[]): string {
+function todoListSignature(todos: TodoItem[]): string {
   return JSON.stringify(todos.map((todo) => [todo.content, todo.status]))
 }
 

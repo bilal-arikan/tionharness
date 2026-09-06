@@ -21,7 +21,6 @@ import {
   BackupPanel,
   AboutPanel,
 } from './appPanels'
-import type { DesktopNotificationsMode } from '@/types/workspace'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import { Button, CollapsibleListShell } from '@/shared/components'
 import { ProvidersPanel } from './ProvidersPanel'
@@ -36,10 +35,6 @@ interface Props {
   onError: (msg: string) => void
   // Re-apply theme/accent globally after an app-settings save.
   onSaved: (s: AppSettings) => void
-  // Re-resolve the effective desktop-notification gate after the active
-  // workspace's three-state override is saved from the Notifications panel, so it
-  // applies live without a workspace switch or a global-settings reload.
-  onWorkspaceNotifySaved?: (mode: DesktopNotificationsMode) => void
   // Slash commands available in the chat composer — shown read-only in the
   // "Komutlar" reference category.
   commands?: SlashCommand[]
@@ -80,7 +75,6 @@ function isCat(v: string | null | undefined): v is Cat {
 export function SettingsPanel({
   onError,
   onSaved,
-  onWorkspaceNotifySaved,
   commands = [],
   cat: catProp,
   onCatChange,
@@ -100,8 +94,8 @@ export function SettingsPanel({
   const [original, setOriginal] = useState<AppSettings | null>(null)
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
   // Active workspace's resolved claude-cli config home (<workspace>/claude-home),
-  // shown read-only in the Providers panel. Per-workspace, unlike the app-global
-  // claudeConfigDir fallback — fetched from the workspace-settings endpoint.
+  // shown read-only in the Providers panel. Fetched from the workspace-settings
+  // endpoint.
   const [wsClaudeHome, setWsClaudeHome] = useState('')
   // Active workspace's resolved codex-cli config home (<workspace>/codex-home),
   // same reasoning as wsClaudeHome above.
@@ -182,7 +176,6 @@ export function SettingsPanel({
       language: draft.language,
       uiLanguage: draft.uiLanguage,
       defaultPermissionMode: draft.defaultPermissionMode,
-      claudeConfigDir: draft.claudeConfigDir,
       extendedPromptCache: draft.extendedPromptCache,
       anthropicContextEditing: draft.anthropicContextEditing,
       anthropicNativeToolSearch: draft.anthropicNativeToolSearch,
@@ -233,15 +226,11 @@ export function SettingsPanel({
       spawnMaxConcurrent: draft.spawnMaxConcurrent,
       spawnQueueMax: draft.spawnQueueMax,
       spawnMaxPerTurn: draft.spawnMaxPerTurn,
-      spawnTimeoutMin: draft.spawnTimeoutMin,
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
       flowRunRetention: draft.flowRunRetention,
-      chatTurnTimeoutMin: draft.chatTurnTimeoutMin,
       chatTurnIdleTimeoutMin: draft.chatTurnIdleTimeoutMin,
       codexStdoutIdleSec: draft.codexStdoutIdleSec,
       idleResumeMax: draft.idleResumeMax,
-      scheduleTimeoutMin: draft.scheduleTimeoutMin,
-      turnWatchdogMin: draft.turnWatchdogMin,
       turnIdleWatchdogMin: draft.turnIdleWatchdogMin,
       shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec,
       shellMaxTimeoutSec: draft.shellMaxTimeoutSec,
@@ -389,13 +378,7 @@ export function SettingsPanel({
                 {cat === 'advanced' && (
                   <>
                     <AdvSection title="Bildirimler & Ekran" icon={Bell}>
-                      <NotificationsPanel
-                        draft={draft}
-                        set={set}
-                        setDraft={setDraft}
-                        onError={onError}
-                        onWorkspaceNotifySaved={onWorkspaceNotifySaved}
-                      />
+                      <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />
                     </AdvSection>
                     <AdvSection title="Otomatik Başlık" icon={Tag}>
                       <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />

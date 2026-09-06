@@ -7,7 +7,10 @@
 > shared|scoped`) zaten koddadır (`internal/mcp/pool.go`, `manager.go`). Kritik bulgu:
 > persistent CLI oturumu + MCP birlikteyken eskiden her tur cold-restart oluyordu (config
 > temp-yol churn'ü); wildcard allowlist + içerik-hash fingerprint + session-ömürlü token ile
-> düzeltildi. Harici `/mcp/gateway` sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
+> düzeltildi. Salt-okur yüzeyler (oturum bilgisi paneli) registry'yi
+> `agent.WithCatalogNoDial` ile kurar → `Pool.CatalogCached` yalnız canlı bağlantıları
+> okur, soğuk sunucu için dial beklemez (2026-09-06, `_Docs/05`). Harici `/mcp/gateway`
+> sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
 > dosyalar: `internal/interaction/server.go`, `internal/agent/climcp.go`,
 > `internal/providers/claudecli_session.go`.
 

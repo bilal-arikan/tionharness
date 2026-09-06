@@ -1,14 +1,14 @@
 // Minimal unified-diff parser for inline diff rendering. Handles standard
 // `diff`/```diff code blocks and the +/- line form produced by edit tools.
 
-export type DiffLineKind = 'add' | 'del' | 'ctx' | 'meta' | 'hunk'
+type DiffLineKind = 'add' | 'del' | 'ctx' | 'meta' | 'hunk'
 
 export interface DiffLine {
   kind: DiffLineKind
   text: string
 }
 
-export interface DiffStats {
+interface DiffStats {
   added: number
   removed: number
 }
@@ -227,7 +227,7 @@ function firstPatchPath(patch: string): string {
 // only in old as removed ("-"), only in new as added ("+"). This avoids the
 // naive "all old removed + all new added" that double-counts unchanged context
 // lines an edit happens to include (e.g. deleting rows in the middle of a block).
-export function lineDiff(oldText: string, newText: string): string {
+function lineDiff(oldText: string, newText: string): string {
   const a = oldText.replace(/\n$/, '').split('\n')
   const b = newText.replace(/\n$/, '').split('\n')
   const n = a.length

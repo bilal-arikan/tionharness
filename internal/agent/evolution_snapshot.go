@@ -158,7 +158,6 @@ func agentGenome(a db.Agent) goals.AgentGenome {
 		ThinkingLevel:       a.ThinkingLevel,
 		NativeWebSearch:     a.NativeWebSearch,
 		PermissionMode:      a.PermissionMode,
-		InboundPolicy:       a.InboundPolicy,
 		MCPEnabled:          a.MCPEnabled,
 		ToolOverridesHash:   goals.HashText(a.ToolOverrides),
 		VisibleToolCount:    -1,

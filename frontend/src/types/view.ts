@@ -83,7 +83,7 @@ export interface ViewNeighborhoodResult {
 }
 
 // ViewGraphEdge is one parent -> child structural relationship of the whole map.
-export interface ViewGraphEdge {
+interface ViewGraphEdge {
   source: ViewRef
   target: ViewRef
 }
@@ -95,7 +95,7 @@ export interface ViewGraphEdge {
 // idle while one of its direct workers runs. The map glows these and hangs the
 // driving agent's avatar off them; the entry (and the glow) is gone once the
 // session stops.
-export interface ViewGraphLiveAgent {
+interface ViewGraphLiveAgent {
   id: string
   name: string
   emoji?: string
@@ -108,7 +108,7 @@ export interface ViewGraphLive {
 }
 
 // ViewGraphMeta is a session's facet data for the map's filters.
-export interface ViewGraphMeta {
+interface ViewGraphMeta {
   kind?: string
   agentId?: string
   tags?: string[]

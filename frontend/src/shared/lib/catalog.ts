@@ -5,14 +5,14 @@ import type { CatalogEntry } from '@/types'
 // Re-exported so every consumer keeps importing labels from '@/shared/lib/catalog'.
 // The implementations live in modelLabel.ts (no api import → unit-testable in the
 // repo's `node` vitest environment).
-export { formatModelVersion, resolveModelLabel, resolveRuntimeBadge } from './modelLabel'
+export { resolveModelLabel } from './modelLabel'
 
 // Module-level cache so the provider/model catalog is fetched once and shared by
 // every consumer (pickers + the agent label resolver).
 let catalogCache: CatalogEntry[] | null = null
 let catalogPromise: Promise<CatalogEntry[]> | null = null
 
-export function loadCatalog(): Promise<CatalogEntry[]> {
+function loadCatalog(): Promise<CatalogEntry[]> {
   if (catalogCache) return Promise.resolve(catalogCache)
   if (!catalogPromise) {
     catalogPromise = api.getCatalog().then((c) => {
@@ -26,7 +26,7 @@ export function loadCatalog(): Promise<CatalogEntry[]> {
 // ThinkingInfo pairs a model's supported reasoning tiers (null = unknown → all
 // tiers enabled) with its class, so the pickers can both gate the buttons and
 // explain a greyed-out one. Both come straight from the backend catalog.
-export interface ThinkingInfo {
+interface ThinkingInfo {
   tiers: string[] | null
   cls: string
 }
@@ -38,7 +38,7 @@ export interface ThinkingInfo {
 // provider clamp anything the concrete model can't honour. The classification
 // itself is computed backend-side (ThinkingTiersFor / ThinkingClass); this is
 // just the client lookup.
-export function thinkingInfoForModel(
+function thinkingInfoForModel(
   catalog: CatalogEntry[],
   provider: string,
   model: string,
@@ -51,7 +51,7 @@ export function thinkingInfoForModel(
 // thinkingTierDisabledReason returns a short Turkish explanation for why a tier
 // is inactive on a model of the given class. Called only for tiers the model
 // does NOT support (absent from thinkingTiers); the class decides the wording.
-export function thinkingTierDisabledReason(cls: string, tier: string): string {
+function thinkingTierDisabledReason(cls: string, tier: string): string {
   if (cls === 'always-on' && tier === 'off') return 'Bu model her zaman düşünür — kapatılamaz'
   if (cls === 'non-thinking') return 'Bu model düşünmez (akıl yürütme yok)'
   // On the reasoning classes the only upper tier a model can be missing is

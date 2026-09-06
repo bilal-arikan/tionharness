@@ -286,8 +286,10 @@ export default function App() {
   const [coordOpen, setCoordOpen] = useState(false)
 
   // Theme / keep-awake / desktop-notification preferences.
-  const { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled } =
-    useAppearance(activeWorkspaceId, setError)
+  const { applyClientPrefs, onAppearanceSaved, notifyEnabled } = useAppearance(
+    activeWorkspaceId,
+    setError,
+  )
 
   // Per-view deep-link targets + cross-view "open X" helpers.
   const links = useDeepLinks(setView)
@@ -911,7 +913,6 @@ export default function App() {
           <SettingsPanel
             onError={setError}
             onSaved={applyClientPrefs}
-            onWorkspaceNotifySaved={onWorkspaceNotifySaved}
             commands={chat.chatCommands}
             cat={links.settingsCat}
             onCatChange={links.setSettingsCat}

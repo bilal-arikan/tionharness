@@ -61,15 +61,10 @@ const (
 // Settings-driven (AgentMessageMaxKB) via applySettings; 0 selects this default.
 const DefaultAgentMessageMaxBytes = 64 * 1024
 
-// DefaultSpawnTimeoutMinutes is the disabled default for the deprecated absolute
-// spawn limit. Semantic inactivity owns cancellation.
-const DefaultSpawnTimeoutMinutes = 0
-
 // DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn/worker
 // work turn: the idle watchdog cancels a turn that emits no step (tool/thinking/
 // token) for this long, so a truly hung turn is reclaimed fast while a long-but-
-// productive one (heavy exploration streaming tool calls) runs on up to the hard
-// SpawnTimeout ceiling. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
+// productive one (heavy exploration streaming tool calls) runs on. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
 // 0 selects this default.
 const DefaultSpawnIdleTimeoutMinutes = 5
 
@@ -82,7 +77,6 @@ const DefaultSpawnIdleTimeoutMinutes = 5
 // and a long-but-step-less operation (non-streaming completion, one big tool
 // call) is bounded by a separate operation lease derived from the same window.
 const (
-	DefaultChatTurnTimeoutMinutes     = 0
 	DefaultChatTurnIdleTimeoutMinutes = 3
 )
 
@@ -95,18 +89,10 @@ const (
 // before the fix). Settings-driven (IdleResumeMax) via applySettings.
 const DefaultIdleResumeMax = 1
 
-// DefaultTurnWatchdogMinutes keeps the deprecated absolute queue limit disabled.
-// The field remains settings/API compatible but is not an active decision source.
-const DefaultTurnWatchdogMinutes = 0
-
 // DefaultTurnIdleWatchdogMinutes bounds semantic inactivity inside a queued run.
 // Only new assistant/tool output and terminal state transitions advance it.
 // Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
 const DefaultTurnIdleWatchdogMinutes = 20
-
-// DefaultScheduleTimeoutMinutes is the disabled default for the deprecated
-// scheduled-fire wall-clock limit. Semantic inactivity owns cancellation.
-const DefaultScheduleTimeoutMinutes = 0
 
 // Default coordinator/worker guards (see internal/agent/coordination.go). They
 // bound the M2 coordination loop so a coordinator can neither fan out unbounded
@@ -177,13 +163,9 @@ type Tunables struct {
 	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
 	flowRunRetention    int // finished root runs kept per flow; 0 → unlimited
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
-	spawnTimeoutMin     int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
-	chatTurnTimeoutMin  int // 0 = disabled (interactive chat turn wall-clock ceiling, in minutes)
 	chatTurnIdleMin     int // 0 = disabled (interactive chat turn inactivity window, in minutes)
 	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
-	schedTimeoutMin     int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
-	turnWatchdogMin     int // 0 → DefaultTurnWatchdogMinutes (queued-turn wedge breaker, in minutes)
 	turnIdleWatchdogMin int // 0 → DefaultTurnIdleWatchdogMinutes (queued-turn inactivity window, in minutes)
 	coordMaxWorkers     int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns       int // 0 → DefaultCoordinatorMaxTurns
@@ -284,13 +266,6 @@ type Tunables struct {
 	debugJournal    bool // emit the parallel debug stream (default on)
 	debugJournalCap int  // newest events kept per session (0 = default)
 
-	// fileFreshnessGuard (Claude Code parity) — when true, the built-in Edit and
-	// Write tools enforce a read-before-write / not-modified-since-read check: an
-	// Edit (or an overwrite of an existing file) errors unless the file was read
-	// this session and is unchanged since, so an out-of-band edit is never silently
-	// clobbered. Default on. See internal/tools/readtracker.go.
-	fileFreshnessGuard bool
-
 	// autoTagSessions — when true, the runtime derives well-known session tags from
 	// turn outcomes + session state (tool-error/error/archived) so an
 	// automation can scan + repair them. Default on. See internal/agent/autotag.go.
@@ -363,7 +338,6 @@ func NewTunables() *Tunables {
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
 		providerRetryMax:   DefaultProviderRetryMax,
 		idleResumeMax:      DefaultIdleResumeMax,
-		chatTurnTimeoutMin: DefaultChatTurnTimeoutMinutes,
 		chatTurnIdleMin:    DefaultChatTurnIdleTimeoutMinutes,
 		// Guardrail warnings on by default (gentle nudge appended to failing
 		// results); the hard stop stays opt-in from settings.
@@ -395,10 +369,6 @@ func NewTunables() *Tunables {
 		// transparent to existing behaviour. Production overrides from settings.
 		debugJournal:    true,
 		debugJournalCap: DefaultDebugJournalCap,
-		// File freshness guard on by default (Claude Code parity): Edit/Write refuse to
-		// clobber a file changed out-of-band since it was last read. Production overrides
-		// from settings via SetFileFreshnessGuard.
-		fileFreshnessGuard: true,
 		// Auto-tagging on by default (production overrides from settings via
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
@@ -621,20 +591,6 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 	return t.spawnMaxPerTurn
 }
 
-// SetSpawnTimeoutMinutes preserves the deprecated absolute setting.
-func (t *Tunables) SetSpawnTimeoutMinutes(minutes int) {
-	t.mu.Lock()
-	t.spawnTimeoutMin = minutes
-	t.mu.Unlock()
-}
-
-// SpawnTimeout returns the deprecated absolute setting. Zero is disabled.
-func (t *Tunables) SpawnTimeout() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return time.Duration(t.spawnTimeoutMin) * time.Minute
-}
-
 // SetSpawnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
 // the idle watchdog cancels a background spawn/worker turn that has emitted no
 // step. 0 selects the built-in default.
@@ -654,18 +610,6 @@ func (t *Tunables) SpawnIdleTimeout() time.Duration {
 		m = DefaultSpawnIdleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
-}
-
-func (t *Tunables) SetChatTurnTimeoutMinutes(minutes int) {
-	t.mu.Lock()
-	t.chatTurnTimeoutMin = minutes
-	t.mu.Unlock()
-}
-
-func (t *Tunables) ChatTurnTimeout() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return time.Duration(t.chatTurnTimeoutMin) * time.Minute
 }
 
 func (t *Tunables) SetChatTurnIdleTimeoutMinutes(minutes int) {
@@ -698,35 +642,6 @@ func (t *Tunables) IdleResumeMax() int {
 		return DefaultIdleResumeMax
 	}
 	return t.idleResumeMax
-}
-
-// SetScheduleTimeoutMinutes preserves the deprecated absolute setting.
-func (t *Tunables) SetScheduleTimeoutMinutes(minutes int) {
-	t.mu.Lock()
-	t.schedTimeoutMin = minutes
-	t.mu.Unlock()
-}
-
-// ScheduleTimeout returns the deprecated absolute setting. Zero is disabled.
-func (t *Tunables) ScheduleTimeout() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return time.Duration(t.schedTimeoutMin) * time.Minute
-}
-
-// SetTurnWatchdogMinutes preserves the legacy absolute setting for wire/storage
-// compatibility. Queued-turn cancellation no longer reads it.
-func (t *Tunables) SetTurnWatchdogMinutes(minutes int) {
-	t.mu.Lock()
-	t.turnWatchdogMin = minutes
-	t.mu.Unlock()
-}
-
-// TurnWatchdog returns the deprecated configured absolute limit. Zero is disabled.
-func (t *Tunables) TurnWatchdog() time.Duration {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return time.Duration(t.turnWatchdogMin) * time.Minute
 }
 
 // SetTurnIdleWatchdogMinutes sets the inactivity window (in minutes) after which a
@@ -1270,22 +1185,6 @@ func (t *Tunables) AutoContinueMax() int {
 		return DefaultAutoContinueMax
 	}
 	return t.autoContinueMax
-}
-
-// SetFileFreshnessGuard toggles the Edit/Write read-before-write freshness guard
-// (Claude Code parity). On by default; disable to restore the historical behaviour
-// where Edit/Write never check whether the file changed since it was last read.
-func (t *Tunables) SetFileFreshnessGuard(enabled bool) {
-	t.mu.Lock()
-	t.fileFreshnessGuard = enabled
-	t.mu.Unlock()
-}
-
-// FileFreshnessGuard reports whether the Edit/Write freshness guard is enabled.
-func (t *Tunables) FileFreshnessGuard() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.fileFreshnessGuard
 }
 
 // SetAutoTagSessions toggles event-driven session auto-tagging (tool-error/error/

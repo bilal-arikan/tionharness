@@ -26,7 +26,7 @@ function setPalette(root: HTMLElement, t: PresetTokens) {
 // and the mode (its dark/light nature drives data-theme) — there is no separate
 // base-mode or accent override anymore. An empty/unknown id falls back to the
 // default preset so the UI is always fully themed.
-export function applyTheme(preset?: string) {
+function applyTheme(preset?: string) {
   const root = document.documentElement
   const p = presetById(preset || DEFAULT_PRESET) ?? presetById(DEFAULT_PRESET)!
   setPalette(root, p.tokens)

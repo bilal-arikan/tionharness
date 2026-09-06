@@ -181,12 +181,6 @@ func (b *Builder) Add(e Entry) {
 	}
 }
 
-// Has reports whether the session already has an entry.
-func (b *Builder) Has(sessionID string) bool {
-	_, ok := b.entries[sessionID]
-	return ok
-}
-
 // Snapshot finalizes the builder into a sorted (by session id) snapshot.
 func (b *Builder) Snapshot(cap Capacity, at int64) Snapshot {
 	out := make([]Entry, 0, len(b.entries))

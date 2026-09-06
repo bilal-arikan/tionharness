@@ -21,7 +21,7 @@ function key(tag: string, opts: unknown): string {
 }
 
 // activeTag is the BCP-47 tag for the locale the UI is currently rendered in.
-export function activeTag(): string {
+function activeTag(): string {
   return intlTag(currentLocale())
 }
 
@@ -43,17 +43,6 @@ export function numberFormat(opts?: Intl.NumberFormatOptions): Intl.NumberFormat
   if (!f) {
     f = new Intl.NumberFormat(tag, opts)
     numberCache.set(k, f)
-  }
-  return f
-}
-
-export function relativeFormat(opts?: Intl.RelativeTimeFormatOptions): Intl.RelativeTimeFormat {
-  const tag = activeTag()
-  const k = key(tag, opts)
-  let f = relativeCache.get(k)
-  if (!f) {
-    f = new Intl.RelativeTimeFormat(tag, { numeric: 'auto', ...opts })
-    relativeCache.set(k, f)
   }
   return f
 }
@@ -98,7 +87,7 @@ export function formatDateTime(
 // `a.localeCompare(b)` for any user-visible ordering: Turkish sorts ç/ğ/ı/ö/ş/ü in
 // their own positions, and the default (implementation) locale would get that wrong
 // whenever the browser locale differs from the UI locale.
-export function collator(opts?: Intl.CollatorOptions): Intl.Collator {
+function collator(opts?: Intl.CollatorOptions): Intl.Collator {
   const tag = activeTag()
   const k = key(tag, opts)
   let c = collatorCache.get(k)
@@ -112,16 +101,6 @@ export function collator(opts?: Intl.CollatorOptions): Intl.Collator {
 // compareText is the ordering used for user-visible lists (names, titles, tags).
 export function compareText(a: string, b: string): number {
   return collator().compare(a, b)
-}
-
-// searchFold normalises a string for substring search and case-insensitive
-// comparison. It deliberately does NOT use toLocaleLowerCase: under the Turkish
-// locale that maps 'I' → 'ı', so typing "Insight" would stop matching a list item
-// spelled "INSIGHT". Search is a machine operation, not a display one, so it folds
-// against the invariant locale. Display casing must come from the catalog text
-// itself, never from toUpperCase()/CSS text-transform, which mangles Turkish i/İ.
-export function searchFold(s: string): string {
-  return s.toLowerCase()
 }
 
 // clearIntlCaches drops every memoised formatter. Only needed by tests that switch

@@ -6,8 +6,9 @@
 > masaüstü toast'ları (tek funnel + tek registry) kapsar. Durum: uygulanmış ve
 > olgun. En önemli kararlar: `busy` sinyalinin merkezî kaynağı **turn kuyruğu**
 > (`turnqueue.Queue.BusySessionIDs`) — yeni bir tur yolu eklerken ek kayıt gerekmez,
-> slotu almak yeterli; masaüstü bildirim ana anahtarı workspace-override'lı 3-durumlu
-> (`inherit`/`on`/`off`); tip-bazlı susturma tek registry'den (`NOTIFY_TYPES`) türer.
+> slotu almak yeterli; masaüstü bildirim ana anahtarı tek yerde
+> (`AppSettings.desktopNotifications`; workspace override'ı 2026-09-06'da kaldırıldı);
+> tip-bazlı susturma tek registry'den (`NOTIFY_TYPES`) türer.
 > Dayandığı dosyalar: `internal/api/running_sessions.go`, `internal/api/activity.go`,
 > `internal/events/types.go`, `frontend/src/shared/lib/{notifyBus,notifyTypes}.ts`,
 > `frontend/src/app/useWorkspaceActivity.ts`.
@@ -142,7 +143,13 @@ Bloklamaz; sink yoksa (otonom, açık client yok) graceful no-op. Native + claud
 yollarının ikisinde de çalışır; kaynak `internal/api/notifysink.go`. Kullanım: ajanın
 kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bitti", "hata").
 
-## Masaüstü bildirim ana anahtarı: workspace override (3-durumlu)
+## Masaüstü bildirim ana anahtarı: workspace override (3-durumlu) — KALDIRILDI
+
+> **2026-09-06:** Workspace-başına `inherit/on/off` override'ı kaldırıldı; ana anahtar
+> yalnız `AppSettings.desktopNotifications` (Ayarlar ▸ Bildirimler). Aynı ayarı iki
+> yerde düzenletmek karışıklık yaratıyordu, override kullanılmıyordu. Aşağıdaki tablo
+> tarihçedir (`WSSettings.DesktopNotifications`, `resolveDesktopNotifications`,
+> `onWorkspaceNotifySaved` artık yok). Tip-bazlı susturma değişmedi.
 
 Masaüstü OS-toast'larını kesen **ana anahtar** iki kaynaktan çözülür: uygulama-genel
 varsayılan (`AppSettings.DesktopNotifications`) + **aktif workspace'in override'ı**.

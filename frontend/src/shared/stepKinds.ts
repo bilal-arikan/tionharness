@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import type { StepKind } from '@/types'
 
-export type StepStatus = 'active' | 'infra' | 'legacy'
+type StepStatus = 'active' | 'infra' | 'legacy'
 
 export interface StepKindInfo {
   kind: StepKind

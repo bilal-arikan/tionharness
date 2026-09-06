@@ -41,7 +41,7 @@ export interface SessionPage {
 
 // asSessionPage normalizes either wire shape (unwrapped legacy array or paged
 // envelope) to the paged form.
-export function asSessionPage(r: Session[] | SessionPage): SessionPage {
+function asSessionPage(r: Session[] | SessionPage): SessionPage {
   return Array.isArray(r)
     ? { items: r, total: r.length, offset: 0, limit: r.length, hasMore: false }
     : r

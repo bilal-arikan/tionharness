@@ -17,10 +17,10 @@ export const STT_LANGUAGES: PickerOption[] = [
   { value: 'ar-SA', label: 'العربية', hint: 'Arabic', icon: '🇸🇦' },
 ]
 
-export const DEFAULT_STT_LANG = 'tr-TR'
+const DEFAULT_STT_LANG = 'tr-TR'
 
 // The chosen dictation language persists across sessions/reloads.
-export const STT_LANG_STORAGE_KEY = 'tionharness.stt.lang'
+const STT_LANG_STORAGE_KEY = 'tionharness.stt.lang'
 
 // Same-window change signal: the language is now set from the Settings screen but
 // consumed by the composer's mic button, so a custom event syncs them live (the

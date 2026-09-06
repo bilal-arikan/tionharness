@@ -79,10 +79,6 @@ export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [
   { value: 'workspace', label: 'Workspace (bugünkü toplam token)' },
 ]
 
-export function tokenScopeLabel(scope?: TokenScope): string {
-  return TOKEN_SCOPES.find((s) => s.value === (scope || 'session'))?.label ?? String(scope ?? '')
-}
-
 // Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
 export const PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{result}}', desc: 'Biten oturumun son yanıtı' },

@@ -37,6 +37,3 @@ func navigateFrom(ctx context.Context) NavigateSink {
 	s, _ := ctx.Value(navigateKey{}).(NavigateSink)
 	return s
 }
-
-// HasNavigateSink reports whether a navigate sink is attached to ctx.
-func HasNavigateSink(ctx context.Context) bool { return navigateFrom(ctx) != nil }

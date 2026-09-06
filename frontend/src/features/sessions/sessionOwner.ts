@@ -14,7 +14,7 @@ import { resolveAgent, type ResolvedAgent } from '@/shared/lib/agentLookup'
 // Order: the owning agent first, then the delegation target, then the profile.
 
 /** Label shown for a delegated run against a built-in profile. */
-export function profileOwnerLabel(profile: string): string {
+function profileOwnerLabel(profile: string): string {
   return `subagent:${profile.trim()}`
 }
 

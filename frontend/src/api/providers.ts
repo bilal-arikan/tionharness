@@ -118,7 +118,7 @@ export interface CodexDeviceStatus {
 }
 
 // ModelPrice is one model's approximate list price (USD per 1M tokens).
-export interface ModelPrice {
+interface ModelPrice {
   inputPerMTok: number
   outputPerMTok: number
   cacheReadMult?: number

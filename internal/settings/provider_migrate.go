@@ -34,7 +34,7 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 	{
 		cfg := map[string]string{
 			"cliPath":   s.ClaudeCLIPath,
-			"configDir": s.ClaudeConfigDir,
+			"configDir": defaultClaudeConfigDir(),
 			"authKind":  s.ClaudeCliAuthKind,
 		}
 		secrets := map[string]string{}
@@ -65,133 +65,6 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 			SecretsEnc: map[string]string{},
 			CreatedAt:  now,
 		})
-	}
-
-	if s.MinimaxKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "minimax",
-			KindID:     "minimax",
-			Label:      "MiniMax",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": s.MinimaxBaseURL},
-			SecretsEnc: map[string]string{"key": s.MinimaxKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	// The "-anthropic" kinds are separate provider kinds an agent could already be
-	// bound to (Agent.Provider == "minimax-anthropic"), but they never had their own
-	// legacy settings key — they reuse the base provider's credential. Migrating only
-	// the base kind therefore left every agent on the Anthropic-mode variant pointing
-	// at an instance that does not exist ("unknown provider instance"), which is a
-	// hard error at Registry.Get, i.e. a dead agent. Both variants migrate whenever
-	// the shared key is present, on the same id == kind id invariant as the rest.
-	if s.MinimaxKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "minimax-anthropic",
-			KindID:     "minimax-anthropic",
-			Label:      "MiniMax (Anthropic modu)",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": ""},
-			SecretsEnc: map[string]string{"key": s.MinimaxKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	if s.DeepSeekKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "deepseek-anthropic",
-			KindID:     "deepseek-anthropic",
-			Label:      "DeepSeek (Anthropic modu)",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": ""},
-			SecretsEnc: map[string]string{"key": s.DeepSeekKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	if s.OpenRouterKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "openrouter",
-			KindID:     "openrouter",
-			Label:      "OpenRouter",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": s.OpenRouterBaseURL},
-			SecretsEnc: map[string]string{"key": s.OpenRouterKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	if s.ZAIKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "zai",
-			KindID:     "zai",
-			Label:      "Z.ai GLM",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": s.ZAIBaseURL},
-			SecretsEnc: map[string]string{"key": s.ZAIKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	if s.DeepSeekKeyEnc != "" {
-		out = append(out, ProviderInstance{
-			ID:         "deepseek",
-			KindID:     "deepseek",
-			Label:      "DeepSeek",
-			Enabled:    true,
-			Config:     map[string]string{"baseUrl": s.DeepSeekBaseURL},
-			SecretsEnc: map[string]string{"key": s.DeepSeekKeyEnc},
-			CreatedAt:  now,
-		})
-	}
-
-	for _, c := range s.CustomProviders {
-		kindID := "openai-compat"
-		if c.Kind == "anthropic" {
-			kindID = "anthropic-compat"
-		}
-		secrets := map[string]string{}
-		if c.KeyEnc != "" {
-			secrets["key"] = c.KeyEnc
-		}
-		// reasoning/promptCache are not standard FieldSpec keys (only openai-compat
-		// uses them), so they ride in Config rather than a kind-declared field —
-		// internal/api's registryInstances reads them back the same way.
-		reasoning := ""
-		if c.Reasoning {
-			reasoning = "true"
-		}
-		instance := ProviderInstance{
-			ID:           c.ID,
-			KindID:       kindID,
-			Label:        c.Label,
-			Enabled:      true,
-			DefaultModel: c.DefaultModel,
-			Models:       c.Models,
-			Config:       map[string]string{"baseUrl": c.BaseURL, "reasoning": reasoning, "promptCache": c.PromptCache},
-			SecretsEnc:   secrets,
-			CreatedAt:    now,
-		}
-
-		// A custom provider whose id collides with one of the built-in
-		// instances migrated above (e.g. a legacy CustomProvider{ID:
-		// "openrouter", ...}) REPLACES that built-in in place instead of
-		// being appended as a second entry with the same id — the same
-		// "user config wins" precedence providers.MergeCatalog documents
-		// (internal/providers/merge.go), now enforced at migration time so
-		// providers.json itself never contains a duplicate id.
-		replaced := false
-		for i, existing := range out {
-			if existing.ID == c.ID {
-				out[i] = instance
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			out = append(out, instance)
-		}
 	}
 
 	// _ silences decrypt-unused when no *Enc field above ever needed live

@@ -8,13 +8,13 @@ import type { SeedDefaultState } from './seed'
 export type SkillSource = 'global' | 'workspace'
 
 // A phase's exit condition (recipe frontmatter `gate`).
-export interface GateSpec {
+interface GateSpec {
   kind: 'artifact' | 'verdict' | 'human' | 'schema'
   value?: string
 }
 
 // One declared phase of a coordinator recipe.
-export interface PhaseSpec {
+interface PhaseSpec {
   id: string
   label?: string
   profile?: string
@@ -25,7 +25,7 @@ export interface PhaseSpec {
 }
 
 // The structured part of a coordinator recipe (skills.RecipeSpec, _Docs/77 R6).
-export interface RecipeSpec {
+interface RecipeSpec {
   version?: string
   phases: PhaseSpec[]
   watchers?: string[]

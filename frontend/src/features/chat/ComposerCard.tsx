@@ -8,7 +8,7 @@
 // the light and dark themes.
 import type { ReactNode } from 'react'
 
-export type ComposerCardTone =
+type ComposerCardTone =
   // Neutral surface — the todo checklist.
   | 'plain'
   // Faint grey — staged/queued interventions.

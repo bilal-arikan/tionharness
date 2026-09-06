@@ -4,11 +4,11 @@ import type { Locale } from '@/i18n/locales'
 
 // Mirrors settings.DTO — the Anthropic key is never returned; anthropicKeySet
 // reports whether one is stored.
-export type Theme = 'dark' | 'light' | 'system'
+type Theme = 'dark' | 'light' | 'system'
 
 // What happens when automatic context compaction fires — mirrors
 // settings.AutoCompactMode (internal/settings/settings.go).
-export type AutoCompactMode = 'rolling' | 'native' | 'auto'
+type AutoCompactMode = 'rolling' | 'native' | 'auto'
 
 export interface AppSettings {
   theme: Theme
@@ -27,7 +27,6 @@ export interface AppSettings {
   // is overridden to the per-workspace config home (<workspace>/claude-home) so the
   // CLI shares skills/settings/login with its workspace (see _Docs/51). This global
   // value is used solely when no workspace is derivable; shown read-only in the UI.
-  claudeConfigDir: string
   // claude-cli credential injected into the subprocess env so an isolated config
   // dir authenticates without an interactive in-dir login. kind selects the env
   // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
@@ -127,16 +126,12 @@ export interface AppSettings {
   spawnMaxConcurrent: number
   spawnQueueMax: number
   spawnMaxPerTurn: number
-  spawnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   spawnIdleTimeoutMin: number
   // Finished flow run trees kept per flow; 0 = unlimited (_Docs/77 R8).
   flowRunRetention: number
-  chatTurnTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
   chatTurnIdleTimeoutMin: number
   codexStdoutIdleSec: number
   idleResumeMax: number
-  scheduleTimeoutMin: number // deprecated absolute limit; retained for wire compatibility
-  turnWatchdogMin: number // deprecated absolute limit; normal flow ignores it
   turnIdleWatchdogMin: number
 
   // Tool execution guards (process-global tool behaviour).
@@ -204,7 +199,7 @@ export interface BackupStatus {
 }
 
 // One archive written by a backup pass.
-export interface BackupArchive {
+interface BackupArchive {
   workspaceId: string
   workspaceName: string
   path: string
@@ -221,7 +216,7 @@ export interface BackupResult {
 }
 
 // One archive file on disk (GET /api/backups/archives). Mirrors backup.ArchiveFile.
-export interface BackupArchiveFile {
+interface BackupArchiveFile {
   name: string
   bytes: number
   modified: number // unix seconds

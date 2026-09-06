@@ -28,10 +28,6 @@ export type BoardDepFilter = '' | 'blocked' | 'ready'
 // another review round. '' = facet inactive.
 export type BoardReviewFilter = '' | 'bounced' | 'exhausted'
 
-// Sentinel used in BoardFilter.agentIds to match tasks with no owner agent.
-// A real agent id can never be '-', so this cannot collide.
-export const UNASSIGNED_AGENT_ID = '-'
-
 // Narrows the board to a subset of tasks. Facets combine with AND; values within
 // one facet combine with OR. An empty slice / '' means the facet is inactive, so
 // the empty object matches every task.
@@ -89,10 +85,6 @@ export interface WorkspaceTemplate {
   automationCount?: number
 }
 
-// Three-state per-workspace override of the app-global desktop-notification
-// master toggle. 'inherit' = follow the global AppSettings value.
-export type DesktopNotificationsMode = 'inherit' | 'on' | 'off'
-
 // Per-workspace settings (overrides + rename). Resolved from X-Workspace-Id.
 export interface WorkspaceSettings {
   id: string
@@ -135,10 +127,6 @@ export interface WorkspaceSettings {
   boardViews: BoardViewDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
-  // This workspace's override of the app-global desktop-notification master toggle.
-  // Three-state: 'inherit' follows AppSettings.desktopNotifications (default),
-  // 'on'/'off' force OS toasts for this workspace regardless of the global toggle.
-  desktopNotifications: DesktopNotificationsMode
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -168,7 +156,6 @@ export type WorkspaceSettingsPatch = Partial<
     | 'boardColumns'
     | 'boardViews'
     | 'ignoredRecommendations'
-    | 'desktopNotifications'
   >
 >
 

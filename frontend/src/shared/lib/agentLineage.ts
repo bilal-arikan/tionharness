@@ -30,7 +30,7 @@ export function lineageOf(agent: Pick<Agent, 'id' | 'parentId'>, byId: AgentInde
 }
 
 // Live direct children of `id`, in roster order.
-export function childrenOf(id: string, agents: Agent[]): Agent[] {
+function childrenOf(id: string, agents: Agent[]): Agent[] {
   return agents.filter((a) => a.parentId === id && !a.deleted)
 }
 
@@ -61,25 +61,4 @@ export function eligibleParents(agent: Agent, agents: Agent[]): Agent[] {
 
 export function hasOverride(agent: Pick<Agent, 'overrides'>, key: AgentOverrideKey): boolean {
   return !!agent.overrides?.includes(key)
-}
-
-// Display order + Turkish labels for the override keys (mirrors
-// db.InheritableFieldKeys). Used by the "override" summaries.
-export const OVERRIDE_LABELS: Record<AgentOverrideKey, string> = {
-  soul: 'Soul',
-  identity: 'Kimlik',
-  provider: 'Sağlayıcı',
-  model: 'Model',
-  thinkingLevel: 'Düşünme seviyesi',
-  nativeWebSearch: 'Web araması',
-  permissionMode: 'İzin modu',
-  inboundPolicy: 'Gelen mesaj politikası',
-  avatar: 'Avatar',
-  color: 'Renk',
-  tools: 'Araçlar',
-  allowedTools: 'Araç allowlist',
-  skills: 'Yetenekler',
-  coordinatorMode: 'Koordinatör',
-  coordinatorWorkflow: 'Koordinasyon reçetesi',
-  coordinatorPrompt: 'Koordinatör promptu',
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -67,37 +66,6 @@ func capNotification(note string, max int) (string, bool) {
 		max, len(note)), true
 }
 
-// inboundPolicyFor resolves the effective policy for a delivery: the target
-// SESSION's setting wins when set, otherwise the recipient AGENT's, otherwise
-// accept. Missing rows and invalid stored values are errors — a delivery is
-// never silently let through on a lookup failure.
-func (r *Runtime) inboundPolicyFor(ctx context.Context, agentID, sessionID string) (string, error) {
-	var sessionPolicy, agentPolicy string
-	if sessionID != "" {
-		sess, err := r.db.GetSession(ctx, sessionID)
-		if err != nil {
-			return "", fmt.Errorf("cannot read inbound policy of session %s: %w", sessionID, err)
-		}
-		sessionPolicy = sess.InboundPolicy
-	}
-	if agentID != "" {
-		ag, err := r.db.GetAgent(ctx, agentID)
-		if err != nil {
-			return "", fmt.Errorf("cannot read inbound policy of agent %s: %w", agentID, err)
-		}
-		agentPolicy = ag.InboundPolicy
-	}
-	return db.ResolveInboundPolicy(sessionPolicy, agentPolicy)
-}
-
-// errRefused reports a policy refusal to the sender, quoting the receipt id so
-// the refusal can be looked up later.
-type errRefused struct{ receipt db.AgentMessage }
-
-func (e *errRefused) Error() string {
-	return fmt.Sprintf("delivery refused by the recipient's inbound policy (receipt %s, status %q)", e.receipt.ID, e.receipt.Status)
-}
-
 // gateInbound applies the size guard and the inbound policy to one pending
 // delivery and records its receipt. The returned receipt is ALWAYS persisted:
 //
@@ -114,27 +82,10 @@ func (r *Runtime) gateInbound(ctx context.Context, pending db.AgentMessage) (db.
 	if err := r.checkMessageSize(path, pending.Body); err != nil {
 		return db.AgentMessage{}, err
 	}
-	policy, err := r.inboundPolicyFor(ctx, pending.ToAgentID, pending.ToSessionID)
-	if err != nil {
-		return db.AgentMessage{}, err
-	}
-	pending.Policy = policy
-	switch policy {
-	case db.InboundAccept:
-		pending.Status = db.DeliveryAccepted
-	case db.InboundHold:
-		pending.Status = db.DeliveryHeld
-		pending.Reason = "recipient inbound policy is \"hold\": the message is parked and waits for approval"
-	case db.InboundRefuse:
-		pending.Status = db.DeliveryRefused
-		pending.Reason = "recipient inbound policy is \"refuse\""
-	}
+	pending.Status = db.DeliveryAccepted
 	receipt, err := r.db.CreateAgentMessage(ctx, pending)
 	if err != nil {
 		return db.AgentMessage{}, err
-	}
-	if receipt.Status == db.DeliveryRefused {
-		return receipt, &errRefused{receipt: receipt}
 	}
 	return receipt, nil
 }
@@ -151,66 +102,4 @@ func (r *Runtime) dropDelivery(ctx context.Context, receiptID string, cause erro
 		r.logger.Warn("inbound: failed to mark delivery dropped", "receipt", receiptID, "error", err)
 	}
 	return fmt.Errorf("%w (delivery receipt %s, status %q)", cause, receiptID, db.DeliveryDropped)
-}
-
-// heldNotice is what a sender is told when its message was parked. It is a
-// SUCCESSFUL return (the message is stored and will be delivered on approval),
-// but it deliberately never claims the recipient has seen it.
-func heldNotice(receipt db.AgentMessage) string {
-	return fmt.Sprintf("Message HELD (receipt %s): the recipient's inbound policy is %q, so the message is stored and waits for approval before delivery. It was NOT delivered yet and no turn was started.",
-		receipt.ID, receipt.Policy)
-}
-
-// ListHeldMessages returns the messages parked for approval, oldest first. Pass
-// an empty agentID for every recipient in the workspace.
-func (r *Runtime) ListHeldMessages(ctx context.Context, agentID string) ([]db.AgentMessage, error) {
-	return r.db.ListHeldAgentMessages(ctx, agentID)
-}
-
-// ReleaseHeldMessage approves a parked message and delivers it. The receipt is
-// CAS-moved held → accepted first, so two concurrent approvals cannot deliver
-// the same message twice; if the delivery then fails the receipt is downgraded
-// to dropped and the error is returned.
-func (r *Runtime) ReleaseHeldMessage(ctx context.Context, id string) (db.AgentMessage, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return db.AgentMessage{}, fmt.Errorf("a held message id is required")
-	}
-	receipt, err := r.db.ResolveHeldAgentMessage(ctx, id, db.DeliveryAccepted, "released for delivery")
-	if err != nil {
-		return db.AgentMessage{}, err
-	}
-	if err := r.deliverReleased(ctx, receipt); err != nil {
-		return db.AgentMessage{}, r.dropDelivery(ctx, receipt.ID, err)
-	}
-	return receipt, nil
-}
-
-// RefuseHeldMessage rejects a parked message. The body stays on the receipt, so
-// the refusal is auditable and the sender can see why nothing was delivered.
-func (r *Runtime) RefuseHeldMessage(ctx context.Context, id, reason string) (db.AgentMessage, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return db.AgentMessage{}, fmt.Errorf("a held message id is required")
-	}
-	if strings.TrimSpace(reason) == "" {
-		reason = "refused by the recipient"
-	}
-	return r.db.ResolveHeldAgentMessage(ctx, id, db.DeliveryRefused, reason)
-}
-
-// deliverReleased performs the delivery a held receipt was waiting for, on the
-// channel it was captured from. An unknown channel is an error, not a no-op.
-func (r *Runtime) deliverReleased(ctx context.Context, receipt db.AgentMessage) error {
-	switch receipt.Channel {
-	case db.ChannelInbox:
-		target, err := r.db.GetAgent(ctx, receipt.ToAgentID)
-		if err != nil {
-			return fmt.Errorf("recipient agent %s is gone: %w", receipt.ToAgentID, err)
-		}
-		return r.deliverToInbox(ctx, receipt.FromAgentID, receipt.FromName, target, receipt.Summary, receipt.Body)
-	case db.ChannelWorker:
-		return r.deliverToWorker(ctx, receipt.ToSessionID, receipt.Body)
-	}
-	return fmt.Errorf("held message %s has an unknown delivery channel %q", receipt.ID, receipt.Channel)
 }

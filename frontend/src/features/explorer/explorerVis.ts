@@ -56,7 +56,7 @@ export function resolveExplorerTheme(): ExplorerTheme {
   }
 }
 
-export const KIND_LABEL: Record<ViewKind, string> = {
+const KIND_LABEL: Record<ViewKind, string> = {
   workspace: 'Workspace',
   category: 'Grup',
   board: 'Pano',
@@ -132,7 +132,7 @@ export function nodeRole(ref: ViewRef): NodeRole {
   return null
 }
 
-export const ROLE_LABEL: Record<Exclude<NodeRole, null>, string> = {
+const ROLE_LABEL: Record<Exclude<NodeRole, null>, string> = {
   'board-column': 'Pano sütunu',
   'board-card': 'Kart',
   'tool-group': 'Araç grubu',

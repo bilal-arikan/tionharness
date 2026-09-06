@@ -46,8 +46,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Name:        "File freshness guard",
 			Scope:       "native",
 			Event:       "System",
-			Setting:     "fileFreshnessGuard",
-			Enabled:     cur.FileFreshnessGuard,
+			Enabled:     true,
 			Description: "Edit / Write / apply_patch refuse to modify a file unless it was Read this session and is unchanged since — prevents silently clobbering an out-of-band edit. Mirrors Claude Code; the claude-cli path enforces its own equivalent natively.",
 		},
 		{

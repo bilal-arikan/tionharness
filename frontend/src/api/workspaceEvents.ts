@@ -146,7 +146,7 @@ export interface AutomationFireData {
 
 // Every workspace hub event carries this payload: the server's navigation
 // hints plus the kind-specific data.
-export interface WorkspaceStreamPayload<D = unknown> {
+interface WorkspaceStreamPayload<D = unknown> {
   target?: Record<string, string>
   data?: D
   level?: string

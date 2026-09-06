@@ -6,7 +6,7 @@ import { toast } from './toastStore'
 // Shared visual language for the path actions used across the app so they
 // always look identical: a compact bordered icon-only button that dims to
 // accent on hover. The path itself lives in the tooltip, not in a label.
-export const PATH_ACTION_CLS =
+const PATH_ACTION_CLS =
   'flex shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50'
 
 interface Props {

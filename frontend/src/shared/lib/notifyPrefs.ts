@@ -7,7 +7,6 @@
 // The catalogue of notifiable types lives in ONE place — notifyTypes.ts — so this
 // module only owns persistence; the UI and the toast funnel read the same list.
 export { NOTIFY_TYPES } from './notifyTypes'
-export type { NotifyType } from './notifyTypes'
 
 const KEY = 'tionharness.notifyMutedTypes'
 

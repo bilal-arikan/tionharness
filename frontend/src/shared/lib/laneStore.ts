@@ -46,12 +46,6 @@ export function seedLanes(fn: (s: LaneState) => LaneState): void {
   commit(fn(state))
 }
 
-// dispatchLaneEvent folds one stream event in (exported for tests and for
-// callers that already own a stream subscription).
-export function dispatchLaneEvent(ev: Parameters<typeof applyLaneEvent>[1]): void {
-  commit(applyLaneEvent(state, ev))
-}
-
 // resetLanes drops the picture (workspace switch) but keeps the connection
 // flag; the caller reopens the stream through connectLanes(). Revision goes
 // back to 0 so "not seeded yet" reads the same as a fresh store.
@@ -83,13 +77,4 @@ export function connectLanes(): () => void {
       commit(markConnection(state, false))
     }
   }
-}
-
-// __resetLaneStoreForTest clears the module state between tests.
-export function __resetLaneStoreForTest(): void {
-  if (disconnect) disconnect()
-  disconnect = null
-  refs = 0
-  state = emptyLanes()
-  listeners.clear()
 }

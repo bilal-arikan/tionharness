@@ -46,7 +46,7 @@ export interface DashboardCounters {
 
 // The workspace projection, byte-identical to what an agent receives from
 // get_view{kind:"workspace"}.
-export interface DashboardSummary {
+interface DashboardSummary {
   text: string
   tokens: number
   elided: number
@@ -55,7 +55,7 @@ export interface DashboardSummary {
 }
 
 // A daily USD series — the float sibling of DaySeriesPoint.
-export interface DayCostPoint {
+interface DayCostPoint {
   day: string
   value: number
 }
@@ -85,7 +85,7 @@ export interface DeltaStat {
   pct: number | null
 }
 
-export interface DashboardDeltas {
+interface DashboardDeltas {
   sessions: DeltaStat
   runs: DeltaStat
   tokens: DeltaStat

@@ -65,7 +65,7 @@ export const snapshotsEqual = (a: DrawingSnapshot, b: DrawingSnapshot): boolean 
   }
   return true
 }
-export const totalPoints = (strokes: Stroke[]): number =>
+const totalPoints = (strokes: Stroke[]): number =>
   strokes.reduce((sum, stroke) => sum + stroke.points.length, 0)
 export const modelBytes = (strokes: Stroke[]): number =>
   strokes.length * STROKE_MODEL_BYTES + totalPoints(strokes) * POINT_MODEL_BYTES

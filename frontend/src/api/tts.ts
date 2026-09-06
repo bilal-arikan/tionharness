@@ -4,7 +4,7 @@
 // SERVER generated (no local voice needed).
 import { wsHeaders, errorFromResponse, req } from './client'
 
-export interface ServerVoice {
+interface ServerVoice {
   id: string
   name: string
   lang: string

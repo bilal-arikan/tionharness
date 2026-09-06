@@ -5,17 +5,16 @@
 
 export type TrajectoryStatus = 'planned' | 'running' | 'waiting' | 'done' | 'failed' | 'abandoned'
 
-export type TrajectoryNodeKind =
-  'phase' | 'session' | 'automation' | 'flowrun' | 'gate' | 'optimizer'
+type TrajectoryNodeKind = 'phase' | 'session' | 'automation' | 'flowrun' | 'gate' | 'optimizer'
 
-export type TrajectoryNodeOrigin = 'declared' | 'observed'
+type TrajectoryNodeOrigin = 'declared' | 'observed'
 
 export type TrajectoryNodeState = 'pending' | 'active' | 'done' | 'failed' | 'skipped' | 'ghost'
 
-export type TrajectoryEdgeKind =
+type TrajectoryEdgeKind =
   'next' | 'spawned' | 'reported' | 'fired' | 'feeds' | 'blocked_by' | 'forked_from'
 
-export interface TrajectoryGate {
+interface TrajectoryGate {
   kind: 'artifact' | 'verdict' | 'human' | 'schema'
   value?: string
 }
@@ -49,13 +48,13 @@ export interface TrajectoryEdge {
 }
 
 // Deterministic end-of-run digest (Rota F3, db.TrajectorySummary).
-export interface PhaseStat {
+interface PhaseStat {
   sessions: number
   failed: number
   durationSec: number
 }
 
-export interface TrajectorySummary {
+interface TrajectorySummary {
   at: number
   durationSec: number
   tokens: number

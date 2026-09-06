@@ -3,7 +3,7 @@
 // both the phase="start" and the completion variants — and the chat's
 // running-worker banner (useRunningWorkers) subscribes for the coordinator it
 // shows, so the roster refetches the moment a worker starts or finishes instead of
-// being discovered by a timer. Sibling of flowNodeStepBus / stepBus.
+// being discovered by a timer. Sibling of flowNodeStepBus.
 
 type Listener = () => void
 

@@ -7,16 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/proc"
 )
-
-// withSessionID stamps the session id onto ctx so the runtime can resolve the
-// session's WorkingDir. A thin wrapper around agent.WithSessionID for handlers
-// where a local variable named "agent" shadows the package (e.g. chat.go).
-func withSessionID(ctx context.Context, id string) context.Context {
-	return agent.WithSessionID(ctx, id)
-}
 
 // gitBranchCtxTimeout bounds the `git` calls used for the working-dir context
 // block so a slow/hung git can never stall a turn.

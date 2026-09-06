@@ -34,7 +34,7 @@ export function wsHeaders(): Record<string, string> {
 // A 502/503/504 from the Vite dev proxy means the Go backend is unreachable
 // (most often: it isn't running) — the bare "HTTP 502" the user used to see
 // gave no hint about that, so we spell it out.
-export function describeHttpError(status: number): string {
+function describeHttpError(status: number): string {
   switch (status) {
     case 502:
     case 503:

@@ -118,8 +118,6 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         <code>spawn_session</code> + UI spawn düğmesi.
       </p>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Eski <code>spawnTimeoutMin</code> ve <code>scheduleTimeoutMin</code> alanları yalnız wire ve
-        storage uyumluluğu için korunur; deprecated ve etkisizdir (<code>0 = disabled</code>).
         Üretken işler toplam süreyle kesilmez. Spawn, worker ve zamanlanmış koşular aşağıdaki
         semantic boşta penceresiyle korunur.
       </p>

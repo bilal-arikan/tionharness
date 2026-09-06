@@ -8,7 +8,7 @@
 // clock) is the shared hub loop in hubStream.ts; this module only names the
 // session endpoint and the session-specific event kinds.
 import { subscribeHubStream } from './hubStream'
-import type { HubEvent, HubStreamHandlers } from './hubStream'
+import type { HubStreamHandlers } from './hubStream'
 
 export type { HubEvent } from './hubStream'
 
@@ -52,4 +52,3 @@ export function subscribeSessionStream(
 
 // Re-exported for callers that narrow on the event shape without importing the
 // transport module.
-export type { HubEvent as SessionHubEvent }

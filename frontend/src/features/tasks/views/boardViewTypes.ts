@@ -22,9 +22,9 @@ export interface ResolvedView {
   sort: BoardSort
 }
 
-export const EMPTY_FILTER: BoardFilter = {}
+const EMPTY_FILTER: BoardFilter = {}
 
-export const DEFAULT_VIEW: ResolvedView = {
+const DEFAULT_VIEW: ResolvedView = {
   filter: EMPTY_FILTER,
   groupBy: 'status',
   sort: 'updated',
@@ -32,7 +32,7 @@ export const DEFAULT_VIEW: ResolvedView = {
 
 // Built-in view ids are prefixed so they can never collide with a saved view's
 // id (the backend slug pattern forbids ':').
-export const BUILTIN_PREFIX = 'builtin:'
+const BUILTIN_PREFIX = 'builtin:'
 
 export function isBuiltinId(id: string): boolean {
   return id.startsWith(BUILTIN_PREFIX)

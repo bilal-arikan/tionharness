@@ -148,6 +148,15 @@ işbirliği).
 
 ## 9. Alıcı tarafı: inbound politikası, makbuz ve byte sınırı (Faz 5)
 
+> **Kaldırıldı (2026-09-06):** §9.1 inbound politikası (`accept|hold|refuse`) ve §9.3
+> tutulan-mesaj uçları (`/api/agent-messages/held|release|refuse`) koddan çıkarıldı.
+> Politika için hiçbir editör, tutulan mesaj için hiçbir UI ya da araç yazılmamıştı;
+> `hold`'a düşen bir mesajı kimse serbest bırakamıyordu. Teslim artık her zaman
+> `accepted`; makbuz durumları `accepted|refused|dropped` (refused yalnız boyut
+> sınırı gibi teslim-öncesi hatalarda). §9.2 makbuz ve §9.4 byte sınırı yaşıyor.
+> Aşağıdaki 9.1 ve 9.3 tarihçe olarak durur; geri istenirse bu bölümden yeniden
+> kurulabilir.
+
 Faz 1–3'te gönderen her zaman kazanıyordu: mesaj ya teslim ediliyor ya da yalnız
 geçici bir araç hatasıyla düşüyordu; alıcının söz hakkı yoktu ve düşen mesajdan
 kalıcı bir iz kalmıyordu. Faz 5 üç boşluğu kapatır.

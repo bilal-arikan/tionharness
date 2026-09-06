@@ -20,7 +20,6 @@ func TestWorkspaceOptionalPath(t *testing.T) {
 		"/health",
 		"/api/version",
 		"/api/version/update",
-		"/api/debug/store-stats",
 	}
 	for _, p := range optional {
 		if !workspaceOptionalPath(p) {

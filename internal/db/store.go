@@ -311,12 +311,8 @@ type AgentProfilePatch struct {
 	// pointer whose nil means enabled, so a patch can only set it, never unset it.
 	NativeWebSearch *bool
 	PermissionMode  *string
-	// InboundPolicy is the recipient-side messaging policy (see
-	// Agent.InboundPolicy): "accept" | "hold" | "refuse", or "" to reset to the
-	// default (accept). An unknown value is rejected by UpdateAgent.
-	InboundPolicy *string
-	Avatar        *string
-	Color         *string
+	Avatar          *string
+	Color           *string
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
 	Skills   *[]string
@@ -358,13 +354,6 @@ type AgentProfilePatch struct {
 //     X → "" materialises the effective values into a root; X → Y keeps the
 //     override set and re-resolves the rest against Y.
 func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatch) (Agent, error) {
-	// Validate before mutating: an unknown inbound policy must fail the write, not
-	// be stored and then blow up on every later delivery.
-	if p.InboundPolicy != nil {
-		if _, err := ValidateInboundPolicy(*p.InboundPolicy); err != nil {
-			return Agent{}, err
-		}
-	}
 	if err := ValidateOverrideKeys(p.ResetFields); err != nil {
 		return Agent{}, err
 	}
@@ -869,22 +858,6 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 func (d *DB) SetSessionWorkingDir(ctx context.Context, sessionID, dir string) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.WorkingDir = dir
-	})
-}
-
-// SetSessionInboundPolicy overrides (or clears, when empty) the inbound-message
-// policy for messages delivered INTO this session. An empty string falls back to
-// the recipient agent's policy; an unknown value is rejected so a typo cannot
-// silently become "accept".
-func (d *DB) SetSessionInboundPolicy(ctx context.Context, sessionID, policy string) error {
-	if policy != "" {
-		if _, err := ValidateInboundPolicy(policy); err != nil {
-			return err
-		}
-	}
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.InboundPolicy = policy
-		s.UpdatedAt = now()
 	})
 }
 

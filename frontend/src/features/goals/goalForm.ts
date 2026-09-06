@@ -3,7 +3,7 @@
 // internal/goals/validate.go (the server is still the authority).
 import type { Goal, GoalGuardrail, GoalMetricDef } from '@/types/goal'
 
-export interface GuardrailDraft {
+interface GuardrailDraft {
   metric: string
   min: string
   max: string

@@ -7,7 +7,7 @@ import { refToString } from '@/types'
 // bucket's angular sector — so the first frames do not untangle a random cloud
 // and the persisted layout (once the user has one) is what the seeds yield to.
 
-export interface SeedPosition {
+interface SeedPosition {
   x: number
   y: number
 }

@@ -58,9 +58,6 @@ func TestTurnIdleForIgnoresAnotherRunProgress(t *testing.T) {
 
 func TestInboxWatchdogDefaultsWithoutTunables(t *testing.T) {
 	s := &Server{}
-	if got := s.inboxTurnWatchdog(); got != 0 {
-		t.Fatalf("deprecated hard ceiling = %v, want disabled", got)
-	}
 	if got, want := s.inboxTurnIdleWatchdog(), agent.DefaultTurnIdleWatchdogMinutes*time.Minute; got != want {
 		t.Fatalf("idle window = %v, want %v", got, want)
 	}

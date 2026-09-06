@@ -79,31 +79,14 @@ func TestApplyClampsNumerics(t *testing.T) {
 	}
 }
 
-func TestDeprecatedHardTimeoutDefaultsStayDisabled(t *testing.T) {
+func TestChatTurnIdleTimeoutDefaultsAndDisable(t *testing.T) {
 	d := Default()
-	if d.SpawnTimeoutMin != 0 || d.ScheduleTimeoutMin != 0 {
-		t.Errorf("deprecated hard defaults = spawn %d schedule %d, want disabled", d.SpawnTimeoutMin, d.ScheduleTimeoutMin)
+	if d.ChatTurnIdleTimeoutMin != 3 {
+		t.Fatalf("chat idle timeout default = %d, want 3", d.ChatTurnIdleTimeoutMin)
 	}
-	if d.TurnWatchdogMin != 0 {
-		t.Errorf("TurnWatchdogMin = %d, want disabled", d.TurnWatchdogMin)
-	}
-	d.SpawnTimeoutMin = 0
-	d.ScheduleTimeoutMin = 0
-	d = normalize(d)
-	if d.SpawnTimeoutMin != 0 || d.ScheduleTimeoutMin != 0 {
-		t.Errorf("normalize activated deprecated hard limits: spawn %d schedule %d", d.SpawnTimeoutMin, d.ScheduleTimeoutMin)
-	}
-}
-
-func TestChatTurnTimeoutDefaultsAndDisable(t *testing.T) {
-	d := Default()
-	if d.ChatTurnTimeoutMin != 0 || d.ChatTurnIdleTimeoutMin != 3 {
-		t.Fatalf("chat timeout defaults = (%d, %d), want (0, 3)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
-	}
-	d.ChatTurnTimeoutMin = 0
 	d.ChatTurnIdleTimeoutMin = 0
 	d = normalize(d)
-	if d.ChatTurnTimeoutMin != 0 || d.ChatTurnIdleTimeoutMin != 0 {
-		t.Fatalf("disabled chat timeouts normalized to (%d, %d)", d.ChatTurnTimeoutMin, d.ChatTurnIdleTimeoutMin)
+	if d.ChatTurnIdleTimeoutMin != 0 {
+		t.Fatalf("disabled chat idle timeout normalized to %d", d.ChatTurnIdleTimeoutMin)
 	}
 }

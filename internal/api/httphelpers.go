@@ -72,22 +72,3 @@ func strictUnknownField(msg string) (string, bool) {
 	}
 	return rest[:end], true
 }
-
-// requireFields writes a 400 "<name> is required" and returns false as soon as it
-// finds a blank required value, so handlers can validate several fields in one
-// call:
-//
-//	if !requireFields(w, "name", req.Name, "provider", req.Provider) {
-//		return
-//	}
-//
-// Arguments are (label, value) pairs; an odd trailing argument is ignored.
-func requireFields(w http.ResponseWriter, pairs ...string) bool {
-	for i := 0; i+1 < len(pairs); i += 2 {
-		if pairs[i+1] == "" {
-			writeError(w, http.StatusBadRequest, pairs[i]+" is required")
-			return false
-		}
-	}
-	return true
-}

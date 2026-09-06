@@ -53,7 +53,7 @@ export interface RotaMark {
   fire?: LaneFire
 }
 
-export interface RotaFutureItem {
+interface RotaFutureItem {
   id: string
   at: number
   label: string

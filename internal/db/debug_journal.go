@@ -631,25 +631,6 @@ func trimDebugRecords(records []DebugEvent, visibleKeep int) ([]DebugEvent, int)
 	return out, keptVisible
 }
 
-func (d *DB) replaceDebugRecordsLocked(sessionID string, records []DebugEvent, visibleKeep int) error {
-	records, visible := trimDebugRecords(records, visibleKeep)
-	data, err := marshalDebugRecords(records)
-	if err != nil {
-		return err
-	}
-	path := d.debugPath(sessionID)
-	if d.debugAtomicWrite != nil {
-		err = d.debugAtomicWrite(path, data)
-	} else {
-		err = atomicWriteBytes(path, data)
-	}
-	if err != nil {
-		return err
-	}
-	d.debugCount[sessionID] = visible
-	return nil
-}
-
 // ReadDebugEvents returns a session's debug events oldest→newest, optionally
 // filtered to a single type. limit <= 0 returns all retained events; a positive
 // limit returns the newest `limit` (still oldest→newest within that window). A

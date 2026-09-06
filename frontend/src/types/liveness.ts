@@ -3,10 +3,9 @@
 // right now" — every session that is running, queued, waiting on a human or on
 // flow input, or idle while its workers run — plus the spawn capacity left.
 
-export type LivenessState =
-  'running' | 'queued' | 'waiting_ask' | 'waiting_input' | 'awaiting_workers'
+type LivenessState = 'running' | 'queued' | 'waiting_ask' | 'waiting_input' | 'awaiting_workers'
 
-export interface LivenessEntry {
+interface LivenessEntry {
   sessionId: string
   state: LivenessState
   // Source in a compact form: "turn:user", "turn:worker", "run", "turn:chat",

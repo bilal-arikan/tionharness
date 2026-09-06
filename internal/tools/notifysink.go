@@ -36,7 +36,3 @@ func notifyFrom(ctx context.Context) NotifySink {
 	s, _ := ctx.Value(notifyKey{}).(NotifySink)
 	return s
 }
-
-// HasNotifySink reports whether a notify sink is attached to ctx, so a caller
-// can install a fallback only when one is missing.
-func HasNotifySink(ctx context.Context) bool { return notifyFrom(ctx) != nil }

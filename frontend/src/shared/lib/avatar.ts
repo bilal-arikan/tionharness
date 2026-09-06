@@ -18,26 +18,6 @@ export const AVATAR_COLORS = [
   '#475569', // slate
 ] as const
 
-// Small set of suggested glyphs for quick selection in the editor.
-export const AVATAR_GLYPHS = [
-  '🤖',
-  '🧠',
-  '🛰️',
-  '⚙️',
-  '🔭',
-  '🧭',
-  '📡',
-  '🦾',
-  '🧪',
-  '📊',
-  '✍️',
-  '🎯',
-  '🔮',
-  '🐝',
-  '🦉',
-  '🐙',
-] as const
-
 // hashString folds a string into a small non-negative integer (djb2).
 function hashString(s: string): number {
   let h = 5381
@@ -73,7 +53,7 @@ export function avatarForeground(background: string): '#000' | '#fff' {
 }
 
 // initials returns up to two uppercase letters for the fallback avatar glyph.
-export function initials(name: string): string {
+function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()

@@ -151,7 +151,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.UILanguage, p.UILanguage)
 
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
-	applyString(&next.ClaudeConfigDir, p.ClaudeConfigDir)
 	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
 
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
@@ -195,9 +194,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.AutonomousAutoContinue = *p.AutonomousAutoContinue
 	}
 	applyInt(&next.AutonomousAutoContinueMax, p.AutonomousAutoContinueMax)
-	if p.FileFreshnessGuard != nil {
-		next.FileFreshnessGuard = *p.FileFreshnessGuard
-	}
 	if p.AutoTagSessions != nil {
 		next.AutoTagSessions = *p.AutoTagSessions
 	}
@@ -250,15 +246,11 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
 	applyInt(&next.SpawnQueueMax, p.SpawnQueueMax)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
-	applyInt(&next.SpawnTimeoutMin, p.SpawnTimeoutMin)
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
 	applyInt(&next.FlowRunRetention, p.FlowRunRetention)
-	applyInt(&next.ChatTurnTimeoutMin, p.ChatTurnTimeoutMin)
 	applyInt(&next.ChatTurnIdleTimeoutMin, p.ChatTurnIdleTimeoutMin)
 	applyInt(&next.CodexStdoutIdleSec, p.CodexStdoutIdleSec)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
-	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
-	applyInt(&next.TurnWatchdogMin, p.TurnWatchdogMin)
 	applyInt(&next.TurnIdleWatchdogMin, p.TurnIdleWatchdogMin)
 	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
 	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
@@ -483,12 +475,6 @@ func normalize(v Settings) Settings {
 	}
 	// Deprecated absolute turn limits stay wire/storage compatible. Zero means
 	// disabled and must not be rewritten into an active one-minute ceiling.
-	if v.SpawnTimeoutMin < 0 {
-		v.SpawnTimeoutMin = 0
-	}
-	if v.SpawnTimeoutMin > 1440 {
-		v.SpawnTimeoutMin = 1440
-	}
 	if v.SpawnIdleTimeoutMin < 1 {
 		v.SpawnIdleTimeoutMin = 1
 	}
@@ -500,12 +486,6 @@ func normalize(v Settings) Settings {
 		v.FlowRunRetention = 1000
 	}
 	// Interactive chat timeouts use 0 as an explicit disabled value.
-	if v.ChatTurnTimeoutMin < 0 {
-		v.ChatTurnTimeoutMin = Default().ChatTurnTimeoutMin
-	}
-	if v.ChatTurnTimeoutMin > 1440 {
-		v.ChatTurnTimeoutMin = 1440
-	}
 	if v.ChatTurnIdleTimeoutMin < 0 {
 		v.ChatTurnIdleTimeoutMin = Default().ChatTurnIdleTimeoutMin
 	}
@@ -529,20 +509,8 @@ func normalize(v Settings) Settings {
 	if v.IdleResumeMax > 5 {
 		v.IdleResumeMax = 5
 	}
-	if v.ScheduleTimeoutMin < 0 {
-		v.ScheduleTimeoutMin = 0
-	}
-	if v.ScheduleTimeoutMin > 1440 {
-		v.ScheduleTimeoutMin = 1440
-	}
 	// Legacy absolute watchdog is retained for storage/API compatibility only.
 	// Zero consistently means disabled; active cancellation uses semantic idle.
-	if v.TurnWatchdogMin < 0 {
-		v.TurnWatchdogMin = 0
-	}
-	if v.TurnWatchdogMin > 1440 {
-		v.TurnWatchdogMin = 1440
-	}
 	// Semantic inactivity is independent from the deprecated absolute setting.
 	if v.TurnIdleWatchdogMin < 1 {
 		v.TurnIdleWatchdogMin = 1

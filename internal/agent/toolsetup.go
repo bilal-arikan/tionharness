@@ -378,10 +378,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	}
 	// Freshness guard: a session-scoped read-tracker lets Edit/Write detect a file
 	// changed out-of-band since it was last read. Nil (guard off) for catalog/preview
-	// builds without a session on ctx, or when the tunable is disabled — nil disables
+	// builds without a session on ctx — nil disables
 	// enforcement in the fs tools.
 	var readTracker *tools.ReadTracker
-	if r.tun != nil && r.tun.FileFreshnessGuard() {
+	if r.tun != nil {
 		readTracker = r.readTrackerFor(SessionIDFrom(ctx))
 	}
 	if sb.Ready() {
@@ -554,7 +554,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			}
 			live = append(live, cfg)
 		}
-		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, live)
+		// A read-only build (WithCatalogNoDial: the info panel, a context preview)
+		// takes only the connections that are already alive and never dials: a
+		// cold or unreachable server contributes nothing instead of stalling the
+		// caller for a DefaultDialTimeout each. It also leaves the breaker
+		// bookkeeping alone — nothing was dialed, so nothing failed or recovered.
+		var (
+			entries     []mcp.CatalogEntry
+			cfgByServer map[string]mcp.ServerConfig
+			errs        map[string]string
+		)
+		noDial := CatalogNoDialFrom(ctx)
+		if noDial {
+			entries, cfgByServer, _ = r.mcpPool.CatalogCached(live)
+		} else {
+			entries, cfgByServer, errs = r.mcpPool.Catalog(ctx, live)
+		}
 		for name, e := range errs {
 			// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
 			// same WARN forever made a workspace where no turn could start look normal.
@@ -572,7 +587,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// threshold measures the current outage rather than a lifetime total. Only
 		// the servers actually dialed count: a skipped one must keep its streak.
 		for _, cfg := range live {
-			if _, bad := errs[cfg.Name]; !bad {
+			if _, bad := errs[cfg.Name]; !bad && !noDial {
 				r.mcpFailStreaks.Clear(cfg.Name)
 			}
 		}

@@ -37,7 +37,7 @@ function isRunningLane(s: LaneSession): boolean {
 /** Translate a lane into the shape `sessionMatchesChips` classifies. The lane
  *  store carries no `category`/`executionType`, so the origin kind stands in:
  *  a subagent lane is exactly one spawned with `origin.kind === 'subagent'`. */
-export function laneChipShape(
+function laneChipShape(
   state: LaneState,
   s: LaneSession,
 ): Parameters<typeof sessionMatchesChips>[0] {

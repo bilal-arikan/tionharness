@@ -4,7 +4,7 @@ import { TIER_MIN_WIDTH } from '@/shared/lib/viewport'
 // useMediaQuery tracks a CSS media query and re-renders when it flips. SSR-safe
 // (returns false when window is unavailable). Used to branch layout between the
 // desktop multi-column shell and the mobile single-column shell.
-export function useMediaQuery(query: string): boolean {
+function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
   )

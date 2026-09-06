@@ -1,5 +1,5 @@
 // A payload-carrying pub/sub for live flow-node lifecycle frames (flow_node),
-// scoped per flow-run id. It is the flow-run counterpart of stepBus.ts: the
+// scoped per flow-run id. It is the flow-run counterpart of flowNodeStepBus.ts: the
 // single SSE feed (useAppEvents) publishes each `flownode` frame here, and the
 // run viewer (RunView) subscribes for the run it is showing so per-node
 // start/done/error + output render the moment they happen — ahead of the
@@ -22,7 +22,7 @@ type NodeListener = (ev: FlowNodeEvent) => void
 // A tree subscriber also needs to know WHICH run in the tree a frame came from —
 // otherwise a parent's viewer would paint a child's node ids onto its own graph.
 // (The per-run scope needs no such tag: there the run id is the key.)
-export interface FlowTreeFrame {
+interface FlowTreeFrame {
   runId: string
   // Where `runId` hangs in the tree: the run that launched it and the node in
   // that run's graph which did. This is what lets a parent's canvas roll a

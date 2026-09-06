@@ -38,7 +38,7 @@ export function isWorkerSession(s?: CoordinationFields | null): boolean {
  * coordinator above it. Worth showing differently — its "finished" turn does not
  * mean its task is done.
  */
-export function isSubCoordinatorSession(s?: CoordinationFields | null): boolean {
+function isSubCoordinatorSession(s?: CoordinationFields | null): boolean {
   return isCoordinatorSession(s) && isWorkerSession(s)
 }
 

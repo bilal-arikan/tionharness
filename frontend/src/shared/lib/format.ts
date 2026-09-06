@@ -32,7 +32,7 @@ export function count(n: number): string {
 
 // decimal renders a number with a fixed number of fraction digits, grouped per
 // locale. Use instead of toFixed() anywhere the result is shown to a user.
-export function decimal(n: number, digits = 1): string {
+function decimal(n: number, digits = 1): string {
   return numberFormat({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n)
 }
 
@@ -41,30 +41,6 @@ export function tokens(n: number): string {
   if (n >= 1_000_000) return `${decimal(n / 1_000_000)}M`
   if (n >= 1000) return `${decimal(n / 1000)}k`
   return count(n)
-}
-
-// Backwards-compatible alias for the token formatter (some panels imported it
-// as fmtTokens / fmt).
-export const fmtTokens = tokens
-
-// bytes renders a byte count as B/KB/MB/GB. Used for compaction savings meters
-// which are tracked in raw bytes, not tokens.
-export function bytes(n: number): string {
-  if (n < 1024) return `${count(n)} B`
-  const units = ['KB', 'MB', 'GB']
-  let v = n / 1024
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${decimal(v, v < 10 ? 1 : 0)} ${units[i]}`
-}
-
-// approxTokens estimates tokens from bytes at the plain-text ~4 chars/token
-// ratio. Honest approximation for compaction savings; shown as "~N token".
-export function approxTokens(n: number): number {
-  return Math.round(n / 4)
 }
 
 // percent renders a 0..1 ratio as a percentage string (e.g. "42%"). Uses Intl's

@@ -7,14 +7,14 @@ export type GoalDirection = 'min' | 'max'
 export type GoalPolicyMode = 'propose' | 'auto' | 'off'
 export type GoalAuthor = 'user' | 'agent:goal-writer' | string
 
-export interface GoalScope {
+interface GoalScope {
   recipes?: string[]
   agents?: string[]
   automations?: string[]
   tags?: string[]
 }
 
-export interface GoalMetric {
+interface GoalMetric {
   metric: string
   direction: GoalDirection
   target?: number | null
@@ -26,14 +26,14 @@ export interface GoalGuardrail {
   max?: number | null
 }
 
-export interface GoalPolicy {
+interface GoalPolicy {
   mode: GoalPolicyMode
   autoApplySurfaces?: string[]
   cooldownHours?: number
   minRuns?: number
 }
 
-export interface GoalRevision {
+interface GoalRevision {
   at: number
   by: GoalAuthor
   note?: string
@@ -74,12 +74,12 @@ export interface GoalMetricDef {
   scopes?: string[]
 }
 
-export interface GoalCandidate {
+interface GoalCandidate {
   id: string
   name: string
 }
 
-export interface GoalScopeCandidates {
+interface GoalScopeCandidates {
   recipes: GoalCandidate[]
   agents: GoalCandidate[]
   automations: GoalCandidate[]

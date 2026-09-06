@@ -12,8 +12,8 @@ import { bumpSignal } from '@/shared/lib/refreshSignals'
 
 // Signal key names — mirrored on the consumer side via useRefreshTrigger('key').
 // Centralized here so a rename / add / remove is a single-file change.
-export const SIGNAL_BOARD = 'board' // task CRUD + board column changes
-export const SIGNAL_EXPLORER = 'explorer' // Özet Haritası drill-down (open branches)
+const SIGNAL_BOARD = 'board' // task CRUD + board column changes
+const SIGNAL_EXPLORER = 'explorer' // Özet Haritası drill-down (open branches)
 export const SIGNAL_ACTIVITY = 'activity' // useActivity's per-view busy flags
 export const SIGNAL_EXECUTIONS = 'executions' // GET /api/executions consumers (session runtime map)
 export const SIGNAL_AGENTS = 'agents' // AgentsView
@@ -93,7 +93,7 @@ export function signalsForEvent(e: AppEvent): string[] {
 const DEBOUNCE_MS = 200
 const pending = new Map<string, number>()
 
-export function debouncedBump(key: string): void {
+function debouncedBump(key: string): void {
   if (pending.has(key)) return // already scheduled
   const t = window.setTimeout(() => {
     pending.delete(key)

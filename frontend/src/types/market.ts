@@ -4,14 +4,14 @@
 // demand via the detail endpoint and used at install time. See _Docs/21-MARKET.md.
 
 export type PackKind = 'skill' | 'agent' | 'provider' | 'flow' | 'workspace' | 'mcp' | 'hook'
-export type PackSource = 'bundled' | 'global' | 'remote'
+type PackSource = 'bundled' | 'global' | 'remote'
 
-export interface SkillPayload {
+interface SkillPayload {
   slug: string
   body: string
 }
 
-export interface AgentPayload {
+interface AgentPayload {
   name: string
   soul?: string
   identity?: string
@@ -26,7 +26,7 @@ export interface AgentPayload {
   skills?: string[]
 }
 
-export interface ProviderPayload {
+interface ProviderPayload {
   label: string
   kind: string
   baseUrl: string
@@ -38,19 +38,19 @@ export interface ProviderPayload {
   promptCache?: string
 }
 
-export interface FlowPayload {
+interface FlowPayload {
   name: string
   graph: string
 }
 
-export interface BoardColumn {
+interface BoardColumn {
   key: string
   label: string
   color?: string
 }
 
 // A workspace template's starter ecosystem (mirrors the Go market types).
-export interface WorkspaceTemplateAgent {
+interface WorkspaceTemplateAgent {
   key: string
   name: string
   soul?: string
@@ -79,7 +79,7 @@ export interface WorkspaceTemplateAgent {
 /** A starter automation rule shipped with a workspace template. Always seeded
  *  DISABLED — the wiring ships, the spending does not. Targets are referenced by
  *  template agent key / flow name so the rule stays portable. */
-export interface WorkspaceTemplateAutomation {
+interface WorkspaceTemplateAutomation {
   name: string
   triggerKind?: string
   triggerTag?: string
@@ -103,7 +103,7 @@ export interface WorkspaceTemplateAutomation {
   cooldownSec?: number
 }
 
-export interface WorkspaceTemplateStep {
+interface WorkspaceTemplateStep {
   id: string
   title: string
   agentKey: string
@@ -116,14 +116,14 @@ export interface WorkspaceTemplateFlow {
   graph?: string
 }
 
-export interface WorkspaceTemplateSchedule {
+interface WorkspaceTemplateSchedule {
   name?: string
   agentKey: string
   cronExpr: string
   prompt: string
 }
 
-export interface WorkspaceTemplateSkill {
+interface WorkspaceTemplateSkill {
   slug: string
   body: string
   files?: Record<string, string>
@@ -146,7 +146,7 @@ export interface WorkspacePayload {
   automations?: WorkspaceTemplateAutomation[]
 }
 
-export interface MCPPayload {
+interface MCPPayload {
   name: string
   /** One-liner shown in the load-on-demand tool catalog. */
   description?: string
@@ -163,14 +163,14 @@ export interface MCPPayload {
 
 // A lifecycle/tool hook imported from a foreign plugin. Bundled scripts ride in
 // the pack's files and ${CLAUDE_PLUGIN_ROOT} is rewritten at install time.
-export interface HookPayload {
+interface HookPayload {
   event: string
   matcher?: string
   command: string
   timeoutSec?: number
 }
 
-export interface PackPayload {
+interface PackPayload {
   skill?: SkillPayload
   agent?: AgentPayload
   provider?: ProviderPayload

@@ -26,7 +26,7 @@ export interface RotaWait {
 
 /** Waits shorter than this are not drawn: a sub-minute handoff adds a sliver of
  *  visual noise without telling the reader anything. */
-export const MIN_WAIT_SEC = 60
+const MIN_WAIT_SEC = 60
 
 /** A member still in flight has no end yet, so its wait runs to `now`. The
  *  liveness signal is the fresher fact; `runState` is what the header carries

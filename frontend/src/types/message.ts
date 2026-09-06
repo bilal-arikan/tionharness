@@ -256,13 +256,13 @@ export interface MessageUsage {
 }
 
 // MessageFeedback is the user's rating of an assistant turn.
-export interface MessageFeedback {
+interface MessageFeedback {
   rating: number // +1 | -1 | 0
   note?: string
   at: number
 }
 
-export interface Usage {
+interface Usage {
   inputTokens: number
   outputTokens: number
 }

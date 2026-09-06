@@ -1,22 +1,8 @@
 // Client-side finding helpers for the Insight cockpit: priority scoring,
-// filtering, lexical clustering and summary counts. Priority + clustering mirror
-// the Go implementations (internal/insight/priority.go, cluster.go) so the panel
-// can filter/collapse instantly without a server round-trip.
+// filtering and summary counts. Priority mirrors the Go implementation
+// (internal/insight/priority.go) so the panel can filter instantly without a
+// server round-trip.
 import type { InsightFinding } from '@/types'
-
-export function severityRank(s?: string): number {
-  switch (s) {
-    case 'high':
-      return 3
-    case 'med':
-    case 'medium':
-      return 2
-    case 'low':
-      return 1
-    default:
-      return 0
-  }
-}
 
 // priorityScore mirrors internal/insight/priority.go.
 export function priorityScore(f: InsightFinding): number {
@@ -52,89 +38,6 @@ export function applyFilter(findings: InsightFinding[], f: FindingFilter): Insig
     }
     return true
   })
-}
-
-export interface FindingCluster {
-  representative: InsightFinding
-  members: InsightFinding[]
-}
-
-const STOPWORDS = new Set([
-  'the',
-  'and',
-  'but',
-  'for',
-  'with',
-  'that',
-  'this',
-  'into',
-  'from',
-  'not',
-  'was',
-  'were',
-  'are',
-  'its',
-  'has',
-  'had',
-  'when',
-  'which',
-  'instead',
-  'than',
-  'then',
-  'even',
-  'though',
-  'tool',
-  'tools',
-  'agent',
-  'model',
-  'call',
-  'calls',
-  'called',
-  'using',
-  'use',
-  'used',
-])
-
-function tokenize(s: string): Set<string> {
-  const out = new Set<string>()
-  for (const w of s.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (w.length >= 3 && !STOPWORDS.has(w)) out.add(w)
-  }
-  return out
-}
-
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 0
-  let inter = 0
-  for (const w of a) if (b.has(w)) inter++
-  const union = a.size + b.size - inter
-  return union === 0 ? 0 : inter / union
-}
-
-const CLUSTER_THRESHOLD = 0.5
-
-// clusterFindings mirrors internal/insight/cluster.go: greedy single-pass lexical
-// grouping over title+rootCause. Input should be priority-sorted so each cluster's
-// representative is the most urgent member.
-export function clusterFindings(findings: InsightFinding[]): FindingCluster[] {
-  const clusters: FindingCluster[] = []
-  const repToks: Set<string>[] = []
-  for (const f of findings) {
-    const toks = tokenize(`${f.title} ${f.rootCause ?? ''}`)
-    let placed = false
-    for (let c = 0; c < clusters.length; c++) {
-      if (jaccard(toks, repToks[c]) >= CLUSTER_THRESHOLD) {
-        clusters[c].members.push(f)
-        placed = true
-        break
-      }
-    }
-    if (!placed) {
-      clusters.push({ representative: f, members: [f] })
-      repToks.push(toks)
-    }
-  }
-  return clusters
 }
 
 export interface FindingSummary {

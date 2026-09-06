@@ -21,15 +21,6 @@ import (
 // forever and block the whole queue behind it. See _Docs/58.
 const maxInboxAttempts = 3
 
-// inboxTurnWatchdog exposes the deprecated absolute setting for storage/API
-// compatibility. It is not an active queued-turn cancellation source.
-func (s *Server) inboxTurnWatchdog() time.Duration {
-	if s.tun == nil {
-		return agent.DefaultTurnWatchdogMinutes * time.Minute
-	}
-	return s.tun.TurnWatchdog()
-}
-
 // inboxTurnIdleWatchdog is the run-scoped semantic inactivity window.
 func (s *Server) inboxTurnIdleWatchdog() time.Duration {
 	if s.tun == nil {

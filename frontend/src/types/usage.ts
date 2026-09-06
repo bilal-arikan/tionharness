@@ -22,7 +22,7 @@ export interface ModelStat {
   estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
 }
 
-export interface BudgetAgentRow {
+interface BudgetAgentRow {
   agentId: string
   name: string
   avatar?: string
@@ -67,7 +67,7 @@ export interface BudgetTrendPoint {
 // Window-cumulative totals across the selected trend window ("oturumlar arası
 // toplam" / caching ROI). cacheHitRate is cacheRead / (cacheRead + input +
 // cacheWrite) — the share of prompt tokens served from cache.
-export interface BudgetCumulative {
+interface BudgetCumulative {
   days: number
   calls: number
   inputTokens: number
@@ -132,7 +132,7 @@ export interface SessionUsageDetail {
 // Per-session debug journal — GET /api/sessions/{id}/debug. The parallel
 // observability stream (separate from the conversation): turn timings, per-call
 // token spend, per-tool latency/size/errors, hook decisions, compaction/recovery.
-export interface SessionDebugToolStat {
+interface SessionDebugToolStat {
   calls: number
   errors: number
   durMs: number
@@ -191,7 +191,7 @@ export interface SessionDebugSummary {
   anomalies?: SessionDebugAnomaly[]
 }
 
-export interface SessionDebugAnomaly {
+interface SessionDebugAnomaly {
   severity: 'warn' | 'info'
   code: string
   message: string
@@ -246,7 +246,7 @@ export interface SessionDebugEvent {
 }
 
 // One tool execution within a single turn (per-message debug panel row).
-export interface TurnToolCall {
+interface TurnToolCall {
   name: string
   durMs: number
   outBytes: number

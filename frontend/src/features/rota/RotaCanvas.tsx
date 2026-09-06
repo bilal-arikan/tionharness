@@ -38,7 +38,7 @@ interface Props {
 
 // Row pitch and label column are deliberately tight: the canvas is a density
 // view, and every pixel of padding is one fewer lane on screen.
-export const ROW_H = 22
+const ROW_H = 22
 /** Lane label column. Exported because the zoom anchor has to know which part
  *  of the canvas does not scale. */
 export const ROTA_LABEL_W = 180

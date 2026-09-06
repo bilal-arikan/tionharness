@@ -8,7 +8,7 @@ import type {
   TrajectoryNodeState,
 } from '@/types/trajectory'
 
-export interface TrajColumn {
+interface TrajColumn {
   // Phase node id ("p:plan") or UNASSIGNED_COL for nodes bound to no phase.
   id: string
   label: string

@@ -91,14 +91,6 @@ type Agent struct {
 	// flags (headless mode refuses edits without an explicit mode).
 	PermissionMode string `json:"permissionMode"`
 
-	// InboundPolicy decides what happens to messages ADDRESSED AT this agent
-	// (send_message into its inbox, send_to_worker into one of its worker
-	// sessions): "accept" | "hold" | "refuse". Empty = unset = accept, which is
-	// exactly the behaviour before this field existed, so old agent rows keep
-	// working unchanged. A session may override it (Session.InboundPolicy).
-	// See internal/db/models_agentmsg.go.
-	InboundPolicy string `json:"inboundPolicy,omitempty"`
-
 	// Visual identity for the roster avatar. Avatar holds an optional emoji/glyph
 	// rendered inside the circle; Color is an optional hex accent (e.g. "#7c3aed").
 	// Both may be empty — the frontend then derives a deterministic look from ID.
@@ -459,12 +451,6 @@ type Session struct {
 
 	// Pinned keeps the session at the top of the sidebar list regardless of recency.
 	Pinned bool `json:"pinned,omitempty"`
-
-	// InboundPolicy overrides the recipient agent's inbound policy for messages
-	// delivered INTO this session ("accept" | "hold" | "refuse"). Empty = inherit
-	// the agent's, which itself defaults to accept. Lets one worker session be
-	// put on hold without changing the agent for every other session.
-	InboundPolicy string `json:"inboundPolicy,omitempty"`
 
 	// Tags are free-form labels on the session, editable by both the user (UI) and
 	// agents (set_session_tags). They organize sessions and, crucially, drive

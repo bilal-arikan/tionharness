@@ -17,7 +17,7 @@ export function sinceFor(key: string, nowMs = Date.now()): number {
   return Math.floor(nowMs / 1000) - w.days * 86400
 }
 
-export const SURFACE_LABEL: Record<string, string> = {
+const SURFACE_LABEL: Record<string, string> = {
   agent: 'Ajan',
   tools: 'Araçlar',
   recipe: 'Reçete',

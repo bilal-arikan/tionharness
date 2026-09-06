@@ -30,6 +30,16 @@
         "$env:TIONHARNESS_ADDR='127.0.0.1:8090'; $env:TIONHARNESS_DATA_DIR=\"$env:LOCALAPPDATA\\Temp\\claude\\th-scratch-data\"; go run ./cmd/tionharness"
       ],
       "port": 8090
+    },
+    {
+      "name": "tionharness-dev",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:TIONHARNESS_ADDR='127.0.0.1:8090'; go run ./cmd/tionharness"
+      ],
+      "port": 8090
     }
   ]
 }

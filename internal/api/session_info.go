@@ -202,7 +202,11 @@ func fillerRoleFor(m db.Message) string {
 func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
-	ctx := r.Context()
+	// Read-only: the tool-catalog estimates below must not dial MCP servers.
+	// Without this the first click into a workspace waited DefaultDialTimeout
+	// per unreachable server (≈25 s with one dead codebase-memory-mcp) before
+	// the info panel — and, for the user, the whole session — appeared.
+	ctx := agent.WithCatalogNoDial(r.Context())
 
 	session, err := wsp.DB.GetSession(ctx, id)
 	if writeDBError(w, err, "session not found") {

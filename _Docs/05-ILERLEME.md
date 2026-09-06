@@ -2,6 +2,80 @@
 
 > **Özet (2026-09-06):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Oturum bilgisi paneli artık MCP dial'ını beklemiyor (2026-09-06) ✅
+
+Belirti: uygulama açılıp bir oturuma tıklanınca ekran "takılı" kalıyor; log'da
+`mcp pool: dial failed … codebase-memory-mcp … context deadline exceeded`. Ölçüm:
+soğuk bir workspace'te `GET /api/sessions/{id}/info` **25 sn** sürüyordu (mesajlar
+1.6 sn, workdir/workers ~10 ms). Sebep: info paneli bağlam dolgusu tahmini için
+`ShippedToolCatalog` / `LazyToolCatalog` / `LazyToolsCatalogBlock` ile üç kez
+registry kuruyor, registry her etkin MCP sunucusunu `Pool.Catalog` ile dial ediyor;
+cevap vermeyen bir sunucu `DefaultDialTimeout` (20 sn) boyunca **sıralı** bekletiyor.
+
+- **`mcp.Pool.CatalogCached`** (yeni, `pool_cached.go`): yalnız zaten canlı ve
+  listelenmiş bağlantıların araçlarını döner; process başlatmaz, initialize/tools-list
+  beklemez; soğuk sunucular `skipped` olarak atlanır.
+- **`agent.WithCatalogNoDial(ctx)`** (yeni, `catalog_nodial.go`): registry kurulumu
+  bu bayrağı görünce `CatalogCached` kullanır, breaker/streak defterine dokunmaz.
+- **`handleSessionInfo`** bağlamı bu bayrakla damgalar. Turlar damgalamaz: tur dial
+  etmeli ki ajan araçlarını alsın.
+- Sonuç: soğuk workspace'te `/info` **194–342 ms**.
+- Test: `internal/mcp/pool_cached_test.go` — soğuk havuz anında döner (olmayan
+  binary bile beklenmez), bağlantı sonrası cache'ten okur.
+
+Aynı tanıda görülen ikinci iz: workspace değişince önceki workspace'in aktif oturum
+kimliği bir anlığına yeni workspace'e sorulur (`…/SES33/stream` 404); UI hemen ilk
+oturuma düşüyor, kalıcı bir hata değil. Kaldırılan `desktopNotifications`
+workspace alanı ve `/api/executions` eski UI'da (gömülü dünkü build) sorun
+çıkarmadı; bu düzeltme ile canlı doğrulandı.
+
+## Ölü kod, yarım özellik ve tek seferlik araç temizliği (2026-09-06) ✅
+
+Uygulama geneli "artık gereksiz" taraması (deadcode + knip + ayar/uç referans
+sayımı) ve ardından temizlik. Üç kova:
+
+**Kesin ölü (referanssız):**
+- Go: 26 erişilmez fonksiyon (`agent.SubagentProfiles`, `TouchActivity`,
+  `api.requireFields`, `conversation.InlineAttachments`, `db.fireActivityHook`,
+  `tools.NewFuncTool` + `funcTool`, `Has*Sink` üçlüsü vb.) — `deadcode -test ./...`
+  listesi; `stepBus` frontend modülü (abonesi kalmamıştı, `publishStep/TurnEnd` no-op'tu).
+- Frontend: `AgentSettingsModal.tsx`, `Card`/`IconButton` bileşenleri,
+  `scripts/codemod-intl.mjs`, `rehype-highlight`/`rehype-raw` bağımlılıkları; knip'in
+  bulduğu 61 kullanılmayan export + 46 tip (export kaldırıldı, gövdesi de kullanılmayanlar
+  silindi: `clusterFindings`, `resolveRuntimeBadge`, `OVERRIDE_LABELS`, `AVATAR_GLYPHS`…).
+- **Yanlış alarm:** `features/network/` dizini ölü sanılmıştı; Explorer
+  `VisNetworkGraph`/`useStoredDensity`/`agentAvatar`'ı kullanıyor — kaldı.
+
+**Yarım özellikler (silindi; gerekirse tarihçeden geri kurulur):**
+- Inbound mesaj politikası (`accept|hold|refuse`) + tutulan-mesaj uçları
+  (`/api/agent-messages/held|release|refuse`): editörü ve UI'sı yoktu, `hold`'a düşen
+  mesaj serbest bırakılamıyordu. `Agent/Session.InboundPolicy`, `DeliveryHeld`,
+  `SendResult.Held`, `ListHeld/ReleaseHeld/RefuseHeld` gitti; teslim her zaman
+  `accepted` (`_Docs/28` §9).
+- Deprecated mutlak zaman aşımları: `spawnTimeoutMin`, `chatTurnTimeoutMin`,
+  `scheduleTimeoutMin`, `turnWatchdogMin` (ayar + tunable + UI metni + DTO).
+  Semantic idle watchdog'lar tek kaynak.
+- Eski tipli sağlayıcı alanları: `minimax/openrouter/zai/deepseek *BaseUrl/*KeyEnc`,
+  `customProviders`, `claudeConfigDir` ve `CustomProvider` tipi; `MigrateFromSettings`
+  yalnız anthropic/claude-cli/codex-cli tohumlar (`_Docs/71`).
+- `fileFreshnessGuard` ayarı (UI'sı yoktu): guard artık **her zaman açık**; yerleşik
+  hook listesinde bilgi satırı olarak kalır.
+- `GET /api/debug/store-stats` ucu (istemcisi yoktu; `db.Stats()` workspace
+  yöneticisi için duruyor).
+
+**Tek seferlik araçlar / kalıntılar:** `cmd/migrate-ids`, `cmd/repair-provider-migration`,
+`cmd/measure-codemode`, `scripts/rtk_eval.py` + `.spec.tsv` silindi; `_Docs/08`, `71`,
+`44`, `17`, `01` notlandı.
+
+**desktopNotifications tek yer:** workspace-başına `inherit/on/off` override'ı
+(`WSSettings.DesktopNotifications`, `desktopNotifications.ts`, `NotificationsPanel`
+segmenti, `onWorkspaceNotifySaved`) kaldırıldı; tek anahtar
+`AppSettings.desktopNotifications` (`_Docs/29`).
+
+Bırakılanlar: küçük listelerdeki render-içi `filter` çağrıları (ölçülebilir maliyet yok),
+`tailscale-serve.ps1` / `install.ps1` (dokümante, kullanımda), belgesiz env değişkenleri
+(`TIONHARNESS_MCP_DIR` yalnız canlı testte).
+
 ## Liste / arama / filtre yollarında uygulama geneli optimizasyon (2026-09-06) ✅
 
 Uygulama genelinde listeleme, arama ve filtreleme yolları tarandı; bulunan on iki

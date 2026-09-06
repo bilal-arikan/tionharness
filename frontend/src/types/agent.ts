@@ -83,7 +83,6 @@ export type AgentOverrideKey =
   | 'thinkingLevel'
   | 'nativeWebSearch'
   | 'permissionMode'
-  | 'inboundPolicy'
   | 'avatar'
   | 'color'
   | 'tools'

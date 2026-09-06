@@ -13,7 +13,6 @@ import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
 import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRefreshSignals'
-import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
 import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import { publishWorkerChange, publishWorkerChangeAll } from '@/shared/lib/workerBus'
@@ -78,9 +77,6 @@ export function handleAutonomousCompletion(
       .then(d.setMessages)
       .catch(() => {})
   }
-  // Same turn-end fan-out as the chat branch (see below): unconditional so a
-  // transcript view showing this session hears it even off the chat screen.
-  publishTurnEnd(sid)
 }
 
 // Autonomous-event handler: raise a desktop notification whose click deep-links
@@ -219,10 +215,6 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
           })
           .catch(() => {})
       }
-      // Fan the turn-end out on the shared step bus for any other transcript
-      // consumer of this session, regardless of which session the chat itself has
-      // active. 'armed'/'start' phases are not ends.
-      if (phase !== 'armed' && phase !== 'start') publishTurnEnd(sid)
       // Completion feedback when a real assistant reply lands, routed through the
       // single toast funnel: a turn-done chime (gated by the device-local
       // sound-effects pref) plus, when this window is backgrounded and the 'chat'
@@ -337,10 +329,6 @@ function onStep(d: AppEventDeps, e: AppEvent) {
   const sid = e.target?.sessionId
   if (!sid || !e.step) return
   d.chat.applyAutoStep(sid, e.step as TurnStep)
-  // Fan the same frame out to any other live transcript view (ExecutionsPanel
-  // via useLiveTranscript) so it grows its own ghost bubble in lock-step with
-  // the chat. One SSE feed, one step bus, N transcript views.
-  publishStep(sid, e.step as TurnStep)
 }
 
 // Live flow-node frames (flow_node): fan each node lifecycle frame out to the

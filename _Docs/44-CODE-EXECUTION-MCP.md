@@ -415,13 +415,15 @@ bypass denemesinin köprüde reddi).
 
 **Kalan (sonraki fazlar):** Faz 3 A/B ölçümü — MCP-yoğun çok-adımlı senaryoda klasik
 vs kod-modu, §11'deki güncellenmiş metrikle (görev-başına toplam token + tur sayısı
-+ bağlama giren araç-çıktısı baytı; `cmd/measure-codemode` + `turn-debug`).
++ bağlama giren araç-çıktısı baytı; `turn-debug` — `cmd/measure-codemode` ölçüm
+aracı 2026-09-06'da kaldırıldı, Faz 0 sonuçları aşağıda tarihçe olarak durur).
 
 ---
 
 ## 11. Faz 0 Baseline Sonuçları (2026-07-02) ✅
 
-Ölçüm aracı: **`cmd/measure-codemode`** (`go run ./cmd/measure-codemode`) — data
+Ölçüm aracı (**2026-09-06'da kaldırıldı**, tarihçe: `git log -- cmd/measure-codemode`):
+`cmd/measure-codemode` — data
 dizinindeki tüm workspace'lerin etkin MCP sunucularına bağlanır, **gerçek** araç
 kataloglarını çeker ve üç senaryonun tur-başı bağlam maliyetini raporlar. Token
 tahmini: runtime'ın bütçelemede kullandığı `conversation.EstimateText`

@@ -81,7 +81,7 @@ import {
   siWasmer,
 } from 'simple-icons'
 
-export interface ProgramIcon {
+interface ProgramIcon {
   title: string
   /** Brand hex WITHOUT the leading '#'. */
   hex: string
@@ -223,7 +223,7 @@ const PROGRAM_ICONS: Record<string, ProgramIcon> = {
 }
 
 // programIconFor returns the brand icon for a single program name, or null.
-export function programIconFor(name: string): ProgramIcon | null {
+function programIconFor(name: string): ProgramIcon | null {
   return PROGRAM_ICONS[name.toLowerCase()] ?? null
 }
 

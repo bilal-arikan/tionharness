@@ -102,7 +102,7 @@ export function stripShellHost(commandStr: string): string {
 
 // splitCommands splits a command string on &&, ||, ;, | (and PowerShell's ;),
 // respecting quotes, into individual sub-commands.
-export function splitCommands(commandStr: string): string[] {
+function splitCommands(commandStr: string): string[] {
   const commands: string[] = []
   let current = ''
   let single = false
@@ -151,7 +151,7 @@ export function splitCommands(commandStr: string): string[] {
 
 // extractCommandName returns the bare program name of one sub-command, resolving
 // env/prefix skips, path prefixes and shell `-c` wrappers (recursively).
-export function extractCommandName(subCommand: string): string | undefined {
+function extractCommandName(subCommand: string): string | undefined {
   const tokens = tokenize(subCommand)
   let idx = 0
   while (idx < tokens.length && isEnvAssignment(tokens[idx]!)) idx++

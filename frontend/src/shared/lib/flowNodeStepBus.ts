@@ -1,5 +1,5 @@
 // A payload-carrying pub/sub for live per-node tool/thinking steps (flow_node_step),
-// scoped per flow-run id. It is the flow counterpart of stepBus.ts: the single SSE
+// scoped per flow-run id. It is the per-flow-run step bus: the single SSE
 // feed (useAppEvents) publishes each `flownodestep` frame here, and the run
 // viewer's node inspector (RunNodeInspector) subscribes for the run it shows so a
 // running agent node renders its steps the moment they happen — before the node

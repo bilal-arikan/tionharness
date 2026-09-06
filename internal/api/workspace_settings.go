@@ -74,30 +74,9 @@ type workspaceSettingsDTO struct {
 	// workspace (always non-nil so the client can render an empty list cleanly).
 	IgnoredRecommendations []string `json:"ignoredRecommendations"`
 
-	// DesktopNotifications is this workspace's override of the app-global
-	// desktop-notification master toggle, exposed as a three-state string so the
-	// client can distinguish "not set" from an explicit off:
-	//   "inherit" → follow AppSettings.DesktopNotifications (default)
-	//   "on"      → force OS toasts on for this workspace
-	//   "off"     → force OS toasts off for this workspace
-	DesktopNotifications string `json:"desktopNotifications"`
-
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
 	TaskCount    int `json:"taskCount"`
-}
-
-// desktopNotificationsToString renders the workspace's three-state
-// desktop-notification override (*bool) as a stable string for the DTO:
-// nil → "inherit", true → "on", false → "off".
-func desktopNotificationsToString(v *bool) string {
-	if v == nil {
-		return "inherit"
-	}
-	if *v {
-		return "on"
-	}
-	return "off"
 }
 
 func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspaceSettingsDTO {
@@ -140,8 +119,6 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		// Non-nil for a clean empty array in JSON (nil marshals to null).
 		BoardViews:             append([]db.BoardViewDef{}, s.BoardViews...),
 		IgnoredRecommendations: append([]string{}, s.IgnoredRecommendations...),
-
-		DesktopNotifications: desktopNotificationsToString(s.DesktopNotifications),
 	}
 	if agents, err := w.DB.ListAgents(ctx); err == nil {
 		dto.AgentCount = len(agents)

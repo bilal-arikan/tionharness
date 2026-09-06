@@ -40,13 +40,13 @@ export interface IngestInstallInput extends IngestSource {
   group?: string // Skills-UI group for imported skills (keeps them from mixing with existing ones)
 }
 
-export interface InstallResult {
+interface InstallResult {
   kind: string
   ref: string
   message: string
 }
 
-export interface IngestSkipNote {
+interface IngestSkipNote {
   key: string
   slug: string
   reason: string

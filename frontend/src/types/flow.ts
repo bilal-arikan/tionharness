@@ -17,7 +17,7 @@ export type FlowNodeType =
 
 export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
-export interface FlowBranch {
+interface FlowBranch {
   contains: string // case-insensitive substring; "" = default
   next: string
 }

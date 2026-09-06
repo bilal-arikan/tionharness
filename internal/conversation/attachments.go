@@ -69,16 +69,6 @@ func humanSize(n int64) string {
 // a couple of calls, well below the multi-MB logs that trigger the problem.
 const largeAttachmentBytes = 256 << 10
 
-// InlineAttachments folds an attachment list into a piece of text using the same
-// block format chat turns use (text/code inlined verbatim; everything else
-// listed by absolute path). Exposed so non-chat callers (e.g. flow runs) can
-// give their agents the same attachment context. Returns text unchanged when
-// atts is empty. Pass a ctx carrying WithAttachmentRoot so the paths are
-// absolute and therefore openable.
-func InlineAttachments(ctx context.Context, text string, atts []db.Attachment) string {
-	return withAttachments(ctx, db.Message{Text: text, Attachments: atts})
-}
-
 // withAttachments appends an "Attachments" block to a user message's text. Text
 // and code attachments small enough to have been inlined at upload time are
 // reproduced verbatim (the model reads them directly); everything else is listed

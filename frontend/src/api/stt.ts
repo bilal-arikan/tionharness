@@ -4,7 +4,7 @@
 // thin client / WebView2 build can dictate without browser speech recognition.
 import { wsHeaders, errorFromResponse, req } from './client'
 
-export interface ServerModel {
+interface ServerModel {
   id: string
   name: string
 }

@@ -18,7 +18,7 @@ function refresh() {
 }
 
 // setViewDirty marks/clears a view's unsaved-edits flag. No-op when unchanged.
-export function setViewDirty(view: View, isDirty: boolean) {
+function setViewDirty(view: View, isDirty: boolean) {
   const had = dirty.has(view)
   if (isDirty && !had) {
     dirty.add(view)
