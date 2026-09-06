@@ -157,6 +157,21 @@ export interface SessionProgress {
   record: ProgressRecord | null
 }
 
+// ActivitySpan is one stretch a session spent working, in unix seconds. Start
+// === End is legitimate: a single message no neighbour joined.
+export interface ActivitySpan {
+  start: number
+  end: number
+}
+
+// SessionActivity answers "when was each of these sessions actually working"
+// for the Rota canvas (_Docs/78 §16). Sessions with no transcript are absent
+// from the map, not present with an empty list.
+export interface SessionActivity {
+  gapSec: number
+  sessions: Record<string, ActivitySpan[]>
+}
+
 // BrowseEntry is one selectable directory in the folder picker.
 interface BrowseEntry {
   name: string

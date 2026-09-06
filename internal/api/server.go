@@ -534,6 +534,11 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
+	// Rota canvas: when each of the given sessions was actually working, so an
+	// intermittent conversation draws as separate blocks instead of one long
+	// bar (_Docs/78 §16). Literal path, registered next to "active" so it is
+	// never read as a session id.
+	mux.HandleFunc("GET /api/sessions/activity", s.handleSessionActivity)
 	mux.HandleFunc("GET /api/sessions/{id}/inflight", s.handleSessionInflight)
 	// Server-authoritative per-session event stream (cursor-based SSE): every
 	// window watching a session subscribes here and renders live from it,

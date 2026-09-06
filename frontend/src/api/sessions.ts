@@ -20,6 +20,7 @@ import type {
   TurnDebug,
   InflightSnapshot,
   SessionChangeStep,
+  SessionActivity,
 } from '@/types'
 import { req } from './client'
 
@@ -352,6 +353,16 @@ export const sessionApi = {
     }),
   // List subdirectories of a path for the folder picker (empty path = roots).
   browseDirs: (path: string) => req<BrowseResp>(`/api/fs/browse?path=${encodeURIComponent(path)}`),
+
+  // When each of the given sessions was actually working — the stretches the
+  // Rota canvas splits a session bar along (_Docs/78 §16). Batched because the
+  // canvas asks for every visible lane at once; gapSec overrides the idle
+  // stretch that separates two bouts (server default: 600).
+  sessionActivity: (ids: readonly string[], gapSec?: number) =>
+    req<SessionActivity>(
+      `/api/sessions/activity?ids=${encodeURIComponent(ids.join(','))}` +
+        (gapSec ? `&gap=${gapSec}` : ''),
+    ),
 
   // Git state of a project path (repo?, branch, remote, identity).
   gitInfo: (path: string) => req<GitInfo>(`/api/fs/gitinfo?path=${encodeURIComponent(path)}`),

@@ -24,6 +24,7 @@ import { ROTA_LABEL_W } from './RotaCanvas'
 import { laneChipCounts, laneChipFilter } from './rotaChips'
 import { useRotaChips } from './useRotaChips'
 import { useRotaPrefs } from './useRotaPrefs'
+import { useActivitySpans } from './useActivitySpans'
 import { RotaTrajectoryView } from './RotaTrajectoryView'
 
 interface Props {
@@ -153,7 +154,16 @@ export function RotaPanel({
 
   const chipCounts = useMemo(() => laneChipCounts(lanes), [lanes])
   const laneFilter = useMemo(() => laneChipFilter(lanes, chips.chipSet), [lanes, chips.chipSet])
-  const layout = layoutRota(lanes, { now, idleCutoffSec: cutoff, laneFilter })
+  // Two passes on purpose: the first decides which lanes are on screen, the
+  // activity read is asked only for those, and the second splits their bars
+  // along the bouts it returned. Until the read lands (or when it fails) the
+  // second pass is skipped and the bars draw whole.
+  const base = layoutRota(lanes, { now, idleCutoffSec: cutoff, laneFilter })
+  const activity = useActivitySpans(base.rows.map((r) => r.session))
+  const layout =
+    activity.size > 0
+      ? layoutRota(lanes, { now, idleCutoffSec: cutoff, laneFilter, activity })
+      : base
   const loading = lanes.revision === 0 || lanes.stale
 
   // The selected session's own trajectory (for the "◈ Rotayı aç" shortcut).

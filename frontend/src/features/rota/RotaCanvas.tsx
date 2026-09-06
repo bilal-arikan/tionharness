@@ -9,6 +9,7 @@ import type { RotaBar, RotaEdge, RotaLayout, RotaMark, RotaRow } from './rotaLay
 import { laneOriginGlyph } from './rotaLabels'
 import { buildTimeScale, formatGapSpan } from './rotaTimeScale'
 import { formatWait } from './rotaWaits'
+import { formatSegments } from './rotaSegments'
 
 // What the side panel can project from either canvas: a session / flow run
 // bar, a whole trajectory (phase header click), an automation ghost.
@@ -296,18 +297,62 @@ export function RotaCanvas({
               else onOpenSession?.(b.rowId)
             }}
           >
-            <title>{`${b.label} · ${b.state} · ${fmtClock(b.start)} → ${b.live ? 'şimdi' : fmtClock(b.end)}`}</title>
-            <rect
-              x={x1}
-              y={y}
-              width={x2 - x1}
-              height={h}
-              rx={run ? 2 : 4}
-              fill={barFill(b)}
-              opacity={run ? 0.7 : 0.9}
-              stroke={sel ? 'var(--color-text)' : 'none'}
-              strokeWidth={sel ? 1.5 : 0}
-            />
+            <title>{`${b.label} · ${b.state} · ${fmtClock(b.start)} → ${b.live ? 'şimdi' : fmtClock(b.end)}${
+              b.segments ? ` · ${formatSegments(b.segments, b.start)}` : ''
+            }`}</title>
+            {b.segments ? (
+              <>
+                {/* The idle spine: the bar's full span stays visible as a thin
+                    dashed line, so a split bar still reads as ONE session and
+                    the blocks keep their place on the axis. */}
+                <line
+                  x1={x1}
+                  x2={x2}
+                  y1={cy}
+                  y2={cy}
+                  stroke={barFill(b)}
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                  opacity={0.55}
+                />
+                {b.segments.map((s) => {
+                  // Each sitting is its own block. The floor keeps a two-minute
+                  // sitting clickable on a multi-day window; the clamp keeps the
+                  // floored block inside the bar.
+                  const sx = Math.min(Math.max(x(s.start), x1), x2)
+                  const sw = Math.min(
+                    Math.max(MIN_BAR_PX, x(s.end) - sx),
+                    Math.max(MIN_BAR_PX, x2 - sx),
+                  )
+                  return (
+                    <rect
+                      key={`seg:${s.start}`}
+                      x={sx}
+                      y={y}
+                      width={sw}
+                      height={h}
+                      rx={run ? 2 : 4}
+                      fill={barFill(b)}
+                      opacity={run ? 0.7 : 0.9}
+                      stroke={sel ? 'var(--color-text)' : 'none'}
+                      strokeWidth={sel ? 1.5 : 0}
+                    />
+                  )
+                })}
+              </>
+            ) : (
+              <rect
+                x={x1}
+                y={y}
+                width={x2 - x1}
+                height={h}
+                rx={run ? 2 : 4}
+                fill={barFill(b)}
+                opacity={run ? 0.7 : 0.9}
+                stroke={sel ? 'var(--color-text)' : 'none'}
+                strokeWidth={sel ? 1.5 : 0}
+              />
+            )}
             {b.waits?.map((w) => {
               // Waits ride the same axis as the bar, so no extra mapping.
               const wx1 = Math.max(x1, x(w.start))

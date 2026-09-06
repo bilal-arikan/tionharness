@@ -1,7 +1,9 @@
 // Rota F0 time scale: the past window's seconds → pixels mapping, with the
 // option to collapse "dead air" — stretches of the window where no lane has a
 // bar, an edge or a mark. Long idle nights otherwise eat most of the canvas
-// and squash the minutes that actually carry work into a few pixels.
+// and squash the minutes that actually carry work into a few pixels. A bar that
+// was split into sittings (rotaSegments) counts only those sittings as
+// activity, so the idle hours INSIDE a bar collapse like any other dead air.
 //
 // It also carries the optional LOG duration axis: with `logDuration` on, time
 // inside a live stretch is spent on a log scale, so a short session keeps a
@@ -81,6 +83,12 @@ function eventInstants(layout: RotaLayout): number[] {
   for (const b of layout.bars) {
     add(b.start)
     add(b.end)
+    // A split bar's sittings are cut points too, so each sitting is measured on
+    // its own instead of sharing one interval with the idle time next to it.
+    for (const s of b.segments ?? []) {
+      add(s.start)
+      add(s.end)
+    }
   }
   for (const m of layout.marks) add(m.at)
   for (const e of layout.edges) add(e.at)
@@ -97,7 +105,20 @@ function activitySpans(layout: RotaLayout): RotaGap[] {
     const e = Math.max(t0, Math.min(now, end))
     if (e >= s) spans.push({ start: s, end: e })
   }
-  for (const b of layout.bars) push(b.start, b.end)
+  for (const b of layout.bars) {
+    if (b.segments && b.segments.length > 0) {
+      // A split bar spans createdAt → updatedAt but only WORKED during its
+      // sittings, so the hours between them are dead air like any other and get
+      // collapsed with them. Its own endpoints stay anchored as instants: they
+      // are real timestamps (creation, last update) and the bar must not start
+      // or end inside a collapse sliver.
+      push(b.start, b.start)
+      for (const s of b.segments) push(s.start, s.end)
+      push(b.end, b.end)
+      continue
+    }
+    push(b.start, b.end)
+  }
   for (const m of layout.marks) push(m.at, m.at)
   for (const e of layout.edges) push(e.at, e.at)
   return spans

@@ -178,6 +178,31 @@ describe('layoutRota', () => {
     expect(l.t0).toBe(NOW - 90_000)
   })
 
+  it('splits a bar along its activity bouts, leaving the others whole', () => {
+    const activity = new Map([
+      [
+        'ROOT',
+        [
+          { start: NOW - 900, end: NOW - 800 },
+          { start: NOW - 200, end: NOW - 10 },
+        ],
+      ],
+    ])
+    const l = layoutRota(fixture(), { now: NOW, activity })
+    const root = l.bars.find((b) => b.rowId === 'ROOT')
+    expect(root?.segments).toEqual([
+      { start: NOW - 900, end: NOW - 800 },
+      { start: NOW - 200, end: NOW - 10 },
+    ])
+    expect(l.bars.find((b) => b.rowId === 'W1')?.segments).toBeUndefined()
+  })
+
+  it('leaves a bar whole when its activity is one stretch', () => {
+    const activity = new Map([['ROOT', [{ start: NOW - 900, end: NOW - 10 }]]])
+    const l = layoutRota(fixture(), { now: NOW, activity })
+    expect(l.bars.find((b) => b.rowId === 'ROOT')?.segments).toBeUndefined()
+  })
+
   it('empty store yields an empty layout with a one-minute window', () => {
     const l = layoutRota(emptyLanes(), { now: NOW })
     expect(l.rows).toEqual([])

@@ -11,7 +11,9 @@
 import type { LaneFire, LaneSession, LaneState } from '@/shared/lib/laneModel'
 import { laneMembers, rootLanes, trajectoryForRoot } from '@/shared/lib/laneModel'
 import type { FlowRunData, ScheduleArmedData, TrajectoryData } from '@/api/workspaceEvents'
+import type { ActivitySpan } from '@/types'
 import { clipWaits, waitSpans, type RotaWait } from './rotaWaits'
+import { barSegments } from './rotaSegments'
 
 export interface RotaRow {
   id: string // session id
@@ -34,6 +36,10 @@ export interface RotaBar {
   // Stretches of a coordinator's bar spent waiting on its spawned workers
   // (rotaWaits.ts). Only ever set on a root's session bar.
   waits?: RotaWait[]
+  // The blocks this bar is drawn in when the session worked in separate
+  // sittings (rotaSegments.ts). Absent = draw the bar whole. Never one entry:
+  // a single stretch IS the whole bar.
+  segments?: ActivitySpan[]
 }
 
 export interface RotaEdge {
@@ -86,6 +92,10 @@ export interface RotaLayoutOptions {
   // worker never loses the coordinator its spawn edge points at — building
   // that rule is the caller's job (see rotaChips.laneChipFilter).
   laneFilter?: (s: LaneSession) => boolean
+  // Per-session activity bouts (GET /api/sessions/activity). A session that is
+  // present splits its bar along them; one that is absent draws whole, so the
+  // canvas renders identically before the fetch lands.
+  activity?: ReadonlyMap<string, ActivitySpan[]>
 }
 
 const DEFAULT_HORIZON = 30 * 60
@@ -130,6 +140,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
     const end = barEnd(s, now)
     // Only a root can be waiting on workers; a member lane has none of its own.
     const waits = depth === 0 ? clipWaits(waitSpans(state, s.id, now, keep), start, end) : undefined
+    const segments = barSegments(opts.activity?.get(s.id), start, end, isLive(s))
     bars.push({
       id: 'bar:' + s.id,
       rowId: s.id,
@@ -140,6 +151,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
       state: s.live?.state ?? s.runState ?? s.state,
       label: sessionLabel(s),
       waits: waits && waits.length > 0 ? waits : undefined,
+      segments: segments.length > 0 ? segments : undefined,
     })
   }
 

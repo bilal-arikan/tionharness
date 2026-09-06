@@ -61,6 +61,42 @@ describe('findGaps', () => {
     ])
   })
 
+  it('collapses the idle hours inside a split bar', () => {
+    const l = layout({
+      bars: [
+        {
+          ...bar(NOW - 10_000, NOW),
+          segments: [
+            { start: NOW - 10_000, end: NOW - 9_000 },
+            { start: NOW - 1_000, end: NOW },
+          ],
+        },
+      ],
+    })
+    expect(findGaps(l)).toEqual([{ start: NOW - 8_970, end: NOW - 1_030 }])
+  })
+
+  it('keeps an unsplit bar solid', () => {
+    expect(findGaps(layout({ bars: [bar(NOW - 10_000, NOW)] }))).toEqual([])
+  })
+
+  it('anchors a split bar own start and end', () => {
+    // The bar was created before its first message and touched after the last
+    // one: both stretches are dead air, but the endpoints stay on the axis.
+    const l = layout({
+      bars: [
+        {
+          ...bar(NOW - 10_000, NOW),
+          segments: [{ start: NOW - 8_000, end: NOW - 7_000 }],
+        },
+      ],
+    })
+    expect(findGaps(l)).toEqual([
+      { start: NOW - 10_000, end: NOW - 8_030 },
+      { start: NOW - 6_970, end: NOW - 30 },
+    ])
+  })
+
   it('returns nothing when the store is empty', () => {
     expect(findGaps(layout({}))).toEqual([])
   })

@@ -47,6 +47,10 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
   verip beklediği aralıklar soluk/çizgili çizilir; çubuk aynı çubuk kalır,
   durum renkleri anlamını korur. Yalnız **spawn edilen** worker'lar için —
   `run_subagent` ayrı oturum yaratmadığından görünmez. Ayrıntı §13.
+- **Oturuşlara bölünmüş çubuk (2026-09-06):** aralıklı bir sohbet çubuğu
+  ömrü boyunca tek blok çizilmez; oturumun gerçekten çalıştığı aralıklar ayrı
+  bloklar, aralar ince kesikli "omurga" olur; bloklar arasındaki ölü zaman
+  eksen normalizasyonuna da girer (çubuk içi boşluk da kırpılır). Ayrıntı §16.
 - **Kenarlar:** `spawned` (turuncu, koordinatör → worker, worker'ın
   `createdAt`'inde), `reported` (mor kesik, tamamlanmış worker → koordinatör,
   `updatedAt`'te), `forked_from` (mor, handoff/spawn/otomasyon → yeni oturum).
@@ -582,7 +586,9 @@ birkaç piksele sıkışıyor, aradaki ölü hava tuvalin %90'ını yiyordu.
   birleştirip `[t0, şimdi]` içindeki boş aralıkları çıkarır. Eşik altı
   (`MIN_GAP_SEC` = 5 dk) aralıklar dokunulmaz; her etkinliğin iki yanına
   30 sn tampon konur ki çubuk ucu ile kırpma işareti bitişmesin. Pencerenin
-  başındaki ve sonundaki ölü hava da sayılır.
+  başındaki ve sonundaki ölü hava da sayılır. Çubuk oturuşlara bölünmüşse
+  (§16) etkinlik = o bloklar, çubuğun tümü değil — çubuk **içindeki** boşluk da
+  kırpılır.
 - `buildTimeScale(layout, {x0, width, collapse})` — her boşluğa sabit
   `GAP_PX` = 4 px verir (dilime harcanan her piksel gerçek etkinlikten
   gider; 4 px kesintiyi göstermeye yetiyor), kalan genişliği gerçek saniyeler paylaşır ve
@@ -753,3 +759,63 @@ hiç uygulanmıyordu.
 
 **Açık kalan.** Yakınlaştırılıp sağa kaydırıldığında etiket sütunu da kayar;
 sabitlemek (sticky) ayrı bir iş.
+
+## 16. Oturuşlara bölünmüş çubuk (2026-09-06)
+
+**Sorun.** Çubuk `createdAt → updatedAt` çizildiği için aralıklı bir sohbet —
+gece yarısı yarım saat, ertesi akşam iki buçuk saat — 19.5 saatlik tek dolu
+blok gibi görünüyordu. Şerit "bu oturum ne zaman çalıştı" sorusuna yalan
+söylemiyordu ama cevabı da vermiyordu: kanvasta o oturumun ömrü vardı,
+çalışması yoktu.
+
+**Veri.** Turların ne zaman olduğunun tek kalıcı kaydı transcript. Yeni uç
+mesaj zaman damgalarını boşluk eşiğine göre katlayıp "oturuş"ları (bout)
+döndürür:
+
+```
+GET /api/sessions/activity?ids=SES1,SES2&gap=600
+→ {"gapSec":600,"sessions":{"SES1":[{"start":…,"end":…}, …]}}
+```
+
+- Saf katlama `internal/trajectory.Bouts` (`activity.go`): iki ardışık damga
+  arasındaki boşluk `gap`'ten **büyükse** yeni oturuş başlar (tam eşik aynı
+  oturuşta kalır). Varsayılan eşik 600 sn; `MaxBouts = 64`, aşılırsa **en
+  eski** oturuşlar tek bloğa katlanır — yakın geçmişin şekli hep birebir kalır.
+- Uç toplu (`internal/api/session_activity.go`): kanvas görünen tüm şeritleri
+  tek istekte sorar. Okuma ucuz — damgalar zaten store'un belleğinde,
+  `StreamMessages` kopya üretmiyor. Bilinmeyen id ve transcript'i olmayan
+  oturum **cevaptan düşer**, batch'i düşürmez. Sınırlar: en fazla 200 id,
+  `gap` 1..86400.
+- Oturum listesine (`GET /api/sessions`) **eklenmedi**: cevabı tek ekran
+  istiyor, alan olsaydı bedeli her yerde ödenirdi.
+
+**Çizim.** `rotaSegments.ts` (saf) bout'ları o çubuğun bloklarına çevirir:
+çubuğa kırpar, kırpma yüzünden değen blokları birleştirir, **canlı** çubukta
+son bloğu çubuk sonuna uzatır (akmakta olan tur mesajını daha yazmadı; yoksa
+çalışan oturum boşta görünürdü). Tek blok kalıyorsa sonuç boştur — tek blok
+zaten düz çubuğun kendisi. `layoutRota` bunu `RotaBar.segments` olarak taşır,
+`RotaCanvas` bloklardan önce çubuğun tüm açıklığı boyunca ince kesikli bir
+omurga çizer: bölünmüş çubuk hâlâ **tek** oturum olarak okunur ve bloklar
+eksendeki yerlerini korur. Tooltip'e "4 oturuş · 3 sa 12 dk çalışma · 16 sa
+boşluk" satırı eklenir.
+
+**Ölü zaman normalizasyonu (2026-09-06).** Bölünmüş çubuğun blokları arasındaki
+boşluk artık ölü zaman sayılır: `rotaTimeScale.activitySpans` bir çubuk
+bölünmüşse çubuğun tümünü değil **bloklarını** etkinlik olarak yazar, çubuğun
+kendi başlangıç/bitişini yalnız birer anlık nokta olarak sabitler (gerçek zaman
+damgaları — oluşturma ve son güncelleme — çubuk bir kırpma dilimi içinde
+başlayıp bitmesin). Böylece hiçbir şeridin çalışmadığı saatler, ister çubuklar
+arasında ister bir çubuğun **içinde** olsun, aynı `findGaps` kuralına girer ve
+`GAP_PX` genişliğinde taralı dilime çöker. `eventInstants` da blok sınırlarını
+kesim noktası olarak ekler; log ekseninde her oturuş kendi başına ölçülür.
+Bölünmemiş çubuk eskisi gibi bütün etkinliktir.
+
+**Getirme.** `useActivitySpans` yalnız kanvasın çizdiği şeritleri, yalnız
+`updatedAt`'i değişenleri, 400 ms debounce ile sorar; cevap veremezse (veya
+henüz gelmediyse) çubuklar bütün çizilir — ekran her durumda doğru, sadece
+bölünme yok. Panel iki geçiş yapar: birinci geçiş hangi şeritlerin ekranda
+olduğunu belirler, ikinci geçiş yanıt geldiyse çubukları böler.
+
+**Bilinçli bırakılanlar.** Eşik sabit (10 dk) — zoom'a göre uyarlanmıyor ve
+arayüzde anahtar yok; kayıt (persist) yok, oturuşlar her istekte yeniden
+hesaplanır; akış koşusu çubukları bölünmez (tek koşu zaten tek oturuş).
