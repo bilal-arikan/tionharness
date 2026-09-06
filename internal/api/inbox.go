@@ -705,9 +705,9 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return
 		}
-		select {
-		case run.steer <- req.Text:
-		default:
+		if !run.trySteer(req.Text) {
+			writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
+			return
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "unknown action: "+req.Action)

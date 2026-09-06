@@ -96,6 +96,9 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// Carry the agent's permission mode so provider-driven loops (claude CLI) can
 	// gate their tool use. Empty maps to "auto" downstream.
 	t.req.PermissionMode = effectivePermissionMode(t.agent.PermissionMode, t.autonomous)
+	// Resolved here, not in initLoopState: the plain (no-tools) path folds steer
+	// messages too and never reaches the native loop's setup.
+	t.steerRole = steerRoleFor(t.provider, t.agent.Model)
 	if t.agent.ThinkingLevel != "" {
 		if err := providers.ValidateThinkingLevelForProvider(t.agent.Provider, t.agent.Model, t.agent.ThinkingLevel); err != nil {
 			return noop, err
@@ -284,6 +287,12 @@ func (t *toolLoopTurn) runPlain() (*providers.Response, []TurnStep, error) {
 	// support (claude-cli, minimax) ignore the budget.
 	t.req.ThinkingBudget = resolveThinkingBudget(t.agent.Model, t.agent.ThinkingLevel)
 
+	// Live steering: this path has no loop to drain between iterations, so
+	// guidance that arrived before the single completion is folded in here
+	// instead of vanishing. Guidance that arrives DURING the completion stays on
+	// the channel and is recovered by the caller's turn-end fallback.
+	t.foldSteer()
+
 	// Prefer first-class token streaming when a live sink is present and the
 	// provider supports it (anthropic/minimax). claude-cli is not a Streamer;
 	// it streams its own trace via req.OnEvent wired above.
@@ -296,10 +305,14 @@ func (t *toolLoopTurn) runPlain() (*providers.Response, []TurnStep, error) {
 			// Text deltas are transient (recovered from resp.Text); the
 			// thinking trace, if any, is persisted so the reasoning block
 			// survives reload.
-			return resp, t.r.traceToSteps(resp.Trace), nil
+			return resp, append(t.steps, t.r.traceToSteps(resp.Trace)...), nil
 		}
 	}
-	return t.completeAndTraceCLI()
+	resp, steps, err := t.completeAndTraceCLI()
+	if err != nil {
+		return nil, nil, err
+	}
+	return resp, append(t.steps, steps...), nil
 }
 
 // configureCLIMCP builds the keyless delegation config: the claude CLI owns the
@@ -533,14 +546,6 @@ func (t *toolLoopTurn) initLoopState() {
 	// it loops. This breaks the loop on the first repeat — independent of the loop
 	// guardrail's hard-stop setting. Per-turn, isolated to mcprepair.go.
 	t.repair = repair.NewGuard()
-	// Steer messages ride the operator channel ({"role":"system"} in messages)
-	// on models that support it — cache-safe, non-spoofable, and valid between a
-	// tool_result user turn and the next assistant turn. Elsewhere they stay
-	// user-role (the provider folds them to keep alternation intact).
-	t.steerRole = providers.RoleUser
-	if t.provider.Name() == "anthropic" && providers.SupportsSystemInMessages(t.agent.Model) {
-		t.steerRole = providers.RoleSystem
-	}
 }
 
 // fail records a turn-level error as an inline step before the loop returns.
@@ -606,12 +611,7 @@ func (t *toolLoopTurn) runNativeLoop() (*providers.Response, []TurnStep, error) 
 		// Live steering: fold any user guidance that arrived since the last
 		// iteration into the conversation before the next model call.
 		if !t.pendingProgrammatic {
-			for _, m := range drainSteer(t.ctx) {
-				t.req.Messages = append(t.req.Messages, providers.Message{Role: t.steerRole, Text: steerPrefix + m})
-				st := TurnStep{Kind: StepSteer, Text: m}
-				t.steps = append(t.steps, st)
-				t.emit(st)
-			}
+			t.foldSteer()
 		}
 		// Recompute the shipped tool schemas for this step: eager tools plus any
 		// lazy tools activated so far (native-search mode: full deferred catalog,
