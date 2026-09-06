@@ -141,6 +141,43 @@ func (r *chatRun) takeSteer() string {
 	return msg
 }
 
+// steerBufferFullMsg is the answer to a steer that could not be handed to the
+// turn. The client keeps the text (the composer clears only on success), so the
+// user can retry once the turn reaches its next drain point.
+const steerBufferFullMsg = "steer queue is full: the turn has not consumed the earlier guidance yet"
+
+// trySteer hands a mid-turn steer message to the native tool loop's steer
+// channel. It reports false when the buffer is full — the turn is not consuming
+// guidance — so the caller answers with an explicit error instead of dropping
+// the message on the floor. Never blocks: this runs on an HTTP handler goroutine
+// and the turn may be stalled inside a long provider call.
+func (r *chatRun) trySteer(msg string) bool {
+	select {
+	case r.steer <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// takeSteerQueue drains every steer message the turn never picked up, oldest
+// first, and leaves the channel empty. Called once at turn end so guidance that
+// arrived after the loop's last drain point (or during a tool-less turn's single
+// completion) is recovered instead of dying with the run.
+func (r *chatRun) takeSteerQueue() []string {
+	var out []string
+	for {
+		select {
+		case m := <-r.steer:
+			if m != "" {
+				out = append(out, m)
+			}
+		default:
+			return out
+		}
+	}
+}
+
 // steerableForTurn reports whether a mid-turn steer ("Yönlendir") can actually
 // reach a turn for the given responding-agent provider + effective permission
 // mode. Native (non-claude-cli) providers drain the steer channel in the tool loop
@@ -1085,9 +1122,9 @@ func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "steer text is required")
 			return
 		}
-		select {
-		case run.steer <- req.Text:
-		default: // buffer full — drop rather than block the request
+		if !run.trySteer(req.Text) {
+			writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
+			return
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "unknown action: "+req.Action)
