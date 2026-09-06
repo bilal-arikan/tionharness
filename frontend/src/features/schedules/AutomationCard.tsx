@@ -4,7 +4,6 @@ import {
   Workflow,
   LayoutGrid,
   Zap,
-  Hash,
   Archive,
   MoveRight,
   Waypoints,
@@ -17,7 +16,7 @@ import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
-import { COLUMN_ACCENT, boardOpLabel, counterMetricLabel } from './automationMeta'
+import { COLUMN_ACCENT, boardOpLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
 import { AutomationFires } from './AutomationFires'
 import { count } from '@/shared/lib/format'
@@ -26,7 +25,6 @@ interface Props {
   automation: Automation
   isBoardKind: boolean
   isTokenKind: boolean
-  isCounterKind: boolean
   agents: Agent[]
   flows: Flow[]
   columns: BoardColumnDef[]
@@ -48,7 +46,6 @@ export function AutomationCard({
   automation: a,
   isBoardKind,
   isTokenKind,
-  isCounterKind,
   agents,
   flows,
   columns,
@@ -69,10 +66,9 @@ export function AutomationCard({
   const opLabel = boardOpLabel(a.boardOp)
   const isTargetlessRule = isBoardKind && (a.boardAction === 'archive' || a.boardAction === 'move')
   // Effective session mode (agent-backed only): explicit value wins, else the
-  // per-kind default (token/counter → continue). Flow-backed rules ignore it.
+  // per-kind default (token → continue). Flow-backed rules ignore it.
   const kind = a.triggerKind ?? 'tag'
-  const effectiveMode =
-    a.sessionMode ?? (kind === 'token' || kind === 'counter' ? 'continue' : 'spawn')
+  const effectiveMode = a.sessionMode ?? (kind === 'token' ? 'continue' : 'spawn')
   const showContinue = !a.flowId && !isTargetlessRule && effectiveMode === 'continue'
 
   return (
@@ -85,13 +81,11 @@ export function AutomationCard({
           ? COLUMN_ACCENT.board
           : isTokenKind
             ? COLUMN_ACCENT.token
-            : isCounterKind
-              ? COLUMN_ACCENT.counter
-              : kind === 'phase'
-                ? COLUMN_ACCENT.phase
-                : kind === 'trajectory_end'
-                  ? COLUMN_ACCENT.trajectory_end
-                  : COLUMN_ACCENT.tag,
+            : kind === 'phase'
+              ? COLUMN_ACCENT.phase
+              : kind === 'trajectory_end'
+                ? COLUMN_ACCENT.trajectory_end
+                : COLUMN_ACCENT.tag,
       }}
     >
       <div className="flex items-start gap-2">
@@ -178,15 +172,6 @@ export function AutomationCard({
                 <Zap size={11} />
                 {a.tokenScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
                 {count(a.tokenThreshold ?? 0)} token
-              </span>
-            ) : isCounterKind ? (
-              <span
-                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
-                title="Sayaç tetikleyicili otomasyon — mesaj/tool sayısı aralığı geçince çalışır"
-              >
-                <Hash size={11} />
-                {a.counterScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
-                {a.counterInterval ?? 0} {a.counterMetric === 'tool' ? 'tool' : 'mesaj'}
               </span>
             ) : kind === 'phase' ? (
               <span
@@ -306,11 +291,6 @@ export function AutomationCard({
       ) : isTokenKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
           Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
-        </div>
-      ) : isCounterKind ? (
-        <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
-          {counterMetricLabel(a.counterMetric)} sayacı — kendini döngülemez (spawn etiketleri yok
-          sayılır).
         </div>
       ) : a.flowId ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">

@@ -114,10 +114,9 @@ export const taskApi = {
 
   // Tag-triggered automations (event-driven loops; surfaced in the Schedules UI).
   listAutomations: () => req<Automation[]>('/api/automations'),
-  // Live workspace metrics the automation-screen lane headers show: today's token
-  // spend (token lane) + cumulative message/tool counts (counter lane).
-  getAutomationLiveStats: () =>
-    req<{ tokensToday: number; messages: number; tools: number }>('/api/automations/live-stats'),
+  // Live workspace metric the automation-screen token lane header shows: today's
+  // token spend.
+  getAutomationLiveStats: () => req<{ tokensToday: number }>('/api/automations/live-stats'),
   createAutomation: (data: {
     name?: string
     triggerKind?: AutomationTriggerKind
@@ -136,8 +135,6 @@ export const taskApi = {
     boardMoveToState?: string
     tokenScope?: 'session' | 'workspace'
     tokenThreshold?: number
-    counterMetric?: 'message' | 'tool'
-    counterInterval?: number
     sessionMode?: 'spawn' | 'continue'
     targetAgentId?: string
     flowId?: string
@@ -172,8 +169,6 @@ export const taskApi = {
       boardMoveToState?: string
       tokenScope?: 'session' | 'workspace'
       tokenThreshold?: number
-      counterMetric?: 'message' | 'tool'
-      counterInterval?: number
       sessionMode?: 'spawn' | 'continue'
       targetAgentId?: string
       flowId?: string

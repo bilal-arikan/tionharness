@@ -25,6 +25,7 @@ export interface AppNavigationParams {
   settingsCat: string | null
   workspaceTab: string | null
   insightTab: string | null
+  goalTarget: string | null
   explorerNode: string | null
   flowsTab: string | null
   rotaTrajectory: string | null
@@ -39,6 +40,7 @@ export interface AppNavigationParams {
   setSettingsCat: (id: string | null) => void
   setWorkspaceTab: (id: string | null) => void
   setInsightTab: (id: string | null) => void
+  setGoalTarget: (id: string | null) => void
   setExplorerNode: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
   setRotaTrajectory: (id: string | null) => void
@@ -58,6 +60,7 @@ export function useAppNavigation(p: AppNavigationParams) {
     setSettingsCat,
     setWorkspaceTab,
     setInsightTab,
+    setGoalTarget,
     setExplorerNode,
     setFlowsTab,
     setRotaTrajectory,
@@ -91,6 +94,8 @@ export function useAppNavigation(p: AppNavigationParams) {
         setWorkspaceTab(r.id)
       } else if (r.view === 'insights') {
         setInsightTab(r.id)
+      } else if (r.view === 'goals') {
+        setGoalTarget(r.id)
       } else if (r.view === 'explorer') {
         setExplorerNode(r.id)
       } else if (r.view === 'flows') {
@@ -114,6 +119,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       setSettingsCat,
       setWorkspaceTab,
       setInsightTab,
+      setGoalTarget,
       setExplorerNode,
       setFlowsTab,
       setRotaTrajectory,
@@ -134,6 +140,7 @@ export function useAppNavigation(p: AppNavigationParams) {
       settingsCat: p.settingsCat,
       workspaceTab: p.workspaceTab,
       insightTab: p.insightTab,
+      goalId: p.goalTarget,
       flowsTab: p.flowsTab,
       explorerNode: p.explorerNode,
       rotaTrajectory: p.rotaTrajectory,

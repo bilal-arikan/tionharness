@@ -472,6 +472,13 @@ type Session struct {
 	// Automation watching that tag fires (see internal/db/models_automation.go).
 	Tags []string `json:"tags,omitempty"`
 
+	// SnapshotHash is the configuration snapshot (_Docs/83 §4.2) in force when
+	// the session was created — the attribution key evolution fitness groups
+	// by. Stamped by createSessionLocked from the runtime's snapshot provider;
+	// empty for sessions older than the feature or created before the runtime
+	// registered one.
+	SnapshotHash string `json:"snapshotHash,omitempty"`
+
 	// StuckTurns counts CONSECUTIVE turns of this session that ended badly (turn
 	// error or a guardrail halt). It is reset to 0 by any clean turn, or when the
 	// "stuck" tag is removed (a fixer resolving the session). At the configured

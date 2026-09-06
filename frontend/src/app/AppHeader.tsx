@@ -1,8 +1,8 @@
 // AppHeader is the app-level top bar for views that don't render their own
 // in-pane header (see HEADERLESS_VIEWS). On chat it shows the session title and
 // the folder/context/debug/detail shortcuts; on workspace/settings it hosts the
-// mobile category-rail toggle.
-import { Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
+// category-rail toggle. Both list toggles work at every width.
+import { Network, PanelLeft, PanelRight, ScanEye, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -18,7 +18,9 @@ export interface AppHeaderProps {
   activeSessionId: string | null
   activeAgentId: string | null
   detailOpen: boolean
-  onOpenMobileList: () => void
+  // chat: sessions list collapse (docked column on md+, drawer on narrow).
+  listOpen: boolean
+  onToggleList: () => void
   // workspace/settings category-rail collapse (shared with the panel).
   navOpen: boolean
   onToggleNav: () => void
@@ -39,7 +41,8 @@ export function AppHeader({
   activeSessionId,
   activeAgentId,
   detailOpen,
-  onOpenMobileList,
+  listOpen,
+  onToggleList,
   navOpen,
   onToggleNav,
   onOpenContextPreview,
@@ -57,12 +60,16 @@ export function AppHeader({
       <div className="flex min-w-0 items-center gap-2">
         {view === 'chat' && (
           <button
-            onClick={onOpenMobileList}
-            aria-label="Oturumlar"
-            title="Oturumlar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+            onClick={onToggleList}
+            aria-label="Oturum listesini aç/kapat"
+            aria-pressed={listOpen}
+            title={listOpen ? 'Oturum listesini gizle' : 'Oturum listesini göster'}
+            data-testid="pane-list-toggle"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+              listOpen ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'
+            }`}
           >
-            <Menu size={18} />
+            <PanelLeft size={18} />
           </button>
         )}
         {(view === 'workspace' || view === 'settings') && (
@@ -72,9 +79,11 @@ export function AppHeader({
             aria-pressed={navOpen}
             title={navOpen ? 'Listeyi gizle' : 'Listeyi göster'}
             data-testid="pane-list-toggle"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+              navOpen ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'
+            }`}
           >
-            <Menu size={18} />
+            <PanelLeft size={18} />
           </button>
         )}
         {view === 'chat' ? (

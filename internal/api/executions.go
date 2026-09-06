@@ -94,8 +94,8 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 			Kind:                     sess.Kind,
 			SourceID:                 sess.SourceID,
 			Title:                    sess.Title,
-			AgentID:                  sess.AgentID,
-			AgentName:                agentName(sess.AgentID),
+			AgentID:                  sess.OwnerAgentID(),
+			AgentName:                sessionAgentName(sess, agentName),
 			MessageCount:             sess.MessageCount,
 			Unread:                   sess.Unread,
 			Running:                  running[sess.ID],
@@ -196,4 +196,14 @@ func newestFlowRunStatus(runs []db.FlowRun) map[string]string {
 		}
 	}
 	return out
+}
+
+// sessionAgentName is the feed's display name for a session's agent. A delegated
+// run names its agent as a target rather than an owner, and a profile subagent
+// has no agent row at all — without both fallbacks those rows read as unowned.
+func sessionAgentName(sess db.Session, lookup func(string) string) string {
+	if n := lookup(sess.OwnerAgentID()); n != "" {
+		return n
+	}
+	return sess.OwnerProfileLabel()
 }

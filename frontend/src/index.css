@@ -11,6 +11,21 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/jetbrains-mono';
 @import 'highlight.js/styles/github-dark.css';
+/* Responsive shell rules (reading measure, column/drawer transitions). Kept
+   un-layered and AFTER the utilities so `.th-*` classes win on ties. */
+@import './styles/layout.css';
+
+/* Extra width tiers on top of Tailwind's sm/md/lg/xl/2xl: `3xl:` for large
+   and ultra-wide monitors (>= 1920px) and `4xl:` for 4K-class widths. They
+   mirror the JS tiers in shared/lib/viewport.ts. */
+@theme {
+  --breakpoint-3xl: 120rem;
+  --breakpoint-4xl: 160rem;
+}
+
+/* `square:` targets the tablet / half-screen band (768-1279px) where the shell
+   docks the list column but not the detail panel. Same bounds as the JS tier. */
+@custom-variant square (@media (min-width: 48rem) and (max-width: 79.9375rem));
 
 /* TionHarness theme — dark, neutral near-black canvas with a violet accent
    (External Agents inspired). The default token set mirrors the "midnight-violet"

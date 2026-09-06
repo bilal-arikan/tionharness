@@ -94,12 +94,12 @@ type Manager struct {
 	workspaces map[string]*Workspace
 	order      []string // creation order (first = default)
 
-	// bg tracks the detached goroutines the store hooks dispatch (activity-inbox
-	// drains, automation and card-worktree reactions). They outlive the call that
-	// started them and touch the workspace's store directory, so Close waits for
-	// them: without that, a caller that closes the manager and then removes the
-	// tree — the app on shutdown, and every test using t.TempDir — races a drain
-	// still writing under store/activity-inbox and the removal fails.
+	// bg tracks the detached goroutines the store hooks dispatch (automation and
+	// card-worktree reactions). They outlive the call that started them and touch
+	// the workspace's store directory, so Close waits for them: without that, a
+	// caller that closes the manager and then removes the tree — the app on
+	// shutdown, and every test using t.TempDir — races a goroutine still writing
+	// under the store and the removal fails.
 	// bgClosed (under bgMu) makes the wait final: no goroutine may be added once
 	// Close has begun draining.
 	bgMu     sync.Mutex
@@ -132,6 +132,12 @@ type Manager struct {
 	// every workspace DB as it opens. nil when the document on disk could not be
 	// read, in which case each workspace keeps only its own observations.
 	globalModelRes *db.GlobalModelResolutions
+
+	// globalSysAgents is the installation-wide customisation layer for built-in
+	// system agents, handed to every workspace DB as it opens. It is what makes an
+	// edit to a built-in apply everywhere instead of deriving a per-workspace
+	// copy; without it the built-ins stay read-only.
+	globalSysAgents *db.GlobalSystemAgentOverrides
 
 	// settingsBridge is the application-wide settings store + live-apply hook,
 	// wired in after the api server is constructed. Stored so it can be applied
@@ -275,6 +281,18 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 		m.globalModelRes = globalModelRes
 	}
 
+	// App-global system-agent customisations: the edits the user made to the
+	// built-in agents, applied over the compiled registry in every workspace.
+	// Unlike the resolutions above, an unreadable document here is FATAL: booting
+	// without it would silently serve the compiled defaults as if nothing had been
+	// customised, and the first later edit would overwrite the document the user's
+	// real settings are still in.
+	globalSysAgents, err := db.OpenGlobalSystemAgentOverrides(rootDir)
+	if err != nil {
+		return nil, fmt.Errorf("read system agent customisations: %w", err)
+	}
+	m.globalSysAgents = globalSysAgents
+
 	metas, err := m.loadMetas()
 	if err != nil {
 		return nil, err
@@ -372,6 +390,10 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 	database.SetGlobalModelResolutions(m.globalModelRes)
+	// Attach BEFORE seeding: EnsureSystemAgents lays these customisations over the
+	// compiled definitions, so the built-ins this workspace seeds and re-imposes
+	// are the edited ones.
+	database.SetGlobalSystemAgentOverrides(m.globalSysAgents)
 	// Seed the small core system-agent set for new workspaces, migrate renamed
 	// roles, and backfill older workspaces. Existing customisations are preserved.
 	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
@@ -495,7 +517,6 @@ func (m *Manager) open(meta Meta) error {
 	// Every message append is session activity regardless of author (user, agent,
 	// worker, or system). Notify open clients so their session list picks up the
 	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
-	// Counter-triggered automations consume the same signal on a detached goroutine.
 	// Workspace event stream (_Docs/77 R3): session lifecycle and trajectory
 	// changes leave the store through these hooks (fired after the store's locks
 	// are released) and land on the bus as structured ws:* events, which the API
@@ -503,49 +524,15 @@ func (m *Manager) open(meta Meta) error {
 	database.SetSessionHook(rt.OnSessionChange)
 	database.SetTrajectoryHook(rt.OnTrajectoryChange)
 	if err := database.SetActivityHook(func(sig db.ActivitySignal) error {
-		if sig.EventID != "" {
-			accepted, err := database.AcceptActivitySignal(sig)
-			if err != nil {
-				return err
-			}
-			if accepted {
-				rt.Emit(events.Event{
-					Type: events.TypeSession, Level: "info",
-					Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
-				})
-			}
-			m.goBackground(func() {
-				if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
-					m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
-				}
-			})
-			return nil
-		}
 		rt.Emit(events.Event{
 			Type:   events.TypeSession,
 			Level:  "info",
 			Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
 		})
-		m.goBackground(func() {
-			autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
-				SessionID:             sig.SessionID,
-				MessageTotal:          sig.MessageTotal,
-				MessageDelta:          sig.MessageDelta,
-				ToolTotal:             sig.ToolTotal,
-				ToolDelta:             sig.ToolDelta,
-				WorkspaceMessageTotal: sig.WorkspaceMessageTotal,
-				WorkspaceToolTotal:    sig.WorkspaceToolTotal,
-			})
-		})
 		return nil
 	}); err != nil {
 		return fmt.Errorf("register activity hook: %w", err)
 	}
-	m.goBackground(func() {
-		if err := autoEngine.DrainActivityInbox(context.Background()); err != nil {
-			m.logger.Error("drain durable activity inbox failed", "workspace", meta.ID, "error", err)
-		}
-	})
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
@@ -842,6 +829,23 @@ func sameDir(a, b string) bool {
 // Delete removes a workspace and all its data. Deleting the last workspace IS
 // allowed: the manager then holds zero workspaces and the web UI falls back to
 // the first-run onboarding screen (no default workspace is re-seeded).
+//
+// Registry first, files second — and the registry change is ONE write-lock hold,
+// exactly like deleteDegraded. Dropping the entry, writing workspaces.json and,
+// on a write failure, putting the entry back all happen without releasing m.mu,
+// so a concurrent List/ListWithDegraded never observes a workspace that is about
+// to come back as gone. A failed persist therefore leaves the workspace live and
+// its data untouched, instead of tearing down (and erasing) a workspace the
+// registry still lists — the state the old two-hold order produced, which the
+// next boot could only read back as a degraded entry pointing at nothing.
+//
+// Only once the registry no longer points at the directory does the destructive
+// part run, outside the lock: stopping the scheduler, closing the DB and erasing
+// the tree are slow IO that must never run under m.mu, and pendingRemoval —
+// claimed inside the hold — is what stops an Attach from adopting the folder in
+// that window. The removal error is logged rather than returned: the entry the
+// user asked to delete is gone for good by then, so failing the call would only
+// invite a retry that can no longer find the workspace.
 func (m *Manager) Delete(id string) error {
 	m.mu.Lock()
 	ws, ok := m.workspaces[id]
@@ -849,8 +853,15 @@ func (m *Manager) Delete(id string) error {
 		m.mu.Unlock()
 		return m.deleteDegraded(id)
 	}
+	prevOrder := append([]string(nil), m.order...)
 	delete(m.workspaces, id)
 	m.order = removeString(m.order, id)
+	if err := m.persist(m.registryMetasLocked()); err != nil {
+		m.workspaces[id] = ws
+		m.order = prevOrder
+		m.mu.Unlock()
+		return err
+	}
 	m.beginRemovalLocked(ws.DataDir)
 	m.mu.Unlock()
 	defer m.endRemoval(ws.DataDir)
@@ -864,10 +875,7 @@ func (m *Manager) Delete(id string) error {
 	if err := os.RemoveAll(ws.DataDir); err != nil {
 		m.logger.Warn("failed to remove workspace dir", "id", id, "error", err)
 	}
-	// No lock is held here on purpose: stopping the scheduler, closing the DB and
-	// removing the directory must not run under m.mu. registryMetas takes the read
-	// lock only for the snapshot.
-	return m.persist(m.registryMetas())
+	return nil
 }
 
 // deleteDegraded removes a registered-but-unopenable workspace. Without it a
@@ -1029,6 +1037,16 @@ func (m *Manager) reopenOrLog(meta Meta) {
 // its entry in workspaces.json and ListWithDegraded can surface it. cause is the
 // open failure and must not be nil — it is the only explanation the user gets.
 // Re-marking an already degraded workspace refreshes the reason.
+//
+// It deliberately does NOT persist, and neither does open(): the degraded mark is
+// DERIVED state, not stored state. registryMetas writes live and degraded entries
+// alike, so moving a workspace between the two lists produces a byte-identical
+// workspaces.json — a write here would only rewrite the file with what it already
+// holds. Nor can the mark be lost to a crash: every caller reached this point from
+// an entry that is already in the registry (the boot loop, or a restore that never
+// dropped it), and Reason is recomputed on the next boot by the open attempt that
+// fails again. Create and Attach are the paths that add a NEW entry, and they
+// persist explicitly after open() returns.
 func (m *Manager) markDegraded(meta Meta, cause error) {
 	reason := ""
 	if cause != nil {

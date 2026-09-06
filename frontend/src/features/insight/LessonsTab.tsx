@@ -125,7 +125,7 @@ export function LessonsTab({ onError }: Props) {
           checked={draft.toolGuardHardStop}
           onChange={(v) => set('toolGuardHardStop', v)}
         />
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <NumberField
             label="Aynı çağrı: uyarı"
             hint="Birebir aynı (araç+argüman) başarısız çağrı bu sayıda uyarı alır (0 = varsayılan 2)."

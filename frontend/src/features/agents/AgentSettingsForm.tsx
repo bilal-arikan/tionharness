@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react'
-import { Eye, Trash2, Star, Copy, RotateCcw, Power, GitBranch, Lock, Wand2 } from 'lucide-react'
+import { Eye, Trash2, Star, Copy, RotateCcw, Power, GitBranch, Lock } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
 import type { Agent, AgentOverrideKey, AgentPatch } from '@/types'
@@ -22,6 +22,7 @@ import {
   booleanFromOption,
 } from './agentOptions'
 import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
+import { BuiltinPromptRevert } from './BuiltinPromptRevert'
 import { AgentLineageChips } from './AgentLineageChips'
 import { FieldOverrideBadge } from './FieldOverrideBadge'
 
@@ -66,10 +67,21 @@ interface Props {
   parent?: Agent | null
   /** Agents this one may pick as its parent (see eligibleParents). */
   parentOptions?: Agent[]
-  /** The enabled customisation of this built-in's role, when one exists. */
-  roleCustomization?: Agent | null
-  /** Jump to another agent's settings (lineage chips, "customisation exists"). */
+  /** Jump to another agent's settings (lineage chips). */
   onSelectAgent?: (id: string) => void
+  /** Render as an inspect-only view: every field is disabled and no mutating
+   * action is offered, even for an agent that is otherwise editable. The Agents
+   * screen passes this for system agents, which are edited from
+   * Settings → "Sistem ajanları" instead. */
+  readOnly?: boolean
+  /** Note shown at the top of a read-only form, saying where the agent IS
+   * editable. Ignored unless `readOnly`. */
+  readOnlyNote?: React.ReactNode
+  /** Whether the plain "Türet" button is offered. The System agents screen sets
+   * it false: there, the only sanctioned derivation is "Özelleştir", which binds
+   * the copy to the built-in's role. Has no effect on "Özelleştir" itself.
+   * `readOnly` suppresses "Türet" regardless of this flag. */
+  allowFreeDerive?: boolean
 }
 
 // Field units of this form that can be inherited. "tools" and "allowedTools"
@@ -120,11 +132,24 @@ export function AgentSettingsForm({
   lineage = [],
   parent = null,
   parentOptions = [],
-  roleCustomization = null,
   onSelectAgent,
+  readOnly = false,
+  readOnlyNote,
+  allowFreeDerive = true,
 }: Props) {
   const descriptionId = useId()
-  const locked = !!agent.locked
+  // `locked` gates every editor and mutating action below. It now follows
+  // `readOnly` ALONE: a built-in system agent is editable in place, its edit
+  // stored in the app-global layer and applied to every workspace, so it no
+  // longer has to be copied to be changed. What a built-in still cannot do —
+  // be deleted, disabled or re-parented — is gated on `agent.locked` at each of
+  // those actions instead of by disabling the whole form.
+  const locked = readOnly
+  // A built-in stays fixed in the ways that are the compiled registry's business:
+  // it always exists, always serves its role, and is never a free-standing agent
+  // to clone. Those actions are gated on this rather than on `locked`, which now
+  // only means "this screen is inspecting, not editing".
+  const isBuiltin = !!agent.locked
   const isChild = !!agent.parentId
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
@@ -455,11 +480,13 @@ export function AgentSettingsForm({
               <SystemAgentStatusBadge agent={agent} />
             </div>
             <p className="text-xs text-[var(--color-text-dim)]">
-              {locked
-                ? 'Yerleşik sistem ajanı'
-                : isChild
-                  ? `${parentName ?? 'Ebeveyninden'} kalıtım alan ajan`
-                  : 'Ajan ayarları'}
+              {agent.locked
+                ? 'Yerleşik sistem ajanı — değişiklikler tüm workspaceʼlerde geçerli'
+                : readOnly
+                  ? 'Salt okunur görünüm'
+                  : isChild
+                    ? `${parentName ?? 'Ebeveyninden'} kalıtım alan ajan`
+                    : 'Ajan ayarları'}
             </p>
           </div>
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
@@ -506,7 +533,7 @@ export function AgentSettingsForm({
             >
               <Eye size={14} /> Bağlam
             </button>
-            {onDerive && (
+            {onDerive && allowFreeDerive && !readOnly && (
               <button
                 data-testid="agent-derive"
                 onClick={() => derive(false)}
@@ -517,28 +544,7 @@ export function AgentSettingsForm({
                 <GitBranch size={14} /> {deriving ? 'Türetiliyor…' : 'Türet'}
               </button>
             )}
-            {onDerive && locked && !roleCustomization && (
-              <button
-                data-testid="agent-customize"
-                onClick={() => derive(true)}
-                disabled={deriving}
-                title="Bu yerleşik ajanın rolünü devralan, yalnız bu workspace'e özgü bir kopya oluştur; kopyada override ettiğin değerler uygulamada bu rol için kullanılır"
-                className="flex items-center gap-1.5 rounded border border-[var(--color-accent)] px-3 py-1.5 text-sm text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] disabled:opacity-50"
-              >
-                <Wand2 size={14} /> Özelleştir
-              </button>
-            )}
-            {locked && roleCustomization && onSelectAgent && (
-              <button
-                data-testid="agent-open-customization"
-                onClick={() => onSelectAgent(roleCustomization.id)}
-                title={`Bu rolü şu anda "${roleCustomization.name}" sağlıyor — ayarlarına git`}
-                className="flex items-center gap-1.5 rounded border border-[var(--color-accent)] px-3 py-1.5 text-sm text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
-              >
-                <Wand2 size={14} /> Özelleştirmeyi aç
-              </button>
-            )}
-            {onDuplicate && !locked && (
+            {onDuplicate && !locked && !isBuiltin && (
               <button
                 data-testid="agent-duplicate"
                 onClick={duplicate}
@@ -558,7 +564,7 @@ export function AgentSettingsForm({
                 {cancelLabel}
               </button>
             )}
-            {onDelete && !locked && (
+            {onDelete && !locked && !isBuiltin && (
               <button
                 data-testid="agent-delete"
                 onClick={onDelete}
@@ -567,18 +573,22 @@ export function AgentSettingsForm({
                 <Trash2 size={14} /> Sil
               </button>
             )}
-            {onRestoreDefault && isChild && (
+            {onRestoreDefault && (isChild || agent.locked) && (
               <button
                 data-testid="agent-restore-default"
                 onClick={onRestoreDefault}
                 disabled={systemActionPending || (agent.overrides ?? []).length === 0}
-                title="Tüm override'ları kaldır: her alan yeniden ebeveynden devralınır"
+                title={
+                  agent.locked
+                    ? 'Tüm özelleştirmeleri kaldır: her alan yeniden yerleşik tanımdan gelir (tüm workspaceʼlerde)'
+                    : "Tüm override'ları kaldır: her alan yeniden ebeveynden devralınır"
+                }
                 className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
               >
-                <RotateCcw size={14} /> Tümünü devral
+                <RotateCcw size={14} /> {agent.locked ? 'Tümünü sıfırla' : 'Tümünü devral'}
               </button>
             )}
-            {onToggleDisabled && !locked && (
+            {onToggleDisabled && !locked && !isBuiltin && (
               <button
                 data-testid="agent-toggle-disabled"
                 onClick={onToggleDisabled}
@@ -601,30 +611,29 @@ export function AgentSettingsForm({
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-        {locked && (
+        {readOnly && readOnlyNote && (
+          <div
+            data-testid="agent-readonly-note"
+            className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
+          >
+            <Lock size={14} className="mt-0.5 shrink-0" />
+            <p>{readOnlyNote}</p>
+          </div>
+        )}
+        {agent.locked && (
           <div
             data-testid="agent-locked-note"
             className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
           >
             <Lock size={14} className="mt-0.5 shrink-0" />
             <p>
-              Bu <strong>yerleşik sistem ajanı</strong>: değerleri uygulama içinde sabittir ve her
-              açılışta kaynak koddan yeniden yüklenir; burada düzenlenemez, silinemez, devre dışı
-              bırakılamaz. Uygulama bu rolü (<code className="font-mono">{agent.systemKey}</code>)
-              varsayılan olarak buradan çözer.{' '}
-              {roleCustomization ? (
-                <>
-                  Şu anda rolü <strong>{roleCustomization.name}</strong> özelleştirmesi sağlıyor.
-                </>
-              ) : (
-                <>
-                  Değiştirmek için <strong>Özelleştir</strong> ile kalıtım alan bir kopya oluştur ve
-                  yalnız istediğin alanları override et; kopya etkin olduğu sürece uygulama rolü
-                  ondan çözer, devre dışı bırakınca yerleşik tanıma döner. Kopya{' '}
-                  <strong>yalnız bu workspace'e özgüdür</strong> — diğer workspace'ler rolü yerleşik
-                  tanımdan çözmeye devam eder.
-                </>
-              )}
+              Bu <strong>yerleşik sistem ajanı</strong>: uygulama{' '}
+              <code className="font-mono">{agent.systemKey}</code> rolünü buradan çözer. Doğrudan
+              düzenleyebilirsin — kopya oluşmaz. Değiştirdiğin alanlar{' '}
+              <strong>tüm workspaceʼlerde</strong> geçerli olur ve sonraki açılışlarda korunur;
+              dokunmadığın alanlar yerleşik tanımı izlemeye devam eder, böylece uygulama
+              güncellendiğinde onlar da güncellenir. <em>Tümünü sıfırla</em> ile yerleşik tanıma
+              dönersin. Silinemez ve devre dışı bırakılamaz.
             </p>
           </div>
         )}
@@ -638,7 +647,7 @@ export function AgentSettingsForm({
             düzenlemek onu override eder; <em>devral</em> ile geri bırakırsın.
           </div>
         )}
-        {isChild && agent.system && !locked && (
+        {isChild && agent.system && !agent.locked && (
           <div
             data-testid="agent-role-note"
             className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
@@ -919,7 +928,29 @@ export function AgentSettingsForm({
             </>
           )}
 
-          <Field label="Karakter / sistem promptu (soul)" trailing={badge('soul')}>
+          <Field
+            label="Karakter / sistem promptu (soul)"
+            trailing={
+              <>
+                {badge('soul')}
+                {/* A system agent can always go back to the prompt shipped in
+                    the binary for its role — the customisation keeps its other
+                    settings, only the text is restored (staged, not saved). */}
+                {agent.systemKey && !locked && (
+                  <BuiltinPromptRevert
+                    agentId={agent.id}
+                    current={soul}
+                    disabled={saving}
+                    onError={setErr}
+                    onRevert={(v) => {
+                      setSoul(v)
+                      mark('soul')
+                    }}
+                  />
+                )}
+              </>
+            }
+          >
             <PromptEditor
               data-testid="agent-soul-textarea"
               value={soul}

@@ -27,7 +27,7 @@ var ErrEmptyAutomationPrompt = errors.New("automation prompt is empty")
 const SessionKindAutomation = "automation"
 
 // SessionKindAutomationRun is the Kind of a ONE-SHOT session an automation spawns
-// when its session mode is NOT "continue" (fireToken/fireBoard/fireTag/fireCounter
+// when its session mode is NOT "continue" (fireToken/fireBoard/fireTag
 // dispatching through LaunchRun's spawn path instead of deliverAutomationTurn).
 // Distinct from SessionKindAutomation (the persistent maintenance thread) so the
 // self-amplification guard in OnUsageRecorded — which excludes ONLY the

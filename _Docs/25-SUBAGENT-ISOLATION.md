@@ -377,6 +377,27 @@ iptal veya spawn başlangıç hatası Activity görünümünde sonsuza dek çal�
 iki hata birlikte raporlanır. Depolama bütünüyle yazılamıyorsa son kalıcı durum
 değiştirilemez, fakat hata sessiz kalmaz.
 
+## Child oturum başlığı ebeveyni adlandırıyor (TSK727, 2026-09-06)
+
+Kalıcı bir child oturumun başlığı tek yerde, `subagentTitle`
+(`internal/agent/subagent.go`) içinde kurulur ve üç parçadan oluşur:
+`🧩 <ajan ya da profil> — <kısa görev> ⤴ <köken>`.
+
+- **Köken parçasını** `subagentParentRef` çözer: ebeveyn oturumun başlığı varsa o
+  kullanılır, yoksa ebeveyn oturum kimliği (`SES42`); ebeveyn hiç yoksa parça
+  tümden düşer — boş bir `⤴` bırakılmaz.
+- **Uzun ebeveyn başlığı** `maxParentRefRunes = 28` ile rune bazında kırpılır:
+  köken çocuğun kendi görev metnini listede dışarı itmemelidir.
+- **Ebeveyn okuması başarısız olursa** hata yutulmaz — `logger.Warn` yazılır ve
+  başlık kimliğe düşer; delegasyon bu yüzden iptal edilmez.
+
+Örnekler: `🧩 Kâşif — graf taramasını çalıştır ⤴ Rota ekranı düzeltmesi`,
+`🧩 Kâşif — testi düzelt ⤴ SES42`, `🧩 Kâşif — testi düzelt`.
+
+Neden: aynı ajana arka arkaya verilen benzer işler oturum listesinde neredeyse
+aynı satırı üretiyordu; köken parçası satırı oturum detayına girmeden ayırt
+edilebilir kılar. Testler: `internal/agent/subagent_title_test.go`.
+
 ## Senkron-tek mod (async ve `stop_subagent` kaldırıldı)
 
 `run_subagent` artık **her zaman senkron** çalışır ve `stop_subagent` aracı

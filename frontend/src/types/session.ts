@@ -204,6 +204,17 @@ export interface Execution {
   updatedAt: number
 }
 
+// ExecutionRuntimeRow is the live subset of an Execution served by
+// GET /api/executions/runtime — what the sidebar needs to draw a running dot,
+// a last-run chip and coordinator lineage, without titles or counters.
+export interface ExecutionRuntimeRow {
+  sessionId: string
+  running: boolean
+  lastStatus?: string
+  coordinatorSessionId?: string
+  rootCoordinatorSessionId?: string
+}
+
 export interface SessionContext {
   contextTokens: number
   hasSummary: boolean

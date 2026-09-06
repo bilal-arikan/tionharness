@@ -24,6 +24,8 @@ Derlenmiş kayıt defteri altı altyapı rolü ve altı yerleşik worker profili
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
 | `insight-applier` | Etkin | `insight-applier` | İçgörü taramasının `workspace-opt` bulgularını workspace varlıklarına uygular (`internal/agent/systemagents.go`, `internal/prompts/defaults/insight-applier.md`). |
 | `stall-judge` | Etkin | `stall-judge` | Koordinatörün son mesajının gerçekte yapılmamış bir worker spawn'ını anlatıp anlatmadığını sınıflandırır; araçsız, tek satır JSON (`internal/agent/coordination_stall.go`, 2026-09-03). |
+| `goal-writer` | Etkin | `goal-writer` | Evrim hedefleri (`_Docs/83`): kullanıcının kendi sözleriyle yazdığı hedefi kapalı metrik kataloğuna, guardrail'lere, kapsama ve propose-only politikaya oturtan taslak yazıcı; araçsız, STRICT JSON; doğrulama ve kayıt kodda (`internal/agent/goal_writer.go`, `internal/goals`, 2026-09-05). |
+| `workspace-evolver` | Etkin | `workspace-evolver` | Evrim E2 (`_Docs/83`): bir hedefin snapshot başına fitness'inden, yalnız izin verilen yüzeylerde (`goals.ProposalRules`) ölçülü değişiklik önerileri üretir; araçsız, STRICT JSON; kanıt/kapsam/bütçe/çatışma kuralları kodda, `evolution` kanalına bulgu olarak düşer, hiçbir şey uygulamaz (`internal/agent/goal_evolver.go`, 2026-09-05). |
 
 ### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)
 

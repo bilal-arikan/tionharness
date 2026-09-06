@@ -3,7 +3,7 @@
 import { act, type ButtonHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Agent, AgentPatch } from '@/types'
+import type { Agent, AgentOverrideKey, AgentPatch } from '@/types'
 
 vi.mock('@/shared/lib/dirtySignals', () => ({ useRegisterDirty: () => undefined }))
 vi.mock('@/shared/components/agents/AgentAvatar', () => ({ AgentAvatar: () => null }))
@@ -153,31 +153,82 @@ describe('AgentSettingsForm inheritance', () => {
     expect(onSave.mock.calls[0][0]).toEqual({ name: 'Titler (özel)', resetFields: ['soul'] })
   })
 
-  it('renders a locked built-in read-only with a customise action', () => {
-    const onDerive = vi.fn(async () => 'AGT9')
-    const { container } = renderForm(parent, { onDerive })
-    expect(container.querySelector('[data-testid="agent-save"]')).toBeNull()
+  // A built-in is edited IN PLACE now: its edit is stored installation-wide, so
+  // there is nothing to copy and no "Özelleştir" action to offer.
+  it('renders a locked built-in as editable, with no customise copy action', () => {
+    const { container } = renderForm(parent, { onDerive: vi.fn() })
+    expect(container.querySelector('[data-testid="agent-save"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="agent-locked-note"]')).not.toBeNull()
-    // Inputs are disabled through the enclosing <fieldset disabled>; the
-    // textarea's own attribute stays untouched.
+    expect(container.querySelector('[data-testid="agent-customize"]')).toBeNull()
+    // The fields are live: no enclosing disabled fieldset.
+    expect(
+      q<HTMLTextAreaElement>(container, '[data-testid="agent-soul-textarea"]').closest(
+        'fieldset[disabled]',
+      ),
+    ).toBeNull()
+  })
+
+  // Editing a built-in reaches every workspace, so the note has to say so.
+  it('tells the user a built-in edit applies to every workspace', () => {
+    const { container } = renderForm(parent)
+    const note = container.querySelector('[data-testid="agent-locked-note"]')?.textContent ?? ''
+    expect(note).toContain('tüm workspace')
+  })
+
+  // What a built-in still cannot be: deleted or disabled.
+  it('offers no delete or disable action on a built-in', () => {
+    const { container } = renderForm(parent, {
+      onDelete: vi.fn(),
+      onToggleDisabled: vi.fn(),
+    })
+    expect(container.querySelector('[data-testid="agent-delete"]')).toBeNull()
+    expect(container.querySelector('[data-testid="agent-toggle-disabled"]')).toBeNull()
+  })
+
+  it('renders an editable agent read-only when the screen only inspects it', () => {
+    const { container, onSave } = renderForm(child, {
+      readOnly: true,
+      readOnlyNote: 'Ayarlar ekranını kullan',
+      onDelete: vi.fn(),
+      onToggleDisabled: vi.fn(),
+      onDuplicate: vi.fn(),
+    })
+    // No mutating action, and every field disabled through the fieldset.
+    for (const id of ['agent-save', 'agent-delete', 'agent-toggle-disabled', 'agent-duplicate'])
+      expect(container.querySelector(`[data-testid="${id}"]`)).toBeNull()
     expect(
       q<HTMLTextAreaElement>(container, '[data-testid="agent-soul-textarea"]').closest(
         'fieldset[disabled]',
       ),
     ).not.toBeNull()
-    act(() => q<HTMLButtonElement>(container, '[data-testid="agent-customize"]').click())
-    expect(onDerive).toHaveBeenCalledWith({ bindRole: true })
+    expect(onSave).not.toHaveBeenCalled()
+    // The read-only note points elsewhere; the built-in note does NOT appear,
+    // because this agent is a customisation, not a locked built-in.
+    expect(container.querySelector('[data-testid="agent-readonly-note"]')?.textContent).toContain(
+      'Ayarlar',
+    )
+    expect(container.querySelector('[data-testid="agent-locked-note"]')).toBeNull()
   })
 
-  it('points at the existing customisation instead of offering a second one', () => {
-    const onSelectAgent = vi.fn()
-    const { container } = renderForm(parent, {
-      onDerive: vi.fn(),
-      roleCustomization: child,
-      onSelectAgent,
-    })
+  it('offers no customise action on a read-only agent that is not a built-in', () => {
+    const { container } = renderForm(child, { readOnly: true, onDerive: vi.fn() })
     expect(container.querySelector('[data-testid="agent-customize"]')).toBeNull()
-    act(() => q<HTMLButtonElement>(container, '[data-testid="agent-open-customization"]').click())
-    expect(onSelectAgent).toHaveBeenCalledWith(child.id)
+    expect(container.querySelector('[data-testid="agent-derive"]')).toBeNull()
+  })
+
+  it('hides the free derive action when disallowed', () => {
+    const { container } = renderForm(parent, { onDerive: vi.fn(), allowFreeDerive: false })
+    expect(container.querySelector('[data-testid="agent-derive"]')).toBeNull()
+  })
+
+  // "Restore defaults" on a built-in drops the installation-wide customisation.
+  it('offers a reset on a built-in that carries customised fields', () => {
+    const onRestoreDefault = vi.fn()
+    const customised = { ...parent, overrides: ['soul'] as AgentOverrideKey[] }
+    const { container } = renderForm(customised, { onRestoreDefault })
+    const button = q<HTMLButtonElement>(container, '[data-testid="agent-restore-default"]')
+    expect(button.disabled).toBe(false)
+    act(() => button.click())
+    expect(onRestoreDefault).toHaveBeenCalled()
   })
 })

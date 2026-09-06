@@ -1,6 +1,6 @@
 # TionHarness — Veri Modeli
 
-> **Özet (2026-09-03):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır. Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+> **Özet (2026-09-06):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur. Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
 
 > ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
 > entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
@@ -164,7 +164,7 @@ erDiagram
 | Tablo | Sorumluluk |
 |-------|-----------|
 | `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, `thinking_level`, `permission_mode`; **kalıtım (2026-09-03):** `parent_id` + `overrides` (alan anahtarları) — override edilmeyen alan okuma anında ebeveynin etkin değerinden çözülür (`resolveAgentLocked`), `locked` = koddan dayatılan yerleşik sistem ajanı (düzenlenemez/silinemez; özelleştirme = rolü devralan çocuk), ayrıntı `82-AJAN-KALITIMI.md`; **araç ayarları** (`mcp_enabled`; `blocked_tools` ajan denylist = varsayılan tüm araçlar açık, listelenenler engelli; `allowed_tools` legacy allowlist yalnız subagent profilleri için). *(Per-ajan günlük bütçe limitleri 2026-07-01'de kaldırıldı.)* **`deleted`/`deleted_at`** = yumuşak silme: ajan silinince kaydı **durur** ve sahip olduğu **oturumlar da durur** — geçmiş sohbetler okunur kalsın, yazarı ham id'ye düşmek yerine gerçek adıyla "silinmiş" görünsün diye. `ListAgents` silinmişleri eler (roster/seçiciler onu asla sunamaz), `GetAgent` elemez (geçmiş render'ı çözsün), `/api/agents` ise bayrakla **hepsini** döner — istemci `agents` (canlı) / `allAgents` (hepsi) diye ayırır. Zamanlamalar ve sahip olunan görevler+run'lar gerçekten silinir (ileriye dönük; ajansız çalışamazlar). **Çalışan ajan silinemez:** tek karar noktası `Runtime.AgentBusy` — ajanın sahip olduğu **ve katıldığı** oturumları canlı kayıtlarla kesiştirir, artı ajana atanmış koşan run'a bakar. Silmenin **iki** yolu da (HTTP `handleDeleteAgent` → **409**, ve self-management `delete_agent` aracı → hata) aynı fonksiyondan geçer; yalnız birini koruyan bir kontrol, koruma gibi göründüğü için hiç kontrol olmamasından kötüdür. Canlı kayıtlar oturum-bazlıdır ve **interaktif** turlar api sunucusunda yaşadığı için `Manager.SetExternalActiveSessions` ile runtime'a enjekte edilir (`SetAutonomousInteraction` ile aynı desen); enjeksiyon olmadan runtime yalnız otonom işleri görürdü. |
-| `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`). **`state` ile `run_state` KARIŞTIRILMAMALI** — aşağıya bakın |
+| `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`). **`state` ile `run_state` KARIŞTIRILMAMALI** — aşağıya bakın. **`updated_at` = son aktivite** (mesaj eklenince `s.UpdatedAt = m.CreatedAt`): metadata yazımları onu ileri taşımaz — `SetSessionTitle` (2026-09-06'dan beri) ve `SetSessionTags` yalnız kendi alanlarını yazar. Sonuç: geç üretilen bir başlık ne oturumu sidebar'ın (`updatedAt` desc) başına taşır ne de Rota çubuğunu "şimdi"ye kadar uzatır |
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; yalnız köken/görüntü, silme kapısı değil) |
@@ -183,6 +183,15 @@ erDiagram
 >   alanıdır — kenar çubuğu filtresi (`SessionsSidebar.tsx`) ve API doğrulaması
 >   (`internal/api/sessions.go`, `handleSetSessionState`) tam olarak bu iki değere
 >   bağlıdır. Buraya bir koşu sonucu yazmak her ikisini de bozar.
+>   **Otomatik canlanma (2026-09-06):** arşivli bir oturuma **gerçek bir tur**
+>   düşerse `state` kendiliğinden `active` olur ve `archived` etiketi silinir
+>   (`Runtime.reactivateArchivedSession`, `internal/agent/sessionreactivate.go`;
+>   tek çağrı noktası `claimTurnSlot`). Bu yalnız `KindUser`/`KindPeer`/
+>   `KindWorker`/`KindSpawn` turları için geçerlidir — salt-okuma yolları slot
+>   almadığı için oturuma **bakmak** onu canlandırmaz, `KindCommand` (transkript
+>   bakımı) ve `KindCoordinator`/`KindWake`/`KindAutomation` (otomatik yeniden
+>   giriş) de bilerek dışarıdadır: arşiv, kaçak bir koordinatör ağacının
+>   kill-switch'i olarak kalmalıdır (bkz. `_Docs/47`).
 > - **`run_state`** oturumun **son arka plan (worker) turunun nasıl bittiğini**
 >   saklar; değerler `turnoutcome.go`'daki sabitlerdir: `completed` | `failed` |
 >   `killed` | `timeout` | `incomplete`. Yanında `run_state_at` (unix saniye)

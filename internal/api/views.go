@@ -147,11 +147,18 @@ func (s *Server) handleGetViewNeighborhood(w http.ResponseWriter, r *http.Reques
 // uncapped, so the Explorer screen can lay the entire hierarchy out as one
 // force-directed network instead of paging through neighborhoods.
 func (s *Server) handleGetViewGraph(w http.ResponseWriter, r *http.Request) {
-	graph, err := s.viewProjector(r).Graph(r.Context())
+	p := s.viewProjector(r)
+	nodes, edges, err := cachedGraphStructure(r.Context(), ws(r), p)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	live, meta, err := p.GraphLive(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	graph := view.Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta}
 	// Never emit null arrays: an empty workspace still has a root node, and an
 	// edge-less graph is [] not null.
 	if graph.Nodes == nil {

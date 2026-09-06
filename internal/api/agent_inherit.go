@@ -78,7 +78,8 @@ func (s *Server) handleDeriveAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRestoreAgentDefaults makes a child inherit every field again (drops all
-// overrides). A locked built-in has nothing to restore (409); a root agent has
+// overrides). On a BUILT-IN it drops the installation-wide customisation, so the
+// role follows the compiled registry again in every workspace. A root agent has
 // no parent to restore from (404).
 func (s *Server) handleRestoreAgentDefaults(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
@@ -87,7 +88,13 @@ func (s *Server) handleRestoreAgentDefaults(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if current.Locked {
-		writeError(w, http.StatusConflict, db.ErrAgentLocked.Error())
+		restored, err := wsp.DB.ClearBuiltinSystemAgentOverrides(r.Context(), current.ID)
+		if writeAgentWriteError(w, err, "agent not found") {
+			return
+		}
+		s.workspaces.PropagateSystemAgentEdit(r.Context(), wsp.ID)
+		s.logger.Info("built-in system agent restored", "agent", restored.ID, "systemKey", restored.SystemKey)
+		writeJSON(w, http.StatusOK, restored)
 		return
 	}
 	if current.ParentID == "" {

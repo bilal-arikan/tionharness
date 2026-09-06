@@ -1,6 +1,6 @@
 # 83 — Evrim Mekanizması: Hedef-Güdümlü Workspace Optimizasyonu
 
-> **Özet (2026-09-04):** Araştırma + beyin fırtınası dokümanı, **uygulanmadı**. Amaç:
+> **Özet (2026-09-06):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı** (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
 > workspace için kaydedilip düzenlenebilen **Hedefler (Goals)** tanımlamak ve ajan
 > hiyerarşisi, araç atamaları, ajan/skill promptları, otomasyon ve zamanlamalar, model
 > ve düşünme seviyesi seçimleri gibi ayarların zamanla bu hedeflere göre optimize
@@ -13,8 +13,10 @@
 > mevcut `recipe-optimizer` / `insight` / `curator` / ajan kalıtımı altyapısı bu
 > özelliğin %60'ını zaten taşıyor; eksik olan **Goal varlığı, fitness hesabı,
 > konfigürasyon anlık görüntüsü (snapshot) + atıf, genel öneri şeması ve geri-alma
-> defteri**. Bir ajan için: bu özellik istendiğinde önce §2'deki mevcut yapı taşlarını,
-> sonra §5'teki faz planını oku; yeniden yazma, genelleştir.
+> defteri**. İki tasarım kararı daha: evrim **kısım kısım** (hedef kapsamı = evrim birimi,
+> §8.2) ilerler ve **git-ağacı benzeri tek geçmiş** (hedef revizyonları + ileride snapshot/
+> ledger, §8.3) üzerinden izlenir. Bir ajan için: bu özellik istendiğinde önce §2'deki
+> mevcut yapı taşlarını, sonra §5'teki faz planını ve §8'i oku; yeniden yazma, genelleştir.
 
 ---
 
@@ -271,15 +273,108 @@ UI (FindingsTab/FindingModal) olduğu gibi kullanılır.
 
 | Faz | İçerik | LLM? | Bağımlılık |
 |---|---|---|---|
-| **E0** | `Goal` varlığı + CRUD API + Hedefler ekranı; metrik kataloğu; hedef başına LLM'siz fitness hesabı (view katmanı deseni, `_Docs/66`) | Hayır | — |
-| **E1** | `ConfigSnapshot` + oturum/koşu/ateşleme atfı; sürüm başına fitness; model sürümü izleme + "yeniden doğrula" işareti | Hayır | E0 |
-| **E2** | Genel `Proposal` + `evolution` kanalı; `workspace-evolver` sistem ajanı, **yalnız öneri**; kodda değişmezler; FindingModal diff + kanıt | Evet (nadir) | E1 |
+| **E0** ✅ | `Goal` varlığı + CRUD API + Hedefler ekranı; metrik kataloğu; hedef başına LLM'siz fitness hesabı (view katmanı deseni, `_Docs/66`) | Hayır | — |
+| **E1** ✅ | `ConfigSnapshot` + oturum/koşu/ateşleme atfı; sürüm başına fitness; model sürümü snapshot'ta izlenir ("yeniden doğrula" işareti E3'e kaydı) | Hayır | E0 |
+| **E2** ✅ | Genel `Proposal` + `evolution` kanalı; `workspace-evolver` sistem ajanı, **yalnız öneri**; kodda değişmezler; FindingModal diff + kanıt | Evet (nadir) | E1 |
 | **E3** | Yüzey başına uygulayıcılar + append-only ledger + Geri al; guardrail ihlalinde otomatik geri alma; `autoApplySurfaces` opt-in (yalnız tersinir sınıf) | Hayır | E2 |
 | **E4** | Varyant deneyi (`derive` tabanlı canary) + deterministik terfi kapısı; yüksek hacimli reçeteler için | Hayır | E3 |
 | **E5** | Açık uçlu hedefler için `outcome-judge` rubrik + insan kalibrasyonu; sistem ajanlarında model bandit'i | Evet | E2 |
 
 E0–E1 tek başına değer üretir (hedef panosu + sürüm atfı); E2 mevcut `workspace-tuning`
 lensinin hedef-bilinçli hali; E3 `AutoPrune`'un genellemesi.
+
+## 8. E0 — gerçekleşen (2026-09-05) ve iki tasarım kararı
+
+### 8.1 Uygulanan
+
+- **Goal varlığı**: `internal/db/models_goal.go` + `store_goal.go` (`goals/GOL<n>.json`;
+  `RawText` kullanıcının sözleri, düzenlemede yeniden yazılmaz; her değişiklik
+  `History[]`'e `GoalRevision{at, by, note, fields}` ekler).
+- **Alan paketi** `internal/goals`: kapalı metrik kataloğu (26 anahtar; reçete istatistikleri,
+  usage, pano, otomasyon, oturum/insan yükü, `task.ratingAvg`, `judge.rubricScore`, config
+  şişme guardrail'leri), tersinir oto-uygulama yüzeyi allowlist'i, `Normalize`/`Validate`/
+  `CanActivate`, `Draft` şeması + `FromDraft`. Kurallar kodda: bilinmeyen metrik/yön, çift ya
+  da sınırsız guardrail, güvensiz auto yüzeyi, açık soruyla etkinleştirme reddedilir; yazıcı
+  `auto` politika koyamaz; sınırsız/katalog-dışı guardrail → açık soru.
+- **`goal-writer` sistem ajanı** (🎯, araçsız, JSON şema; `internal/agent/goal_writer.go`,
+  `prompts/defaults/goal-writer.md`). Girdi: sözler + katalog + kapsam adayları + mevcut
+  hedefler (+ yeniden yazımda taban hedef). Çıktı `draft` olarak kaydedilir.
+- **API** `GET /api/goals`, `GET /api/goals/catalog`, `POST /api/goals/intake`,
+  `GET/PUT /api/goals/{id}`, `POST /api/goals/{id}/status`, `DELETE`. `POST /api/goals` yok:
+  hedef yalnız yazıcıdan girer.
+- **Ekran** `features/goals/` — liste + detay (açık sorular bandı, "Senin sözlerin", Ölçüm,
+  Kapsam, Politika, Geçmiş), intake modalı, katalog-bağlı editör. Bölüm düzeni sonraki
+  fazlar için yer bırakır: **fitness trendi** (E1), **öneriler** (E2), **evrim defteri /
+  geri al** (E3) aynı başlık altına eklenir.
+
+### 8.1b E1 — uygulanan (2026-09-05)
+
+- `goals.ConfigSnapshot` (kanonik JSON → sha256[:8]; `Diff`), depo `evolution/snapshots/`
+  (`index.json`'da `prev` kenarı ve `current`), `Session.SnapshotHash` damgası (kilit
+  dışında; deadlock regresyon testi), runtime sağlayıcısı 2 sn önbellekli.
+- `goals.Evaluate`: kapsam + pencere + ana metrik/guardrail + snapshot başına gruplama +
+  sürümler arası fark. Ölçülebilen/ölçülemeyen metrikler katalogda `Available` ile ayrılır.
+- API `GET /api/goals/{id}/fitness`, `GET /api/evolution/snapshots[/{hash}]`; ekranda
+  **Ölçüm** bloğu. §8.3'teki ağacın düğümleri (snapshot) ve `prev` kenarları artık var;
+  ledger kenarları (uygulanan öneri) E3'te gelir.
+
+### 8.1c E2 — uygulanan (2026-09-06)
+
+- `insight.EvolutionProposal` + `ChannelEvolution`; `goals.ProposalRules` kapalı yüzey/alan
+  listesi ve `CheckProposal` (kanıt, kapsam, varlık, bütçe, beklenen etki yönü, yan etki →
+  ret ya da `conflict`).
+- `workspace-evolver` sistem ajanı; `SweepGoals`/`MaybeEvolveGoal` (minRuns, cooldown,
+  guardrail ihlali) ve manuel `RunGoalEvolver`; `fileEvolverProposals` kap/ret/tırmandırma;
+  `evolution/state.json`.
+- API `POST /api/goals/{id}/evolve`, `GET /api/goals/{id}/evolution`; ekranda **Öneriler**
+  bloğu ve İçgörü'de `evolution` kanalı. §4.4'teki değişmezlerin hepsi kodda ve testli;
+  §4.5 (uygulama/geri alma) E3'te.
+
+### 8.2 Karar: workspace'in tamamı değil, kısım kısım evrim
+
+**Evrim birimi = hedefin kapsamı.** Bir hedef reçete/ajan/otomasyon/etiket kümesine
+bağlıdır; evolver yalnız o kümenin yüzeylerine öneri üretir, fitness yalnız o kümenin
+koşularından hesaplanır. Gerekçeler araştırmadan geliyor (§3):
+
+1. **Kredi atfı**: workspace genelinde "ne değişti, hangi sonuç değişti" sorusu çok-ajanlıda
+   çözülmemiş (MAS-PromptBench, Cognition). Kapsam daraldıkça atıf mümkün olur; tek seferde
+   tek kapsam, tek yüzey.
+2. **İstatistik gücü**: kişisel workspace'te n küçük. Reçete başına 5 koşu anlamlı bir
+   sinyal olabilir; workspace toplamına karışınca gürültüye döner.
+3. **Patlama yarıçapı**: yanlış bir değişiklik bir reçeteyi bozar, tüm workspace'i değil;
+   geri alma da o kapsamda kalır.
+4. **Çakışma yönetimi**: iki hedef aynı yüzeyi zıt yöne çekerse (maliyet ↓ vs kalite ↑)
+   çatışma kapsam kesişiminde görünür ve §6/4 kuralı uygulanır (öneri iki hedefin
+   guardrail'ini de geçmeli, geçemezse çatışma bulgusu).
+
+Workspace-geneli hedef yine mümkündür (tüm listeler boş); ama evolver bunu "tüm yüzeyler
+serbest" değil, **kapsam başına ayrı geçişler** olarak koşar: her reçete/ajan için ayrı
+fitness, ayrı öneri, ayrı cooldown. Genel hedef bir şemsiye, uygulama yine parça parça.
+
+### 8.3 Karar: evrim geçmişi git-ağacı gibi tek görünümde
+
+Evet, mantıklı ve altyapı buna zaten yatkın. Tasarım:
+
+- **Düğüm** = bir `ConfigSnapshot` (E1: kapsamdaki yüzeylerin içerik hash'i). **Kenar** =
+  ledger kaydı (E3: `{goalId, proposal, before, after, appliedBy, evidence}`). Hedef
+  revizyonları (E0, bugün var) aynı zaman çizgisinde "hedef değişti" işaretleri olarak durur;
+  model sürümü değişimleri de birer işaret (§4.2).
+- **Dallar** = kapsamlar (§8.2). Her reçete/ajan kapsamı kendi dalında ilerler; workspace
+  görünümü tüm dalları tek tuvalde yan yana gösterir, Rota'nın şerit (lane) düzeni ve
+  `rotaTimeScale` boşluk-kırpma mantığı doğrudan yeniden kullanılır. Bir dalın düğümüne
+  tıklayınca: o snapshot'ta yüzeylerin değeri, before/after diff'i, kanıt oturumları, o
+  sürümle koşan runs'ların fitness'i (E1 atfı).
+- **Deney (E4)** = geçici yan dal: `derive` ile türetilen çocuk ajan kolu; terfi = ana dala
+  birleşme, ret = dalın kapanması. Git'teki merge/abandon görselini birebir karşılar.
+- **Geri alma** = daldan önceki düğüme "checkout": ledger'daki `before` geri yazılır, yeni
+  bir düğüm olarak (tarih silinmez) eklenir; `Regressed` işareti düğümde rozet olur.
+- Veri kaynağı **tek append-only ledger**; graf projeksiyonu LLM'siz view katmanında
+  (`_Docs/66`) üretilir; snapshot içerik-adresli olduğu için aynı konfigürasyona dönüş aynı
+  düğüme geri bağlanır (gerçek DAG, düz zaman çizgisi değil).
+
+Bugün (E0) yalnız hedef revizyonları var; ekranın "Geçmiş" bölümü bu ağacın ilk, tek dallı
+halidir. E1 snapshot'ı, E3 ledger'ı ekleyince görünüm ayrı bir **Evrim** sekmesine
+(Hedefler ekranı içinde) taşınır.
 
 ## 6. Açık sorular
 

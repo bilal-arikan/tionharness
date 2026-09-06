@@ -44,9 +44,11 @@ export function BoardColumn({
   return (
     <section
       data-testid={testId}
-      // Below `md` the three lanes scroll horizontally one-per-screen (snap), so a
-      // portrait phone shows a full-width lane instead of three squeezed ones.
-      className="flex min-h-0 w-[85vw] max-w-[340px] shrink-0 snap-center flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] md:w-auto md:max-w-none md:min-w-0 md:flex-1 md:snap-align-none"
+      // Below `md` the lanes scroll horizontally one-per-screen (snap), so a
+      // portrait phone shows a full-width lane instead of squeezed ones. On md+
+      // a lane never shrinks below 17rem (the row scrolls sideways instead) and
+      // grows up to 24rem when the board has room to spare.
+      className="flex min-h-0 w-[85vw] max-w-[340px] shrink-0 snap-center flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] md:w-auto md:min-w-[17rem] md:max-w-[24rem] md:flex-1 md:snap-align-none 3xl:min-w-[19rem]"
     >
       <header
         className="flex shrink-0 items-start gap-2 rounded-t-lg border-b border-[var(--color-border)] border-t-2 px-3 py-2"

@@ -403,13 +403,31 @@ func subagentSessionMeta(parentID string, agent db.Agent, ephemeral bool, spec t
 	if contextMode == "" {
 		contextMode = db.ContextIsolated
 	}
-	s := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal}
+	s := db.Session{Kind: subagentSessionKind, ParentSessionID: parentID, ExecutionType: db.ExecutionSubagent, Category: db.CategorySubagent, ContextMode: contextMode, Visibility: db.VisibilityInternal, Title: subagentTitle(agent, spec)}
 	if ephemeral {
 		s.TargetProfile = strings.TrimSpace(spec.Target)
 	} else {
-		s.TargetAgentID = agent.ID
+		// The owning agent, so every generic session/execution consumer resolves a
+		// name and avatar for a delegated run the same way it does for a spawn.
+		// TargetAgentID stays set too: it is what marks the row a delegation.
+		s.TargetAgentID, s.AgentID = agent.ID, agent.ID
 	}
 	return s
+}
+
+// subagentTitle names a delegated run so the session list reads it like any other
+// session instead of falling back to a "new chat" placeholder: the target agent
+// followed by a short snippet of the task.
+func subagentTitle(agent db.Agent, spec tools.RunAgentSpec) string {
+	name := strings.TrimSpace(agent.Name)
+	if name == "" {
+		name = strings.TrimSpace(spec.Target)
+	}
+	task := spawnTitle(strings.TrimSpace(spec.Task))
+	if name == "" {
+		return "🧩 " + task
+	}
+	return "🧩 " + name + " — " + task
 }
 
 // initializeChildSession commits the opening user turn before exposing the child

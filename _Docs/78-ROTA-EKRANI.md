@@ -39,7 +39,8 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 
 - **Kök oturum** grubun üst şeridi; worker / handoff / otomasyon oturumları
   altında içe girintili şeritlerdir (`Session.origin.rootSessionId`).
-- **Çubuk** = oturumun ömrü (`createdAt → updatedAt`; canlıysa "şimdi"ye kadar
+- **Çubuk** = oturumun ömrü (`createdAt → updatedAt`; `updatedAt` **son
+  aktivitedir** — başlık/etiket yazımı onu ilerletmez, 2026-09-06; canlıysa "şimdi"ye kadar
   uzar ve ucunda yanıp sönen nokta). Renk: canlı = vurgu, `completed` = yeşil,
   `failed/killed/timeout` = kırmızı, arşiv = soluk.
 - **Bekleme aralıkları (2026-09-04):** bir koordinatörün çubuğunda worker'a iş

@@ -219,7 +219,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		Kind:                     session.Kind,
 		State:                    session.State,
 		Pinned:                   session.Pinned,
-		AgentID:                  session.AgentID,
+		AgentID:                  session.OwnerAgentID(),
 		MessageCount:             session.MessageCount,
 		Unread:                   session.Unread,
 		ExecutionType:            session.ExecutionType,
@@ -279,10 +279,16 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// just the visible transcript. multiAgent changes the static prefix (a
 	// history-annotation note is prepended), so resolve it the way the real turn
 	// does; only the flag is used here, the labelled copy is the turn's business.
-	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, session.AgentID, history)
-	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
-	if writeDBError(w, err, "agent not found") {
-		return
+	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, session.OwnerAgentID(), history)
+	// A profile subagent runs through an ephemeral clone of its caller that is
+	// never persisted, so it has no agent row to fetch. That is not an error: the
+	// zero agent still yields the settings-floor context budget below, whereas
+	// failing here made the whole info panel 404 for a delegated run.
+	agentRow, err := wsp.DB.GetAgent(ctx, session.OwnerAgentID())
+	if err != nil && session.OwnerAgentID() != "" {
+		if writeDBError(w, err, "agent not found") {
+			return
+		}
 	}
 	extra := s.systemFillers(ctx, wsp, session, history, multiAgent)
 
@@ -322,9 +328,14 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// session's default agent), with the default agent always present.
 	resp.Agents = buildAgentStats(ctx, wsp.DB, session, history)
 	for i := range resp.Agents {
-		if resp.Agents[i].AgentID == session.AgentID {
+		if resp.Agents[i].AgentID == session.OwnerAgentID() {
 			resp.AgentName = resp.Agents[i].Name
 		}
+	}
+	// A profile subagent has no agent row at all, so name it from the profile
+	// instead of leaving the header's agent blank.
+	if resp.AgentName == "" {
+		resp.AgentName = session.OwnerProfileLabel()
 	}
 
 	// Live background process: an in-flight turn (chat-streaming or autonomous) and,
@@ -685,17 +696,20 @@ func estimateToolCatalog(defs []providers.ToolDef) int {
 func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, history []db.Message) []sessionAgentStat {
 	stats := map[string]*sessionAgentStat{}
 	order := []string{}
+	// A delegated run names its agent as a target rather than an owner, so the
+	// roster resolves it the same way the executions feed does.
+	owner := session.OwnerAgentID()
 	touch := func(agentID string) *sessionAgentStat {
 		st := stats[agentID]
 		if st == nil {
-			st = &sessionAgentStat{AgentID: agentID, IsOwner: agentID == session.AgentID}
+			st = &sessionAgentStat{AgentID: agentID, IsOwner: agentID == owner}
 			stats[agentID] = st
 			order = append(order, agentID)
 		}
 		return st
 	}
 	// Always surface the session's default agent, even with no assistant turns.
-	touch(session.AgentID)
+	touch(owner)
 
 	for _, m := range history {
 		if m.Role != "assistant" {
@@ -703,7 +717,7 @@ func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, h
 		}
 		aid := m.AgentID
 		if aid == "" {
-			aid = session.AgentID
+			aid = owner
 		}
 		st := touch(aid)
 		st.Turns++
@@ -718,6 +732,11 @@ func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, h
 			st.Avatar = ag.Avatar
 			st.Color = ag.Color
 			st.Model = ag.Model
+		} else if label := session.OwnerProfileLabel(); aid == "" && label != "" {
+			// A profile subagent has no agent row by design — an ephemeral clone of
+			// its caller is never persisted. Naming it after its profile keeps the
+			// roster honest; calling it deleted would claim an agent once existed.
+			st.Name = label
 		} else {
 			st.Name = "Silinmiş ajan"
 			st.Disabled = true

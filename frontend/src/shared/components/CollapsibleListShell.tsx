@@ -1,46 +1,62 @@
 import type { ReactNode } from 'react'
+import { PanelLeftOpen } from 'lucide-react'
+import { Backdrop } from './Backdrop'
 
 interface Props {
-  // Mobile drawer open state. On `md+` the list is ALWAYS visible regardless of
-  // this value (a static column); `open` only drives the portrait-phone drawer.
+  // Open state from useCollapsibleList: on md+ whether the docked column shows
+  // (else the reopen rail); on narrow whether the drawer is slid in.
   open: boolean
   onToggle: () => void
   // The list column (the panel's <aside>/<div> with its own width + border).
   children: ReactNode
-  // Kept for API compatibility with older callers; no longer used (there is no
-  // reopen rail — the list is always present on desktop and a drawer on mobile).
-  label?: string
+  // Label on the collapsed reopen rail (e.g. "Artifactlar"). Also its tooltip.
+  label: string
   testId?: string
-  hideRail?: boolean
 }
 
 // CollapsibleListShell renders a screen's left list EXACTLY like the chat sessions
-// sidebar:
-//   • md+ (wide): a static, always-visible column — never collapses, no rail.
-//   • < md (portrait phone): a left slide-in drawer over the content, toggled by an
-//     external header hamburger (md:hidden). `open` drives only the drawer's slide;
-//     a dim backdrop appears while it is open.
-// The list is ALWAYS in the DOM (like the chat sidebar); mobile visibility is pure
-// CSS transform, so on desktop the panel is always open by default.
-export function CollapsibleListShell({ open, onToggle, children }: Props) {
+// sidebar, the ONE standard for every list column:
+//   • md+ (docked): `open` shows the column; collapsed swaps it for a slim
+//     vertical reopen rail (icon + rotated label) so the content pane gets the
+//     width. The state is persisted by useCollapsibleList (default open).
+//   • < md (drawer): a left slide-in drawer over the content, toggled by the
+//     screen header's list button; `open` drives only the drawer's slide and a
+//     dim backdrop appears while it is open.
+// The column stays in the DOM on narrow (pure CSS transform) so the drawer can
+// animate; on md+ it is unmounted while collapsed and re-enters with
+// `.th-pane-enter` (styles/layout.css).
+export function CollapsibleListShell({ open, onToggle, children, label, testId }: Props) {
   return (
     <>
-      {/* Mobile-only dim backdrop while the drawer is open. */}
-      {open && (
-        <div
-          className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
+      {/* Narrow-only dim backdrop while the drawer is open. */}
+      {open && <Backdrop onClick={onToggle} className="md:hidden" />}
+
+      {/* Docked reopen rail (md+ only, while collapsed). */}
+      {!open && (
+        <button
+          type="button"
           onClick={onToggle}
-        />
+          title={`${label} panelini aç`}
+          aria-label={`${label} panelini aç`}
+          data-testid={testId ? `${testId}-rail` : undefined}
+          className="th-rail hidden h-full w-9 shrink-0 flex-col items-center gap-3 border-r border-[var(--color-border)] bg-[var(--color-surface)] pt-3 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] md:flex"
+        >
+          <PanelLeftOpen size={16} className="shrink-0" />
+          <span className="text-[10px] font-medium uppercase tracking-wide [writing-mode:vertical-rl]">
+            {label}
+          </span>
+        </button>
       )}
-      {/* Desktop: static column (always visible). Mobile: fixed left drawer that
-          slides in/out with `open`. Solid surface + shadow so it never shows the
-          content/backdrop through it. The mobile drawer is `inset-y-0` (full
-          viewport height), so without a bottom inset its last rows (and any
-          sticky bottom bar) would hide behind the fixed MobileNavBar (z-50).
-          Reserve the same nav height `<main>` reserves so they stay clickable. */}
+
+      {/* Docked column (md+) / fixed left drawer (narrow). Solid surface + shadow
+          so the drawer never shows the content through it. The drawer is
+          inset-y-0 (full viewport height) so it reserves the MobileNavBar height
+          at the bottom, keeping its last rows clickable. */}
       <div
-        className={`relative flex shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-sm)] md:static md:translate-x-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))] max-md:shadow-xl max-md:transition-transform ${
-          open ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
+        data-testid={testId}
+        data-list-open={open ? '1' : '0'}
+        className={`relative flex shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-sm)] md:static md:translate-x-0 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))] max-md:shadow-xl th-drawer ${
+          open ? 'th-pane-enter max-md:translate-x-0' : 'md:hidden max-md:-translate-x-full'
         }`}
       >
         {children}

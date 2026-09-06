@@ -45,6 +45,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         <option value="app-fix">app-fix</option>
         <option value="workspace-opt">workspace-opt</option>
         <option value="recipe-opt">recipe-opt</option>
+        <option value="evolution">evolution</option>
       </select>
 
       <select

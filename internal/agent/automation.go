@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -46,10 +45,9 @@ type UsageRecorded struct {
 // engine.OnTurnFinished as the runtime's turn hook. Firing runs on the detached
 // goroutine FireTurnFinished spawns, so it never blocks the finishing turn.
 type AutomationEngine struct {
-	db         *db.DB
-	rt         *Runtime
-	logger     *slog.Logger
-	activityMu sync.Mutex
+	db     *db.DB
+	rt     *Runtime
+	logger *slog.Logger
 }
 
 // NewAutomationEngine constructs an engine bound to a workspace's DB and runtime.
@@ -75,8 +73,8 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
-		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken || a.TriggerKind == db.TriggerCounter {
-			continue // board/token/counter automations react to their own events, not turns
+		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken {
+			continue // board/token automations react to their own events, not turns
 		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue

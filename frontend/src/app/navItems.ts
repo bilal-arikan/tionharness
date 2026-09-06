@@ -16,6 +16,7 @@ import {
   Wallet,
   FileText,
   Lightbulb,
+  Target,
   type LucideIcon,
 } from 'lucide-react'
 import type { View } from './NavRail'
@@ -36,4 +37,5 @@ export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIco
   { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'prompts', label: 'Prompts', labelKey: 'navigation.promptsFiles', icon: FileText },
   { key: 'insights', label: 'İçgörü', icon: Lightbulb },
+  { key: 'goals', label: 'Hedefler', icon: Target },
 ]

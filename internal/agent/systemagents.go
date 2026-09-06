@@ -30,6 +30,8 @@ var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
 	"insight-applier":     {"🛠️", "#8A6BC8"},
 	"recipe-optimizer":    {"✦", "#6B7FD8"},
 	"stall-judge":         {"⚖️", "#7A8FA6"},
+	"goal-writer":         {"🎯", "#5E8FD6"},
+	"workspace-evolver":   {"🧬", "#4F9E8F"},
 
 	// Worker profiles — read-only.
 	"subagent-explore":   {"🔍", "#17A2A2"},
@@ -124,6 +126,28 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			SuggestedModel: "haiku",
 			Provider:       "claude-cli",
 			// Pure classifier: one short JSON verdict, no tools.
+			AllowedTools: "[]",
+		},
+		{
+			SystemKey:      "goal-writer",
+			Name:           "Goal Writer",
+			Description:    "Turns a user's own words into a normalized evolution goal (metric, guardrails, scope, policy) and saves it as a draft for review.",
+			SystemPrompt:   prompts.Default("goal-writer"),
+			SuggestedModel: "sonnet",
+			Provider:       "claude-cli",
+			// Writer, not actor: it answers with one JSON draft; the code
+			// validates and stores it. No tools.
+			AllowedTools: "[]",
+		},
+		{
+			SystemKey:      "workspace-evolver",
+			Name:           "Workspace Evolver",
+			Description:    "Proposes measured configuration changes toward a workspace goal from per-snapshot fitness (evolution channel, suggestion-only).",
+			SystemPrompt:   prompts.Default("workspace-evolver"),
+			SuggestedModel: "sonnet",
+			Provider:       "claude-cli",
+			// Suggestion-only: it reads the fitness it is handed and answers
+			// with JSON; the code validates and files the proposals. No tools.
 			AllowedTools: "[]",
 		},
 		{

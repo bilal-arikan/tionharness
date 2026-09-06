@@ -106,6 +106,18 @@ var specs = []Spec{
 		OwnedBySystemKey: "stall-judge",
 	},
 	{
+		Key:              "goal-writer",
+		Label:            "Hedef yazıcı promptu",
+		Hint:             "Evrim hedefleri (_Docs/83): kullanıcının kendi sözleriyle yazdığı hedefi metrik kataloğuna, guardrail'lere, kapsama ve politikaya oturtan sistem ajanı promptu. Yanıt STRICT JSON taslak; kayıt ve doğrulama kodda.",
+		OwnedBySystemKey: "goal-writer",
+	},
+	{
+		Key:              "workspace-evolver",
+		Label:            "Workspace evolver promptu",
+		Hint:             "Evrim E2 (_Docs/83): bir hedefin snapshot başına fitness'inden, yalnız izin verilen yüzeylerde ölçülü değişiklik önerileri üreten sistem ajanı promptu. Yanıt STRICT JSON; kanıt/kapsam/bütçe kuralları kodda, hiçbir şey uygulanmaz.",
+		OwnedBySystemKey: "workspace-evolver",
+	},
+	{
 		Key:              "insight-applier",
 		Label:            "İçgörü uygulama promptu",
 		Hint:             "Taramanın ürettiği workspace-opt bulgularını workspace varlıklarına (skill/agent/hook/automation) uygulayan ajanın sistem promptu. Repo dosyalarına erişimi yoktur.",

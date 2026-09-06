@@ -115,18 +115,6 @@ func init() {
 			return ValidateTokenThreshold(a.TokenThreshold)
 		},
 	})
-	RegisterTrigger(TriggerSpec{
-		Kind: TriggerCounter, Label: "Sayaç",
-		Validate: func(a Automation) error {
-			if !ValidCounterMetric(a.CounterMetric) {
-				return fmt.Errorf("%w: invalid counterMetric %q (message|tool)", ErrAutomationShape, a.CounterMetric)
-			}
-			if !ValidCounterScope(a.CounterScope) {
-				return fmt.Errorf("%w: invalid counterScope %q (session|workspace)", ErrAutomationShape, a.CounterScope)
-			}
-			return ValidateCounterInterval(a.CounterInterval)
-		},
-	})
 }
 
 // validateCommonShape is the kind-independent tail of ValidateAutomationShape.

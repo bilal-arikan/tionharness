@@ -302,7 +302,7 @@ type WorkspaceTemplateSchedule struct {
 // shared) are deliberately absent.
 type WorkspaceTemplateAutomation struct {
 	Name string `json:"name"`
-	// TriggerKind: "tag" | "board" | "token" | "counter" ("" = tag).
+	// TriggerKind: "tag" | "board" | "token" ("" = tag).
 	TriggerKind string `json:"triggerKind,omitempty"`
 	TriggerTag  string `json:"triggerTag,omitempty"`
 
@@ -317,11 +317,6 @@ type WorkspaceTemplateAutomation struct {
 	// Token trigger (TriggerKind == "token").
 	TokenScope     string `json:"tokenScope,omitempty"`
 	TokenThreshold int    `json:"tokenThreshold,omitempty"`
-
-	// Counter trigger (TriggerKind == "counter").
-	CounterMetric   string `json:"counterMetric,omitempty"`
-	CounterScope    string `json:"counterScope,omitempty"`
-	CounterInterval int    `json:"counterInterval,omitempty"`
 
 	// Target: an agent (by template key) or a flow (by name). A flow-backed rule
 	// leaves AgentKey empty. An archive-action board rule needs neither.

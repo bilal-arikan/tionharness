@@ -14,8 +14,6 @@ interface Props {
   // Label shown on the collapsed reopen rail (e.g. "Artifactlar").
   label: string
   testId?: string
-  // Hide the collapsed reopen rail (an external PaneHeader toggle reopens instead).
-  hideRail?: boolean
   // The list header + body. The outer column chrome (surface bg, right border,
   // width, drawer/collapse, resize handle) is supplied by ListPane.
   children: ReactNode
@@ -23,7 +21,8 @@ interface Props {
 
 // ListPane is the ONE standard left-list column shared by every two-pane screen
 // (Artifacts, Skills, Tools, Market, Flows, Executions, Agents …). It composes:
-//   • CollapsibleListShell — collapse to a slim reopen rail; mobile left drawer.
+//   • CollapsibleListShell — docked column / collapse to a slim reopen rail (md+),
+//     left drawer (narrow); state from useCollapsibleList (persisted, default open).
 //   • a solid surface <aside> with a right border, matching the chat sessions sidebar.
 //   • useResizableSidebar — a persisted drag-resizable width.
 //   • ResizeHandle — the drag strip on the right edge.
@@ -38,7 +37,6 @@ export function ListPane({
   minWidth,
   label,
   testId,
-  hideRail,
   children,
 }: Props) {
   const { width, startDrag } = useResizableSidebar({
@@ -47,16 +45,10 @@ export function ListPane({
     min: minWidth,
   })
   return (
-    <CollapsibleListShell
-      open={open}
-      onToggle={onToggle}
-      label={label}
-      testId={testId}
-      hideRail={hideRail}
-    >
+    <CollapsibleListShell open={open} onToggle={onToggle} label={label} testId={testId}>
       <aside
         style={{ width }}
-        className="relative flex h-full flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"
+        className="th-col relative flex h-full flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"
       >
         {children}
         <ResizeHandle onMouseDown={startDrag} />

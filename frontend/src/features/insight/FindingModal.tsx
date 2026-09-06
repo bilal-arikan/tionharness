@@ -136,6 +136,53 @@ export function FindingModal({
               </p>
             </div>
           )}
+          {f.evolution && (
+            <div data-testid="finding-evolution">
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Evrim önerisi · hedef {f.evolution.goalId}
+                {f.evolution.kind === 'conflict' && ' · ÇATIŞMA'}
+                {f.evolution.kind === 'escalation' && ' · İNSAN KARARI'}
+                {f.evolution.lowConfidence && ' · düşük güven'}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5">
+                  {f.evolution.surface}
+                  {f.evolution.entityId ? `/${f.evolution.entityId}` : ''}
+                </code>
+                <span>
+                  alan <code>{f.evolution.field}</code>
+                </span>
+                <span>
+                  eylem <code>{f.evolution.action}</code>
+                </span>
+                {f.evolution.value && (
+                  <span className="max-w-full truncate">
+                    değer <code>{f.evolution.value}</code>
+                  </span>
+                )}
+                {f.evolution.removes && (
+                  <span className="text-[var(--color-warning)]">
+                    kaldırır <code>{f.evolution.removes}</code>
+                  </span>
+                )}
+                {f.evolution.expectedMetric && (
+                  <span className="text-[var(--color-text-dim)]">
+                    beklenen {f.evolution.expectedMetric}{' '}
+                    {(f.evolution.expectedDelta ?? 0) > 0 ? '+' : ''}
+                    {f.evolution.expectedDelta}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                Kanıt: {f.evolution.evidence}
+                {f.evolution.snapshotHash && ` · snapshot ${f.evolution.snapshotHash.slice(0, 8)}`}
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-text-dim)]">
+                Öneri uygulanmaz; kabul edersen değişikliği sen yaparsın (otomatik uygulama ve geri
+                alma sonraki fazda). Reddedersen evolver bunu bir daha önermez.
+              </p>
+            </div>
+          )}
           {f.filePointer && (
             <div>
               <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">

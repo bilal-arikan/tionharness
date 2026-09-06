@@ -477,6 +477,11 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Info("agent updated", "agent", agent.Name, "id", agent.ID)
+	// A built-in's edit is stored installation-wide, so every OTHER open
+	// workspace has to re-seed its own copy of the row to match.
+	if agent.Locked {
+		s.workspaces.PropagateSystemAgentEdit(r.Context(), wsp.ID)
+	}
 
 	// --- P1.2: model-change event ---
 	if req.Model != nil && *req.Model != prev.Model {

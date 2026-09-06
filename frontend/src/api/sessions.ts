@@ -58,6 +58,9 @@ export interface SessionListParams {
   sort?: string
   kind?: string
   state?: string
+  // Free-text title / session-id filter, applied by the server BEFORE paging so
+  // a search reaches sessions the sidebar has not loaded yet.
+  q?: string
   // Comma-separated sidebar chip keys. The server applies the same chip
   // predicate BEFORE paging, so total/hasMore describe the rows the sidebar can
   // actually show — without it a page of mixed kinds can be almost entirely
@@ -81,6 +84,7 @@ export const sessionApi = {
     if (params?.sort) p.set('sort', params.sort)
     if (params?.kind) p.set('kind', params.kind)
     if (params?.state) p.set('state', params.state)
+    if (params?.q) p.set('q', params.q)
     if (params?.chips !== undefined) p.set('chips', params.chips)
     const qs = p.toString()
     return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions').then(

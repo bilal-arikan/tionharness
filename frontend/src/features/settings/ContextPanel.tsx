@@ -73,7 +73,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
   return (
     <>
       <SubHead icon={Layers}>Bağlam penceresi</SubHead>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Maks. bağlam token — TABAN"
           hint="Bütçenin ALT sınırı: bütçeyi yalnızca YÜKSELTİR, asla düşürmez. Türetilen değer (pencere × oran, tavana kırpılı) bunun üstündeyse etkisizdir. Pencereyi KÜÇÜLTMEK için bunu değil, aşağıdaki 'Bütçe tavanı'nı düşür."
@@ -315,7 +315,7 @@ export function ContextPanel({ draft, set }: PanelProps) {
         checked={draft.reactiveCompact}
         onChange={(v) => set('reactiveCompact', v)}
       />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Maks. token resume denemesi"
           hint="Çıktı limiti aşılınca tur kaç kez sürdürülür (0 = kapalı; kısmi cevap olduğu gibi gösterilir)."

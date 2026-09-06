@@ -147,6 +147,16 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 	if err != nil {
 		return err
 	}
+	// A built-in's tool access is customised installation-wide, like every other
+	// field on it (see store_agent_system_edit.go), rather than refused.
+	if locked, ok := d.lockedSystemAgent(agentID); ok {
+		return d.editBuiltinSystemAgent(ctx, locked, []string{"tools", "allowedTools"}, func(a *Agent) {
+			a.MCPEnabled = mcpEnabled
+			a.ToolOverrides = toolOverrides
+			a.BlockedTools = string(blockedJSON)
+			a.AllowedTools = "[]"
+		})
+	}
 	_, err = d.mutateAgentLockedErr(agentID, func(a *Agent) error {
 		if a.Locked {
 			return ErrAgentLocked
@@ -172,6 +182,11 @@ func (d *DB) UpdateAgentAllowedTools(ctx context.Context, agentID, allowedTools 
 	var allowed []string
 	if err := json.Unmarshal([]byte(allowedTools), &allowed); err != nil {
 		return fmt.Errorf("allowed tools must be a JSON array: %w", err)
+	}
+	if locked, ok := d.lockedSystemAgent(agentID); ok {
+		return d.editBuiltinSystemAgent(ctx, locked, []string{"allowedTools"}, func(a *Agent) {
+			a.AllowedTools = allowedTools
+		})
 	}
 	_, err := d.mutateAgentLockedErr(agentID, func(a *Agent) error {
 		if a.Locked {

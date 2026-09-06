@@ -283,7 +283,7 @@ export function ServerManagement(props: {
         <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-dim)]">
           Yeni MCP sunucusu
         </h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <input
             data-testid="mcp-server-name-input"
             value={name}

@@ -182,6 +182,12 @@ forceAtlas2 fiziği) kullanır; React Flow ve üç-kolon odak modeli kaldırıld
   Fasetler AND, faset içi OR; kökten ulaşılamayan düğüm atılır. `localStorage`
   (`tionharness.explorerFilter`) ile kalıcı. Kalıcılık GC'si (`canonicalNodeIds`)
   filtrelenmemiş grafı görür.
+- **Alt düğümleri gizle/göster (2026-09-05):** sağ panelin üstünde, çocuğu olan her
+  düğüm için katlama düğmesi (`useExplorerCollapse`; workspace başına `localStorage`).
+  Katlanan düğüm kalır, yalnız onun üzerinden ulaşılan alt ağaç kaybolur (başka bir
+  yoldan ulaşılan düğüm — ör. ajanı üzerinden bir oturum — görünmeye devam eder);
+  tuvalde etiketine `[+N]` rozeti gelir. `applyExplorerFilter` `collapsed` kümesi alır,
+  `childCounts` tam grafın çocuk sayısını verir.
 - **Ekranında aç (2026-09-05):** sağ panelin üstündeki buton seçili düğümü sahibi
   olan ekranda açar (`explorerNavigation.screenForRef` → `App` `applyRoute`).
   Yoğunluk kaydırıcısı `useStoredDensity` ile kalıcıdır.

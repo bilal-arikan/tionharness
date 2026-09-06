@@ -289,6 +289,7 @@ func (d *DB) recoverCLIReplyBeforeMutationLocked(sessionID string) (bool, error)
 	}
 	d.mu.Lock()
 	d.sessions[sessionID] = s
+	d.markMutatedLocked()
 	d.messages[sessionID] = msgs
 	d.mu.Unlock()
 	return true, nil

@@ -40,21 +40,10 @@ export function SystemAgentsPanel({ onError }: Props) {
   const catalog = useCatalog()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState(false)
-  // Name of the workspace these customisations belong to. The panel lives in the
-  // app-wide Settings screen, but the agents it edits come from the ACTIVE
-  // workspace's store — the banner is what keeps that from being a surprise.
-  const [workspaceName, setWorkspaceName] = useState('')
 
   useEffect(() => {
     if (error) onError(error)
   }, [error, onError])
-
-  useEffect(() => {
-    api
-      .getWorkspaceSettings()
-      .then((w) => setWorkspaceName(w.name))
-      .catch((e) => onError((e as Error).message))
-  }, [onError])
 
   const groups = useMemo(() => groupSystemAgents(agents), [agents])
   const systemAgents = useMemo(() => [...groups.services, ...groups.workers], [groups])
@@ -108,12 +97,10 @@ export function SystemAgentsPanel({ onError }: Props) {
   }
 
   const restoreDefault = async (agent: Agent) => {
-    if (
-      !confirm(
-        `"${agent.name}" ajanının tüm override'ları kaldırılsın mı? Her alan yeniden ebeveyninden devralınır; bu işlem geri alınamaz.`,
-      )
-    )
-      return
+    const question = agent.locked
+      ? `"${agent.name}" ajanının tüm özelleştirmeleri kaldırılsın mı? Her alan yeniden yerleşik tanımdan gelir ve bu TÜM workspaceʼleri etkiler; bu işlem geri alınamaz.`
+      : `"${agent.name}" ajanının tüm override'ları kaldırılsın mı? Her alan yeniden ebeveyninden devralınır; bu işlem geri alınamaz.`
+    if (!confirm(question)) return
     setActionPending(true)
     try {
       await api.restoreDefaultAgent(agent.id)
@@ -179,10 +166,10 @@ export function SystemAgentsPanel({ onError }: Props) {
       >
         <Layers size={14} className="mt-0.5 shrink-0" />
         <p>
-          Yerleşik tanımlar tüm workspace'lerde ortaktır; buradaki{' '}
-          <strong>özelleştirmeler yalnız {workspaceName || 'aktif'} workspace'ine özgüdür</strong> —{' '}
-          <em>Özelleştir</em> ile türetilen kopya bu workspace'in kayıtlarında yaşar, diğer
-          workspace'ler rolü yerleşik tanımdan çözmeye devam eder.
+          Yerleşik sistem ajanları burada <strong>doğrudan</strong> düzenlenir — kopya oluşmaz.
+          Değişiklikler <strong>tüm workspaceʼlerde</strong> geçerlidir; dokunmadığın alanlar
+          yerleşik tanımı izlemeye devam eder, böylece uygulama güncellendiğinde onlar da
+          güncellenir.
         </p>
       </div>
       <div className="flex min-h-0 flex-1">
@@ -235,20 +222,18 @@ export function SystemAgentsPanel({ onError }: Props) {
               agent={selected}
               onSave={(p) => save(selected.id, p)}
               onDerive={(opts) => derive(selected.id, opts)}
+              // A system agent's only sanctioned derivation is "Özelleştir",
+              // which binds the copy to the built-in's role. A free-standing
+              // child would serve no role and only clutter the roster.
+              allowFreeDerive={false}
               lineage={lineageOf(selected, byId)}
               parent={selected.parentId ? (byId.get(selected.parentId) ?? null) : null}
               parentOptions={eligibleParents(selected, agents)}
-              roleCustomization={
-                selected.locked && selected.systemKey
-                  ? (agents.find(
-                      (a) =>
-                        a.system && !a.locked && a.systemKey === selected.systemKey && !a.disabled,
-                    ) ?? null)
-                  : null
-              }
               onSelectAgent={setSelectedId}
               onDelete={selected.locked ? undefined : () => remove(selected)}
-              onRestoreDefault={selected.parentId ? () => restoreDefault(selected) : undefined}
+              onRestoreDefault={
+                selected.parentId || selected.locked ? () => restoreDefault(selected) : undefined
+              }
               onToggleDisabled={selected.locked ? undefined : () => toggleDisabled(selected)}
               systemActionPending={actionPending}
             />

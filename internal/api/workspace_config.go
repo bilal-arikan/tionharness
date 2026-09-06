@@ -14,6 +14,9 @@ import (
 // registry prompts (with their embedded defaults for "reset" and their UI
 // metadata), the workspace instructions and the free-form README. All live
 // under <workspace>/config/.
+//
+// Only prompts with no owning system agent are listed: a system-owned prompt's
+// effective text is its agent's Soul, edited on Settings ▸ "Sistem ajanları".
 type wsConfigDTO struct {
 	Dir          string                  `json:"dir"`
 	Prompts      map[string]string       `json:"prompts"`  // key → current file content
@@ -58,27 +61,32 @@ func buildWSConfigDTO(wsp *workspace.Workspace) wsConfigDTO {
 		Dir:          agent.WorkspaceConfigDir(wsDir),
 		Prompts:      map[string]string{},
 		Defaults:     map[string]string{},
-		PromptKeys:   agent.PromptKeys,
+		PromptKeys:   []string{},
 		PromptMeta:   map[string]promptMetaTO{},
 		Instructions: readFileOr(agent.InstructionsFilePath(wsDir), ""),
 		Readme:       readFileOr(agent.ReadmeFilePath(wsDir), ""),
 	}
 	for _, spec := range prompts.Specs() {
 		key := spec.Key
+		// System-owned prompts are NOT listed here. Their effective text comes
+		// from the owning system agent's Soul, which is edited on
+		// Settings ▸ "Sistem ajanları" (directly, or on a customisation that
+		// inherits from the built-in). Listing them again on this screen only
+		// offered a second, weaker editor whose value was ignored unless system
+		// agent resolution failed. The keys stay in the registry, and an
+		// existing override file is still read as the resolution fallback.
+		if spec.OwnedBySystemKey != "" {
+			continue
+		}
 		def := agent.PromptDefault(key)
 		dto.Defaults[key] = def
 		dto.Prompts[key] = readFileOr(agent.PromptFilePath(wsDir, key), def)
-		if spec.OwnedBySystemKey != "" {
-			if systemAgent, _, err := wsp.Runtime.ResolveSystemAgent(spec.OwnedBySystemKey); err == nil {
-				dto.Prompts[key] = systemAgent.Soul
-			}
-		}
+		dto.PromptKeys = append(dto.PromptKeys, key)
 		dto.PromptMeta[key] = promptMetaTO{
-			Label:            spec.Label,
-			Hint:             spec.Hint,
-			Placeholders:     spec.Placeholders,
-			EpochAffecting:   spec.EpochAffecting,
-			OwnedBySystemKey: spec.OwnedBySystemKey,
+			Label:          spec.Label,
+			Hint:           spec.Hint,
+			Placeholders:   spec.Placeholders,
+			EpochAffecting: spec.EpochAffecting,
 		}
 	}
 	return dto

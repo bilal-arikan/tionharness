@@ -40,28 +40,7 @@ const (
 	// only by cooldown/maxIterations); requiring at least this many tokens keeps a
 	// token trigger a meaningful "spend milestone" rather than a per-call hook.
 	MinTokenThreshold = 1000
-
-	// MinCounterInterval is the smallest interval a counter automation may set. An
-	// interval of 1 would fire on nearly every message/tool call; requiring at least
-	// this many keeps a counter trigger a meaningful cadence ("every N messages")
-	// rather than a per-append hook. Kept small because counters (unlike tokens)
-	// grow slowly and predictably, so a modest floor is enough.
-	MinCounterInterval = 2
 )
-
-// ErrCounterIntervalRange reports a counterInterval value below the accepted floor.
-var ErrCounterIntervalRange = errors.New("counterInterval out of range")
-
-// ValidateCounterInterval rejects a counter-automation interval that would fire
-// too often to be useful. Shared by the REST handlers and the agent tools so the
-// two entry points cannot drift apart.
-func ValidateCounterInterval(v int) error {
-	if v < MinCounterInterval {
-		return fmt.Errorf("%w: en az %d olmalı (çok küçük bir aralık neredeyse her mesajda tetiklenir)",
-			ErrCounterIntervalRange, MinCounterInterval)
-	}
-	return nil
-}
 
 // ErrTokenThresholdRange reports a tokenThreshold value below the accepted floor.
 var ErrTokenThresholdRange = errors.New("tokenThreshold out of range")

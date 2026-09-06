@@ -3,6 +3,7 @@
 export function ChannelBadge({ channel }: { channel: string }) {
   const appFix = channel === 'app-fix'
   const recipe = channel === 'recipe-opt'
+  const evolution = channel === 'evolution'
   return (
     <span
       className={`rounded px-1.5 py-0.5 text-xs ${
@@ -10,11 +11,19 @@ export function ChannelBadge({ channel }: { channel: string }) {
           ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
           : recipe
             ? 'bg-[#6B7FD8]/15 text-[#6B7FD8]'
-            : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+            : evolution
+              ? 'bg-[#4F9E8F]/15 text-[#4F9E8F]'
+              : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
       }`}
-      title={recipe ? 'Reçete optimizer önerisi (Rota F4) — reçeteyi sen düzenlersin' : undefined}
+      title={
+        recipe
+          ? 'Reçete optimizer önerisi (Rota F4) — reçeteyi sen düzenlersin'
+          : evolution
+            ? 'Evrim önerisi (Hedefler) — kabul/ret senin; uygulama sonraki fazda'
+            : undefined
+      }
     >
-      {appFix ? 'app-fix' : recipe ? '✦ recipe-opt' : 'workspace-opt'}
+      {appFix ? 'app-fix' : recipe ? '✦ recipe-opt' : evolution ? '🧬 evolution' : 'workspace-opt'}
     </span>
   )
 }

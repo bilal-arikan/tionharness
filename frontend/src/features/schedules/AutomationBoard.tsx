@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Brush, Clock, Flag, Hash, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
+import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -20,7 +20,6 @@ import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
 import { CuratorPanel } from './CuratorPanel'
-import { count } from '@/shared/lib/format'
 
 // Backstop refresh for the lane-header metrics; visibility-gated.
 const LIVE_STATS_POLL_MS = 15000
@@ -63,14 +62,10 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   const [loadingSchedules, setLoadingSchedules] = useState(true)
   const [loadingAutomations, setLoadingAutomations] = useState(true)
 
-  // Live workspace metrics shown in the token/counter lane headers so the user can
-  // see how close the workspace is to the next fire (and calibrate intervals). null
+  // Live workspace metric shown in the token lane header so the user can see how
+  // close the workspace is to the next fire (and calibrate thresholds). null
   // until first fetch. Polled while the screen is open.
-  const [liveStats, setLiveStats] = useState<{
-    tokensToday: number
-    messages: number
-    tools: number
-  } | null>(null)
+  const [liveStats, setLiveStats] = useState<{ tokensToday: number } | null>(null)
 
   const [editor, setEditor] = useState<Editor | null>(null)
   // Id of the schedule currently being run manually (disables its Run button).
@@ -331,14 +326,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: 'Yeni token otomasyonu',
       emptyLabel: 'Henüz token otomasyonu yok.',
     },
-    counter: {
-      title: 'Sayaç otomasyonları',
-      icon: Hash,
-      accent: COLUMN_ACCENT.counter,
-      description: 'Oturumun mesaj/tool sayısı aralığı geçince çalışır (token’dan kararlı ritim).',
-      addLabel: 'Yeni sayaç otomasyonu',
-      emptyLabel: 'Henüz sayaç otomasyonu yok.',
-    },
     phase: {
       title: 'Rota fazı otomasyonları',
       icon: Waypoints,
@@ -359,20 +346,13 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     },
   }
 
-  // Live lane stat: shown only for token/counter lanes that actually hold a
+  // Live lane stat: shown only for the token lane when it actually holds a
   // workspace-scoped rule — the metric that rule keys on. Session-scoped rules vary
   // per session and have no single workspace-level value, so no stat for them.
   const laneStat = (kind: AutomationTriggerKind): React.ReactNode => {
     if (!liveStats) return undefined
     if (kind === 'token' && byKind('token').some((a) => a.tokenScope === 'workspace')) {
       return <span>bugün {compact(liveStats.tokensToday)} token</span>
-    }
-    if (kind === 'counter' && byKind('counter').some((a) => a.counterScope === 'workspace')) {
-      return (
-        <span>
-          {count(liveStats.messages)} mesaj · {count(liveStats.tools)} tool
-        </span>
-      )
     }
     return undefined
   }
@@ -401,7 +381,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             automation={a}
             isBoardKind={kind === 'board'}
             isTokenKind={kind === 'token'}
-            isCounterKind={kind === 'counter'}
             agents={agents}
             flows={flows}
             columns={columns}
@@ -478,10 +457,13 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         />
       )}
 
-      {/* Three lanes side by side. Below `md` (portrait phones / narrow windows)
-          they become a snap-scrolling carousel: one near-full-width lane per
-          screen, each with its own vertical card scroll. */}
-      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto p-3 md:snap-none md:overflow-x-hidden">
+      {/* Seven lanes side by side, each with its own vertical card scroll. The
+          row scrolls HORIZONTALLY at every width: below `md` it is a snapping
+          carousel (one near-full-width lane per screen); on md+ every lane keeps
+          a readable minimum width (BoardColumn) and only grows when there is
+          spare room, so a narrow window scrolls sideways instead of squeezing
+          all lanes into unreadable slivers. */}
+      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain p-3 md:snap-none">
         <BoardColumn
           testId="automation-lane-schedules"
           title="Zamanlamalar"
@@ -515,7 +497,6 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
         {renderAutomationLane('token')}
-        {renderAutomationLane('counter')}
         {renderAutomationLane('phase')}
         {renderAutomationLane('trajectory_end')}
       </div>

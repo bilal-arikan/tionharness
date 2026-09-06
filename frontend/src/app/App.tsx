@@ -4,7 +4,15 @@
 // lives in the app/use*.ts hooks; the view metadata in viewRegistry.tsx.
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { api } from '@/api'
-import { LoadingState, Toaster, toast, CommandPalette, type Command } from '@/shared/components'
+import {
+  Backdrop,
+  CollapsibleListShell,
+  LoadingState,
+  Toaster,
+  toast,
+  CommandPalette,
+  type Command,
+} from '@/shared/components'
 import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
@@ -46,6 +54,7 @@ import { MarketPanel } from '@/features/market/MarketPanel'
 import { BudgetPanel } from '@/features/budget/BudgetPanel'
 import { DashboardPanel } from '@/features/dashboard/DashboardPanel'
 import { InsightPanel } from '@/features/insight/InsightPanel'
+import { GoalsPanel } from '@/features/goals/GoalsPanel'
 import { SettingsPanel } from '@/features/settings/SettingsPanel'
 import { WorkspaceView } from '@/features/workspace/WorkspaceView'
 import { PromptsView } from '@/features/settings/PromptsView'
@@ -55,6 +64,8 @@ import { ClaudeAuthGate } from '@/features/workspace/ClaudeAuthGate'
 import { WorkspaceRecommendations } from '@/features/workspace/WorkspaceRecommendations'
 import { useDirtyViews } from '@/shared/lib/dirtySignals'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
+import { useViewportAttribute } from '@/shared/hooks/useViewport'
+import { useShellLayout } from './useShellLayout'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { isImagePath, mediaUrl } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -236,10 +247,14 @@ export default function App() {
   // Portrait-phone layout flag: below Tailwind's `md` breakpoint the desktop rail
   // and persistent sidebars collapse into a bottom nav + slide-in drawers.
   const isMobile = useIsMobile()
-  // Mobile-only: the left list column (chat sessions OR the agents roster)
-  // is a slide-in drawer instead of an always-visible column. Opened via the
-  // header hamburger; closed on select. One flag shared across list-bearing views.
-  const [mobileListOpen, setMobileListOpen] = useState(false)
+  // Viewport tier/aspect -> <html data-viewport data-aspect> for the CSS layer,
+  // and the per-column dock/drawer modes the shell composes below.
+  useViewportAttribute()
+  const shell = useShellLayout()
+  // Chat sessions list: a persisted docked-column collapse on md+ (default
+  // open), an ephemeral slide-in drawer on narrow. Toggled from the app header
+  // and the list's own collapse button; the drawer closes on select.
+  const sessionsList = useCollapsibleList('tionharness.sessionsListOpen')
 
   // App-headed list screens (workspace / settings) own their category-rail
   // collapse here so the app header's toggle button and the panel share one flag.
@@ -281,10 +296,14 @@ export default function App() {
   // session list request carries it: the server applies the chip filter before
   // paging, so the same selection drives the fetch and the rendered rows.
   const sessionChips = useSessionChips()
+  // The sidebar's title/id search (debounced there); the controller sends it to
+  // the server so the filter reaches unloaded pages.
+  const [sessionSearch, setSessionSearch] = useState('')
   // Workspace-scoped data model: agents, sessions, transcript + their actions.
   const ctl = useSessionsController({
     activeWorkspaceId,
     chipsParam: sessionChips.chipsParam,
+    searchQuery: sessionSearch,
     setError,
     setView,
   })
@@ -438,6 +457,7 @@ export default function App() {
     applyClientPrefs,
     refreshWorkspaces,
     refreshSessions: ctl.refreshSessions,
+    refreshSessionsSoon: ctl.refreshSessionsSoon,
     setMessages: ctl.setMessages,
     setMeterRefresh: ctl.setMeterRefresh,
     setSettingsNonce,
@@ -475,12 +495,12 @@ export default function App() {
     (next: View) => {
       if (confirmLeaveIfDirty(next)) {
         setView(next)
-        // Leaving a list-bearing view closes the mobile list drawer so it never
-        // lingers over another screen.
-        setMobileListOpen(false)
+        // Leaving a list-bearing view closes the mobile sessions drawer so it
+        // never lingers over another screen (the docked column is untouched).
+        if (isMobile) sessionsList.setOpen(false)
       }
     },
-    [confirmLeaveIfDirty],
+    [confirmLeaveIfDirty, isMobile, sessionsList.setOpen],
   )
 
   // Open the Skills screen focused on one skill. SkillsPanel is mounted by the
@@ -533,6 +553,7 @@ export default function App() {
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
     insightTab: links.insightTab,
+    goalTarget: links.goalTarget,
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
     rotaTrajectory: links.rotaTrajectory,
@@ -547,6 +568,7 @@ export default function App() {
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
     setInsightTab: links.setInsightTab,
+    setGoalTarget: links.setGoalTarget,
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
     setRotaTrajectory: links.setRotaTrajectory,
@@ -588,21 +610,13 @@ export default function App() {
           schedules are workspace-scoped, so the list is hidden there. */}
       {/* Chat: a sessions-only list (agents now live in their own view). */}
       {view === 'chat' && (
-        <>
-          {/* Mobile: dim backdrop behind the sessions drawer. */}
-          {isMobile && mobileListOpen && (
-            <div
-              className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
-              onClick={() => setMobileListOpen(false)}
-            />
-          )}
-          {/* Desktop: an always-visible column (md:static). Mobile: a left
-              slide-in drawer toggled by the header hamburger. */}
-          <div
-            className={`shrink-0 md:static ${
-              mobileListOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
-            } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform`}
-          >
+        <CollapsibleListShell
+          open={sessionsList.open}
+          onToggle={sessionsList.toggle}
+          label="Oturumlar"
+          testId="sessions-column"
+        >
+          <div data-list-mode={shell.list} className="flex h-full">
             <SessionsSidebar
               sessions={ctl.sessions}
               agents={ctl.allAgents}
@@ -620,20 +634,22 @@ export default function App() {
               chipCountsFromServer={ctl.sessionChipCounts}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
-                setMobileListOpen(false)
+                if (isMobile) sessionsList.setOpen(false)
               }}
               onNewSession={() => {
                 ctl.newSession()
-                setMobileListOpen(false)
+                if (isMobile) sessionsList.setOpen(false)
               }}
               onRefresh={ctl.refreshSessions}
+              onQueryChange={setSessionSearch}
+              onCollapse={sessionsList.toggle}
               onGenerateTitle={ctl.regenerateSessionTitle}
               onDeleteSession={ctl.deleteSession}
               onSetArchived={ctl.setSessionArchived}
               onSetPinned={ctl.setSessionPinned}
             />
           </div>
-        </>
+        </CollapsibleListShell>
       )}
 
       {/* Key the view subtree by the active workspace so switching (or creating
@@ -661,7 +677,8 @@ export default function App() {
             activeSessionId={ctl.activeSessionId}
             activeAgentId={ctl.activeAgentId}
             detailOpen={detailOpen}
-            onOpenMobileList={() => setMobileListOpen(true)}
+            listOpen={sessionsList.open}
+            onToggleList={sessionsList.toggle}
             navOpen={view === 'workspace' ? workspaceNav.open : settingsNav.open}
             onToggleNav={view === 'workspace' ? workspaceNav.toggle : settingsNav.toggle}
             onOpenContextPreview={() => setCtxPreviewOpen(true)}
@@ -870,6 +887,13 @@ export default function App() {
             }}
           />
         )}
+        {view === 'goals' && (
+          <GoalsPanel
+            onError={setError}
+            goalId={links.goalTarget}
+            onSelectGoal={links.setGoalTarget}
+          />
+        )}
         {view === 'workspace' && (
           <WorkspaceView
             onError={setError}
@@ -900,15 +924,20 @@ export default function App() {
 
       {view === 'chat' && detailOpen && ctl.activeSessionId && (
         <>
-          {/* Mobile: dim backdrop behind the right detail drawer. */}
-          {isMobile && (
-            <div
-              className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
-              onClick={toggleDetail}
-            />
-          )}
-          {/* Desktop: a right-hand column. Mobile: a right slide-in drawer. */}
-          <div className="shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:shadow-xl">
+          {/* Drawer mode (narrow + square tiers, portrait monitors): dim backdrop
+              behind the right detail drawer. */}
+          {shell.detail === 'drawer' && <Backdrop onClick={toggleDetail} />}
+          {/* Wide/ultra: a docked right-hand column. Otherwise a right slide-in
+              drawer that enters from the edge (th-drawer-from-right). */}
+          <div
+            data-testid="detail-column"
+            data-detail-mode={shell.detail}
+            className={
+              shell.detail === 'docked'
+                ? 'relative shrink-0'
+                : 'th-drawer-from-right fixed inset-y-0 right-0 z-40 shrink-0 shadow-xl max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]'
+            }
+          >
             <SessionDetailPanel
               sessionId={ctl.activeSessionId}
               refreshKey={ctl.meterRefresh}

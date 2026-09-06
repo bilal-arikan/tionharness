@@ -22,6 +22,11 @@ export function SummaryHeader({ summary, onPick }: Props) {
       value: summary.recipeOpt,
       onClick: () => onPick({ channel: 'recipe-opt' }),
     },
+    {
+      label: '🧬 evolution',
+      value: summary.evolution,
+      onClick: () => onPick({ channel: 'evolution' }),
+    },
     { label: 'yüksek', value: summary.high, onClick: () => onPick({ severity: 'high' }) },
     {
       label: '⚠ regresyon',

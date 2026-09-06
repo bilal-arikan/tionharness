@@ -131,6 +131,21 @@ describe('graphToVis', () => {
     expect(edges).toHaveLength(graph.edges.length)
   })
 
+  it('badges a folded node with the number of hidden children', () => {
+    const { nodes } = graphToVis(graph, {
+      selectedKey: null,
+      search: '',
+      theme,
+      layout: seedLayout(graph, ROOT_KEY),
+      collapsed: new Set(['category:sessions', 'session:SES1']),
+      childCounts: new Map([['category:sessions', 2]]),
+    })
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    expect(byId.get('category:sessions')!.label).toBe('Oturumlar [+2]')
+    // Folded without children on record: no badge.
+    expect(byId.get('session:SES1')!.label).toBe('Fix login')
+  })
+
   it('is deterministic for the same inputs', () => {
     const a = vis({ search: 'x' })
     const b = vis({ search: 'x' })

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { PanelLeftClose, Plus, RefreshCw } from 'lucide-react'
 
 // Shared chrome for every secondary sidebar (the per-screen list column), so the
 // header row, the "new item" button, the refresh control and the drag handle all
@@ -13,17 +13,54 @@ export const SELECTED_ITEM_CLS = 'bg-[var(--color-accent-soft)] text-[var(--colo
 export const SELECTED_ITEM_RING = 'ring-1 ring-[var(--color-accent)]'
 
 // SidebarHeader is the top row of a list column: an uppercase title on the left
-// and optional actions (typically a RefreshButton) on the right. Like the chat
-// sessions sidebar, it has NO collapse button — on mobile the drawer is dismissed
-// by tapping the backdrop; on desktop the column is always visible.
-export function SidebarHeader({ title, children }: { title: string; children?: ReactNode }) {
+// and optional actions (typically a RefreshButton) on the right. Pass `onCollapse`
+// (the useCollapsibleList toggle) to get the standard in-panel collapse button:
+// on md+ it folds the docked column into the reopen rail, on narrow it closes
+// the drawer (the backdrop does the same).
+export function SidebarHeader({
+  title,
+  onCollapse,
+  children,
+}: {
+  title: string
+  onCollapse?: () => void
+  children?: ReactNode
+}) {
   return (
     <div className="flex items-center justify-between px-4 pt-4 pb-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+      <span className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
         {title}
       </span>
-      {children && <div className="flex items-center gap-1">{children}</div>}
+      {(children || onCollapse) && (
+        <div className="flex shrink-0 items-center gap-1">
+          {children}
+          {onCollapse && <CollapseListButton onClick={onCollapse} />}
+        </div>
+      )}
     </div>
+  )
+}
+
+// CollapseListButton is the icon-only "hide this list" control used by every
+// list-column header (SidebarHeader and the custom sessions/insight headers).
+export function CollapseListButton({
+  onClick,
+  title = 'Listeyi gizle',
+}: {
+  onClick: () => void
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      data-testid="list-collapse"
+      className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+    >
+      <PanelLeftClose size={14} />
+    </button>
   )
 }
 

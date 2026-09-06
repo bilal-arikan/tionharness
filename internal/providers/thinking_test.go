@@ -102,6 +102,58 @@ func TestCodexGPT5ThinkingTiersAreProviderAware(t *testing.T) {
 	}
 }
 
+// TestNativeEffortTransportsDoNotOfferUltra pins the asymmetry the effort enum
+// forces: "ultra" is a real CLI effort value but has no Messages-API
+// representation, so the HTTP kinds must not offer it while the CLI kinds must.
+func TestNativeEffortTransportsDoNotOfferUltra(t *testing.T) {
+	for _, kind := range []string{"anthropic", "anthropic-compat"} {
+		got := ThinkingTiersForProvider(kind, "claude-opus-4-8")
+		if slices.Contains(got, "ultra") {
+			t.Errorf("%s offers ultra but output_config.effort cannot carry it: %v", kind, got)
+		}
+		if !slices.Contains(got, "max") {
+			t.Errorf("%s lost the max tier: %v", kind, got)
+		}
+		// Always-on models take the same treatment.
+		if alwaysOn := ThinkingTiersForProvider(kind, "claude-fable-5"); slices.Contains(alwaysOn, "ultra") {
+			t.Errorf("%s always-on ramp offers ultra: %v", kind, alwaysOn)
+		}
+	}
+	if got := ThinkingTiersForProvider("claude-cli", "claude-opus-4-8"); !slices.Contains(got, "ultra") {
+		t.Errorf("claude-cli lost ultra, which it reaches through CLAUDE_CODE_EFFORT_LEVEL: %v", got)
+	}
+}
+
+// TestUltraStaysStorableOnNativeEffortTransports guards the migration edge: an
+// agent that stored "ultra" (picked on a CLI provider, or before a provider
+// switch) must remain saveable even though the picker no longer offers it.
+func TestUltraStaysStorableOnNativeEffortTransports(t *testing.T) {
+	for _, kind := range []string{"anthropic", "anthropic-compat"} {
+		if got := StorableThinkingLevelsFor(kind, "claude-opus-4-8"); !slices.Contains(got, "ultra") {
+			t.Errorf("%s made a stored ultra row unsaveable: %v", kind, got)
+		}
+		if err := ValidateThinkingLevelForProvider(kind, "claude-opus-4-8", "ultra"); err != nil {
+			t.Errorf("%s rejected a stored ultra level: %v", kind, err)
+		}
+	}
+	// A model class that never had ultra does not gain it.
+	if got := StorableThinkingLevelsFor("anthropic", "claude-haiku-4-5"); slices.Contains(got, "ultra") {
+		t.Errorf("legacy class gained ultra: %v", got)
+	}
+}
+
+// TestEffortForThinkingBudgetUltraReportsTheEnumCeiling documents that the
+// ultra budget maps to "max" deliberately — the Messages API effort enum is
+// low|medium|high|xhigh|max — rather than by an unmarked default fallthrough.
+func TestEffortForThinkingBudgetUltraReportsTheEnumCeiling(t *testing.T) {
+	if got := EffortForThinkingBudget(65536); got != "max" {
+		t.Errorf("max budget = %q, want max", got)
+	}
+	if got := EffortForThinkingBudget(131072); got != "max" {
+		t.Errorf("ultra budget = %q, want max (effort enum has no ultra)", got)
+	}
+}
+
 func TestThinkingClass(t *testing.T) {
 	cases := map[string]string{
 		"claude-fable-5":             "always-on",

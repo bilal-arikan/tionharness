@@ -4,6 +4,7 @@ import type { ViewGraphResult, ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
 import {
   applyExplorerFilter,
+  childCounts,
   emptyExplorerFilter,
   explorerFacets,
   type ExplorerFilter,
@@ -14,12 +15,15 @@ import { graphToVis, kindColor, resolveExplorerTheme, ROOT_KEY, ROOT_REF } from 
 import type { ExplorerBucket } from './ExplorerFilters'
 
 const EMPTY_FILTER = emptyExplorerFilter()
+const NO_COLLAPSED: ReadonlySet<string> = new Set()
 
 interface Options {
   onError?: (msg: string) => void
   search: string
   // Facet filter (explorerFilter); omitted = everything visible.
   filter?: ExplorerFilter
+  // Nodes folded from the side panel (useExplorerCollapse).
+  collapsed?: ReadonlySet<string>
   // Deep link: the node to select + focus on entry (a ref string), and the
   // callback that mirrors every user selection back into the URL.
   initialFocus?: string | null
@@ -35,6 +39,7 @@ export function useExplorerGraph({
   onError,
   search,
   filter = EMPTY_FILTER,
+  collapsed = NO_COLLAPSED,
   initialFocus,
   onFocus,
 }: Options) {
@@ -109,9 +114,12 @@ export function useExplorerGraph({
   // filter over that. Both are pure and cheap relative to the physics.
   const live = useMemo(() => (graph ? augmentLive(graph) : null), [graph])
   const visible = useMemo(
-    () => (live ? applyExplorerFilter(live.graph, filter, live.liveState, ROOT_KEY) : null),
-    [live, filter],
+    () =>
+      live ? applyExplorerFilter(live.graph, filter, live.liveState, ROOT_KEY, collapsed) : null,
+    [live, filter, collapsed],
   )
+  // Children per node on the full (unfiltered) map: the fold toggle's count.
+  const counts = useMemo(() => (live ? childCounts(live.graph) : new Map<string, number>()), [live])
   const facets = useMemo(
     () => (graph ? explorerFacets(graph) : { kinds: [], agents: [], tags: [] }),
     [graph],
@@ -182,8 +190,10 @@ export function useExplorerGraph({
       layout,
       liveState: live.liveState,
       liveAgents: live.liveAgents,
+      collapsed,
+      childCounts: counts,
     })
-  }, [visible, layout, live, selectedKey, search, themeVersion])
+  }, [visible, layout, live, selectedKey, search, themeVersion, collapsed, counts])
   const canonicalNodeIds = useMemo(
     () => (live ? live.graph.nodes.map((handle) => refToString(handle.ref)) : []),
     [live],
@@ -196,6 +206,8 @@ export function useExplorerGraph({
     facets,
     buckets,
     liveCount: live?.liveState.size ?? 0,
+    // How many children the selected node has on the full map (0 = leaf).
+    selectedChildCount: counts.get(selectedKey) ?? 0,
     nodes,
     edges,
     canonicalNodeIds,

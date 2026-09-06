@@ -16,6 +16,11 @@ const reactTestEnvironment = globalThis as typeof globalThis & {
 }
 reactTestEnvironment.IS_REACT_ACT_ENVIRONMENT = true
 
+// jsdom reports a 1024px-wide window, which is the "square" viewport tier where
+// the rail is icon-only (labels hidden). Widen it so the labels render.
+Object.defineProperty(window, 'innerWidth', { value: 1440, configurable: true })
+Object.defineProperty(window, 'innerHeight', { value: 900, configurable: true })
+
 const roots: ReturnType<typeof createRoot>[] = []
 
 function render(element: React.ReactNode) {

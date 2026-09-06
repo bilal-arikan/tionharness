@@ -134,4 +134,37 @@ describe('thinking options', () => {
       }
     }
   })
+
+  it('explains the ultra tier on native-effort providers as a max fallback, not high', () => {
+    const catalog: CatalogEntry[] = [
+      {
+        id: 'anthropic',
+        label: 'Anthropic',
+        needsKey: true,
+        allowCustomModel: true,
+        appliesToolHooks: false,
+        available: true,
+        models: [
+          {
+            id: 'claude-opus-4-8',
+            label: 'Opus 4.8',
+            thinkingClass: 'adaptive',
+            // No "ultra": output_config.effort cannot carry it.
+            thinkingTiers: ['off', 'low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ],
+      },
+    ]
+    const filtered = thinkingOptionsForModel(
+      agentOptions,
+      catalog,
+      'anthropic',
+      'claude-opus-4-8',
+      '',
+    )
+    const ultra = filtered.find((option) => option.value === 'ultra')
+    expect(ultra?.disabled).toBe(true)
+    expect(ultra?.hint).toContain('Maks')
+    expect(filtered.find((option) => option.value === 'max')?.disabled).not.toBe(true)
+  })
 })

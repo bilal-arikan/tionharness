@@ -2,7 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api, getActiveWorkspace } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import type { Agent, Artifact, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
+import type {
+  Agent,
+  Artifact,
+  Task,
+  TaskPatch,
+  Flow,
+  BoardColumnDef,
+  BoardFilter,
+  BoardViewDef,
+} from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
 import { fileURL } from '@/shared/lib/attachments'
 import { pickCardImage } from './cardImage'
@@ -56,6 +66,10 @@ interface Props {
   focusTaskId?: string | null
   onFocusTask?: (id: string | null) => void
 }
+
+// Settle window for the board's free-text search before the card list is
+// re-filtered (facet chips still apply immediately).
+const BOARD_SEARCH_SETTLE_MS = 150
 
 export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -299,9 +313,35 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   const view = useBoardView(savedViews, setSavedViews, onError)
   const { filter, groupBy, sort } = view.live
 
+  // Typing in the search box patches the filter on every keystroke. The list is
+  // filtered against a settled copy of the text so a fast typist does not
+  // re-fold every card's title and description per key; the facet filters
+  // (chips, radios) still apply on the spot.
+  const settledText = useDebouncedValue(filter.text ?? '', BOARD_SEARCH_SETTLE_MS)
+  const effectiveFilter = useMemo<BoardFilter>(
+    () => ({
+      text: settledText,
+      priorities: filter.priorities,
+      tags: filter.tags,
+      agentIds: filter.agentIds,
+      columns: filter.columns,
+      dep: filter.dep,
+      review: filter.review,
+    }),
+    [
+      settledText,
+      filter.priorities,
+      filter.tags,
+      filter.agentIds,
+      filter.columns,
+      filter.dep,
+      filter.review,
+    ],
+  )
+
   // The filter runs against the FULL list because dependency state is relational
   // (a card's blocked-ness depends on cards the filter may have hidden).
-  const visible = useMemo(() => filterTasks(tasks, filter), [tasks, filter])
+  const visible = useMemo(() => filterTasks(tasks, effectiveFilter), [tasks, effectiveFilter])
 
   // Columns are derived from the grouping axis; 'status' returns the workspace's
   // configured column set verbatim. Derived from the filtered list so an axis
@@ -673,7 +713,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
                   if (t) handleDrop(t, col.key)
                   setDragId(null)
                 }}
-                className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
+                className="th-col flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)] max-sm:w-[78vw] 3xl:w-80"
               >
                 <div
                   role="heading"

@@ -101,7 +101,7 @@ export function ProviderInstanceModelSelect({ providerInstanceId, model, onChang
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
           <span className="text-xs font-medium text-[var(--color-text-dim)]">Sağlayıcı</span>
           <select

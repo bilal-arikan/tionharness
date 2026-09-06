@@ -97,7 +97,6 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
         defaultWidth={288}
         label="Araçlar"
         testId="tools-list-toggle"
-        hideRail
       >
         <div className="border-b border-[var(--color-border)] p-3">
           {/* Prominent, clearly-clickable jump to MCP server management. */}

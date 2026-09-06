@@ -149,9 +149,8 @@ export function WorkspaceView({
         open={navOpen ?? true}
         onToggle={onToggleNav ?? (() => {})}
         label="Workspace"
-        hideRail
       >
-        <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
+        <aside className="th-col flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm square:w-48">
           <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
             Workspace{ws ? ` · ${ws.name}` : ''}
           </div>
@@ -221,7 +220,7 @@ export function WorkspaceView({
           className={`mx-auto w-full min-w-0 flex-1 ${
             tab === 'logs'
               ? 'flex max-w-none overflow-hidden'
-              : 'max-w-2xl space-y-4 overflow-y-auto p-6'
+              : 'th-column max-w-2xl space-y-4 overflow-y-auto p-4 sm:p-6 3xl:max-w-4xl'
           }`}
         >
           {!ws ? (

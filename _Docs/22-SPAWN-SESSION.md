@@ -77,6 +77,9 @@ Akış:
    dedup istemiyoruz). Başlık `✨ <kısa prompt>`
    — koordinatör fan-out'uyla açılan worker oturumları (`Role == worker`) aynı
    yerde `🤖 <kısa prompt>` alır, böylece oturum listesinde düz spawn'dan ayrılır.
+   (Kalıcı alt-ajan oturumları bu yoldan geçmez: başlıkları `subagentTitle`
+   ile `🧩 <ajan> — <kısa görev> ⤴ <ebeveyn>` biçiminde kurulur —
+   `_Docs/25-SUBAGENT-ISOLATION.md`.)
 5. `AddMessage(user, prompt)` — thread gerçek bir konuşma gibi okunsun.
    **TSK507:** spawn'ı bir **ajan** başlattıysa (`SpawnOptions.CreatedBy` gerçek
    bir ajana çözülüyorsa) bu açılış mesajı o ajana atfedilir

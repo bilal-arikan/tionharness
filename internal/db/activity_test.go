@@ -54,8 +54,7 @@ func TestToolCallCountFromSteps(t *testing.T) {
 }
 
 // TestActivityHookCarriesDeltas verifies the activity hook fires per append with
-// the session's new totals and this append's deltas — the stateless-crossing
-// contract a counter automation relies on (prev = total - delta).
+// the session's new totals and this append's deltas (prev = total - delta).
 func TestActivityHookCarriesDeltas(t *testing.T) {
 	ctx := context.Background()
 	d, err := Open(filepath.Join(t.TempDir(), "store"))
@@ -92,38 +91,6 @@ func TestActivityHookCarriesDeltas(t *testing.T) {
 	// Assistant append: message 2 (+1), tool total 2 (+2).
 	if got[1].MessageTotal != 2 || got[1].MessageDelta != 1 || got[1].ToolTotal != 2 || got[1].ToolDelta != 2 {
 		t.Errorf("assistant signal = %+v", got[1])
-	}
-}
-
-// TestWorkspaceCounterTotal verifies the workspace aggregate sums every session's
-// counter, for both metrics — the value a workspace-scoped counter automation
-// watches.
-func TestWorkspaceCounterTotal(t *testing.T) {
-	ctx := context.Background()
-	d, err := Open(filepath.Join(t.TempDir(), "store"))
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	defer d.Close()
-	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
-	s1, _ := d.CreateSession(ctx, Session{AgentID: agent.ID})
-	s2, _ := d.CreateSession(ctx, Session{AgentID: agent.ID})
-
-	// s1: 1 user + 1 assistant(2 tools) = 2 msgs, 2 tools.
-	_, _ = d.AddMessage(ctx, Message{SessionID: s1.ID, Role: "user", Text: "a"})
-	_, _ = d.AddMessage(ctx, Message{SessionID: s1.ID, Role: "assistant", Text: "b", Steps: `[{"kind":"tool"},{"kind":"tool"}]`})
-	// s2: 1 assistant(3 tools) = 1 msg, 3 tools.
-	_, _ = d.AddMessage(ctx, Message{SessionID: s2.ID, Role: "assistant", Text: "c", Steps: `[{"kind":"tool"},{"kind":"tool"},{"kind":"tool"}]`})
-
-	if got := d.WorkspaceCounterTotal(CounterMetricMessage); got != 3 {
-		t.Errorf("workspace message total = %d, want 3", got)
-	}
-	if got := d.WorkspaceCounterTotal(CounterMetricTool); got != 5 {
-		t.Errorf("workspace tool total = %d, want 5", got)
-	}
-	// Empty metric defaults to message.
-	if got := d.WorkspaceCounterTotal(""); got != 3 {
-		t.Errorf("workspace default(message) total = %d, want 3", got)
 	}
 }
 

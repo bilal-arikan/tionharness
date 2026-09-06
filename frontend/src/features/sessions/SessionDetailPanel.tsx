@@ -82,6 +82,8 @@ export function SessionDetailPanel({
     min: 280,
     max: 640,
     invert: true,
+    // Docked only on wide/ultra (a drawer elsewhere), so no tier cap.
+    capToTier: false,
   })
   const [info, setInfo] = useState<SessionInfo | null>(null)
   // In-flight action guard for the running-process card (stop/restart/drop).
@@ -321,7 +323,7 @@ export function SessionDetailPanel({
   return (
     <aside
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)] max-md:!w-[85vw] max-md:!max-w-sm"
+      className="th-col relative flex h-full shrink-0 flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)] max-md:!w-[85vw] max-md:!max-w-sm"
     >
       {/* Drag strip on the LEFT edge to resize the right-hand panel. It stays put
           while the content scrolls, so the scroll lives on the inner wrapper. */}

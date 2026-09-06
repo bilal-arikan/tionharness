@@ -336,7 +336,7 @@ export function TaskFormModal({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Durum (kolon)">
               <div data-testid="task-boardstate-select" className="flex flex-wrap gap-1.5">
                 {columns.map((col) => {
@@ -387,7 +387,7 @@ export function TaskFormModal({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Ajan (atanan)">
               <div data-testid="task-detail-owner-wrap">
                 <AgentPicker

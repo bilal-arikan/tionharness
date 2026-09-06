@@ -1,0 +1,122 @@
+/* Responsive shell layer: the CSS half of the viewport tiers declared in
+   shared/lib/viewport.ts. useViewportAttribute() stamps <html data-viewport=
+   narrow|square|wide|ultra data-aspect=portrait|square|landscape>; the rules
+   below key the reading measure, column transitions and drawer motion off it.
+   Un-layered on purpose (see index.css) so a `.th-*` class can override the
+   Tailwind utility that sits next to it. */
+
+/* ---- Reading measure --------------------------------------------------
+   `.th-measure` centres its content once the viewport is wider than a
+   comfortable line length, using padding rather than a wrapper so the scroll
+   container stays the full width (the scrollbar hugs the pane edge). Below the
+   ultra tier the measure is 100% and only the gutter applies, which is exactly
+   the old `px-[1px] md:px-6` behaviour. */
+:root {
+  --th-measure: 100%;
+  --th-gutter: 1px;
+  --th-motion: 220ms;
+  --th-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (min-width: 48rem) {
+  :root {
+    --th-gutter: 1.5rem;
+  }
+}
+:root[data-viewport='ultra'] {
+  --th-measure: 88rem;
+}
+
+.th-measure {
+  padding-inline: max(var(--th-gutter), calc((100% - var(--th-measure)) / 2));
+  transition: padding-inline var(--th-motion) var(--th-ease);
+}
+/* Card-style blocks (composer chrome) keep a wider phone gutter than the
+   transcript so the rounded card never touches the screen edge. */
+.th-measure-card {
+  --th-gutter: 0.75rem;
+}
+@media (min-width: 48rem) {
+  .th-measure-card {
+    --th-gutter: 1.5rem;
+  }
+}
+
+/* ---- Column width transitions -----------------------------------------
+   Docked columns (rail, list panes, detail panel) animate their width when a
+   tier boundary caps them or a collapse toggles. During a drag-resize the
+   transition is suppressed so the column tracks the pointer 1:1
+   (useResizableSidebar sets body[data-th-resizing]). */
+.th-col {
+  transition:
+    width var(--th-motion) var(--th-ease),
+    max-width var(--th-motion) var(--th-ease);
+}
+body[data-th-resizing] .th-col {
+  transition: none;
+}
+
+/* ---- Drawer + backdrop motion -----------------------------------------
+   Slide-in drawers use a transform transition; a drawer that is mounted only
+   while open (detail panel, nav peek) enters from its edge via @starting-style.
+   The backdrop fades in the same way. Reduced-motion users get the global
+   near-instant override from index.css. */
+.th-drawer {
+  transition: transform var(--th-motion) var(--th-ease);
+}
+.th-drawer-from-right {
+  transform: translateX(0);
+  transition: transform var(--th-motion) var(--th-ease);
+}
+@starting-style {
+  .th-drawer-from-right {
+    transform: translateX(100%);
+  }
+}
+.th-drawer-from-left {
+  transform: translateX(0);
+  transition: transform var(--th-motion) var(--th-ease);
+}
+@starting-style {
+  .th-drawer-from-left {
+    transform: translateX(-100%);
+  }
+}
+.th-backdrop {
+  opacity: 1;
+  transition: opacity var(--th-motion) ease-out;
+}
+@starting-style {
+  .th-backdrop {
+    opacity: 0;
+  }
+}
+
+/* ---- List column collapse ---------------------------------------------
+   A docked list column re-enters from the collapsed reopen rail with a short
+   slide + fade; the rail itself just fades in. Both are keyframes (not
+   transitions) because the column is unmounted while collapsed. */
+@keyframes th-pane-in {
+  from {
+    opacity: 0;
+    transform: translateX(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (min-width: 48rem) {
+  .th-pane-enter {
+    animation: th-pane-in var(--th-motion) var(--th-ease);
+  }
+}
+.th-rail {
+  animation: th-pane-in var(--th-motion) var(--th-ease);
+}
+
+/* ---- Content-width transitions ----------------------------------------
+   Centred form columns (settings / workspace) widen on the ultra tier;
+   animate the max-width so the tier flip does not snap. */
+.th-column {
+  transition: max-width var(--th-motion) var(--th-ease);
+}

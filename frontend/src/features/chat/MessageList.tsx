@@ -399,7 +399,7 @@ export function MessageList({
           OUTSIDE the scroll container, a wheel over the bubble has no scrollable
           ancestor to bubble into — hence the explicit forward in onWheel. */}
       {pinnedTyped && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-[1px] pt-2 pb-6 md:px-6">
+        <div className="th-measure pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent pt-2 pb-6">
           {/* role="button" on a div rather than a real <button>: UserBubble renders
               block-level markup, which a button's phrasing-only content model
               forbids. Keyboard activation is wired explicitly to match. */}
@@ -433,7 +433,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         aria-label="Sohbet geçmişi"
-        className="h-full overflow-y-auto px-[1px] pb-6 pt-2 md:px-6"
+        className="th-measure h-full overflow-y-auto pb-6 pt-2"
         style={bottomInset ? { paddingBottom: bottomInset } : undefined}
       >
         <div className="flex w-full flex-col gap-4">

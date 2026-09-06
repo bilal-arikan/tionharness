@@ -30,7 +30,7 @@ export function MarketGrid({
   remoteWarnings,
 }: Props) {
   return (
-    <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-start gap-3 overflow-y-auto p-4">
+    <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-start gap-3 overflow-y-auto p-3 sm:p-4 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
       {visible.length === 0 && (
         <p className="col-span-full mt-8 text-center text-sm text-[var(--color-text-dim)]">
           Bu türde paket yok.

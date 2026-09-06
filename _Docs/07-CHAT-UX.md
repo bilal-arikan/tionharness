@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-09-03):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30) ve ajan aksiyonu renk kodlaması (2026-09-02). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
+> **Özet (2026-09-06):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — ve başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -836,7 +836,9 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
 
 - Sohbet **session-bazlı**: sol panel (`SessionsSidebar.tsx`) oturumları **zaman
   kovalarına** gruplar (Bugün/Dün/Geçen hafta/Geçen ay/Daha eski; ajan altında gruplama
-  yok), `updatedAt` desc; her oturum **tek bir ajana bağlıdır** (`Session.AgentID`) ve
+  yok), `updatedAt` desc — bu alan **son aktivitedir**, bu yüzden bir oturumu yeniden
+  adlandırmak (elle ya da ✨ ile) onu listenin başına taşımaz (2026-09-06,
+  `SetSessionTitle` artık damgayı bump etmiyor); her oturum **tek bir ajana bağlıdır** (`Session.AgentID`) ve
   satırda o ajanın avatarı görünür. Ajan roster'ı ayrı **Ajanlar** view'inde
   (`AgentRoster`/`AgentsView`) = yeni sohbetlerin varsayılan ajan seçicisi.
   `POST /api/sessions` `agentId` opsiyonel (boş → ilk ajan).
@@ -1050,6 +1052,15 @@ da görünür) hem de ilk-tur LLM auto-title'ı için **fallback**tir: LLM başa
 dönerse kesit kalır, başarılıysa daha temiz bir başlıkla üzerine yazar (refine). Tamamen
 best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunulmaz; mevcut
 `session_change("title")` eventi UI'ı günceller.
+
+**Başlık yazımı aktivite değildir (2026-09-06, TSK867).** `SetSessionTitle` artık
+`Session.UpdatedAt`'e dokunmuyor — o damga "son aktivite" demektir ve yalnız mesaj
+eklenince ilerler (`SetSessionTags` de aynı gerekçeyle hiç bump yapmıyordu). Eskiden
+eski bir oturumun başlığını sonradan üretmek (`handleGenerateSessionTitle`) o oturumu
+bugün konuşulmuş gibi gösteriyordu: sidebar'ın zaman kovaları onu "Bugün"e alıyor,
+Rota çubuğu `Math.max(updatedAt, createdAt)` yüzünden "şimdi"ye kadar uzuyordu.
+Kasıtlı yan etki: yeniden adlandırma oturumu listede öne taşımaz; başlık değişimi
+UI'a yine `session_change("title")` ile anında yansır.
 
 ### Hata kurtarma ve yeniden deneme
 
@@ -1363,9 +1374,19 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `non-thinking` (**DeepSeek V4 Flash** →
   yalnız `off`); `legacy` (somut eski Claude/MiniMax — reasoning_effort tavanı `high` — DeepSeek Pro →
   `xhigh/max` yok); `alias` (claude-cli `opus`/boş "claude oturum modeli"/özel → tam rampa, provider kırpar).
+  **`ultra` native yolda sunulmaz (2026-09-06):** Messages API'de derinlik
+  `output_config.effort` ile taşınır ve enum `low|medium|high|xhigh|max` — `ultra` yok. Bu yüzden
+  `ThinkingTiersForProvider` `anthropic`/`anthropic-compat` kind'larında rampadan `ultra`'yı
+  düşürür (`usesNativeEffort`), `EffortForThinkingBudget` ise ultra bütçesini (131072) açıkça
+  belgelenmiş biçimde `max`'a eşler — eskisi gibi işaretsiz bir `default` dalıyla **sessizce**
+  değil. `StorableThinkingLevelsFor` `ultra`'yı bu kind'larda **saklanabilir** tutar: CLI
+  sağlayıcısında seçilmiş ya da sağlayıcısı sonradan değiştirilmiş ajan satırları kaydedilemez
+  hâle gelmesin (always-on sınıfındaki `off` ile aynı kalıp). CLI yolları (`climcp`, `codexcli`)
+  `ultra`'yı gerçek effort değeri olarak geçirmeye devam eder.
   **Gizleme değil pasifleştirme:** desteklenmeyen tiyer butonu gizlenmez, **soluk+disabled** gösterilir
   ve tooltip sebebini yazar (`thinkingTierDisabledReason(cls, tier)` — "her zaman düşünür — kapatılamaz"
-  / "düşünmez" / "\"Yüksek\"e düşer"). Composer (`ComposerPicker`) ve ajan formu (`OptionPills`) artık
+  / "düşünmez" / akıl yürüten sınıflarda `ultra` için "\"Maks\"a (max) düşer" / legacy klamplamasında
+  "\"Yüksek\"e düşer"). Composer (`ComposerPicker`) ve ajan formu (`OptionPills`) artık
   `disabled` opsiyonlarını destekler; kaynak `thinkingInfoForModel(catalog, provider, model)`. Model
   kataloğda yoksa (özel id) tüm tiyerler aktif; mevcut seçili seviye ve "Oto" her zaman tıklanabilir
   kalır. Backend kırpma güvenlik ağı yerinde durur.

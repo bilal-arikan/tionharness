@@ -54,6 +54,11 @@ export function thinkingInfoForModel(
 export function thinkingTierDisabledReason(cls: string, tier: string): string {
   if (cls === 'always-on' && tier === 'off') return 'Bu model her zaman düşünür — kapatılamaz'
   if (cls === 'non-thinking') return 'Bu model düşünmez (akıl yürütme yok)'
+  // On the reasoning classes the only upper tier a model can be missing is
+  // "ultra": the Messages API effort enum stops at "max", so it lands on max
+  // rather than on the legacy high clamp.
+  if (tier === 'ultra' && (cls === 'adaptive' || cls === 'always-on' || cls === 'alias'))
+    return 'Bu sağlayıcıda "Maks"a (max) düşer — effort değeri ultra taşımıyor'
   if (tier === 'xhigh' || tier === 'max' || tier === 'ultra')
     return 'Bu modelde "Yüksek"e (high) düşer'
   return 'Bu model bu seviyeyi desteklemez'

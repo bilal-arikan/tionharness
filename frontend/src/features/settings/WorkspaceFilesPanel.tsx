@@ -9,7 +9,7 @@ import { Field } from './primitives'
 import { PromptEditor, LoadingState, toast } from '@/shared/components'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { displayPath } from '@/shared/lib/paths'
-import { changedEditablePrompts, isSystemOwnedPrompt } from '@/shared/lib/workspacePrompts'
+import { changedEditablePrompts } from '@/shared/lib/workspacePrompts'
 
 // FilesSaveState lets the parent (WorkspaceView) render the Save button + status
 // in its top header instead of this panel showing its own.
@@ -148,12 +148,22 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
       <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Runtime promptları
       </div>
+      <p className="text-[11px] text-[var(--color-text-dim)]">
+        Sistem ajanlarının promptları (başlık, compaction, insight, subagent profilleri…) burada
+        değil: her biri kendi ajanının promptudur ve <strong>Ayarlar ▸ Sistem ajanları</strong>{' '}
+        ekranından düzenlenir — doğrudan ya da kalıtım alan bir özelleştirme üzerinden.{' '}
+        <button
+          type="button"
+          onClick={onGoToAgents}
+          className="text-[var(--color-accent)] underline underline-offset-2"
+        >
+          Ajanlar ekranını aç
+        </button>
+      </p>
       {config.promptKeys.map((key) => {
         const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
         const placeholders = meta.placeholders ?? []
-        const ownedBySystemKey = meta.ownedBySystemKey
-        const readOnly = isSystemOwnedPrompt(key, config.promptMeta ?? {})
         const missing = placeholders.filter((p) => !draft.prompts[key].includes(`{{${p}}}`))
         let hint = meta.hint
         if (placeholders.length) {
@@ -165,35 +175,19 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
             <PromptEditor
               value={draft.prompts[key]}
               onChange={(v) => setPrompt(key, v)}
-              readOnly={readOnly}
               rows={4}
               mono
               autoSize
               textareaClassName="text-xs"
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              {!ownedBySystemKey && (
-                <button
-                  onClick={() => setPrompt(key, config.defaults[key] ?? '')}
-                  disabled={isDefault}
-                  className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-30"
-                >
-                  Varsayılana dön
-                </button>
-              )}
-              {ownedBySystemKey && (
-                <span className="text-[11px] text-[var(--color-text-dim)]">
-                  Etkin prompt <code>{ownedBySystemKey}</code> sistem ajanından gelir. Workspace
-                  override yalnızca sistem ajanı çözümlemesi başarısız olursa kullanılır.
-                  <button
-                    type="button"
-                    onClick={onGoToAgents}
-                    className="ml-1 text-[var(--color-accent)] underline underline-offset-2"
-                  >
-                    Ajanlar ekranında düzenle
-                  </button>
-                </span>
-              )}
+              <button
+                onClick={() => setPrompt(key, config.defaults[key] ?? '')}
+                disabled={isDefault}
+                className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-30"
+              >
+                Varsayılana dön
+              </button>
               {isDefault ? (
                 <span className="text-[11px] text-[var(--color-text-dim)]">varsayılan</span>
               ) : (

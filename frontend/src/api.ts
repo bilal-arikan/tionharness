@@ -28,6 +28,8 @@ import { sttServerApi } from './api/stt'
 import { viewApi } from './api/views'
 import { trajectoryApi } from './api/trajectories'
 import { curatorApi } from './api/curator'
+import { goalApi } from './api/goals'
+import { evolutionApi } from './api/evolution'
 import { dashboardApi } from './api/dashboard'
 
 export { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace }
@@ -58,5 +60,7 @@ export const api = {
   ...viewApi,
   ...trajectoryApi,
   ...curatorApi,
+  ...goalApi,
+  ...evolutionApi,
   ...dashboardApi,
 }

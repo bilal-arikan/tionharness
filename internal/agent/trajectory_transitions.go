@@ -48,6 +48,9 @@ func (r *Runtime) observeTrajectoryTransitions(ev db.TrajectoryChangeEvent) {
 				trigger = optimizerTriggerFail
 			}
 			r.enqueueTrajectoryWork(func() { r.MaybeOptimizeRecipe(context.Background(), slug, trigger) })
+			// Evolution (E2): every active goal re-checks its own thresholds
+			// after a run ends; the LLM pass, when due, leaves the queue.
+			r.enqueueTrajectoryWork(func() { r.SweepGoals(context.Background()) })
 		}
 	}
 }

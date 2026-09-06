@@ -1,9 +1,8 @@
-import { resolveAgent } from '@/shared/lib/agentLookup'
+import { resolveSessionOwner, sessionRowLabel } from './sessionOwner'
 import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
@@ -29,7 +28,10 @@ import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
+import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
+import { CollapseListButton, ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useDraftSessionIds } from '@/shared/hooks/useDraftSessionIds'
+import { useStableCallback } from '@/shared/lib/useStableCallback'
 import {
   ARCHIVED_CHIP,
   kindMeta,
@@ -53,23 +55,6 @@ const SIDEBAR_WIDTH_KEY = 'tionharness.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 200
 const MAX_SIDEBAR_WIDTH = 560
 const DEFAULT_SIDEBAR_WIDTH = 264
-
-function readSidebarWidth(): number {
-  try {
-    const saved = Number(globalThis.localStorage.getItem(SIDEBAR_WIDTH_KEY))
-    return saved >= MIN_SIDEBAR_WIDTH && saved <= MAX_SIDEBAR_WIDTH ? saved : DEFAULT_SIDEBAR_WIDTH
-  } catch {
-    return DEFAULT_SIDEBAR_WIDTH
-  }
-}
-
-function writeSidebarWidth(width: number): void {
-  try {
-    globalThis.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width))
-  } catch {
-    // Persistence is best-effort when storage is blocked by browser policy.
-  }
-}
 
 interface Props {
   sessions: Session[]
@@ -109,12 +94,18 @@ interface Props {
   onNewSession: () => void
   // Re-fetch the session list from the server (manual refresh button).
   onRefresh: () => void
+  // Standard list collapse (docked column → reopen rail on md+, drawer close on narrow).
+  onCollapse?: () => void
   onGenerateTitle: (id: string) => void
   onDeleteSession: (id: string) => void
   // Archive (true) or restore (false) a session — drives the Active/Archived filter.
   onSetArchived: (id: string, archived: boolean) => void
   // Pin (true) or unpin (false) a session — pinned rows float to the top.
   onSetPinned: (id: string, pinned: boolean) => void
+  // Debounced title/id search, for the owner to send as the list's server-side
+  // filter. The local sessionMatchesQuery pass keeps the loaded rows responsive
+  // while the server round-trip is in flight.
+  onQueryChange?: (query: string) => void
 }
 
 // SessionsSidebar is the unified sessions column: a flat, time-bucketed list of
@@ -140,10 +131,12 @@ export function SessionsSidebar({
   onSelectSession,
   onNewSession,
   onRefresh,
+  onCollapse,
   onGenerateTitle,
   onDeleteSession,
   onSetArchived,
   onSetPinned,
+  onQueryChange,
 }: Props) {
   // One flat list filtered by multi-select chips: the kind chips plus a Worker
   // and an Arşiv chip. The selection itself lives in useSessionChips (above this
@@ -163,39 +156,14 @@ export function SessionsSidebar({
   const [hits, setHits] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
 
-  // Draggable width (persisted), matching the old sidebar behaviour.
-  const [width, setWidth] = useState(readSidebarWidth)
-  const drag = useRef<{ startX: number; startW: number } | null>(null)
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!drag.current) return
-      setWidth(
-        Math.min(
-          MAX_SIDEBAR_WIDTH,
-          Math.max(MIN_SIDEBAR_WIDTH, drag.current.startW + (e.clientX - drag.current.startX)),
-        ),
-      )
-    }
-    const onUp = () => {
-      if (!drag.current) return
-      drag.current = null
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      writeSidebarWidth(width)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [width])
-  const startDrag = (e: React.MouseEvent) => {
-    e.preventDefault()
-    drag.current = { startX: e.clientX, startW: width }
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-  }
+  // Draggable width (persisted) via the shared hook, which also caps the column
+  // on the square tier and pauses the width transition while dragging.
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: SIDEBAR_WIDTH_KEY,
+    defaultWidth: DEFAULT_SIDEBAR_WIDTH,
+    min: MIN_SIDEBAR_WIDTH,
+    max: MAX_SIDEBAR_WIDTH,
+  })
 
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
@@ -306,6 +274,14 @@ export function SessionsSidebar({
     }
   }
 
+  // Server-side title/id filter: the same debounce as the message search below,
+  // reported to the owner (which re-queries the paged list with ?q=).
+  const notifyQuery = useStableCallback((q: string) => onQueryChange?.(q))
+  useEffect(() => {
+    const handle = setTimeout(() => notifyQuery?.(query.trim()), 250)
+    return () => clearTimeout(handle)
+  }, [query, notifyQuery])
+
   // Debounced full-text message search. Runs only for queries of 2+ chars so a
   // single keystroke doesn't hit the backend; cleared when the box empties.
   useEffect(() => {
@@ -344,19 +320,22 @@ export function SessionsSidebar({
   return (
     <aside
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="th-col relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"
     >
       <div className="flex items-center justify-between px-4 pt-4 pb-1">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           Oturumlar
         </span>
-        <button
-          onClick={onRefresh}
-          className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          title="Sohbet geçmişini yenile"
-        >
-          <RefreshCw size={14} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={onRefresh}
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            title="Sohbet geçmişini yenile"
+          >
+            <RefreshCw size={14} />
+          </button>
+          {onCollapse && <CollapseListButton onClick={onCollapse} />}
+        </div>
       </div>
 
       {/* Prominent new-chat button, above the search. */}
@@ -445,7 +424,9 @@ export function SessionsSidebar({
               {items.map((s) => {
                 // Sessions outlive their agent, so resolve rather than find:
                 // a deleted owner still renders (badged) instead of vanishing.
-                const owner = resolveAgent(agents, s.agentId)
+                // A delegated run carries its identity as a target rather than an
+                // owner, so resolveSessionOwner falls back to it (see sessionOwner).
+                const owner = resolveSessionOwner(agents, s)
                 const isActive = activeSessionId === s.id
                 const runtime = runtimeById?.get(s.id)
                 // Live either because THIS window is streaming the turn (instant, no
@@ -537,7 +518,7 @@ export function SessionsSidebar({
                           <span
                             className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}
                           >
-                            {s.title || 'Yeni sohbet'}
+                            {sessionRowLabel(agents, s)}
                           </span>
                           {s.kind === 'spawned' && (
                             <span
@@ -691,11 +672,7 @@ export function SessionsSidebar({
         </SelectionBarButton>
       </SelectionBar>
 
-      <div
-        onMouseDown={startDrag}
-        title="Genişliği ayarla"
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)]"
-      />
+      <ResizeHandle onMouseDown={startDrag} />
     </aside>
   )
 }

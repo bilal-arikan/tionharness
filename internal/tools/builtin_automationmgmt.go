@@ -47,17 +47,13 @@ func NewCreateAutomationTool(database *db.DB, actorID string) CreateAutomationTo
 func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
-		Description: "Create an event-driven automation. Four trigger kinds: (a) triggerKind='tag' (default) — when a session " +
+		Description: "Create an event-driven automation. Three trigger kinds: (a) triggerKind='tag' (default) — when a session " +
 			"carrying triggerTag finishes a turn, its final reply is rendered into promptTemplate ({{result}}, {{title}}, " +
 			"{{tag}}, {{sessionId}}) and the target runs; (b) triggerKind='board' — when a kanban card changes (created/moved/" +
 			"updated/deleted), the target runs with the card context ({{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, " +
 			"{{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
 			"tokenThreshold multiple (tokenScope='session' watches one session's lifetime spend, 'workspace' the whole day's), " +
-			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup; " +
-			"(d) triggerKind='counter' — when an activity counter crosses each counterInterval multiple " +
-			"(counterMetric='message'|'tool'; counterScope='session' watches the crossing session, 'workspace' the whole " +
-			"workspace's cumulative counter), the target runs with {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. " +
-			"Prefer 'counter' over 'token' for a stable work-cadence — token counts are cache-inflated and fire unpredictably. " +
+			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup. " +
 			"The target is EITHER an agent (targetAgentId → a NEW session is spawned) OR an orchestration flow " +
 			"(flowId → the rendered prompt is run as the flow input). For a tag automation the spawned session carries " +
 			"triggerTag by default (a self-continuing loop bounded by maxIterations); board and token automations do not self-loop. " +
@@ -68,7 +64,7 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Optional display name"},
-				"triggerKind":{"type":"string","enum":["tag","board","token","counter"],"description":"What fires the automation: 'tag' (default; session tag), 'board' (kanban card change), 'token' (token-spend threshold crossing), or 'counter' (message/tool count crossing)"},
+				"triggerKind":{"type":"string","enum":["tag","board","token"],"description":"What fires the automation: 'tag' (default; session tag), 'board' (kanban card change), or 'token' (token-spend threshold crossing)"},
 				"triggerTag":{"type":"string","description":"[tag kind] The session tag that fires this automation when a tagged session's turn ends"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"],"description":"[board kind] Which card change fires it (default 'move')"},
 				"boardFromState":{"type":"string","description":"[board kind] Only fire when a card LEAVES this column (empty = any source)"},
@@ -79,13 +75,10 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] What to watch: 'session' (default; one session's lifetime tokens) or 'workspace' (whole workspace's tokens today)"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] Token INTERVAL; fires each time cumulative spend crosses another multiple (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache."},
-				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] Which counter to watch: 'message' (default; every user/assistant message) or 'tool' (executed tool calls)"},
-				"counterScope":{"type":"string","enum":["session","workspace"],"description":"[counter kind] What to watch: 'session' (default; the crossing session's own counter) or 'workspace' (the whole workspace's cumulative counter — sum of every session; good for a multi-agent work-cadence trigger)"},
-				"counterInterval":{"type":"integer","description":"[counter kind] Count INTERVAL; fires each time the watched counter crosses another multiple (e.g. 10 → at 10, 20…). Min 2."},
-				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token/counter default). Omit to use the per-kind default. Ignored for flow-backed rules."},
+				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token default). Omit to use the per-kind default. Ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Optional for board archive/move actions, which never call an LLM. Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Optional for board archive/move actions, which never call an LLM. Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → self-continuing loop). To stop the loop, set a DIFFERENT tag that no automation triggers on — an empty [] does NOT break the loop (it is re-defaulted to [triggerTag]). Ignored for flow-backed and board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling. Range 1-500; 0/unlimited is REJECTED (infinite-loop risk). Omit for the default 50."},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
@@ -114,9 +107,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardMoveToState string   `json:"boardMoveToState"`
 		TokenScope       string   `json:"tokenScope"`
 		TokenThreshold   *int     `json:"tokenThreshold"`
-		CounterMetric    string   `json:"counterMetric"`
-		CounterScope     string   `json:"counterScope"`
-		CounterInterval  *int     `json:"counterInterval"`
 		SessionMode      string   `json:"sessionMode"`
 		TargetAgentID    string   `json:"targetAgentId"`
 		FlowID           string   `json:"flowId"`
@@ -131,8 +121,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		return "", argErr(err)
 	}
 	in.TriggerKind = strings.TrimSpace(in.TriggerKind)
-	in.CounterMetric = strings.TrimSpace(in.CounterMetric)
-	in.CounterScope = strings.TrimSpace(in.CounterScope)
 	in.SessionMode = strings.TrimSpace(in.SessionMode)
 	in.TriggerTag = strings.TrimSpace(in.TriggerTag)
 	in.BoardOp = strings.TrimSpace(in.BoardOp)
@@ -153,13 +141,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 			return "", fmt.Errorf("tokenThreshold is required for token automations")
 		}
 		tokenThreshold = *in.TokenThreshold
-	}
-	counterInterval := 0
-	if in.TriggerKind == db.TriggerCounter {
-		if in.CounterInterval == nil {
-			return "", fmt.Errorf("counterInterval is required for counter automations")
-		}
-		counterInterval = *in.CounterInterval
 	}
 	// A board 'archive' automation needs no target (no LLM call). Otherwise either
 	// a flow (flowId) or an agent (targetAgentId) is the target.
@@ -222,9 +203,6 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardMoveToState: in.BoardMoveToState,
 		TokenScope:       in.TokenScope,
 		TokenThreshold:   tokenThreshold,
-		CounterMetric:    in.CounterMetric,
-		CounterScope:     in.CounterScope,
-		CounterInterval:  counterInterval,
 		SessionMode:      in.SessionMode,
 		TargetAgentID:    in.TargetAgentID,
 		FlowID:           in.FlowID,
@@ -260,13 +238,13 @@ func NewUpdateAutomationTool(database *db.DB, actorID string) UpdateAutomationTo
 func (UpdateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_automation",
-		Description: "Edit an automation (user- or agent-created). Pass the id and any field shown in the schema to change it (name, triggerKind, the tag/board/token/counter trigger fields, targetAgentId, flowId, promptTemplate, spawnTags, sessionMode, maxIterations, cooldownSec, expiresAt, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
+		Description: "Edit an automation (user- or agent-created). Pass the id and any field shown in the schema to change it (name, triggerKind, the tag/board/token trigger fields, targetAgentId, flowId, promptTemplate, spawnTags, sessionMode, maxIterations, cooldownSec, expiresAt, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"id":{"type":"string","description":"The automation id (see list_automations)"},
 				"name":{"type":"string"},
-				"triggerKind":{"type":"string","enum":["tag","board","token","counter"]},
+				"triggerKind":{"type":"string","enum":["tag","board","token"]},
 				"triggerTag":{"type":"string"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"]},
 				"boardFromState":{"type":"string","description":"[board kind] source-column filter (empty = any)"},
@@ -277,9 +255,6 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] watch one session ('session') or the whole workspace/day ('workspace')"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] token interval; fires each time cumulative spend crosses another multiple (min 1000)"},
-				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] watch 'message' count or 'tool' calls"},
-				"counterScope":{"type":"string","enum":["session","workspace"],"description":"[counter kind] watch one session ('session') or the whole workspace's cumulative counter ('workspace')"},
-				"counterInterval":{"type":"integer","description":"[counter kind] count interval; fires each time the watched counter crosses another multiple (min 2)"},
 				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] 'spawn' (fresh session per fire) or 'continue' (persistent per-automation thread, history-aware). Omit for the per-kind default; ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
@@ -311,9 +286,6 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardMoveToState *string   `json:"boardMoveToState"`
 		TokenScope       *string   `json:"tokenScope"`
 		TokenThreshold   *int      `json:"tokenThreshold"`
-		CounterMetric    *string   `json:"counterMetric"`
-		CounterScope     *string   `json:"counterScope"`
-		CounterInterval  *int      `json:"counterInterval"`
 		SessionMode      *string   `json:"sessionMode"`
 		TargetAgentID    *string   `json:"targetAgentId"`
 		FlowID           *string   `json:"flowId"`
@@ -373,15 +345,6 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.TokenThreshold != nil {
 		cur.TokenThreshold = *in.TokenThreshold
-	}
-	if in.CounterMetric != nil {
-		cur.CounterMetric = strings.TrimSpace(*in.CounterMetric)
-	}
-	if in.CounterScope != nil {
-		cur.CounterScope = strings.TrimSpace(*in.CounterScope)
-	}
-	if in.CounterInterval != nil {
-		cur.CounterInterval = *in.CounterInterval
 	}
 	if in.SessionMode != nil {
 		cur.SessionMode = strings.TrimSpace(*in.SessionMode)
@@ -495,13 +458,13 @@ func (ListAutomationsTool) Def() providers.ToolDef {
 			"enabled, iterationCount/maxIterations, and whether each was created by an agent — provenance only; " +
 			"you can edit/delete any of them). Results are PAGINATED: pass limit (default 20, max 100) and offset " +
 			"to page; the reply reports total and hasMore, and you reach the next page with offset += limit. " +
-			"Filters: enabled (true/false), triggerKind (tag|board|token|counter), targetAgentId (exact). Sort: " +
+			"Filters: enabled (true/false), triggerKind (tag|board|token), targetAgentId (exact). Sort: " +
 			"updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "enabled": { "type": "boolean", "description": "Only enabled (true) or disabled (false) automations." },
-    "triggerKind": { "type": "string", "enum": ["tag", "board", "token", "counter"], "description": "Only automations with this trigger kind." },
+    "triggerKind": { "type": "string", "enum": ["tag", "board", "token"], "description": "Only automations with this trigger kind." },
     "targetAgentId": { "type": "string", "description": "Only automations targeting this agent." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
     "limit": { "type": "integer", "description": "Max automations per page (default 20, max 100)." },
@@ -535,9 +498,9 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 
 	triggerKind := strings.TrimSpace(in.TriggerKind)
 	switch triggerKind {
-	case "", "tag", "board", "token", "counter":
+	case "", "tag", "board", "token":
 	default:
-		return "", fmt.Errorf("triggerKind must be one of tag, board, token, counter; got %q", triggerKind)
+		return "", fmt.Errorf("triggerKind must be one of tag, board, token; got %q", triggerKind)
 	}
 	target := strings.TrimSpace(in.TargetAgentID)
 	matches := make([]db.Automation, 0, len(autos))
@@ -589,9 +552,6 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 		BoardMoveToState string `json:"boardMoveToState,omitempty"`
 		TokenScope       string `json:"tokenScope,omitempty"`
 		TokenThreshold   int    `json:"tokenThreshold,omitempty"`
-		CounterMetric    string `json:"counterMetric,omitempty"`
-		CounterScope     string `json:"counterScope,omitempty"`
-		CounterInterval  int    `json:"counterInterval,omitempty"`
 		TargetAgentID    string `json:"targetAgentId"`
 		FlowID           string `json:"flowId,omitempty"`
 		Enabled          bool   `json:"enabled"`
@@ -618,9 +578,6 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 			BoardMoveToState: a.BoardMoveToState,
 			TokenScope:       a.TokenScope,
 			TokenThreshold:   a.TokenThreshold,
-			CounterMetric:    a.CounterMetric,
-			CounterScope:     a.CounterScope,
-			CounterInterval:  a.CounterInterval,
 			TargetAgentID:    a.TargetAgentID,
 			FlowID:           a.FlowID,
 			Enabled:          a.Enabled,

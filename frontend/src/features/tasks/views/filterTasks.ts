@@ -20,6 +20,21 @@ function foldForSearch(s: string): string {
   return s.replace(/[İI]/g, 'i').replace(/ı/g, 'i').toLowerCase().normalize('NFD').replace(/̇/g, '') // strip the combining dot above left by 'İ'
 }
 
+// foldedHay caches each task's folded search text. Folding runs a Unicode
+// normalisation over title + description, and the filter re-runs on every
+// keystroke and every board mutation; tasks are replaced (never mutated in
+// place) when they change, so a cached entry can never outlive its task.
+const foldedHay = new WeakMap<Task, string>()
+
+function taskSearchText(t: Task): string {
+  let hay = foldedHay.get(t)
+  if (hay === undefined) {
+    hay = foldForSearch(`${t.title}\n${t.description}`)
+    foldedHay.set(t, hay)
+  }
+  return hay
+}
+
 // Parse a task's dependencies JSON string into an array of task ids.
 export function parseDeps(raw: string): string[] {
   try {
@@ -54,10 +69,7 @@ export function filterTasks(all: Task[], filter: BoardFilter): Task[] {
   const text = filter.text ? foldForSearch(filter.text.trim()) : ''
 
   return all.filter((t) => {
-    if (text) {
-      const hay = foldForSearch(`${t.title}\n${t.description}`)
-      if (!hay.includes(text)) return false
-    }
+    if (text && !taskSearchText(t).includes(text)) return false
     if (filter.priorities?.length && !filter.priorities.includes((t.priority ?? '') as never)) {
       return false
     }

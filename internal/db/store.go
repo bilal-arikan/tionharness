@@ -18,6 +18,7 @@ import (
 
 func (d *DB) persistAgentLocked(a Agent) error {
 	d.agents[a.ID] = a
+	d.markMutatedLocked()
 	return atomicWriteJSON(d.dir(dirAgents, a.ID+".json"), a)
 }
 
@@ -174,6 +175,7 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	a.DeletedAt = now()
 	a.UpdatedAt = a.DeletedAt
 	d.agents[id] = a
+	d.markMutatedLocked()
 	if err := atomicWriteJSON(d.dir(dirAgents, id+".json"), a); err != nil {
 		return err
 	}
@@ -187,6 +189,7 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	for scid, sc := range d.schedules {
 		if sc.AgentID == id {
 			delete(d.schedules, scid)
+			d.markMutatedLocked()
 			_ = removeFile(d.dir(dirSchedules, scid+".json"))
 		}
 	}
@@ -201,12 +204,14 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 				return err
 			}
 			d.automations[aid] = a
+			d.markMutatedLocked()
 		}
 	}
 	// Cascade: tasks owned by this agent — they cannot be delivered without an owner.
 	for tid, t := range d.tasks {
 		if t.OwnerAgentID == id {
 			delete(d.tasks, tid)
+			d.markMutatedLocked()
 			_ = removeFile(d.dir(dirTasks, tid+".json"))
 		}
 	}
@@ -240,6 +245,7 @@ func (d *DB) RemoveSkillFromAgents(ctx context.Context, slug string) (int, error
 			return updated, err
 		}
 		d.agents[aid] = a
+		d.markMutatedLocked()
 		updated++
 	}
 	return updated, nil
@@ -338,7 +344,12 @@ type AgentProfilePatch struct {
 // it. Only non-nil patch fields are written.
 //
 // Inheritance rules (see agent_inherit.go):
-//   - a Locked (built-in) agent refuses every patch with ErrAgentLocked;
+//   - a Locked (built-in) system agent is edited THROUGH the app-global override
+//     layer: the patched units are pinned there and re-imposed on every
+//     workspace's copy of the built-in, so the edit reaches the whole
+//     installation and derives no per-workspace copy. Without a layer attached
+//     the built-in stays read-only (ErrAgentLocked), because an edit written only
+//     to this workspace's row would be silently reverted by the next boot;
 //   - on a child, every field the patch touches becomes an OVERRIDE, and
 //     ResetFields drops overrides (the field goes back to inheriting; its raw
 //     value is refreshed from the parent so the on-disk row stays readable);
@@ -356,6 +367,12 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 	}
 	if err := ValidateOverrideKeys(p.ResetFields); err != nil {
 		return Agent{}, err
+	}
+	// A built-in is owned by the compiled registry, so its edit is stored in the
+	// app-global layer rather than in this workspace's row; the write below then
+	// re-imposes it everywhere.
+	if locked, ok := d.lockedSystemAgent(agentID); ok {
+		return d.updateBuiltinSystemAgent(ctx, locked, p)
 	}
 	return d.mutateAgentLockedErr(agentID, func(a *Agent) error {
 		if a.Locked {
@@ -394,70 +411,10 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		if p.Name != nil {
 			a.Name = *p.Name
 		}
-		if p.Soul != nil {
-			a.Soul = *p.Soul
-			mark("soul")
-		}
-		if p.Identity != nil {
-			a.Identity = *p.Identity
-			mark("identity")
-		}
-		if p.Provider != nil {
-			a.Provider = *p.Provider
-			mark("provider")
-		}
-		if p.ProviderInstanceID != nil {
-			a.ProviderInstanceID = *p.ProviderInstanceID
-			mark("provider")
-		}
-		if p.Model != nil {
-			a.Model = *p.Model
-			mark("model")
-		}
-		if p.ThinkingLevel != nil {
-			a.ThinkingLevel = *p.ThinkingLevel
-			mark("thinkingLevel")
-		}
-		if p.NativeWebSearch != nil {
-			v := *p.NativeWebSearch
-			a.NativeWebSearch = &v
-			mark("nativeWebSearch")
-		}
-		if p.PermissionMode != nil {
-			a.PermissionMode = *p.PermissionMode
-			mark("permissionMode")
-		}
-		if p.InboundPolicy != nil {
-			a.InboundPolicy = *p.InboundPolicy
-			mark("inboundPolicy")
-		}
-		if p.Avatar != nil {
-			a.Avatar = *p.Avatar
-			mark("avatar")
-		}
-		if p.Color != nil {
-			a.Color = *p.Color
-			mark("color")
-		}
-		if p.Skills != nil {
-			a.Skills = *p.Skills
-			mark("skills")
-		}
 		if p.Disabled != nil {
 			a.Disabled = *p.Disabled
 		}
-		if p.CoordinatorMode != nil {
-			a.CoordinatorMode = *p.CoordinatorMode
-			mark("coordinatorMode")
-		}
-		if p.CoordinatorWorkflow != nil {
-			a.CoordinatorWorkflow = *p.CoordinatorWorkflow
-			mark("coordinatorWorkflow")
-		}
-		if p.CoordinatorPrompt != nil {
-			a.CoordinatorPrompt = *p.CoordinatorPrompt
-			mark("coordinatorPrompt")
-		}
+		applyInheritablePatch(a, p, mark)
 		if len(p.ResetFields) > 0 && a.ParentID != "" {
 			d.resetOverridesLocked(a, p.ResetFields)
 		}
@@ -527,6 +484,7 @@ const (
 
 func (d *DB) persistSessionLocked(s Session) error {
 	d.sessions[s.ID] = s
+	d.markMutatedLocked()
 	return d.writeSessionHeaderLocked(s)
 }
 
@@ -539,6 +497,7 @@ func (d *DB) persistSessionAfterWriteLocked(s Session) error {
 		return err
 	}
 	d.sessions[s.ID] = s
+	d.markMutatedLocked()
 	return nil
 }
 
@@ -639,6 +598,7 @@ func (d *DB) writeSessionFileLocked(s Session) error {
 
 // CreateSession inserts a new session.
 func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
+	s = d.stampSnapshot(s)
 	d.mu.Lock()
 	created, err := d.createSessionLocked(s)
 	d.mu.Unlock()
@@ -670,6 +630,7 @@ func (d *DB) CreateChildSession(ctx context.Context, s Session) (Session, error)
 }
 
 func (d *DB) createChildSession(s Session) (Session, error) {
+	s = d.stampSnapshot(s)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if strings.TrimSpace(s.ParentSessionID) == "" {
@@ -814,6 +775,7 @@ func normalizeSessionMeta(s Session) Session {
 }
 
 func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error) {
+	fresh := d.stampSnapshot(Session{AgentID: agentID, Kind: kind, Title: title})
 	d.mu.Lock()
 	for _, s := range d.sessions {
 		if s.AgentID == agentID && s.Kind == kind {
@@ -821,7 +783,7 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 			return s, nil
 		}
 	}
-	created, err := d.createSessionLocked(Session{AgentID: agentID, Kind: kind, Title: title})
+	created, err := d.createSessionLocked(fresh)
 	d.mu.Unlock()
 	if err == nil {
 		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
@@ -834,6 +796,7 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 // "task" session per task or one "flow" session per flow. Each run appends a
 // turn, so the entity's whole execution history reads as a single transcript.
 func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agentID, title string) (Session, error) {
+	fresh := d.stampSnapshot(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
 	d.mu.Lock()
 	for _, s := range d.sessions {
 		if s.Kind == kind && s.SourceID == sourceID {
@@ -841,7 +804,7 @@ func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agent
 			return s, nil
 		}
 	}
-	created, err := d.createSessionLocked(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
+	created, err := d.createSessionLocked(fresh)
 	d.mu.Unlock()
 	if err == nil {
 		d.fireSessionHook(SessionChangeEvent{SessionID: created.ID, Op: SessionOpCreate, Session: created})
@@ -1406,6 +1369,7 @@ func (d *DB) deleteSessionLocked(ctx context.Context, sessionID string, removeAl
 		return Session{}, err
 	}
 	delete(d.sessions, sessionID)
+	d.markMutatedLocked()
 	delete(d.messages, sessionID)
 	d.deleteSessionFilesLocked(sessionID)
 	d.dropTranscriptLock(sessionID)
@@ -1421,6 +1385,7 @@ func (d *DB) deleteSessionFilesLocked(sessionID string) {
 	for id, a := range d.artifacts {
 		if a.SessionID == sessionID {
 			delete(d.artifacts, id)
+			d.markMutatedLocked()
 			_ = removeFile(d.dir(dirArtifacts, id+".json"))
 		}
 	}
@@ -1452,29 +1417,22 @@ func (d *DB) GetSession(ctx context.Context, id string) (Session, error) {
 // ListSessions returns sessions for an agent (or all if agentID is empty),
 // most recently updated first.
 func (d *DB) ListSessions(ctx context.Context, agentID string) ([]Session, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	out := make([]Session, 0, len(d.sessions))
-	for _, s := range d.sessions {
-		s = normalizeSessionMeta(s)
-		if agentID == "" || s.AgentID == agentID {
+	// The ordering (pinned first, newest-updated first, ID tie-break) and the
+	// normalisation both live in sortedSessions, which memoises the whole list
+	// against MutationGen; this only copies (and optionally filters) it so the
+	// caller owns the slice it gets.
+	all := d.sortedSessions()
+	if agentID == "" {
+		out := make([]Session, len(all))
+		copy(out, all)
+		return out, nil
+	}
+	out := make([]Session, 0, len(all))
+	for _, s := range all {
+		if s.AgentID == agentID {
 			out = append(out, s)
 		}
 	}
-	// Pinned sessions float to the top; within each group, most-recently-updated
-	// first. A view preference, so it never changes the underlying activity order.
-	// Tie-break on ID so equal-UpdatedAt sessions keep a STABLE order across calls
-	// (the source map iterates in random order, so without this the list reshuffles
-	// on every poll).
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Pinned != out[j].Pinned {
-			return out[i].Pinned
-		}
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
-		}
-		return out[i].ID > out[j].ID
-	})
 	return out, nil
 }
 
@@ -1602,6 +1560,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
 	s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
 	d.sessions[s.ID] = s
+	d.markMutatedLocked()
 	d.mu.Unlock()
 	tl.Unlock()
 	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
@@ -1729,6 +1688,7 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 	d.mu.Lock()
 	d.messages[m.SessionID] = targetMsgs
 	d.sessions[target.ID] = target
+	d.markMutatedLocked()
 	d.mu.Unlock()
 	tl.Unlock()
 	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
@@ -1815,6 +1775,7 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 		s.MessageCount--
 	}
 	d.sessions[s.ID] = s
+	d.markMutatedLocked()
 	return d.writeSessionFileLocked(s)
 }
 
@@ -1877,6 +1838,7 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 		s.CompactionCount = 0
 	}
 	d.sessions[s.ID] = s
+	d.markMutatedLocked()
 	return removed, d.writeSessionFileLocked(s)
 }
 
@@ -1946,6 +1908,7 @@ func (d *DB) loadSessions() error {
 			continue
 		}
 		d.sessions[l.s.ID] = l.s
+		d.markMutatedLocked()
 		d.messages[l.s.ID] = l.msgs
 	}
 	return nil

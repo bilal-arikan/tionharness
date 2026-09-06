@@ -85,7 +85,7 @@ func TestAutomationLifecycle(t *testing.T) {
 
 // TestUpdateAutomationPersistsAllFields is the regression guard for the
 // field-by-field UpdateAutomation copy that silently dropped fields it forgot to
-// list: counter metric/scope/interval and sessionMode round-tripped through create
+// list: token scope/threshold and sessionMode round-tripped through create
 // but were lost on update. UpdateAutomation now replaces the whole configuration,
 // so this test fails loudly if any config field stops persisting on update. It also
 // checks that the runtime bookkeeping (iteration count) is preserved across an edit.
@@ -97,15 +97,14 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 	ctx := context.Background()
 
 	a, err := d.CreateAutomation(ctx, Automation{
-		TriggerKind:     TriggerCounter,
-		CounterMetric:   CounterMetricMessage,
-		CounterScope:    CounterScopeSession,
-		CounterInterval: 5,
-		SessionMode:     SessionModeContinue,
-		TargetAgentID:   "AGT1",
-		PromptTemplate:  "go",
-		Enabled:         true,
-		MaxIterations:   3,
+		TriggerKind:    TriggerToken,
+		TokenScope:     TokenScopeSession,
+		TokenThreshold: MinTokenThreshold,
+		SessionMode:    SessionModeContinue,
+		TargetAgentID:  "AGT1",
+		PromptTemplate: "go",
+		Enabled:        true,
+		MaxIterations:  3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -116,9 +115,8 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 	}
 
 	// Edit every config field the update paths can touch.
-	a.CounterMetric = CounterMetricTool
-	a.CounterScope = CounterScopeWorkspace
-	a.CounterInterval = 42
+	a.TokenScope = TokenScopeWorkspace
+	a.TokenThreshold = 42_000
 	a.SessionMode = SessionModeSpawn
 	a.MaxIterations = 7
 	a.PromptTemplate = "changed"
@@ -128,12 +126,10 @@ func TestUpdateAutomationPersistsAllFields(t *testing.T) {
 
 	got, _ := d.GetAutomation(ctx, a.ID)
 	switch {
-	case got.CounterMetric != CounterMetricTool:
-		t.Errorf("counterMetric not persisted: %q", got.CounterMetric)
-	case got.CounterScope != CounterScopeWorkspace:
-		t.Errorf("counterScope not persisted: %q", got.CounterScope)
-	case got.CounterInterval != 42:
-		t.Errorf("counterInterval not persisted: %d", got.CounterInterval)
+	case got.TokenScope != TokenScopeWorkspace:
+		t.Errorf("tokenScope not persisted: %q", got.TokenScope)
+	case got.TokenThreshold != 42_000:
+		t.Errorf("tokenThreshold not persisted: %d", got.TokenThreshold)
 	case got.SessionMode != SessionModeSpawn:
 		t.Errorf("sessionMode not persisted: %q", got.SessionMode)
 	case got.MaxIterations != 7:

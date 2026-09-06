@@ -284,6 +284,9 @@ export interface ExplorerVisOptions {
   // nodes are drawn as the agent's picture.
   liveState?: ReadonlyMap<string, ViewGraphLive['state']>
   liveAgents?: ReadonlyMap<string, ViewGraphLive>
+  // Folded nodes and how many children each hides: drawn with a "+N" badge.
+  collapsed?: ReadonlySet<string>
+  childCounts?: ReadonlyMap<string, number>
 }
 
 // Glow of a live session: a wide, tinted shadow plus a thick border in the
@@ -371,12 +374,18 @@ export function graphToVis(graph: ViewGraphResult, opts: ExplorerVisOptions): Ex
       : boxed
         ? opts.theme.surface2
         : color
+    const hiddenChildren =
+      opts.collapsed?.has(key) && (opts.childCounts?.get(key) ?? 0) > 0
+        ? (opts.childCounts?.get(key) ?? 0)
+        : 0
     const node: Node = {
       id: key,
-      label: truncate(label, depth <= 1 ? 24 : 26),
+      label:
+        truncate(label, depth <= 1 ? 24 : 26) + (hiddenChildren > 0 ? ` [+${hiddenChildren}]` : ''),
       title: tooltip(label, [
         role ? ROLE_LABEL[role] : KIND_LABEL[handle.ref.kind],
         key,
+        ...(hiddenChildren > 0 ? [`${hiddenChildren} alt düğüm gizli`] : []),
         ...(liveSessionState === 'running'
           ? ['● çalışıyor']
           : liveSessionState === 'awaiting-workers'

@@ -61,6 +61,7 @@ func dbFilter[T any](d *DB, m map[string]T, keep func(T) bool, less func(a, b T)
 // (<dirName>/<id>.json). The caller must already hold d.mu.
 func dbPersistLocked[T any](d *DB, m map[string]T, dirName, id string, v T) error {
 	m[id] = v
+	d.markMutatedLocked()
 	return atomicWriteJSON(d.dir(dirName, id+".json"), v)
 }
 
@@ -71,5 +72,6 @@ func dbDeleteLocked[T any](d *DB, m map[string]T, dirName, id string) error {
 		return ErrNotFound
 	}
 	delete(m, id)
+	d.markMutatedLocked()
 	return removeFile(d.dir(dirName, id+".json"))
 }

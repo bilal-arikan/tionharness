@@ -79,7 +79,7 @@ func ProjectAutomation(in AutomationInput, level Level) (View, error) {
 
 // automationTrigger renders the trigger kind with the config that shapes it —
 // the tag for a tag rule, the op + columns for a board rule, the interval for
-// token/counter rules. Empty fields resolve to their documented defaults so the
+// token rules. Empty fields resolve to their documented defaults so the
 // line always shows what actually fires.
 func automationTrigger(a db.Automation) string {
 	switch a.TriggerKind {
@@ -100,12 +100,6 @@ func automationTrigger(a db.Automation) string {
 	case db.TriggerToken:
 		scope := a.EffectiveTokenScope()
 		return fmt.Sprintf("token (%s) her %d tok", scope, a.TokenThreshold)
-	case db.TriggerCounter:
-		metric := a.CounterMetric
-		if metric == "" {
-			metric = db.CounterMetricMessage
-		}
-		return fmt.Sprintf("counter (%s, %s) her %d", a.EffectiveCounterScope(), metric, a.CounterInterval)
 	default:
 		return "tag:" + orDash(a.TriggerTag)
 	}

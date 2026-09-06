@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
 // SearchHit is one message that matched a cross-session search, with enough
@@ -36,8 +38,14 @@ type SearchOpts struct {
 // query terms. Because the store keeps all sessions in memory (loaded at boot),
 // this is a pure in-RAM scan — no index, no disk I/O, no external tool. Results
 // are ranked by match density and recency, newest/most-relevant first.
+//
+// The scan runs under the store's read lock, so it is kept allocation-free:
+// terms are matched with a rune-folding substring search instead of lowering a
+// copy of every message, and only the top `limit` candidates are retained (a
+// bounded heap) so a broad query over a large workspace never materialises
+// thousands of hits — nor cuts a snippet for any of them — before truncating.
 func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, error) {
-	terms := strings.Fields(strings.ToLower(o.Query))
+	terms := strings.Fields(textutil.FoldLower(o.Query))
 	if len(terms) == 0 {
 		return nil, nil
 	}
@@ -78,41 +86,47 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 	sort.SliceStable(sessions, func(i, j int) bool { return sessions[i].UpdatedAt > sessions[j].UpdatedAt })
 
 	now := now()
-	hits := make([]SearchHit, 0, limit*2)
-	for _, s := range sessions {
-		for _, m := range d.messages[s.ID] {
+	top := newSearchTopK(limit)
+	seq := 0
+	for si := range sessions {
+		s := &sessions[si]
+		msgs := d.messages[s.ID]
+		for mi := range msgs {
+			m := &msgs[mi]
 			if roleOK != nil && !roleOK[m.Role] {
 				continue
 			}
 			if o.SinceUnix > 0 && m.CreatedAt < o.SinceUnix {
 				continue
 			}
-			hay := strings.ToLower(m.Text)
-			matches, hadAll := countTerms(hay, terms)
+			matches, hadAll := countTerms(m.Text, terms)
 			if !hadAll {
 				continue
 			}
-			hits = append(hits, SearchHit{
-				SessionID:    s.ID,
-				SessionTitle: strings.TrimSpace(s.Title),
-				MessageID:    m.ID,
-				Role:         m.Role,
-				AgentID:      m.AgentID,
-				Snippet:      makeSnippet(m.Text, terms[0]),
-				Score:        score(matches, now-m.CreatedAt),
-				CreatedAt:    m.CreatedAt,
+			top.offer(searchCandidate{
+				session:   s,
+				message:   m,
+				score:     score(matches, now-m.CreatedAt),
+				createdAt: m.CreatedAt,
+				seq:       seq,
 			})
+			seq++
 		}
 	}
 
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].Score != hits[j].Score {
-			return hits[i].Score > hits[j].Score
-		}
-		return hits[i].CreatedAt > hits[j].CreatedAt
-	})
-	if len(hits) > limit {
-		hits = hits[:limit]
+	ranked := top.ranked()
+	hits := make([]SearchHit, 0, len(ranked))
+	for _, c := range ranked {
+		hits = append(hits, SearchHit{
+			SessionID:    c.session.ID,
+			SessionTitle: strings.TrimSpace(c.session.Title),
+			MessageID:    c.message.ID,
+			Role:         c.message.Role,
+			AgentID:      c.message.AgentID,
+			Snippet:      makeSnippet(c.message.Text, terms[0]),
+			Score:        c.score,
+			CreatedAt:    c.createdAt,
+		})
 	}
 	return hits, nil
 }
@@ -151,10 +165,11 @@ func (d *DB) MessagesAround(ctx context.Context, sid, mid string, before, after 
 }
 
 // countTerms returns the total occurrence count of all terms and whether every
-// term appears at least once (AND semantics). hay must already be lower-cased.
+// term appears at least once (AND semantics). The terms must be folded with
+// textutil.FoldLower; hay is folded on the fly without being copied.
 func countTerms(hay string, terms []string) (total int, all bool) {
 	for _, t := range terms {
-		n := strings.Count(hay, t)
+		n := textutil.CountFold(hay, t)
 		if n == 0 {
 			return 0, false
 		}
@@ -181,7 +196,7 @@ func makeSnippet(text, term string) string {
 	if len(runes) <= window {
 		return collapsed
 	}
-	idx := strings.Index(strings.ToLower(collapsed), term)
+	idx := textutil.IndexFold(collapsed, term)
 	if idx < 0 {
 		return string(runes[:window]) + "…"
 	}

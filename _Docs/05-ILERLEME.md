@@ -1,6 +1,146 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-04):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-06):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Liste / arama / filtre yollarında uygulama geneli optimizasyon (2026-09-06) ✅
+
+Uygulama genelinde listeleme, arama ve filtreleme yolları tarandı; bulunan on iki
+darboğaz düzeltildi. Ortak altyapı: `internal/textutil/fold.go` — ayırma yapmadan,
+rune bazlı büyük/küçük harf katlayan `IndexFold` / `ContainsFold` / `CountFold`
+(`İ` → `i`; `strings.ToLower`'ın ürettiği "i + birleşik nokta" tuzağı yok) ve
+`db.MutationGen()` — her varlık yazımında artan sayaç; türetilmiş görünümler
+cache'lerini buna göre geçersizler.
+
+- **Artifact listesi içeriksiz.** `GET /api/artifacts` her kaydın gövdesini
+  taşıyordu (composer/görev seçicileri parametresiz çağırıp tüm workspace'i
+  indiriyordu). Liste artık meta döner; gövde `GET /api/artifacts/{id}` ile
+  (`?withContent=true` ile eski davranış). Composer `#artifact` eklerken gövdeyi
+  seçim anında çeker.
+- **Mesaj araması.** `SearchMessages` tüm mesajları global RLock altında
+  `ToLower` kopyasıyla tarıyor, tüm eşleşmeleri toplayıp sıralıyordu. Artık
+  katlamalı arama ayırma yapmaz, yalnız en iyi `limit` aday sınırlı bir yığında
+  tutulur (`store_search_topk.go`), snippet yalnız onlar için kesilir.
+- **Executions feed.** Sidebar her 20 sn'de ve her SSE olayında tüm oturum
+  listesini (başlık, ajan adı) çekiyordu. Yeni `GET /api/executions/runtime`
+  yalnız koşan / son durumu olan / koordinatör altındaki oturumların
+  `{running,lastStatus,lineage}` satırlarını döner; olay tetiklemesi 400 ms
+  bekleyip birleştirilir.
+- **Oturum listesi yenilemesi.** Aktif workspace'teki her olay listeyi anında
+  yeniliyordu; `refreshSessionsSoon` 300 ms'lik kuyruklama ile tek istek yapar.
+  Sunucuda `ListSessions` normalize + sıralanmış listeyi `MutationGen`'e karşı
+  memoize eder (`store_sessions_cache.go`); dashboard, executions, inbox,
+  bağlam bloğu aynı snapshot'ı paylaşır.
+- **Başlık araması sunucuda.** Sidebar araması yalnız yüklü sayfada çalışıyordu;
+  `?q=` artık sayfalamadan önce başlık/kimlik üzerinde uygulanır
+  (`sessions_title_filter.go`), sidebar 250 ms debounce ile gönderir; yerel
+  filtre anlık geri bildirim için kalır.
+- **Flows liste paneli.** Koşular sekmesinde her satır için iki `flows.find`
+  taraması ve her render'da yeniden filtre; artık `useMemo` + `flowById`.
+- **İçgörü bulguları.** `OpenFindingStore` her istekte JSONL'i diskten okuyup
+  parse ediyordu; `finding_cache.go` boyut+mtime ile doğrulanan parse cache'i,
+  yazar rename sonrası cache'i kendisi tazeler. `List` öncelik skorunu
+  karşılaştırıcı içinde değil bir kez hesaplar.
+- **Loglar.** Handler tüm ring'i kopyalayıp süzüyordu; `logbuf.Collect` en
+  yeniden geriye yürüyüp `limit` eşleşmede durur; metin eşleşmesi katlamalı.
+- **Görev panosu metin filtresi.** Her tuşta tüm kartlar NFD normalize ediliyordu;
+  150 ms settle + kart başına `WeakMap` fold cache'i.
+- **Explorer grafı.** Her `GET /api/views/graph` tüm workspace BFS'ini
+  yeniden kuruyordu; yapısal yarı (`GraphStructure`) `MutationGen` + 15 sn
+  TTL ile workspace başına cache'lenir, canlı katman (`GraphLive`) her istekte.
+
+Elle bakılıp bırakılanlar: `AutomationBoard`, `NodeInspector`,
+`ExternalToolsPanel` gibi küçük listelerdeki render içi `filter` çağrıları —
+onlarca eleman, ölçülebilir maliyet yok.
+
+Testler: `internal/textutil/fold_test.go` (yeni); db/api/view/insight/logbuf
+paketleri ve frontend vitest yeşil.
+
+## Alt-ajan oturum başlığı artık ebeveyn oturumu adlandırıyor (2026-09-06) ✅
+
+TSK727. Kalıcı bir `run_subagent` koşusu oturum listesinde `🧩 <ajan> — <görev>`
+olarak görünüyordu; aynı ajana arka arkaya benzer işler verildiğinde satırlar
+birbirinden ayırt edilemiyordu — hangi konuşmanın çocuğu olduğu ancak oturum
+detayına girilince anlaşılıyordu.
+
+- **`internal/agent/subagent.go`**: başlık tek yerde, `subagentTitle` içinde
+  kuruluyor; köken parçasını yeni `subagentParentRef` çözer — ebeveynin başlığı
+  varsa o, yoksa ebeveyn oturum kimliği, ikisi de yoksa parça tümden düşer.
+- **Kırpma:** `maxParentRefRunes = 28` uzun bir ebeveyn başlığını kısaltır, böylece
+  çocuğun **kendi** görev metni satırda görünür kalır (rune bazlı — Türkçe
+  başlıklar ortadan bölünmez).
+- **Ebeveyn okuma hatası yutulmuyor:** `logger.Warn` + kimliğe düşme; başlık
+  sessizce köken parçasını kaybetmez.
+- **Ortaya çıkan biçimler:** `🧩 Kâşif — graf taramasını çalıştır ⤴ Rota ekranı
+  düzeltmesi`, `🧩 Kâşif — testi düzelt ⤴ SES42`, `🧩 Kâşif — testi düzelt`.
+- **Testler** (`internal/agent/subagent_title_test.go`, yeni):
+  `TestSubagentTitleNamesParentSession`, `TestSubagentTitleFallsBackToParentID`,
+  `TestSubagentTitleWithoutParentDropsOriginSegment`,
+  `TestSubagentTitleTruncatesLongParentTitle`,
+  `TestSubagentSessionMetaCarriesParentAwareTitle`. Mutasyon testi hem köken
+  parçasının kaldırılmasını hem de rune kırpmasının kapatılmasını öldürdü.
+
+Doküman: `_Docs/25-SUBAGENT-ISOLATION.md` (başlık sözleşmesi), `_Docs/22` (emoji
+öneki tablosu).
+
+Commit: `7bba73ce` (`task/tsk727`).
+
+## Arşivli oturum, gerçek bir tur geldiğinde kendini yeniden canlandırıyor (2026-09-06) ✅
+
+TSK690. Arşivlenmiş bir oturuma kullanıcı yazdığında (ya da bir peer/worker/spawn
+turu düştüğünde) tur normal şekilde koşuyor, ama oturum `archived` kalmaya devam
+ediyordu: konuşma canlıydı, kayıt ise "kaldırılmış" görünüyordu — kullanıcı
+oturumu arşivden elle çıkarmadıkça sidebar'ın varsayılan görünümünde kaybolmaya
+devam ediyordu.
+
+- **`internal/agent/sessionreactivate.go`** (yeni): `Runtime.reactivateArchivedSession`
+  — oturum `archived` ise state `active` yapılır, `archived` etiketi kaldırılır ve
+  `session` / `state` olayı yayınlanır. Zaten canlı oturumda no-op.
+- **Tek çağrı noktası `internal/agent/turnslot.go:83`**, `r.turns.Acquire`
+  başarısından hemen sonra. Neden orası: `claimTurnSlot` tur kuyruğuna **tek**
+  giriş kapısıdır ve salt-okuma yolları (stream'e bağlanma, başlık/özet üretimi,
+  insight taraması) hiç slot almaz — sınır tam olarak "biri bu oturumla
+  konuşuyor" ile "biri ona bakıyor" arasından geçer.
+- **Allowlist, denylist değil:** `KindUser`, `KindPeer`, `KindWorker`, `KindSpawn`
+  dirilir. Dışarıda kalanlar ve gerekçeleri: `KindCommand` (`/compact`,
+  `/handoff` — transkript bakımı, yeni iş değil), `KindCoordinator` / `KindWake` /
+  `KindAutomation` (otomatik yeniden giriş; bunları diriltmek kaçak bir
+  koordinatörün arşiv kill-switch'ini bozardı — `internal/agent/coordination.go`
+  arşiv kontrolü, `_Docs/47` 2026-08-27 notu).
+- **Testler** (`internal/agent/sessionreactivate_test.go`, yeni): pozitif yol dört
+  tur türü için, salt-okuma yolu negatifi, bakım/otomatik tur negatifi (dört
+  alt-test) ve canlı oturumda no-op.
+
+Bilinen sınır: arşivli bir oturumdaki **zamanlanmış** tur (`KindWake`) hâlâ
+sessizce koşuyor ve oturum arşivde kalıyor — ayrı kart **TSK870**.
+
+Commit: `e4b1f007` (`task/tsk690`).
+
+## Geç gelen başlık artık oturumun "son aktivite"sini ileri taşımıyor (2026-09-06) ✅
+
+TSK867. `SetSessionTitle` yazdığı her başlıkta `s.UpdatedAt = now()` yapıyordu.
+Oysa `UpdatedAt` bu modelde **son aktivite** semantiği taşır (`internal/db/store.go`
+mesaj eklerken `s.UpdatedAt = m.CreatedAt` yazar); başlık ise metadata'dır,
+aktivite değil — aynı gerekçeyle `SetSessionTags` zaten bump yapmıyordu.
+
+Belirti: eski bir oturumun başlığı sonradan üretilince
+(`handleGenerateSessionTitle`) o oturumun Rota çubuğu "şimdi"ye kadar uzuyordu,
+çünkü kanvas ömrü `Math.max(updatedAt, createdAt)` ile çiziyor
+(`frontend/src/features/rota/rotaLayout.ts`) — aylar önce kapanmış bir konuşma
+bugün konuşulmuş gibi görünüyordu.
+
+- **`internal/db/store.go`**: `SetSessionTitle` yalnız `Title`'ı yazar,
+  `UpdatedAt`'e dokunmaz.
+- **Kasıtlı yan etki:** yeniden adlandırma artık oturumu sidebar listesinin başına
+  taşımıyor (liste `updatedAt` desc sıralı) — başlık değişimi UI'a yine
+  `session_change("title")` ile anında yansır.
+- **Testler** (yeni): `internal/db/session_title_activity_test.go`,
+  `internal/api/session_title_activity_test.go`.
+
+Bilinen sınır: mevcut store'larda **geçmişte** şişmiş `updatedAt` değerleri
+geriye dönük düzelmiyor (bir başlık yazımı zaten damgayı ezmiştir) — ayrı kart
+**TSK869**.
+
+Commit: `938916d1` (`task/tsk867`).
 
 ## Stop ve teardown artık superseded (kuşak dışı) run'ları da iptal edip bekliyor (2026-09-06) ✅
 
@@ -39,6 +179,395 @@ sonra eski turun süreci ayrık (detached) biçimde yaşamaya devam edebiliyordu
 
 Doğrulama sınırı: **`-race` bu makinede çalıştırılamadı (cgo/gcc yok)**;
 eşzamanlılık kanıtı yalnız testlerin deterministik senkronizasyonuna dayanıyor.
+
+## `ultra` düşünme kademesi artık native yolda sessizce max'a düşmüyor (2026-09-06) ✅
+
+TSK740. `EffortForThinkingBudget` 32768'in üstündeki her bütçeyi işaretsiz bir
+`default` dalıyla `"max"`e çeviriyordu; `thinkingBudgetForLevel("ultra")` 131072
+ürettiği için Messages API yolunda **ultra sessizce max'a düşüyordu**. Kademe
+listesi (`ThinkingTiersForProvider`) ise adaptive sınıfta ultra'yı sunmaya devam
+ediyordu, yani kullanıcı taşınamayan bir derinlik seçebiliyordu.
+
+Sağlayıcı sözleşmesi doğrulandı: Anthropic Messages API'de `output_config.effort`
+enum'u `low|medium|high|xhigh|max` — **`ultra` yok** (`outputConfig.Effort`
+yorumu da bunu söylüyordu). Yani klamplama doğru davranış; kusur sessiz olması ve
+sunulan kademe listesiyle çelişmesiydi.
+
+- **`internal/providers/thinking.go`**: `EffortForThinkingBudget`'a açık
+  `case budget <= 65536: return "max"` + gerekçeli `default` eklendi (davranış
+  aynı, artık kasıtlı ve belgeli). `ThinkingTiersForProvider` yeni
+  `usesNativeEffort` (kind `anthropic` / `anthropic-compat`) için ramp'ten
+  `ultra`'yı düşürüyor; `StorableThinkingLevelsFor` onu **saklanabilir** tutuyor
+  (CLI sağlayıcısında seçilmiş ya da sağlayıcı sonradan değiştirilmiş satırlar
+  kaydedilemez hâle gelmesin — always-on sınıfındaki `off` ile aynı kalıp).
+- **`frontend/src/shared/lib/catalog.ts`**: devre dışı ultra kademesinin gerekçesi
+  artık doğru — akıl yürüten sınıflarda `"Maks"a (max) düşer`, eski `"Yüksek"e
+  (high) düşer` metni yalnız legacy klamplaması için kaldı.
+- **Testler**: `TestNativeEffortTransportsDoNotOfferUltra`,
+  `TestUltraStaysStorableOnNativeEffortTransports`,
+  `TestEffortForThinkingBudgetUltraReportsTheEnumCeiling` (Go) +
+  `thinkingOptions.test.ts` içinde native-effort ipucu testi.
+
+CLI yolları etkilenmedi: `climcp` ve `codexcli` ultra'yı gerçek effort değeri
+olarak geçirmeye devam ediyor.
+
+## internal/agent turn_record terminal-state testleri: HEAD'de kırık değil (2026-09-06) ✅
+
+TSK755, TSK731'in bağımsız doğrulamasında kapsam dışı iki kırık test bildirmişti:
+`TestRecordChildAssistantMessageRunStateFailureDoesNotRemainRunning` ve
+`TestInitializeChildSessionRunStateFailureIsReportedAndNotRunning`. **HEAD'de
+ikisi de geçiyor** — yalıtılmış `-count=8`, tüm `internal/agent` paketi ve
+`scripts/test.sh full` içinde.
+
+Testlerin boş yere geçmediği mutasyonla doğrulandı: `recordChildAssistantMessage`
+içindeki birleşik hata metni geçici olarak bozulduğunda test beklendiği gibi
+FAIL veriyor (`combined terminal-state error = MUTANT: ...`), yani Windows'ta
+`session.json`'ı dizinle değiştirip yazmayı düşüren gerçek yol çalışıyor.
+
+Kod değişikliği yapılmadı: kırıklık üretilemediği için "düzeltme" uydurmak
+testi susturmak ya da gerçek bir davranışı değiştirmek olurdu. Rapor edilen
+kırıklık büyük olasılıkla doğrulayıcının çalışma ağacının
+`360ddf46 fix: Harden child session persistence failures` (2026-08-30) öncesi bir
+tabandan ayrılmış olmasından geliyor; o commit tam olarak bu iki testin
+doğruladığı terminal-state sertleştirmesini getiriyor.
+
+## Canlı workspace silme: defter yazımı tek kilit tutuşunda + rollback (2026-09-06) ✅
+
+`Manager.Delete` canlı yolda kaydı düşürüp scheduler/DB'yi kapatıyor, dizini
+siliyor ve `persist()`'i **en sonda, ikinci bir kilit tutuşunda** çağırıyordu.
+Yazma başarısız olursa ortaya en kötü durum çıkıyordu: workspace hem bellekten hem
+diskten gitmiş, ama `workspaces.json` onu hâlâ listeliyor — sonraki açılışta
+hiçbir şeyi göstermeyen bir degraded kayıt. `deleteDegraded` için kapatılan
+gözlemlenebilirlik penceresi de canlı yolda açıktı.
+
+- **`internal/workspace/manager.go`:** kaydın düşürülmesi, `persist()` ve
+  başarısızlıkta geri alma artık tek yazma-kilidi tutuşunda
+  (`registryMetasLocked()` + `persist()`'in anlık görüntüyü argüman alması bunu
+  mümkün kılıyor). `m.order` tutuş başında kopyalanıp rollback'te aynen geri
+  konuyor. Yıkım ve `os.RemoveAll` yalnız persist başarılıysa ve kilidin dışında
+  çalışıyor; `pendingRemoval` işareti o pencerede `Attach`'ı reddediyor. Dizin
+  silme hatası eskisi gibi loglanıyor (kayıt zaten kalıcı olarak gitmiştir).
+- **`markDegraded` / `open`:** persist etmemeleri bilinçli — `registryMetas`
+  canlı ve degraded kayıtları birlikte yazdığı için işaret türetilmiş durumdur ve
+  yer değiştirme bayt-eş dosya üretir; gerekçe koda yorum olarak yazıldı.
+- **Test:** `internal/workspace/delete_live_test.go` — rollback (kayıt, sıra ve
+  veri dizini korunuyor, `pendingRemoval` temiz), rollback'in eşzamanlı `List()`
+  ile gözlemlenemezliği (4 okuyucu × 50 başarısız silme) ve gerçek bir workspace
+  üzerinde mutlu yol (defter + dizin gerçekten gidiyor).
+- Doküman: `_Docs/06-WORKSPACES.md` §"Canlı silmede sıra".
+
+## Artifact testindeki gereksiz `as unknown as` kaldırıldı (2026-09-06) ✅
+
+`artifactGrouping.test.ts` içindeki "draft taşımıyor" iddiası `Draft`'ı
+`Record<string, unknown>`'a çevirmeye çalışıp TS2352 alıyor, sonra da bunu
+`as unknown as` ile örtüyordu. Kök neden: `Object.keys` zaten herhangi bir
+nesneyi alır ve `string[]` döner — cast hiç gerekmiyordu. Cast kaldırıldı,
+tipler gerçekten uyuşuyor (`frontend/src/features/artifacts/artifactGrouping.test.ts`).
+
+## Sayaç (counter) otomasyon türü tamamen kaldırıldı (2026-09-05) ✅
+
+Otomasyon ekranındaki "Sayaç otomasyonları" şeridi ve arkasındaki `counter` tetik türü
+(mesaj/tool sayısı aralığı; `_Docs/46` eski §2.7) ürün, API, ajan araçları, motor ve
+depodan çıkarıldı; token türü tempo ihtiyacını karşılıyor.
+
+- **db:** `TriggerCounter`, `CounterMetric*`/`CounterScope*` sabit ve doğrulayıcıları,
+  `Automation.CounterMetric/CounterScope/CounterInterval`, `MinCounterInterval` /
+  `ValidateCounterInterval`, tetik kaydı, `EffectiveCounterScope`, `WorkspaceCounterTotal`,
+  dayanıklı `activity-inbox` (`Accept/Pending/CompleteActivitySignal`) ve hiç çağrılmayan
+  `automation_activity_dispatch.go` + `ActivityDispatchReceipts` silindi. Geriye dönük:
+  `TriggerCounterLegacy = "counter"`; diskteki eski kayıtlar yüklemede **atlanır**
+  (uyarı logu), dosya yerinde bırakılır; yazma yolları türü "unknown triggerKind" ile reddeder.
+  `EffectiveSessionMode` boş modu yalnız `token` için `continue` çözer.
+- **agent:** `automation_counter.go` (+test), `AutomationEngine.activityMu`,
+  `TriggerAutomationCounter`; evrim genomu artık counter alanlarını hash'lemiyor.
+- **workspace manager:** activity hook yalnız `message_activity` canlı olayını yayar;
+  inbox drenajı ve `OnActivityRecorded` köprüsü kalktı. `db.ActivitySignal` + CLI-reply
+  activity outbox'ı (WAL'a bağlı) **korundu** — canlı oturum listesi bu sinyale bağlı.
+- **api / araçlar / market:** `automationReq`, `create/update/list_automation` şemaları,
+  `WorkspaceTemplateAutomation`, pack yayını/şablon içe aktarma counter alanlarını taşımıyor;
+  `GET /api/automations/live-stats` yalnız `{tokensToday}` döner; `view/automation.go`
+  tetik özeti counter dalını kaybetti.
+- **frontend:** `AutomationTriggerKind`'dan `counter`, `CounterMetric/CounterScope` tipleri,
+  `CounterTriggerFields`, `COUNTER_*` sabitleri, modal/kart/pano dalları, `COLUMN_ACCENT.counter`,
+  payload alanları ve `api.createAutomation/updateAutomation` tipleri kaldırıldı; pano 6 şerit.
+- **Testler:** `db/automation_limits_test` (counter doğrulayıcı testleri silindi, "retired
+  counter kind is unknown" eklendi), `automation_core_test`, `automation_test`
+  (round-trip artık token alanlarıyla), `activity_test` (`TestWorkspaceCounterTotal` silindi),
+  `cli_reply_wal_test` (inbox testi silindi). `go build ./... && go vet ./...` temiz.
+
+## Otomasyon panosu yatay kaydırılır — şeritler artık sıkışmıyor (2026-09-05) ✅
+
+Otomasyon ekranındaki yedi şerit md+ genişlikte `flex-1 min-w-0` ile aynı satıra
+sıkıştırılıyordu (1440px'te şerit başına ~190px, kartlar okunmuyor). Artık satır her
+genişlikte yatay kaydırılır: `AutomationBoard` kapsayıcısı `overflow-x-auto` +
+`overscroll-x-contain` (md+'daki `overflow-x-hidden` kalktı); `BoardColumn` md+'da
+`min-w-[17rem]` altına inmez, yer varsa `max-w-[24rem]`'e kadar büyür (`3xl:` 19rem
+taban). Telefonlarda snap-carousel davranışı aynı. Ölçüm: 1440×900'de şeritler 272px,
+satır 2000px kaydırılabilir; 2560'ta 322px ve kaydırmasız sığar.
+
+## Tüm sol liste panelleri daraltılabilir (varsayılan açık) + İçgörü paneli standarda uydu (2026-09-05) ✅
+
+Sol liste kolonları (oturumlar, ajan roster'ı, artifact/skill/araç/market/akış/hedef
+listeleri, ayar ve workspace kategori rayları, İçgörü alt-sayfa rayı) artık **tek
+standart**la aç/kapa: masaüstünde kalıcı daraltma (varsayılan **açık**), daraltınca
+ince dikey **yeniden-açma rayı**; dar ekranda eskisi gibi drawer.
+
+- **`useCollapsibleList(storageKey)`** iki durum tutar: md+ için `localStorage`'da
+  kalıcı dock aç/kapa (yalnız açık `'0'` daraltır), narrow için kalıcı olmayan
+  drawer bayrağı (varsayılan kapalı). `open/toggle/setOpen` o an geçerli sunumu
+  adresler; katman `useViewport`'tan gelir (matchMedia gerekmez, jsdom'da çalışır).
+- **`CollapsibleListShell`**: md+ kapalıyken kolon DOM'dan çıkar, yerine `.th-rail`
+  (`PanelLeftOpen` + dikey etiket, `<testId>-rail`); açılınca `.th-pane-enter`
+  kayma+solma. `hideRail` prop'u kaldırıldı (tüm çağrı noktalarından silindi).
+- **Kapatma/açma kontrolleri:** `PaneHeader` liste düğmesi (`PanelLeft`) artık her
+  genişlikte görünür, kapalıyken accent renkli; `AppHeader` sohbet hamburger'i
+  `onOpenMobileList` yerine `listOpen/onToggleList` (her genişlik); ayar/workspace
+  kategori düğmesi de her genişlikte. Panel içi: `SidebarHeader` `onCollapse`
+  (`CollapseListButton`, `PanelLeftClose`) — Ajanlar, Artifactlar, İçgörü,
+  oturum kenar çubuğu (`SessionsSidebar onCollapse`).
+- **Sohbet oturum listesi** `App.tsx`'te özel drawer kodu yerine
+  `CollapsibleListShell` + `useCollapsibleList('tionharness.sessionsListOpen')`;
+  oturum seçimi/yeni sohbet yalnız dar ekranda drawer'ı kapatır, görünüm değişimi
+  de öyle (dock durumu korunur).
+- **İçgörü:** sabit `w-52` aside → `ListPane` (`tionharness.insightListWidth`,
+  208px, min 176, sürüklenebilir) + `SidebarHeader` (yenile + daralt) + sağ kolonda
+  `PaneHeader` ("İçgörü · <sekme>", liste düğmesi) — dar ekranda drawer'ın açıcısı.
+- Tarayıcıda doğrulandı: 1440'ta sohbet listesi daralt → 36px ray → geri aç
+  (`tionharness.sessionsListOpen` 0/1), İçgörü aynı; 390'da İçgörü düğmesi drawer
+  + backdrop açar/kapatır. Vitest 832/832, tsc/eslint/prettier temiz.
+
+## Dört katmanlı responsive kabuk — dar / kare / geniş / çok geniş + durum geçişleri (2026-09-05) ✅
+
+Ekranlar artık yalnız "telefon / masaüstü" ikilisine değil, dört genişlik katmanına ve
+en-boy oranına göre yerleşiyor. Tek kaynak `frontend/src/shared/lib/viewport.ts`
+(`classifyViewport`): **narrow** < 768, **square** 768–1279, **wide** 1280–1919,
+**ultra** ≥ 1920; en-boy: portrait < 0.9, square ≤ 1.25, landscape. Katman ve oran
+`useViewport()` (tek `resize` aboneliği, yalnız sınır geçişinde render) ile
+`<html data-viewport data-aspect>`'e damgalanır; CSS tarafı `src/styles/layout.css`.
+
+- **Kabuk modları** (`app/useShellLayout.ts`, saf `computeShellLayout`): rail
+  hidden/compact/full, liste drawer/docked, detay drawer/docked, ölçü fluid/centered.
+  Kare katmanda NavRail ikon-raya zorlanır; genişletme kalıcı değil, içerik üstüne
+  açılan **peek** (dış tıklama / görünüm seçimi / katman değişimi kapatır). Oturum
+  detay paneli kare katmanda ve **portrait** monitörlerde sağdan kayan drawer'a
+  döner (`th-drawer-from-right` + `Backdrop`); geniş/ultra'da dock'lu kolon.
+- **Kolon üst sınırı:** `useResizableSidebar` kaydedilen genişliği katmana göre
+  kırpar (`capListColumnWidth`, kare = 256px; saklanan değer bozulmaz). Oturum
+  kenar çubuğu kendi drag kodunu bırakıp bu hook'a + `ResizeHandle`'a geçti.
+  `capToTier:false` ile detay paneli (drawer olduğu için) kırpılmaz.
+- **Okuma ölçüsü:** transcript, composer, `ComposerCard`, `SessionStartPanel`
+  `.th-measure` alır: ultra'da içerik 88rem'e ortalanır (padding tabanlı; kaydırma
+  çubuğu kenarda kalır), altında eski `px-[1px] md:px-6` oluğu. Ayarlar/Workspace
+  form kolonları `3xl:max-w-4xl`.
+- **Durum geçişleri:** `.th-col` (genişlik; sürüklerken `body[data-th-resizing]`
+  ile kapalı), `.th-drawer` (transform), `@starting-style` ile giren drawer ve
+  solan `.th-backdrop`, `.th-measure`/`.th-column` padding/max-width geçişleri.
+  `prefers-reduced-motion` global kuralı hepsini kısar.
+- **Tailwind:** `--breakpoint-3xl: 120rem`, `--breakpoint-4xl: 160rem` ve
+  `square:` custom variant (`index.css`). Sabit `grid-cols-2/3/4` form ızgaraları
+  (`AppToolsPanel`, `BackupPanel`, `ContextPanel`, `ProfilePanel`, `ProjectPanel`,
+  `WorkspacePanel`, `TaskFormModal`, `ServerManagement`, `LessonsTab`,
+  `ProviderInstanceModelSelect`) dar ekranda tek sütuna iner; Market ızgarası ve
+  pano sütunları ultra'da genişler, `StatTiles` kare katmanda 3 sütun.
+- **Testler:** `viewport.test.ts`, `useShellLayout.test.ts`;
+  `navigationI18n.test.tsx` jsdom'un 1024px penceresini (kare katman, etiketsiz
+  rail) 1440'a genişletir. Tarayıcıda 390×844, 1024×768, 1440×900, 2560×1440
+  doğrulandı (rail peek, detay drawer, liste kırpma, 180px ölçü paddingi).
+  Vitest 832/832, prettier + eslint temiz.
+
+## Evrim E2 — `workspace-evolver`: hedefe bağlı, yalnız öneri üreten geçiş (2026-09-06) ✅
+
+`_Docs/83` faz planının üçüncü kalemi. Etkin bir hedef için nadir bir LLM geçişi, E1
+fitness'ini (snapshot başına + diff'ler), kapsamdaki yüzeylerin güncel değerlerini, en
+kötü koşuları ve önceki önerilerin akıbetini okuyup **`evolution` kanalına bulgu** olarak
+öneri düşürür. Hiçbir şey uygulanmaz; kabul/ret insanın.
+
+- **Genel öneri şeması** (`insight.EvolutionProposal`, `Finding.Evolution`): `goalId,
+  surface, entityId, field, action, value, removes, expectedMetric, expectedDelta,
+  sideEffects, evidence, snapshotHash, lowConfidence, kind change|conflict|escalation`.
+  Yeni kanal `insight.ChannelEvolution`; `Upsert`'in konu-birleştirme geçişi bu kanalda
+  kapalı (varlık id'leri "uçucu token" sayılıp farklı ajanların önerileri birleşmesin).
+- **Kural katmanı** (`internal/goals/proposal.go`, saf): kapalı `ProposalRules` listesi
+  (yüzey.alan → izinli eylemler, değer uzunluk tavanı, büyüme bütçesi): agent
+  soul/identity/model/thinkingLevel/nativeWebSearch/tools/skills/coordinator*, skill
+  visibility/autoSummary/body, recipe phase/watcher, tools visibility/disabled, automation
+  cooldown/maxIterations/tokenThreshold/counterInterval/enabled/promptTemplate/targetAgentId,
+  schedule cronExpr/enabled, prompt override, ws-settings terseMode/instructions.
+  **Görünmez**: permissionMode, inboundPolicy, provider, hook'lar, hedefler, guardrail'ler,
+  rubrik, kilitli sistem ajanları. `CheckProposal` kodda reddeder: kanıtsız (sayı yok),
+  genel olumsuz yargı, kapsam dışı ya da var olmayan varlık, izinsiz alan/eylem, uzun
+  değer, bütçe aşımı (`Removes` yoksa), hedefin metriği olmayan ya da yanlış yöne giden
+  `expectedDelta`, hedefin kendi primary/guardrail'ine yan etki. Başka etkin ve kesişen
+  bir hedefin metriğine yan etki → **`conflict`** (yüksek önem, reddedilmez, görünür).
+  Sabitler: geçiş başına ≤ 3 öneri, `minRuns` varsayılan 5, cooldown 72 sa, 3 tekrar
+  sonra tırmandırma.
+- **`workspace-evolver` sistem ajanı** (🧬, araçsız, sonnet, JSON şema; prompt
+  `prompts/defaults/workspace-evolver.md`; kayıt, `analysisPromptKeys`, golden listeler,
+  `_Docs/74`). `internal/agent/goal_evolver.go`: `SweepGoals` (rota bitişinde kuyruktan,
+  `trajectory_transitions.go`), `MaybeEvolveGoal` (mod `off` değil, cooldown geçmiş,
+  son geçişten beri ≥ minRuns kapsamlı oturum **veya** guardrail ihlali), `RunGoalEvolver`
+  (manuel tetik cooldown'u yok sayar; eşik altındaysa öneriler `[düşük güven]`).
+  `fileEvolverProposals` (LLM'siz, testlenebilir): kap, geçiş içi tekrar, **kullanıcının
+  reddettiği imza bir daha dosyalanmaz**, açık kalan aynı öneri 3 geçiş üst üste gelirse
+  tek bir **"İnsan kararı gerekiyor"** kartı (kind `escalation`) ve sonra susar.
+  Durum `evolution/state.json` (`db.EvolutionGoalState`: lastAt, sessionsSeen, trigger,
+  proposals, dropped, repeats, escalated). Fitness girdisi toplama `Runtime.FitnessInputs`
+  olarak agent'a taşındı (API de onu kullanır).
+- **API**: `POST /api/goals/{id}/evolve` (manuel), `GET /api/goals/{id}/evolution` (son
+  geçiş + hedefin bulguları). Hedef silinince evolver durumu da silinir.
+- **Ekran**: hedef detayında **Öneriler** bloğu (`GoalProposals`): "Şimdi evrimleştir",
+  son geçiş satırı (tetik, öneri/elenen sayısı ya da atlanma sebebi), kart başına
+  yüzey/varlık/alan/eylem/değer, beklenen etki, kanıt, Kabul / Reddet; kapananlar
+  katlanır. İçgörü ekranı: `🧬 evolution` kanal çipi, süzgeç, rozet, FindingModal'da
+  "Evrim önerisi" bloğu (çatışma / insan kararı / düşük güven işaretleri).
+- **Testler**: `goals/proposal_test.go` (her ret sebebi, çatışma, kural listesi
+  görünmezleri içermiyor), `agent/goal_evolver_test.go` (kap/tekrar/ret/tırmandırma,
+  prompt içeriği + görünmez alan sızmıyor, kapılar), `db/store_snapshot_test.go` (Seq
+  sırası), prompts/systemagents golden. Canlı (claude-cli, WS2 scratch, 3 oturum, manuel):
+  geçiş 9 sn, düşük güven, model haklı olarak boş liste döndürdü (usage verisi yok);
+  durum ve ekran kaydı doğru.
+- **Bilerek bırakılan**: uygulama + geri alma defteri (E3), varyant deneyi (E4), rubrik
+  yargıcı (E5); `IgnoredRecommendations` yerine reddedilen bulgu statüsü kullanıldı (UI
+  tavsiye kartları listesiyle karıştırmamak için).
+
+## Evrim E1 — konfigürasyon snapshot'ı, oturum atfı, hedef fitness'i (2026-09-05) ✅
+
+`_Docs/83` faz planının ikinci kalemi; LLM yok. Her oturum, yaratıldığı anda yürürlükteki
+**konfigürasyon snapshot'ının** hash'iyle damgalanır; hedef fitness'i bu damgaya göre
+"sürüm başına" gruplanır ve sürümler arası fark listelenir.
+
+- **Snapshot** (`internal/goals/snapshot.go`): `ConfigSnapshot{Agents (kilitli yerleşikler
+  hariç, 16 kalıtılabilir alan; soul/identity/toolOverrides/allowedTools hash), Tools
+  (disabled + visibility + MCP sunucu aç/kapa), Recipes (slug→sürüm), Automations (etkin;
+  tetik alanları hash), Schedules (etkin; cron/hedef), Prompts (workspace override hash),
+  Settings (terseMode, instructions hash, promptEpoch), Models (sağlayıcı|istenen→çözülen)}`.
+  Kanonik JSON (sıralı map anahtarları, sıralı diziler) → sha256 ilk 8 bayt; aynı içerik
+  aynı hash. `Diff(a,b)` yüzey/varlık/alan düzeyinde değişiklik listesi üretir.
+- **Depo** (`internal/db/store_snapshot.go`): `evolution/snapshots/<hash>.json` (içerik bir
+  kez yazılır) + `index.json` (`firstSeen/lastSeen/prev`, `current`) — `prev` kenarı
+  git-ağacı görünümünün omurgası. `Session.SnapshotHash` alanı; `SetSnapshotProvider` ile
+  runtime sağlayıcısı, `stampSnapshot` **d.mu alınmadan önce** çalışır (sağlayıcı depoyu
+  RLock ile okur; kilit içinde çağrılınca deadlock — canlıda görülüp düzeltildi, regresyon
+  testi `TestSnapshotProviderMayReadStore`). `ListSessionUsage`, `ListSessionAsks`,
+  `CountSessionsBySnapshot` yardımcıları.
+- **Runtime** (`internal/agent/evolution_snapshot.go`): `BuildSnapshot` + 2 sn önbellekli
+  `CurrentSnapshotHash` (yeni hash görülünce `SaveSnapshot`); `NewRuntime` sağlayıcıyı
+  kaydeder.
+- **Fitness** (`internal/goals/fitness.go`, saf): `Evaluate(goal, inputs)` → kapsam
+  süzgeci (reçete = rota kök oturumu + altları, ajan, etiket kesişimi, otomasyon = ateşleme
+  oturumları; insight oturumları hariç), pencere (`since`), ana metrik + guardrail'ler
+  (ihlal işareti, hedef tutuyor mu), **snapshot başına** aynı hesap + önceki snapshot'a
+  göre `Changes`. Değerlendiricisi olan metrikler: `recipe.*` (rota özetlerinden),
+  `usage.*` (session-usage + billing fiyatı), `board.cycleTimeSec/cardsDonePerDay`,
+  `automation.errorRate/firesPerDay`, `session.errorTurnsRatio/humanAsksPerSession/
+  stuckLoops`, `config.soulChars/skillCount`. Katalogda `Available:false` olanlar
+  (`judge.rubricScore`, `feedback.upRatio`, `board.runSuccessRate`, `config.toolCount`)
+  "henüz ölçülmüyor" döner, uydurma sayı yok. `task.ratingAvg` → `feedback.upRatio`
+  olarak yeniden adlandırıldı (kart puanı diye bir alan yoktu; tur geri bildirimi var).
+- **API**: `GET /api/goals/{id}/fitness?since=`, `GET /api/evolution/snapshots` (sürümler,
+  oturum sayıları, önceki sürüme göre diff), `GET /api/evolution/snapshots/{hash}`.
+- **Ekran**: hedef detayında **Ölçüm** bloğu (`GoalFitnessBlock`): pencere çipleri
+  (7/30/90 gün/tümü), ana metrik + hedef rozeti, guardrail rozetleri (ihlal kırmızı),
+  "Konfigürasyon sürümlerine göre" listesi (hash, tarih aralığı, oturum sayısı, değer,
+  yöne göre yeşil/kırmızı delta, değişiklik satırları, "şu anki" rozeti). Eski statik
+  bölüm "Ölçüm tanımı" oldu.
+- **Testler**: `goals/fitness_test.go` (kapsam, pencere, tüm değerlendiriciler, kanonik
+  hash, diff), `db/store_snapshot_test.go`, `agent/evolution_snapshot_test.go`;
+  frontend `fitnessMeta.test.ts`. Canlı: PM ajanının `thinkingLevel` değişimi yeni
+  snapshot + `high → low` diff'i üretti, sonraki oturumlar yeni hash'le damgalandı.
+- **Bilerek bırakılan**: model sürümü değişiminde "override'ları yeniden doğrula" işareti
+  (E3, uygulanmış değişiklik defteri gerektirir); `config.toolCount` (etkin araç kümesi
+  çözümleyicisi gerekir).
+
+## Evrim hedefleri E0 — Goal varlığı, hedef yazıcı ajan, Hedefler ekranı (2026-09-05) ✅
+
+`_Docs/83-EVRIM-MEKANIZMASI.md` faz planının ilk kalemi. Workspace için **Hedef (Goal)**
+varlığı, hedefi kullanıcının sözlerinden yazan `goal-writer` sistem ajanı ve iki-panelli
+**Hedefler** ekranı eklendi. Hedefler **doğrudan girilmez**: `POST /api/goals/intake`
+serbest metni alır, yazıcı ajan kapalı metrik kataloğuna/guardrail'lere/kapsama oturtup
+`draft` olarak kaydeder; kullanıcı ekranda düzenler ve etkinleştirir.
+
+- **Veri modeli** (`internal/db/models_goal.go`, `store_goal.go`, `goals/` dizini, `GOL<n>`):
+  `Goal{Name, Summary, Description, RawText (kullanıcının sözleri, düzenlemede asla
+  yeniden yazılmaz), Status draft|active|paused|archived, Kind metric|rubric|mixed,
+  Priority, Scope{recipes,agents,automations,tags}, Primary{metric,direction,target},
+  Guardrails[], Rubric, Policy{mode propose|auto|off, autoApplySurfaces, cooldownHours,
+  minRuns}, Questions[], Notes, History[]}`. Her düzenleme/durum değişikliği
+  `GoalRevision{at, by, note, fields}` ekler (hedefin kendi geçmişi, git-ağacı görünümünün
+  ilk tohumu).
+- **Alan paketi** `internal/goals` (leaf): kapalı **metrik kataloğu** (`catalog.go`, 26
+  anahtar: reçete istatistikleri, usage, pano sonuçları, otomasyon sayaçları, hata/insan
+  yükü, `task.ratingAvg`, `judge.rubricScore`, config şişme guardrail'leri), tersinir
+  **oto-uygulama yüzeyi allowlist'i** (`thinkingLevel, toolVisibility, automationCooldown,
+  skillAutoSummary`), `Normalize`/`Validate`/`CanActivate` (bilinmeyen metrik, yön, çift
+  guardrail, sınırsız guardrail, güvensiz auto yüzeyi, açık soru varken etkinleştirme
+  **kodda** reddedilir), `Draft` şeması + `FromDraft` (yazıcı `auto` politikayı asla
+  koyamaz; sınırsız ya da katalog-dışı guardrail bulgu reddi değil **açık soru** olur).
+- **Sistem ajanı** `goal-writer` (🎯, araçsız, sonnet önerisi; prompt
+  `prompts/defaults/goal-writer.md`, kayıt `prompts.go`, `analysisPromptKeys`, golden
+  listeler + `_Docs/74`). `Runtime.WriteGoal` (`internal/agent/goal_writer.go`): katalog +
+  kapsam adayları (reçete slug'ları, ajanlar, otomasyonlar, oturum etiketleri) + mevcut
+  hedefler + (yeniden yazımda) taban hedef ile `guardedComplete` (JSON şema); sonuç
+  `FromDraft` → `Validate` → `CreateGoal`/`UpdateGoal`. Yeniden yazım kimliği ve geçmişi
+  korur, etkin hedefi onay için taslağa düşürür.
+- **API** (`internal/api/goals.go`): `GET /api/goals[?status=]`, `GET /api/goals/catalog`
+  (metrikler + yüzeyler + kapsam adayları), `POST /api/goals/intake`, `GET/PUT
+  /api/goals/{id}`, `POST /api/goals/{id}/status`, `DELETE`. Bilerek `POST /api/goals`
+  yok.
+- **Ekran** `frontend/src/features/goals/` — `GoalsPanel` (ListPane + PaneHeader, Açık/
+  Arşiv/Tümü süzgeci, deep-link `#/w/WS/goals/GOL3`), `GoalIntake` (kendi sözlerinle yaz
+  modalı, örnek çipler, Ctrl+Enter), `GoalDetail` (açık sorular bandı, "Senin sözlerin"
+  alıntısı, Ölçüm/Kapsam/Politika/Geçmiş bölümleri — sonraki fazların fitness trendi,
+  öneriler ve evrim defteri aynı başlık altına eklenecek), `GoalEditor` (katalog-bağlı
+  metrik/guardrail seçiciler, aday-bağlı kapsam çipleri, politika + oto yüzeyleri),
+  `goalMeta.ts`/`goalForm.ts` saf yardımcılar. Nav: **Hedefler** (Target ikonu).
+- **Testler**: `goals/validate_test.go`, `db/store_goal_test.go` (yaşam döngüsü + diskten
+  yeniden yükleme), `api/goals_test.go`, `agent/goal_writer_test.go`; frontend
+  `goalMeta.test.ts`, `goalForm.test.ts`. Gerçek LLM ile canlı doğrulama (claude-cli,
+  WS2 scratch): metrik hedef (`recipe.avgCostUSD` + `recipe.successRate ≥ 0.9`, reçete +
+  PM ajanı kapsamı, 4 açık soru) ve rubrik hedef (`judge.rubricScore`, üç seviyeli rubrik)
+  taslakları; düzenle → soruları boşalt → etkinleştir akışı ekranda çalıştı.
+
+## Promptlar ekranından sistem ajanı promptlarının kaldırılması + koddaki prompta dönme (2026-09-05) ✅
+
+**Sorun.** Promptlar ekranı, kayıt defterindeki 21 promptun tamamını listeliyordu. Bunların
+14'ü aslında bir **sistem ajanının promptuydu** (`ownedBySystemKey`): etkin metin ajanın
+`Soul` alanından gelir, ekrandaki kutu ise yalnızca sistem ajanı çözümlemesi başarısız
+olursa kullanılan bir yedek dosyaydı. Sonuç: aynı prompt için ikisi de "gerçek" görünen,
+biri neredeyse hiç okunmayan iki editör. Sistem ajanları artık Ayarlar ▸ Sistem ajanları
+ekranından doğrudan (ya da kalıtım alan bir özelleştirme üzerinden) düzenlenebildiği için
+bu ikinci editörün varlık sebebi kalmamıştı.
+
+**Ne değişti.**
+
+- `buildWSConfigDTO` (`internal/api/workspace_config.go`) artık `OwnedBySystemKey` dolu
+  olan prompt'ları DTO'ya hiç koymuyor: `promptKeys`, `promptMeta`, `prompts` ve
+  `defaults` yalnız serbest promptları taşıyor. Ekranda 21 yerine **7** prompt kalıyor
+  (handoff, continuation, btw-system, btw-preamble, auto-continue, coordinator, terse).
+  Kayıt defteri ve dosya çözümlemesi değişmedi — mevcut override dosyası hâlâ fallback
+  olarak okunur; `PUT` doğrulaması `agent.PromptKeys`'in tamamını kabul etmeye devam eder,
+  böylece market paketi içe aktarımı bozulmaz.
+- `WorkspaceFilesPanel` içindeki sistem-sahipli dal (salt-okunur editör + "Ajanlar
+  ekranında düzenle" notu) tamamen silindi; yerine listenin başına nereye gidileceğini
+  söyleyen tek bir yönlendirme notu kondu.
+- **Yeni:** `GET /api/agents/{id}/builtin-prompt` (`internal/api/agent_builtin_prompt.go`)
+  ajanın sistem rolü için **binary'ye gömülü** promptu döner (`prompts.Default`). Sistem
+  rolü olmayan ajanda 404.
+- `BuiltinPromptRevert` (`frontend/src/features/agents/`) soul editörünün başlığına
+  "Koddaki prompta dön" düğmesi ekler: metni çeker, **kaydedilmemiş düzenleme olarak**
+  yerleştirir (Kaydet'e basılana kadar uygulanmaz), sonuç önbelleğe alınır ve editör zaten
+  gömülü metinse düğme pasifleşir. Yalnız `systemKey` taşıyan ve kilitli olmayan ajanda
+  görünür. Özelleştirmeyi silmeye gerek kalmadan prompt geri alınabiliyor — model/araç
+  seçimleri korunuyor.
+
+**Testler.** `internal/api/agent_builtin_prompt_test.go` (kilitli yerleşikte gömülü metin;
+sapmış özelleştirmede hâlâ **orijinal** metin; sistem rolü olmayan ajanda 404; her
+`ownedBySystemKey`'in gerçek bir yerleşik tanıma karşılık geldiği drift-guard),
+`internal/api/workspace_config_test.go` (sistem-sahipli anahtarların DTO'da hiç
+bulunmaması, serbest olanların kalması), `AgentSettingsForm.revert.test.tsx` (6 senaryo).
+`scripts/test.sh full` yeşil (794 frontend testi). Canlı doğrulama: geçici sunucuda
+`/api/workspace-config` 7 anahtar döndü, sapmış özelleştirmede `builtin-prompt` orijinal
+başlık promptunu verdi.
 
 ## Yerel sunucu erişilebilirlik rozeti (2026-09-04) ✅
 
@@ -12000,7 +12529,8 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
   `layoutId` (kalıcılık ad alanı — Ağ ile Harita kayıtları birbirini budamaz),
   `focusNodeId`+`focusTick` (her istek bir kez işlenir; düğüm sonradan gelirse bekler;
   yenileme kamerayı geri çekmez; zoom `max(mevcut,1)`), `onNodeDoubleClick`.
-  `ExplorerView` artık `workspaceId` prop'u alır (`App.tsx`).
+  `ExplorerView` artık `workspaceId` prop'u alır (`App.tsx`). Kök düğüm `fixed`
+  (sürüklenebilir): çapasız fizik alanı sürekli kayıp dönüyordu.
 - **Testler:** `explorerSeed.test.ts`, `explorerVis.test.ts`, `useExplorerGraph.test.tsx`,
   `ExplorerView.test.tsx`, `VisNetworkGraph.test.tsx` (+3 senaryo).
 - **Bilinen dış durum:** `frontend` `tsc -b` bu sırada `features/rota/*` altındaki
@@ -12172,3 +12702,15 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
 - **Testler:** `children_test` (grup → oturum, cap grup üstünde), `graph_test`
   (bucket→grup→oturum kenarları), `api/views_test` (ebeveyn `category:skind:*`),
   `explorerVis.test`, `explorerNavigation.test`.
+
+## Harita: sağ panelden alt düğümleri gizle/göster (2026-09-05) ✅
+
+- **İstek:** seçili düğümün çocuklarını sağ panelden bir toggle ile gizleyip
+  gösterebilmek.
+- **Fix:** `useExplorerCollapse(workspaceId)` (katlanan ref'ler, workspace başına
+  `localStorage`), `applyExplorerFilter(..., collapsed)` (katlanan düğümden dışarı
+  gezinilmez; yalnız onun ulaştığı alt ağaç düşer), `childCounts` (tam grafta çocuk
+  sayısı), `graphToVis` `[+N]` rozeti + tooltip satırı. `ExplorerView` panel çubuğu:
+  "Alt düğümleri gizle · N" / "Alt düğümleri göster · N" (yalnız çocuğu olan düğümde).
+- **Test:** `explorerFilter.test` (katlama + sayım), `explorerVis.test` (rozet),
+  `ExplorerView.test` (toggle, yaprakta yok, workspace başına kalıcılık).

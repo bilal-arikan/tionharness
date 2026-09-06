@@ -36,24 +36,34 @@ func newID() string { return uuid.NewString() }
 type DB struct {
 	root string // store root directory
 
-	mu          sync.RWMutex
-	agents      map[string]Agent
-	sessions    map[string]Session
-	messages    map[string][]Message // keyed by session id, chronological
-	tasks       map[string]Task
-	schedules   map[string]Schedule
-	mcp         map[string]MCPServer
-	flows       map[string]Flow
-	flowRuns    map[string]FlowRun
-	sessionAsks map[string]SessionAsk // durable ask suspend/resume (MVP)
+	mu       sync.RWMutex
+	agents   map[string]Agent
+	sessions map[string]Session
+	// mutGen counts entity mutations (store_mutation.go). Read-mostly derived
+	// views — the sorted session list, the Explorer graph — key their caches on
+	// it, so a cache entry is exactly as fresh as the store it was built from.
+	mutGen atomic.Uint64
+	// sessionsSorted is the memoised ListSessions("") result (store_sessions_cache.go).
+	sessionsSorted atomic.Pointer[sessionsSnapshot]
+	messages       map[string][]Message // keyed by session id, chronological
+	tasks          map[string]Task
+	schedules      map[string]Schedule
+	mcp            map[string]MCPServer
+	flows          map[string]Flow
+	flowRuns       map[string]FlowRun
+	sessionAsks    map[string]SessionAsk // durable ask suspend/resume (MVP)
 	// agentMessages holds the delivery receipts for agent→agent / coordinator→
 	// worker messages, including the parked bodies of held ones.
 	agentMessages map[string]AgentMessage
 	automations   map[string]Automation
 	artifacts     map[string]Artifact
 	hooks         map[string]Hook
-	usage         map[string]Usage        // keyed by agentID + "|" + day
-	sessionUsage  map[string]SessionUsage // keyed by session id (lifetime rollup)
+	goals         map[string]Goal // evolution goals (_Docs/83)
+	// snapshotProv, when set, names the configuration snapshot in force for a
+	// new session (store_snapshot.go); nil until the runtime registers one.
+	snapshotProv atomic.Value
+	usage        map[string]Usage        // keyed by agentID + "|" + day
+	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
@@ -70,6 +80,22 @@ type DB struct {
 	globalModelRes   *GlobalModelResolutions
 	globalModelResMu sync.RWMutex
 
+	// globalSysAgents is the shared app-level customisation layer for built-in
+	// system agents (one per installation, wired by the workspace manager). It is
+	// applied over the compiled definitions when the built-ins are seeded and
+	// re-imposed, which is what makes an edit to a built-in reach every workspace
+	// without deriving a copy. nil when unwired — the plain compiled defaults are
+	// then seeded, exactly as before.
+	globalSysAgents   *GlobalSystemAgentOverrides
+	globalSysAgentsMu sync.RWMutex
+
+	// systemDefs is the compiled system-agent registry as last passed to
+	// EnsureSystemAgents, keyed by SystemKey. Editing a built-in compares the edit
+	// against the definition it came from; db does not import the agent package
+	// that owns the registry, so the definitions are remembered on the way in.
+	systemDefs   map[string]SystemAgentDefinition
+	systemDefsMu sync.RWMutex
+
 	// boardHook is an optional observer invoked (best-effort) after a task's
 	// board state changes or a task is created/deleted. It backs board-triggered
 	// automations; the workspace manager wires it to the AutomationEngine. It is
@@ -82,10 +108,10 @@ type DB struct {
 
 	// activityHook is an optional observer invoked (best-effort) after a message is
 	// appended, carrying the session's new message/tool-call totals and this
-	// append's deltas. It backs counter-triggered automations (metric
-	// message/tool); the workspace manager wires it to the AutomationEngine. Like
-	// boardHook it is called AFTER the store lock is released and the callback is
-	// expected to dispatch on its own goroutine, so an append is never blocked.
+	// append's deltas. The workspace manager wires it to the live event stream
+	// (session-list "message_activity" refresh). Like boardHook it is called AFTER
+	// the store lock is released and the callback is expected to dispatch on its
+	// own goroutine, so an append is never blocked.
 	activityHook   ActivityFn
 	activityHookMu sync.RWMutex
 
@@ -208,6 +234,7 @@ func Open(path string) (*DB, error) {
 		automations:        map[string]Automation{},
 		artifacts:          map[string]Artifact{},
 		hooks:              map[string]Hook{},
+		goals:              map[string]Goal{},
 		usage:              map[string]Usage{},
 		sessionUsage:       map[string]SessionUsage{},
 		debugCount:         map[string]int{},
@@ -278,6 +305,7 @@ const (
 	dirArtifacts          = "artifacts"
 	dirRender             = "render" // per-session render_template output (transient, swept)
 	dirHooks              = "hooks"
+	dirGoals              = "goals"
 	dirUsage              = "usage"
 	dirSessionUsage       = "session-usage"
 	dirTrajectories       = "trajectories" // index.json only; the graphs are session sidecars
@@ -303,6 +331,7 @@ const (
 	idKnowledge  = "MEM"
 	idMCP        = "MCP"
 	idHook       = "HOK"
+	idGoal       = "GOL"
 	idSchedule   = "SCH"
 	idAutomation = "AUT"
 	idTrajectory = "RTA" // "Rota"
@@ -491,6 +520,7 @@ func (d *DB) load() error {
 	}
 	for _, a := range agents {
 		d.agents[a.ID] = a
+		d.markMutatedLocked()
 	}
 
 	tasks, err := loadJSONDir[Task](d.dir(dirTasks))
@@ -499,6 +529,7 @@ func (d *DB) load() error {
 	}
 	for _, t := range tasks {
 		d.tasks[t.ID] = t
+		d.markMutatedLocked()
 	}
 
 	schedules, err := loadJSONDir[Schedule](d.dir(dirSchedules))
@@ -507,6 +538,7 @@ func (d *DB) load() error {
 	}
 	for _, s := range schedules {
 		d.schedules[s.ID] = s
+		d.markMutatedLocked()
 	}
 
 	mcps, err := loadJSONDir[MCPServer](d.dir(dirMCP))
@@ -515,6 +547,7 @@ func (d *DB) load() error {
 	}
 	for _, m := range mcps {
 		d.mcp[m.ID] = m
+		d.markMutatedLocked()
 	}
 
 	flows, err := loadJSONDir[Flow](d.dir(dirFlows))
@@ -523,6 +556,7 @@ func (d *DB) load() error {
 	}
 	for _, f := range flows {
 		d.flows[f.ID] = f
+		d.markMutatedLocked()
 	}
 
 	flowRuns, err := loadJSONDir[FlowRun](d.dir(dirFlowRuns))
@@ -541,6 +575,7 @@ func (d *DB) load() error {
 		}
 		r.State = materialized
 		d.flowRuns[r.ID] = r
+		d.markMutatedLocked()
 		if r.Status == FlowRunning {
 			runningFlowRuns++
 		}
@@ -553,6 +588,7 @@ func (d *DB) load() error {
 	}
 	for _, a := range sessionAsks {
 		d.sessionAsks[a.ID] = a
+		d.markMutatedLocked()
 	}
 
 	agentMessages, err := loadJSONDir[AgentMessage](d.dir(dirAgentMsgs))
@@ -561,6 +597,7 @@ func (d *DB) load() error {
 	}
 	for _, m := range agentMessages {
 		d.agentMessages[m.ID] = m
+		d.markMutatedLocked()
 	}
 
 	automations, err := loadJSONDir[Automation](d.dir(dirAutomations))
@@ -568,7 +605,14 @@ func (d *DB) load() error {
 		return err
 	}
 	for _, a := range automations {
+		if a.TriggerKind == TriggerCounterLegacy {
+			// Retired trigger kind: keep the file untouched on disk for the record
+			// but never surface the rule (see TriggerCounterLegacy).
+			slog.Warn("automation: skipping retired counter-kind rule", "component", "db", "id", a.ID, "name", a.Name)
+			continue
+		}
 		d.automations[a.ID] = a
+		d.markMutatedLocked()
 	}
 
 	artifacts, err := loadJSONDir[Artifact](d.dir(dirArtifacts))
@@ -591,6 +635,7 @@ func (d *DB) load() error {
 	var migrate []Artifact
 	for _, a := range artifacts {
 		d.artifacts[a.ID] = a
+		d.markMutatedLocked()
 		// Legacy artifact with an embedded body: move it to a content file. This is
 		// the ONLY case the loop still distinguishes — the read-back branch happened
 		// in the concurrent pass above, and the condition here is untouched by it
@@ -613,6 +658,16 @@ func (d *DB) load() error {
 	}
 	for _, h := range hooks {
 		d.hooks[h.ID] = h
+		d.markMutatedLocked()
+	}
+
+	goals, err := loadJSONDir[Goal](d.dir(dirGoals))
+	if err != nil {
+		return err
+	}
+	for _, g := range goals {
+		d.goals[g.ID] = g
+		d.markMutatedLocked()
 	}
 
 	d.markLoadPhase("entities", phaseStart)

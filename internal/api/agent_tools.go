@@ -248,5 +248,10 @@ func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
 	if err := ws(r).DB.UpdateAgentTools(r.Context(), id, req.MCPEnabled, string(overridesJSON)); writeAgentWriteError(w, err, "agent not found") {
 		return
 	}
+	// A built-in's tool access is customised installation-wide (see
+	// handleUpdateAgent), so the other open workspaces re-seed their copies.
+	if updated, err := ws(r).DB.GetAgent(r.Context(), id); err == nil && updated.Locked {
+		s.workspaces.PropagateSystemAgentEdit(r.Context(), ws(r).ID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"mcpEnabled": req.MCPEnabled, "toolOverrides": overrides})
 }

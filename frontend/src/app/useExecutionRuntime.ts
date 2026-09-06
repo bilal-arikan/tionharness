@@ -1,23 +1,15 @@
-// useExecutionRuntime polls GET /api/executions and exposes the two facts the
-// session list needs but GET /api/sessions does not carry: whether a session's
-// turn is running right now, and how its last task/flow run finished.
-//
-// Both endpoints are built on the same DB.ListSessions call; /api/executions
-// merely enriches each row. The sessions sidebar consumes this map to render the
-// live pulse dot + the pass/fail status pill for task and flow transcripts.
-//
-// The poll is backed up by the shared 'executions' refresh signal, which the SSE
-// dispatcher bumps on every chat / flow / schedule / spawn / worker / task /
-// session event, so a status flip lands without waiting for the next tick.
 import { useEffect, useMemo } from 'react'
 import { api } from '@/api'
-import type { Execution } from '@/types'
+import type { ExecutionRuntimeRow } from '@/types'
 import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_EXECUTIONS } from './eventToRefreshSignals'
 
-// Backstop only — SIGNAL_EXECUTIONS below carries the live updates.
 const POLL_MS = 20000
+// Run-lifecycle events arrive in bursts (a coordinator fanning out workers
+// fires one per spawn); the signal-driven refetch waits for the burst to
+// settle instead of issuing one request per event.
+const SIGNAL_SETTLE_MS = 400
 
 export interface ExecutionRuntime {
   running: boolean
@@ -31,24 +23,32 @@ export interface ExecutionRuntimeState {
   runtimeById: Map<string, ExecutionRuntime>
 }
 
+// Polls the compact runtime feed (GET /api/executions/runtime) rather than the
+// full executions list: the sidebar only needs running/lastStatus/lineage per
+// session, and the full feed carried every session in the workspace with its
+// title and agent name on every poll and every run-lifecycle event.
 export function useExecutionRuntime(activeWorkspaceId: string | null): ExecutionRuntimeState {
   const { data, refresh } = useAsync(
-    () => (activeWorkspaceId ? api.listExecutions() : Promise.resolve([] as Execution[])),
+    () =>
+      activeWorkspaceId ? api.listExecutionRuntime() : Promise.resolve([] as ExecutionRuntimeRow[]),
     [activeWorkspaceId],
     { pollMs: POLL_MS },
   )
-  const executions = useMemo(() => data ?? [], [data])
+  const rows = useMemo(() => data ?? [], [data])
 
   // Cross-window live sync: the central SSE dispatcher bumps this signal on every
-  // run-lifecycle event in the active workspace.
+  // run-lifecycle event in the active workspace. Coalesced with a short settle
+  // window; the initial load is the useAsync above, not this effect.
   const tick = useRefreshTrigger(SIGNAL_EXECUTIONS)
   useEffect(() => {
-    refresh()
+    if (tick === 0) return
+    const t = window.setTimeout(refresh, SIGNAL_SETTLE_MS)
+    return () => window.clearTimeout(t)
   }, [tick, refresh])
 
   const runtimeById = useMemo(() => {
     const m = new Map<string, ExecutionRuntime>()
-    for (const e of executions) {
+    for (const e of rows) {
       m.set(e.sessionId, {
         running: e.running,
         lastStatus: e.lastStatus ?? '',
@@ -57,7 +57,7 @@ export function useExecutionRuntime(activeWorkspaceId: string | null): Execution
       })
     }
     return m
-  }, [executions])
+  }, [rows])
 
   return { runtimeById }
 }

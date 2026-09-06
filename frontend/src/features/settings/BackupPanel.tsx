@@ -121,7 +121,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
         checked={draft.backupEnabled}
         onChange={(v) => set('backupEnabled', v)}
       />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Yedekleme aralığı (saat)"
           hint="İki otomatik yedek arası süre (en az 1 saat). 24 = günde bir."

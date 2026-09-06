@@ -94,5 +94,6 @@ func (d *DB) DeleteSessionAsk(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	delete(d.sessionAsks, id)
+	d.markMutatedLocked()
 	return removeFile(d.dir(dirSessionAsks, id+".json"))
 }

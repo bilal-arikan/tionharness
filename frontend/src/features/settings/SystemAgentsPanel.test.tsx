@@ -117,14 +117,17 @@ describe('SystemAgentsPanel', () => {
     expect(container.querySelector('[data-testid="settings-form"]')?.textContent).toBe('SYS2')
   })
 
-  it('names the workspace the customisations belong to', async () => {
+  // Built-ins are edited in place and the edit applies installation-wide, so the
+  // scope note must say that rather than promising a workspace-local copy.
+  it('says an edit applies to every workspace and makes no copy', async () => {
     listAgents.mockResolvedValue([
       agent({ id: 'SYS1', name: 'Titler', system: true, locked: true, systemKey: 'titler' }),
     ])
     const { container } = await renderPanel()
 
-    const note = container.querySelector('[data-testid="system-agents-scope-note"]')
-    expect(note?.textContent).toContain("Atölye workspace'ine özgüdür")
+    const note = container.querySelector('[data-testid="system-agents-scope-note"]')?.textContent
+    expect(note).toContain('tüm workspace')
+    expect(note).toContain('kopya oluşmaz')
   })
 
   it('reports a load failure to the caller', async () => {

@@ -38,11 +38,16 @@ const (
 	// conditional change to one coordinator recipe. Suggestion-only in v1 — the
 	// user (or a later opt-in applier) edits the recipe.
 	ChannelRecipeOpt Channel = "recipe-opt"
+	// ChannelEvolution marks a workspace-evolver proposal (_Docs/83 E2): one
+	// measured change to one surface (agent field, tool tier, automation limit,
+	// prompt, skill flag …) in service of a named Goal. Suggestion-only; the
+	// user accepts or dismisses it here, application and rollback come in E3.
+	ChannelEvolution Channel = "evolution"
 )
 
 // Valid reports whether c is one of the known channels.
 func (c Channel) Valid() bool {
-	return c == ChannelAppFix || c == ChannelWorkspaceOpt || c == ChannelRecipeOpt
+	return c == ChannelAppFix || c == ChannelWorkspaceOpt || c == ChannelRecipeOpt || c == ChannelEvolution
 }
 
 // FindingStatus is a finding's position in its review lifecycle (_Docs/60 §5).
@@ -104,6 +109,9 @@ type Finding struct {
 	// Proposal is the structured recipe change behind a recipe-opt finding
 	// (Rota F4); nil on the other channels.
 	Proposal *RecipeProposal `json:"proposal,omitempty"`
+	// Evolution is the structured change behind an evolution finding (_Docs/83
+	// E2); nil on the other channels.
+	Evolution *EvolutionProposal `json:"evolution,omitempty"`
 	// LastRunID is the scan run (insight.RunRecord.ID) that most recently produced
 	// or re-confirmed this finding. It is what makes "show me what the run that
 	// just finished surfaced" answerable: without it a consumer triggered by one
@@ -124,6 +132,36 @@ type RecipeProposal struct {
 	// Removes names what an addition drops to stay within the growth budget.
 	Removes  string `json:"removes,omitempty"`
 	Evidence string `json:"evidence"`
+}
+
+// EvolutionProposal is what the workspace evolver proposes for a Goal: one
+// action on one field of one entity of one surface, with the metric it is
+// expected to move and the evidence it rests on. Surfaces, fields and actions
+// are validated against goals.ProposalRules before a finding is filed.
+type EvolutionProposal struct {
+	GoalID   string `json:"goalId"`
+	Surface  string `json:"surface"`  // agent | skill | recipe | tools | automation | schedule | prompt | ws-settings
+	EntityID string `json:"entityId"` // AGT12 | skill slug | AUT3 | tool name | prompt key | "" for ws-settings
+	Field    string `json:"field"`
+	Action   string `json:"action"` // set | add | remove | prune | swap
+	Value    string `json:"value,omitempty"`
+	// Removes names what an addition drops to stay within a growth budget.
+	Removes string `json:"removes,omitempty"`
+	// ExpectedMetric / ExpectedDelta state the predicted effect (a catalog
+	// metric of the goal and the signed change), verified after application.
+	ExpectedMetric string  `json:"expectedMetric,omitempty"`
+	ExpectedDelta  float64 `json:"expectedDelta,omitempty"`
+	// SideEffects lists catalog metrics the change may worsen.
+	SideEffects []string `json:"sideEffects,omitempty"`
+	Evidence    string   `json:"evidence"`
+	// SnapshotHash is the configuration the proposal was made against.
+	SnapshotHash string `json:"snapshotHash,omitempty"`
+	// LowConfidence marks a proposal made under the goal's minRuns threshold
+	// (manual trigger only).
+	LowConfidence bool `json:"lowConfidence,omitempty"`
+	// Kind: "change" (default), "conflict" (clashes with another goal) or
+	// "escalation" (the same proposal kept coming back; a human must decide).
+	Kind string `json:"kind,omitempty"`
 }
 
 // AppliedEntity names the workspace entity a finding was applied to. Both fields
@@ -180,7 +218,7 @@ var findingsRelPath = filepath.Join("insight", "findings.jsonl")
 // given store root (db.Root()). A missing file yields an empty store.
 func OpenFindingStore(root string) (*FindingStore, error) {
 	path := filepath.Join(root, findingsRelPath)
-	items, err := readFindings(path)
+	items, err := findingsCache.load(path)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +247,11 @@ func (s *FindingStore) Upsert(f Finding) (Finding, error) {
 		// lenses, each slugging it with its own signature, which used to produce a
 		// separate card per lens. Match on the canonical TOPIC (tool + error shape)
 		// within the same channel so those land on one card.
-		if topic := canonTopic(f.LensID, f.Signature); topic != "" && f.Channel != "" {
+		// Evolution proposals are keyed by entity id (AGT17, AUT3 …), which the
+		// topic canonicaliser treats as volatile; merging them would collapse
+		// proposals for different entities into one card, so they match on the
+		// exact signature only.
+		if topic := canonTopic(f.LensID, f.Signature); topic != "" && f.Channel != "" && f.Channel != ChannelEvolution {
 			for i := range s.items {
 				if s.items[i].Channel != f.Channel {
 					continue
@@ -282,7 +324,12 @@ func (s *FindingStore) mergeInto(i int, f Finding) (Finding, error) {
 func (s *FindingStore) List(lensID string, channel Channel) []Finding {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]Finding, 0, len(s.items))
+	// The priority score is computed once per finding, not once per comparison.
+	type scored struct {
+		f     Finding
+		score int
+	}
+	kept := make([]scored, 0, len(s.items))
 	for _, f := range s.items {
 		if lensID != "" && f.LensID != lensID {
 			continue
@@ -290,14 +337,18 @@ func (s *FindingStore) List(lensID string, channel Channel) []Finding {
 		if channel != "" && f.Channel != channel {
 			continue
 		}
-		out = append(out, f)
+		kept = append(kept, scored{f: f, score: f.PriorityScore()})
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if pi, pj := out[i].PriorityScore(), out[j].PriorityScore(); pi != pj {
-			return pi > pj
+	sort.SliceStable(kept, func(i, j int) bool {
+		if kept[i].score != kept[j].score {
+			return kept[i].score > kept[j].score
 		}
-		return out[i].LastSeen > out[j].LastSeen
+		return kept[i].f.LastSeen > kept[j].f.LastSeen
 	})
+	out := make([]Finding, len(kept))
+	for i, k := range kept {
+		out[i] = k.f
+	}
 	return out
 }
 
@@ -435,5 +486,9 @@ func writeFindings(path string, items []Finding) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	findingsCache.rememberWritten(path, items)
+	return nil
 }

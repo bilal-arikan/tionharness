@@ -29,6 +29,8 @@ export interface AppEventDeps {
   applyClientPrefs: (s: ClientPrefs) => void
   refreshWorkspaces: () => void
   refreshSessions: () => void
+  // Coalesced variant for the per-event live refresh (see useSessionsController).
+  refreshSessionsSoon: () => void
   setMessages: Dispatch<SetStateAction<Message[]>>
   setMeterRefresh: Dispatch<SetStateAction<number>>
   setSettingsNonce: Dispatch<SetStateAction<number>>
@@ -130,7 +132,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   if (e.type === 'session') {
     const sid = e.target?.sessionId
     const op = e.target?.op
-    d.refreshSessions()
+    d.refreshSessionsSoon()
     if (sid === d.activeSessionId) {
       d.setMeterRefresh((n) => n + 1)
       const transcriptOp =
@@ -170,7 +172,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // the one on screen in this window (then the user is seeing it live).
     const evView = viewForEventType(e.type)
     if (evView && evView !== d.view) d.markViewUnread(evView)
-    d.refreshSessions()
+    d.refreshSessionsSoon()
     // A chat reply that completed server-side after the SSE stream closed
     // (e.g. the user refreshed mid-turn and the detached turn finished) is not
     // in the open transcript. If it belongs to the session being viewed,

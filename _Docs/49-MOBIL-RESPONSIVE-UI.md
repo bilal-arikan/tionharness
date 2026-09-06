@@ -1,7 +1,10 @@
 # 49 — Mobil / Dikey Ekran Uyumlu UI (Responsive)
 
-> **Durum:** F1 + F2 + F3 + panel UX iyileştirmeleri UYGULANDI ✅ (2026-07-04) —
-> kalan F4 tasarım 📐. Bkz. §7 (F3 sonrası liste panelleri drawer'a yükseltildi).
+> **Durum:** F1 + F2 + F3 + panel UX iyileştirmeleri UYGULANDI ✅ (2026-07-04);
+> **dört katmanlı kabuk** (dar / kare / geniş / çok geniş + en-boy oranı, durum
+> geçişleri) UYGULANDI ✅ (2026-09-05, §7.7); **tüm sol liste panelleri
+> daraltılabilir** (varsayılan açık, yeniden-açma rayı, İçgörü standarda uydu)
+> UYGULANDI ✅ (2026-09-05, §7.8) — kalan F4 tasarım 📐. Bkz. §7.
 > **Amaç:** TionHarness web UI'ını **dikey (portrait) telefon ekranlarına** uyumlu
 > hale getirmek. Bugün UI **masaüstü-sabit** (yatay çok-sütunlu düzen, sabit
 > genişlikli raylar/sidebar'lar); telefonda kullanılamaz. Bu doküman kırılma
@@ -300,3 +303,70 @@ sessions gibi), başlıktaki butondan yeniden açılır. `tsc -b && vite build` 
   App header'ında `PanelLeft` toggle butonu render edilir.
 - Böylece 9 liste ekranı da: başlık + başlıktan aç/kapa + mobil drawer + boş durum
   bakımından **tek standart**.
+
+### 7.7 Dört katmanlı kabuk — kare ve çok geniş ekranlar + durum geçişleri ✅ (2026-09-05)
+
+F1–F3 yalnız "md altı = telefon" ikilisini biliyordu; 768–1279px arası tablet /
+yarım ekran pencereler (üç kolon sığmaz) ve ≥ 1920px monitörler (satırlar
+okunamayacak kadar uzar) masaüstü gibi davranıyordu. Bu adım genişliği dört
+katmana, en-boy oranını üç sınıfa ayırır ve her kolonun dock/drawer modunu buradan
+türetir.
+
+- **Tek kaynak:** `shared/lib/viewport.ts` — `classifyWidth` (narrow < 768, square
+  768–1279, wide 1280–1919, ultra ≥ 1920; Tailwind `md`/`xl` ve `index.css`'teki
+  `--breakpoint-3xl: 120rem` ile birebir), `classifyAspect` (portrait < 0.9,
+  square ≤ 1.25, landscape), `capListColumnWidth` (kare katmanda liste kolonu
+  ≤ 256px). `useIsMobile()` artık aynı tablodan okur.
+- **Hook'lar:** `shared/hooks/useViewport.ts` (`useSyncExternalStore`, tek resize
+  aboneliği, yalnız katman/oran değişince bildirim; `useViewportAttribute()`
+  `<html data-viewport data-aspect>` damgalar) ve `app/useShellLayout.ts`
+  (`computeShellLayout` saf, test edilir): rail `hidden|compact|full`, liste
+  `drawer|docked`, detay `drawer|docked`, ölçü `fluid|centered`.
+- **Kare katman:** `NavRail` ikon-raya zorlanır; workspace düğmesi rail'i içerik
+  üstünde **peek** olarak açar (`absolute z-40`, akış yuvası 3.5rem sabit;
+  `useOutsideClick`, görünüm seçimi ve katman değişimi kapatır, `data-rail-mode`
+  ile gözlenir). Detay paneli `App.tsx`'te `shell.detail === 'drawer'` iken sağdan
+  giren drawer + `Backdrop`; portrait monitörlerde de (ör. 1200×1600) drawer.
+- **Ultra katman:** `.th-measure` (`styles/layout.css`) transcript / composer /
+  `ComposerCard` / `SessionStartPanel` üzerinde; `--th-measure: 88rem` yalnız
+  `[data-viewport='ultra']`'da, altında yalnız oluk (`--th-gutter`). Ayarlar ve
+  Workspace form kolonları `3xl:max-w-4xl`; Market ızgarası ve pano sütunları
+  `3xl:` ile genişler.
+- **Durum geçişleri:** `.th-col` genişlik geçişi (sürükleme sırasında
+  `body[data-th-resizing]` ile kapalı), `.th-drawer` transform, `.th-drawer-from-*`
+  ve `.th-backdrop` `@starting-style` giriş animasyonu, `.th-column` max-width.
+  `prefers-reduced-motion` altında hepsi anlık.
+- **Paylaşılan drag:** `SessionsSidebar` kendi drag/persist kodunu bıraktı;
+  `useResizableSidebar` (+ `ResizeHandle`) kullanır. Hook `capToTier` seçeneği
+  aldı (detay paneli `false`), `localStorage` erişimi try/catch'li.
+- **Izgaralar:** sabit `grid-cols-N` form ızgaraları `grid-cols-1 sm:grid-cols-N`
+  oldu; `StatTiles` kare katmanda 3 sütun (`square:` custom variant).
+- **Doğrulama:** `viewport.test.ts`, `useShellLayout.test.ts`; tarayıcıda 390×844
+  (drawer + backdrop), 1024×768 (compact rail, peek, liste 256px, detay drawer
+  320px), 1440×900 (tam dock), 2560×1440 (transcript 1768px, iki yanda 180px ölçü
+  paddingi).
+
+### 7.8 Tüm sol liste panelleri daraltılabilir — tek standart, varsayılan açık ✅ (2026-09-05)
+
+§7.4–7.6'nın daraltma modeli bir ara "md+'da her zaman görünür kolon"a
+indirgenmişti (`useCollapsibleList` yalnız mobil drawer bayrağı tutuyordu,
+`hideRail` her yerde). Kullanıcı isteğiyle daraltma geri geldi ve **her** sol
+liste paneline uygulandı; İçgörü'nün özel `aside`'ı da standarda taşındı.
+
+- **Durum modeli** (`shared/hooks/useCollapsibleList.ts`): md+ → kalıcı dock
+  aç/kapa (`storageKey`, varsayılan açık; yalnız `'0'` daraltır), narrow → kalıcı
+  olmayan drawer (varsayılan kapalı). Katman `useViewport().tier` ile belirlenir.
+- **Kabuk** (`shared/components/CollapsibleListShell.tsx`): kapalı+md+ → kolon
+  unmount, ince `.th-rail` düğmesi (36px, ikon + `writing-mode: vertical-rl`
+  etiket, `data-testid="<id>-rail"`); açık → `.th-pane-enter` keyframe. Narrow
+  → önceki drawer davranışı (`th-drawer`, `Backdrop`). `data-list-open` ile
+  gözlemlenebilir. `hideRail` kaldırıldı.
+- **Kontroller:** `PaneHeader` liste düğmesi her genişlikte (`PanelLeft`,
+  kapalıyken accent); `AppHeader` sohbet ve ayar/workspace düğmeleri her
+  genişlikte; `SidebarHeader onCollapse` / `CollapseListButton` panel içinde.
+- **Uygulanan paneller:** Sohbet oturumları (`App.tsx` → `CollapsibleListShell`,
+  `tionharness.sessionsListOpen`), Ajanlar, Artifactlar, Skills, Araçlar,
+  Market, Akışlar, Hedefler, Ayarlar ve Workspace kategori rayları, **İçgörü**
+  (`ListPane` + `SidebarHeader` + sağ kolonda `PaneHeader`).
+- **Sohbet özel durumu:** oturum seçimi / yeni sohbet / görünüm değişimi yalnız
+  dar ekranda drawer'ı kapatır; masaüstü dock durumu korunur.

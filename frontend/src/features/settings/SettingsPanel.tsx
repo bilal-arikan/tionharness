@@ -302,9 +302,8 @@ export function SettingsPanel({
         open={navOpen ?? true}
         onToggle={onToggleNav ?? (() => {})}
         label="Ayarlar"
-        hideRail
       >
-        <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
+        <aside className="th-col flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm square:w-48">
           <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
             Uygulama
           </div>
@@ -365,7 +364,7 @@ export function SettingsPanel({
           // Two-pane roster + settings form of its own; render full-bleed.
           <SystemAgentsPanel onError={onError} />
         ) : (
-          <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
+          <div className="th-column mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6 3xl:max-w-4xl">
             {!draft ? (
               <LoadingState label="Yükleniyor…" />
             ) : (

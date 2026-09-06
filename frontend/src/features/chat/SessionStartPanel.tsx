@@ -102,10 +102,10 @@ export function SessionStartPanel({
 
   return (
     // Geometry is deliberately copied from the Composer: the same outer gutter
-    // (px-1 / md:px-6) and the same card (rounded-2xl, px-3, pt-2.5/pb-2), so the
+    // (th-measure) and the same card (rounded-2xl, px-3, pt-2.5/pb-2), so the
     // panel reads as one stacked block with the input rather than a floating
     // toast of a different width.
-    <div data-testid="session-start-panel" className="px-1 pb-1.5 md:px-6 md:pb-2">
+    <div data-testid="session-start-panel" className="th-measure pb-1.5 md:pb-2">
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg">
         <div className="flex items-center gap-1.5">
           <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">

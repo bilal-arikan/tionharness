@@ -19,6 +19,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
@@ -235,12 +236,23 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := strings.TrimSpace(q.Get("kind"))
 	origin := strings.TrimSpace(q.Get("origin"))
-	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
+	search := textutil.FoldLower(strings.TrimSpace(q.Get("q")))
 	archived, archivedGiven, err := boolQuery(q, "archived")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// A listing is metadata: the body of every artifact would otherwise ride
+	// along on each page (and on the parameter-less calls the pickers make),
+	// which for a workspace of large documents is megabytes per request. The
+	// detail endpoint (GET /api/artifacts/{id}) carries the content; a caller
+	// that really wants bodies in bulk opts in with ?withContent=true.
+	withContent, _, err := boolQuery(q, "withContent")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	stripContent := withContent == nil || !*withContent
 	matches := make([]db.Artifact, 0, len(list))
 	for _, a := range list {
 		if kind != "" && a.Kind != kind {
@@ -249,11 +261,14 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 		if origin != "" && a.Origin != origin {
 			continue
 		}
-		if search != "" && !strings.Contains(strings.ToLower(a.Title), search) {
+		if search != "" && !textutil.ContainsFold(a.Title, search) {
 			continue
 		}
 		if archivedGiven && a.Archived != *archived {
 			continue
+		}
+		if stripContent {
+			a.Content = ""
 		}
 		matches = append(matches, a)
 	}

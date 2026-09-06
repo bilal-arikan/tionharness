@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
 // handleListLogs returns recent captured log entries (application + all
@@ -22,9 +23,8 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries := s.logs.Entries(0) // all retained; filter then trim below
 	minLevel := levelRank(r.URL.Query().Get("level"))
-	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	q := textutil.FoldLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	component := strings.TrimSpace(r.URL.Query().Get("component"))
 	session := strings.TrimSpace(r.URL.Query().Get("session"))
 	parseMs := func(key string) int64 {
@@ -37,32 +37,29 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	since, until := parseMs("since"), parseMs("until")
 
-	filtered := make([]logbuf.Entry, 0, len(entries))
-	for _, e := range entries {
+	// Newest-first walk that stops at `limit` matches: the ring is never copied
+	// whole, and the text match only runs on rows the cheaper facets kept.
+	filtered := s.logs.Collect(limit, func(e logbuf.Entry) bool {
 		if levelRank(e.Level) < minLevel {
-			continue
+			return false
 		}
 		if component != "" && e.Component != component {
-			continue
+			return false
 		}
 		if session != "" && e.Session != session {
-			continue
+			return false
 		}
 		if since > 0 && e.Time < since {
-			continue
+			return false
 		}
 		if until > 0 && e.Time > until {
-			continue
+			return false
 		}
-		if q != "" && !entryMatches(e, q) {
-			continue
-		}
-		filtered = append(filtered, e)
-	}
+		return q == "" || entryMatches(e, q)
+	})
 
-	// Keep the most recent `limit` after filtering.
-	if len(filtered) > limit {
-		filtered = filtered[len(filtered)-limit:]
+	if filtered == nil {
+		filtered = []logbuf.Entry{}
 	}
 	writeJSON(w, http.StatusOK, filtered)
 }
@@ -141,18 +138,21 @@ func levelRank(level string) int {
 	}
 }
 
+// entryMatches is the free-text facet. q must be folded with
+// textutil.FoldLower; the entry's fields are folded in place while scanning,
+// so a query over the whole ring never allocates a lower-cased copy per row.
 func entryMatches(e logbuf.Entry, q string) bool {
-	if strings.Contains(strings.ToLower(e.Message), q) {
+	if textutil.ContainsFold(e.Message, q) {
 		return true
 	}
 	// Promoted source fields participate in free-text search like any attr.
 	for _, v := range []string{e.Component, e.Session, e.Agent, e.Workspace} {
-		if v != "" && strings.Contains(strings.ToLower(v), q) {
+		if v != "" && textutil.ContainsFold(v, q) {
 			return true
 		}
 	}
 	for k, v := range e.Attrs {
-		if strings.Contains(strings.ToLower(k), q) || strings.Contains(strings.ToLower(v), q) {
+		if textutil.ContainsFold(k, q) || textutil.ContainsFold(v, q) {
 			return true
 		}
 	}

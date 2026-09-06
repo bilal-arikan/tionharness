@@ -106,10 +106,11 @@ describe('draftFromArtifact', () => {
   })
 
   it('does not carry non-editable fields into the draft', () => {
-    // Draft is a closed object type with no index signature, so TS rejects the
-    // direct cast; going through unknown is the sanctioned widening and is what
-    // this assertion needs — it only reads the key list.
-    const draft = draftFromArtifact(artifact({ id: 'ART7' })) as unknown as Record<string, unknown>
+    // No cast: Object.keys takes any object and hands back string[], so the
+    // assertion below reads the key list off a plain Draft. The Record cast this
+    // used to carry was never needed for the check and only hid the mismatch it
+    // was widening around.
+    const draft = draftFromArtifact(artifact({ id: 'ART7' }))
     expect(Object.keys(draft).sort()).toEqual(['content', 'group', 'kind', 'language', 'title'])
   })
 })

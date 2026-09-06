@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ViewGraphResult, ViewRef } from '@/types'
 import {
   applyExplorerFilter,
+  childCounts,
   countActiveExplorerFacets,
   emptyExplorerFilter,
   explorerFacets,
@@ -141,6 +142,40 @@ describe('applyExplorerFilter', () => {
       ROOT,
     )
     expect(keys(both).filter((k) => k.startsWith('session:'))).toEqual([])
+  })
+})
+
+describe('collapsed nodes', () => {
+  const layer = augmentLive(graph)
+
+  it('keeps a folded node but drops what only it reaches; counts its children', () => {
+    const out = applyExplorerFilter(
+      layer.graph,
+      emptyExplorerFilter(),
+      layer.liveState,
+      ROOT,
+      new Set(['category:agents']),
+    )
+    const k = keys(out)
+    expect(k).toContain('category:agents')
+    expect(k).not.toContain('agent:AG1')
+    expect(k).not.toContain('agent:AG2')
+    // Sessions still arrive through the sessions bucket.
+    expect(k).toContain('session:SES1')
+    const foldedSession = applyExplorerFilter(
+      layer.graph,
+      emptyExplorerFilter(),
+      layer.liveState,
+      ROOT,
+      new Set(['session:SES1']),
+    )
+    expect(keys(foldedSession)).toContain('session:SES1')
+    expect(keys(foldedSession)).not.toContain('session:W1')
+    expect(keys(foldedSession)).not.toContain('agent:AG1#live:SES1')
+    const counts = childCounts(layer.graph)
+    expect(counts.get('category:agents')).toBe(2)
+    expect(counts.get('session:SES1')).toBe(2) // worker + live avatar
+    expect(counts.get('session:W1')).toBeUndefined()
   })
 })
 

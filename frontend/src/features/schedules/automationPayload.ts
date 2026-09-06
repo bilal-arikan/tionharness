@@ -2,8 +2,6 @@ import type {
   AutomationTriggerKind,
   BoardAction,
   BoardOp,
-  CounterMetric,
-  CounterScope,
   SessionMode,
   TokenScope,
   TrajEndStatus,
@@ -25,9 +23,6 @@ export interface AutomationPayloadInput {
   boardMoveToState: string
   tokenScope: TokenScope
   tokenThreshold: number
-  counterMetric: CounterMetric
-  counterScope: CounterScope
-  counterInterval: number
   trajPhase: string
   trajRecipe: string
   trajEvent: TrajEvent
@@ -58,21 +53,15 @@ export function buildAutomationPayload(input: AutomationPayloadInput) {
       }
     : input.kind === 'token'
       ? { tokenScope: input.tokenScope, tokenThreshold: input.tokenThreshold }
-      : input.kind === 'counter'
+      : input.kind === 'phase'
         ? {
-            counterMetric: input.counterMetric,
-            counterScope: input.counterScope,
-            counterInterval: input.counterInterval,
+            trajPhase: input.trajPhase.trim(),
+            trajRecipe: input.trajRecipe.trim(),
+            trajEvent: input.trajEvent,
           }
-        : input.kind === 'phase'
-          ? {
-              trajPhase: input.trajPhase.trim(),
-              trajRecipe: input.trajRecipe.trim(),
-              trajEvent: input.trajEvent,
-            }
-          : input.kind === 'trajectory_end'
-            ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
-            : { triggerTag: input.triggerTag.trim() }
+        : input.kind === 'trajectory_end'
+          ? { trajRecipe: input.trajRecipe.trim(), trajStatus: input.trajStatus }
+          : { triggerTag: input.triggerTag.trim() }
   const target = isTargetlessAction
     ? { targetAgentId: '', flowId: '' }
     : input.targetMode === 'flow'

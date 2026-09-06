@@ -23,10 +23,13 @@ export function formatDurationMs(ms: number): string {
 // Safe persisted execution summary. Raw TurnStep payloads stay in the authorized
 // transcript/debug surfaces; this card exposes only counts and stable reasons.
 export function SessionExecutionCard({ info }: { info: SessionInfo }) {
+  // The delegation target, named rather than shown as a raw id: the info payload
+  // resolves agentName from the target for a delegated run, so prefer it and keep
+  // the id only as the fallback for a target that no longer resolves.
   const target = info.targetProfile
     ? `Profil: ${info.targetProfile}`
     : info.targetAgentId
-      ? `Ajan: ${info.targetAgentId}`
+      ? `Ajan: ${info.agentName || info.targetAgentId}`
       : '—'
   const tokens = `${formatTokens(info.inputTokens ?? 0)} giriş · ${formatTokens(info.outputTokens ?? 0)} çıkış`
 

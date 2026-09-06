@@ -85,10 +85,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         defaultWidth={288}
         label="Artifactlar"
         testId="artifacts-list-toggle"
-        hideRail
       >
         <SidebarHeader
           title={`Artifactlar · ${list.length}${listState.hasMore ? ` / ${listState.total}` : ''}`}
+          onCollapse={toggleList}
         >
           {listState.grouped.length > 1 && (
             <button

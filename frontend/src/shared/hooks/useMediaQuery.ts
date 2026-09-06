@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TIER_MIN_WIDTH } from '@/shared/lib/viewport'
 
 // useMediaQuery tracks a CSS media query and re-renders when it flips. SSR-safe
 // (returns false when window is unavailable). Used to branch layout between the
@@ -18,8 +19,8 @@ export function useMediaQuery(query: string): boolean {
 }
 
 // useIsMobile reports whether the viewport is below Tailwind's `md` breakpoint
-// (768px) — i.e. a portrait phone. Kept in one place so the breakpoint stays in
-// sync with the `md:` utility classes used across the responsive layout.
+// (768px), i.e. the `narrow` tier: a portrait phone. The bound comes from the
+// shared tier table so the `md:` utilities, this hook and useViewport agree.
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 767px)')
+  return useMediaQuery(`(max-width: ${TIER_MIN_WIDTH.square - 1}px)`)
 }

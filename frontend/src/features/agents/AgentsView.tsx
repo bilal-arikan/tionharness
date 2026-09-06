@@ -239,17 +239,6 @@ export function AgentsView({
     }
   }
 
-  const toggleDisabled = async (agent: Agent) => {
-    setSystemActionPending(true)
-    try {
-      await onUpdateAgent(agent.id, { disabled: !agent.disabled })
-    } catch (e) {
-      onError?.((e as Error).message)
-    } finally {
-      setSystemActionPending(false)
-    }
-  }
-
   const rosterItem = (a: Agent) => {
     const lineage = lineageOf(a, byId)
     return (
@@ -335,12 +324,6 @@ export function AgentsView({
   const selectedLineage = selected ? lineageOf(selected, byId) : []
   const selectedParent = selected?.parentId ? (byId.get(selected.parentId) ?? null) : null
   const selectedParentOptions = selected ? eligibleParents(selected, agents) : []
-  const selectedRoleCustomization =
-    selected?.locked && selected.systemKey
-      ? (agents.find(
-          (a) => a.system && !a.locked && a.systemKey === selected.systemKey && !a.disabled,
-        ) ?? null)
-      : null
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -352,9 +335,8 @@ export function AgentsView({
         defaultWidth={256}
         label="Ajanlar"
         testId="agents-list-toggle"
-        hideRail
       >
-        <SidebarHeader title="Ajanlar">
+        <SidebarHeader title="Ajanlar" onCollapse={toggleRoster}>
           {onRefresh && (
             <button
               onClick={doRefresh}
@@ -586,23 +568,30 @@ export function AgentsView({
                 defaultSaveState={defaultAgentSaveState}
                 onSetDefault={() => onSetDefault(selected.id)}
                 onSave={(p) => onUpdateAgent(selected.id, p)}
-                onDuplicate={() => onDuplicateAgent(selected.id)}
-                onDerive={onDeriveAgent ? (opts) => onDeriveAgent(selected.id, opts) : undefined}
+                onDuplicate={selected.system ? undefined : () => onDuplicateAgent(selected.id)}
+                onDerive={
+                  onDeriveAgent && !selected.system
+                    ? (opts) => onDeriveAgent(selected.id, opts)
+                    : undefined
+                }
+                readOnly={selected.system}
+                readOnlyNote={
+                  <>
+                    Bu bir <strong>sistem ajanı</strong>: bu ekranda yalnızca incelenir. Düzenlemek
+                    için <strong>Ayarlar → Sistem ajanları</strong> ekranını kullan.
+                  </>
+                }
                 lineage={selectedLineage}
                 parent={selectedParent}
                 parentOptions={selectedParentOptions}
-                roleCustomization={selectedRoleCustomization}
                 onSelectAgent={select}
                 onDelete={
-                  selected.locked
+                  selected.system
                     ? undefined
                     : async () => {
-                        const roleNote = selected.system
-                          ? '\n\nBu bir sistem rolü özelleştirmesi: silinince rol yerleşik tanıma döner.'
-                          : ''
                         if (
                           confirm(
-                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.${roleNote}`,
+                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
                           )
                         ) {
                           await onDeleteAgent(selected.id)
@@ -610,9 +599,8 @@ export function AgentsView({
                         }
                       }
                 }
-                onRestoreDefault={selected.parentId ? () => restoreDefault(selected) : undefined}
-                onToggleDisabled={
-                  selected.system && !selected.locked ? () => toggleDisabled(selected) : undefined
+                onRestoreDefault={
+                  selected.parentId && !selected.system ? () => restoreDefault(selected) : undefined
                 }
                 systemActionPending={systemActionPending}
               />

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Menu } from 'lucide-react'
+import { PanelLeft } from 'lucide-react'
 
 interface Props {
   // Screen title shown in the header (e.g. "Ajanlar"). Optional: omit it when
@@ -11,7 +11,8 @@ interface Props {
   // a name input + id chip directly in the top bar (e.g. the flow editor).
   titleSlot?: ReactNode
   // When provided, a left toggle button appears (like the chat sessions
-  // hamburger) that shows/hides the screen's left list panel.
+  // header's) that shows/hides the screen's left list panel: collapses the docked
+  // column on md+, opens/closes the drawer on narrow.
   listOpen?: boolean
   onToggleList?: () => void
   // Optional secondary line after the title (e.g. the selected agent name),
@@ -53,9 +54,11 @@ export function PaneHeader({
       aria-label="Liste panelini aç/kapat"
       aria-pressed={listOpen}
       data-testid="pane-list-toggle"
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] md:hidden"
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+        listOpen ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'
+      }`}
     >
-      <Menu size={18} />
+      <PanelLeft size={18} />
     </button>
   )
   const titleContent = titleSlot ?? (

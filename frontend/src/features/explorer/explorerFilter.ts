@@ -87,6 +87,9 @@ export function applyExplorerFilter(
   filter: ExplorerFilter,
   liveState: ReadonlyMap<string, unknown>,
   rootKey: string,
+  // Nodes folded from the side panel: kept themselves, but nothing is reached
+  // through them, so a subtree with no other way in disappears.
+  collapsed: ReadonlySet<string> = new Set(),
 ): ViewGraphResult {
   const hidden = new Set(filter.hiddenBuckets)
   const meta = graph.meta ?? {}
@@ -123,6 +126,7 @@ export function applyExplorerFilter(
     const current = queue.shift()!
     if (reachable.has(current)) continue
     reachable.add(current)
+    if (collapsed.has(current)) continue
     for (const next of children.get(current) ?? []) if (!reachable.has(next)) queue.push(next)
   }
 
@@ -133,6 +137,21 @@ export function applyExplorerFilter(
       (e) => reachable.has(refToString(e.source)) && reachable.has(refToString(e.target)),
     ),
   }
+}
+
+// childCounts is how many distinct children each node has (self-loops do not
+// count): what the fold toggle reports and the canvas badges on a folded node.
+export function childCounts(graph: ViewGraphResult): Map<string, number> {
+  const seen = new Map<string, Set<string>>()
+  for (const edge of graph.edges) {
+    const source = refToString(edge.source)
+    const target = refToString(edge.target)
+    if (source === target) continue
+    const set = seen.get(source) ?? new Set<string>()
+    set.add(target)
+    seen.set(source, set)
+  }
+  return new Map([...seen].map(([key, set]) => [key, set.size]))
 }
 
 // Facet vocabularies the filter bar offers, read off the unfiltered graph so a

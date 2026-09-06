@@ -14,6 +14,9 @@ import {
 import { api } from '@/api'
 import type { Agent, InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
+import { ListPane, PaneHeader } from '@/shared/components'
+import { SidebarHeader } from '@/shared/components/SidebarChrome'
+import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { FindingsTab } from './FindingsTab'
 import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
@@ -52,6 +55,8 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 // the scan actions on top + the sub-pages below.
 export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange }: Props) {
   const [localTab, setLocalTab] = useState<Tab>('findings')
+  // Left sub-page column: the standard collapsible list pane (persisted, default open).
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.insightListOpen')
   // URL-controlled when a valid tab arrives via the route; else local state.
   const tab: Tab = TABS.some((t) => t.key === tabProp) ? (tabProp as Tab) : localTab
   const setTab = (t: Tab) => {
@@ -155,13 +160,19 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
 
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden">
-      {/* Left: scan actions on top + sub-page rail below (Settings-style). */}
-      <aside className="flex h-full w-52 flex-shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-        {/* Header: label + refresh — same look/arrangement as the chat session list. */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            İçgörü
-          </span>
+      {/* Left: scan actions on top + sub-page rail below — the standard ListPane
+          column (collapsible to a reopen rail on md+, drawer on narrow, resizable). */}
+      <ListPane
+        open={listOpen}
+        onToggle={toggleList}
+        widthKey="tionharness.insightListWidth"
+        defaultWidth={208}
+        minWidth={176}
+        label="İçgörü"
+        testId="insight-list-toggle"
+      >
+        {/* Header: label + refresh + collapse — same chrome as every list column. */}
+        <SidebarHeader title="İçgörü" onCollapse={toggleList}>
           <button
             onClick={load}
             className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
@@ -169,7 +180,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
           >
             <RefreshCw size={14} className={scanning ? 'animate-spin' : ''} />
           </button>
-        </div>
+        </SidebarHeader>
 
         {/* Prominent scan button — styled like the chat "+ Yeni Sohbet" button. */}
         <div className="px-3 pb-1 pt-1">
@@ -200,7 +211,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         </div>
 
         {/* Sub-page rail. */}
-        <div className="flex flex-col gap-1 p-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {TABS.map((t) => {
             const Icon = t.icon
             const active = tab === t.key
@@ -219,53 +230,62 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
             )
           })}
         </div>
-      </aside>
+      </ListPane>
 
-      {/* Right: active sub-page content. */}
-      <div
-        className={`min-w-0 flex-1 p-4 ${
-          tab === 'findings' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-auto'
-        }`}
-      >
-        {(scanNote || scanning) && (
-          <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm">
-            {scanning && <RefreshCw className="h-4 w-4 animate-spin" />}
-            <span>{scanning ? (scanNote ?? 'Tarama çalışıyor…') : scanNote}</span>
-          </div>
-        )}
+      {/* Right: standard pane header (list toggle + title) above the active
+          sub-page content, like Tools / Skills. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PaneHeader
+          title="İçgörü"
+          subtitle={'· ' + (TABS.find((t) => t.key === tab)?.label ?? '')}
+          listOpen={listOpen}
+          onToggleList={toggleList}
+        />
+        <div
+          className={`min-w-0 flex-1 p-3 sm:p-4 ${
+            tab === 'findings' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-auto'
+          }`}
+        >
+          {(scanNote || scanning) && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm">
+              {scanning && <RefreshCw className="h-4 w-4 animate-spin" />}
+              <span>{scanning ? (scanNote ?? 'Tarama çalışıyor…') : scanNote}</span>
+            </div>
+          )}
 
-        {tab === 'findings' && (
-          <FindingsTab
-            findings={findings}
-            lenses={lenses}
-            reload={loadFindings}
-            onOpenSession={onOpenSession ?? (() => {})}
-            onError={onError}
-            onNote={setScanNote}
-          />
-        )}
-        {tab === 'lenses' && (
-          <LensList
-            lenses={lenses}
-            scanning={scanning}
-            onToggle={toggleLens}
-            onScanLens={(id) => runScan([id])}
-            onSaved={loadLenses}
-            onError={onError}
-          />
-        )}
-        {tab === 'lessons' && <LessonsTab onError={onError} />}
-        {tab === 'saved-lessons' && <LessonsList fill />}
-        {tab === 'fleet' && <FleetTab onError={onError} />}
-        {tab === 'runs' && <RunsTab onError={onError} />}
-        {tab === 'settings' && (
-          <SettingsTab
-            settings={settings}
-            setSettings={setSettings}
-            onError={onError}
-            onReset={load}
-          />
-        )}
+          {tab === 'findings' && (
+            <FindingsTab
+              findings={findings}
+              lenses={lenses}
+              reload={loadFindings}
+              onOpenSession={onOpenSession ?? (() => {})}
+              onError={onError}
+              onNote={setScanNote}
+            />
+          )}
+          {tab === 'lenses' && (
+            <LensList
+              lenses={lenses}
+              scanning={scanning}
+              onToggle={toggleLens}
+              onScanLens={(id) => runScan([id])}
+              onSaved={loadLenses}
+              onError={onError}
+            />
+          )}
+          {tab === 'lessons' && <LessonsTab onError={onError} />}
+          {tab === 'saved-lessons' && <LessonsList fill />}
+          {tab === 'fleet' && <FleetTab onError={onError} />}
+          {tab === 'runs' && <RunsTab onError={onError} />}
+          {tab === 'settings' && (
+            <SettingsTab
+              settings={settings}
+              setSettings={setSettings}
+              onError={onError}
+              onReset={load}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -414,6 +414,9 @@ func (s *Server) Routes() http.Handler {
 	s.registerTTSRoutes(mux)
 	s.registerSTTRoutes(mux)
 	s.registerSettingsRoutes(mux)
+	// Compiled-in prompt of the agent's system role, for "revert to the code
+	// prompt" on a system agent's soul editor.
+	mux.HandleFunc("GET /api/agents/{id}/builtin-prompt", s.handleAgentBuiltinPrompt)
 	s.registerSecretRoutes(mux)
 	s.registerMiscRoutes(mux)
 	s.registerWebRoutes(mux)
@@ -470,6 +473,21 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/workers", s.handleSpawnWorker)
 	mux.HandleFunc("GET /api/recipes/{slug}/optimizer", s.handleRecipeOptimizerState)
 	mux.HandleFunc("POST /api/recipes/{slug}/optimize", s.handleOptimizeRecipe)
+	// Evolution goals (_Docs/83): the writer-only intake + user review/edit.
+	// "catalog" and "intake" are registered before {id} so they never read as ids.
+	mux.HandleFunc("GET /api/goals", s.handleListGoals)
+	mux.HandleFunc("GET /api/goals/catalog", s.handleGoalCatalog)
+	mux.HandleFunc("POST /api/goals/intake", s.handleGoalIntake)
+	mux.HandleFunc("GET /api/goals/{id}", s.handleGetGoal)
+	mux.HandleFunc("PUT /api/goals/{id}", s.handleUpdateGoal)
+	mux.HandleFunc("POST /api/goals/{id}/status", s.handleSetGoalStatus)
+	mux.HandleFunc("DELETE /api/goals/{id}", s.handleDeleteGoal)
+	mux.HandleFunc("GET /api/goals/{id}/fitness", s.handleGoalFitness)
+	mux.HandleFunc("POST /api/goals/{id}/evolve", s.handleEvolveGoal)
+	mux.HandleFunc("GET /api/goals/{id}/evolution", s.handleGoalEvolution)
+	// Configuration versions (E1): the history the evolution ledger hangs off.
+	mux.HandleFunc("GET /api/evolution/snapshots", s.handleListSnapshots)
+	mux.HandleFunc("GET /api/evolution/snapshots/{hash}", s.handleGetSnapshot)
 	mux.HandleFunc("GET /api/curator/report", s.handleCuratorReport)
 	mux.HandleFunc("POST /api/curator/run", s.handleCuratorRun)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
@@ -818,6 +836,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 // list that surfaces them all with their kind and live status.
 func (s *Server) registerExecutionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/executions", s.handleListExecutions)
+	// Compact live facts (running / last status / lineage) for the sidebar poll.
+	mux.HandleFunc("GET /api/executions/runtime", s.handleListExecutionRuntime)
 	// Per-view "work in progress" flags for the left-nav busy indicators.
 	mux.HandleFunc("GET /api/activity", s.handleActivity)
 }

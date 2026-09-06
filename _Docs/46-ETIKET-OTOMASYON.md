@@ -10,11 +10,11 @@ değişince, §2.5), (3) tur olaylarına göre **otomatik etiketleme** (§3).
 
 **Tetik türü (`Automation.TriggerKind`):** `""`/`"tag"` (varsayılan,
 geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili (2026-07-06);
-`"token"` = token-harcaması eşiği tetikleyicili (2026-08-03, §2.6); `"counter"` =
-mesaj/tool sayacı aralığı tetikleyicili (2026-08-06, §2.7 — token'ın kararlı, cache'ten
-etkilenmeyen alternatifi). Guardrail'ler
+`"token"` = token-harcaması eşiği tetikleyicili (2026-08-03, §2.6); Rota türleri
+`"phase"` / `"trajectory_end"` (`_Docs/78`). `"counter"` (mesaj/tool sayacı, 2026-08-06)
+**2026-09-05'te tamamen kaldırıldı** (§2.7). Guardrail'ler
 (MaxIterations/CooldownSec/ExpiresAt/Enabled), hedefleme (TargetAgentID **veya** FlowID)
-ve iterasyon defteri **dört tür için ortaktır** (`guardsPass` paylaşılır).
+ve iterasyon defteri **tüm türler için ortaktır** (`guardsPass` paylaşılır).
 
 ## 1. Etiketler
 
@@ -392,79 +392,25 @@ biriktirir). Reuse yolu `LaunchRun`'un fren kapısını atladığından, otonom 
 - `internal/agent/automation_test.go` — `crossedMultiple` (boundary matrisi), `tokenVars` (ikame).
 - `internal/db/automation_limits_test.go` — `ValidateTokenThreshold` (floor), `ValidTokenScope`.
 
-## 2.7 Sayaç (Mesaj/Tool) Tetikleyicili Otomasyonlar (2026-08-06)
+## 2.7 Sayaç (Mesaj/Tool) Tetikleyicili Otomasyonlar — KALDIRILDI (2026-09-05)
 
-Aynı `Automation` entity'si, `TriggerKind="counter"` ile bir **aktivite sayacı**
-(bir oturumun **veya** tüm workspace'in — `CounterScope`) bir aralık katını geçince
-tetiklenir. Token tetikleyicisinin **kararlı
-alternatifi**: token sayısı prompt-cache (`cacheRead`) yüzünden turda 200k–1M
-zıplayıp öngörülemez ateşlerken, sayaçlar yavaş ve öngörülebilir büyür — "her N
-mesajda/araç çağrısında bir özet/kontrol/bakım" gibi **tempo-bazlı** kurallar için
-doğru primitif. Token bütçe bekçisi olarak kalır; tempo için `counter` tercih edilir.
+2026-08-06'da eklenen `TriggerKind="counter"` türü (bir oturumun ya da workspace'in
+mesaj/tool sayacı bir aralık katını geçince ateşleme; `CounterMetric`/`CounterScope`/
+`CounterInterval`, `agent/automation_counter.go`, dayanıklı `activity-inbox`,
+`WorkspaceCounterTotal`, "Sayaç" şeridi) **ürünün her katmanından çıkarıldı**; token
+türü (§2.6) tempo/bakım ihtiyacını karşılıyor. Ayrıntılı döküm `05-ILERLEME.md`
+(2026-09-05). Kalıcı olarak bilinmesi gerekenler:
 
-### Ek alanlar (yalnız `counter` türünde anlamlı)
-| Alan | Anlam |
-|------|-------|
-| `CounterMetric` | İzlenen sayaç: `message` (vars., boş=`message`) = `Session.MessageCount` (her user/assistant mesajı); `tool` = `Session.ToolCallCount` (yürütülen araç çağrıları). `db.ValidCounterMetric`. |
-| `CounterScope` | İzlenen kapsam: `session` (vars., boş=`session`) = geçişi yapan oturumun kendi sayacı; `workspace` = tüm workspace'in **kümülatif** sayacı (her oturumun toplamı, `db.WorkspaceCounterTotal`). Gün-reset değil: her `interval` **yeni** aktivitede bir ateşler — çok-ajanlı iş temposu için doğru. `db.ValidCounterScope`. |
-| `CounterInterval` | Sayaç **aralığı**: izlenen sayaç her bu kadarın katını geçince ateşler (ör. 10 → 10, 20, 30…). En az `db.MinCounterInterval` (2). |
-
-`Session.ToolCallCount`, `AddMessage`'ta asistan mesajının `Steps` içindeki
-`kind=="tool"` adımları sayılarak beslenen monotonik bir sayaçtır (yükleme/rewind'de
-mesaj satırlarından yeniden hesaplanır — `reconcileHeader` + truncate yolu).
-
-### Semantik: token ile aynı stateless "her-N" geçiş tespiti
-`crossedMultiple(prev, now, interval)` **yeniden kullanılır** — per-scope defter
-tutulmaz. Prev, sinyalin taşıdığı deltadan çıkarılır (`now − delta`).
-
-### Tetik: activity hook (tek huni `AddMessage`)
-Mesaj eklemenin tek choke-point'i `db.AddMessage`; sayaçları güncelledikten sonra
-**kilit serbest bırakılıp** `ActivitySignal{SessionID, MessageTotal/Delta,
-ToolTotal/Delta}` gönderir (`internal/db/store_activity.go`, `SetActivityHook`).
-Workspace manager bunu detached goroutine'de `autoEngine.OnActivityRecorded`'a
-bağlar. Board hook'un aynısı: append asla bloklanmaz. `OnActivityRecorded` metrik +
-kapsama göre `(total, delta)` seçip geçişi değerlendirir (`agent/automation_counter.go`):
-- **Session kapsam:** `total` = sinyalin taşıdığı oturum toplamı (`sig.*Total`).
-- **Workspace kapsam:** `total` = `db.WorkspaceCounterTotal(metric)` (tüm oturumların
-  toplamı, token'ın `WorkspaceTokensToday` deseni — yalnız bir workspace-kuralı varsa
-  lazy hesaplanır). `prev = total − delta`.
-
-Ateşleme token ile aynı: **kalıcı bakım oturumuna** history-aware teslim
-(`deliverAutomationTurn`) veya `FlowID` varsa `LaunchRun`. **Self-amplification
-guard:** bakım oturumunun kendi mesaj/tool'ları sayacı ittiğinden `Kind=="automation"`
-oturumlara atfedilen geçişler **her iki kapsamda da** atlanır (token'da yalnız session
-guard'lıydı; sayaçta bakım turu her fire'da mesaj+tool eklediğinden workspace de guard'lı —
-upkeep toplama SAYILIR ama kendisi fire tetiklemez).
-
-### Prompt değişkenleri (`counterVars`, `agent/automation_counter.go`)
-`{{count}}` (aralığı geçen toplam) · `{{interval}}` · `{{metric}}` · `{{scope}}` ·
-`{{sessionId}}` (workspace kapsamında boş) · ortak
-`{{iteration}}`/`{{maxIterations}}`/`{{automation}}`/`{{date}}`/`{{time}}`/`{{datetime}}`.
-`{{result}}` **yoktur**.
-
-### API / Araç / Test
-- **API:** `automationReq`'e `counterMetric`/`counterScope`/`counterInterval` (pointer).
-  Create'te metrik+kapsam doğrulanır, interval zorunlu + `db.ValidateCounterInterval`.
-  Update kısmi patch.
-- **Araçlar:** `create/update/list_automation`'a aynı alanlar (tetik türü artık `counter` içerir).
-- **Test:** `db/activity_test.go` (ToolCallCount + hook deltaları + `countToolSteps` +
-  `WorkspaceCounterTotal`), `db/automation_limits_test.go`
-  (`ValidateCounterInterval`/`ValidCounterMetric`/`ValidCounterScope`),
-  `agent/automation_counter_test.go` (`counterVars` + workspace scope).
-- **UI (2026-08-06):** Otomasyon ekranına **5. şerit "Sayaç"** eklendi
-  (`AutomationBoard`, `COLUMN_ACCENT.counter`, `Hash` ikonu). `AutomationModal` sayaç
-  dalı + `CounterTriggerFields` (**kapsam** seçici session/workspace + metrik seçici
-  mesaj/tool + aralık girişi, min 2), `AutomationCard` rozeti
-  (`# oturum|workspace · her N mesaj/tool`), `task.ts` tipine
-  `counterMetric`/`counterScope`/`counterInterval`, `automationMeta` sabitleri
-  (`COUNTER_METRICS`/`COUNTER_SCOPES`/`COUNTER_PROMPT_VARS`/`MIN_COUNTER_INTERVAL`/`DEFAULT_COUNTER_INTERVAL`).
-- **Canlı şerit istatistiği (2026-08-06):** `GET /api/automations/live-stats`
-  (`handleAutomationLiveStats`) `{tokensToday, messages, tools}` döner
-  (`WorkspaceTokensToday` + `WorkspaceCounterTotal`). `AutomationBoard` 5 sn'de bir
-  çekip **token** şerit başlığına `bugün N token`, **sayaç** şeridine `N mesaj · N tool`
-  rozeti (`BoardColumn.stat`) basar — yalnız o şeritte **workspace-scope kural** varsa
-  gösterilir (session-scope kuralların workspace-seviyesi tek değeri yok). Amaç: bir
-  sonraki ateşlemeye ne kadar kaldığını görüp aralığı kalibre etmek.
+- `db.TriggerCounterLegacy = "counter"` yalnız geriye dönük uyum içindir: diskte kalan
+  eski kayıtlar yüklemede atlanır (uyarı logu), dosya silinmez; create/update yolları
+  türü "unknown triggerKind" ile reddeder.
+- `db.ActivitySignal` + `SetActivityHook` + CLI-reply activity outbox'ı **duruyor**:
+  workspace manager bunu yalnız `message_activity` canlı olayına (oturum listesi
+  `UpdatedAt` tazeleme) köprüler. `Session.MessageCount`/`ToolCallCount` sayaçları da
+  UI için yerinde.
+- `GET /api/automations/live-stats` artık yalnız `{tokensToday}` döner.
+- Aşağıdaki "Ortak kod" ve "Oturum modu" notlarındaki counter atıfları tarihseldir;
+  `EffectiveSessionMode` boş modu yalnız `token` için `continue` çözer.
 
 ### Ortak kod (refactor 2026-08-06)
 Dört tür büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):

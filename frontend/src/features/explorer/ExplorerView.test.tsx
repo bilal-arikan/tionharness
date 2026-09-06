@@ -145,6 +145,35 @@ describe('ExplorerView', () => {
     expect(again.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('folds and unfolds the selected node from the side panel and remembers it', async () => {
+    const first = await mount()
+    // The root has children: the toggle is offered and hides the subtree.
+    const hide = [...first.host.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Alt düğümleri gizle'),
+    )!
+    expect(hide.textContent).toContain('· 1')
+    await act(async () => hide.click())
+    expect(latestGraphProps().nodes.map((n) => n.id)).toEqual(['workspace:workspace'])
+    const show = [...first.host.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Alt düğümleri göster'),
+    )!
+    expect(show.getAttribute('aria-pressed')).toBe('true')
+    // A leaf offers no toggle.
+    await act(async () => latestGraphProps().onSelect?.('session:SES1'))
+    expect(
+      [...first.host.querySelectorAll('button')].some((b) =>
+        b.textContent?.includes('Alt düğümleri'),
+      ),
+    ).toBe(false)
+    await act(async () => first.root.unmount())
+    roots.delete(first.root)
+    // Persisted per workspace.
+    await mount()
+    expect(latestGraphProps().nodes.map((n) => n.id)).toEqual(['workspace:workspace'])
+    await mount({ workspaceId: 'ws2' })
+    expect(latestGraphProps().nodes).toHaveLength(3)
+  })
+
   it('renders the whole map on its own layout scope with the root selected', async () => {
     const { host } = await mount()
     const props = latestGraphProps()

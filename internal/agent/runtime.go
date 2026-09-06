@@ -671,6 +671,9 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		coordCtx:    coordCtx,
 		coordCancel: coordCancel,
 	}
+	// Every new session is stamped with the configuration snapshot in force
+	// (_Docs/83 §4.2); the provider is cheap and self-caching.
+	r.db.SetSnapshotProvider(r.CurrentSnapshotHash)
 	r.skills.SetChangeHandler(func() {
 		r.publish(events.Event{
 			Type:   events.TypeSkills,

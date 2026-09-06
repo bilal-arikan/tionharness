@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { Play, Trash2 } from 'lucide-react'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { FLOW_TEMPLATES } from './flowTemplates'
@@ -77,6 +77,32 @@ export function FlowsListPane({
   bulkRun,
   bulkDelete,
 }: Props) {
+  // The three tab lists are derived once per input change, not per render, and
+  // the run rows look their flow up in a map instead of scanning the flow list
+  // twice per run (once to filter, once to label).
+  const needle = useMemo(() => q.trim().toLowerCase(), [q])
+  const flowById = useMemo(() => new Map(flows.map((f) => [f.id, f])), [flows])
+  const visibleTemplates = useMemo(
+    () => FLOW_TEMPLATES.filter((t) => t.name.toLowerCase().includes(needle)),
+    [needle],
+  )
+  const visibleRuns = useMemo(
+    () =>
+      needle
+        ? runs.filter((rn) => (flowById.get(rn.flowId)?.name ?? '').toLowerCase().includes(needle))
+        : runs,
+    [runs, needle, flowById],
+  )
+  const visibleFlows = useMemo(
+    () =>
+      flows.filter(
+        (f) =>
+          f.name.toLowerCase().includes(needle) &&
+          (tagFilter.length === 0 || tagFilter.some((t) => f.tags?.includes(t))),
+      ),
+    [flows, needle, tagFilter],
+  )
+  const orderedFlowIds = useMemo(() => visibleFlows.map((f) => f.id), [visibleFlows])
   return (
     <ListPane
       open={flowsListOpen}
@@ -86,7 +112,6 @@ export function FlowsListPane({
       minWidth={180}
       label="Akışlar"
       testId="flows-list-toggle"
-      hideRail
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {/* Tab switch */}
@@ -135,9 +160,7 @@ export function FlowsListPane({
 
         {tab === 'templates' ? (
           <ul className="space-y-1">
-            {FLOW_TEMPLATES.filter((t) =>
-              t.name.toLowerCase().includes(q.trim().toLowerCase()),
-            ).map((t) => (
+            {visibleTemplates.map((t) => (
               <li key={t.id}>
                 <button
                   onClick={() => setTemplateId(t.id)}
@@ -155,52 +178,44 @@ export function FlowsListPane({
           </ul>
         ) : tab === 'runs' ? (
           <ul className="space-y-1">
-            {runs
-              .filter((rn) => {
-                const qq = q.trim().toLowerCase()
-                if (!qq) return true
-                return (flows.find((f) => f.id === rn.flowId)?.name ?? '')
-                  .toLowerCase()
-                  .includes(qq)
-              })
-              .map((rn) => {
-                const rflow = flows.find((f) => f.id === rn.flowId)
-                const fname = rflow?.name ?? '（silinmiş akış）'
-                const femoji = normalizeAvatar(rflow?.emoji)
-                const badge = rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
-                const badgeColor =
-                  rn.status === 'success'
-                    ? 'text-[var(--color-success)]'
-                    : rn.status === 'failure'
-                      ? 'text-[var(--color-danger)]'
-                      : 'text-[var(--color-accent)]'
-                return (
-                  <li key={rn.id}>
-                    <button
-                      onClick={() => setSelectedRunId(rn.id)}
-                      className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm ${
-                        selectedRunId === rn.id
-                          ? SELECTED_ITEM_CLS
-                          : 'hover:bg-[var(--color-surface-2)]'
-                      }`}
-                    >
-                      <span className={`mt-0.5 text-xs ${badgeColor}`}>{badge}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">
-                          {femoji && <span className="mr-1 leading-none">{femoji}</span>}
-                          {fname}
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
-                          {formatDateTime(new Date(rn.createdAt * 1000), {
-                            dateStyle: 'short',
-                            timeStyle: 'medium',
-                          })}
-                        </span>
+            {visibleRuns.map((rn) => {
+              const rflow = flowById.get(rn.flowId)
+              const fname = rflow?.name ?? '（silinmiş akış）'
+              const femoji = normalizeAvatar(rflow?.emoji)
+              const badge = rn.status === 'success' ? '✓' : rn.status === 'failure' ? '✕' : '▶'
+              const badgeColor =
+                rn.status === 'success'
+                  ? 'text-[var(--color-success)]'
+                  : rn.status === 'failure'
+                    ? 'text-[var(--color-danger)]'
+                    : 'text-[var(--color-accent)]'
+              return (
+                <li key={rn.id}>
+                  <button
+                    onClick={() => setSelectedRunId(rn.id)}
+                    className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                      selectedRunId === rn.id
+                        ? SELECTED_ITEM_CLS
+                        : 'hover:bg-[var(--color-surface-2)]'
+                    }`}
+                  >
+                    <span className={`mt-0.5 text-xs ${badgeColor}`}>{badge}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">
+                        {femoji && <span className="mr-1 leading-none">{femoji}</span>}
+                        {fname}
                       </span>
-                    </button>
-                  </li>
-                )
-              })}
+                      <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
+                        {formatDateTime(new Date(rn.createdAt * 1000), {
+                          dateStyle: 'short',
+                          timeStyle: 'medium',
+                        })}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
             {runs.length === 0 && (
               <li className="text-sm text-[var(--color-text-dim)]">Henüz koşu yok.</li>
             )}
@@ -240,88 +255,76 @@ export function FlowsListPane({
                 )}
               </div>
             )}
-            {(() => {
-              const visible = flows.filter(
-                (f) =>
-                  f.name.toLowerCase().includes(q.trim().toLowerCase()) &&
-                  (tagFilter.length === 0 || tagFilter.some((t) => f.tags?.includes(t))),
-              )
-              const orderedIds = visible.map((f) => f.id)
-              return (
-                <ul className="space-y-1">
-                  {visible.map((f) => (
-                    <li key={f.id}>
-                      <button
-                        onClick={(e) => {
-                          if (sel.handleClick(e, f.id, orderedIds, selectedId)) return
-                          selectFlow(f)
-                        }}
-                        className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
-                          sel.isSelected(f.id)
-                            ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
-                            : selectedId === f.id
-                              ? SELECTED_ITEM_CLS
-                              : 'hover:bg-[var(--color-surface-2)]'
-                        }`}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
-                            {normalizeAvatar(f.emoji) && (
-                              <span className="shrink-0 leading-none">
-                                {normalizeAvatar(f.emoji)}
-                              </span>
-                            )}
-                            <span className="truncate">{f.name}</span>
-                          </span>
-                          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                            <span className="truncate font-mono text-[11px]">{f.id}</span>
-                            <span className="flex-shrink-0">· {flowNodeCount(f.graph)} node</span>
-                          </span>
-                          {(f.tags?.length ?? 0) > 0 && (
-                            <span className="mt-1 flex flex-wrap gap-1">
-                              {f.tags!.slice(0, 4).map((t) => (
-                                <span
-                                  key={t}
-                                  className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
-                                >
-                                  #{t}
-                                </span>
-                              ))}
-                              {f.tags!.length > 4 && (
-                                <span className="text-[10px] text-[var(--color-text-dim)]">
-                                  +{f.tags!.length - 4}
-                                </span>
-                              )}
+            <ul className="space-y-1">
+              {visibleFlows.map((f) => (
+                <li key={f.id}>
+                  <button
+                    onClick={(e) => {
+                      if (sel.handleClick(e, f.id, orderedFlowIds, selectedId)) return
+                      selectFlow(f)
+                    }}
+                    className={`flex w-full items-start justify-between rounded-lg px-3 py-2 text-left text-sm ${
+                      sel.isSelected(f.id)
+                        ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+                        : selectedId === f.id
+                          ? SELECTED_ITEM_CLS
+                          : 'hover:bg-[var(--color-surface-2)]'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        {normalizeAvatar(f.emoji) && (
+                          <span className="shrink-0 leading-none">{normalizeAvatar(f.emoji)}</span>
+                        )}
+                        <span className="truncate">{f.name}</span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+                        <span className="truncate font-mono text-[11px]">{f.id}</span>
+                        <span className="flex-shrink-0">· {flowNodeCount(f.graph)} node</span>
+                      </span>
+                      {(f.tags?.length ?? 0) > 0 && (
+                        <span className="mt-1 flex flex-wrap gap-1">
+                          {f.tags!.slice(0, 4).map((t) => (
+                            <span
+                              key={t}
+                              className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                          {f.tags!.length > 4 && (
+                            <span className="text-[10px] text-[var(--color-text-dim)]">
+                              +{f.tags!.length - 4}
                             </span>
                           )}
                         </span>
-                        <span
-                          onClick={(e) => {
-                            // Let modifier-clicks bubble up to the selection handler.
-                            if (e.ctrlKey || e.metaKey || e.shiftKey) return
-                            e.stopPropagation()
-                            removeFlow(f)
-                          }}
-                          className="ml-2 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
-                        >
-                          ✕
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                  {flowsLoading && (
-                    <li>
-                      <LoadingState label="Akışlar yükleniyor…" />
-                    </li>
-                  )}
-                  {!flowsLoading && visible.length === 0 && (
-                    <li className="text-sm text-[var(--color-text-dim)]">
-                      {flows.length === 0 ? 'Henüz akış yok.' : 'Eşleşen akış yok.'}
-                    </li>
-                  )}
-                </ul>
-              )
-            })()}
+                      )}
+                    </span>
+                    <span
+                      onClick={(e) => {
+                        // Let modifier-clicks bubble up to the selection handler.
+                        if (e.ctrlKey || e.metaKey || e.shiftKey) return
+                        e.stopPropagation()
+                        removeFlow(f)
+                      }}
+                      className="ml-2 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                    >
+                      ✕
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {flowsLoading && (
+                <li>
+                  <LoadingState label="Akışlar yükleniyor…" />
+                </li>
+              )}
+              {!flowsLoading && visibleFlows.length === 0 && (
+                <li className="text-sm text-[var(--color-text-dim)]">
+                  {flows.length === 0 ? 'Henüz akış yok.' : 'Eşleşen akış yok.'}
+                </li>
+              )}
+            </ul>
             <SelectionBar count={sel.count} onClear={sel.clear}>
               <SelectionBarButton icon={<Play size={13} />} onClick={bulkRun}>
                 Çalıştır

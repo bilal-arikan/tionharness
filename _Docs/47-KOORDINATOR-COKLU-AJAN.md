@@ -1,13 +1,16 @@
 # 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
 
-> **Özet (2026-09-03):** TionHarness'e Claude Code'un koordinatör moduna denk çok-ajan
+> **Özet (2026-09-06):** TionHarness'e Claude Code'un koordinatör moduna denk çok-ajan
 > koordinasyon katmanını tasarlayan ve **büyük ölçüde uygulanmış** (M2 tam, F0-F5) çok
 > uzun bir doküman. Dört koordinasyon yöntemi tanımlar: M1 (paralel fan-out, sync),
 > M2 (koordinatör-işçi, async notify-back — bu dokümanın asıl konusu), M3 (peer/takım
 > mesajlaşma), M4 (deterministik flow). Anahtar bileşenler: `spawn_worker`/`send_to_worker`/
 > `stop_worker`/`list_workers` araçları, `CoordinationEngine` + per-session tur kuyruğu,
 > `<task-notification>` geri bildirim formatı, sınırsız derinlikte koordinatör ağacı
-> (rol≠ebeveynlik). Dayandığı dosyalar: `internal/agent/coordination.go`, `subagent.go`,
+> (rol≠ebeveynlik). Oturumu arşivlemek koordinatör için kesin bir **kill-switch**tir ve
+> öyle kalır: 2026-09-06'daki otomatik oturum canlandırması yalnız
+> `user`/`peer`/`worker`/`spawn` turlarını kapsar, koordinatör/wake/otomasyon turlarını
+> bilerek kapsamaz. Dayandığı dosyalar: `internal/agent/coordination.go`, `subagent.go`,
 > `spawn.go`, `internal/prompts/defaults/coordinator.md`. §1-§13 tek-seviyeli tasarımın
 > tarihçesidir, §14+ güncel ağaç modelini anlatır.
 
@@ -370,6 +373,16 @@ ağacını durdurmak için 25 worker'ı da elle arşivlemek gerekti. Not `stallH
 olduğu gibi kalıcı yazılmaya devam eder; arşivden çıkınca bir sonraki bildirim onu
 işler. Slot'a hiç dokunulmadığı için arşivden çıkan oturum `driving` takılı kalmaz.
 Regresyon: `coordination_archived_test.go`.
+
+2026-09-06 (TSK690): **oturum otomatik canlanması bu kill-switch'i bilerek
+dışarıda bırakır.** Arşivli bir oturum artık gerçek bir tur gelince kendini
+`active` yapıyor (`Runtime.reactivateArchivedSession`,
+`internal/agent/sessionreactivate.go`; `claimTurnSlot` içinden), ama canlandırma
+listesi bir **allowlist**tir: `KindUser`, `KindPeer`, `KindWorker`, `KindSpawn`.
+`KindCoordinator`, `KindWake` ve `KindAutomation` **dışarıdadır** — bunları
+diriltmek yukarıdaki arşiv kapısını anlamsızlaştırır, kaçak bir koordinatör ağacı
+kendi kendini arşivden çıkarabilirdi. Yani arşiv, koordinatör için hâlâ kesin bir
+durdurma düğmesidir; oturumu ancak **birinin gerçekten konuşması** geri açar.
 
 ### 2026-08-28: taze worker notu artık muafiyet değil, yalnız halt bastırması
 

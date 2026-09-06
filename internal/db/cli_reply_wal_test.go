@@ -417,42 +417,6 @@ func TestCLIReplyActivityCorruptionDoesNotPoisonValidSession(t *testing.T) {
 	}
 }
 
-func TestActivityInboxAcceptAndCompletionSurviveReopen(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "store")
-	d, err := Open(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sig := ActivitySignal{EventID: "event", SessionID: "session", MessageTotal: 2, MessageDelta: 1, WorkspaceMessageTotal: 3}
-	accepted, err := d.AcceptActivitySignal(sig)
-	if err != nil || !accepted {
-		t.Fatalf("first accept = %v, %v", accepted, err)
-	}
-	reopened, err := Open(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	accepted, err = reopened.AcceptActivitySignal(sig)
-	if err != nil || accepted {
-		t.Fatalf("replayed accept = %v, %v", accepted, err)
-	}
-	pending, err := reopened.PendingActivitySignals()
-	if err != nil || len(pending) != 1 {
-		t.Fatalf("pending = %+v, %v", pending, err)
-	}
-	if err := reopened.CompleteActivitySignal(sig); err != nil {
-		t.Fatal(err)
-	}
-	again, err := Open(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pending, err = again.PendingActivitySignals()
-	if err != nil || len(pending) != 0 {
-		t.Fatalf("completed receipt replayed = %+v, %v", pending, err)
-	}
-}
-
 func TestActivityHookPanicRetainsOutboxAndAllowsRetry(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "store")
 	d, err := Open(root)

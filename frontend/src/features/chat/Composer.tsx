@@ -393,9 +393,8 @@ export function Composer({
   // addArtifact stages an existing session artifact as a text attachment so its
   // content is included in the next turn. No upload: the content is inlined
   // directly (capped). De-dupes on the artifact id.
-  const addArtifact = (a: Artifact) => {
+  const stageArtifact = (a: Artifact) => {
     const localId = `art-${a.id}`
-    if (pending.some((p) => p.localId === localId)) return
     let content = a.content ?? ''
     if (content.length > ARTIFACT_INLINE_CAP) {
       content = content.slice(0, ARTIFACT_INLINE_CAP) + '\n…(truncated)'
@@ -409,7 +408,26 @@ export function Composer({
       textContent: content,
       source: 'artifact',
     }
-    setPending((p) => [...p, { localId, name: attachment.name, uploading: false, attachment }])
+    setPending((p) =>
+      p.some((x) => x.localId === localId)
+        ? p
+        : [...p, { localId, name: attachment.name, uploading: false, attachment }],
+    )
+  }
+  // The artifact list is metadata only (its bodies are not shipped with the
+  // listing), so the body is fetched on demand; a failed fetch falls back to
+  // whatever the row carried so staging never silently does nothing.
+  const addArtifact = (a: Artifact) => {
+    const localId = `art-${a.id}`
+    if (pending.some((p) => p.localId === localId)) return
+    if (a.content) {
+      stageArtifact(a)
+      return
+    }
+    api
+      .getArtifact(a.id)
+      .then((full) => stageArtifact(full))
+      .catch(() => stageArtifact(a))
   }
 
   // onPaste: large clipboard text becomes a .txt attachment (Claude.ai-style),
@@ -804,7 +822,7 @@ export function Composer({
         />
       )}
       <div
-        className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-1 pt-3 pb-1.5 transition-shadow md:px-6 md:pt-4 md:pb-2 ${
+        className={`th-measure relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent pt-3 pb-1.5 transition-shadow md:pt-4 md:pb-2 ${
           dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
         }`}
         onDragOver={(e) => {

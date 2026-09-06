@@ -1,16 +1,64 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useViewport } from './useViewport'
 
-// useCollapsibleList tracks the MOBILE drawer state of a screen's left list — the
-// exact model the chat sessions sidebar uses. On `md+` the list is always visible
-// (a static column, handled by CSS in CollapsibleListShell), so this flag only
-// matters on portrait phones, where it must default CLOSED and reset on every load
-// (never persisted) so a phone always lands on the content, not an open drawer.
-// The `storageKey` argument is accepted for call-site compatibility but unused.
-export function useCollapsibleList(_storageKey?: string): {
+// useCollapsibleList owns the open/closed state of a screen's left list column
+// (sessions, roster, artifacts, insight sub-pages …). The column has two very
+// different presentations, so the flag is tracked per tier:
+//   • md+ (docked column): a PERSISTED collapse under `storageKey`, default OPEN.
+//     Collapsing it swaps the column for a slim reopen rail
+//     (CollapsibleListShell) so content gets the width.
+//   • narrow (drawer): an ephemeral drawer flag, default CLOSED and never
+//     persisted, so a phone always lands on the content rather than an open
+//     drawer.
+// The returned `open` / `toggle` / `setOpen` always address the presentation
+// that is active right now, so callers wire one pair of props regardless of tier.
+export function useCollapsibleList(storageKey: string): {
   open: boolean
   toggle: () => void
   setOpen: (v: boolean) => void
 } {
-  const [open, setOpen] = useState(false)
-  return { open, toggle: () => setOpen((v) => !v), setOpen }
+  const mobile = useViewport().tier === 'narrow'
+  const [dockedOpen, setDockedOpen] = useState(() => readDockedOpen(storageKey))
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const setOpen = useCallback(
+    (v: boolean) => {
+      if (mobile) {
+        setDrawerOpen(v)
+        return
+      }
+      setDockedOpen(v)
+      writeDockedOpen(storageKey, v)
+    },
+    [mobile, storageKey],
+  )
+  const toggle = useCallback(() => {
+    if (mobile) {
+      setDrawerOpen((v) => !v)
+      return
+    }
+    setDockedOpen((v) => {
+      writeDockedOpen(storageKey, !v)
+      return !v
+    })
+  }, [mobile, storageKey])
+
+  return { open: mobile ? drawerOpen : dockedOpen, toggle, setOpen }
+}
+
+function readDockedOpen(key: string): boolean {
+  try {
+    // Absent = default open; only an explicit '0' collapses.
+    return globalThis.localStorage.getItem(key) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function writeDockedOpen(key: string, open: boolean) {
+  try {
+    globalThis.localStorage.setItem(key, open ? '1' : '0')
+  } catch {
+    // Persistence is best-effort when storage is blocked by browser policy.
+  }
 }

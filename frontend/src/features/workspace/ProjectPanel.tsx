@@ -163,7 +163,7 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
                 className={inputCls}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="user.name" hint="Bu repodaki commit yazarı adı.">
                 <input
                   value={userName}

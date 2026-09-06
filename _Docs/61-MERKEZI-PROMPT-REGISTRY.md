@@ -1,8 +1,15 @@
 # 61 — Merkezi Prompt Registry
 
-> **Durum:** Tamamlandı (2026-07-15). Uygulamaya dağınık gömülü LLM promptları tek
-> kayıt defterinde (`internal/prompts`) toplandı; tümü workspace-başına
-> düzenlenebilir hale geldi.
+> **Özet (2026-09-05):** Uygulamaya dağınık gömülü LLM promptları tek kayıt
+> defterinde (`internal/prompts`) toplandı: embed edilmiş `.md` default'lar,
+> workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch
+> rozeti ve `debug.jsonl` prompt izi. Durum: **tamamlandı** (çekirdek 2026-07-15).
+> 2026-09-05'te kapsam ayrıldı: bir sistem ajanına bağlı 14 prompt
+> (`OwnedBySystemKey`) Promptlar ekranından çıkarıldı — etkin metinleri ajanın
+> `Soul` alanıdır ve Ayarlar ▸ Sistem ajanları'ndan düzenlenir; ekranda 7 serbest
+> prompt kaldı. Soul editörüne `GET /api/agents/{id}/builtin-prompt` ile beslenen
+> "Koddaki prompta dön" düğmesi eklendi. Sahip paketler: `internal/prompts`,
+> `internal/api`, `frontend/src/features/{settings,agents}`.
 
 ## Sorun
 
@@ -71,6 +78,9 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
 - `GET/PATCH /api/workspace-config` — `promptMeta` (label/hint/placeholders/
   epochAffecting) eklendi; `promptKeys` artık 16 anahtar (2026-08-01: `terse`).
   `""` yazmak dosyayı temizler (default devralır).
+  **2026-09-05:** DTO artık `OwnedBySystemKey` dolu anahtarları HİÇ döndürmüyor
+  (aşağıdaki bölüm); ekranda 7 serbest prompt kalır. `PUT` doğrulaması bütün
+  `agent.PromptKeys`'i kabul etmeye devam eder (market paketi içe aktarımı).
 - Navbar → Promptlar: tüm anahtarlar registry metadata'sıyla render
   edilir; "özelleştirildi" etiketi, "yeni oturumlarda etkili" epoch rozeti ve
   eksik-yer-tutucu uyarısı eklendi. Editörler **içeriğe göre otomatik boyutlanır**
@@ -83,6 +93,27 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
   yolu yalnız kopyalanabilir (klasörü açan `reveal` uç noktası 2026-08-12'de kaldırıldı).
 - Market publish + workspace şablonları `agent.PromptKeys` üzerinden döndüğü için
   özelleştirilmiş TÜM promptları otomatik taşır.
+
+## Sistem ajanı promptları ekrandan çıktı (2026-09-05)
+
+Kayıt defterindeki 21 promptun 14'ü bir sistem ajanına bağlıdır
+(`Spec.OwnedBySystemKey`). Bunlarda etkin metin ajanın `Soul` alanıdır; workspace
+dosyası yalnız ajan çözümlemesi başarısız olursa okunur. Promptlar ekranı bunları
+da listelediği sürece aynı prompt için ikisi de gerçek görünen, biri neredeyse hiç
+okunmayan iki editör vardı.
+
+Çözüm: `buildWSConfigDTO` sistem-sahipli anahtarları DTO'ya koymaz. Kayıt defteri,
+dosya çözümlemesi ve `PUT` doğrulaması **değişmedi** — yalnız ekranın gördüğü liste
+daraldı. Ekranın başındaki not kullanıcıyı Ayarlar ▸ Sistem ajanları'na yönlendirir.
+
+Geri dönüş yolu: `GET /api/agents/{id}/builtin-prompt` ajanın rolü için binary'ye
+gömülü promptu (`prompts.Default`) döner; sistem rolü yoksa 404. Soul editöründeki
+"Koddaki prompta dön" düğmesi (`BuiltinPromptRevert`) bu metni **kaydedilmemiş
+düzenleme** olarak yerleştirir — Kaydet'e basılana kadar uygulanmaz, ve
+özelleştirmenin model/araç seçimleri korunur (satırı silmek gerekmez).
+
+Kalan serbest 7 anahtar: `handoff`, `continuation`, `btw-system`, `btw-preamble`,
+`auto-continue`, `coordinator`, `terse`.
 
 ## Drift koruması
 

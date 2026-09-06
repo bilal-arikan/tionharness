@@ -79,6 +79,33 @@ func (b *Buffer) add(e Entry) {
 
 // Entries returns up to limit most-recent entries (oldest→newest). limit <= 0
 // returns all retained entries.
+// Collect returns, in chronological order, the newest entries for which keep
+// is true, at most limit of them (limit <= 0 means every match). It walks the
+// ring from the newest entry backwards and stops as soon as the limit is met,
+// so a filtered tail costs the matching window rather than a copy of the whole
+// retained buffer followed by a full filter pass.
+func (b *Buffer) Collect(limit int, keep func(Entry) bool) []Entry {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	cap := limit
+	if cap <= 0 || cap > len(b.entries) {
+		cap = len(b.entries)
+	}
+	out := make([]Entry, 0, cap)
+	for i := len(b.entries) - 1; i >= 0; i-- {
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		if keep(b.entries[i]) {
+			out = append(out, b.entries[i])
+		}
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
 func (b *Buffer) Entries(limit int) []Entry {
 	b.mu.RLock()
 	defer b.mu.RUnlock()

@@ -481,7 +481,6 @@ export function SkillsPanel({ onError, onOpenTrajectory }: Props) {
         defaultWidth={288}
         label="Skills"
         testId="skills-list-toggle"
-        hideRail
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">

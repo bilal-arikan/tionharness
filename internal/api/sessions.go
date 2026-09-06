@@ -92,6 +92,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	executionType := strings.TrimSpace(q.Get("executionType"))
 	state := strings.TrimSpace(q.Get("state"))
 	ids := parseSessionIDs(q.Get("ids"))
+	search := sessionSearchNeedle(q.Get("q"))
 	rawChips, chipsGiven := q["chips"]
 	chipSel, chipFilter := parseChips(strings.Join(rawChips, ","), chipsGiven)
 	// Build the caller's non-chip scope first. Chip badges describe this scope,
@@ -113,6 +114,9 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if ids != nil && !ids[s.ID] {
+			continue
+		}
+		if !sessionMatchesSearch(s, search) {
 			continue
 		}
 		scope = append(scope, s)

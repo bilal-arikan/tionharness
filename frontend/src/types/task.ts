@@ -102,10 +102,9 @@ export interface Schedule {
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
 // Automation trigger kind: 'tag' (a tagged session finishing a turn), 'board'
 // (a kanban card change), 'token' (cumulative token spend crossing a threshold),
-// or 'counter' (a session's message/tool count crossing an interval). '' from
-// older files is treated as 'tag'.
-export type AutomationTriggerKind =
-  'tag' | 'board' | 'token' | 'counter' | 'phase' | 'trajectory_end'
+// or the Rota kinds 'phase' / 'trajectory_end'. '' from older files is treated
+// as 'tag'. (The 'counter' kind was retired 2026-09-05.)
+export type AutomationTriggerKind = 'tag' | 'board' | 'token' | 'phase' | 'trajectory_end'
 // Phase transition a phase automation watches (Rota F2).
 export type TrajEvent = 'exit' | 'enter'
 // Terminal status filter of a trajectory_end automation ('' = any).
@@ -115,17 +114,10 @@ export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
 // Token automation scope: one session's lifetime spend, or the whole workspace's
 // spend for the current day. '' is treated as 'session'.
 export type TokenScope = 'session' | 'workspace'
-// Counter automation metric: count user/assistant messages, or executed tool
-// calls, in a session. '' is treated as 'message'.
-export type CounterMetric = 'message' | 'tool'
 // Automation session strategy (agent-backed only): 'spawn' runs a fresh session
 // per fire; 'continue' reuses one persistent per-automation thread (history-aware).
-// '' resolves per kind (tag/board → spawn, token/counter → continue).
+// '' resolves per kind (tag/board → spawn, token → continue).
 export type SessionMode = 'spawn' | 'continue'
-// Counter automation scope: the crossing session's own counter, or the whole
-// workspace's cumulative counter (sum of every session). '' is treated as
-// 'session'.
-export type CounterScope = 'session' | 'workspace'
 // What a board automation does when it fires: 'spawn' (default, '' is treated the
 // same) runs the target agent/flow — the board drives execution; 'archive'
 // archives the card with no LLM call (the 'done → archive' cleanup).
@@ -173,12 +165,6 @@ export interface Automation {
   // Token interval: fires each time cumulative spend crosses another multiple
   // (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache.
   tokenThreshold?: number
-  // Counter-trigger fields (only meaningful when triggerKind === 'counter').
-  counterMetric?: CounterMetric // default 'message'
-  counterScope?: CounterScope // default 'session'
-  // Count interval: fires each time the watched counter crosses another multiple
-  // (e.g. 10 → at 10, 20…). Min 2.
-  counterInterval?: number
   // Trajectory-trigger fields (Rota F2; triggerKind 'phase' | 'trajectory_end').
   // trajPhase narrows a phase rule to one phase id ('' = every phase);
   // trajRecipe narrows to trajectories seeded from that recipe slug ('' = any);

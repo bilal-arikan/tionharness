@@ -79,6 +79,7 @@ func (d *DB) migrateUnifiedLayout() {
 		}
 		if changed {
 			d.artifacts[id] = a
+			d.markMutatedLocked()
 			_ = d.persistArtifactLocked(&a)
 		}
 	}

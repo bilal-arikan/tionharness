@@ -273,6 +273,7 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	delete(d.tasks, id)
+	d.markMutatedLocked()
 	if err := removeFile(d.dir(dirTasks, id+".json")); err != nil {
 		d.mu.Unlock()
 		return err
@@ -354,6 +355,7 @@ func (d *DB) MigrateBoardColumns(ctx context.Context, oldCols, newCols []BoardCo
 			return moved, perr
 		}
 		d.tasks[t.ID] = t
+		d.markMutatedLocked()
 		toMigrate = append(toMigrate, migration{
 			fromState: fromState,
 			toState:   to,

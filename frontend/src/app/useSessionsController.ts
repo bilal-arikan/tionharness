@@ -31,6 +31,8 @@ import {
 // page at a time and appended via loadMoreSessions. Kept under the backend's
 // maxPageLimit (100) so the server never clamps it silently.
 const SESSIONS_PAGE_SIZE = 100
+// Trailing settle window for event-driven list refreshes (refreshSessionsSoon).
+const SESSIONS_REFRESH_SETTLE_MS = 300
 const INITIAL_SESSION_LOOKUP_LIMIT = 50
 
 export interface SessionsControllerParams {
@@ -40,6 +42,10 @@ export interface SessionsControllerParams {
   // client-side meant a page of 100 could hold three visible chats and the
   // "Daha fazla yükle" button looked broken.
   chipsParam: string
+  // The sidebar's free-text title / id search, already debounced by the sidebar.
+  // Sent as ?q= so the server filters BEFORE paging: without it a search only
+  // saw the rows already loaded and silently missed every older session.
+  searchQuery?: string
   setError: (msg: string | null) => void
   setView: (v: View) => void
 }
@@ -47,6 +53,7 @@ export interface SessionsControllerParams {
 export function useSessionsController({
   activeWorkspaceId,
   chipsParam,
+  searchQuery = '',
   setError,
   setView,
 }: SessionsControllerParams) {
@@ -71,6 +78,13 @@ export function useSessionsController({
   // refresh and load-more callbacks stay stable across chip changes.
   const chipsParamRef = useRef(chipsParam)
   chipsParamRef.current = chipsParam
+  // The search the in-flight/last request used; undefined when blank so the
+  // request line stays identical to the pre-search one. Synced in an effect
+  // (declared before the effect that re-queries on it, so it runs first).
+  const searchQueryRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    searchQueryRef.current = searchQuery.trim() || undefined
+  }, [searchQuery])
   const activeWorkspaceIdRef = useRef(activeWorkspaceId)
   activeWorkspaceIdRef.current = activeWorkspaceId
   const listQueryIdentityRef = useRef('')
@@ -245,7 +259,7 @@ export function useSessionsController({
         : Promise.resolve({ ok: true as const, items: [] as Agent[] })
 
     Promise.all([
-      api.listSessions({ limit: SESSIONS_PAGE_SIZE, chips: chipsParam }),
+      api.listSessions({ limit: SESSIONS_PAGE_SIZE, chips: chipsParam, q: searchQueryRef.current }),
       exactLookup,
       agentLookup,
     ])
@@ -437,6 +451,7 @@ export function useSessionsController({
       const page = await api.listSessions({
         limit: sessionsLimitRef.current,
         chips: chipsParamRef.current,
+        q: searchQueryRef.current,
       })
       if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return false
       setSessions(withActiveSession(page.items))
@@ -457,6 +472,39 @@ export function useSessionsController({
   }, [runQueuedSessionRefresh, withActiveSession])
   refreshSessionsRef.current = refreshSessions
 
+  // Coalesced refresh for the live event stream. Every chat/session/board event
+  // in the active workspace asks for the list again; during a multi-agent run
+  // that is several requests a second, each one re-sorting the whole workspace
+  // on the server and re-deriving every sidebar memo on a new array. One
+  // trailing timer per burst is enough — the list is a projection, not the
+  // transcript, so a few hundred milliseconds of lag is invisible.
+  const refreshSoonTimerRef = useRef<number | null>(null)
+  const refreshSessionsSoon = useCallback(() => {
+    if (refreshSoonTimerRef.current !== null) return
+    refreshSoonTimerRef.current = window.setTimeout(() => {
+      refreshSoonTimerRef.current = null
+      void refreshSessionsRef.current?.()
+    }, SESSIONS_REFRESH_SETTLE_MS)
+  }, [])
+  useEffect(
+    () => () => {
+      if (refreshSoonTimerRef.current !== null) window.clearTimeout(refreshSoonTimerRef.current)
+    },
+    [],
+  )
+
+  // A changed search re-queries from the first page. The bootstrap effect owns
+  // the initial load, so the very first (blank) value is skipped.
+  const searchSeenRef = useRef(false)
+  useEffect(() => {
+    if (!searchSeenRef.current) {
+      searchSeenRef.current = true
+      if (!searchQuery.trim()) return
+    }
+    sessionsLimitRef.current = SESSIONS_PAGE_SIZE
+    void refreshSessionsRef.current?.()
+  }, [searchQuery])
+
   // Append the next page to the session list (sidebar "Daha fazla yükle").
   const loadMoreSessions = useCallback(() => {
     if (listReplacePendingRef.current) return
@@ -467,7 +515,12 @@ export function useSessionsController({
     const identity = listQueryIdentityRef.current
     const token = listRequestGuardRef.current.begin(identity)
     api
-      .listSessions({ limit: SESSIONS_PAGE_SIZE, offset, chips: chipsParamRef.current })
+      .listSessions({
+        limit: SESSIONS_PAGE_SIZE,
+        offset,
+        chips: chipsParamRef.current,
+        q: searchQueryRef.current,
+      })
       .then((page) => {
         if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return
         if (page.chipCounts) setSessionChipCounts(page.chipCounts)
@@ -949,6 +1002,7 @@ export function useSessionsController({
     pendingRouteRef,
     // actions
     refreshSessions,
+    refreshSessionsSoon,
     changeChatAgent,
     selectSession,
     renameSession,

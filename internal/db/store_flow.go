@@ -101,6 +101,7 @@ func (d *DB) DeleteFlow(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	delete(d.flows, id)
+	d.markMutatedLocked()
 	if err := removeFile(d.dir(dirFlows, id+".json")); err != nil {
 		return err
 	}
@@ -151,6 +152,7 @@ func (d *DB) applyFlowRunDelta(prev, next string) {
 // slot. Caller must hold d.mu.
 func (d *DB) deleteFlowRunLocked(r FlowRun) {
 	delete(d.flowRuns, r.ID)
+	d.markMutatedLocked()
 	_ = removeFile(d.dir(dirFlowRuns, r.ID+".json"))
 	_ = d.deleteFlowRunStateDeltasLocked(r.ID)
 	d.applyFlowRunDelta(r.Status, "")
@@ -340,6 +342,7 @@ func (d *DB) AppendFlowRunStateDelta(ctx context.Context, id string, delta FlowR
 	r.State = materialized
 	r.UpdatedAt = now()
 	d.flowRuns[id] = r
+	d.markMutatedLocked()
 	return nil
 }
 

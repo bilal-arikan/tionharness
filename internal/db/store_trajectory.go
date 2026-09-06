@@ -161,6 +161,9 @@ func (d *DB) rebuildTrajectoryIndexLocked() error {
 
 // persistTrajectoryIndexLocked writes the index. Caller holds trajIndexMu.
 func (d *DB) persistTrajectoryIndexLocked() error {
+	// Trajectory nodes are part of the Explorer graph, so an index change must
+	// invalidate the caches keyed on MutationGen like any entity write.
+	d.markMutatedLocked()
 	return atomicWriteJSON(d.dir(dirTrajectories, trajectoryIndexFile), d.trajIndex)
 }
 

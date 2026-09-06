@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Hash, LayoutGrid, Repeat, Sparkles, X, Zap } from 'lucide-react'
+import { LayoutGrid, Repeat, Sparkles, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -8,8 +8,6 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
-  CounterMetric,
-  CounterScope,
   Flow,
   SessionMode,
   TokenScope,
@@ -20,18 +18,15 @@ import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
 import {
   COLUMN_ACCENT,
-  DEFAULT_COUNTER_INTERVAL,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PROMPT,
   DEFAULT_TOKEN_THRESHOLD,
   MAX_ITERATIONS_HARD_CAP,
-  MIN_COUNTER_INTERVAL,
   MIN_TOKEN_THRESHOLD,
   STUCK_TEMPLATE,
 } from './automationMeta'
 import {
   BoardTriggerFields,
-  CounterTriggerFields,
   TrajectoryTriggerFields,
   PromptVarsField,
   TokenTriggerFields,
@@ -72,7 +67,6 @@ export function AutomationModal({
 }: Props) {
   const isBoardKind = kind === 'board'
   const isTokenKind = kind === 'token'
-  const isCounterKind = kind === 'counter'
   const isTrajKind = kind === 'phase' || kind === 'trajectory_end'
 
   const [name, setName] = useState(editing?.name ?? '')
@@ -88,13 +82,6 @@ export function AutomationModal({
   const [tokenThreshold, setTokenThreshold] = useState(
     editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
   )
-  const [counterMetric, setCounterMetric] = useState<CounterMetric>(
-    editing?.counterMetric ?? 'message',
-  )
-  const [counterScope, setCounterScope] = useState<CounterScope>(editing?.counterScope ?? 'session')
-  const [counterInterval, setCounterInterval] = useState(
-    editing?.counterInterval ?? DEFAULT_COUNTER_INTERVAL,
-  )
   const [trajPhase, setTrajPhase] = useState(editing?.trajPhase ?? '')
   const [trajRecipe, setTrajRecipe] = useState(editing?.trajRecipe ?? '')
   const [trajEvent, setTrajEvent] = useState<TrajEvent>(editing?.trajEvent ?? 'exit')
@@ -103,9 +90,9 @@ export function AutomationModal({
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   // Session strategy: default matches the backend's per-kind default so a new rule
-  // starts where the user expects (token/counter continue a thread; others spawn).
+  // starts where the user expects (token continues a thread; others spawn).
   const [sessionMode, setSessionMode] = useState<SessionMode>(
-    editing?.sessionMode ?? (isTokenKind || isCounterKind ? 'continue' : 'spawn'),
+    editing?.sessionMode ?? (isTokenKind ? 'continue' : 'spawn'),
   )
   const [promptTemplate, setPromptTemplate] = useState(
     editing?.promptTemplate ?? DEFAULT_PROMPT[kind],
@@ -132,10 +119,6 @@ export function AutomationModal({
     token:
       isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
         ? `Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`
-        : '',
-    counter:
-      isCounterKind && counterInterval < MIN_COUNTER_INTERVAL
-        ? `Sayaç aralığı en az ${MIN_COUNTER_INTERVAL} olmalı`
         : '',
     moveTarget:
       isBoardKind && boardAction === 'move' && !boardMoveToState
@@ -188,9 +171,6 @@ export function AutomationModal({
       boardMoveToState,
       tokenScope,
       tokenThreshold,
-      counterMetric,
-      counterScope,
-      counterInterval,
       trajPhase,
       trajRecipe,
       trajEvent,
@@ -227,22 +207,14 @@ export function AutomationModal({
     ? 'pano otomasyonu'
     : isTokenKind
       ? 'token otomasyonu'
-      : isCounterKind
-        ? 'sayaç otomasyonu'
-        : 'etiket otomasyonu'
+      : 'etiket otomasyonu'
 
   return (
     <FormModal
       title={`${editing ? 'Düzenle' : 'Yeni'} — ${kindLabel}`}
-      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : isCounterKind ? Hash : Repeat}
+      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : Repeat}
       accent={
-        isBoardKind
-          ? COLUMN_ACCENT.board
-          : isTokenKind
-            ? COLUMN_ACCENT.token
-            : isCounterKind
-              ? COLUMN_ACCENT.counter
-              : COLUMN_ACCENT.tag
+        isBoardKind ? COLUMN_ACCENT.board : isTokenKind ? COLUMN_ACCENT.token : COLUMN_ACCENT.tag
       }
       submitLabel={editing ? 'Kaydet' : '+ Otomasyon'}
       onSubmit={submit}
@@ -315,17 +287,6 @@ export function AutomationModal({
               if (p.threshold !== undefined) setTokenThreshold(p.threshold)
             }}
           />
-        ) : isCounterKind ? (
-          <CounterTriggerFields
-            metric={counterMetric}
-            scope={counterScope}
-            interval={counterInterval}
-            onChange={(p) => {
-              if (p.metric !== undefined) setCounterMetric(p.metric)
-              if (p.scope !== undefined) setCounterScope(p.scope)
-              if (p.interval !== undefined) setCounterInterval(p.interval)
-            }}
-          />
         ) : isTrajKind ? (
           <TrajectoryTriggerFields
             kind={kind}
@@ -350,7 +311,6 @@ export function AutomationModal({
         )}
         <FieldError message={errorFor('tag')} />
         <FieldError message={errorFor('token')} />
-        <FieldError message={errorFor('counter')} />
       </Field>
 
       {isTargetlessAction ? (

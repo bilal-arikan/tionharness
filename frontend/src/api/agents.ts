@@ -74,6 +74,11 @@ export const agentApi = {
   restoreDefaultAgent: (id: string) =>
     req<Agent>(`/api/agents/${id}/restore-default`, { method: 'POST' }),
 
+  // Compiled-in prompt of the agent's system role, used by the soul editor's
+  // "revert to the code prompt" action. 404 when the agent carries no role.
+  agentBuiltinPrompt: (id: string) =>
+    req<{ systemKey: string; soul: string }>(`/api/agents/${id}/builtin-prompt`),
+
   // Full-copy an agent (profile + provider/model + tool config + skills) into a
   // new "(kopya)" with a fresh id. Returns the created clone.
   duplicateAgent: (id: string) => req<Agent>(`/api/agents/${id}/duplicate`, { method: 'POST' }),

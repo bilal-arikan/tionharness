@@ -1,6 +1,6 @@
 # TionHarness — Workspace İzolasyonu
 
-> **Özet (2026-09-03):** Workspace'lerin fiziksel izolasyonunu (her workspace kendi `store/` dizini + kendi Runtime + kendi Scheduler'ı) ve buna bağlı özellikleri anlatır: yeni workspace başlangıç ekibi (CEO+PM otomasyonu), workspace-özel tema/görünüm, şablon olarak dışa/içe aktarım, çoklu pencere + deep-link, "okunmadı" rozet senkronu ve workspace ayarları (`ws-settings.json`: instructions enjeksiyonu, terse/caveman mod). Durum: **uygulandı, canlı**. En önemli kararlar: tek depo+filtre yerine fiziksel ayrı dizin (sızıntı riskini sıfırlar), fs/shell araçlarının artık workspace köküne kilitli OLMAMASI (güvenlik yalnız izin moduna dayanır), URL hash'inin tek doğru navigasyon kaynağı olması. Dayandığı dosyalar: `internal/workspace/manager.go`, `internal/workspace/settings.go`.
+> **Özet (2026-09-06):** Workspace'lerin fiziksel izolasyonunu (her workspace kendi `store/` dizini + kendi Runtime + kendi Scheduler'ı) ve buna bağlı özellikleri anlatır: yeni workspace başlangıç ekibi (CEO+PM otomasyonu), workspace-özel tema/görünüm, şablon olarak dışa/içe aktarım, çoklu pencere + deep-link, "okunmadı" rozet senkronu, workspace ayarları (`ws-settings.json`: instructions enjeksiyonu, terse/caveman mod) ve kayıt defteri yazma sırası (degraded kayıtlar + canlı silmede "önce defter, sonra dosyalar" — tek kilit tutuşu, gözlemlenemez rollback). Durum: **uygulandı, canlı**. En önemli kararlar: tek depo+filtre yerine fiziksel ayrı dizin (sızıntı riskini sıfırlar), fs/shell araçlarının artık workspace köküne kilitli OLMAMASI (güvenlik yalnız izin moduna dayanır), URL hash'inin tek doğru navigasyon kaynağı olması, `persist()`'in anlık görüntüyü argüman olarak alması (silme + yazma + rollback'in tek tutuşta olmasını mümkün kılan şey). Dayandığı dosyalar: `internal/workspace/manager.go`, `internal/workspace/settings.go`.
 
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
@@ -251,6 +251,38 @@ silerdi.
   yıldızladığı işaretçi degraded olsa bile ezilmez. Switcher listesinde bozuk
   satır kırmızı **"bozuk"** rozetiyle ve tooltip olarak `degradedReason` ile
   gösterilir.
+
+### Canlı silmede sıra: önce defter, sonra dosyalar (2026-09-06)
+
+Canlı `Delete(id)` de degraded yoluyla aynı kuralı izler: kaydın düşürülmesi,
+`persist()` ve başarısızlıkta geri alma **tek yazma-kilidi tutuşunda** olur.
+
+- `persist()` başarısız olursa hiçbir şey değişmez: workspace canlı kalır,
+  `m.workspaces`/`m.order` eski hâline döner, scheduler/DB kapatılmaz ve veri
+  dizinine dokunulmaz. Eski sıra (önce yıkım, sonra `persist`) hata durumunda en
+  kötü durumu üretiyordu — workspace hem bellekten hem diskten gitmiş, ama
+  `workspaces.json` onu hâlâ listeliyor; sonraki açılışta hiçbir şeyi
+  göstermeyen bir degraded kayıt.
+- Rollback aynı tutuşta olduğu için **gözlemlenemez**: eşzamanlı bir
+  `List()`/`ListWithDegraded()` kaydı asla "silinmiş" görmez.
+- Yıkım (scheduler durdurma, MCP/DB kapatma, `os.RemoveAll`) kilidin dışında ve
+  yalnız `persist()` başarılıysa çalışır; o pencerede klasörü `pendingRemoval`
+  işareti korur (`Attach` reddedilir). Dizin silinemezse hata **loglanır**,
+  döndürülmez: kullanıcının sildiği kayıt o noktada kalıcı olarak gitmiştir,
+  çağrıyı başarısız saymak yalnız artık bulunamayacak bir workspace için yeniden
+  denemeye davet eder.
+- `markDegraded` / `open` **bilerek persist etmez**: degraded işareti türetilmiş
+  durumdur. `registryMetas` canlı ve degraded kayıtları birlikte yazdığından iki
+  liste arasında yer değiştirmek bayt-eş `workspaces.json` üretir. İşaret bir
+  çökmede de kaybolmaz — bu noktaya gelen her çağıran defterde zaten var olan bir
+  kayıttan gelir ve `Reason` bir sonraki açılışta yeniden başarısız olan `open`
+  denemesinden yeniden hesaplanır. Yeni kayıt ekleyen yollar (`Create`, `Attach`)
+  `open()` sonrası zaten açıkça persist eder.
+
+Testler: `internal/workspace/delete_live_test.go`
+(`TestDeleteLiveRollsBackOnPersistFailure`,
+`TestDeleteLiveRollbackIsNotObservable`,
+`TestDeleteLiveRemovesRegistryEntryAndDir`).
 
 ## Çoklu Pencere / Derin Bağlantı (Deep-Link)
 

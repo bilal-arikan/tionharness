@@ -206,6 +206,7 @@ func (d *DB) recoverInflight() error {
 			s.UpdatedAt = m.CreatedAt
 			s.Unread = true
 			d.sessions[sessionID] = s
+			d.markMutatedLocked()
 			// Append the recovered line; tolerate write failure (the sidecar stays
 			// and we retry next boot). No transcript lock: recovery runs inside
 			// load(), single-threaded, before the DB is published.

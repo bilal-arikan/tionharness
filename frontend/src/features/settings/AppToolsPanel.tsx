@@ -93,7 +93,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         çağrısında geçerli olan güvenlik/bütçe frenleridir. (Yalnızca native/anthropic tool yolunda
         çalışır.)
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Maks. delegasyon derinliği"
           hint="Zincirin kaç kat iç içe gidebileceği (1–10). Döngü koruması."
@@ -123,7 +123,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         Üretken işler toplam süreyle kesilmez. Spawn, worker ve zamanlanmış koşular aşağıdaki
         semantic boşta penceresiyle korunur.
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Maks. eşzamanlı spawn"
           hint="Aynı anda çalışabilen spawn edilmiş oturum sayısı (1–128)."
@@ -204,7 +204,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         dönmeden önceki çıktı üst sınırı. Tek çağrıdaki <code>timeout_sec</code> argümanı
         varsayılanı geçersiz kılar (maks. ile kırpılır).
       </p>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <NumberField
           label="Kabuk varsayılan süre (sn)"
           hint="timeout_sec verilmezse kullanılan Bash/PowerShell süresi (varsayılan 30)."
@@ -237,7 +237,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         çalıştırabilir ve koordinatör ağacı ne kadar derinleşebilir. Otomatik tur sayısı ve ağaç
         başına toplam worker oturumu <strong>sınırsızdır</strong> (limit kaldırıldı).
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Koordinatör başına maks. worker"
           hint="Bir koordinatörün aynı anda çalıştırabileceği aktif worker sayısı (1–64)."
@@ -277,7 +277,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         checked={draft.coordinatorStallGuard}
         onChange={(v) => set('coordinatorStallGuard', v)}
       />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <NumberField
           label="Gecikme tarayıcı penceresi (dk)"
           hint="Bir koordinatör bu kadar dakika sessiz kalıp hiç çalışan worker'ı yoksa tarayıcı yargıca sorar. 0 = varsayılan (5 dk). -1 = tarayıcıyı kapat (tur-sonu guard'ı yine çalışır)."

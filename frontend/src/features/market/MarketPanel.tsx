@@ -258,7 +258,6 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         minWidth={160}
         label="Kategoriler"
         testId="market-list-toggle"
-        hideRail
       >
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           <div className="flex items-center px-2 py-1">

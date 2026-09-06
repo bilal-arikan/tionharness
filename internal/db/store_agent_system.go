@@ -136,6 +136,10 @@ func (d *DB) FindBuiltinAgentBySystemKey(key string) (*Agent, bool) {
 // exactly the fields that differ as overrides; the role keeps resolving to it
 // (FindAgentBySystemKey prefers the enabled customisation).
 func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefinition) error {
+	// Remember the compiled registry: editing a built-in has to compare the edit
+	// against the definition it came from (see updateBuiltinSystemAgent), and the
+	// db package deliberately does not import the agent package that owns it.
+	d.rememberSystemDefinitions(defs)
 	if legacy, ok := d.FindAgentBySystemKey("compactor"); ok {
 		if _, err := d.mutateAgentLocked(legacy.ID, func(a *Agent) {
 			a.SystemKey = "overview-summarizer"
@@ -145,6 +149,12 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 	}
 	for _, def := range defs {
 		if err := d.adoptLegacyWorkerAgent(def); err != nil {
+			return err
+		}
+		// Fold a pre-existing per-workspace customisation into the app-global
+		// layer BEFORE the built-in is re-imposed, so the same boot seeds the
+		// adopted values instead of briefly serving the compiled defaults.
+		if err := d.adoptWorkspaceCustomisation(ctx, def); err != nil {
 			return err
 		}
 		if err := d.ensureSystemAgent(ctx, def); err != nil {
@@ -181,7 +191,9 @@ func (d *DB) adoptLegacyWorkerAgent(def SystemAgentDefinition) error {
 }
 
 func (d *DB) ensureSystemAgent(ctx context.Context, def SystemAgentDefinition) error {
-	canonical := def.canonicalAgent()
+	// The compiled definition WITH the app-global customisation laid over it: the
+	// built-in a user edited is what every workspace seeds and re-imposes.
+	canonical := d.canonicalFor(def)
 
 	d.mu.Lock()
 	var locked *Agent
@@ -342,6 +354,7 @@ func (d *DB) collapseLegacyChildLocked(locked Agent, canonical Agent) (bool, err
 		return false, err
 	}
 	delete(d.agents, locked.ID)
+	d.markMutatedLocked()
 	if err := removeFile(d.dir(dirAgents, locked.ID+".json")); err != nil {
 		return false, err
 	}

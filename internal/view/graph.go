@@ -40,8 +40,34 @@ type Graph struct {
 // their categories then stay as empty buckets instead of failing the whole map,
 // mirroring structuralCache.nodes.
 func (p *Projector) Graph(ctx context.Context) (Graph, error) {
+	nodes, edges, err := p.GraphStructure(ctx)
+	if err != nil {
+		return Graph{}, err
+	}
+	live, meta, err := p.GraphLive(ctx)
+	if err != nil {
+		return Graph{}, err
+	}
+	return Graph{Nodes: nodes, Edges: edges, Live: live, Meta: meta}, nil
+}
+
+// GraphLive is the per-request half of Graph: which sessions execute right now
+// plus the per-session facet meta. It is cheap (one session pass) and depends
+// on the live source, so it is never cached.
+func (p *Projector) GraphLive(ctx context.Context) ([]GraphLive, map[string]GraphMeta, error) {
 	if p == nil || p.store == nil {
-		return Graph{}, fmt.Errorf("view: projector has no store")
+		return nil, nil, fmt.Errorf("view: projector has no store")
+	}
+	return p.graphLive(ctx, p.newStructuralCache())
+}
+
+// GraphStructure is the structural half of Graph: the breadth-first walk of
+// every node and edge from the workspace root. It depends only on the store's
+// entities (plus the optional static sources), which is what lets the API
+// memoise it against db.MutationGen across requests.
+func (p *Projector) GraphStructure(ctx context.Context) ([]Handle, []GraphEdge, error) {
+	if p == nil || p.store == nil {
+		return nil, nil, fmt.Errorf("view: projector has no store")
 	}
 	cache := p.newStructuralCache()
 	root := Handle{Label: "workspace", Ref: Ref{Kind: KindSpace, ID: WorkspaceRefID}, Level: LevelCard}
@@ -57,7 +83,7 @@ func (p *Projector) Graph(ctx context.Context) (Graph, error) {
 			if optionalSourceMissing(current) {
 				continue
 			}
-			return Graph{}, err
+			return nil, nil, err
 		}
 		for _, child := range children {
 			edges[GraphEdge{Source: current, Target: child.Ref}] = struct{}{}
@@ -69,15 +95,9 @@ func (p *Projector) Graph(ctx context.Context) (Graph, error) {
 		}
 	}
 
-	live, meta, err := p.graphLive(ctx, cache)
-	if err != nil {
-		return Graph{}, err
-	}
 	out := Graph{
 		Nodes: make([]Handle, 0, len(nodes)),
 		Edges: make([]GraphEdge, 0, len(edges)),
-		Live:  live,
-		Meta:  meta,
 	}
 	for _, handle := range nodes {
 		out.Nodes = append(out.Nodes, handle)
@@ -95,7 +115,7 @@ func (p *Projector) Graph(ctx context.Context) (Graph, error) {
 		}
 		return a.Target.String() < b.Target.String()
 	})
-	return out, nil
+	return out.Nodes, out.Edges, nil
 }
 
 // graphChildren is the uncapped child list the whole-map walk follows. It is

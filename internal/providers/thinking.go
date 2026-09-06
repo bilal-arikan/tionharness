@@ -57,11 +57,29 @@ func StorableThinkingLevels(model string) []string {
 // CLI effort ramp even though its versioned model ids would otherwise look like
 // legacy models to the provider-neutral classifier.
 func StorableThinkingLevelsFor(providerKind, model string) []string {
+	class := ThinkingClassForProvider(providerKind, model)
 	tiers := ThinkingTiersForProvider(providerKind, model)
-	if ThinkingClassForProvider(providerKind, model) != "always-on" {
+	// The Messages-API transports do not OFFER "ultra" (the effort enum stops at
+	// "max"), but an agent may already store it — it was picked on a CLI provider,
+	// or the provider was switched afterwards. Rejecting it would make those rows
+	// unsaveable, so it stays a legal stored state that maps to the ceiling.
+	if usesNativeEffort(providerKind) && containsTier(thinkingTiersForClass(class), "ultra") {
+		tiers = append(tiers, "ultra")
+	}
+	if class != "always-on" {
 		return tiers
 	}
 	return append([]string{"off"}, tiers...)
+}
+
+// containsTier reports whether a tier ramp carries one token.
+func containsTier(tiers []string, want string) bool {
+	for _, t := range tiers {
+		if t == want {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateThinkingLevel checks a requested reasoning level twice: that the token
@@ -288,9 +306,40 @@ func ThinkingTiersFor(model string) []string {
 }
 
 // ThinkingTiersForProvider returns the effective tier ramp for one provider
-// transport and model pair.
+// transport and model pair. "ultra" is dropped for the Messages-API transports:
+// there depth is output_config.effort, whose enum tops out at "max" (see
+// EffortForThinkingBudget), so offering it would promise a depth the wire format
+// cannot carry.
 func ThinkingTiersForProvider(providerKind, model string) []string {
-	return thinkingTiersForClass(ThinkingClassForProvider(providerKind, model))
+	tiers := thinkingTiersForClass(ThinkingClassForProvider(providerKind, model))
+	if usesNativeEffort(providerKind) {
+		tiers = withoutTier(tiers, "ultra")
+	}
+	return tiers
+}
+
+// usesNativeEffort reports whether a provider kind sends its turns over the
+// Anthropic Messages API, where reasoning depth rides output_config.effort
+// rather than a CLI effort flag. Both kinds share the anthropic.go request
+// builder and therefore the same effort enum.
+func usesNativeEffort(providerKind string) bool {
+	switch providerKind {
+	case "anthropic", "anthropic-compat":
+		return true
+	default:
+		return false
+	}
+}
+
+// withoutTier returns tiers with one token removed, leaving the input untouched.
+func withoutTier(tiers []string, drop string) []string {
+	out := make([]string, 0, len(tiers))
+	for _, t := range tiers {
+		if t != drop {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func thinkingTiersForClass(class string) []string {
@@ -320,6 +369,13 @@ func hasConcreteVersion(model string) bool {
 // adaptive-class models. 0 means "no override" (server default). The xhigh/max
 // tiers exist only on the adaptive class; the legacy enabled+budget path clamps
 // those budgets down instead (see thinkingFor).
+//
+// The ceiling is "max" on purpose: the Messages API effort enum is
+// low|medium|high|xhigh|max, so the "ultra" tier — real on the CLI transports
+// (climcp, codexcli) — has no wire representation here and an "ultra" budget
+// reports the top of the enum. ThinkingTiersForProvider keeps "ultra" off the
+// offered ramp for those provider kinds so the mapping is never a silent
+// downgrade of a tier the user was told they could pick.
 func EffortForThinkingBudget(budget int) string {
 	switch {
 	case budget <= 0:
@@ -332,7 +388,9 @@ func EffortForThinkingBudget(budget int) string {
 		return "high"
 	case budget <= 32768:
 		return "xhigh"
-	default:
+	case budget <= 65536:
+		return "max"
+	default: // "ultra" (131072) and anything above: the enum stops at "max".
 		return "max"
 	}
 }

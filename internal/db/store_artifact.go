@@ -92,6 +92,7 @@ func (d *DB) persistArtifactLocked(a *Artifact) error {
 		return err
 	}
 	d.artifacts[a.ID] = *a // in-memory keeps the full content
+	d.markMutatedLocked()
 	return nil
 }
 
@@ -295,6 +296,7 @@ func (d *DB) DeleteArtifact(ctx context.Context, id string) error {
 	}
 	a := d.artifacts[id]
 	delete(d.artifacts, id)
+	d.markMutatedLocked()
 	d.removeArtifactContent(a) // drop the externalised body file (text kinds)
 	return removeFile(d.dir(dirArtifacts, id+".json"))
 }

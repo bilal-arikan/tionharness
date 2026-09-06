@@ -7,21 +7,15 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
-  CounterMetric,
-  CounterScope,
   TokenScope,
 } from '@/types'
 import {
   BOARD_ACTIONS,
   BOARD_OPS,
   BOARD_PROMPT_VARS,
-  COUNTER_METRICS,
-  COUNTER_PROMPT_VARS,
   TRAJ_END_STATUSES,
   TRAJ_EVENTS,
   TRAJ_PROMPT_VARS,
-  COUNTER_SCOPES,
-  MIN_COUNTER_INTERVAL,
   MIN_TOKEN_THRESHOLD,
   PROMPT_VARS,
   TOKEN_PROMPT_VARS,
@@ -202,73 +196,6 @@ export function TokenTriggerFields({
   )
 }
 
-// CounterTriggerFields renders the scope + metric selectors and the count
-// interval for a counter-triggered automation. The automation fires each time the
-// watched counter (a session's — or the whole workspace's — messages or executed
-// tool calls) crosses another multiple of the interval. Unlike token spend, these
-// counts are stable and cache-independent.
-export function CounterTriggerFields({
-  metric,
-  scope,
-  interval,
-  onChange,
-}: {
-  metric: CounterMetric
-  scope: CounterScope
-  interval: number
-  onChange: (patch: { metric?: CounterMetric; scope?: CounterScope; interval?: number }) => void
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label
-        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
-        title="Kapsam: tek bir oturumun sayacı mı, yoksa tüm workspace'in oturumlarının toplamı mı izlensin."
-      >
-        Kapsam
-        <select
-          value={scope}
-          onChange={(e) => onChange({ scope: e.target.value as CounterScope })}
-          className={selCls}
-        >
-          {COUNTER_SCOPES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-        Ölçüt
-        <select
-          value={metric}
-          onChange={(e) => onChange({ metric: e.target.value as CounterMetric })}
-          className={selCls}
-        >
-          {COUNTER_METRICS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label
-        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
-        title="Sayaç aralığı: izlenen mesaj/tool sayısı her bu kadarının katını geçtiğinde tetiklenir (ör. 10 → 10, 20…)."
-      >
-        Aralık (sayı)
-        <input
-          type="number"
-          min={MIN_COUNTER_INTERVAL}
-          step={1}
-          value={interval}
-          onChange={(e) => onChange({ interval: Number(e.target.value) || 0 })}
-          className={`${selCls} w-20`}
-        />
-      </label>
-    </div>
-  )
-}
-
 // PromptVarsField renders the prompt-template textarea plus the ℹ️ variable
 // picker popover, choosing the variable list by trigger kind.
 export function PromptVarsField({
@@ -286,11 +213,9 @@ export function PromptVarsField({
       ? BOARD_PROMPT_VARS
       : kind === 'token'
         ? TOKEN_PROMPT_VARS
-        : kind === 'counter'
-          ? COUNTER_PROMPT_VARS
-          : kind === 'phase' || kind === 'trajectory_end'
-            ? TRAJ_PROMPT_VARS
-            : PROMPT_VARS
+        : kind === 'phase' || kind === 'trajectory_end'
+          ? TRAJ_PROMPT_VARS
+          : PROMPT_VARS
   return (
     <div className="relative">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">

@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Map as MapIcon, MessageSquare, RefreshCw } from 'lucide-react'
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ExternalLink,
+  Map as MapIcon,
+  MessageSquare,
+  RefreshCw,
+} from 'lucide-react'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { refToString } from '@/types'
@@ -8,6 +15,7 @@ import { VisNetworkGraph } from '@/features/network/VisNetworkGraph'
 import { useStoredDensity } from '@/features/network/useStoredDensity'
 import { ExplorerDetailDrawer } from './ExplorerDetailDrawer'
 import { ExplorerFilters } from './ExplorerFilters'
+import { useExplorerCollapse } from './useExplorerCollapse'
 import { useExplorerFilter } from './useExplorerFilter'
 import { screenForRef, type ExplorerTarget } from './explorerNavigation'
 import { ExplorerSearch, type ExplorerSearchResult } from './ExplorerSearch'
@@ -48,6 +56,7 @@ export function ExplorerView({
   // Persisted per browser: leaving the screen must not reset the packing.
   const [density, setDensity] = useStoredDensity('tionharness.explorerDensity')
   const [filter, setFilter, clearFilter] = useExplorerFilter()
+  const fold = useExplorerCollapse(workspaceId)
   const [detailOpen, setDetailOpen] = useState(false)
   const isMobile = useIsMobile()
   const {
@@ -64,6 +73,7 @@ export function ExplorerView({
     facets,
     buckets,
     liveCount,
+    selectedChildCount,
     selectedKey,
     focusKey,
     focusTick,
@@ -74,6 +84,7 @@ export function ExplorerView({
     onError,
     search,
     filter,
+    collapsed: fold.collapsed,
     initialFocus: focusNode,
     onFocus: onFocusNode,
   })
@@ -127,17 +138,41 @@ export function ExplorerView({
   // Top of the side panel: jump to the screen that owns the selected node. A
   // session goes to its transcript, an agent to its card, a card to the board…
   const selectedTarget = onOpenTarget ? screenForRef(panelRef) : null
-  const openSessionButton = selectedTarget && (
-    <div className="border-b border-[var(--color-border)] px-3 py-2">
-      <button
-        onClick={() => onOpenTarget?.(selectedTarget)}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-semibold text-[var(--color-on-accent)] shadow-sm transition hover:brightness-110 active:brightness-95"
-      >
-        {selectedTarget.view === 'chat' ? <MessageSquare size={14} /> : <ExternalLink size={14} />}
-        <span className="truncate">
-          {selectedTarget.label} ekranında aç{selectedTarget.id ? ` · ${selectedTarget.id}` : ''}
-        </span>
-      </button>
+  // Fold toggle: hides / shows the selected node's subtree on the canvas. Only
+  // offered for nodes that have children on the full map.
+  const selectedCollapsed = fold.isCollapsed(selectedKey)
+  const foldButton = selectedChildCount > 0 && (
+    <button
+      onClick={() => fold.toggle(selectedKey)}
+      aria-pressed={selectedCollapsed}
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+    >
+      {selectedCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
+      <span className="truncate">
+        {selectedCollapsed
+          ? `Alt düğümleri göster · ${selectedChildCount}`
+          : `Alt düğümleri gizle · ${selectedChildCount}`}
+      </span>
+    </button>
+  )
+  const openSessionButton = (selectedTarget || foldButton) && (
+    <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
+      {selectedTarget && (
+        <button
+          onClick={() => onOpenTarget?.(selectedTarget)}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-semibold text-[var(--color-on-accent)] shadow-sm transition hover:brightness-110 active:brightness-95"
+        >
+          {selectedTarget.view === 'chat' ? (
+            <MessageSquare size={14} />
+          ) : (
+            <ExternalLink size={14} />
+          )}
+          <span className="truncate">
+            {selectedTarget.label} ekranında aç{selectedTarget.id ? ` · ${selectedTarget.id}` : ''}
+          </span>
+        </button>
+      )}
+      {foldButton}
     </div>
   )
 
