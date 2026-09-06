@@ -8,10 +8,12 @@ import (
 )
 
 // TestSteerableForTurn pins the rule that gates the "unsupported" steer response:
-// native providers steer in any mode; claude-cli only in "ask"/"read-only" (a
-// permission-prompt boundary exists there), never in "auto" (bypass); codex-cli
-// NEVER (it has no permission-prompt-tool boundary in any mode — codex exec
-// rejects every approval request outright, see codexMCPSpec's doc comment).
+// native providers steer in any mode; claude-cli only in "ask" (the one mode whose
+// tool calls actually reach callPermission's allow paths, where steerContext is
+// injected), never in "auto" (bypass) or "read-only" (plan mode — see the
+// read-only sub-test); codex-cli NEVER (it has no permission-prompt-tool boundary
+// in any mode — codex exec rejects every approval request outright, see
+// codexMCPSpec's doc comment).
 func TestSteerableForTurn(t *testing.T) {
 	cases := []struct {
 		provider, mode string
@@ -20,7 +22,7 @@ func TestSteerableForTurn(t *testing.T) {
 		{"claude-cli", "auto", false},
 		{"claude-cli", "", false}, // "" resolves to auto/bypass
 		{"claude-cli", "ask", true},
-		{"claude-cli", "read-only", true},
+		{"claude-cli", "read-only", false},
 		{"anthropic", "auto", true},
 		{"minimax", "", true},
 		{"codex-cli", "auto", false},
@@ -31,6 +33,28 @@ func TestSteerableForTurn(t *testing.T) {
 		if got := steerableForTurn(c.provider, c.mode); got != c.want {
 			t.Errorf("steerableForTurn(%q,%q) = %v, want %v", c.provider, c.mode, got, c.want)
 		}
+	}
+}
+
+// TestSteerableForTurnReadOnlyCLI pins the read-only case on its own, because it is
+// the one that looks steerable but is not. read-only DOES wire the
+// permission-prompt tool (climcp.PromptToolForMode), which is why this returned
+// true and the backend told the user "steered". But read-only also runs the CLI
+// under --permission-mode plan, where the CLI blocks mutations itself and every
+// bridged tool sits on --allowedTools, so the only call reaching the prompt is
+// ExitPlanMode — and callPermission hands that to callExitPlan before it can ever
+// call steerContext. No boundary, no delivery: the honest answer is false, so the
+// caller takes its "unsupported" path (queue + hint) instead of claiming the
+// message landed. "ask" must stay true in the same breath — that is the mode whose
+// write/exec tools do reach callPermission's allow paths.
+func TestSteerableForTurnReadOnlyCLI(t *testing.T) {
+	if steerableForTurn("claude-cli", "read-only") {
+		t.Error(`steerableForTurn("claude-cli","read-only") = true, want false: ` +
+			"plan mode reaches the prompt only via ExitPlanMode, which never delivers a steer")
+	}
+	if !steerableForTurn("claude-cli", "ask") {
+		t.Error(`steerableForTurn("claude-cli","ask") = false, want true: ` +
+			"the read-only fix must not disable the one mode that does deliver")
 	}
 }
 

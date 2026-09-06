@@ -70,10 +70,11 @@ type chatRun struct {
 
 	// steerable reports whether a mid-turn steer ("Yönlendir") can actually reach
 	// this turn. Native providers always can (the tool loop drains the steer
-	// channel). claude-cli can ONLY when a permission-prompt tool boundary exists —
-	// i.e. "ask"/"read-only" modes; "auto" runs the CLI with
-	// --dangerously-skip-permissions and never calls that tool, so a steer would be
-	// silently re-queued at turn end. handleSessionControl reads this to answer
+	// channel). claude-cli can ONLY in "ask", the one mode whose tool calls reach
+	// callPermission's allow paths (where the steer rides as additionalContext);
+	// "auto" bypasses permissions entirely and "read-only" runs in plan mode, whose
+	// sole prompt call (ExitPlanMode) never delivers a steer — in both a steer would
+	// be silently re-queued at turn end. handleSessionControl reads this to answer
 	// "unsupported" (client queues the message + shows a hint) instead of pretending
 	// the steer landed. Set once per turn at register-time; guarded by mu.
 	steerable bool
@@ -181,10 +182,9 @@ func (r *chatRun) takeSteerQueue() []string {
 // steerableForTurn reports whether a mid-turn steer ("Yönlendir") can actually
 // reach a turn for the given responding-agent provider + effective permission
 // mode. Native (non-claude-cli) providers drain the steer channel in the tool loop
-// in every mode. claude-cli delivers a steer only at a permission-prompt tool
-// boundary, which is wired solely in "ask"/"read-only" modes; "auto" runs the CLI
-// with --dangerously-skip-permissions and never calls that tool. Kept as a pure
-// function so the rule is unit-testable and lives next to the field it feeds.
+// in every mode. claude-cli delivers a steer only where callPermission answers a
+// prompt, which is "ask" alone. Kept as a pure function so the rule is
+// unit-testable and lives next to the field it feeds.
 func steerableForTurn(provider, mode string) bool {
 	// codex-cli runs its own subprocess tool loop too, so it shares claude-cli's lack
 	// of a mid-turn steer drain point — but unlike claude it is NEVER steerable: codex
@@ -199,7 +199,19 @@ func steerableForTurn(provider, mode string) bool {
 	if providers.TransportOf(provider) != providers.TransportCLI {
 		return true
 	}
-	return mode == "ask" || mode == "read-only"
+	// claude-cli: "ask" only. The permission-prompt tool IS wired in "read-only" too
+	// (PromptToolForMode), but read-only additionally runs the CLI under
+	// --permission-mode plan (claudecli.go permissionArgs), where the CLI blocks
+	// mutations itself and every bridged/external MCP tool is on --allowedTools — so
+	// the ONLY call that reaches the prompt is ExitPlanMode, and callPermission routes
+	// that to callExitPlan BEFORE any steerContext() call. steerContext is reached
+	// solely from callPermission's allow paths, which read-only never takes: the mode
+	// has no boundary a steer can ride. Reporting true here made the backend answer
+	// "steered" for a message that could only resurface at turn end via the
+	// steer_undelivered re-queue; false routes it to the caller's existing
+	// "unsupported" path, which queues it and tells the user. "auto" is false for the
+	// older reason: it runs with --dangerously-skip-permissions and never prompts.
+	return mode == "ask"
 }
 
 // setSteerable records whether a mid-turn steer can reach this turn (see the
