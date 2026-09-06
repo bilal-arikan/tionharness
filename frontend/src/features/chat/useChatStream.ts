@@ -517,6 +517,30 @@ export function useChatStream(deps: ChatStreamDeps) {
     })
   }, [activeSessionId, setError])
 
+  // Convert a WAITING queued message into live guidance for the turn that is
+  // already running ("şimdi yönlendir"). The whole move is one atomic backend
+  // call, so the chip is NOT removed optimistically: it disappears only when the
+  // server's queue update says the message really left the queue. Any refusal
+  // (this turn cannot be steered, the turn is not consuming guidance) leaves the
+  // message queued — it still runs as its own turn — and is reported.
+  const steerQueued = useCallback(
+    async (id: string) => {
+      const sid = activeSessionId
+      if (!sid) return
+      try {
+        const r = await api.steerQueued(sid, id)
+        if (r?.result === 'unsupported') {
+          setError(
+            'Bu tur canlı yönlendirmeyi taşıyamıyor (claude-cli "auto"/"read-only" veya codex-cli) — mesaj sırada kaldı ve tur bitince çalışacak. Canlı yönlendirme için ajanı "ask" moduna al.',
+          )
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [activeSessionId, setError],
+  )
+
   // Promote a waiting message so it dispatches next ("öne al").
   const sendQueuedNext = useCallback(
     (id: string) => {
@@ -593,6 +617,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     removePending,
     clearQueue,
     sendQueuedNext,
+    steerQueued,
     markPending,
     reconcileActive,
     clearPending,

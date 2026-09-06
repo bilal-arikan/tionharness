@@ -550,6 +550,10 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}/queue/{msgId}", s.handleCancelQueued)
 	mux.HandleFunc("DELETE /api/sessions/{id}/queue", s.handleClearQueue)
 	mux.HandleFunc("POST /api/sessions/{id}/queue/{msgId}/front", s.handleMoveQueuedFront)
+	// Convert a waiting message into live guidance for the turn already running,
+	// in ONE atomic step (a client-side steer+cancel pair could duplicate or lose
+	// it). See inbox_steer.go.
+	mux.HandleFunc("POST /api/sessions/{id}/queue/{msgId}/steer", s.handleSteerQueued)
 	mux.HandleFunc("POST /api/sessions/{id}/control", s.handleSessionControl)
 	// Cross-window "user is typing" signal (ephemeral, not retained).
 	mux.HandleFunc("POST /api/sessions/{id}/typing", s.handleTyping)
