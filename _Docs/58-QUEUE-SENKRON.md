@@ -682,9 +682,26 @@ arasında başka bir goroutine kuyruğu değiştirebilir → diske yazılan snap
 pencereye yayınlanan kuyruk **birbirinden sapabilirdi**. İkisi tek locked-snapshot'tan
 türeten `flushInbox` ile birleştirildi (tutarsızlık penceresi kapandı, kilit alımı
 yarıya indi). Ortak kilitle-mutasyon-flush iskeleti `withInbox(sessionID, fn)`
-helper'ına toplandı (`cancel/clear/move`). `runTurnGuarded` panic bariyeri, kavramsal
+helper'ına toplandı (`cancel/clear/move`; 2026-09-06'dan beri ayrıca
+`steerQueuedMessage` — aşağıya bakın). `runTurnGuarded` panic bariyeri, kavramsal
 eşi `runQueuedTurn` watchdog'unun yanına (`inbox_durability.go`) taşındı. Davranış
 birebir korundu; `go build`/`go vet` temiz, inbox testleri 4/4 geçiyor.
+
+### Kuyruktaki mesaj steer'e çevrilebiliyor (2026-09-06, TSK901)
+
+Kuyruk mutasyonlarına `steerQueuedMessage` (`internal/api/inbox_steer.go`) eklendi:
+`POST /api/sessions/{id}/queue/{msgId}/steer` bekleyen bir mesajı, tur bitmesini
+beklemeden, çalışan tura canlı yönlendirme olarak taşır.
+
+Diğer mutator'lardan farkı, geri çağrının inbox dışına da uzanması: aramayı,
+run'a teslimi ve silmeyi **tek `withInbox` kilidi** altında yapar. Bu şart —
+seri worker kuyruk başını aynı kilit altında poplar (`popInboxHead`), yani
+kilit tutulurken mesaj dispatch edilemez. Silme yalnız run metni **kabul
+ettikten sonra** yapılır; steer reddedilirse (uçuşta tur yok, tur steerable
+değil, steer buffer dolu, mesajda ek dosya var) kuyruk hiç değişmez ve mesaj
+kendi turu olarak koşmaya devam eder. Teslim yolları bloklamaz ve yalnız run'ın
+mutex'ini alır, dolayısıyla kuyruk kilidi bir sağlayıcı çağrısı boyunca
+tutulmaz. Ayrıntı ve yanıt tablosu → `_Docs/59-CLI-STEER-PLANI.md`.
 
 ## Session silme — fail-closed runtime teardown (2026-07-13)
 
