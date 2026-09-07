@@ -20,6 +20,7 @@ func TestContextWindowFor(t *testing.T) {
 		{"minimax/minimax-m3", windowMiniMax},
 		{"deepseek/deepseek-v4-flash", windowDeepSeek},
 		{"google/gemini-3.5-flash", windowGemini},
+		{"gpt-6-astra", windowGPTLarge},
 		{"gpt-5.6-sol", windowGPTLarge},
 		{"gpt-5.6-terra", windowGPTLarge},
 		{"gpt-5.6-luna", windowGPTLuna},
@@ -66,6 +67,7 @@ func TestAdaptiveBudgetFraction(t *testing.T) {
 		{"google/gemini-3.5-flash", 0.35},
 		{"", 0},                  // claude-cli default → unknown → 0 (caller falls back)
 		{"openai/gpt-5.5", 0.35}, // gpt/codex family → long-context share
+		{"gpt-6-astra", 0.35},
 		{"gpt-5.6-sol", 0.35},
 		{"gpt-4o-mini", 0}, // no longer in the gpt gate → unknown
 		{"glm-5.2", 0.35},

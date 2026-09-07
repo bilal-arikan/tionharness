@@ -10,6 +10,15 @@ type Price struct {
 	// so OpenAI/DeepSeek-routed models carry a higher read multiplier here.
 	CacheReadMultOverride  float64 `json:"cacheReadMult,omitempty"`
 	CacheWriteMultOverride float64 `json:"cacheWriteMult,omitempty"`
+	// Optional long-context surcharge. Some models (the OpenAI GPT-5.6 Sol/Terra
+	// tiers and GPT-6 Astra) bill a premium once a request's INPUT side crosses a
+	// threshold, and the premium applies to the WHOLE request — every input,
+	// cache and output token — not only the tokens past the threshold. Zero
+	// LongContextThresholdTokens disables the surcharge entirely, which is the
+	// case for every other model in the tables below.
+	LongContextThresholdTokens int     `json:"longContextThresholdTokens,omitempty"`
+	LongContextInputMult       float64 `json:"longContextInputMult,omitempty"`
+	LongContextOutputMult      float64 `json:"longContextOutputMult,omitempty"`
 }
 
 // Prompt-cache price multipliers relative to the base input price. Cache reads
@@ -22,6 +31,12 @@ type Price struct {
 const (
 	CacheReadMult  = 0.10
 	CacheWriteMult = 1.25
+	// longContextThresholdGPT is the input-token count past which the OpenAI
+	// GPT-5.6 tiers and GPT-6 Astra move the whole request onto long-context
+	// rates. Not to be confused with windowGPTOther in context_window.go, which
+	// reuses the same number for an unrelated reason (the Codex CLI's fallback
+	// window for slugs it does not recognise).
+	longContextThresholdGPT = 272_000
 	// CacheWrite1hMult is the extended (1-hour TTL) cache-write premium.
 	CacheWrite1hMult = 2.0
 )
@@ -42,6 +57,30 @@ func (p Price) cacheWriteMult() float64 {
 	return CacheWriteMult
 }
 
+// longContextMults returns the (input, output) surcharge multipliers to apply to
+// a request whose input side totals inputSide tokens. Both are 1 when the model
+// has no surcharge or the request stays at or below the threshold.
+//
+// The threshold is compared against the FULL input side — fresh input plus cache
+// reads plus cache writes — because that is what the provider counts as the
+// request's input tokens; billing only the fresh portion would let a mostly
+// cached long request slip under the threshold it actually crossed. The
+// comparison is strictly greater-than: the published rule is "requests exceeding
+// the threshold", so a request exactly at it stays on standard rates.
+func (p Price) longContextMults(inputSide int) (float64, float64) {
+	if p.LongContextThresholdTokens <= 0 || inputSide <= p.LongContextThresholdTokens {
+		return 1, 1
+	}
+	in, out := p.LongContextInputMult, p.LongContextOutputMult
+	if in <= 0 {
+		in = 1
+	}
+	if out <= 0 {
+		out = 1
+	}
+	return in, out
+}
+
 // Cost returns the USD cost of a plain input/output token count at this price
 // (no caching). Equivalent to CostDetailed(in, out, 0, 0).
 func (p Price) Cost(inputTokens, outputTokens int) float64 {
@@ -52,15 +91,20 @@ func (p Price) Cost(inputTokens, outputTokens int) float64 {
 // the base rate, cache reads at CacheReadMult, cache writes at CacheWriteMult,
 // and output at the output rate.
 func (p Price) CostDetailed(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
-	in := float64(inputTokens) * p.InputPerMTok
-	cr := float64(cacheReadTokens) * p.InputPerMTok * p.cacheReadMult()
-	cw := float64(cacheWriteTokens) * p.InputPerMTok * p.cacheWriteMult()
-	out := float64(outputTokens) * p.OutputPerMTok
+	inMult, outMult := p.longContextMults(inputTokens + cacheReadTokens + cacheWriteTokens)
+	in := float64(inputTokens) * p.InputPerMTok * inMult
+	cr := float64(cacheReadTokens) * p.InputPerMTok * p.cacheReadMult() * inMult
+	cw := float64(cacheWriteTokens) * p.InputPerMTok * p.cacheWriteMult() * inMult
+	out := float64(outputTokens) * p.OutputPerMTok * outMult
 	return (in + cr + cw + out) / 1_000_000
 }
 
 // CacheSavings returns the USD saved by serving cacheReadTokens from cache
 // instead of paying the full input rate for them (the cache discount realised).
+// The surcharge is deliberately NOT applied here: this measures the discount on
+// the cache-read tokens alone, and on a surcharged request both the real and the
+// counterfactual side carry the same input multiplier, so it cancels out of the
+// ratio callers display. Applying it would inflate the reported saving.
 func (p Price) CacheSavings(cacheReadTokens int) float64 {
 	return float64(cacheReadTokens) * p.InputPerMTok * (1 - p.cacheReadMult()) / 1_000_000
 }
@@ -73,8 +117,10 @@ func (p Price) CacheSavings(cacheReadTokens int) float64 {
 // simply cost+CacheSavings: that keeps the cache-write premium, overstating the
 // baseline by (cacheWriteMult−1)×cacheWrite×InputPerMTok.
 func (p Price) CostNoCaching(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
-	in := float64(inputTokens+cacheReadTokens+cacheWriteTokens) * p.InputPerMTok
-	out := float64(outputTokens) * p.OutputPerMTok
+	inputSide := inputTokens + cacheReadTokens + cacheWriteTokens
+	inMult, outMult := p.longContextMults(inputSide)
+	in := float64(inputSide) * p.InputPerMTok * inMult
+	out := float64(outputTokens) * p.OutputPerMTok * outMult
 	return (in + out) / 1_000_000
 }
 
@@ -167,9 +213,22 @@ var priceTable = map[string]map[string]Price{
 	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
 	// correctly report unpriced for anything absent here).
 	"openai": {
-		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
-		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
-		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
+		// GPT-6 Astra breaks the flat 0.10× cache-read rule the rest of this table
+		// follows: input is $10/MTok but cached input is a published $1/MTok, i.e.
+		// exactly 0.10× — the ratio holds, so the shared override still applies.
+		// Cache writes are $12.50/MTok = 1.25× input, the one OpenAI model here
+		// that does carry a write premium, so it does NOT pin 1.0 like its
+		// siblings.
+		//
+		// All four current tiers carry the same long-context surcharge: past 272K
+		// input tokens the WHOLE request bills at 2× input/cache and 1.5× output.
+		// The published long-context rates confirm the multipliers rather than
+		// assuming Astra's apply to the rest — Sol $5/$30 → $10/$45, Terra
+		// $2/$12 → $4/$18, Luna $0.20/$1.20 → $0.40/$1.80.
+		"gpt-6-astra":   {InputPerMTok: 10.00, OutputPerMTok: 50.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
+		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
+		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
+		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
 		"gpt-5.5":       {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
 		"gpt-5.4-mini":  {InputPerMTok: 0.75, OutputPerMTok: 4.50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
 	},

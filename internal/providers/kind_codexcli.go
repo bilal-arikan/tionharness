@@ -36,6 +36,7 @@ func init() {
 			},
 			Models: []ModelInfo{
 				{ID: "", Label: "codex oturum modeli", Description: "codex oturumunun aktif modelini kullanır"},
+				{ID: "gpt-6-astra", Label: "GPT-6 Astra — öncü", Description: "En yetenekli nesil; 1.05M bağlam (922k girdi), 128k çıktı, max'a kadar akıl yürütme. 272k üzeri istekler tüm istek için 2× girdi/cache ve 1.5× çıktı ücretlendirilir (maliyet tahmininde modellenir). API faturalı: ChatGPT aboneliğinde kademeli açılır, Enterprise'da yönetici onayı ister"},
 				{ID: "gpt-5.6-sol", Label: "GPT-5.6 Sol", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-terra", Label: "GPT-5.6 Terra", Description: "En yeni nesil; ~1.05M bağlam (272k üzeri uzun-bağlam fiyatlandırması)"},
 				{ID: "gpt-5.6-luna", Label: "GPT-5.6 Luna", Description: "En yeni nesil; 400k bağlam"},

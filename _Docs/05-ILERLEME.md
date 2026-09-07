@@ -1,7 +1,59 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-06):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-07):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## GPT-6 Astra desteği (2026-09-07) ✅
+
+**İstek:** projeye Codex tarafında GPT-6 Astra desteği ekle.
+
+`gpt-6-astra` codex-cli kataloğunda (boş "oturum modeli" girdisinden hemen sonra,
+listenin en üstünde) ve `openai` fiyat tablosunda. Doğrulama iki bağımsız kaynakla
+yapıldı (`developers.openai.com` model sayfası + Codex CLI entegrasyon rehberi);
+ikisi de aynı rakamları veriyor: 1.05M bağlam (922k azami girdi), 128k çıktı,
+$10/$50 per MTok, cache-read $1/MTok, cache-write $12.50/MTok, çıkış 2026-09-03.
+
+Asıl iş katalog satırı değil, **aile geçitlerinin** genişletilmesiydi — ikisi de
+`gpt-5` üzerine kuruluydu ve Astra'yı sessizce ıskalıyordu:
+
+- **`gptFamily` (`context_window.go`):** `gpt-6`/`gpt6` eklendi. Eklenmeseydi
+  pencere/azami-çıktı/bütçe fraksiyonu üçü de **0** ("bilinmeyen") dönerdi;
+  `EffectiveBudget` o durumda muhafazakâr varsayılan pencereye düşer, yani 1.05M'lik
+  bir model 272K'lık bir modelmiş gibi erken sıkıştırılırdı. Kademe eşleşmesine
+  `astra` eklendi → `windowGPTLarge` (Sol/Terra ile aynı katman). Geçit dar
+  tutulma felsefesini koruyor: `gpt-4o`/`gpt-4.1` hâlâ dışarıda.
+- **`ThinkingClassForProvider` (`thinking.go`):** `strings.HasPrefix(…, "gpt-5")`
+  koşulu `codexEffortModel` yardımcısına çıkarıldı (`gpt-5` **veya** `gpt-6`
+  öneki). Astra low/medium/high/xhigh + max (Responses API) belgeliyor, yani
+  GPT-5.6 kademeleriyle aynı tam rampayı hak ediyor; `none` desteklemiyor ama bu
+  yol Codex için zaten "off" dışında bir şey üretmiyordu.
+
+**Fiyatlandırmada bir incelik:** Astra, tablodaki diğer OpenAI modellerinin
+aksine gerçek bir **cache-write primi** taşıyor ($12.50 = 1.25× girdi), o yüzden
+kardeşleri gibi `CacheWriteMultOverride: 1.0` **pinlemiyor**; cache-read oranı ise
+$1/$10 = 0.10×, yani ortak override geçerli. Erişim notu katalogda: Astra API
+faturalı, ChatGPT aboneliğinde kademeli açılıyor, Enterprise'da yönetici onayı
+istiyor.
+
+**Uzun-bağlam sürşarjı artık modelleniyor** (aynı commit'te, dört tier birden):
+`Price`'a üç alan eklendi (`LongContextThresholdTokens`, `LongContextInputMult`,
+`LongContextOutputMult`) ve `CostDetailed`/`CostNoCaching` bunları uyguluyor —
+imzalar değişmedi, tek tüketici `internal/billing` olduğu için her çağrı yeri
+otomatik doğrulandı. Üç karar: **(1)** eşik **tüm girdi tarafına** (taze + cache
+read + cache write) bakar; yalnız tazeye bakmak, çoğu cache'lenmiş uzun bir
+isteğin gerçekte aştığı eşiğin altında görünmesine yol açardı. **(2)** karşılaştırma
+kesin büyüktür — yayınlanan kural "eşiği **aşan** istekler", yani tam eşikteki
+istek standart tarifede kalır. **(3)** `CacheSavings` sürşarj **uygulamaz**:
+gerçek ve karşı-olgusal tarafın ikisi de aynı girdi çarpanını taşıdığı için oran
+sadeleşir, uygulamak tasarrufu şişirirdi. Çarpanlar varsayılmadı, her tier'ın
+yayınlanmış uzun-bağlam tarifesiyle doğrulandı (Sol $5/$30 → $10/$45, Terra
+$2/$12 → $4/$18, Luna $0.20/$1.20 → $0.40/$1.80, Astra $10/$50 → $20/$75) ve bu
+tarifeler testte oracle olarak kullanıldı (`pricing_longcontext_test.go`).
+
+**Testler:** yeni `codex_gpt6astra_test.go` (aile geçidi + hariç tutulan pre-5
+slug'lar, pencere/çıktı/fraksiyon, tam düşünme rampası + kademe doğrulaması +
+Codex'e özgülük, fiyat, katalog metadata'sı); `context_window_test.go` ve
+`maxoutput_test.go` tablolarına Astra satırları.
 
 ## Rota: aralıklı oturumun çubuğu oturuşlara bölünüyor (2026-09-06) ✅
 
