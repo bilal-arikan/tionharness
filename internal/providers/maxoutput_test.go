@@ -21,6 +21,7 @@ func TestMaxOutputFor(t *testing.T) {
 		{"google/gemini-3.5-flash", maxOutGemini},
 		{"", 0},                       // claude-cli default → unknown
 		{"openai/gpt-5.5", maxOutGPT}, // gpt/codex family
+		{"gpt-6-astra", maxOutGPT},
 		{"gpt-5.6-sol", maxOutGPT},
 		{"gpt-5.6-luna", maxOutGPT},
 		{"codex-auto-review", maxOutGPT},

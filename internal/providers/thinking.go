@@ -279,13 +279,24 @@ func ThinkingClass(model string) string {
 }
 
 // ThinkingClassForProvider adds transport knowledge where a model id alone is
-// ambiguous. Codex GPT-5 models expose xhigh/max/ultra as real CLI effort
+// ambiguous. Codex GPT-5/GPT-6 models expose xhigh/max/ultra as real CLI effort
 // values; other providers keep the existing adaptive/legacy classification.
+// GPT-6 Astra documents low/medium/high/xhigh plus max (Responses API), so it
+// lands in the same ramp as the GPT-5.6 tiers — note Astra drops "none", which
+// this class never emitted for Codex anyway.
 func ThinkingClassForProvider(providerKind, model string) string {
-	if providerKind == "codex-cli" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-5") {
+	if providerKind == "codex-cli" && codexEffortModel(model) {
 		return "adaptive"
 	}
 	return ThinkingClass(model)
+}
+
+// codexEffortModel reports whether a Codex CLI slug takes the real reasoning
+// effort ramp. Matched on the generation prefix rather than a bare "gpt" so an
+// older 4.x slug typed into the custom-model field keeps its legacy tiers.
+func codexEffortModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "gpt-5") || strings.HasPrefix(m, "gpt-6")
 }
 
 // isNonThinking reports whether the model has no extended-reasoning mode at all,

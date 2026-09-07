@@ -22,12 +22,14 @@ const (
 	windowDeepSeek         = 1_000_000 // DeepSeek V4 family ("1M context")
 	windowGemini           = 1_000_000 // Gemini long-context family
 	// The OpenAI GPT-5.6 line is tiered too: Sol and Terra ship ~1.05M
-	// (1_048_576) while Luna stays at 400K. The frequently quoted 272K is NOT a
-	// context limit — it is the long-context *pricing* threshold for Sol/Terra and,
-	// separately, the Codex CLI's own fallback context_window for slugs it does not
-	// recognise. We reuse that fallback for every other gpt-5.x / codex slug: it is
-	// what the CLI itself assumes, so it can never over-promise.
-	windowGPTLarge = 1_048_576 // GPT-5.6 Sol / Terra
+	// (1_048_576) while Luna stays at 400K. GPT-6 Astra ships the same 1.05M
+	// window (1,050,000 quoted by the API docs; the 1_048_576 constant is within
+	// 0.14% and stays on the safe side). The frequently quoted 272K is NOT a
+	// context limit — it is the long-context *pricing* threshold for Sol/Terra and
+	// Astra alike and, separately, the Codex CLI's own fallback context_window for
+	// slugs it does not recognise. We reuse that fallback for every other gpt-5.x /
+	// codex slug: it is what the CLI itself assumes, so it can never over-promise.
+	windowGPTLarge = 1_048_576 // GPT-5.6 Sol / Terra, GPT-6 Astra
 	windowGPTLuna  = 400_000   // GPT-5.6 Luna
 	windowGPTOther = 272_000   // other gpt-5.x / codex slugs (CLI fallback)
 	// The GLM (Z.ai) line is tiered as well: glm-5.2 and glm-5.3 ship a 1M window
@@ -67,7 +69,8 @@ const (
 	maxOutGLM = 32_768
 )
 
-// gptFamily reports whether the slug belongs to the OpenAI GPT-5.x / Codex family.
+// gptFamily reports whether the slug belongs to the OpenAI GPT-5.x / GPT-6 /
+// Codex family.
 // The gate is deliberately narrow: a bare "gpt" substring also matches gpt-4o,
 // gpt-4.1, gpt-4o-mini and friends, whose windows are much smaller (128K for
 // 4o-mini) than anything in the table below — claiming 272K for them is an
@@ -75,11 +78,13 @@ const (
 // late. Only the slugs we actually verified are claimed; every other "gpt" model
 // falls through to the unknown branch (0), matching the file's philosophy of
 // filling only families we are confident about.
-// The tier keywords ("sol", "terra", "luna") are short and would collide with
-// unrelated names (e.g. "solar"), so tier matching is only ever done after this
-// gate passes.
+// The tier keywords ("sol", "terra", "luna", "astra") are short and would collide
+// with unrelated names (e.g. "solar"), so tier matching is only ever done after
+// this gate passes.
 func gptFamily(m string) bool {
-	return strings.Contains(m, "gpt-5") || strings.Contains(m, "gpt5") || strings.Contains(m, "codex")
+	return strings.Contains(m, "gpt-5") || strings.Contains(m, "gpt5") ||
+		strings.Contains(m, "gpt-6") || strings.Contains(m, "gpt6") ||
+		strings.Contains(m, "codex")
 }
 
 // glmFamily reports whether the slug belongs to the Z.ai GLM family.
@@ -162,7 +167,7 @@ func ContextWindowFor(provider, model string) int {
 		// Tier order matters: "gpt-5.6-sol" must hit the large tier, not the
 		// generic gpt fallback.
 		switch {
-		case strings.Contains(m, "sol"), strings.Contains(m, "terra"):
+		case strings.Contains(m, "sol"), strings.Contains(m, "terra"), strings.Contains(m, "astra"):
 			return windowGPTLarge
 		case strings.Contains(m, "luna"):
 			return windowGPTLuna

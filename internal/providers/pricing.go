@@ -167,6 +167,17 @@ var priceTable = map[string]map[string]Price{
 	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
 	// correctly report unpriced for anything absent here).
 	"openai": {
+		// GPT-6 Astra breaks the flat 0.10× cache-read rule the rest of this table
+		// follows: input is $10/MTok but cached input is a published $1/MTok, i.e.
+		// exactly 0.10× — the ratio holds, so the shared override still applies.
+		// Cache writes are $12.50/MTok = 1.25× input, the one OpenAI model here
+		// that does carry a write premium, so it does NOT pin 1.0 like its
+		// siblings. The >272K long-context surcharge (2× input/cache, 1.5× output
+		// for the whole request) is NOT modelled: Price has no threshold field and
+		// Sol/Terra carry the same threshold un-modelled today, so estimates below
+		// the threshold stay exact and above it under-report — the catalog entry
+		// spells the surcharge out.
+		"gpt-6-astra":   {InputPerMTok: 10.00, OutputPerMTok: 50.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
 		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
 		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
