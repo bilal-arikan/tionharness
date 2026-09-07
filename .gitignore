@@ -34,6 +34,8 @@ credential-secret
 # Local dev logs + scratch (not part of the project)
 # _devlogs/: dev.ps1 lifecycle log + captured backend stderr (crash traces).
 /_devlogs/
+# .scratch/: agent scratchpad (task dumps, API responses) - local only.
+/.scratch/
 *.log
 *.log.err
 *.err

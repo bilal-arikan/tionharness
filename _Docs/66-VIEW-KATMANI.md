@@ -699,8 +699,8 @@ clipPath:  …/features/view/ViewPanel.tsx                ← her şeyi söylüy
 `dsl.go` iki yardımcı sunar:
 
 - **`shortPath(s)`** — `\` → `/` normalizasyonu, kullanıcı ev dizini öneki `~`
-  ile değiştirilir. Ev eşleşmesi **tam segment** sınırındadır (`/home/bil`,
-  `/home/bilal-backup`'ı yutmaz). **Ayırıcı içermeyen string yol değildir** ve
+  ile değiştirilir. Ev eşleşmesi **tam segment** sınırındadır (`/home/ale`,
+  `/home/alex-backup`'ı yutmaz). **Ayırıcı içermeyen string yol değildir** ve
   olduğu gibi döner — bir başlığı veya araç adını burada yeniden yazmak, değerin
   ne olduğu hakkında yalan söylemek olur.
 - **`clipPath(s, max)`** — önce `shortPath`, hâlâ uzunsa **kuyruğu** tutar ve

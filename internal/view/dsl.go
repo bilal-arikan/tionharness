@@ -157,8 +157,8 @@ func shortPath(s string) string {
 	if h == "" || len(p) < len(h) || !strings.EqualFold(p[:len(h)], h) {
 		return p
 	}
-	// Only a whole-segment prefix match counts: "/home/bil" must not swallow the
-	// first segment of "/home/bilal-backup".
+	// Only a whole-segment prefix match counts: "/home/ale" must not swallow the
+	// first segment of "/home/alex-backup".
 	rest := p[len(h):]
 	if rest != "" && !strings.HasPrefix(rest, "/") {
 		return p

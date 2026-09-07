@@ -12,17 +12,17 @@ import {
 
 describe('displayPath', () => {
   it('collapses a Windows home path to ~\\', () => {
-    expect(displayPath('C:\\Users\\bilal\\Desktop\\Projects\\TionHarness')).toBe(
+    expect(displayPath('C:\\Users\\alex\\Desktop\\Projects\\TionHarness')).toBe(
       '~\\Desktop\\Projects\\TionHarness',
     )
   })
 
   it('collapses a POSIX home path to ~/', () => {
-    expect(displayPath('/home/bilal/projects/app.go')).toBe('~/projects/app.go')
+    expect(displayPath('/home/alex/projects/app.go')).toBe('~/projects/app.go')
   })
 
   it('collapses a Git Bash mounted drive home path to ~/', () => {
-    expect(displayPath('/c/Users/bilal/Desktop/Projects/TionHarness')).toBe(
+    expect(displayPath('/c/Users/alex/Desktop/Projects/TionHarness')).toBe(
       '~/Desktop/Projects/TionHarness',
     )
   })
@@ -40,7 +40,7 @@ describe('displayPath', () => {
 
 describe('shortPath', () => {
   it('tail-truncates a long Git Bash home path', () => {
-    expect(shortPath('/c/Users/bilal/Desktop/Projects/TionHarness/internal/agent/runtime.go')).toBe(
+    expect(shortPath('/c/Users/alex/Desktop/Projects/TionHarness/internal/agent/runtime.go')).toBe(
       '…/internal/agent/runtime.go',
     )
   })
@@ -48,9 +48,9 @@ describe('shortPath', () => {
 
 describe('splitPaths', () => {
   it('detects a Git Bash path embedded in a shell command', () => {
-    const segments = splitPaths('cd /c/Users/bilal/Desktop/Projects/TionHarness && go build ./...')
+    const segments = splitPaths('cd /c/Users/alex/Desktop/Projects/TionHarness && go build ./...')
     const pathSeg = segments.find((s) => s.kind === 'path')
-    expect(pathSeg?.text).toBe('/c/Users/bilal/Desktop/Projects/TionHarness')
+    expect(pathSeg?.text).toBe('/c/Users/alex/Desktop/Projects/TionHarness')
   })
 
   it('keeps a whole URL in one url segment (scheme not cut off)', () => {
@@ -107,7 +107,7 @@ describe('splitPaths', () => {
     ['Windows', 'C:\\work\\src\\app.ts:12:4', 'C:\\work\\src\\app.ts'],
     ['Windows slash', 'C:/work/src/app.ts:12', 'C:/work/src/app.ts'],
     ['POSIX', '/opt/app/src/main.go:9', '/opt/app/src/main.go'],
-    ['Git Bash', '/c/Users/bilal/project/main.go:7:2', '/c/Users/bilal/project/main.go'],
+    ['Git Bash', '/c/Users/alex/project/main.go:7:2', '/c/Users/alex/project/main.go'],
     ['relative', 'frontend/src/App.tsx:20:3', 'frontend/src/App.tsx'],
   ])('detects %s path references with locations', (_label, shown, target) => {
     expect(splitPaths(shown)).toEqual([{ text: shown, kind: 'path', target }])
@@ -164,7 +164,7 @@ describe('isUrl', () => {
   it('accepts absolute and www. links, rejects paths', () => {
     expect(isUrl('https://example.com')).toBe(true)
     expect(isUrl('www.example.com')).toBe(true)
-    expect(isUrl('/c/Users/bilal/a.go')).toBe(false)
+    expect(isUrl('/c/Users/alex/a.go')).toBe(false)
     expect(isUrl('internal/agent/titler.go')).toBe(false)
   })
 })

@@ -94,7 +94,7 @@ func TestCompactPaths(t *testing.T) {
 }
 
 func TestClipPath(t *testing.T) {
-	withHome(t, "/home/bilal")
+	withHome(t, "/home/alex")
 
 	cases := []struct {
 		name string
@@ -106,7 +106,7 @@ func TestClipPath(t *testing.T) {
 			// The informative half of a path is its TAIL, so the cut is marked at
 			// the front and lands on a separator boundary.
 			name: "front elision on a long path",
-			in:   "/home/bilal/desktop/projects/tionharness/frontend/src/features/view/ViewPanel.tsx",
+			in:   "/home/alex/desktop/projects/tionharness/frontend/src/features/view/ViewPanel.tsx",
 			max:  30,
 			want: "…/features/view/ViewPanel.tsx",
 		},
@@ -118,7 +118,7 @@ func TestClipPath(t *testing.T) {
 		},
 		{
 			name: "home shortening alone can make it fit",
-			in:   "/home/bilal/projects/app/main.go",
+			in:   "/home/alex/projects/app/main.go",
 			max:  25,
 			want: "~/projects/app/main.go",
 		},
@@ -140,7 +140,7 @@ func TestClipPath(t *testing.T) {
 		},
 		{
 			name: "whitespace collapses to one line",
-			in:   "/home/bilal/a\n/b.go",
+			in:   "/home/alex/a\n/b.go",
 			max:  40,
 			want: "~/a /b.go",
 		},
