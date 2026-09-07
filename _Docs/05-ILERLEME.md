@@ -28,15 +28,27 @@ Asıl iş katalog satırı değil, **aile geçitlerinin** genişletilmesiydi —
   GPT-5.6 kademeleriyle aynı tam rampayı hak ediyor; `none` desteklemiyor ama bu
   yol Codex için zaten "off" dışında bir şey üretmiyordu.
 
-**Fiyatlandırmada iki incelik:** (1) Astra, tablodaki diğer OpenAI modellerinin
+**Fiyatlandırmada bir incelik:** Astra, tablodaki diğer OpenAI modellerinin
 aksine gerçek bir **cache-write primi** taşıyor ($12.50 = 1.25× girdi), o yüzden
 kardeşleri gibi `CacheWriteMultOverride: 1.0` **pinlemiyor**; cache-read oranı ise
-$1/$10 = 0.10×, yani ortak override geçerli. (2) **272k üzeri uzun-bağlam
-sürşarjı** (tüm istek için 2× girdi/cache, 1.5× çıktı) modellenmedi: `Price`
-yapısında eşik alanı yok ve aynı eşiği taşıyan Sol/Terra da bugün modellemiyor —
-eşiğin altında tahmin birebir, üstünde eksik raporlar. Sürşarj katalog
-açıklamasında açıkça yazıyor. Erişim notu da katalogda: Astra API faturalı,
-ChatGPT aboneliğinde kademeli açılıyor, Enterprise'da yönetici onayı istiyor.
+$1/$10 = 0.10×, yani ortak override geçerli. Erişim notu katalogda: Astra API
+faturalı, ChatGPT aboneliğinde kademeli açılıyor, Enterprise'da yönetici onayı
+istiyor.
+
+**Uzun-bağlam sürşarjı artık modelleniyor** (aynı commit'te, dört tier birden):
+`Price`'a üç alan eklendi (`LongContextThresholdTokens`, `LongContextInputMult`,
+`LongContextOutputMult`) ve `CostDetailed`/`CostNoCaching` bunları uyguluyor —
+imzalar değişmedi, tek tüketici `internal/billing` olduğu için her çağrı yeri
+otomatik doğrulandı. Üç karar: **(1)** eşik **tüm girdi tarafına** (taze + cache
+read + cache write) bakar; yalnız tazeye bakmak, çoğu cache'lenmiş uzun bir
+isteğin gerçekte aştığı eşiğin altında görünmesine yol açardı. **(2)** karşılaştırma
+kesin büyüktür — yayınlanan kural "eşiği **aşan** istekler", yani tam eşikteki
+istek standart tarifede kalır. **(3)** `CacheSavings` sürşarj **uygulamaz**:
+gerçek ve karşı-olgusal tarafın ikisi de aynı girdi çarpanını taşıdığı için oran
+sadeleşir, uygulamak tasarrufu şişirirdi. Çarpanlar varsayılmadı, her tier'ın
+yayınlanmış uzun-bağlam tarifesiyle doğrulandı (Sol $5/$30 → $10/$45, Terra
+$2/$12 → $4/$18, Luna $0.20/$1.20 → $0.40/$1.80, Astra $10/$50 → $20/$75) ve bu
+tarifeler testte oracle olarak kullanıldı (`pricing_longcontext_test.go`).
 
 **Testler:** yeni `codex_gpt6astra_test.go` (aile geçidi + hariç tutulan pre-5
 slug'lar, pencere/çıktı/fraksiyon, tam düşünme rampası + kademe doğrulaması +
