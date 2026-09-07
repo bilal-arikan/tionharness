@@ -2,6 +2,12 @@
 
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
 >
+> **Not (2026-09-07):** token kalibrasyonu — claude-cli harness ek yükü artık gerçek
+> turlardan (CLI sürümü, araç kataloğu hash'i) başına **öğreniliyor**; sistem promptu +
+> araç şemaları anthropic `count_tokens` ile **bir kez** kesin sayılıp hash'le
+> cache'leniyor; fold kapısı `cli-harness` kovasını bütçeliyor. Bkz. "Token
+> kalibrasyonu (2026-09-07)".
+>
 > **Not (2026-09-04):** tur-içi araç-çıktısı budaması artık **taşmayı beklemiyor** —
 > istek model penceresinin %55'ini geçince tur başına bir kez, bedava (LLM'siz)
 > çalışıyor; eşik pencereye göre ölçekleniyor ve tur-içi tahmin artık araç şemalarını
@@ -1121,6 +1127,65 @@ göstermediği `38-SESSION-DEBUG.md`'de anlatılır.
 **Sınırlar.** Bu bir *varsayılan politika* ayarıdır, sert sınır değil. claude-cli `--resume` warm modunda
 bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen gerilim, §11). Testler:
 `budget_test.go` (`TestEffectiveBudgetAdaptive`), `context_window_test.go` (`TestAdaptiveBudgetFraction`).
+
+## Token kalibrasyonu — öğrenilen CLI ek yükü + kesin prefix sayımı (2026-09-07)
+
+Karakter-tabanlı tahmin (`tokens.go`, ~3 char/token) iki büyük **sabit** hata kaynağı
+taşıyordu: claude-cli harness'ı (elle ölçülmüş sabitler, CLI sürümü büyüdükçe eskiyen)
+ve sistem promptu + araç şemaları (context'in en büyük sabit payı, her turda yeniden
+tahmin). İkisi de artık **ölçülüp hatırlanıyor**; turdan tura yalnız mesajlar ve dinamik
+sonek tahmin ediliyor.
+
+**Depo:** `internal/db/store_token_calibration.go` → `token-calibrations.json`
+(workspace singleton'ı, `model-resolutions.json` kalıbı). Kayıp dosya = bir ölçüm
+kaybı, doğruluk kaybı değil.
+
+| Tür | Anahtar | Değer | Güncelleme |
+|---|---|---|---|
+| `cli-overhead` | provider · CLI sürümü · `CatalogFingerprint(shipped tools)` | ölçülen − tahmin | pencereli ortalama (8 örnek; en yeni örnek ≥ 1/8 ağırlık) |
+| `prefix` | provider · model · `PrefixFingerprint(model, system, tools)` | `count_tokens` sonucu | kesin, değişince yer değiştirir |
+
+**CLI ek yükü nasıl öğrenilir** (`internal/api/cli_overhead_learn.go`):
+
+1. Tur gönderilmeden önce kapı `tahmin = Prepare.ContextTokens + contextOverheadTokens`
+   hesaplar (`agentTurnPrep.estimatedTokens`). Fold / native compaction / fold-failed
+   turlarında tahmin ayak iziyle uyuşmaz → o turdan öğrenilmez.
+2. claude-cli stream'inde **ilk** assistant mesajının `input + cache_read +
+   cache_creation` toplamı `Response.FirstCallPromptTokens` olarak alınır: prompt tam
+   gönderildiği haliyle, tool-loop büyütmeden. `result` zarfının kümülatif usage'ını
+   `num_turns`'a bölmek büyüyen bir prompt'un ortalamasıdır; öğrenme için kullanılmaz
+   (yalnız tek çağrılı turda kümülatif == tekil kabul edilir).
+3. `persistAgentReply` → `learnCLIOverhead`: `ek yük = max(0, ölçülen − tahmin)`,
+   `ObserveTokenCalibration` ile anahtara katılır.
+4. `projectedCLIOverhead`: öğrenilmiş değer varsa onu (`predictedSource: measured`,
+   `predictedSamples`), yoksa `conversation.PredictCLIOverhead` referansını
+   (`reference`) döner. Anahtar CLI sürümü veya araç kataloğu değişince yeni ölçüm
+   sıfırdan başlar; eski değer asla yeni harness'a uygulanmaz.
+
+**Kesin prefix** (`internal/api/prefix_calibration.go`): `exactPrefixTokens` yalnız
+`TokenCounter` uygulayan sağlayıcılarda (anthropic `/v1/messages/count_tokens`) çalışır.
+Cache miss yalnız **tur yolunda** sayılır (`contextOverheadTokens` →
+`systemFillersOpts(measurePrefix=true)`; 8 sn timeout; başarısızlıkta anahtar başına
+10 dk geri çekilme); oturum bilgisi / context önizleme panelleri sadece cache okur,
+provider'a hiç gitmez. Sonuç `applyPrefixCalibration` ile `system`/`skills`/
+`lazy-tools`/`tools` kovalarına oranlı dağıtılır (toplam kesin değere eşit, yuvarlama
+artığı en büyük kovaya), kovalar `calibrated: true` işaretlenir; `session_context`
+`prefixAccurate` döner.
+
+**Kapı etkisi:** `systemFillers` claude-cli ajanlarında yeni `cli-harness` kovası
+taşır → context meter ve fold kapısı gerçek ayak izini bütçeler. Öncesinde kapı CLI
+harness'ını **hiç** saymıyordu (sadece önizlemede "beklenen taban" olarak
+gösteriliyordu); bu yüzden claude-cli oturumlarında meter ~26K+ yukarı okur ve fold o
+kadar erken tetiklenir — doğru davranış.
+
+**UI:** kalibre kovalarda `~` öneki düşer (`SessionContextUsage`, tooltip "Kesin sayım /
+ölçülmüş"); `SessionContextModal`/`AgentContextModal` "Ölçülmüş taban (CLI · N tur)";
+palette `cli-harness` rose.
+
+**Kapsam dışı (bilinçli):** codex-cli (per-call prompt boyutu stream'de yok),
+tokenizer paketi (Claude tokenizer'ı yayınlanmamış; o200k yalnız proxy), anchor+delta
+(son ölçülen prompt + fark) ve provider/model başına EMA oto-kalibrasyon — sıradaki
+adımlar.
 
 ## Taşma-öncesi araç çıktısı budaması (2026-09-04)
 

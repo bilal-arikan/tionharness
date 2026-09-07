@@ -47,6 +47,9 @@ const ROLE_COLORS: Record<string, string> = {
   // from past turns' Steps traces and injected into the volatile suffix.
   'tool-activity': '#7c3aed', // deep violet — kin to `tool`/`tools`, distinct hue
   artifacts: '#ec4899', // pink — session artifact context block
+  // CLI-wrapper harness (claude-cli's own system prompt + built-in tools + MCP
+  // bridge): billed every call, invisible in the composed request.
+  'cli-harness': '#f43f5e', // rose
   system: '#64748b', // slate
 }
 

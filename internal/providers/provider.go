@@ -392,6 +392,14 @@ type Response struct {
 	// num_turns), because the CLI reports Usage CUMULATIVELY across those steps — so
 	// Usage divided by ProviderCalls recovers the per-call (single-pass) token cost.
 	ProviderCalls int
+	// FirstCallPromptTokens is the FULL prompt size (input + cache read + cache
+	// write) of the FIRST model API round-trip behind this Response — i.e. the
+	// context exactly as the caller composed it, before any in-turn tool result
+	// grew it. Only CLI-wrapper providers that stream per-call usage set it
+	// (claude-cli); 0 elsewhere. It is the ground truth the token-calibration
+	// learner compares the pre-send estimate against, which the cumulative Usage
+	// divided by ProviderCalls only approximates.
+	FirstCallPromptTokens int
 	// RawContent is the provider-native content-block array of this response,
 	// verbatim (anthropic only; empty elsewhere). The native tool loop echoes it
 	// back on the assistant turn (Message.RawContent) so server-side blocks —

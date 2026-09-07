@@ -41,8 +41,12 @@ export function SessionContextUsage({ info, ctxWindow, ctxUsed, ctxFree, ctxPct 
               {f.label}
               {f.count > 1 && <span className="text-[var(--color-text-dim)]"> ·{f.count}</span>}
             </span>
-            <span className="shrink-0 font-mono text-[var(--color-text-dim)]">
-              ~{formatTokens(f.tokens)} · {pctOf(f.tokens, ctxWindow)}%
+            <span
+              className="shrink-0 font-mono text-[var(--color-text-dim)]"
+              title={f.calibrated ? 'Kesin sayım / ölçülmüş' : 'Karakter tabanlı tahmin'}
+            >
+              {f.calibrated ? '' : '~'}
+              {formatTokens(f.tokens)} · {pctOf(f.tokens, ctxWindow)}%
             </span>
           </div>
         ))}

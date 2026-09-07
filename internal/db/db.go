@@ -72,6 +72,11 @@ type DB struct {
 	// agent configured with the alias "opus" is actually talking to.
 	modelResolutions map[string]ModelResolution
 
+	// tokenCalibrations holds learned token-accounting facts (measured CLI-harness
+	// overheads, exact prompt-prefix counts), keyed as store_token_calibration.go
+	// describes. Observed from completed turns / count endpoints, never hardcoded.
+	tokenCalibrations map[string]TokenCalibration
+
 	// globalModelRes is the shared app-level model-resolution store (one per
 	// installation, wired by the workspace manager). It is written alongside
 	// modelResolutions and read only as a fallback, so a fresh workspace can
@@ -241,6 +246,7 @@ func Open(path string) (*DB, error) {
 		counters:           map[string]int64{},
 		issued:             map[string]int64{},
 		modelResolutions:   map[string]ModelResolution{},
+		tokenCalibrations:  map[string]TokenCalibration{},
 		transcriptMus:      map[string]*sync.Mutex{},
 		activityDelivering: map[string]struct{}{},
 	}
@@ -682,6 +688,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.timeLoadPhase("modelResolutions", d.loadModelResolutions); err != nil {
+		return err
+	}
+	if err := d.timeLoadPhase("tokenCalibrations", d.loadTokenCalibrations); err != nil {
 		return err
 	}
 	if err := d.timeLoadPhase("sessions", d.loadSessions); err != nil {

@@ -401,6 +401,13 @@ type agentTurnPrep struct {
 	// rawHistory is the un-annotated message list (stable indices), the basis for
 	// the claude-cli resume delta and the CLI compaction boundary.
 	rawHistory []db.Message
+	// estimatedTokens is the footprint the fold gate budgeted for this pass
+	// (messages + summary + non-message overhead), i.e. what TionHarness believed
+	// the prompt would cost before sending. Compared against the provider's real
+	// first-call prompt afterwards to learn the CLI harness overhead
+	// (cli_overhead_learn.go). 0 when the estimate is not comparable: a fold or
+	// native compaction changed the footprint after it was taken.
+	estimatedTokens int
 }
 
 // prepareAgentRequest reads the history, refreshes the session, folds the context
@@ -483,6 +490,9 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 	}
 	if prep.Compacted {
 		t.wsp.Runtime.DropWarmCLISession(t.session.ID)
+	}
+	if !prep.Compacted && !prep.NativeCompacted && !prep.FoldFailed {
+		out.estimatedTokens = prep.ContextTokens + overhead
 	}
 	if prep.NativeCompacted {
 		t.session, cerr = t.database.GetSession(t.ctx, t.session.ID)
@@ -886,6 +896,13 @@ func (t *chatTurn) persistInterruptedTurn(agentRow db.Agent, replyID string, age
 // the turn must end.
 func (t *chatTurn) persistAgentReply(agentRow db.Agent, prep agentTurnPrep, replyID string, agentStart time.Time, leadSteps, steps []agent.TurnStep, resp *providers.Response) bool {
 	boundary, compacted := cliCompactionBoundary(steps, len(prep.rawHistory))
+	// Token calibration: the real prompt this turn's first model call carried,
+	// against the estimate the gate budgeted. A turn the CLI compacted mid-way
+	// still measured its FIRST call against the pre-send estimate, so it stays
+	// comparable. Best-effort, never blocks the reply.
+	if prep.estimatedTokens > 0 {
+		t.s.learnCLIOverhead(context.WithoutCancel(t.ctx), t.wsp, agentRow, prep.estimatedTokens, resp)
+	}
 	state := db.CLIReplyState{
 		UpdateResume:          prep.resumePlan.active && resp.SessionID != "",
 		ResumeSessionID:       resp.SessionID,

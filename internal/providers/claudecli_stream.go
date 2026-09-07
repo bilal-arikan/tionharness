@@ -568,6 +568,15 @@ func (p *cliStreamParser) feed(line string) {
 			p.resp.Model = ev.Message.Model
 		}
 		if ev.Message.Usage != nil {
+			// The first assistant message's usage is the prompt exactly as sent:
+			// nothing this turn has grown it yet. Later messages (tool-loop
+			// round-trips) carry a larger prompt, so only the first is kept.
+			if p.resp.FirstCallPromptTokens == 0 {
+				u := ev.Message.Usage
+				if first := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens; first > 0 {
+					p.resp.FirstCallPromptTokens = first
+				}
+			}
 			p.resp.Usage.OutputTokens += ev.Message.Usage.OutputTokens
 			if ev.Message.Usage.InputTokens > p.resp.Usage.InputTokens {
 				p.resp.Usage.InputTokens = ev.Message.Usage.InputTokens

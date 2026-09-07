@@ -210,7 +210,11 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
                       and as the primary accent chip before the first turn is measured. */}
                   {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                     <Stat
-                      label="Beklenen taban (CLI)"
+                      label={
+                        data.cliOverhead.predictedSource === 'measured'
+                          ? `Ölçülmüş taban (CLI · ${data.cliOverhead.predictedSamples ?? 0} tur)`
+                          : 'Beklenen taban (CLI)'
+                      }
                       value={data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead}
                       accent={data.cliOverhead.chatMeasuredTokens === 0}
                     />

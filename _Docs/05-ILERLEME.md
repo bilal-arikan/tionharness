@@ -1,7 +1,51 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-07):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-07):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Token kalibrasyonu: CLI ek yükü otomatik ölçüm + kesin prefix sayımı (2026-09-07) ✅
+
+**İstek:** token tahminini kesinleştir — (1) claude-cli harness ek yükünü elle ölçülmüş
+sabitler yerine gerçek turlardan otomatik öğren, (CLI sürümü, araç kataloğu hash'i)
+başına sakla; (2) sabit prefix'i (sistem promptu + araç şemaları) provider'ın
+`count_tokens` ucundan **bir kez** kesin say, hash'le cache'le; tur başına yalnız
+mesajlar tahmin edilsin.
+
+- **Depo:** `internal/db/store_token_calibration.go` — `token-calibrations.json`
+  singleton'ı (`model-resolutions.json` kalıbı). İki tür: `cli-overhead`
+  (pencereli ortalama, `ObserveTokenCalibration`, pencere 8 örnek) ve `prefix`
+  (kesin değer, `SetTokenCalibration`). Anahtarlar `CLIOverheadCalibrationKey(provider,
+  cliVersion, catalogFingerprint)` ve `PrefixCalibrationKey(provider, model,
+  prefixFingerprint)`.
+- **Parmak izi:** `internal/conversation/fingerprint.go` — `CatalogFingerprint`
+  (isim sırasına göre name+desc+schema, çerçeveli SHA-256/16 hex) ve
+  `PrefixFingerprint(model, system, defs)`.
+- **Ölçüm kaynağı:** `providers.Response.FirstCallPromptTokens` — claude-cli stream'inde
+  **ilk** assistant mesajının `input+cache_read+cache_creation` toplamı, yani prompt tam
+  gönderildiği haliyle (tool-loop büyütmeden). `result` zarfının kümülatif usage'ı
+  `num_turns`'a bölünerek elde edilen ortalama artık öğrenme için kullanılmıyor (tek
+  çağrılı turda kümülatif == tekil, o kabul edilir).
+- **Öğrenme:** `internal/api/cli_overhead_learn.go` — `persistAgentReply` içinde
+  `learnCLIOverhead(estimated, resp)`: `ek yük = ölçülen ilk çağrı − (Prepare.ContextTokens
+  + contextOverheadTokens)`; fold / native compaction / fold-failed turlarda tahmin
+  karşılaştırılabilir olmadığından atlanır. `projectedCLIOverhead` öğrenilmiş değer varsa
+  onu, yoksa `PredictCLIOverhead` referansını döner (`predictedSource`
+  `measured|reference`, `predictedSamples`).
+- **Kesin prefix:** `internal/api/prefix_calibration.go` — `exactPrefixTokens` yalnız
+  tur yolunda (`contextOverheadTokens` → `systemFillersOpts(measurePrefix=true)`) cache
+  miss'te sayar (8 sn timeout, başarısızlıkta 10 dk geri çekilme); panel yolları sadece
+  cache okur. `applyPrefixCalibration` system/skills/lazy-tools/tools kovalarını kesin
+  toplama oranlı ölçekler (`calibrated: true`); `session_context` önizlemesi
+  `prefixAccurate` döner. Yalnız `TokenCounter` uygulayan sağlayıcılar (anthropic).
+- **Kapı etkisi:** `systemFillers` artık claude-cli ajanlarında `cli-harness` kovası
+  taşıyor (öğrenilmişse ölçülen ortalama, değilse referans taban) → context meter ve fold
+  kapısı **gerçek** ayak izini bütçeler; daha önce kapı CLI harness'ını hiç saymıyordu.
+- **UI:** `SessionContextUsage` kalibre kovalarda `~` öneki düşer (tooltip: kesin sayım);
+  `SessionContextModal`/`AgentContextModal` "Ölçülmüş taban (CLI · N tur)" etiketi;
+  palette `cli-harness` (rose).
+- **Testler:** `db/store_token_calibration_test`, `conversation/fingerprint_test`,
+  `providers/claudecli_firstcall_test`, `api/cli_overhead_learn_test`,
+  `api/prefix_calibration_test`.
 
 ## GPT-6 Astra desteği (2026-09-07) ✅
 
