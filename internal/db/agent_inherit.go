@@ -74,6 +74,15 @@ var inheritableFields = []inheritableField{
 			}
 		},
 		func(a, b *Agent) bool { return a.NativeWebSearchEnabled() == b.NativeWebSearchEnabled() }},
+	{"nativeShell",
+		func(d, s *Agent) {
+			d.NativeShell = nil
+			if s.NativeShell != nil {
+				v := *s.NativeShell
+				d.NativeShell = &v
+			}
+		},
+		func(a, b *Agent) bool { return a.NativeShellEnabled() == b.NativeShellEnabled() }},
 	{"permissionMode",
 		func(d, s *Agent) { d.PermissionMode = s.PermissionMode },
 		func(a, b *Agent) bool { return a.PermissionMode == b.PermissionMode }},

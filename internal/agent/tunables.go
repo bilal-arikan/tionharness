@@ -148,6 +148,10 @@ type Tunables struct {
 	// full menu is ~36k tokens per session, the worker menu ~11k (_Docs/17). On by
 	// default.
 	cliToolAllowlist bool
+	// cliNativeSubagents keeps claude-cli's own Agent launcher on the menu for the
+	// read-only research types (Explore/Plan); their transcript is folded into the
+	// trace. On by default.
+	cliNativeSubagents bool
 	// auxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
 	// compaction, lessons, insight, recipe optimizer, stall judge) on a configured
 	// first-party anthropic API instance instead of the calling agent's CLI, so a
@@ -348,8 +352,9 @@ func NewTunables() *Tunables {
 		lessonReflect: true,
 		// claude-cli built-in tool allowlist + auxiliary native routing on by
 		// default: both are pure prefix-size levers (_Docs/17, 2026-09-03).
-		cliToolAllowlist: true,
-		auxNativeRouting: true,
+		cliToolAllowlist:   true,
+		cliNativeSubagents: true,
+		auxNativeRouting:   true,
 		// Autonomous turns (no human in the loop) re-confine fs/shell to the working
 		// dir by default — the safety brake for the otherwise-unconfined tools.
 		autonomousConfine: true,
@@ -448,6 +453,22 @@ func (t *Tunables) ClaudeCLIToolAllowlist() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.cliToolAllowlist
+}
+
+// SetClaudeCLINativeSubagents toggles claude-cli's native Agent launcher for the
+// read-only research types (Explore/Plan). See climcp.WriteConfig.
+func (t *Tunables) SetClaudeCLINativeSubagents(enabled bool) {
+	t.mu.Lock()
+	t.cliNativeSubagents = enabled
+	t.mu.Unlock()
+}
+
+// ClaudeCLINativeSubagents reports whether claude-cli's native research
+// subagents (Explore/Plan) stay on the menu.
+func (t *Tunables) ClaudeCLINativeSubagents() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.cliNativeSubagents
 }
 
 // SetAuxNativeRouting toggles running auxiliary system-agent calls on a

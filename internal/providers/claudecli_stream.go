@@ -95,8 +95,9 @@ type cliStreamParser struct {
 	onEvent        func(TraceStep)
 	onCompaction   *cliCompactionEmitter
 	callbackMu     sync.Mutex
-	toolIdx        map[string]int // tool_use id → index in resp.Trace
-	emitted        map[int]bool   // trace index → already delivered via onEvent
+	toolIdx        map[string]int    // tool_use id → index in resp.Trace
+	subToolIdx     map[string]subRef // nested (subagent) tool_use id → parent step + sub index
+	emitted        map[int]bool      // trace index → already delivered via onEvent
 	pending        strings.Builder
 	finalText      string
 	sawResult      bool
@@ -186,6 +187,7 @@ func newCLIParser(model string, onEvent func(TraceStep)) *cliStreamParser {
 		resp:       &Response{Model: model},
 		onEvent:    onEvent,
 		toolIdx:    map[string]int{},
+		subToolIdx: map[string]subRef{},
 		emitted:    map[int]bool{},
 		toolStart:  map[string]time.Time{},
 		notedBlock: map[string]bool{},
@@ -553,6 +555,13 @@ func (p *cliStreamParser) feed(line string) {
 			p.rateLimitMsg = describeRateLimit(rl)
 		}
 	case "assistant":
+		// A CLI-native subagent's events fold into the Agent step that launched
+		// it (claudecli_subagent.go) instead of the main trace: its text is not the
+		// reply and its tool calls belong under the delegation card.
+		if parent, ok := p.subagentParent(&ev); ok {
+			p.feedSubagentAssistant(parent, &ev)
+			return
+		}
 		p.sawModelTurn = true
 		if ev.Message == nil {
 			return
@@ -568,6 +577,15 @@ func (p *cliStreamParser) feed(line string) {
 			p.resp.Model = ev.Message.Model
 		}
 		if ev.Message.Usage != nil {
+			// The first assistant message's usage is the prompt exactly as sent:
+			// nothing this turn has grown it yet. Later messages (tool-loop
+			// round-trips) carry a larger prompt, so only the first is kept.
+			if p.resp.FirstCallPromptTokens == 0 {
+				u := ev.Message.Usage
+				if first := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens; first > 0 {
+					p.resp.FirstCallPromptTokens = first
+				}
+			}
 			p.resp.Usage.OutputTokens += ev.Message.Usage.OutputTokens
 			if ev.Message.Usage.InputTokens > p.resp.Usage.InputTokens {
 				p.resp.Usage.InputTokens = ev.Message.Usage.InputTokens
@@ -640,6 +658,11 @@ func (p *cliStreamParser) feed(line string) {
 		}
 		for _, b := range ev.Message.Content {
 			if b.Type != "tool_result" {
+				continue
+			}
+			// Nested (subagent) tool results are keyed by their own tool_use id, so
+			// they resolve regardless of which parent tag the event carries.
+			if p.feedSubagentToolResult(b) {
 				continue
 			}
 			if i, ok := p.toolIdx[b.ToolUseID]; ok {

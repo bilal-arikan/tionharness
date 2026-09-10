@@ -312,6 +312,10 @@ func (t *toolLoopTurn) runPlain() (*providers.Response, []TurnStep, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// A CLI-native checklist (claude TodoWrite, codex update_plan) reaches the
+	// progress file through the trace, the way a bridged todo_write call reaches
+	// it through the Interaction server.
+	t.r.mirrorNativeTodos(t.ctx, resp.Trace)
 	return resp, append(t.steps, steps...), nil
 }
 
@@ -350,9 +354,12 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 	// Built-in tool allowlist (`--tools`): only when the bridge is wired — without
 	// an Interaction endpoint the natives ARE the agent's whole tool surface, so the
 	// menu is left untouched (the suppression list alone applies, as before).
+	// Native subagent launcher (Explore/Plan) rides only bridged turns: the
+	// suppression list above scopes it and the stream parser folds its transcript.
+	t.req.CLINativeSubagents = t.inter.URL != "" && t.r.tun.ClaudeCLINativeSubagents()
 	if t.inter.URL != "" && t.r.tun.ClaudeCLIToolAllowlist() {
 		t.req.CLIRestrictNativeTools = true
-		t.req.CLINativeTools = climcp.NativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled())
+		t.req.CLINativeTools = climcp.NativeToolAllowlist(t.agent, t.inter, t.agent.PermissionMode, t.r.tun.ShellEnabled(), t.req.CLINativeSubagents)
 	}
 	if path == "" && len(disallowed) == 0 {
 		return noop

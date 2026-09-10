@@ -12,14 +12,23 @@ interface Props {
   onOpenArtifact?: (id: string) => void
 }
 
-// subInput is the parsed run_subagent call input (target + task) used for the
-// collapsed header summary.
+// subInput is the parsed delegation call input (target + task) used for the
+// collapsed header summary. run_subagent carries {target, task}; a CLI-native
+// launch (claude-cli Agent, folded from the stream) carries
+// {subagent_type, description, prompt} — the same two slots, other names.
 function subInput(input: unknown): { target: string; task: string } {
   if (input && typeof input === 'object') {
     const o = input as Record<string, unknown>
+    const str = (...keys: string[]) => {
+      for (const k of keys) {
+        const v = o[k]
+        if (typeof v === 'string' && v) return v
+      }
+      return ''
+    }
     return {
-      target: typeof o.target === 'string' ? o.target : '',
-      task: typeof o.task === 'string' ? o.task : '',
+      target: str('target', 'subagent_type'),
+      task: str('task', 'description', 'prompt'),
     }
   }
   return { target: '', task: '' }

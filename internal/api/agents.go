@@ -104,6 +104,9 @@ type createAgentReq struct {
 	// db.Agent.NativeWebSearch). Pointer, and omitting it stores nil, which means
 	// ENABLED — new agents can search the web unless the caller sends false.
 	NativeWebSearch *bool `json:"nativeWebSearch"`
+	// NativeShell opts a claude-cli agent into the CLI's own shell family next to
+	// the bridged one (see db.Agent.NativeShell). Omitted stores nil = off.
+	NativeShell *bool `json:"nativeShell"`
 	// MCPEnabled gates tool access. Pointer so we can tell "omitted" (nil →
 	// default on) apart from an explicit false (opt-out). New agents get tools
 	// by default.
@@ -205,6 +208,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
 		NativeWebSearch:     req.NativeWebSearch,
+		NativeShell:         req.NativeShell,
 		PermissionMode:      req.PermissionMode,
 		MCPEnabled:          mcpEnabled,
 		CoordinatorMode:     req.CoordinatorMode,
@@ -350,6 +354,7 @@ type updateAgentReq struct {
 	// NativeWebSearch toggles the provider's own web search. Pointer so omitting
 	// it leaves the stored value alone and an explicit false turns it off.
 	NativeWebSearch *bool     `json:"nativeWebSearch"`
+	NativeShell     *bool     `json:"nativeShell"`
 	Avatar          *string   `json:"avatar"`
 	Color           *string   `json:"color"`
 	Skills          *[]string `json:"skills"`
@@ -450,6 +455,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
 		NativeWebSearch:     req.NativeWebSearch,
+		NativeShell:         req.NativeShell,
 		PermissionMode:      req.PermissionMode,
 		Avatar:              req.Avatar,
 		Color:               req.Color,

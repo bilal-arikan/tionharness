@@ -268,8 +268,15 @@ type Request struct {
 	// providers and codex ignore it.
 	CLIRestrictNativeTools bool
 	CLINativeTools         []string
-	cliCompaction          *cliCompactionEmitter
-	forceCLICompact        bool
+	// CLINativeSubagents, when set, tells claude-cli that its own Agent launcher
+	// is on the menu for read-only research (Explore/Plan): the subprocess gets a
+	// spawn depth of 1 and forwards subagent text so the stream carries the whole
+	// nested transcript (parent_tool_use_id), which the parser folds into the
+	// launching tool step. The system note is worded for that menu. HTTP providers
+	// and codex ignore it.
+	CLINativeSubagents bool
+	cliCompaction      *cliCompactionEmitter
+	forceCLICompact    bool
 }
 
 type CLICompactionPhase string
@@ -338,6 +345,11 @@ type TraceStep struct {
 	Input   json.RawMessage // tool input
 	Output  string          // tool result
 	IsError bool            // tool failed
+	// SubSteps is the nested trace of a "tool" step that launched a CLI-native
+	// subagent (claude-cli Agent): every event the stream tagged with this step's
+	// tool_use id as parent_tool_use_id, in arrival order. The agent layer renders
+	// such a step as a collapsible subagent card. Empty for ordinary tool steps.
+	SubSteps []TraceStep
 	// DurMs is the wall-clock latency of a "tool" step, measured by a provider that
 	// runs the loop internally (claude-cli: time between seeing the tool_use event
 	// and its tool_result on the live stream). 0 when unknown (native-loop steps,
@@ -392,6 +404,14 @@ type Response struct {
 	// num_turns), because the CLI reports Usage CUMULATIVELY across those steps — so
 	// Usage divided by ProviderCalls recovers the per-call (single-pass) token cost.
 	ProviderCalls int
+	// FirstCallPromptTokens is the FULL prompt size (input + cache read + cache
+	// write) of the FIRST model API round-trip behind this Response — i.e. the
+	// context exactly as the caller composed it, before any in-turn tool result
+	// grew it. Only CLI-wrapper providers that stream per-call usage set it
+	// (claude-cli); 0 elsewhere. It is the ground truth the token-calibration
+	// learner compares the pre-send estimate against, which the cumulative Usage
+	// divided by ProviderCalls only approximates.
+	FirstCallPromptTokens int
 	// RawContent is the provider-native content-block array of this response,
 	// verbatim (anthropic only; empty elsewhere). The native tool loop echoes it
 	// back on the assistant turn (Message.RawContent) so server-side blocks —

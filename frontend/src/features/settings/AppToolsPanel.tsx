@@ -82,6 +82,12 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('claudeCliToolAllowlist', v)}
       />
       <Toggle
+        label="claude-cli yerleşik araştırma alt-ajanları (Agent: Explore/Plan)"
+        hint="Açık (varsayılan): Claude Code'un kendi Agent aracı yalnız salt-okuma araştırma tipleri (Explore, Plan) için menüde kalır; general-purpose ve diğer tipler Agent(<tip>) kurallarıyla engellenir, derinlik 1 ile sınırlanır. Alt-ajan süreç içinde koşar (yeni claude -p başlamaz, köprü gidiş-dönüşü yok) ve tüm transkripti (araç çağrıları + metin) ana çağrının altına katlanmış alt-ajan kartı olarak izlenir. Dosya yazan veya belirli bir TionHarness ajanına giden delegasyon yine run_subagent'tan geçer. Kapalı: Agent ailesi tamamen bastırılır."
+        checked={draft.claudeCliNativeSubagents}
+        onChange={(v) => set('claudeCliNativeSubagents', v)}
+      />
+      <Toggle
         label="Yardımcı çağrıları native Anthropic API'den koştur"
         hint="Açık (varsayılan): başlık, özet, compaction katlaması, ders/içgörü çıkarma ve koordinatör stall yargıcı gibi ARAÇSIZ sistem ajanı çağrıları, çağıran ajan claude-cli/codex-cli'daysa ve bir Anthropic API anahtarı tanımlıysa o anahtarla native API'den (haiku sınıfı, ~1-2k token) yapılır; aksi hâlde eskisi gibi CLI'da kalır (her çağrı ~36k token'lık Claude Code tabanını taşır). Not: bu çağrılar CLI aboneliğinden değil API anahtarından faturalanır."
         checked={draft.auxNativeRouting}

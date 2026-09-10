@@ -114,6 +114,9 @@ export interface AppSettings {
   claudeSysPromptFile: boolean
   // `--tools` allowlist of claude-cli built-ins per bridged turn (prompt-size lever).
   claudeCliToolAllowlist: boolean
+  // claude-cli's native Explore/Plan subagents stay on the menu (transcript folded
+  // into the trace under the launching Agent call).
+  claudeCliNativeSubagents: boolean
   // Auxiliary system-agent calls (title/summary/compaction/lessons/judge) run on a
   // configured anthropic API instance instead of the caller's CLI.
   auxNativeRouting: boolean

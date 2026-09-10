@@ -130,12 +130,9 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 	total := sysTok + skillsTok + toolTok + dynTok
 	// Predicted-only CLI overhead (empty sessionID → no measured turn): count the
 	// eager (core-tier) bridged tools that carry a full schema up front.
-	eagerTools := 0
-	for _, d := range defs {
-		if interactionTier(d.Name) == "core" {
-			eagerTools++
-		}
-	}
+	eagerTools := countEagerTools(defs)
+	cliOver := computeCLIOverhead(ctx, wsp, agent.Provider, "", total, eagerTools)
+	s.applyLearnedCLIOverhead(ctx, wsp, agent, cliOver)
 	writeJSON(w, http.StatusOK, agentContextPreview{
 		Provider:      agent.Provider,
 		System:        system,
@@ -148,7 +145,7 @@ func (s *Server) handleAgentContext(w http.ResponseWriter, r *http.Request) {
 		Dynamic:       dynamic,
 		DynamicTokens: dynTok,
 		TotalTokens:   total,
-		CLIOverhead:   computeCLIOverhead(ctx, wsp, agent.Provider, "", total, eagerTools),
+		CLIOverhead:   cliOver,
 	})
 }
 

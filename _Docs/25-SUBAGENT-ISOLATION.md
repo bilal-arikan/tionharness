@@ -12,6 +12,14 @@
 > (`majority`, `reviewer-selects` — birini kazanan ilan edip yalnız onun yanıtını
 > basar, TSK835). Bütçe/derinlik/döngü guard'ları tek yerde (`runAgent`); her
 > çakışma öncelik kuralı değil **hata**dır.
+>
+> **Not (2026-09-10):** claude-cli'da Claude Code'un **kendi** `Agent` aracı yalnız
+> salt-okuma araştırma tipleri (Explore/Plan) için menüde (`Settings.
+> ClaudeCLINativeSubagents`, varsayılan açık; diğer tipler `Agent(<tip>)` scoped
+> deny, derinlik 1). Stream parser alt-ajanın `parent_tool_use_id`'li olaylarını
+> ana çağrının `SubSteps`'ine katlar ve aynı `StepSubagent` kartı olarak gösterir;
+> yazan / belirli TionHarness ajanına giden delegasyon `run_subagent`'ta kalır.
+> Codex'in `spawn_agent`'ı `codex exec`'te sonuç döndüremediği için kapalı.
 
 ## Amaç
 

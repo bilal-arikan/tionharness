@@ -282,6 +282,13 @@ type Settings struct {
 	// full menu is ~36k tokens per session, the allowlisted worker menu ~11k
 	// (measured on 2.1.259, _Docs/17). Default on.
 	ClaudeCLIToolAllowlist bool `json:"claudeCliToolAllowlist"`
+	// ClaudeCLINativeSubagents keeps claude-cli's own Agent launcher on the menu
+	// for the read-only research types (Explore/Plan). They run inside the CLI
+	// process (no fresh CLI start, no bridge round-trip) and their transcript is
+	// folded into the trace under the launching call; every other native type
+	// stays denied and writing delegation still goes through run_subagent.
+	// Default on.
+	ClaudeCLINativeSubagents bool `json:"claudeCliNativeSubagents"`
 	// AuxNativeRouting runs tool-less auxiliary system-agent calls (title, summary,
 	// compaction fold, lessons, insight, recipe optimizer, stall judge) on a
 	// configured first-party anthropic API instance when the calling agent is on a
@@ -490,7 +497,10 @@ func Default() Settings {
 		// Built-in tool allowlist + auxiliary native routing on by default: pure
 		// prefix-size levers (_Docs/17, 2026-09-03).
 		ClaudeCLIToolAllowlist: true,
-		AuxNativeRouting:       true,
+		// Native research subagents (Explore/Plan) on by default: observable via
+		// the folded transcript and cheaper than a fresh CLI start (2026-09-10).
+		ClaudeCLINativeSubagents: true,
+		AuxNativeRouting:         true,
 
 		// System prompt handed to claude-cli via a temp file by default
 		// (--append-system-prompt-file): a large appended prompt (skills + lazy tool
@@ -639,7 +649,10 @@ type DTO struct {
 	// calls prefer a configured anthropic API instance over the caller's CLI
 	// (default on, no-op without a key). _Docs/17, _Docs/74.
 	ClaudeCLIToolAllowlist bool `json:"claudeCliToolAllowlist"`
-	AuxNativeRouting       bool `json:"auxNativeRouting"`
+	// ClaudeCLINativeSubagents: claude-cli's native Explore/Plan subagents stay on
+	// the menu (default on; transcript folded into the trace).
+	ClaudeCLINativeSubagents bool `json:"claudeCliNativeSubagents"`
+	AuxNativeRouting         bool `json:"auxNativeRouting"`
 	// ClaudeSysPromptFile: true (default) routes the appended system prompt through a
 	// temp file (--append-system-prompt-file) to survive the Windows command-line
 	// limit; false hands it inline via --append-system-prompt. _Docs/17.
@@ -755,16 +768,17 @@ func (s Settings) ToDTO() DTO {
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
 
-		EnableShell:             s.EnableShell,
-		EnableCLIHooks:          s.EnableCLIHooks,
-		EnableCodeMode:          s.EnableCodeMode,
-		ClaudeResume:            s.ClaudeResume,
-		ClaudePersistentSession: s.ClaudePersistentSession,
-		ClaudeCLIToolAllowlist:  s.ClaudeCLIToolAllowlist,
-		AuxNativeRouting:        s.AuxNativeRouting,
-		ClaudeSysPromptFile:     s.ClaudeSysPromptFile,
-		DelegationMaxDepth:      s.DelegationMaxDepth,
-		DelegationMaxCalls:      s.DelegationMaxCalls,
+		EnableShell:              s.EnableShell,
+		EnableCLIHooks:           s.EnableCLIHooks,
+		EnableCodeMode:           s.EnableCodeMode,
+		ClaudeResume:             s.ClaudeResume,
+		ClaudePersistentSession:  s.ClaudePersistentSession,
+		ClaudeCLIToolAllowlist:   s.ClaudeCLIToolAllowlist,
+		ClaudeCLINativeSubagents: s.ClaudeCLINativeSubagents,
+		AuxNativeRouting:         s.AuxNativeRouting,
+		ClaudeSysPromptFile:      s.ClaudeSysPromptFile,
+		DelegationMaxDepth:       s.DelegationMaxDepth,
+		DelegationMaxCalls:       s.DelegationMaxCalls,
 
 		SpawnMaxConcurrent:     s.SpawnMaxConcurrent,
 		SpawnQueueMax:          s.SpawnQueueMax,
@@ -876,16 +890,17 @@ type Patch struct {
 
 	AutoTitleEnabled *bool `json:"autoTitleEnabled"`
 
-	EnableShell             *bool `json:"enableShell"`
-	EnableCLIHooks          *bool `json:"enableCliHooks"`
-	EnableCodeMode          *bool `json:"enableCodeMode"`
-	ClaudeResume            *bool `json:"claudeResume"`
-	ClaudePersistentSession *bool `json:"claudePersistentSession"`
-	ClaudeCLIToolAllowlist  *bool `json:"claudeCliToolAllowlist"`
-	AuxNativeRouting        *bool `json:"auxNativeRouting"`
-	ClaudeSysPromptFile     *bool `json:"claudeSysPromptFile"`
-	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
-	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
+	EnableShell              *bool `json:"enableShell"`
+	EnableCLIHooks           *bool `json:"enableCliHooks"`
+	EnableCodeMode           *bool `json:"enableCodeMode"`
+	ClaudeResume             *bool `json:"claudeResume"`
+	ClaudePersistentSession  *bool `json:"claudePersistentSession"`
+	ClaudeCLIToolAllowlist   *bool `json:"claudeCliToolAllowlist"`
+	ClaudeCLINativeSubagents *bool `json:"claudeCliNativeSubagents"`
+	AuxNativeRouting         *bool `json:"auxNativeRouting"`
+	ClaudeSysPromptFile      *bool `json:"claudeSysPromptFile"`
+	DelegationMaxDepth       *int  `json:"delegationMaxDepth"`
+	DelegationMaxCalls       *int  `json:"delegationMaxCalls"`
 
 	SpawnMaxConcurrent     *int `json:"spawnMaxConcurrent"`
 	SpawnQueueMax          *int `json:"spawnQueueMax"`

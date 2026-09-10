@@ -39,6 +39,11 @@ type Host interface {
 	ShellEnabled() bool
 	// CLIHooksEnabled reports whether workspace hooks are passed to the CLI.
 	CLIHooksEnabled() bool
+	// NativeSubagentsEnabled reports whether claude-cli's own Agent launcher may
+	// stay on the menu for read-only research (Explore/Plan). Its transcript is
+	// folded into the trace by the stream parser, so it is observable; every
+	// other native subagent type stays denied.
+	NativeSubagentsEnabled() bool
 	Logger() *slog.Logger
 	// EmitDebug records a diagnostic event on the turn's session journal.
 	EmitDebug(ctx context.Context, ev db.DebugEvent)
@@ -254,14 +259,15 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 		// lives to fire), so they are suppressed unconditionally — keeping them would
 		// only mislead, not help.
 		disallowed = append(disallowed, "AskUserQuestion", "ScheduleWakeup")
-		// The checklist family is the subtle one: newer Claude Code CLIs renamed the
-		// old TodoWrite into a TaskCreate/TaskUpdate/TaskList/TaskGet family. Whichever
-		// the CLI version exposes, it SHADOWS TionHarness's bridged todo_write — the model
-		// reaches for the native tool, so nothing reaches the progress sink and the
-		// progress card stays empty. Suppress the whole family (disallowing a tool the
-		// CLI doesn't have is harmless) so todo_write is the only checklist path — but
-		// only while todo_write is actually advertised (see the WS17 invariant above).
-		suppressIfBridged("todo_write", todoFamily...)
+		// The checklist family: the native TodoWrite is ALLOWED — its tool_use carries
+		// the list in the same {"todos":[...]} shape as todo_write, so the trace
+		// promotes it to a checklist card and mirrors it into the progress sink
+		// (agent.mirrorNativeTodos); it no longer shadows anything. The newer
+		// TaskCreate/TaskUpdate/TaskList/TaskGet family has no such mirror (its state
+		// lives inside the CLI), so it is suppressed while todo_write is advertised
+		// (see the WS17 invariant above); disallowing a tool the CLI doesn't have is
+		// harmless.
+		suppressIfBridged("todo_write", taskChecklistFamily...)
 		// Skill: the CLI's native skill tool only sees its own <CLAUDE_CONFIG_DIR>/skills
 		// dir, never TionHarness's workspace tier (<workspace>/skills) or global tier
 		// (~/.tionharness/skills) — so a weak model reaching for it fails with "Unknown
@@ -270,16 +276,25 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 		// is advertised, else the native Skill stays as the (CLI-native-only) fallback.
 		suppressIfBridged("use_skill", "Skill")
 		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
-		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —
-		// invisible to TionHarness, so it bypasses the bridged run_subagent (no `subagent`
-		// trace, no TionHarness agent/profile target, no budget accounting). When
-		// delegation is enabled run_subagent is the gated replacement; when it is
-		// disabled the agent should not delegate at all. Either way the native launcher
-		// must be suppressed — same shadowing class as TodoWrite/Skill above.
-		// AgentOutputTool is the reader alias newer CLIs expose for a launched
-		// subagent's output; with the launcher gone it has nothing to read, but
-		// suppressing it too keeps the whole native delegation family off the menu.
-		disallowed = append(disallowed, "Task", "Agent", "AgentOutputTool")
+		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process.
+		// Since the stream parser folds a child's events (parent_tool_use_id) into the
+		// launching step it is OBSERVABLE, so the read-only research types may stay
+		// when the workspace opts in: Explore/Plan run in-process (no fresh CLI start,
+		// no bridge round-trip) and are the cheapest way to gather facts. Everything
+		// that writes or targets a TionHarness agent still goes through run_subagent,
+		// so the built-in general-purpose/claude launchers are denied with SCOPED rules
+		// (Agent(<name>) leaves the tool available and denies only those calls). The
+		// old `Task` launcher name is always off (no scoped form), and so is
+		// AgentOutputTool: -p mode waits for a subagent and hands its result back as
+		// the tool_result, so the reader alias has nothing extra to read.
+		// With the opt-in off the whole family is suppressed as before — same
+		// shadowing class as Skill above.
+		if h.NativeSubagentsEnabled() {
+			disallowed = append(disallowed, "Task", "AgentOutputTool")
+			disallowed = append(disallowed, deniedNativeSubagentTypes...)
+		} else {
+			disallowed = append(disallowed, "Task", "Agent", "AgentOutputTool")
+		}
 		// Peer messaging: claude-cli 2.x ships a native `SendMessage` tool (sibling of
 		// Task/Agent) that talks to the CLI's OWN in-process subagents — it knows
 		// nothing about TionHarness agents, so it fails with "agent not found" even for a
@@ -291,8 +306,12 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
 		// shell entirely (TionHarness's shell is not bridged when disabled). With the
 		// bridge present, all commands route through TionHarness's own sandboxed shells
-		// (bridged Bash-preferred, plus PowerShell for Windows-native tasks).
-		if h.ShellEnabled() {
+		// (bridged Bash-preferred, plus PowerShell for Windows-native tasks) — unless
+		// the agent opted into its native shell (Agent.NativeShell): every native Bash
+		// call still lands in the trace with its command and output, so the toggle
+		// trades TionHarness's sandbox/background-shell management for the CLI's
+		// in-process shell (no bridge round-trip, hooks such as rtk apply).
+		if h.ShellEnabled() && !ag.NativeShellEnabled() {
 			// Also suppress the native background-shell siblings (BashOutput/KillShell,
 			// renamed TaskOutput/TaskStop in newer CLIs): they only operate on shells the
 			// native Bash spawned, which is now gone, so they are inert — but suppressing
@@ -338,9 +357,22 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 // Native tool families the bridge shadows; shared by WriteConfig (suppression)
 // and NativeToolAllowlist (the positive mirror) so the two can never disagree.
 var (
-	todoFamily  = []string{"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"}
-	shellFamily = []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"}
-	planFamily  = []string{"EnterPlanMode", "ExitPlanMode"}
+	// taskChecklistFamily is the newer CLI checklist family that has NO mirror
+	// into TionHarness's progress sink; todoFamily adds the mirrored TodoWrite
+	// and is the full native fallback kept when todo_write is not advertised.
+	taskChecklistFamily = []string{"TaskCreate", "TaskUpdate", "TaskList", "TaskGet"}
+	todoFamily          = append([]string{"TodoWrite"}, taskChecklistFamily...)
+	shellFamily         = []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"}
+	planFamily          = []string{"EnterPlanMode", "ExitPlanMode"}
+	// deniedNativeSubagentTypes are the scoped Agent(<type>) deny rules applied
+	// when the native launcher stays on the menu: only the read-only research
+	// types (Explore, Plan) remain callable. Custom agents a CLI config dir might
+	// define are not enumerable here; TionHarness runs the CLI in an isolated
+	// CLAUDE_CONFIG_DIR, and the spawn depth of 1 (providers.nativeSubagentEnv)
+	// keeps any such child from fanning out further.
+	deniedNativeSubagentTypes = []string{
+		"Agent(general-purpose)", "Agent(claude)", "Agent(statusline-setup)", "Agent(claude-code-guide)",
+	}
 )
 
 // advertisedSet is CoreToolNames ∪ ExtendedToolNames as a lookup set.

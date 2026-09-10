@@ -38,6 +38,11 @@ func applyInheritablePatch(a *Agent, p AgentProfilePatch, mark func(key string))
 		a.NativeWebSearch = &v
 		mark("nativeWebSearch")
 	}
+	if p.NativeShell != nil {
+		v := *p.NativeShell
+		a.NativeShell = &v
+		mark("nativeShell")
+	}
 	if p.PermissionMode != nil {
 		a.PermissionMode = *p.PermissionMode
 		mark("permissionMode")

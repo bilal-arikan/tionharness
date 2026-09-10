@@ -49,7 +49,7 @@ func TestCodexConfigFull(t *testing.T) {
 	cfg := codexConfig{
 		DeveloperInstructions:   "Stay on task.",
 		ReasoningEffort:         "high",
-		DisableWebSearch:        true,
+		WebSearchMode:           "disabled",
 		DisableUpdatePlan:       true,
 		DisableRequestUserInput: true,
 		Servers: map[string]CLIMCPServer{
@@ -73,9 +73,9 @@ func TestCodexConfigFull(t *testing.T) {
 
 	want := `developer_instructions = """Stay on task."""
 model_reasoning_effort = "high"
+web_search = "disabled"
 
 [tools]
-web_search = false
 update_plan = { enabled = false }
 experimental_request_user_input = { enabled = false }
 
@@ -154,10 +154,14 @@ func TestCodexConfigUpdatePlanIsInlineTableNotBool(t *testing.T) {
 	if strings.Contains(got, "update_plan = false") {
 		t.Fatalf("update_plan must never render as a bare bool, got %q", got)
 	}
-	// web_search, by contrast, does accept a bare bool.
-	web := renderCodexConfig(codexConfig{DisableWebSearch: true})
-	if !strings.Contains(web, "web_search = false\n") {
-		t.Fatalf("web_search must render as a bare bool, got %q", web)
+	// web_search is a TOP-LEVEL mode string, never a [tools] bool (codex parses
+	// the bool form and discards it).
+	web := renderCodexConfig(codexConfig{WebSearchMode: "disabled", DisableUpdatePlan: true})
+	if !strings.HasPrefix(web, "web_search = \"disabled\"\n") {
+		t.Fatalf("web_search must render as a top-level mode string before any section, got %q", web)
+	}
+	if strings.Contains(web, "web_search = false") {
+		t.Fatalf("web_search must never render as a bare bool, got %q", web)
 	}
 }
 
@@ -173,23 +177,26 @@ func TestCodexConfigNativeWebSearchRequest(t *testing.T) {
 	tests := []struct {
 		name            string
 		nativeWebSearch bool
-		wantDisabled    bool
+		want            string
 	}{
-		{name: "enabled omits strict config key", nativeWebSearch: true},
-		{name: "disabled renders false", nativeWebSearch: false, wantDisabled: true},
+		// Both values verified accepted by codex 0.153.3 under --strict-config.
+		{name: "enabled asks for live web access", nativeWebSearch: true, want: `web_search = "live"` + "\n"},
+		{name: "disabled pins the disabled mode", nativeWebSearch: false, want: `web_search = "disabled"` + "\n"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := renderCodexConfig(c.buildConfig(Request{NativeWebSearch: tc.nativeWebSearch}))
-			if tc.wantDisabled {
-				if !strings.Contains(got, "web_search = false\n") {
-					t.Fatalf("disabled native web search must render false, got %q", got)
-				}
-				return
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("native web search %v must render %q, got %q", tc.nativeWebSearch, tc.want, got)
 			}
-			if strings.Contains(got, "web_search") {
-				t.Fatalf("enabled native web search must omit the strict config key, got %q", got)
+			if strings.Contains(got, "web_search = false") || strings.Contains(got, "web_search = true") {
+				t.Fatalf("web_search must never render as a bool, got %q", got)
+			}
+			// update_plan is allowed (mirrored into the progress sink), so the [tools]
+			// section must not switch it off.
+			if strings.Contains(got, "update_plan = { enabled = false }") {
+				t.Fatalf("update_plan must stay enabled on a chat turn, got %q", got)
 			}
 		})
 	}

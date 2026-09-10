@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -135,6 +136,11 @@ type contextFiller struct {
 	Role   string `json:"role"`
 	Tokens int    `json:"tokens"`
 	Count  int    `json:"count"`
+	// Calibrated marks a prefix bucket whose Tokens were rescaled to the exact
+	// server-side count of the whole prefix (prefix_calibration.go) instead of
+	// the chars/token heuristic, and the CLI-harness bucket once it is learned
+	// from real turns rather than the reference constants.
+	Calibrated bool `json:"calibrated,omitempty"`
 }
 
 type sessionAgentStat struct {
@@ -550,13 +556,25 @@ func buildFillers(summary string, pending []db.Message, stepsFrom int) ([]contex
 // calls/results, which buildFillers accounts for separately from this bounded
 // recap — see hasWarmCLIThread.
 func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) []contextFiller {
+	return s.systemFillersOpts(ctx, wsp, session, history, multiAgent, false)
+}
+
+// systemFillersOpts is systemFillers with the prefix-count switch exposed:
+// measurePrefix true lets a cache MISS count the static prefix server-side now
+// (the turn path, one call per prefix change); false only reuses an existing
+// exact count (read-only panels must never block on a provider call).
+func (s *Server) systemFillersOpts(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent, measurePrefix bool) []contextFiller {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return nil
 	}
 
-	out := make([]contextFiller, 0, 5)
+	out := make([]contextFiller, 0, 6)
 	system := s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
+	// The whole prefix as shipped, before the catalog blocks are carved out for
+	// display: the exact-count fingerprint must cover exactly what the provider
+	// receives as the system field.
+	fullSystem := system
 
 	// Carve the two self-contained catalog blocks out of the prefix into their own
 	// buckets. Both are costs the user can act on INDEPENDENTLY of the prompt text
@@ -598,8 +616,40 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	// Tool schemas SHIPPED at turn start — the eager tier only. ToolCatalog (every
 	// allowed tool) was over-counting here by billing lazy tools for schemas that
 	// never leave the server; those are already covered by the catalog block above.
-	if cat := wsp.Runtime.ShippedToolCatalog(ctx, agentRow); len(cat) > 0 {
+	cat := wsp.Runtime.ShippedToolCatalog(ctx, agentRow)
+	if len(cat) > 0 {
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
+	}
+
+	// Exact prefix count (providers with a server-side counter): rescale the
+	// prefix buckets above to the real tokenizer's figure, so the meter and the
+	// fold gate stop estimating the largest fixed share of the context.
+	if counter, ok := s.tokenCounterFor(agentRow); ok {
+		if exact, ok := exactPrefixTokens(ctx, wsp.DB, counter, agentRow, fullSystem, cat, measurePrefix); ok {
+			out = applyPrefixCalibration(out, exact)
+		}
+	}
+
+	// CLI-wrapper harness (claude-cli): the CLI's own system prompt, built-in
+	// tools and MCP bridge ride every call but never appear in TionHarness's
+	// composed request. Learned from real turns per CLI version + tool catalog
+	// (cli_overhead_learn.go); the hand-measured reference is the floor before
+	// the first learned turn. Counted here so the gate budgets the true footprint.
+	if learnsCLIOverhead(agentRow.Provider) {
+		tokens, source, samples := s.projectedCLIOverhead(ctx, wsp, agentRow, countEagerTools(cat))
+		if tokens > 0 {
+			label := "CLI ek yükü (" + agentRow.Provider + ", referans)"
+			if source == cliOverheadSourceMeasured {
+				label = "CLI ek yükü (" + agentRow.Provider + ", ölçülmüş · " + strconv.Itoa(samples) + " tur)"
+			}
+			out = append(out, contextFiller{
+				Label:      label,
+				Role:       "cli-harness",
+				Tokens:     tokens,
+				Count:      1,
+				Calibrated: source == cliOverheadSourceMeasured,
+			})
+		}
 	}
 
 	// Recent tool activity recap (dynamic suffix): the compact "- Tool(arg) → result"
@@ -642,7 +692,7 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 // conversation.WithContextOverheadStepBase so a fold can drop the trace of the
 // messages it just summarized away instead of reporting a stale footprint.
 func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) (total, stepBase int, err error) {
-	for _, f := range s.systemFillers(ctx, wsp, session, history, multiAgent) {
+	for _, f := range s.systemFillersOpts(ctx, wsp, session, history, multiAgent, true) {
 		total += f.Tokens
 	}
 	stepBase = warmCLIStepBaseline(session, len(history))

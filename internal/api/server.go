@@ -310,6 +310,7 @@ func (s *Server) applySettings() {
 	s.tun.SetCodeMode(cur.EnableCodeMode)
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetClaudeCLIToolAllowlist(cur.ClaudeCLIToolAllowlist)
+	s.tun.SetClaudeCLINativeSubagents(cur.ClaudeCLINativeSubagents)
 	s.tun.SetAuxNativeRouting(cur.AuxNativeRouting)
 	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)

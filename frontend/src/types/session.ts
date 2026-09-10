@@ -276,6 +276,9 @@ export interface SessionContextPreview {
   // Exact prompt size counted by the provider's REAL tokenizer server-side
   // (?accurate=1, anthropic only). 0/absent = not requested or unsupported.
   accurateTokens?: number
+  // systemTokens/skillsTokens/toolTokens were rescaled to the exact server-side
+  // count of the static prefix cached under its fingerprint (no heuristic).
+  prefixAccurate?: boolean
   cache: CachePreview
   // Present only for CLI-wrapper providers (claude-cli): the gap
   // between TionHarness's segment estimate (totalTokens) and the real prompt the CLI
@@ -309,6 +312,11 @@ export interface CLIOverhead {
   workerCalls: number
   workerKind: string
   predictedOverhead: number
+  // Where predictedOverhead comes from: 'measured' = the learned mean of real
+  // turns for this CLI version + tool catalog (predictedSamples turns);
+  // 'reference' = the hand-measured constants (floor before the first turn).
+  predictedSource?: 'measured' | 'reference'
+  predictedSamples?: number
 }
 
 // Which segments of the next request are served from a warm prompt cache vs sent
@@ -334,6 +342,9 @@ interface ContextFiller {
   role: string
   tokens: number
   count: number
+  // Prefix buckets rescaled to an exact server-side count, or the CLI-harness
+  // bucket once learned from real turns (not the chars/token heuristic).
+  calibrated?: boolean
 }
 
 // An agent that took part in a session, with per-agent turn/token counts.

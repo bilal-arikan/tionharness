@@ -23,6 +23,12 @@ export interface ChatStreamDeps {
   messagesRef: RefObject<Message[]>
   // Live desktop-notification preference (read without re-binding callbacks).
   notifyEnabled: RefObject<boolean>
+  // Whether the transcript is on screen right now (the chat view is rendered).
+  // A ref, so flipping views never re-subscribes the stream. While it is false
+  // the live-bubble coalescer widens its window: nothing renders `messages`
+  // off the chat view, so 20Hz transcript churn only starves whatever screen
+  // IS mounted (an agent form's Save appearing to hang, for instance).
+  transcriptVisible?: RefObject<boolean>
   setMessages: Dispatch<SetStateAction<Message[]>>
   setError: (msg: string | null) => void
   selectSession: (id: string) => void

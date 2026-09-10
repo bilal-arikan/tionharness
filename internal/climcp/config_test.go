@@ -17,13 +17,14 @@ import (
 
 // fakeHost is the in-memory Host every test in this package uses.
 type fakeHost struct {
-	servers  []mcp.ServerConfig
-	gate     func(string) bool
-	gateErr  error
-	hooks    map[string][]db.Hook
-	shell    bool
-	cliHooks bool
-	debug    []db.DebugEvent
+	servers         []mcp.ServerConfig
+	gate            func(string) bool
+	gateErr         error
+	hooks           map[string][]db.Hook
+	shell           bool
+	cliHooks        bool
+	nativeSubagents bool
+	debug           []db.DebugEvent
 }
 
 func (f *fakeHost) EnabledServers(context.Context) ([]mcp.ServerConfig, error) { return f.servers, nil }
@@ -33,9 +34,10 @@ func (f *fakeHost) ServerGate(context.Context, db.Agent) (func(string) bool, err
 func (f *fakeHost) EnabledHooks(_ context.Context, event string) ([]db.Hook, error) {
 	return f.hooks[event], nil
 }
-func (f *fakeHost) ShellEnabled() bool    { return f.shell }
-func (f *fakeHost) CLIHooksEnabled() bool { return f.cliHooks }
-func (f *fakeHost) Logger() *slog.Logger  { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+func (f *fakeHost) ShellEnabled() bool           { return f.shell }
+func (f *fakeHost) CLIHooksEnabled() bool        { return f.cliHooks }
+func (f *fakeHost) NativeSubagentsEnabled() bool { return f.nativeSubagents }
+func (f *fakeHost) Logger() *slog.Logger         { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 func (f *fakeHost) EmitDebug(_ context.Context, ev db.DebugEvent) {
 	f.debug = append(f.debug, ev)
 }
@@ -113,13 +115,46 @@ func TestWriteConfigTwoTierInteraction(t *testing.T) {
 	}
 	// Bridged families are suppressed; plan mode stays (ask mode can answer it).
 	dis := toSet(res.Disallowed)
-	for _, w := range []string{"AskUserQuestion", "TodoWrite", "TaskCreate", "Skill", "Task", "Agent", "SendMessage", "Bash", "TaskStop"} {
+	for _, w := range []string{"AskUserQuestion", "TaskCreate", "Skill", "Task", "Agent", "SendMessage", "Bash", "TaskStop"} {
 		if !dis[w] {
 			t.Errorf("expected %q suppressed; got %v", w, res.Disallowed)
 		}
 	}
+	// TodoWrite is mirrored into the progress sink, so it is never suppressed.
+	if dis["TodoWrite"] {
+		t.Error("TodoWrite must stay available (mirrored native checklist)")
+	}
 	if dis["EnterPlanMode"] {
 		t.Error("ask mode must keep EnterPlanMode/ExitPlanMode")
+	}
+}
+
+// TestWriteConfigNativeSubagentsScopedDeny pins the opt-in shape of the native
+// Agent launcher: the tool itself stays available (no bare "Agent" rule) while
+// the non-research built-in types are denied with scoped Agent(<type>) rules;
+// the old Task launcher and the output reader stay off. A native-shell agent
+// likewise keeps the whole Bash family.
+func TestWriteConfigNativeSubagentsScopedDeny(t *testing.T) {
+	on := true
+	h := &fakeHost{shell: true, nativeSubagents: true}
+	res, err := WriteConfig(context.Background(), h, false, db.Agent{NativeShell: &on}, bridgedInter, "auto")
+	if err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	defer res.Cleanup()
+	dis := toSet(res.Disallowed)
+	if dis["Agent"] {
+		t.Errorf("native subagents on: bare Agent must not be suppressed; got %v", res.Disallowed)
+	}
+	for _, w := range []string{"Agent(general-purpose)", "Agent(claude)", "Task", "AgentOutputTool"} {
+		if !dis[w] {
+			t.Errorf("expected %q suppressed; got %v", w, res.Disallowed)
+		}
+	}
+	for _, w := range []string{"Bash", "BashOutput", "TaskOutput", "TaskStop"} {
+		if dis[w] {
+			t.Errorf("native shell agent: %q must not be suppressed; got %v", w, res.Disallowed)
+		}
 	}
 }
 

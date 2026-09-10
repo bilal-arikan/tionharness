@@ -239,6 +239,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyBool(&next.ClaudeResume, p.ClaudeResume)
 	applyBool(&next.ClaudePersistentSession, p.ClaudePersistentSession)
 	applyBool(&next.ClaudeCLIToolAllowlist, p.ClaudeCLIToolAllowlist)
+	applyBool(&next.ClaudeCLINativeSubagents, p.ClaudeCLINativeSubagents)
 	applyBool(&next.AuxNativeRouting, p.AuxNativeRouting)
 	applyBool(&next.ClaudeSysPromptFile, p.ClaudeSysPromptFile)
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)

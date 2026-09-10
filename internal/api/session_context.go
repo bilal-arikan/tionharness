@@ -60,7 +60,11 @@ type sessionContextPreview struct {
 	// Only populated on ?accurate=1 for providers implementing TokenCounter
 	// (anthropic); 0 otherwise. Lets the UI show heuristic-vs-real drift — the
 	// heuristic keeps driving compaction, so behaviour is unchanged.
-	AccurateTokens int          `json:"accurateTokens,omitempty"`
+	AccurateTokens int `json:"accurateTokens,omitempty"`
+	// PrefixAccurate is true when SystemTokens/SkillsTokens/ToolTokens were
+	// rescaled to the exact server-side count of the static prefix cached under
+	// its fingerprint (prefix_calibration.go); false when they are heuristic.
+	PrefixAccurate bool         `json:"prefixAccurate,omitempty"`
 	Cache          cachePreview `json:"cache"`
 	// CLIOverhead is set only for CLI-wrapper providers (claude-cli),
 	// where TotalTokens above under-reports the real billed input — see the type doc.
@@ -103,6 +107,11 @@ type cliOverheadPreview struct {
 	// once a real measurement exists (measured path leaves it as the projection for
 	// comparison).
 	PredictedOverhead int `json:"predictedOverhead"`
+	// PredictedSource says where PredictedOverhead comes from: "measured" (the
+	// learned mean of real turns for this CLI version + tool catalog, over
+	// PredictedSamples turns) or "reference" (the hand-measured constants).
+	PredictedSource  string `json:"predictedSource,omitempty"`
+	PredictedSamples int    `json:"predictedSamples,omitempty"`
 }
 
 // cachePreview tells the UI which segments of the next request are served from a
@@ -406,6 +415,16 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	skillsTok := conversation.EstimateText(skillsText)
 	dynTok := conversation.EstimateText(dynText)
 	toolTok := estimateToolCatalog(defs)
+	// Exact prefix count when one is cached for this very prefix (read-only
+	// panel: never counts on a miss). The fingerprint covers the FULL system
+	// field (before the skills carve-out) plus the shipped schemas.
+	prefixAccurate := false
+	if counter, ok := s.tokenCounterFor(agent); ok {
+		if exact, ok := exactPrefixTokens(ctx, wsp.DB, counter, agent, req.System, defs, false); ok {
+			scaleToExact(exact, &sysTok, &skillsTok, &toolTok)
+			prefixAccurate = true
+		}
+	}
 
 	cache := s.computeCachePreview(
 		agent.Provider, session, len(msgs),
@@ -421,13 +440,9 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// tools are deferred (name-only until ToolSearch), and fs built-ins (Read/Write/…)
 	// live in Claude Code's own base, not the bridge. So the CLI-overhead projection
 	// counts just the core tier — the precise cold-start floor.
-	eagerTools := 0
-	for _, d := range defs {
-		if interactionTier(d.Name) == "core" {
-			eagerTools++
-		}
-	}
+	eagerTools := countEagerTools(defs)
 	cliOver := computeCLIOverhead(ctx, wsp, agent.Provider, session.ID, totalTok, eagerTools)
+	s.applyLearnedCLIOverhead(ctx, wsp, agent, cliOver)
 
 	// Exact server-side count on demand (?accurate=1): the composed request —
 	// system + dynamic + summary + messages + tool schemas — is counted by the
@@ -467,6 +482,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		LazyTools:           lazyList,
 		TotalTokens:         totalTok,
 		AccurateTokens:      accurateTok,
+		PrefixAccurate:      prefixAccurate,
 		Cache:               cache,
 		CLIOverhead:         cliOver,
 		CompactionSimulated: simulateCompaction,
@@ -576,6 +592,21 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 		WorkerCalls:          workerCalls,
 		WorkerKind:           workerKind,
 		PredictedOverhead:    predicted,
+	}
+}
+
+// applyLearnedCLIOverhead swaps the reference projection on a CLI-overhead
+// preview for the learned one when a turn has been measured for this agent's
+// CLI version + tool catalog, and labels the source either way. nil-safe.
+func (s *Server) applyLearnedCLIOverhead(ctx context.Context, wsp *workspace.Workspace, agent db.Agent, preview *cliOverheadPreview) {
+	if preview == nil {
+		return
+	}
+	preview.PredictedSource = cliOverheadSourceReference
+	if c, ok := s.learnedCLIOverhead(ctx, wsp, agent); ok {
+		preview.PredictedOverhead = c.Tokens
+		preview.PredictedSource = cliOverheadSourceMeasured
+		preview.PredictedSamples = c.Samples
 	}
 }
 

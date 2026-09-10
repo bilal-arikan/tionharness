@@ -148,7 +148,11 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   <Stat label="Dinamik" value={data.dynamicTokens} />
                   {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                     <Stat
-                      label="Beklenen taban (CLI)"
+                      label={
+                        data.cliOverhead.predictedSource === 'measured'
+                          ? `Ölçülmüş taban (CLI · ${data.cliOverhead.predictedSamples ?? 0} tur)`
+                          : 'Beklenen taban (CLI)'
+                      }
                       value={data.totalTokens + data.cliOverhead.predictedOverhead}
                       accent
                     />
