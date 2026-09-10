@@ -449,6 +449,12 @@ func TestCodexParserWebSearchAndTodoList(t *testing.T) {
 	if resp.Trace[1].Tool != "todo_list" || resp.Trace[1].Output != "[x] read contract\n[ ] write parser" {
 		t.Errorf("step 1 = %+v", resp.Trace[1])
 	}
+	// The input carries the list in todo_write's shape so the agent layer can
+	// promote the step to a checklist card and mirror it into the progress sink.
+	wantInput := `{"todos":[{"content":"read contract","status":"completed"},{"content":"write parser","status":"pending"}]}`
+	if string(resp.Trace[1].Input) != wantInput {
+		t.Errorf("step 1 input = %s, want %s", resp.Trace[1].Input, wantInput)
+	}
 }
 
 // A web_search item carries an action next to the query ("search", "open", …).

@@ -45,9 +45,19 @@ type codexConfig struct {
 	// sub-agent thread and drops the collaboration instruction block from the
 	// prompt entirely.
 	DisableSubAgents bool
-	// DisableWebSearch emits `web_search = false` under [tools].
-	DisableWebSearch bool
+	// WebSearchMode emits the TOP-LEVEL `web_search = "<mode>"` key when
+	// non-empty: disabled | cached | indexed | live. This is the only switch codex
+	// honours: `[tools] web_search = <bool>` is parsed and then DISCARDED by the
+	// config loader (codex-rs config/src/config_toml.rs
+	// deserialize_optional_web_search_tool_config maps the bool form to None), so
+	// the old bare-bool rendering never turned anything off. Verified live on
+	// codex 0.153.3 under --strict-config: "live" and "disabled" are accepted, an
+	// unknown value fails config parsing before any turn runs.
+	WebSearchMode string
 	// DisableUpdatePlan emits `update_plan = { enabled = false }` under [tools].
+	// Off by default since the native plan is mirrored into TionHarness's
+	// progress sink (see agent.mirrorNativeTodos); kept so a caller can still
+	// suppress the tool.
 	DisableUpdatePlan bool
 	// DisableRequestUserInput emits `experimental_request_user_input =
 	// { enabled = false }` under [tools].
@@ -73,6 +83,11 @@ func renderCodexConfig(cfg codexConfig) string {
 	}
 	if cfg.ReasoningEffort != "" {
 		fmt.Fprintf(&b, "model_reasoning_effort = %s\n", tomlString(cfg.ReasoningEffort))
+	}
+	if cfg.WebSearchMode != "" {
+		// Top-level key (see codexConfig.WebSearchMode); must precede every
+		// [section] header or TOML would file it under the last table.
+		fmt.Fprintf(&b, "web_search = %s\n", tomlString(cfg.WebSearchMode))
 	}
 
 	if cfg.DisableNativeMultiAgent {
@@ -100,15 +115,11 @@ func renderCodexConfig(cfg codexConfig) string {
 		b.WriteString("enabled = false\n")
 	}
 
-	if cfg.DisableWebSearch || cfg.DisableUpdatePlan || cfg.DisableRequestUserInput {
+	if cfg.DisableUpdatePlan || cfg.DisableRequestUserInput {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
 		b.WriteString("[tools]\n")
-		if cfg.DisableWebSearch {
-			// web_search is the one toggle that accepts a bare bool.
-			b.WriteString("web_search = false\n")
-		}
 		if cfg.DisableUpdatePlan {
 			// MUST stay an inline table. A bare bool is rejected by codex with
 			// "invalid type: boolean `false`, expected struct UpdatePlanToolConfig".

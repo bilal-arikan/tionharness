@@ -16,21 +16,29 @@ import (
 // replacement is absent, exactly as the suppression logic keeps the native
 // fallback alive in that case. Deterministic order: it feeds the persistent-
 // session fingerprint.
-func NativeToolAllowlist(ag db.Agent, inter tools.InteractionEndpoint, mode string, shellEnabled bool) []string {
+func NativeToolAllowlist(ag db.Agent, inter tools.InteractionEndpoint, mode string, shellEnabled, nativeSubagents bool) []string {
+	// TodoWrite is always on the menu: its calls are mirrored into the progress
+	// sink, so it is as good as the bridged todo_write (see WriteConfig).
 	out := []string{"Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit", "ToolSearch",
-		"ListMcpResourcesTool", "ReadMcpResourceTool"}
+		"ListMcpResourcesTool", "ReadMcpResourceTool", "TodoWrite"}
 	if ag.NativeWebSearchEnabled() {
 		out = append(out, "WebSearch", "WebFetch")
 	}
 	advertised := advertisedSet(inter)
-	// Native shell family survives only while TionHarness's own shell is not bridged.
-	if !shellEnabled {
+	// Native shell family survives while TionHarness's own shell is not bridged, or
+	// when the agent opted into its native shell next to the bridge.
+	if !shellEnabled || ag.NativeShellEnabled() {
 		out = append(out, shellFamily...)
+	}
+	// Native subagent launcher for read-only research; the scoped Agent(<type>)
+	// deny rules in WriteConfig keep every other type off.
+	if nativeSubagents {
+		out = append(out, "Agent")
 	}
 	// WS17 invariant (see WriteConfig): a native whose bridge is not advertised
 	// this turn stays on the menu so the model is never left without the family.
 	if !advertised["todo_write"] {
-		out = append(out, todoFamily...)
+		out = append(out, taskChecklistFamily...)
 	}
 	if !advertised["use_skill"] {
 		out = append(out, "Skill")

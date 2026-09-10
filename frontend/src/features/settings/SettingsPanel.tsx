@@ -220,6 +220,7 @@ export function SettingsPanel({
       claudePersistentSession: draft.claudePersistentSession,
       claudeSysPromptFile: draft.claudeSysPromptFile,
       claudeCliToolAllowlist: draft.claudeCliToolAllowlist,
+      claudeCliNativeSubagents: draft.claudeCliNativeSubagents,
       auxNativeRouting: draft.auxNativeRouting,
       delegationMaxDepth: draft.delegationMaxDepth,
       delegationMaxCalls: draft.delegationMaxCalls,

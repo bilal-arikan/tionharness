@@ -1,7 +1,63 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-07):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-10):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## CLI yerleşik araçları: izleyerek serbest bırakma (2026-09-10) ✅
+
+- **İstek:** Oturum başında CLI'lara yasakladığımız yerleşik araçlardan, izlemeye
+  devam edebildiğimiz sürece açılabilecek olanları açmak (native web araçları gibi).
+  Araştırma özeti: Claude Code stream-json alt-ajan olaylarını `parent_tool_use_id`
+  ile yayıyor (`--forward-subagent-text`/`CLAUDE_CODE_FORWARD_SUBAGENT_TEXT` metni de
+  ekler); Codex JSONL `todo_list` ve `collab_tool_call` item'larını zaten veriyor; ama
+  `codex exec` + multi_agent_v2 alt-ajan sonucu çözülemiyor (openai/codex#33267) ve
+  spawn edilen thread'ler `approval_policy=never`'a zorlanıyor (#12713) → codex
+  alt-ajanları **kapalı kaldı**. Codex kaynak koduna göre `[tools] web_search = <bool>`
+  yükleyici tarafından **sessizce atılıyor** (bool → None); gerçek anahtar üst-düzey
+  `web_search = "disabled|cached|indexed|live"` (0.153.3'te `--strict-config` ile canlı
+  doğrulandı: `live`/`disabled` kabul, `bogus` red).
+- **Progress aynası (claude `TodoWrite` + codex `update_plan`):** `TodoWrite` artık
+  `--tools` allowlist'inde ve bastırılmıyor; yalnız aynasız `TaskCreate/TaskUpdate/
+  TaskList/TaskGet` ailesi köprü ilan edilmişken bastırılıyor (`climcp.go`
+  `taskChecklistFamily`). Codex `update_plan` açık (`DisableUpdatePlan: false`);
+  `todo_list` item'ı `Input`'a `{"todos":[{content,status}]}` olarak yazılıyor
+  (`codexcli_events.go todoListInput`). `trace.go isChecklistTool` üçünü de
+  (`todo_write`/`TodoWrite`/`todo_list`) `StepTodo` kartına terfi ettiriyor;
+  `agent/native_todo_mirror.go` turun son native listesini `TodoSink`'e yazıyor
+  (`tools.TodoSinkFrom`). Sistem notu (`interactionSystemNote`) iki yolu da adlandırıyor.
+- **claude-cli native `Agent(Explore|Plan)` (`Settings.ClaudeCLINativeSubagents`,
+  varsayılan açık):** `Agent` menüde kalır, `Agent(general-purpose)`, `Agent(claude)`,
+  `Agent(statusline-setup)`, `Agent(claude-code-guide)` scoped deny; `Task` ve
+  `AgentOutputTool` daima kapalı. Alt süreç env: `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`
+  + `CLAUDE_CODE_FORWARD_SUBAGENT_TEXT=1` (`providers/claudecli_subagent.go`;
+  persistent fingerprint'e `CLINativeSubagents` eklendi). Parser `parent_tool_use_id`'li
+  assistant/user olaylarını ana trace'e değil ebeveyn `Agent` adımının `SubSteps`'ine
+  katlar, her eklemede `Running` kart yayınlar, final `tool_result` aynı `ID` ile kapatır;
+  alt-ajan metni ana yanıta sızmaz. `trace.go` `SubSteps`'li/`Agent` adımını
+  `StepSubagent`'a çevirir; `SubagentStep.tsx` `subagent_type`/`description`'ı
+  başlıkta gösterir. Sistem notu varyantı (`interactionNote(true)`) Explore/Plan'ı
+  serbest bırakıp yazan delegasyonu `run_subagent`'ta tutar. Ayarlar ▸ Uygulama
+  araçları'nda toggle.
+- **Ajan-düzeyi native shell opt-in (`Agent.NativeShell`, `*bool`, nil = kapalı):**
+  claude-cli ajanı için Bash ailesi köprüyle birlikte menüde kalır; suppression yalnız
+  `ShellEnabled && !NativeShellEnabled()` iken. Zincir: `db.models` → `AgentProfilePatch`
+  → `agent_patch_apply`/`agent_inherit` (`nativeShell` override anahtarı) → API
+  create/update → `AgentSettingsForm` "Claude Code'un kendi shell'i" pill'i.
+- **Codex `web_search` modu:** `codexConfig.WebSearchMode` üst-düzey `web_search = "live"`
+  (toggle açık) / `"disabled"` (kapalı) yazar; eski `[tools] web_search = false` kaldırıldı
+  (etkisizdi). Not: codex'in kendi varsayılanı `cached` (dış ağa çıkmayan OpenAI indeksi);
+  `live` gerçek web erişimidir.
+- **Testler:** `climcp/allowlist_test` (TodoWrite/Agent/native shell; disjoint kontrolü
+  shell × subagents × mod × ajan), `climcp/config_test` (`TestWriteConfigNativeSubagentsScopedDeny`),
+  `providers/claudecli_subagent_test` (katlama, canlı kartlar, bilinmeyen ebeveyn
+  fallback, env + not), `providers/codexcli_config_test` (mod anahtarı, update_plan açık),
+  `codexcli_events_test` (todo_list Input), `agent/native_todo_mirror_test`
+  (ayna + terfi), `db/agent_native_shell_test`, `AgentSettingsForm.test` (native shell pill).
+- **Açık bırakılanlar:** `Skill`, `AskUserQuestion`, `ScheduleWakeup`, `SendMessage`,
+  plan ailesi (auto), `Workflow`, `Artifact`, `EnterWorktree` kapalı kaldı; codex
+  `spawn_agent` (`[agents] enabled=false`) yukarıdaki iki issue kapanana kadar kapalı.
+  `NativeShell` market pack / şablon / evrim snapshot alanlarına eklenmedi (nil = kapalı
+  varsayılanıyla güvenli).
 
 ## Token kalibrasyonu: CLI ek yükü otomatik ölçüm + kesin prefix sayımı (2026-09-07) ✅
 

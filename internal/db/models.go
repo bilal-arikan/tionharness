@@ -85,6 +85,14 @@ type Agent struct {
 	// would silently mean "off" for every pre-existing agent. Ignored by non-CLI
 	// providers, which get their web tools from the request itself.
 	NativeWebSearch *bool `json:"nativeWebSearch,omitempty"`
+	// NativeShell lets a claude-cli agent keep Claude Code's OWN shell family
+	// (Bash + its background siblings) next to TionHarness's bridged shell. The
+	// native calls still land in the trace with command and output, but they run
+	// outside TionHarness's sandbox and background-shell management, so this is
+	// opt-IN: nil or false means the bridged shell is the only shell (the default
+	// every agent had before the field existed), true keeps the native family.
+	// Read it through NativeShellEnabled. Ignored by non-CLI providers.
+	NativeShell *bool `json:"nativeShell,omitempty"`
 	// PermissionMode gates how the agent's tool use is approved:
 	// "read-only" | "ask" | "auto". Empty defaults to "auto". For the claude-cli
 	// path this maps to the CLI's --permission-mode / --dangerously-skip-permissions
@@ -221,6 +229,13 @@ type Agent struct {
 // web search. Only an explicit false turns it off.
 func (a Agent) NativeWebSearchEnabled() bool {
 	return a.NativeWebSearch == nil || *a.NativeWebSearch
+}
+
+// NativeShellEnabled resolves the opt-in NativeShell toggle: only an explicit
+// true keeps the CLI's own shell family on a bridged turn; nil (agents stored
+// before the field existed) and false mean the bridged shell alone.
+func (a Agent) NativeShellEnabled() bool {
+	return a.NativeShell != nil && *a.NativeShell
 }
 
 // SessionSchemaVersion is the current session-header format version, stamped on

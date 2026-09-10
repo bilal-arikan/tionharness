@@ -389,6 +389,9 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	if req.DisableThinking {
 		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
 	}
+	// Native subagent menu is part of the launch fingerprint, so pinning it for
+	// the process lifetime is as safe as the thinking flag above.
+	cmd.Env = append(cmd.Env, nativeSubagentEnv(req)...)
 	if req.WorkDir != "" {
 		if fi, statErr := os.Stat(req.WorkDir); statErr == nil && fi.IsDir() {
 			cmd.Dir = req.WorkDir
@@ -452,6 +455,7 @@ func (c *ClaudeCLI) persistentFingerprint(req Request, sys string) string {
 	fmt.Fprintln(h, strings.Join(c.allowedTools, ","))
 	fmt.Fprintln(h, strings.Join(c.disallowedTools, ","))
 	fmt.Fprintln(h, req.CLIRestrictNativeTools, strings.Join(req.CLINativeTools, ","))
+	fmt.Fprintln(h, req.CLINativeSubagents)
 	fmt.Fprintln(h, sys)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

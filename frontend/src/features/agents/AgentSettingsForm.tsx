@@ -93,6 +93,7 @@ const FORM_OVERRIDE_KEYS: AgentOverrideKey[] = [
   'model',
   'thinkingLevel',
   'nativeWebSearch',
+  'nativeShell',
   'permissionMode',
   'avatar',
   'color',
@@ -169,6 +170,8 @@ export function AgentSettingsForm({
   // undefined = the agent never stored the flag, which means ENABLED (see
   // Agent.nativeWebSearch) — the checkbox must start checked, not cleared.
   const [nativeWebSearch, setNativeWebSearch] = useState(agent.nativeWebSearch ?? true)
+  // Opt-IN (see Agent.nativeShell): undefined means the bridged shell alone.
+  const [nativeShell, setNativeShell] = useState(agent.nativeShell ?? false)
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
@@ -238,6 +241,9 @@ export function AgentSettingsForm({
       case 'nativeWebSearch':
         setNativeWebSearch(parent.nativeWebSearch ?? true)
         break
+      case 'nativeShell':
+        setNativeShell(parent.nativeShell ?? false)
+        break
       case 'permissionMode':
         setPermissionMode(parent.permissionMode || 'auto')
         break
@@ -285,6 +291,7 @@ export function AgentSettingsForm({
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel || 'off') ||
       nativeWebSearch !== (agent.nativeWebSearch ?? true) ||
+      nativeShell !== (agent.nativeShell ?? false) ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       coordinatorMode !== (agent.coordinatorMode ?? false) ||
       coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
@@ -301,6 +308,7 @@ export function AgentSettingsForm({
       model,
       thinkingLevel,
       nativeWebSearch,
+      nativeShell,
       permissionMode,
       coordinatorMode,
       coordinatorWorkflow,
@@ -333,6 +341,7 @@ export function AgentSettingsForm({
     model: model.trim(),
     thinkingLevel,
     nativeWebSearch,
+    nativeShell,
     permissionMode,
     skills,
     coordinatorMode,
@@ -359,6 +368,7 @@ export function AgentSettingsForm({
     pin('model', 'model')
     pin('thinkingLevel', 'thinkingLevel')
     pin('nativeWebSearch', 'nativeWebSearch')
+    pin('nativeShell', 'nativeShell')
     pin('permissionMode', 'permissionMode')
     pin('avatar', 'avatar')
     pin('color', 'color')
@@ -865,6 +875,30 @@ export function AgentSettingsForm({
             <code>--disallowedTools</code> + <code>permissions.deny</code> ile engellenir; arama
             yalnız TionHarness'in köprülenen <code>WebSearch</code>/<code>WebFetch</code>{' '}
             araçlarından geçer (izleme ve kullanım sayacı bunlarda çalışır).
+          </p>
+
+          <OptionField label="Claude Code'un kendi shell'i" trailing={badge('nativeShell')}>
+            <OptionPills
+              value={nativeShell ? 'on' : 'off'}
+              onChange={(value) => {
+                setNativeShell(booleanFromOption(value))
+                mark('nativeShell')
+              }}
+              options={BOOLEAN_OPTIONS}
+              ariaLabel="Claude Code'un kendi shell'i"
+              ariaDescribedBy={`${descriptionId}-native-shell`}
+              testid="agent-native-shell"
+            />
+          </OptionField>
+          <p
+            id={`${descriptionId}-native-shell`}
+            className="-mt-2 text-xs text-[var(--color-text-dim)]"
+          >
+            Varsayılan kapalı: claude-cli ajanı komutları TionHarness'in köprülenen sandbox
+            shell'inden geçirir. Açıkken Claude Code'un yerleşik <code>Bash</code> ailesi de menüde
+            kalır; her çağrı komut ve çıktısıyla aktivite izinde görünür ama TionHarness sandbox'ı
+            ve arka-plan shell yönetimi dışında koşar (köprü gidiş-dönüşü yok, CLI hook'ları
+            uygulanır). Yalnız claude-cli sağlayıcısında anlamlıdır.
           </p>
 
           <OptionField label="Koordinatör" trailing={badge('coordinatorMode')}>

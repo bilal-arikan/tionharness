@@ -355,7 +355,10 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 	case "web_search":
 		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Output: webSearchStepOutput(it)})
 	case "todo_list":
-		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "todo_list", Output: summarizeTodoList(it.Items)})
+		// Input carries the list in todo_write's {"todos":[{content,status}]} shape so
+		// the agent layer can promote the step to a checklist card and mirror it into
+		// the progress sink exactly like a bridged todo_write call.
+		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "todo_list", Input: todoListInput(it.Items), Output: summarizeTodoList(it.Items)})
 	case "collab_tool_call":
 		summary := summarizeCollab(it)
 		p.setStep(it, final, TraceStep{
@@ -642,6 +645,35 @@ func webSearchStepOutput(it *codexItem) string {
 	default:
 		return action + ": " + query
 	}
+}
+
+// todoListInput renders a todo_list item's entries in todo_write's input shape
+// ({"todos":[{"content","status"}]}), the one contract every checklist consumer
+// (trace promotion, progress sink) already understands. Codex only knows
+// done/not-done, so status is completed or pending; nil when there is nothing.
+func todoListInput(items []codexTodoItem) json.RawMessage {
+	if len(items) == 0 {
+		return nil
+	}
+	type todo struct {
+		Content string `json:"content"`
+		Status  string `json:"status"`
+	}
+	todos := make([]todo, 0, len(items))
+	for _, t := range items {
+		status := "pending"
+		if t.Completed {
+			status = "completed"
+		}
+		todos = append(todos, todo{Content: t.Text, Status: status})
+	}
+	raw, err := json.Marshal(struct {
+		Todos []todo `json:"todos"`
+	}{todos})
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 func summarizeTodoList(items []codexTodoItem) string {

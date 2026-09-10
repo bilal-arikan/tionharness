@@ -175,11 +175,34 @@ func permissionModeArgs(mode string) []string {
 
 // interactionSystemNote tells the CLI to use the TionHarness Interaction MCP tools
 // (which surface in the TionHarness UI) instead of its own built-ins, which can't be
-// answered in non-interactive print mode.
+// answered in non-interactive print mode. The checklist sentence names BOTH paths:
+// the bridged todo_write and Claude Code's own TodoWrite reach the same progress
+// sink (the native call is mirrored from the stream), only the newer TaskCreate
+// family is invisible. This is the codex wording and the claude wording when the
+// native Agent launcher is off the menu; see interactionNote.
 const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
-	"To create, show, or update a task checklist, ALWAYS call the todo_write tool — it persists to the session's progress file. " +
-	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach TionHarness and the progress view stays empty. " +
+	"To create, show, or update a task checklist, call the todo_write tool (or the built-in TodoWrite when present) — both persist to the session's progress file. " +
+	"Do NOT use AskUserQuestion or the TaskCreate/TaskUpdate/TaskList/TaskGet tools: they do not reach TionHarness and the progress view stays empty. " +
 	"To delegate a focused sub-task to another agent, use the run_subagent tool when it is available; never use the built-in Task or Agent subagent launcher, which runs invisibly to TionHarness."
+
+// interactionSystemNoteNativeSubagents is the claude-cli wording when the native
+// Agent launcher IS on the menu for read-only research (Request.CLINativeSubagents):
+// Explore/Plan run in-process (no fresh CLI start, no bridge round-trip) and their
+// transcript is folded into the trace, while anything that writes or targets a
+// TionHarness agent still goes through run_subagent.
+const interactionSystemNoteNativeSubagents = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
+	"To create, show, or update a task checklist, call the todo_write tool (or the built-in TodoWrite when present) — both persist to the session's progress file. " +
+	"Do NOT use AskUserQuestion or the TaskCreate/TaskUpdate/TaskList/TaskGet tools: they do not reach TionHarness and the progress view stays empty. " +
+	"For read-only research (finding files, tracing code, gathering facts) you may use the built-in Agent tool with subagent_type Explore or Plan; its activity is recorded in TionHarness. " +
+	"For any delegation that edits files, runs commands, or should go to a specific TionHarness agent, use the run_subagent tool when it is available; the other built-in subagent types are blocked."
+
+// interactionNote picks the system note for a claude-cli turn.
+func interactionNote(nativeSubagents bool) string {
+	if nativeSubagents {
+		return interactionSystemNoteNativeSubagents
+	}
+	return interactionSystemNote
+}
 
 // usesInteractionTools reports whether the TionHarness Interaction MCP tools are in
 // the allowlist for this call.
@@ -275,7 +298,7 @@ func (c *ClaudeCLI) mcpArgs() []string {
 func (c *ClaudeCLI) buildSystemAndPrompt(req Request) (sys, prompt string) {
 	sys = strings.TrimSpace(req.System)
 	if c.usesInteractionTools() {
-		sys = strings.TrimSpace(sys + "\n\n" + interactionSystemNote)
+		sys = strings.TrimSpace(sys + "\n\n" + interactionNote(req.CLINativeSubagents))
 	}
 	// The rolling summary (req.Summary) stays woven into the uncached [Context]
 	// tail here — the claude-cli path is already cache-optimal via --resume (its
@@ -331,6 +354,10 @@ type cliEvent struct {
 	Subtype string      `json:"subtype"`
 	Message *cliMessage `json:"message"`
 	IsError bool        `json:"is_error"`
+	// ParentToolUseID tags an assistant/user event that belongs to a CLI-native
+	// subagent: it is the tool_use id of the Agent call that spawned it (nested
+	// spawns carry their own launcher's id). Empty on the main conversation.
+	ParentToolUseID string `json:"parent_tool_use_id"`
 	// api_error_status is a result-envelope field the CLI types inconsistently: a
 	// slug ("rate_limit") on some builds, a bare HTTP status NUMBER (429) on
 	// others. flexString accepts both — with a plain string the number made
@@ -768,6 +795,7 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	if req.DisableThinking {
 		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
 	}
+	cmd.Env = append(cmd.Env, nativeSubagentEnv(req)...)
 	// Max effort parity: Claude Code's settings.json effortLevel enum rejects "max"
 	// (it silently downgrades to high the moment the session touches /effort or
 	// /model), so the --settings file can only carry up to xhigh. The env var is

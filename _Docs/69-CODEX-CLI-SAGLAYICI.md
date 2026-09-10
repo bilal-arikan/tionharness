@@ -1,6 +1,6 @@
 # 69 — Codex CLI Sağlayıcı: Fizibilite ve Referans
 
-> **Özet (2026-09-03):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (bkz. `70-CODEX-CLI-UYGULAMA-PLANI.md`). Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
+> **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (bkz. `70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -815,8 +815,18 @@ varsayılanı için geçerliydi, TionHarness'in yazdığı config için değil).
 
 `db.Agent.NativeWebSearch` (JSON `nativeWebSearch`, `*bool`) →
 `Agent.NativeWebSearchEnabled()` → `toolloop.go` `req.NativeWebSearch` →
-`codexcli.go buildConfig` → `codexConfig.DisableWebSearch` → `config.toml`'da
-`[tools] web_search = false`.
+`codexcli.go buildConfig` → `codexConfig.WebSearchMode` → `config.toml`'da
+**üst-düzey** `web_search = "live"` (açık) / `web_search = "disabled"` (kapalı).
+
+> **Düzeltme (2026-09-10):** önceki `[tools] web_search = false` yazımı **etkisizdi**:
+> codex-rs `config/src/config_toml.rs` `deserialize_optional_web_search_tool_config`
+> bool formunu okuyup **atıyor** (`Enabled(bool) → None`); `[tools].web_search` yalnız
+> nesne formunu (search_context_size, allowed_domains…) taşır. Gerçek mod anahtarı
+> `ConfigToml.web_search: Option<WebSearchMode>` (`disabled|cached|indexed|live`,
+> codex varsayılanı `cached` = dış ağa çıkmayan OpenAI indeksi). codex 0.153.3 +
+> `--strict-config` ile canlı doğrulandı: `live` ve `disabled` kabul edildi, `bogus`
+> config aşamasında reddedildi. Yukarıdaki 0.8/`web_search=false` satırları tarihsel
+> kayıttır.
 
 Toggle **varsayılan açıktır**; `nil` (alan diskte yok) = açık demektir, bu yüzden
 model alanı `*bool`'dur — düz `bool` + `omitempty` ile mevcut ajan dosyaları

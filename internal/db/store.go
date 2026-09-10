@@ -310,9 +310,12 @@ type AgentProfilePatch struct {
 	// distinguishable from "not in this patch"; the stored field is itself a
 	// pointer whose nil means enabled, so a patch can only set it, never unset it.
 	NativeWebSearch *bool
-	PermissionMode  *string
-	Avatar          *string
-	Color           *string
+	// NativeShell opts a claude-cli agent into the CLI's own shell family next to
+	// the bridged one (see Agent.NativeShell). Pointer for the same reason.
+	NativeShell    *bool
+	PermissionMode *string
+	Avatar         *string
+	Color          *string
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
 	Skills   *[]string

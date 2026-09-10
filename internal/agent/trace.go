@@ -312,13 +312,43 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 		AfterTokens:   t.AfterTokens,
 		Trigger:       t.Trigger,
 	}
-	if st.Kind == StepTool && !st.IsError && tool == "todo_write" {
+	if st.Kind == StepTool && !st.IsError && isChecklistTool(tool) {
 		if todos := todoStepItems(t.Input, t.Output); len(todos) > 0 {
 			st.Kind = StepTodo
 			st.Todos = todos
 		}
 	}
+	// A CLI-native subagent launch (claude-cli Agent) carries the child's folded
+	// transcript in SubSteps; render it as the same collapsible card run_subagent
+	// gets, nested trace converted recursively.
+	if st.Kind == StepTool && (len(t.SubSteps) > 0 || isNativeSubagentLauncher(tool)) {
+		st.Kind = StepSubagent
+		if len(t.SubSteps) > 0 {
+			st.SubSteps = make([]TurnStep, 0, len(t.SubSteps))
+			for _, sub := range t.SubSteps {
+				st.SubSteps = append(st.SubSteps, traceStepToTurnStep(sub))
+			}
+		}
+	}
 	return st
+}
+
+// isChecklistTool reports whether a tool step carries a checklist in
+// todo_write's {"todos":[...]} shape: the bridged todo_write itself, Claude
+// Code's native TodoWrite (same input contract) and codex's update_plan, whose
+// todo_list stream item the codex parser re-renders into that shape.
+func isChecklistTool(tool string) bool {
+	switch tool {
+	case "todo_write", "TodoWrite", "todo_list":
+		return true
+	}
+	return false
+}
+
+// isNativeSubagentLauncher reports whether a tool name is claude-cli's own
+// subagent launcher (Agent on current CLIs, Task on older ones).
+func isNativeSubagentLauncher(tool string) bool {
+	return tool == "Agent" || tool == "Task"
 }
 
 // traceStepToTurnStep is the runtime-bound form: the pure mapping plus the

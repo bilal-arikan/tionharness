@@ -19,13 +19,14 @@ func TestNativeToolAllowlistBase(t *testing.T) {
 		CoreToolNames:     []string{"Bash", "todo_write", "use_skill"},
 		ExtendedToolNames: []string{"update_session"},
 	}
-	got := toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", true))
-	for _, want := range []string{"Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit", "ToolSearch", "WebSearch", "WebFetch"} {
+	got := toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", true, false))
+	// TodoWrite is always kept: its calls are mirrored into the progress sink.
+	for _, want := range []string{"Read", "Edit", "Write", "Glob", "Grep", "NotebookEdit", "ToolSearch", "WebSearch", "WebFetch", "TodoWrite"} {
 		if !got[want] {
 			t.Errorf("allowlist missing %q: %v", want, got)
 		}
 	}
-	for _, banned := range []string{"Bash", "TodoWrite", "TaskCreate", "Skill", "EnterPlanMode", "Task", "Agent", "AskUserQuestion", "SendMessage"} {
+	for _, banned := range []string{"Bash", "TaskCreate", "Skill", "EnterPlanMode", "Task", "Agent", "AskUserQuestion", "SendMessage"} {
 		if got[banned] {
 			t.Errorf("allowlist must not keep %q while its bridge is advertised / mode is auto", banned)
 		}
@@ -33,22 +34,41 @@ func TestNativeToolAllowlistBase(t *testing.T) {
 
 	// Web search opted out on the agent → the natives leave the menu.
 	off := false
-	got = toSet(NativeToolAllowlist(db.Agent{NativeWebSearch: &off}, inter, "auto", true))
+	got = toSet(NativeToolAllowlist(db.Agent{NativeWebSearch: &off}, inter, "auto", true, false))
 	if got["WebSearch"] || got["WebFetch"] {
 		t.Error("agent with native web search off must not keep WebSearch/WebFetch")
 	}
 
 	// Shell not bridged → native Bash family stays (the agent has no other shell).
-	got = toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", false))
+	got = toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", false, false))
 	for _, want := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
 		if !got[want] {
 			t.Errorf("shell disabled: allowlist must keep native %q", want)
 		}
 	}
 
+	// Agent opted into its native shell next to the bridge → the family stays too.
+	on := true
+	got = toSet(NativeToolAllowlist(db.Agent{NativeShell: &on}, inter, "auto", true, false))
+	for _, want := range []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"} {
+		if !got[want] {
+			t.Errorf("native shell opt-in: allowlist must keep native %q", want)
+		}
+	}
+
+	// Native subagents opted in → the Agent launcher joins the menu (its non-research
+	// types are denied by scoped rules in WriteConfig).
+	got = toSet(NativeToolAllowlist(db.Agent{}, inter, "auto", true, true))
+	if !got["Agent"] {
+		t.Error("native subagents on: allowlist must keep Agent")
+	}
+	if got["Task"] || got["AgentOutputTool"] {
+		t.Error("native subagents on: Task/AgentOutputTool must stay off the menu")
+	}
+
 	// Bridges not advertised this turn → the WS17 invariant keeps the native fallback.
 	bare := tools.InteractionEndpoint{URL: inter.URL, CoreToolNames: []string{"Bash"}}
-	got = toSet(NativeToolAllowlist(db.Agent{}, bare, "ask", true))
+	got = toSet(NativeToolAllowlist(db.Agent{}, bare, "ask", true, false))
 	for _, want := range []string{"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "Skill", "EnterPlanMode", "ExitPlanMode"} {
 		if !got[want] {
 			t.Errorf("unbridged/ask: allowlist must keep native %q", want)
@@ -67,17 +87,23 @@ func TestNativeToolAllowlistDisjointFromSuppression(t *testing.T) {
 		CoreToolNames:     []string{"Bash", "ask_user", "todo_write", "use_skill", "permission_prompt"},
 		ExtendedToolNames: []string{"update_session"},
 	}
+	on := true
+	agents := map[string]db.Agent{"default": {}, "nativeShell": {NativeShell: &on}}
 	for _, shell := range []bool{true, false} {
-		for _, mode := range []string{"auto", "ask", "read-only"} {
-			res, err := WriteConfig(context.Background(), &fakeHost{shell: shell}, false, db.Agent{}, inter, mode)
-			if err != nil {
-				t.Fatalf("WriteConfig(shell=%v, mode=%s): %v", shell, mode, err)
-			}
-			res.Cleanup()
-			kept := toSet(NativeToolAllowlist(db.Agent{}, inter, mode, shell))
-			for _, d := range res.Disallowed {
-				if kept[d] {
-					t.Errorf("shell=%v mode=%s: %q is both allowlisted and disallowed", shell, mode, d)
+		for _, subagents := range []bool{true, false} {
+			for _, mode := range []string{"auto", "ask", "read-only"} {
+				for name, ag := range agents {
+					res, err := WriteConfig(context.Background(), &fakeHost{shell: shell, nativeSubagents: subagents}, false, ag, inter, mode)
+					if err != nil {
+						t.Fatalf("WriteConfig(shell=%v, subagents=%v, mode=%s, agent=%s): %v", shell, subagents, mode, name, err)
+					}
+					res.Cleanup()
+					kept := toSet(NativeToolAllowlist(ag, inter, mode, shell, subagents))
+					for _, d := range res.Disallowed {
+						if kept[d] {
+							t.Errorf("shell=%v subagents=%v mode=%s agent=%s: %q is both allowlisted and disallowed", shell, subagents, mode, name, d)
+						}
+					}
 				}
 			}
 		}

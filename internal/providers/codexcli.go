@@ -203,21 +203,33 @@ func (c *CodexCLI) buildArgs(req Request, model string) []string {
 // both halves ride in developer_instructions; the volatile per-turn context is
 // kept in the stdin prompt instead, exactly as on the claude path, so it does
 // not churn the cached prefix.
+// codexWebSearchMode maps the agent's native-web-search toggle onto codex's
+// top-level `web_search` mode. Only the two values TionHarness has verified on
+// codex 0.153.3 are ever emitted (see codexConfig.WebSearchMode).
+func codexWebSearchMode(nativeWebSearch bool) string {
+	if nativeWebSearch {
+		return "live"
+	}
+	return "disabled"
+}
+
 func (c *CodexCLI) buildConfig(req Request) codexConfig {
 	return codexConfig{
 		DeveloperInstructions: strings.TrimSpace(joinNonEmpty(req.System, interactionSystemNote)),
 		ReasoningEffort:       codexReasoningEffort(req),
-		// TionHarness supplies its own equivalents through the MCP bridge, and the
-		// codex built-ins are invisible in the TionHarness UI: update_plan would
-		// shadow todo_write, and experimental_request_user_input would block the
-		// turn on a prompt no one can answer in exec mode.
-		DisableUpdatePlan:       true,
+		// experimental_request_user_input would block the turn on a prompt no one
+		// can answer in exec mode, so it stays off. update_plan is now ALLOWED: the
+		// JSONL stream surfaces every plan update as a todo_list item, which the
+		// trace promotes to a checklist card and mirrors into the progress sink
+		// (agent.mirrorNativeTodos), so the native tool no longer shadows
+		// todo_write — both reach the same progress view.
+		DisableUpdatePlan:       false,
 		DisableRequestUserInput: true,
 		// Native web search is opt-OUT (Request.NativeWebSearch, on by default).
-		// Off renders `web_search = false`; on writes NOTHING at all — codex enables
-		// its search by default and `web_search = true` is not a documented/verified
-		// key, so under --strict-config an unknown value would fail the whole turn.
-		DisableWebSearch: !req.NativeWebSearch,
+		// The switch is the TOP-LEVEL web_search mode key (codexWebSearchMode): on
+		// asks for "live" (real web access; codex's own default is "cached", an
+		// OpenAI-maintained index with no external fetch), off pins "disabled".
+		WebSearchMode: codexWebSearchMode(req.NativeWebSearch),
 		// `[agents] enabled = false` is the real block: measured on codex 0.148.0 it
 		// removes spawn_agent from the tool catalog, drops the collaboration
 		// instruction block from the prompt and lets no sub-agent thread start.

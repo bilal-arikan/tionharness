@@ -200,7 +200,7 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // TionHarness tool. Codex has no --disallowedTools flag, so this list is advisory
 // for now: it rides DisallowedTools so the suppression intent is recorded in one
 // place, and the codex config renderer disables the real overlaps structurally
-// instead ([tools] update_plan / experimental_request_user_input / web_search).
+// instead ([tools] experimental_request_user_input, [agents] enabled).
 //
 // The list is deliberately much shorter than the claude one — codex simply does
 // not ship most of those natives (no Task/Agent launcher, no Skill tool, no
@@ -211,18 +211,19 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // tools one by one.
 // web_search is left out on purpose, but no longer because it is always off: it
 // is now an AGENT-level toggle (db.Agent.NativeWebSearch → Request.NativeWebSearch
-// → codexConfig.DisableWebSearch). With the toggle off the config renderer writes
-// `web_search = false`, so there is nothing left to suppress here; with it on the
-// user has explicitly asked for the native search to run next to the bridged
+// → codexConfig.WebSearchMode). With the toggle off the config renderer writes
+// `web_search = "disabled"`, so there is nothing left to suppress here; with it on
+// the user has explicitly asked for the native search to run next to the bridged
 // TionHarness WebSearch/WebFetch, so listing it here would revoke that choice.
+// update_plan is likewise NOT listed any more: its todo_list stream items are
+// promoted to checklist cards and mirrored into the progress sink, so it no
+// longer shadows todo_write.
 func codexAdvisorySuppressions() []string {
-	// update_plan shadows the bridged todo_write (the progress card sink);
 	// experimental_request_user_input shadows ask_user. The collaboration tools
 	// bypass TionHarness's worker lifecycle and shadow spawn_worker,
 	// send_to_worker, and list_workers. All are also switched off structurally in
 	// the rendered config.toml.
 	return []string{
-		"update_plan",
 		"experimental_request_user_input",
 		"collaboration.spawn_agent",
 		"collaboration.send_message",

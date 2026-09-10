@@ -45,3 +45,8 @@ func todoSinkFrom(ctx context.Context) TodoSink {
 // HasTodoSink reports whether a todo sink is attached to ctx, so a caller can
 // install a fallback only when one is missing.
 func HasTodoSink(ctx context.Context) bool { return todoSinkFrom(ctx) != nil }
+
+// TodoSinkFrom returns the sink attached to ctx, or nil when none is present.
+// Exported for the agent layer, which mirrors a CLI-native checklist (claude
+// TodoWrite, codex update_plan) into the same sink todo_write writes to.
+func TodoSinkFrom(ctx context.Context) TodoSink { return todoSinkFrom(ctx) }

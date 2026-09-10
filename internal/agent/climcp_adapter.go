@@ -37,6 +37,7 @@ func (h cliHost) EnabledHooks(ctx context.Context, event string) ([]db.Hook, err
 
 func (h cliHost) ShellEnabled() bool                              { return h.r.tun.ShellEnabled() }
 func (h cliHost) CLIHooksEnabled() bool                           { return h.r.tun.CLIHooksEnabled() }
+func (h cliHost) NativeSubagentsEnabled() bool                    { return h.r.tun.ClaudeCLINativeSubagents() }
 func (h cliHost) Logger() *slog.Logger                            { return h.r.logger }
 func (h cliHost) EmitDebug(ctx context.Context, ev db.DebugEvent) { h.r.emitDebug(ctx, ev) }
 

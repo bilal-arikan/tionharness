@@ -2,6 +2,14 @@
 
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
 >
+> **Not (2026-09-10):** claude-cli `--tools` allowlist'i artık `TodoWrite`'ı daima
+> ve (varsayılan açık `ClaudeCLINativeSubagents` ile) `Agent`'ı taşıyor; `Agent`'ın
+> general-purpose/claude tipleri `Agent(<tip>)` scoped deny ile kapalı, Explore/Plan
+> süreç içinde koşup transkripti ana çağrıya katlanıyor (yeni `claude -p` tabanı
+> ödenmez). Native `TodoWrite` ve codex `update_plan` progress dosyasına aynalanıyor.
+> Ajan-düzeyi `NativeShell` opt-in'i Bash ailesini köprüyle birlikte açar. Ayrıntı
+> `05-ILERLEME.md` "CLI yerleşik araçları: izleyerek serbest bırakma".
+>
 > **Not (2026-09-07):** token kalibrasyonu — claude-cli harness ek yükü artık gerçek
 > turlardan (CLI sürümü, araç kataloğu hash'i) başına **öğreniliyor**; sistem promptu +
 > araç şemaları anthropic `count_tokens` ile **bir kez** kesin sayılıp hash'le
