@@ -2,7 +2,7 @@
 // appearance, sessions controller, chat stream, SSE events, URL routing) into
 // the shell layout (nav rail, per-view panels, modals). The per-concern logic
 // lives in the app/use*.ts hooks; the view metadata in viewRegistry.tsx.
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { api } from '@/api'
 import {
   Backdrop,
@@ -327,6 +327,14 @@ export default function App() {
     }
   }, [])
 
+  // Is the transcript on screen? The live-bubble coalescer reads this to decide
+  // how hard it may push transcript state: off the chat view nobody renders
+  // `messages`, so 20Hz churn would only steal frames from the screen that IS
+  // mounted (agent settings, tools, …). A ref keeps view switches free of a
+  // stream resubscribe.
+  const transcriptVisible = useRef(view === 'chat')
+  transcriptVisible.current = view === 'chat'
+
   // Chat-turn streaming machinery (send loop, interventions, slash commands).
   const chat = useChatStream({
     agents: ctl.agents,
@@ -342,6 +350,7 @@ export default function App() {
     selectSession: ctl.selectSession,
     refreshSessions: ctl.refreshSessions,
     bumpMeter: ctl.bumpMeter,
+    transcriptVisible,
   })
   // Publish the live chat handle for the controller's messages-load effect.
   // Effect-time assignment is safe: the effect reads the ref inside an async

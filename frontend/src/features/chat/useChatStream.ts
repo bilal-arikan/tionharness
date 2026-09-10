@@ -41,6 +41,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     selectSession,
     refreshSessions,
     bumpMeter,
+    transcriptVisible,
   } = deps
 
   // Streaming-turn control is PER-SESSION: several turns can overlap because a
@@ -406,6 +407,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       reload,
       notifyEnabled,
       bumpMeter,
+      transcriptVisible,
     })
     return subscribeSessionStream(sid, handlers)
   }, [
@@ -416,6 +418,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     setTyping,
     notifyEnabled,
     bumpMeter,
+    transcriptVisible,
   ])
 
   // ---- self-wake (schedule_wake) waiting state ----

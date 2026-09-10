@@ -94,6 +94,9 @@ export interface HubApplyCtx {
   // agent's turn ending — so an open panel tracks the conversation instead of
   // freezing at its mount-time snapshot.
   bumpMeter: () => void
+  // Whether the transcript is currently rendered (chat view on screen). Read at
+  // fire time through the ref, so switching views costs no resubscribe.
+  transcriptVisible?: RefObject<boolean>
 }
 
 // makeHubHandlers builds the SessionStreamHandlers for one active session. It
@@ -113,6 +116,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     reload,
     notifyEnabled,
     bumpMeter,
+    transcriptVisible,
   } = ctx
 
   // Live accumulator behind the ghost bubble. A stable id per turn so upserts
@@ -154,6 +158,15 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
   // smooth (well above the ~10Hz where reading starts to feel steppy) while
   // paying those costs once per frame instead of once per token.
   const GHOST_SYNC_MS = 50
+  // Off the chat view nothing renders the transcript, so those per-frame costs
+  // buy nothing while still re-rendering the whole app tree (every other screen
+  // included) 20 times a second. Widening the window there keeps the ghost
+  // consistent — it still lands, just coarsely — and gives the mounted screen
+  // its main thread back: an agent-settings Save no longer waits seconds for a
+  // repaint slot while a turn streams in the background.
+  const GHOST_SYNC_HIDDEN_MS = 500
+  const ghostSyncDelay = () =>
+    transcriptVisible?.current === false ? GHOST_SYNC_HIDDEN_MS : GHOST_SYNC_MS
   let ghostTimer: ReturnType<typeof setTimeout> | null = null
   let ghostDirty = false
 
@@ -194,7 +207,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       if (!ghostDirty) return
       ghostDirty = false
       syncGhost() // trailing edge: flush what accumulated, reopen the window
-    }, GHOST_SYNC_MS)
+    }, ghostSyncDelay())
   }
 
   const dropGhost = () => {
