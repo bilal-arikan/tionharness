@@ -81,3 +81,7 @@ Thumbs.db
 
 # Agent runtime working-dir state (persistent progress)
 .tionharness/
+
+# zvec-grep local semantic index (machine state: embeddings, locks, manifest).
+# Rebuilt on demand with `zg index`; never shared.
+.zvec-grep/
