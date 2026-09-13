@@ -125,7 +125,7 @@ export default function App() {
   const paletteCommands = useMemo<Command[]>(() => {
     const nav = (Object.keys(VIEW_TITLE) as View[]).map((v) => ({
       id: `view:${v}`,
-      label: v === 'prompts' ? t(VIEW_TITLE[v]) : VIEW_TITLE[v],
+      label: VIEW_TITLE[v].startsWith('navigation.') ? t(VIEW_TITLE[v]) : VIEW_TITLE[v],
       group: 'Git',
       keywords: v,
       run: () => setView(v),
@@ -846,7 +846,14 @@ export default function App() {
           />
         )}
         {view === 'skills' && (
-          <SkillsPanel onError={setError} onOpenTrajectory={links.openTrajectory} />
+          <SkillsPanel
+            onError={setError}
+            onOpenTrajectory={links.openTrajectory}
+            onOpenSession={(sid) => {
+              setView('chat')
+              ctl.selectSession(sid)
+            }}
+          />
         )}
         {view === 'tools' && (
           <ToolCatalogPanel
@@ -903,6 +910,10 @@ export default function App() {
             onError={setError}
             goalId={links.goalTarget}
             onSelectGoal={links.setGoalTarget}
+            onOpenSession={(sid) => {
+              setView('chat')
+              ctl.selectSession(sid)
+            }}
           />
         )}
         {view === 'workspace' && (

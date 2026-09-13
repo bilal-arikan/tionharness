@@ -54,6 +54,8 @@ interface Props {
   onError: (msg: string) => void
   // Rota F3: open the Rota screen on a recipe's latest trajectory.
   onOpenTrajectory?: (id: string) => void
+  // Opens a recorded optimizer exchange in Chat.
+  onOpenSession?: (sessionId: string) => void
 }
 
 // Tier badge styling — workspace (higher priority) is accented, global is muted.
@@ -189,7 +191,7 @@ function SkillVisibilitySelector({
 
 // SkillsPanel is the two-panel Skills screen: a list of resolved skills on the
 // left, the selected skill's full instructions (loaded on demand) on the right.
-export function SkillsPanel({ onError, onOpenTrajectory }: Props) {
+export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props) {
   const skillsTick = useRefreshTrigger(SIGNAL_SKILLS)
   const [list, setList] = useState<Skill[]>([])
   const [catalogRevision, setCatalogRevision] = useState(0)
@@ -831,7 +833,11 @@ export function SkillsPanel({ onError, onOpenTrajectory }: Props) {
                   </p>
                 ) : null}
                 {active.kind === 'coordinator-workflow' && (
-                  <RecipeStatsBlock slug={active.slug} onOpenTrajectory={onOpenTrajectory} />
+                  <RecipeStatsBlock
+                    slug={active.slug}
+                    onOpenTrajectory={onOpenTrajectory}
+                    onOpenSession={onOpenSession}
+                  />
                 )}
                 {active.alwaysAllow && active.alwaysAllow.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">

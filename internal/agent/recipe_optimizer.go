@@ -89,6 +89,8 @@ type OptimizerResult struct {
 	Skipped   string            `json:"skipped,omitempty"`
 	Proposals []insight.Finding `json:"proposals"`
 	Dropped   int               `json:"dropped"` // proposals refused by the invariants
+	// SessionID is the recorded optimizer exchange (open it in Chat to continue).
+	SessionID string `json:"sessionId,omitempty"`
 	// Applied counts pruning proposals applied to the recipe (auto_prune: true).
 	Applied int `json:"applied"`
 }
@@ -233,6 +235,7 @@ func (r *Runtime) RunRecipeOptimizer(ctx context.Context, slug, trigger string) 
 		_, _ = finish("model call failed: "+err.Error(), 0)
 		return res, err
 	}
+	res.SessionID = r.recordSystemAgentSession(ctx, optimizerSystemKey, agent, "Reçete optimizer: "+slug, user, resp.Text)
 	raw := extractJSONObject(resp.Text)
 	var parsed struct {
 		Proposals []rawProposal `json:"proposals"`

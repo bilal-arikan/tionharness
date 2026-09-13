@@ -156,6 +156,18 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 		// A failed turn still burns tokens; providers.WithUsage attaches what the
 		// call actually spent to the error, so bill it before propagating.
 		r.recordFailedUsage(ctx, agent, req, err)
+		r.noteAuxRouteFailure(agent, err)
+		// The auxiliary native route rejected its key: the instance is now
+		// quarantined, and THIS call — a goal draft, a canvas edit the user is
+		// waiting on — is retried right away on the caller's own provider rather
+		// than failing once "for the record".
+		if fallback, ok := r.auxRouteFallback(ctx, agent, err); ok {
+			r.logger.Warn("auxiliary route failed; retrying on the caller's provider",
+				"agent", agent.ID, "from", agent.ProviderInstanceID, "to", fallback.ProviderInstanceID,
+				"model", fallback.Model, "callKind", callKindFrom(ctx))
+			req.Model = fallback.Model
+			return r.guardedComplete(ctx, fallback, req, autonomous)
+		}
 		// Mirror recordedComplete's logging: guardedComplete is the funnel for the
 		// non-tool autonomous calls (reflect/summary/title), so a provider failure
 		// here must surface in the logs too — not just propagate up silently.

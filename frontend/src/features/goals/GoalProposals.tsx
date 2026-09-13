@@ -17,6 +17,8 @@ interface Props {
   goal: Goal
   metrics: GoalMetricDef[] | undefined
   onError: (msg: string) => void
+  // Opens the recorded evolver exchange in Chat.
+  onOpenSession?: (sessionId: string) => void
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -28,10 +30,11 @@ const STATUS_LABEL: Record<string, string> = {
   dismissed: 'reddedildi',
 }
 
-export function GoalProposals({ goal, metrics, onError }: Props) {
+export function GoalProposals({ goal, metrics, onError, onOpenSession }: Props) {
   const [data, setData] = useState<GoalEvolution | null>(null)
   const [running, setRunning] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [showClosed, setShowClosed] = useState(false)
 
   const load = useCallback(() => {
@@ -48,6 +51,7 @@ export function GoalProposals({ goal, metrics, onError }: Props) {
     setNote(null)
     try {
       const res = await api.evolveGoal(goal.id)
+      setSessionId(res.sessionId ?? null)
       if (!res.ran) setNote(`Atlandı: ${res.skipped}`)
       else
         setNote(
@@ -110,7 +114,21 @@ export function GoalProposals({ goal, metrics, onError }: Props) {
           Şimdi evrimleştir
         </Button>
       </div>
-      {note && <p className="text-xs text-[var(--color-text-dim)]">{note}</p>}
+      {note && (
+        <p className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+          <span>{note}</span>
+          {sessionId && onOpenSession && (
+            <button
+              type="button"
+              onClick={() => onOpenSession(sessionId)}
+              className="rounded border border-[var(--color-border)] px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
+              data-testid="evolver-open-session"
+            >
+              Oturumu aç
+            </button>
+          )}
+        </p>
+      )}
       {open.length === 0 ? (
         <p className="text-xs text-[var(--color-text-dim)]">
           Açık öneri yok. Evolver, kapsamda en az {goal.policy.minRuns || data?.minRuns || 5} oturum

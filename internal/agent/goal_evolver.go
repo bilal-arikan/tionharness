@@ -87,9 +87,11 @@ type EvolutionResult struct {
 	Skipped       string            `json:"skipped,omitempty"`
 	LowConfidence bool              `json:"lowConfidence,omitempty"`
 	Proposals     []insight.Finding `json:"proposals"`
-	Dropped       int               `json:"dropped"`
-	DropReasons   []string          `json:"dropReasons,omitempty"`
-	Sessions      int               `json:"sessions"`
+	// SessionID is the recorded evolver exchange (open it in Chat to continue).
+	SessionID   string   `json:"sessionId,omitempty"`
+	Dropped     int      `json:"dropped"`
+	DropReasons []string `json:"dropReasons,omitempty"`
+	Sessions    int      `json:"sessions"`
 }
 
 // SweepGoals runs MaybeEvolveGoal for every active goal (called from the
@@ -223,6 +225,7 @@ func (r *Runtime) RunGoalEvolver(ctx context.Context, goalID, trigger string) (E
 		_, _ = finish("model call failed: " + err.Error())
 		return res, err
 	}
+	res.SessionID = r.recordSystemAgentSession(ctx, evolverSystemKey, agent, "Evrim: "+g.Name, user, resp.Text)
 	raw := extractJSONObject(resp.Text)
 	var parsed struct {
 		Proposals []goals.RawProposal `json:"proposals"`

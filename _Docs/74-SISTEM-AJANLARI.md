@@ -29,15 +29,30 @@ Derlenmiş kayıt defteri altı altyapı rolü ve altı yerleşik worker profili
 
 ### Yardımcı çağrılar nerede koşar — `auxNativeRouting` (2026-09-03)
 
-Çözümleyiciler (`resolveTitleConfig`, `resolveCompactorConfig`,
-`resolveAnalysisSystemAgent`, `resolveFoldAgent`) sistem ajanından yalnız prompt +
-model alır; kimlik ve **kimlik bilgileri çağıran ajandan** gelir. Çağıran ajan
+**Kural değişti (2026-09-11):** çözümleyiciler (`resolveTitleConfig`,
+`resolveCompactorConfig`, `resolveAnalysisSystemAgent`, `resolveFoldAgent`) artık tek
+bir yardımcıdan geçer — `Runtime.systemAgentExecutor` — ve **sistem ajanının kendi
+sağlayıcısı, örneği ve modeli** koşar; çağıran yalnız kimliğini (faturalama) ödünç verir.
+Sabitlenmiş sağlayıcı koşulsuz, yerleşik varsayılan ise registry o örneği sunabiliyorsa
+(`Available`) alınır; boş sağlayıcı ile `claude-cli` aynı taşıyıcıdır. Aşağıdaki
+yönlendirme yalnız sağlayıcı sabitlenmemişken uygulanır. (Tarihsel model: sistem
+ajanından yalnız prompt + model alınır, kimlik bilgileri çağırandan gelirdi.) Çağıran ajan
 claude-cli/codex-cli'daysa bu, her başlık/özet/yargı için taze bir `claude -p` =
 Claude Code'un ~36k token'lık taban promptu (2.1.259 ölçümü, `_Docs/17`) demekti.
 `Runtime.routeAuxAgent` (`internal/agent/systemagent_route.go`) artık üç koşul
 sağlanınca kopyayı anahtarlı ilk `anthropic` instance'ına çevirir: ayar
 `auxNativeRouting` açık (varsayılan), çağıran CLI türünde, `Registry.
-FirstAvailableOfKind("anthropic")` boş değil. Model, sistem ajanının alias'ından
+FirstAvailableOfKind("anthropic")` boş değil. **İki istisna (2026-09-11):** sistem
+ajanının `overrides`'ında `provider` varsa (kullanıcı Ayarlar ▸ Sistem Ajanları'ndan
+sağlayıcı seçmişse) çağrı tam o sağlayıcı/örnek/modelde koşar ve yönlendirme atlanır
+(`pinsProvider`); bir anthropic örneği auth hatası verirse sağlayıcı ayarları yeniden
+kaydedilene kadar (`providers.Registry.Generation`) karantinaya alınır, düşen çağrı aynı
+anda çağıranın kendi sağlayıcısında yeniden denenir (`auxRouteFallback`) ve sonraki
+yardımcı çağrılar CLI sağlayıcıda kalır (`noteAuxRouteFailure`, `auxRouteQuarantined`).
+Yalnız CLI kullanan bir kurulumda kalıcı çözüm: Ayarlar ▸ Sağlayıcılar'da anthropic
+örneğini devre dışı bırakmak ya da anahtarını silmek — o zaman yönlendirme hiç
+tetiklenmez. Boş id ile çağrılan `pickInsightAgent` de artık en yeni ajanı değil
+workspace varsayılan ajanını alır. Model, sistem ajanının alias'ından
 API id'sine çevrilir (`providers.NativeClaudeModel`: haiku →
 `claude-haiku-4-5-20251001`). Koşullar sağlanmazsa davranış eskisi gibidir;
 native anthropic bir çağıranda yalnız alias çevrilir. Faturalama çağıran ajanın

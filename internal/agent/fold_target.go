@@ -55,8 +55,5 @@ func (r *Runtime) resolveFoldAgent(agent db.Agent) (db.Agent, bool) {
 	if err != nil {
 		return agent, false
 	}
-	agent.Model = adoptSystemAgentModel(r.logger, "compaction", agent.Provider, agent.Model, compactor.Model)
-	agent.System = true
-	agent.SystemKey = compactor.SystemKey
-	return r.routeAuxAgent(agent, compactor), true
+	return r.systemAgentExecutor("compaction", agent, compactor), true
 }

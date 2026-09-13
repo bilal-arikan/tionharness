@@ -28,11 +28,13 @@ interface Props {
   // Selected goal, deep-link aware (#/w/{ws}/goals/{GOL}).
   goalId?: string | null
   onSelectGoal?: (id: string | null) => void
+  // Opens a recorded system-agent exchange (writer / evolver) in Chat.
+  onOpenSession?: (sessionId: string) => void
 }
 
 type Filter = 'open' | 'all' | 'archived'
 
-export function GoalsPanel({ onError, goalId, onSelectGoal }: Props) {
+export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Props) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [catalog, setCatalog] = useState<GoalCatalog | null>(null)
   const [loading, setLoading] = useState(false)
@@ -40,6 +42,8 @@ export function GoalsPanel({ onError, goalId, onSelectGoal }: Props) {
   const [localId, setLocalId] = useState<string | null>(null)
   const [intake, setIntake] = useState<{ goal?: Goal | null } | null>(null)
   const [editing, setEditing] = useState(false)
+  // The writer exchange behind the most recent intake, per goal id.
+  const [writerSessions, setWriterSessions] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.goalsListOpen')
 
@@ -294,7 +298,27 @@ export function GoalsPanel({ onError, goalId, onSelectGoal }: Props) {
               onCancel={() => setEditing(false)}
             />
           ) : (
-            <GoalDetail goal={active} catalog={catalog} onError={onError} />
+            <>
+              {onOpenSession && writerSessions[active.id] && (
+                <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+                  <span>Hedef yazıcı ile konuşma kaydedildi.</span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onOpenSession(writerSessions[active.id])}
+                    data-testid="goal-writer-open-session"
+                  >
+                    Oturumu aç
+                  </Button>
+                </div>
+              )}
+              <GoalDetail
+                goal={active}
+                catalog={catalog}
+                onError={onError}
+                onOpenSession={onOpenSession}
+              />
+            </>
           )}
         </div>
       </div>
@@ -304,7 +328,8 @@ export function GoalsPanel({ onError, goalId, onSelectGoal }: Props) {
           goal={intake.goal}
           onClose={() => setIntake(null)}
           onError={onError}
-          onWritten={(g) => {
+          onWritten={(g, _created, sessionId) => {
+            if (sessionId) setWriterSessions((m) => ({ ...m, [g.id]: sessionId }))
             upsert(g)
             setIntake(null)
             setFilter((f) => (f === 'archived' ? 'open' : f))

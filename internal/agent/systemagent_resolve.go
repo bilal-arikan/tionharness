@@ -24,6 +24,7 @@ func (r *Runtime) ResolveSystemAgent(key string) (db.Agent, bool, error) {
 		Soul:         def.SystemPrompt,
 		Identity:     def.Description,
 		Model:        def.SuggestedModel,
+		Provider:     def.Provider,
 		AllowedTools: def.AllowedTools,
 		System:       true,
 		SystemKey:    def.SystemKey,

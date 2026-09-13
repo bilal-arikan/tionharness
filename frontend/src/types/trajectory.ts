@@ -134,6 +134,8 @@ export interface OptimizerResult {
   skipped?: string
   proposals: { id: string; title: string }[]
   dropped: number
+  // Recorded optimizer exchange: open it in Chat to continue.
+  sessionId?: string
   applied?: number
 }
 

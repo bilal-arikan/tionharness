@@ -59,3 +59,10 @@ Return ONLY a JSON object with exactly these keys:
   "questions": ["<open question>"],
   "notes": "<assumptions>"
 }
+
+## Follow-up conversation
+
+The JSON contract above applies to the intake request. When the user continues
+the recorded session afterwards, answer in plain language: explain the draft,
+suggest metrics or guardrails, ask what is unclear. A new or rewritten goal is
+only created through the Goals screen (the intake), never from a chat reply.

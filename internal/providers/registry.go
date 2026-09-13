@@ -48,6 +48,8 @@ type Registry struct {
 	betaRefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
 
 	instances map[string]Instance // provider instances, keyed by ID (Faz 2, _Docs/71 §2.3)
+	// generation increments on every SetInstances (see Generation).
+	generation uint64
 }
 
 // NewRegistry creates a registry. It auto-detects the keyless CLI transports
@@ -68,6 +70,16 @@ func NewRegistry() *Registry {
 // whenever settings or providers.json change. Unlike the old per-kind Set*
 // methods, there is exactly one entry point regardless of how many kinds or
 // instances exist.
+// Generation counts SetInstances calls: it changes exactly when the provider
+// configuration (instances, keys, enabled flags) is re-applied, so a caller can
+// tie a cached judgement about an instance ("its key was rejected") to the
+// configuration that produced it and drop it the moment the user edits providers.
+func (r *Registry) Generation() uint64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.generation
+}
+
 func (r *Registry) SetInstances(list []Instance) {
 	m := make(map[string]Instance, len(list))
 	for _, inst := range list {
@@ -78,6 +90,7 @@ func (r *Registry) SetInstances(list []Instance) {
 	}
 	r.mu.Lock()
 	r.instances = m
+	r.generation++
 	r.mu.Unlock()
 }
 

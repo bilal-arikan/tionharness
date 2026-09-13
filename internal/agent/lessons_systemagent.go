@@ -21,12 +21,21 @@ func (r *Runtime) resolveAnalysisSystemAgent(key string, agent db.Agent) (db.Age
 		return agent, r.readPrompt(promptKey), nil
 	}
 
-	// Keep provider credentials and the billing agent ID on the calling agent.
-	// Only model, prompt, and usage actor identity come from the system agent.
-	agent.Model = adoptSystemAgentModel(r.logger, key, agent.Provider, agent.Model, systemAgent.Model)
-	agent.System = true
-	agent.SystemKey = systemAgent.SystemKey
-	return r.routeAuxAgent(agent, systemAgent), systemAgent.Soul, nil
+	return r.systemAgentExecutor(key, agent, systemAgent), systemAgent.Soul, nil
+}
+
+// pinsProvider reports whether the user explicitly chose a provider for this
+// system agent (the "provider" key sits in its overrides and names a provider).
+func pinsProvider(a db.Agent) bool {
+	if a.Provider == "" {
+		return false
+	}
+	for _, k := range a.Overrides {
+		if k == "provider" {
+			return true
+		}
+	}
+	return false
 }
 
 // analysisPromptKeys maps an analysis system agent to the prompt-registry key

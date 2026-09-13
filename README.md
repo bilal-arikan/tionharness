@@ -112,7 +112,7 @@ ve ajanlar tek tek örneklere bağlanır:
 ## Arayüz
 
 Panel, Sohbet, Ajanlar, Ağ, Harita, Rota, Görevler, Otomasyon, Akışlar, Artifactlar, Skills,
-Araçlar & MCP, Market, Bütçe, Loglar ve İçgörü ekranları. Tema: açık/koyu/sistem +
+Araçlar & MCP, Market, Bütçe, Loglar, İçgörü ve Hedefler ekranları. Tema: açık/koyu/sistem +
 6 renk paleti (Violet, Blue, Emerald, Rose, Amber, Nord) — her biri açık ve koyu varyantıyla,
 hepsi canlı uygulanır. Arayüz dili, ajanın yanıt dilinden bağımsız olarak ayarlanır.
 

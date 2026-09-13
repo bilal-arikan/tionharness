@@ -14,13 +14,16 @@ import { fmtDurationSec, fmtTokens } from '@/features/rota/trajectoryFormat'
 interface Props {
   slug: string
   onOpenTrajectory?: (id: string) => void
+  // Opens the recorded optimizer exchange in Chat.
+  onOpenSession?: (sessionId: string) => void
 }
 
-export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
+export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Props) {
   const [rows, setRows] = useState<RecipeStats[] | null>(null)
   const [openProposals, setOpenProposals] = useState<number>(0)
   const [lastPass, setLastPass] = useState<string>('')
   const [optimizing, setOptimizing] = useState(false)
+  const [optimizerSession, setOptimizerSession] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
   useEffect(() => {
     let cancelled = false
@@ -60,6 +63,7 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
     setOptimizing(true)
     try {
       const r = await api.optimizeRecipe(slug)
+      setOptimizerSession(r.sessionId ?? null)
       if (r.ran)
         toast.info(
           `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi${r.applied ? `, ${r.applied} oto-uygulandı` : ''})`,
@@ -77,6 +81,17 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory }: Props) {
     <div className="mt-2 text-xs" data-testid="recipe-stats">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="font-medium text-[var(--color-text-dim)]">Rota istatistikleri</span>
+        {optimizerSession && onOpenSession && (
+          <button
+            type="button"
+            onClick={() => onOpenSession(optimizerSession)}
+            className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] hover:bg-[var(--color-surface-2)]"
+            title="Optimizer ile konuşmayı sohbette aç"
+            data-testid="optimizer-open-session"
+          >
+            Optimizer oturumu
+          </button>
+        )}
         <button
           type="button"
           onClick={optimize}

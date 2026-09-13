@@ -23,6 +23,7 @@ import type { View } from './NavRail'
 
 export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIcon }[] = [
   { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
+  { key: 'goals', label: 'Hedefler', icon: Target },
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'rota', label: 'Rota', icon: Waypoints },
@@ -37,5 +38,4 @@ export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIco
   { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'prompts', label: 'Prompts', labelKey: 'navigation.promptsFiles', icon: FileText },
   { key: 'insights', label: 'İçgörü', icon: Lightbulb },
-  { key: 'goals', label: 'Hedefler', icon: Target },
 ]

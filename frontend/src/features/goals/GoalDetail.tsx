@@ -25,9 +25,10 @@ interface Props {
   goal: Goal
   catalog: GoalCatalog | null
   onError: (msg: string) => void
+  onOpenSession?: (sessionId: string) => void
 }
 
-export function GoalDetail({ goal, catalog, onError }: Props) {
+export function GoalDetail({ goal, catalog, onError, onOpenSession }: Props) {
   const metrics = catalog?.metrics
   const unit = (key: string) => metrics?.find((m) => m.key === key)?.unit
   const nameOf = (kind: keyof GoalCatalog['candidates'], id: string) => {
@@ -81,7 +82,12 @@ export function GoalDetail({ goal, catalog, onError }: Props) {
 
       <GoalFitnessBlock goal={goal} metrics={metrics} onError={onError} />
 
-      <GoalProposals goal={goal} metrics={metrics} onError={onError} />
+      <GoalProposals
+        goal={goal}
+        metrics={metrics}
+        onError={onError}
+        onOpenSession={onOpenSession}
+      />
 
       <section className="flex flex-col gap-2">
         <SectionHead>Ölçüm tanımı</SectionHead>

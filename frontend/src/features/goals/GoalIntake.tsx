@@ -11,7 +11,8 @@ import type { Goal } from '@/types/goal'
 interface Props {
   goal?: Goal | null
   onClose: () => void
-  onWritten: (goal: Goal, created: boolean) => void
+  // sessionId is the recorded writer exchange (open it in Chat to continue).
+  onWritten: (goal: Goal, created: boolean, sessionId?: string) => void
   onError: (msg: string) => void
 }
 
@@ -32,7 +33,7 @@ export function GoalIntake({ goal, onClose, onWritten, onError }: Props) {
     setBusy(true)
     try {
       const res = await api.intakeGoal(text, goal?.id)
-      onWritten(res.goal, res.created)
+      onWritten(res.goal, res.created, res.sessionId)
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e))
     } finally {

@@ -81,12 +81,9 @@ func (r *Runtime) resolveTitleConfig(agent db.Agent) (db.Agent, string) {
 		return agent, r.readPrompt("title")
 	}
 
-	agent.Model = adoptSystemAgentModel(r.logger, "titler", agent.Provider, agent.Model, titler.Model)
-	// Keep billing on the calling agent ID/provider credentials, but carry the
-	// resolved actor identity into RecordUsage so KindTitle becomes system:title.
-	agent.System = true
-	agent.SystemKey = titler.SystemKey
-	return r.routeAuxAgent(agent, titler), titler.Soul
+	// Billing stays on the calling agent's id; transport and model are the
+	// titler's own (systemAgentExecutor), and KindTitle becomes system:title.
+	return r.systemAgentExecutor("titler", agent, titler), titler.Soul
 }
 
 // TitleFor resolves a titling agent (the preferred one if given, otherwise the

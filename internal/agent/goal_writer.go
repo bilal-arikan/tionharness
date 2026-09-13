@@ -36,6 +36,8 @@ type GoalIntakeResult struct {
 	Goal db.Goal `json:"goal"`
 	// Created is true for a new draft, false for a rewrite of an existing goal.
 	Created bool `json:"created"`
+	// SessionID is the recorded writer exchange (open it in Chat to continue).
+	SessionID string `json:"sessionId,omitempty"`
 }
 
 // GoalScopeCandidates are the ids the writer may reference in a scope.
@@ -103,12 +105,13 @@ func (r *Runtime) WriteGoal(ctx context.Context, rawText, goalID string) (GoalIn
 	if err := goals.Validate(g); err != nil {
 		return GoalIntakeResult{}, fmt.Errorf("goal writer produced an invalid draft: %w", err)
 	}
+	sessionID := r.recordSystemAgentSession(ctx, goalWriterSystemKey, agent, "Hedef: "+rawText, user, resp.Text)
 	if base == nil {
 		stored, err := r.db.CreateGoal(ctx, g, db.GoalByWriter, "written from the user's statement")
 		if err != nil {
 			return GoalIntakeResult{}, err
 		}
-		return GoalIntakeResult{Goal: stored, Created: true}, nil
+		return GoalIntakeResult{Goal: stored, Created: true, SessionID: sessionID}, nil
 	}
 	if err := r.db.ReplaceGoalRawText(ctx, base.ID, rawText); err != nil {
 		return GoalIntakeResult{}, err
@@ -117,7 +120,7 @@ func (r *Runtime) WriteGoal(ctx context.Context, rawText, goalID string) (GoalIn
 	if err != nil {
 		return GoalIntakeResult{}, err
 	}
-	return GoalIntakeResult{Goal: stored}, nil
+	return GoalIntakeResult{Goal: stored, SessionID: sessionID}, nil
 }
 
 // GoalScopeCandidates collects the recipe slugs, agents, automations and

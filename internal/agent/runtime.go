@@ -313,6 +313,10 @@ type Runtime struct {
 	spawnWake   chan struct{}
 	spawnStop   chan struct{}
 	spawnDone   chan struct{}
+	// auxRouteBad quarantines anthropic instances whose key was rejected on the
+	// auxiliary route (systemagent_route.go): instance id → the provider
+	// configuration generation the rejection was seen under.
+	auxRouteBad sync.Map
 	spawnClose  sync.Once
 
 	// spawnLifeMu / spawnClosing / spawnWG form the shutdown barrier for background

@@ -300,6 +300,15 @@ func (r *Runtime) pickInsightAgent(ctx context.Context, agentID string) (db.Agen
 	if agentID != "" {
 		return r.db.GetAgent(ctx, agentID)
 	}
+	// The workspace's default agent is the user's stated choice of transport and
+	// credentials; only when none is set does the newest agent stand in (that
+	// used to be the sole rule, and it could pick a system agent that happened
+	// to be created last).
+	if id := r.DefaultAgentID(); id != "" {
+		if a, err := r.db.GetAgent(ctx, id); err == nil && !a.Disabled && !a.Deleted {
+			return a, nil
+		}
+	}
 	agents, err := r.db.ListAgents(ctx)
 	if err != nil {
 		return db.Agent{}, err

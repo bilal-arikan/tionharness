@@ -86,6 +86,8 @@ export interface EvolutionResult {
   proposals: InsightFinding[]
   dropped: number
   dropReasons?: string[]
+  // Recorded evolver exchange: open it in Chat to continue.
+  sessionId?: string
   sessions: number
 }
 

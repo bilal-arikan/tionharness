@@ -95,4 +95,6 @@ export interface GoalCatalog {
 export interface GoalIntakeResult {
   goal: Goal
   created: boolean
+  // Recorded writer exchange: open it in Chat to continue.
+  sessionId?: string
 }

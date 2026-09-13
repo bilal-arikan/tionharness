@@ -1,7 +1,67 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-10):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-13):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Sistem ajanının kendi sağlayıcısı ve modeli her zaman kullanılır (2026-09-11) ✅
+
+- **Karar (kullanıcı onayı):** Ayarlar ▸ Sistem Ajanları kartındaki sağlayıcı/model artık
+  "öneri" değil **kural**. Tek yerde uygulanıyor: `Runtime.systemAgentExecutor`
+  (`internal/agent/systemagent_exec.go`); `resolveAnalysisSystemAgent`, `resolveTitleConfig`,
+  `resolveCompactorConfig`, `resolveFoldAgent` hepsi onu çağırır.
+- **Kural:** çağıran yalnız kimliğini (faturalama) ödünç verir. Sağlayıcı/örnek sistem
+  ajanınınki — kullanıcı sabitlediyse (`provider` override) koşulsuz, yerleşik varsayılansa
+  registry o örneği sunabiliyorsa (`Registry.Available`; codex-only kurulumda claude-cli
+  isteyen yerleşik titler codex'te kalır). Boş sağlayıcı (anahtarsız claude-cli varsayılanı)
+  ile `claude-cli` aynı taşıyıcı sayılır (fold ortasında sağlayıcı nesnesi değişmez).
+  Model sistem ajanınınki, koşacağı sağlayıcıya göre `adoptSystemAgentModel` ile denetlenir.
+  Aux native yönlendirme (CLI → anthropic) yalnız sağlayıcı sabitlenmemişse devreye girer;
+  auth hatasında `auxRouteFallback` önce sistem ajanının kendi CLI taşıyıcısına döner.
+- Compiled fallback (`ResolveSystemAgent` satırsız durum) artık `Provider`'ı da taşır.
+- Testler: `TestSystemAgentExecutorUsesOwnProviderAndModel` + mevcut yönlendirme/fold
+  testleri; `_Docs/74` §"Yardımcı çağrılar nerede koşar" güncellendi.
+
+## Sistem ajanı çağrıları görünür ve devam ettirilebilir oturum (2026-09-11) ✅
+
+- **İstek:** Hedef yazıcı, workspace evolver ve reçete optimizer çağrılarının
+  oturumunu görebilmek ve devam ettirebilmek. Ayrıca NavRail sırası: Panel,
+  **Hedefler**, Sohbet, … (Görevler eski yerinde).
+- **Backend:** `Runtime.recordSystemAgentSession` (`internal/agent/systemagent_session.go`)
+  tek atışlık çağrının promptunu + yanıtını rolü karşılayan workspace ajanına bağlı
+  **sıradan bir `chat` oturumu** olarak kaydeder (`Origin user`, etiket
+  `system:<key>`, başlık istekten). `WriteGoal` / `RunGoalEvolver` /
+  `RunRecipeOptimizer` sonuçlarına `sessionId` eklendi. Titler/compaction/stall-judge/
+  lesson gibi arka plan rolleri bilerek kaydedilmez (liste dolar). Üç promptun sonuna
+  "Follow-up conversation" paragrafı eklendi (ilk yanıt JSON sözleşmesi, devamı düz
+  dil; sohbette söylenen hiçbir şey uygulanmaz).
+- **Frontend:** Hedefler'de (yazıcı oturumu + Öneriler ▸ evolver oturumu) ve
+  Skills ▸ reçete istatistiklerinde (optimizer oturumu) **"Oturumu aç"** düğmesi;
+  Sohbet'e geçip o oturumu seçer, oradan yazılan mesaj normal tur olarak ajana gider.
+  Test: `TestRecordSystemAgentSession`.
+
+## Yardımcı çağrı yönlendirmesi: sabitlenmiş sağlayıcı + geçersiz anahtar karantinası (2026-09-11) ✅
+
+- **Bulgu (kullanıcı testi):** Hedefler'de goal-writer `anthropic API error
+  (authentication_error): invalid x-api-key` veriyordu. Neden:
+  `resolveAnalysisSystemAgent` sistem ajanından yalnız prompt + model alıp çağıranın
+  sağlayıcısında koşuyor, `routeAuxAgent` de CLI çağıranı
+  "anahtarı olan" ilk anthropic örneğine çeviriyordu — anahtarın geçerliliğine
+  bakılmadan. Ayrıca `pickInsightAgent("")` en yeni ajanı seçiyordu (bu bir sistem ajanı
+  bile olabiliyordu).
+- **Düzeltme:** (1) sistem ajanının `overrides`'ında `provider` varsa çağrı o
+  sağlayıcı/örnek/modelde koşar, aux yönlendirme atlanır (`pinsProvider`,
+  `internal/agent/lessons_systemagent.go`); (2) `guardedComplete` auth hatasında
+  anthropic örneğini **sağlayıcı ayarları yeniden kaydedilene kadar** (`Registry.Generation`)
+  aux yönlendirme karantinasına alır (`noteAuxRouteFailure`,
+  `systemagent_route.go`) — sonraki başlık/özet/hedef çağrıları çağıranın CLI
+  sağlayıcısında kalır, pencere dolunca yol yeniden denenir; (3) `pickInsightAgent`
+  önce workspace varsayılan ajanını alır; (4) **aynı çağrı içinde geri dönüş**:
+  `guardedComplete` aux-yönlendirilmiş çağrı auth hatası alınca çağıranın kendi satırından
+  sağlayıcı/örnek/modeli geri kurup (`auxRouteFallback`) bir kez yeniden dener — kullanıcı
+  artık "ilk deneme düşer, ikincisi çalışır" görmez. Testler:
+  `TestResolveAnalysisSystemAgentHonoursPinnedProvider`,
+  `TestAuxRouteQuarantineAfterAuthError`, `TestAuxRouteFallbackRebuildsCaller`. Kalıcı
+  sağlık probe'u önerisi pano kartı TSK121'de.
 
 ## CLI yerleşik araçları: izleyerek serbest bırakma (2026-09-10) ✅
 

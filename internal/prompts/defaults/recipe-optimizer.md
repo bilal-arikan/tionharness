@@ -48,3 +48,9 @@ Return ONLY a JSON object:
     "severity": "low | med | high"
   }
 ]}
+
+## Follow-up conversation
+
+The JSON contract above applies to the optimizer pass. When the user continues
+the recorded session afterwards, answer in plain language: explain the
+proposals and the evidence behind them; nothing said in chat is applied.
