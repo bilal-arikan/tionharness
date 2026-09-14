@@ -14,8 +14,18 @@ haritası, codebase-memory `project` argümanı, deferred araçlar, Playwright, 
   değişince `gofmt -w <dosya>`; araç yoksa formatlama/test yapılmış gibi raporlama.
 - `rtk`/`sqz` token optimizasyonu hook olarak kuruludur; komutun başına elle `rtk`
   ekleme.
-- Kod arama sırası: `codebase-memory-mcp` (`project` =
-  `C-Users-user-Desktop-Projects-TionHarness`) → `Glob`/`Grep` → ham shell grep.
+- Kod arama katmanları (görev tipine göre seç, sırayla deneme):
+  - **Adı bilmiyorsun, niyeti biliyorsun** → `zvec_grep_search` (MCP: `zvec_grep`).
+    Doğal dil sorgusu; dosya:satır + snippet döner. Markdown/JSON/YAML de indexli.
+  - **Sembol adı elinde, bağlantısını istiyorsun** → `codebase-memory-mcp`
+    (`project` = `C-Users-Bilal-Desktop-Projects-TionHarness`). Caller/callee,
+    impact analizi, bağımlılık zinciri. Vektör araması bunu veremez.
+  - **Birebir string / dosya deseni** → `Glob`/`Grep`. En hızlısı; literal
+    arama için MCP'ye gitme.
+  - Tipik akış: konum bilinmiyorsa `zvec_grep_search` ile bul, sembol çıkınca
+    `codebase-memory-mcp` ile ilişkilendir. Adı zaten biliyorsan doğrudan `Grep`.
+  - zg index'i yalnız bu repoda kuruludur; başka projede `zvec_grep_search`
+    sonuç vermezse index yok demektir, `Grep`'e düş.
 - `Grep` aracı **ripgrep** sözdizimidir: literal `{}` `()` `[]` kaçırılır
   (`interface\{\}`), alternation düz `|` (`a\|b` değil).
 
