@@ -71,11 +71,15 @@ func TestGoalStoreLifecycle(t *testing.T) {
 		t.Fatalf("raw text: %v", err)
 	}
 
-	// Ordering: active first, then drafts by priority, then newest.
-	d2, _ := d.CreateGoal(ctx, Goal{Name: "B", Priority: 1, Primary: GoalMetric{Metric: "board.cycleTimeSec", Direction: "min"}}, GoalByWriter, "")
-	d3, _ := d.CreateGoal(ctx, Goal{Name: "C", Priority: 4, Primary: GoalMetric{Metric: "board.cycleTimeSec", Direction: "min"}}, GoalByWriter, "")
+	// Ordering: active first, then newest.
+	d2, _ := d.CreateGoal(ctx, Goal{Name: "B", Primary: GoalMetric{Metric: "board.cycleTimeSec", Direction: "min"}}, GoalByWriter, "")
+	d3, _ := d.CreateGoal(ctx, Goal{Name: "C", Primary: GoalMetric{Metric: "board.cycleTimeSec", Direction: "min"}}, GoalByWriter, "")
+	d3.CreatedAt = d2.CreatedAt + 1
+	d.mu.Lock()
+	d.goals[d3.ID] = d3
+	d.mu.Unlock()
 	list, _ := d.ListGoals(ctx)
-	if len(list) != 3 || list[0].ID != g.ID || list[1].ID != d2.ID || list[2].ID != d3.ID {
+	if len(list) != 3 || list[0].ID != g.ID || list[1].ID != d3.ID || list[2].ID != d2.ID {
 		t.Fatalf("order = %v", []string{list[0].ID, list[1].ID, list[2].ID})
 	}
 	drafts, _ := d.ListGoalsByStatus(ctx, GoalStatusDraft)

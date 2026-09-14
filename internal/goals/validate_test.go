@@ -28,9 +28,6 @@ func TestValidateRules(t *testing.T) {
 	if err := Validate(g); err != nil {
 		t.Fatalf("valid goal rejected: %v", err)
 	}
-	if g.Kind != db.GoalKindMetric {
-		t.Fatalf("kind defaulted to %q, want metric", g.Kind)
-	}
 	cases := []struct {
 		name string
 		mut  func(*db.Goal)
@@ -46,14 +43,9 @@ func TestValidateRules(t *testing.T) {
 		{"guardrail duplicate", func(g *db.Goal) {
 			g.Guardrails = append(g.Guardrails, db.GoalGuardrail{Metric: "recipe.successRate", Max: f(1)})
 		}, "listed twice"},
-		{"auto without surfaces", func(g *db.Goal) { g.Policy.Mode = db.GoalModeAuto }, "auto mode needs"},
-		{"auto unsafe surface", func(g *db.Goal) {
-			g.Policy.Mode = db.GoalModeAuto
-			g.Policy.AutoApplySurfaces = []string{"soul"}
-		}, "may not be auto-applied"},
+		{"unknown mode", func(g *db.Goal) { g.Policy.Mode = "auto" }, "unknown policy mode"},
+		{"negative cooldown", func(g *db.Goal) { g.Policy.CooldownHours = -1 }, "must not be negative"},
 		{"bad status", func(g *db.Goal) { g.Status = "done" }, "unknown status"},
-		{"priority range", func(g *db.Goal) { g.Priority = 9 }, "priority must be"},
-		{"rubric metric without rubric", func(g *db.Goal) { g.Primary.Metric = "judge.rubricScore"; g.Primary.Direction = "max" }, "needs a rubric"},
 		{"too long", func(g *db.Goal) { g.Description = strings.Repeat("x", MaxTextLen+1) }, "longer than"},
 	}
 	for _, tc := range cases {
@@ -67,25 +59,22 @@ func TestValidateRules(t *testing.T) {
 			}
 		})
 	}
-	// A safe auto policy passes.
+	// Measure-only is a valid user choice.
 	g = validGoal()
-	g.Policy = db.GoalPolicy{Mode: db.GoalModeAuto, AutoApplySurfaces: []string{"thinkingLevel"}}
+	g.Policy = db.GoalPolicy{Mode: db.GoalModeOff}
 	Normalize(&g)
 	if err := Validate(g); err != nil {
-		t.Fatalf("safe auto policy rejected: %v", err)
+		t.Fatalf("off policy rejected: %v", err)
 	}
 }
 
-// TestNormalizeDefaults: direction falls back to the catalog default, kind is
-// derived from the rubric, lists are trimmed and de-duplicated.
+// TestNormalizeDefaults: direction falls back to the catalog default, status
+// and mode default, lists are trimmed and de-duplicated.
 func TestNormalizeDefaults(t *testing.T) {
-	g := db.Goal{Name: " x ", Primary: db.GoalMetric{Metric: "recipe.successRate"}, Rubric: "iyi", Scope: db.GoalScope{Recipes: []string{" a ", "a", ""}}}
+	g := db.Goal{Name: " x ", Primary: db.GoalMetric{Metric: "recipe.successRate"}, Scope: db.GoalScope{Recipes: []string{" a ", "a", ""}}}
 	Normalize(&g)
 	if g.Primary.Direction != "max" {
 		t.Fatalf("direction = %q, want catalog default max", g.Primary.Direction)
-	}
-	if g.Kind != db.GoalKindMixed {
-		t.Fatalf("kind = %q, want mixed (metric + rubric)", g.Kind)
 	}
 	if g.Status != db.GoalStatusDraft || g.Policy.Mode != db.GoalModePropose {
 		t.Fatalf("defaults: status=%q mode=%q", g.Status, g.Policy.Mode)
@@ -98,37 +87,25 @@ func TestNormalizeDefaults(t *testing.T) {
 	}
 }
 
-// TestCanActivate: open questions block activation.
-func TestCanActivate(t *testing.T) {
-	g := validGoal()
-	g.Questions = []string{"Hangi reçete?"}
-	Normalize(&g)
-	if err := CanActivate(g); err == nil || !strings.Contains(err.Error(), "open question") {
-		t.Fatalf("want open-question error, got %v", err)
-	}
-	g.Questions = nil
-	if err := CanActivate(g); err != nil {
-		t.Fatalf("want activatable, got %v", err)
-	}
-}
-
-// TestFromDraft: the writer can never escalate policy, the raw text is kept,
-// and a rewrite of an active goal falls back to draft for re-confirmation.
+// TestFromDraft: the writer can never pick the policy mode, the raw text is
+// kept, unusable guardrails are dropped, and a rewrite of an active goal falls
+// back to draft for re-confirmation.
 func TestFromDraft(t *testing.T) {
-	d := Draft{
-		Name: "Ucuz inceleme", Summary: "s", Description: "d", Kind: "metric", Priority: 2,
-		Scope:      Scope{Recipes: []string{"code-review"}},
-		Primary:    Primary{Metric: "recipe.avgCostUSD", Direction: "min", Target: f(0.5)},
-		Guardrails: []Guard{{Metric: "recipe.successRate", Min: f(0.9)}},
-		Policy:     Policy{Mode: "auto", AutoApplySurfaces: []string{"thinkingLevel"}, CooldownHours: 72, MinRuns: 5},
-		Questions:  []string{"q"},
+	d := db.Goal{
+		Name: "Ucuz inceleme", Description: "d",
+		Scope:      db.GoalScope{Recipes: []string{"code-review"}},
+		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min", Target: f(0.5)},
+		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: f(0.9)}},
+		Policy:     db.GoalPolicy{Mode: "off", CooldownHours: 72, MinRuns: 5},
+		// Fields the writer must not decide are ignored even if present.
+		ID: "GOL99", Status: db.GoalStatusActive, CreatedBy: "someone", History: []db.GoalRevision{{At: 1}},
 	}
 	g := FromDraft(d, "  incelemeler pahalı  ", nil)
-	if g.Policy.Mode != db.GoalModePropose || len(g.Policy.AutoApplySurfaces) != 0 {
-		t.Fatalf("writer must not set auto policy: %+v", g.Policy)
+	if g.Policy.Mode != db.GoalModePropose || g.Policy.CooldownHours != 72 || g.Policy.MinRuns != 5 {
+		t.Fatalf("draft policy must be propose with the writer's cadence: %+v", g.Policy)
 	}
-	if g.RawText != "incelemeler pahalı" || g.CreatedBy != db.GoalByWriter || g.Status != db.GoalStatusDraft {
-		t.Fatalf("draft shape: raw=%q by=%q status=%q", g.RawText, g.CreatedBy, g.Status)
+	if g.ID != "" || g.RawText != "incelemeler pahalı" || g.CreatedBy != db.GoalByWriter || g.Status != db.GoalStatusDraft || len(g.History) != 0 {
+		t.Fatalf("draft shape: id=%q raw=%q by=%q status=%q history=%d", g.ID, g.RawText, g.CreatedBy, g.Status, len(g.History))
 	}
 	if g.Primary.Target == nil || *g.Primary.Target != 0.5 || len(g.Guardrails) != 1 || g.Guardrails[0].Min == nil {
 		t.Fatalf("numbers lost: %+v %+v", g.Primary, g.Guardrails)
@@ -141,11 +118,11 @@ func TestFromDraft(t *testing.T) {
 	if g.ID != "GOL3" || g.Status != db.GoalStatusDraft || g.CreatedBy != db.GoalByUser || g.CreatedAt != 7 || len(g.History) != 1 {
 		t.Fatalf("rewrite must keep identity and drop to draft: %+v", g)
 	}
-	// An unbounded or unknown guardrail becomes a question, not a refusal.
-	d.Guardrails = append(d.Guardrails, Guard{Metric: "recipe.avgSessions"}, Guard{Metric: "vibes", Min: f(1)})
+	// An unbounded or unknown guardrail is dropped, not a refusal.
+	d.Guardrails = append(d.Guardrails, db.GoalGuardrail{Metric: "recipe.avgSessions"}, db.GoalGuardrail{Metric: "vibes", Min: f(1)})
 	g = FromDraft(d, "x", nil)
-	if len(g.Guardrails) != 1 || len(g.Questions) != 3 {
-		t.Fatalf("lenient guardrails: %+v / %v", g.Guardrails, g.Questions)
+	if len(g.Guardrails) != 1 {
+		t.Fatalf("lenient guardrails: %+v", g.Guardrails)
 	}
 	if err := Validate(g); err != nil {
 		t.Fatalf("draft with dropped guardrails must validate: %v", err)
@@ -177,8 +154,5 @@ func TestCatalogIntegrity(t *testing.T) {
 	}
 	if len(Keys()) != len(seen) {
 		t.Fatal("Keys() disagrees with Catalog()")
-	}
-	if !IsAutoApplySurface("thinkingLevel") || IsAutoApplySurface("model") {
-		t.Fatal("auto-apply surface allowlist wrong")
 	}
 }

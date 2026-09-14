@@ -1,43 +1,31 @@
 package db
 
 // Goal is a workspace objective the evolution machinery (_Docs/83) optimizes
-// toward. Goals are never written straight from a form: the goal-writer system
-// agent turns the user's own words (RawText) into this normalized shape, saves
-// it as a DRAFT, and the user reviews, edits and activates it. Every later
-// human or agent edit appends a GoalRevision so the goal's own history is
-// inspectable before any optimizer acts on it.
+// toward: one primary metric from the closed catalog, the guardrails that must
+// hold while it is pushed, an optional scope and a policy. A goal is created
+// either directly by the user (the editor) or from the user's own words by the
+// goal-writer system agent, which keeps the statement verbatim in RawText and
+// stores the result as a DRAFT for review. Every later edit appends a
+// GoalRevision so the goal's own history is inspectable.
 type Goal struct {
 	ID string `json:"id"` // GOL<n>
 
-	Name    string `json:"name"`              // short title
-	Summary string `json:"summary,omitempty"` // one line, what "better" means
-	// Description is the agent-normalized statement of the objective; RawText
-	// is what the user typed, kept verbatim so intent is never lost in the
-	// rewrite (the "loss of user intent" failure mode).
-	Description string `json:"description,omitempty"`
-	RawText     string `json:"rawText,omitempty"`
+	Name        string `json:"name"`                  // short title
+	Description string `json:"description,omitempty"` // what "better" means, assumptions included
+	// RawText is what the user typed when the goal came through the writer,
+	// kept verbatim so intent is never lost in the rewrite. Empty for goals
+	// the user entered directly.
+	RawText string `json:"rawText,omitempty"`
 
 	// Status: draft (written, not yet confirmed) | active | paused | archived.
 	Status string `json:"status"`
-	// Kind: metric (fully measurable) | rubric (open-ended, judged) | mixed.
-	Kind string `json:"kind,omitempty"`
-	// Priority orders competing goals: 1 (highest) .. 5. 0 = unset (treated as 3).
-	Priority int `json:"priority,omitempty"`
 
 	Scope      GoalScope       `json:"scope"`
 	Primary    GoalMetric      `json:"primary"`
 	Guardrails []GoalGuardrail `json:"guardrails"`
-	// Rubric is the plain-language grading rubric for the open-ended part of the
-	// goal (Anthropic "Outcomes" pattern); empty for purely metric goals.
-	Rubric string     `json:"rubric,omitempty"`
-	Policy GoalPolicy `json:"policy"`
+	Policy     GoalPolicy      `json:"policy"`
 
-	// Questions are the writer's clarifying questions the user should settle
-	// before activating; Notes carries the writer's assumptions.
-	Questions []string `json:"questions,omitempty"`
-	Notes     string   `json:"notes,omitempty"`
-
-	// CreatedBy is provenance only ("user" | "agent:goal-writer").
+	// CreatedBy is provenance only ("user" | "agent:goal-writer" | "seed").
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
@@ -70,15 +58,11 @@ type GoalGuardrail struct {
 	Max    *float64 `json:"max,omitempty"`
 }
 
-// GoalPolicy says how far the optimizer may go on this goal's behalf.
+// GoalPolicy says what the evolver may do on this goal's behalf.
 type GoalPolicy struct {
-	// Mode: propose (default; file proposals only) | auto (apply the
-	// reversible surfaces listed below) | off (measure only).
+	// Mode: propose (default; file proposals only) | off (measure only).
 	Mode string `json:"mode"`
-	// AutoApplySurfaces names the reversible surfaces auto mode may touch
-	// (e.g. thinkingLevel, toolVisibility, automationCooldown).
-	AutoApplySurfaces []string `json:"autoApplySurfaces,omitempty"`
-	// CooldownHours is the minimum time between two changes for this goal.
+	// CooldownHours is the minimum time between two passes for this goal.
 	CooldownHours int `json:"cooldownHours,omitempty"`
 	// MinRuns is how many in-scope runs must accumulate before a pass.
 	MinRuns int `json:"minRuns,omitempty"`
@@ -87,29 +71,27 @@ type GoalPolicy struct {
 // GoalRevision is one entry of a goal's change log.
 type GoalRevision struct {
 	At     int64    `json:"at"`
-	By     string   `json:"by"`               // "user" | "agent:goal-writer"
+	By     string   `json:"by"`               // "user" | "agent:goal-writer" | "seed"
 	Note   string   `json:"note,omitempty"`   // human line (what changed / why)
 	Fields []string `json:"fields,omitempty"` // changed field names
 }
 
-// Goal statuses, kinds, directions and policy modes.
+// Goal statuses, directions, policy modes and provenance markers.
 const (
 	GoalStatusDraft    = "draft"
 	GoalStatusActive   = "active"
 	GoalStatusPaused   = "paused"
 	GoalStatusArchived = "archived"
 
-	GoalKindMetric = "metric"
-	GoalKindRubric = "rubric"
-	GoalKindMixed  = "mixed"
-
 	GoalDirectionMin = "min"
 	GoalDirectionMax = "max"
 
 	GoalModePropose = "propose"
-	GoalModeAuto    = "auto"
 	GoalModeOff     = "off"
 
 	GoalByUser   = "user"
 	GoalByWriter = "agent:goal-writer"
+	// GoalBySeed marks a built-in starter goal provisioned into a new workspace
+	// (goals.EnsureDefaultGoals), so the UI can tell it from one the user stated.
+	GoalBySeed = "seed"
 )

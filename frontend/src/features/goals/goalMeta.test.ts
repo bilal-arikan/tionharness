@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Goal } from '@/types/goal'
-import {
-  authorLabel,
-  formatMetricValue,
-  metricLabel,
-  nextStatuses,
-  openQuestions,
-  scopeSummary,
-} from './goalMeta'
+import { authorLabel, formatMetricValue, metricLabel, nextStatuses, scopeSummary } from './goalMeta'
 
 const goal = (over: Partial<Goal> = {}): Goal => ({
   id: 'GOL1',
@@ -41,12 +34,11 @@ describe('goalMeta', () => {
     expect(formatMetricValue(null, 'usd')).toBe('—')
   })
 
-  it('summarizes scope and counts open questions', () => {
+  it('summarizes scope', () => {
     expect(scopeSummary(goal())).toBe('tüm workspace')
     expect(scopeSummary(goal({ scope: { recipes: ['a'], tags: ['x', 'y'] } }))).toBe(
       '1 reçete · 2 etiket',
     )
-    expect(openQuestions(goal({ questions: ['a', ' ', ''] }))).toBe(1)
   })
 
   it('labels authors and metrics', () => {

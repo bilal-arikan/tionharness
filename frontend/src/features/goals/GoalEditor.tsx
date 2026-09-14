@@ -1,25 +1,20 @@
-// GoalEditor — the user's review/edit form over a writer-drafted goal. Every
-// field the server validates is editable here; the metric pickers are bound to
-// the closed catalog and the scope pickers to the workspace's candidates.
+// GoalEditor — the goal form, used both to create a goal directly and to
+// review/edit one the writer drafted. Every field the server validates is
+// editable here; the metric pickers are bound to the closed catalog and the
+// scope pickers to the workspace's candidates.
 import { useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button, SectionHead } from '@/shared/components'
 import type { Goal, GoalCatalog } from '@/types/goal'
-import {
-  DIRECTION_LABEL,
-  KIND_LABEL,
-  MODE_HINT,
-  MODE_LABEL,
-  PRIORITY_LABEL,
-  SCOPE_LABEL,
-  SURFACE_LABEL,
-} from './goalMeta'
+import { DIRECTION_LABEL, MODE_HINT, MODE_LABEL, SCOPE_LABEL } from './goalMeta'
 import { fromFormState, toFormState, validateForm, type GoalFormState } from './goalForm'
 
 interface Props {
   goal: Goal
   catalog: GoalCatalog
   saving: boolean
+  // submitLabel replaces "Kaydet" (e.g. "Oluştur" for a new goal).
+  submitLabel?: string
   onSave: (goal: Goal) => void
   onCancel: () => void
 }
@@ -28,7 +23,7 @@ const INPUT =
   'w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 const LABEL = 'mb-1 block text-xs text-[var(--color-text-dim)]'
 
-export function GoalEditor({ goal, catalog, saving, onSave, onCancel }: Props) {
+export function GoalEditor({ goal, catalog, saving, submitLabel, onSave, onCancel }: Props) {
   const [f, setF] = useState<GoalFormState>(() => toFormState(goal))
   const [touched, setTouched] = useState(false)
   const set = <K extends keyof GoalFormState>(k: K, v: GoalFormState[K]) =>
@@ -63,50 +58,13 @@ export function GoalEditor({ goal, catalog, saving, onSave, onCancel }: Props) {
           />
         </div>
         <div className="md:col-span-2">
-          <label className={LABEL}>Özet (tek satır)</label>
-          <input
-            className={INPUT}
-            value={f.summary}
-            onChange={(e) => set('summary', e.target.value)}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className={LABEL}>Açıklama</label>
+          <label className={LABEL}>Açıklama (ne iyileşsin, hangi varsayımlarla)</label>
           <textarea
             className={INPUT}
-            rows={3}
+            rows={4}
             value={f.description}
             onChange={(e) => set('description', e.target.value)}
           />
-        </div>
-        <div>
-          <label className={LABEL}>Tür</label>
-          <select
-            className={INPUT}
-            value={f.kind}
-            onChange={(e) => set('kind', e.target.value as GoalFormState['kind'])}
-          >
-            <option value="">(otomatik)</option>
-            {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={LABEL}>Öncelik</label>
-          <select
-            className={INPUT}
-            value={f.priority}
-            onChange={(e) => set('priority', e.target.value)}
-          >
-            {[1, 2, 3, 4, 5].map((p) => (
-              <option key={p} value={String(p)}>
-                {p} · {PRIORITY_LABEL[p]}
-              </option>
-            ))}
-          </select>
         </div>
       </section>
 
@@ -287,21 +245,6 @@ export function GoalEditor({ goal, catalog, saving, onSave, onCancel }: Props) {
         </div>
       </section>
 
-      <section className="flex flex-col gap-2">
-        <SectionHead>Rubrik</SectionHead>
-        <p className="text-xs text-[var(--color-text-dim)]">
-          Açık uçlu hedefler için: 0, 0.5 ve 1 puanın neye benzediğini yaz. Ayrı bağlamda çalışan
-          yargıç bununla puanlar; tek başına terfi kararı vermez.
-        </p>
-        <textarea
-          className={INPUT}
-          rows={4}
-          value={f.rubric}
-          onChange={(e) => set('rubric', e.target.value)}
-          placeholder={f.primaryMetric === 'judge.rubricScore' ? 'zorunlu' : 'isteğe bağlı'}
-        />
-      </section>
-
       <section className="flex flex-col gap-3">
         <SectionHead>Politika</SectionHead>
         <div className="grid gap-3 md:grid-cols-3">
@@ -340,57 +283,6 @@ export function GoalEditor({ goal, catalog, saving, onSave, onCancel }: Props) {
           </div>
         </div>
         <p className="text-xs text-[var(--color-text-dim)]">{MODE_HINT[f.mode]}</p>
-        {f.mode === 'auto' && (
-          <div className="flex flex-wrap gap-1.5">
-            {catalog.autoApplySurfaces.map((s) => {
-              const on = f.autoApplySurfaces.includes(s)
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    set(
-                      'autoApplySurfaces',
-                      on ? f.autoApplySurfaces.filter((x) => x !== s) : [...f.autoApplySurfaces, s],
-                    )
-                  }
-                  className={`rounded-full border px-2.5 py-1 text-xs ${
-                    on
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                      : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
-                  }`}
-                >
-                  {SURFACE_LABEL[s] ?? s}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className={LABEL}>
-            Açık sorular (satır başına bir; etkinleştirmeden önce boşalt)
-          </label>
-          <textarea
-            className={INPUT}
-            rows={3}
-            value={f.questions}
-            onChange={(e) => set('questions', e.target.value)}
-            data-testid="goal-questions"
-          />
-        </div>
-        <div>
-          <label className={LABEL}>Notlar / varsayımlar</label>
-          <textarea
-            className={INPUT}
-            rows={3}
-            value={f.notes}
-            onChange={(e) => set('notes', e.target.value)}
-          />
-        </div>
       </section>
 
       <div className="flex items-center gap-2 border-t border-[var(--color-border)] pt-3">
@@ -404,7 +296,7 @@ export function GoalEditor({ goal, catalog, saving, onSave, onCancel }: Props) {
             Vazgeç
           </Button>
           <Button type="submit" disabled={saving} data-testid="goal-editor-save">
-            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            {saving ? 'Kaydediliyor…' : (submitLabel ?? 'Kaydet')}
           </Button>
         </div>
       </div>

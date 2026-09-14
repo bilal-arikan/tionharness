@@ -2,10 +2,9 @@
 // the catalog in internal/goals.
 
 export type GoalStatus = 'draft' | 'active' | 'paused' | 'archived'
-export type GoalKind = 'metric' | 'rubric' | 'mixed'
 export type GoalDirection = 'min' | 'max'
-export type GoalPolicyMode = 'propose' | 'auto' | 'off'
-export type GoalAuthor = 'user' | 'agent:goal-writer' | string
+export type GoalPolicyMode = 'propose' | 'off'
+export type GoalAuthor = 'user' | 'agent:goal-writer' | 'seed' | string
 
 interface GoalScope {
   recipes?: string[]
@@ -28,7 +27,6 @@ export interface GoalGuardrail {
 
 interface GoalPolicy {
   mode: GoalPolicyMode
-  autoApplySurfaces?: string[]
   cooldownHours?: number
   minRuns?: number
 }
@@ -43,20 +41,14 @@ interface GoalRevision {
 export interface Goal {
   id: string
   name: string
-  summary?: string
   description?: string
-  // The user's original statement, verbatim.
+  // The user's original statement, verbatim (writer path only).
   rawText?: string
   status: GoalStatus
-  kind?: GoalKind
-  priority?: number
   scope: GoalScope
   primary: GoalMetric
   guardrails: GoalGuardrail[]
-  rubric?: string
   policy: GoalPolicy
-  questions?: string[]
-  notes?: string
   createdBy?: GoalAuthor
   createdAt: number
   updatedAt: number
@@ -68,7 +60,7 @@ export interface GoalMetricDef {
   key: string
   label: string
   hint?: string
-  unit: 'usd' | 'sec' | 'tokens' | 'count' | 'ratio' | 'score' | string
+  unit: 'usd' | 'sec' | 'tokens' | 'count' | 'ratio' | string
   defaultDirection: GoalDirection
   source: string
   scopes?: string[]
@@ -88,7 +80,6 @@ interface GoalScopeCandidates {
 
 export interface GoalCatalog {
   metrics: GoalMetricDef[]
-  autoApplySurfaces: string[]
   candidates: GoalScopeCandidates
 }
 

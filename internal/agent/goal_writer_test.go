@@ -28,7 +28,7 @@ func TestGoalWriterUserPrompt(t *testing.T) {
 	p := goalWriterUserPrompt("incelemeler çok pahalı", &base, existing, cands, "Türkçe")
 	for _, want := range []string{
 		"incelemeler çok pahalı", "Reply language", "Türkçe",
-		"`recipe.avgCostUSD`", "`judge.rubricScore`", "`config.soulChars`",
+		"`recipe.avgCostUSD`", "`usage.cacheHitRatio`", "`config.soulChars`",
 		"code-review (Kod İnceleme)", "AGT2 (Dev)", "AUT1 (nightly)", "Tags: bugfix",
 		"GOL1 [active] Hız", "Existing goal this statement refines", `"id": "GOL3"`,
 		`Policy mode must be "propose"`,

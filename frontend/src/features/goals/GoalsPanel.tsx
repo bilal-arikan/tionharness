@@ -1,8 +1,9 @@
 // GoalsPanel — the Hedefler screen (_Docs/83 §4.1): the workspace's evolution
-// goals as a two-pane list + detail. A goal is only ever CREATED through the
-// writer agent (GoalIntake); the user then reviews, edits, activates, pauses or
-// archives it here. The detail pane is sectioned so the later phases (fitness
-// trend, proposals, evolution ledger) attach under the same header.
+// goals as a two-pane list + detail. A goal is created either directly in the
+// editor or drafted by the writer agent from the user's words (GoalIntake);
+// the user then edits, activates, pauses or archives it here. The detail pane
+// is sectioned so fitness, proposals and the evolution ledger attach under the
+// same header.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Archive, Pencil, RefreshCw, Sparkles, Target, Trash2 } from 'lucide-react'
 import { api } from '@/api'
@@ -12,6 +13,7 @@ import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import type { Goal, GoalCatalog, GoalStatus } from '@/types/goal'
 import { GoalDetail } from './GoalDetail'
 import { GoalEditor } from './GoalEditor'
+import { emptyGoal } from './goalForm'
 import { GoalIntake } from './GoalIntake'
 import {
   STATUS_ACTION_LABEL,
@@ -19,7 +21,6 @@ import {
   STATUS_TONE,
   metricLabel,
   nextStatuses,
-  openQuestions,
   scopeSummary,
 } from './goalMeta'
 
@@ -42,6 +43,8 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
   const [localId, setLocalId] = useState<string | null>(null)
   const [intake, setIntake] = useState<{ goal?: Goal | null } | null>(null)
   const [editing, setEditing] = useState(false)
+  // creating shows the editor over a blank goal (direct create, no writer).
+  const [creating, setCreating] = useState(false)
   // The writer exchange behind the most recent intake, per goal id.
   const [writerSessions, setWriterSessions] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -53,6 +56,7 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
       setLocalId(id)
       onSelectGoal?.(id)
       setEditing(false)
+      setCreating(false)
     },
     [onSelectGoal],
   )
@@ -116,6 +120,21 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
     }
   }
 
+  const create = async (g: Goal) => {
+    setSaving(true)
+    try {
+      const stored = await api.createGoal(g)
+      upsert(stored)
+      setFilter((f) => (f === 'archived' ? 'open' : f))
+      select(stored.id)
+      load()
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const remove = async (g: Goal) => {
     if (
       !window.confirm(
@@ -155,10 +174,19 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
           </button>
         </div>
         <NewItemButton
-          onClick={() => setIntake({})}
+          onClick={() => {
+            select(null)
+            setCreating(true)
+          }}
           label="Yeni hedef"
-          title="Hedefi kendi sözlerinle yaz; yazıcı ajan taslağa çevirir"
+          title="Metriği, guardrail'leri ve kapsamı formda seç"
           testId="goals-new"
+        />
+        <NewItemButton
+          onClick={() => setIntake({})}
+          label="Sözlerinle yazdır"
+          title="Hedefi kendi sözlerinle yaz; yazıcı ajan taslağa çevirir"
+          testId="goals-new-intake"
         />
         <div className="flex gap-1 px-3 pb-2 text-xs">
           {(
@@ -185,12 +213,11 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {visible.length === 0 && !loading && (
             <EmptyState icon={Target} title="Henüz hedef yok.">
-              "Yeni hedef" ile ne istediğini kendi sözlerinle yaz; hedef yazıcı onu ölçülebilir bir
-              taslağa çevirir.
+              "Yeni hedef" ile formdan oluştur ya da "Sözlerinle yazdır" ile ne istediğini yaz;
+              hedef yazıcı onu ölçülebilir bir taslağa çevirir.
             </EmptyState>
           )}
           {visible.map((g) => {
-            const q = openQuestions(g)
             return (
               <button
                 key={g.id}
@@ -207,7 +234,6 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
                 <span className="truncate text-xs text-[var(--color-text-dim)]">
                   {metricLabel(g.primary.metric, catalog?.metrics)}{' '}
                   {g.primary.direction === 'min' ? '↓' : '↑'} · {scopeSummary(g)}
-                  {q > 0 && <span className="text-[var(--color-warning)]"> · {q} soru</span>}
                 </span>
               </button>
             )
@@ -219,7 +245,7 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
         <PaneHeader
           listOpen={listOpen}
           onToggleList={toggleList}
-          title={active ? undefined : 'Hedefler'}
+          title={active ? undefined : creating ? 'Yeni hedef' : 'Hedefler'}
           subtitle={active ? undefined : 'workspace evrimi neye göre iyileşsin'}
           titleSlot={
             active ? (
@@ -242,12 +268,7 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
                     size="sm"
                     variant={s === 'active' ? 'primary' : 'secondary'}
                     onClick={() => void setStatus(active, s)}
-                    disabled={s === 'active' && openQuestions(active) > 0}
-                    title={
-                      s === 'active' && openQuestions(active) > 0
-                        ? 'Önce açık soruları boşalt'
-                        : STATUS_ACTION_LABEL[s]
-                    }
+                    title={STATUS_ACTION_LABEL[s]}
                     data-testid={`goal-status-${s}`}
                   >
                     {s === 'archived' && <Archive size={13} />}
@@ -283,11 +304,20 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
           }
         />
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
-          {!active ? (
-            <EmptyState icon={Target} title="Bir hedef seç ya da yeni hedef yaz.">
-              Hedefler doğrudan girilmez: sözlerini hedef yazıcı ajan ölçülebilir bir taslağa
-              çevirir, sen onaylarsın. Etkin hedefler ileride evrim geçişlerini (öneri, uygulama,
-              geri alma) yönlendirecek.
+          {!active && creating && catalog ? (
+            <GoalEditor
+              goal={emptyGoal()}
+              catalog={catalog}
+              saving={saving}
+              submitLabel="Oluştur"
+              onSave={(g) => void create(g)}
+              onCancel={() => setCreating(false)}
+            />
+          ) : !active ? (
+            <EmptyState icon={Target} title="Bir hedef seç ya da yeni hedef oluştur.">
+              Bir hedef = kapalı katalogdan bir ana metrik + korunacak guardrail'ler + kapsam.
+              Formdan doğrudan oluştur ya da sözlerini hedef yazıcı ajana taslağa çevirt. Etkin
+              hedefler evrim geçişlerini (öneri, uygulama, geri alma) yönlendirir.
             </EmptyState>
           ) : editing && catalog ? (
             <GoalEditor

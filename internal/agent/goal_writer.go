@@ -13,15 +13,15 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-// Goal writer (_Docs/83 §4.1). Goals are never created straight from a form:
-// the user states the goal in their own words, the goal-writer system agent
-// maps it onto the closed metric catalog, the workspace's scope candidates and
-// a propose-only policy, and the code validates and stores the result as a
-// DRAFT. The user then reviews, edits and activates it in the Goals screen.
+// Goal writer (_Docs/83 §4.1). The user states a goal in their own words, the
+// goal-writer system agent maps it onto the closed metric catalog and the
+// workspace's scope candidates, and the code validates and stores the result
+// as a DRAFT for review in the Goals screen. (The editor can also create a
+// goal directly; the writer is the "write it for me" path.)
 //
-// Invariants enforced in code: unknown metrics / scopes / surfaces are refused
-// by goals.Validate, the writer can never set an auto policy (goals.FromDraft
-// downgrades it), and the user's original words are kept verbatim as RawText.
+// Invariants enforced in code: unknown metrics are refused by goals.Validate,
+// a draft always lands propose-only (goals.FromDraft), and the user's original
+// words are kept verbatim as RawText.
 
 const (
 	goalWriterSystemKey = "goal-writer"
@@ -97,7 +97,7 @@ func (r *Runtime) WriteGoal(ctx context.Context, rawText, goalID string) (GoalIn
 		return GoalIntakeResult{}, fmt.Errorf("goal writer: model call failed: %w", err)
 	}
 	raw := extractJSONObject(resp.Text)
-	var draft goals.Draft
+	var draft db.Goal
 	if raw == "" || json.Unmarshal([]byte(raw), &draft) != nil {
 		return GoalIntakeResult{}, errors.New("goal writer: no JSON draft in reply")
 	}
@@ -167,7 +167,7 @@ func (r *Runtime) GoalScopeCandidates(ctx context.Context) GoalScopeCandidates {
 func goalWriterUserPrompt(rawText string, base *db.Goal, existing []db.Goal, cands GoalScopeCandidates, lang string) string {
 	var b strings.Builder
 	if lang != "" {
-		fmt.Fprintf(&b, "Reply language for name/summary/description/rubric/questions/notes: %s.\n\n", lang)
+		fmt.Fprintf(&b, "Reply language for name/description: %s.\n\n", lang)
 	}
 	b.WriteString("## User statement (verbatim)\n\n")
 	b.WriteString(rawText)

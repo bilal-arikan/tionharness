@@ -15,7 +15,7 @@ type Metric struct {
 	// Label / Hint are Turkish UI strings (the app's UI language).
 	Label string `json:"label"`
 	Hint  string `json:"hint,omitempty"`
-	// Unit: usd | sec | tokens | count | ratio | score.
+	// Unit: usd | sec | tokens | count | ratio.
 	Unit string `json:"unit"`
 	// DefaultDirection is the improvement direction the writer should assume
 	// unless the user says otherwise.
@@ -94,7 +94,6 @@ var catalog = []Metric{
 
 	// Human feedback and judged quality.
 	{Key: "feedback.upRatio", Label: "Beğeni oranı", Hint: "Kullanıcının 👍 verdiği tur / puanlanan tur (E5'te ölçülecek)", Unit: "ratio", DefaultDirection: "max", Source: "feedback", Scopes: []string{scopeAgent, scopeTag}, Available: false},
-	{Key: "judge.rubricScore", Label: "Rubrik puanı", Hint: "Açık uçlu hedefler için ayrı bağlamda çalışan yargıç puanı (0–1); rubrik metni hedefte tanımlanır (E5'te ölçülecek)", Unit: "score", DefaultDirection: "max", Source: "judge", Scopes: []string{scopeRecipe, scopeAgent, scopeTag}, Available: false},
 
 	// Config size budgets (guardrails against bloat).
 	{Key: "config.soulChars", Label: "Ajan soul uzunluğu", Hint: "Karakter; şişmeye karşı guardrail", Unit: "count", DefaultDirection: "min", Source: "config", Scopes: []string{scopeAgent}},
@@ -104,7 +103,7 @@ var catalog = []Metric{
 
 // unavailable names the entries that carry Available: false above; every other
 // entry is measurable today and is flagged so at init.
-var unavailable = map[string]bool{"board.runSuccessRate": true, "feedback.upRatio": true, "judge.rubricScore": true, "config.toolCount": true}
+var unavailable = map[string]bool{"board.runSuccessRate": true, "feedback.upRatio": true, "config.toolCount": true}
 
 var byKey = func() map[string]Metric {
 	m := make(map[string]Metric, len(catalog))
@@ -114,22 +113,3 @@ var byKey = func() map[string]Metric {
 	}
 	return m
 }()
-
-// AutoApplySurfaces lists the reversible, low-risk surfaces a goal's auto
-// policy may name (_Docs/83 §4.5). Everything else always waits for a human.
-var AutoApplySurfaces = []string{
-	"thinkingLevel",      // lower an agent's thinking level
-	"toolVisibility",     // move a tool to summary/name-only/hidden
-	"automationCooldown", // raise an automation's cooldown / threshold
-	"skillAutoSummary",   // switch a skill to auto-summary
-}
-
-// IsAutoApplySurface reports whether s is an allowed auto-apply surface.
-func IsAutoApplySurface(s string) bool {
-	for _, k := range AutoApplySurfaces {
-		if k == s {
-			return true
-		}
-	}
-	return false
-}

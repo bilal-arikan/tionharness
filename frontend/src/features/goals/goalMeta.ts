@@ -4,7 +4,6 @@ import type {
   Goal,
   GoalAuthor,
   GoalDirection,
-  GoalKind,
   GoalMetricDef,
   GoalPolicyMode,
   GoalStatus,
@@ -24,34 +23,19 @@ export const STATUS_TONE: Record<GoalStatus, BadgeTone> = {
   archived: 'muted',
 }
 
-export const KIND_LABEL: Record<GoalKind, string> = {
-  metric: 'Ölçülebilir',
-  rubric: 'Rubrik',
-  mixed: 'Karma',
-}
-
 export const DIRECTION_LABEL: Record<GoalDirection, string> = {
   min: 'düşsün',
   max: 'artsın',
 }
 
 export const MODE_LABEL: Record<GoalPolicyMode, string> = {
-  propose: 'Yalnız öner',
-  auto: 'Tersinir olanları uygula',
+  propose: 'Öner',
   off: 'Yalnız ölç',
 }
 
 export const MODE_HINT: Record<GoalPolicyMode, string> = {
   propose: 'Evrim geçişi bulgu üretir; her değişikliği sen onaylarsın.',
-  auto: 'Seçtiğin tersinir yüzeyler (düşünme seviyesi, araç görünürlüğü, cooldown…) otomatik uygulanır; gerisi onay bekler.',
   off: 'Hedef yalnız ölçülür, öneri üretilmez.',
-}
-
-export const SURFACE_LABEL: Record<string, string> = {
-  thinkingLevel: 'Düşünme seviyesi',
-  toolVisibility: 'Araç görünürlüğü',
-  automationCooldown: 'Otomasyon cooldown',
-  skillAutoSummary: 'Skill oto-özet',
 }
 
 export const SCOPE_LABEL = {
@@ -61,19 +45,12 @@ export const SCOPE_LABEL = {
   tags: 'Etiketler',
 } as const
 
-export const PRIORITY_LABEL: Record<number, string> = {
-  1: 'En yüksek',
-  2: 'Yüksek',
-  3: 'Normal',
-  4: 'Düşük',
-  5: 'En düşük',
-}
-
 // authorLabel names who made a change.
 export function authorLabel(by: GoalAuthor | undefined): string {
   if (!by) return '—'
   if (by === 'user') return 'Sen'
   if (by === 'agent:goal-writer') return 'Hedef yazıcı'
+  if (by === 'seed') return 'Başlangıç hedefi'
   if (by.startsWith('agent:')) return by.slice('agent:'.length)
   return by
 }
@@ -120,8 +97,6 @@ export function formatMetricValue(v: number | null | undefined, unit: string | u
           : `${v} sn`
     case 'tokens':
       return v >= 1000 ? `${(v / 1000).toFixed(1)}k tok` : `${v} tok`
-    case 'score':
-      return v.toFixed(2)
     default:
       return String(v)
   }
@@ -136,9 +111,4 @@ export function scopeSummary(g: Goal): string {
   if (n(g.scope.automations)) parts.push(`${n(g.scope.automations)} otomasyon`)
   if (n(g.scope.tags)) parts.push(`${n(g.scope.tags)} etiket`)
   return parts.length ? parts.join(' · ') : 'tüm workspace'
-}
-
-// openQuestions counts unanswered writer questions (blocks activation).
-export function openQuestions(g: Goal): number {
-  return g.questions?.filter((q) => q.trim() !== '').length ?? 0
 }

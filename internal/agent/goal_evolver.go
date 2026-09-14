@@ -508,9 +508,6 @@ func evolverUserPrompt(g db.Goal, fit goals.GoalFitness, sc surfaceContext, wors
 		fmt.Fprintf(&b, "Reply language for title/rationale/evidence: %s.\n\n", lang)
 	}
 	fmt.Fprintf(&b, "## Goal %s — %s\n\n", g.ID, g.Name)
-	if g.Summary != "" {
-		b.WriteString(g.Summary + "\n")
-	}
 	if g.Description != "" {
 		b.WriteString(g.Description + "\n")
 	}

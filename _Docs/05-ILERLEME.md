@@ -3,6 +3,35 @@
 > **Özet (2026-09-13):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Hedef (Goal) modeli sadeleştirildi — doğrudan oluşturma, ölü alanlar kaldırıldı (2026-09-14) ✅
+
+- **Neden:** Evolver ve fitness kodu bir hedeften yalnız `Primary`, `Guardrails`, `Scope`,
+  `Status`, `Policy.Mode/MinRuns/CooldownHours` ve açıklama metnini okuyordu. Geri kalan
+  alanlar (`Kind`, `Priority`, `Rubric`, `Summary`, `Notes`, `Questions`,
+  `AutoApplySurfaces`, `auto` modu, `judge.rubricScore`) yalnız yazılıp gösteriliyordu;
+  hiçbir kod uygulamıyor ya da ölçmüyordu. Ayrıca hedef **yalnız** `goal-writer` LLM
+  çağrısıyla girilebiliyordu; metriği bilen kullanıcı için gereksiz kapı.
+- **Model** (`internal/db/models_goal.go`): `Goal{Name, Description, RawText?, Status, Scope,
+  Primary, Guardrails, Policy{mode propose|off, cooldownHours, minRuns}, CreatedBy,
+  History}`. Eski JSON dosyalarındaki fazla alanlar yüklemede sessizce yok sayılır;
+  `auto` modlu bir kayıt varsa `Validate` düzenlemede reddeder (kullanıcı `propose`'a alır).
+- **Giriş yolları:** `POST /api/goals` (editörden doğrudan; `RawText`/provenance/geçmiş
+  sunucunun) **eklendi**. `POST /api/goals/intake` (yazıcı ajan) kalır, artık zorunlu
+  kapı değil "sözlerinle yazdır" yardımcısı. Yazıcı yanıtı doğrudan `db.Goal`'a
+  parse edilir (`goals.DraftSchema` düzenlenebilir alt küme); sınırsız/katalog-dışı
+  guardrail açık soru olmak yerine düşürülür, kullanıcı editörde ekler. `CanActivate`
+  kalktı: etkinleştirme `Validate` ile aynı.
+- **Katalog:** `judge.rubricScore` ve oto-uygulama yüzeyi allowlist'i kaldırıldı
+  (yargıç ajan / oto-uygulama geldiğinde ilgili fazda geri eklenir, `_Docs/83` §4.5).
+- **Ekran:** "Yeni hedef" boş formu açar (`GoalEditor` + `emptyGoal`), "Sözlerinle
+  yazdır" yazıcı modalını. Editör/detaydan tür, öncelik, rubrik, oto-yüzey, açık
+  soru ve not bölümleri gitti. Başlangıç hedefleri (`goals/defaults.go`) yeni modele
+  uyarlandı (özet + not → açıklama).
+- **Testler:** `goals/validate_test.go` (FromDraft `db.Goal` taslağı, `off` modu geçerli,
+  `auto` bilinmeyen), `api/goals_test.go` (`handleCreateGoal` 201 / 422, provenance
+  temizleme), `db/store_goal_test.go` (sıralama artık durum + yenilik), frontend
+  `goalForm.test.ts` (`emptyGoal` boştan doldurma). `scripts/test.sh full` yeşil.
+
 ## Sistem ajanının kendi sağlayıcısı ve modeli her zaman kullanılır (2026-09-11) ✅
 
 - **Karar (kullanıcı onayı):** Ayarlar ▸ Sistem Ajanları kartındaki sağlayıcı/model artık
@@ -13299,3 +13328,33 @@ ve kart drill-down'ında tur sayısı. Bütçe sabiti `agent`'tan `db`'ye taşı
   "Alt düğümleri gizle · N" / "Alt düğümleri göster · N" (yalnız çocuğu olan düğümde).
 - **Test:** `explorerFilter.test` (katlama + sayım), `explorerVis.test` (rozet),
   `ExplorerView.test` (toggle, yaprakta yok, workspace başına kalıcılık).
+
+## Hedefler: yeni workspace üç başlangıç hedefiyle geliyor (2026-09-13) ✅
+
+- **İstek:** varsayılan workspace'in neler getirdiğine bakıp olası hedefler belirlemek.
+- **Durum tespiti:** yeni workspace bir pano, bir başlangıç akışı (`starter-answer-verify`)
+  ve üç **kapalı** otomasyon (`board-run-in-progress`, `board-archive-done`,
+  `insight-apply-workspace-opt`) getiriyordu; **hiç hedef getirmiyordu** — Hedefler
+  ekranı kullanıcı kendi cümlesiyle bir hedef yazana kadar boştu.
+- **Backend:** `goals.EnsureDefaultGoals` (yeni `internal/goals/defaults.go`) üç
+  başlangıç hedefini **taslak** olarak tohumlar: `usage.costUSDPerSession` (min),
+  `usage.cacheHitRatio` (max), `session.humanAsksPerSession` (min). Üçü de
+  guardrail'li ve birbirini dengeler: 1. hedefin guardrail'i 3. hedefin primary
+  metriğidir, böylece "ucuzluk" kullanıcıya daha çok soru sorarak, "az soru" da
+  yanlış varsayımla ilerleyerek kazanılamaz.
+- **Metrik seçimi:** yalnız katalogda `Available` olan metrikler kullanıldı; reçete
+  metrikleri (düz sohbet workspace'inde reçete koşmaz), `board.cycleTimeSec` (ilgili
+  otomasyon kapalı geldiği için ölçmez) ve `Available:false` olanlar
+  (`judge.rubricScore`, `feedback.upRatio` …) bilerek dışarıda bırakıldı — ölçülmeyen
+  metrik üzerine hedef sonsuza dek "henüz ölçülmedi" der.
+- **Tohumlama sözleşmesi:** akış/otomasyon tohumlarıyla aynı — `.seeded-goals.json`
+  defteri kullanıcı silmesini kalıcı yapar (silinen hedef geri gelmez), idempotent,
+  eski workspace'ler bir sonraki açılışta backfill olur. `open()` içinde
+  `EnsureDefaultAutomations`'tan sonra çağrılır.
+- **Provenance:** `db.GoalBySeed = "seed"` eklendi; `authorLabel` bunu "Başlangıç
+  hedefi" olarak gösteriyor. Hedefler **taslak** geldiği için kullanıcı gözden
+  geçirip etkinleştirene kadar hiçbir ölçüm ya da evrim önerisi çalışmaz.
+- **Test:** `internal/goals/defaults_test.go` — her tohum `Validate`+`CanActivate`
+  geçer, policy `propose`, kapsam boş, tüm metrikler ölçülebilir; tohumlama
+  idempotent ve silme sonrası diriltmiyor. `scripts/test.sh fast` (db + workspace)
+  temiz; `internal/goals` ayrıca elle koşuldu.

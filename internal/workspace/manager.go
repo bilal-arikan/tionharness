@@ -21,6 +21,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
+	"github.com/bilal-arikan/tionharness/internal/goals"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
@@ -439,6 +440,12 @@ func (m *Manager) open(meta Meta) error {
 	// per-workspace opt-in.
 	if err := agent.EnsureDefaultAutomations(context.Background(), database, storeDir); err != nil {
 		m.logger.Warn("seed default automations failed", "workspace", meta.ID, "error", err)
+	}
+	// Seed the built-in starter goals (cost / cache / human load). Idempotent,
+	// deletion-aware, and seeded as DRAFTS so nothing is measured or proposed
+	// until the user reviews and activates one.
+	if err := goals.EnsureDefaultGoals(context.Background(), database, storeDir); err != nil {
+		m.logger.Warn("seed default goals failed", "workspace", meta.ID, "error", err)
 	}
 
 	// Collapse the near-duplicate lessons written before signature-similarity

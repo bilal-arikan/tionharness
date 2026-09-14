@@ -1,6 +1,6 @@
 # 83 — Evrim Mekanizması: Hedef-Güdümlü Workspace Optimizasyonu
 
-> **Özet (2026-09-06):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı** (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
+> **Özet (2026-09-14):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı** (Goal varlığı — 2026-09-14'te sadeleştirildi, §4.1 notu: doğrudan oluşturma + yalnız okunan alanlar; `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
 > workspace için kaydedilip düzenlenebilen **Hedefler (Goals)** tanımlamak ve ajan
 > hiyerarşisi, araç atamaları, ajan/skill promptları, otomasyon ve zamanlamalar, model
 > ve düşünme seviyesi seçimleri gibi ayarların zamanla bu hedeflere göre optimize
@@ -162,15 +162,17 @@ Depoda `goal`/`fitness`/`experiment`/`A/B` araması yalnız tesadüfi sonuç ver
     { "metric": "recipe.avgSessions", "max": 6 },
     { "metric": "agent.soulChars", "max": 4000 }
   ],
-  "rubric": null,                    // açık uçlu hedef için düz-dilli rubrik (Outcomes deseni)
-  "policy": {
-    "mode": "propose | auto | off",
-    "autoApplySurfaces": ["thinkingLevel", "toolOverrides:hide", "automation:cooldown"],
-    "cooldownHours": 72, "minRuns": 5
-  },
+  "policy": { "mode": "propose | off", "cooldownHours": 72, "minRuns": 5 },
   "createdAt": "...", "updatedAt": "...", "history": [ /* alan değişiklikleri, kim/ne zaman */ ]
 }
 ```
+
+> **2026-09-14 sadeleştirme:** Uygulanan model yukarıdaki kadar. İlk sürümdeki `kind`,
+> `priority`, `rubric` (+ `judge.rubricScore`), `summary`/`notes`/`questions`,
+> `policy.auto` + `autoApplySurfaces` alanları hiçbir kod tarafından okunmadığı için
+> kaldırıldı; yargıç ajan (§4.1 rubrik) ve oto-uygulama (§4.5) kendi fazlarında,
+> o fazın ihtiyacı kadar geri eklenir. Hedef artık editörden doğrudan da oluşturulur
+> (`POST /api/goals`); `goal-writer` zorunlu kapı değil, "sözlerinle yazdır" yardımcısıdır.
 
 Metrik adları kapalı bir kataloğa bağlıdır (`internal/evolution/metrics.go`): reçete
 istatistikleri, usage, pano sonuçları, otomasyon sayaçları, hata sınıfları, `Task.Rating`.

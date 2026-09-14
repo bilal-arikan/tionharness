@@ -11,10 +11,7 @@ interface GuardrailDraft {
 
 export interface GoalFormState {
   name: string
-  summary: string
   description: string
-  kind: Goal['kind'] | ''
-  priority: string
   primaryMetric: string
   primaryDirection: 'min' | 'max'
   primaryTarget: string
@@ -23,24 +20,34 @@ export interface GoalFormState {
   agents: string[]
   automations: string[]
   tags: string[]
-  rubric: string
   mode: Goal['policy']['mode']
-  autoApplySurfaces: string[]
   cooldownHours: string
   minRuns: string
-  questions: string
-  notes: string
 }
 
 const num = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v))
 
+// emptyGoal is the blank the editor starts from when the user creates a goal
+// directly; the server assigns id, timestamps, provenance and history.
+export function emptyGoal(): Goal {
+  return {
+    id: '',
+    name: '',
+    status: 'draft',
+    scope: {},
+    primary: { metric: '', direction: 'min' },
+    guardrails: [],
+    policy: { mode: 'propose' },
+    createdAt: 0,
+    updatedAt: 0,
+    history: [],
+  }
+}
+
 export function toFormState(g: Goal): GoalFormState {
   return {
     name: g.name,
-    summary: g.summary ?? '',
     description: g.description ?? '',
-    kind: g.kind ?? '',
-    priority: g.priority ? String(g.priority) : '3',
     primaryMetric: g.primary.metric,
     primaryDirection: g.primary.direction,
     primaryTarget: num(g.primary.target),
@@ -49,13 +56,9 @@ export function toFormState(g: Goal): GoalFormState {
     agents: g.scope.agents ?? [],
     automations: g.scope.automations ?? [],
     tags: g.scope.tags ?? [],
-    rubric: g.rubric ?? '',
     mode: g.policy.mode,
-    autoApplySurfaces: g.policy.autoApplySurfaces ?? [],
     cooldownHours: g.policy.cooldownHours ? String(g.policy.cooldownHours) : '',
     minRuns: g.policy.minRuns ? String(g.policy.minRuns) : '',
-    questions: (g.questions ?? []).join('\n'),
-    notes: g.notes ?? '',
   }
 }
 
@@ -64,13 +67,6 @@ export function parseNum(s: string): number | null {
   const t = s.trim().replace(',', '.')
   if (t === '') return null
   return Number(t)
-}
-
-function lines(s: string): string[] {
-  return s
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
 }
 
 // fromFormState rebuilds the goal payload over the stored goal (id, status,
@@ -83,14 +79,10 @@ export function fromFormState(base: Goal, f: GoalFormState): Goal {
       min: parseNum(r.min),
       max: parseNum(r.max),
     }))
-  const priority = Number(f.priority)
   return {
     ...base,
     name: f.name.trim(),
-    summary: f.summary.trim(),
     description: f.description.trim(),
-    kind: f.kind || undefined,
-    priority: Number.isFinite(priority) && priority > 0 ? priority : undefined,
     scope: { recipes: f.recipes, agents: f.agents, automations: f.automations, tags: f.tags },
     primary: {
       metric: f.primaryMetric,
@@ -98,15 +90,11 @@ export function fromFormState(base: Goal, f: GoalFormState): Goal {
       target: parseNum(f.primaryTarget),
     },
     guardrails,
-    rubric: f.rubric.trim(),
     policy: {
       mode: f.mode,
-      autoApplySurfaces: f.mode === 'auto' ? f.autoApplySurfaces : [],
       cooldownHours: parseNum(f.cooldownHours) ?? 0,
       minRuns: parseNum(f.minRuns) ?? 0,
     },
-    questions: lines(f.questions),
-    notes: f.notes.trim(),
   }
 }
 
@@ -117,8 +105,6 @@ export function validateForm(f: GoalFormState, catalog: GoalMetricDef[]): string
   if (!catalog.some((m) => m.key === f.primaryMetric)) return 'Ana metrik katalogda yok.'
   if (f.primaryTarget.trim() !== '' && Number.isNaN(parseNum(f.primaryTarget)))
     return 'Hedef değer sayı olmalı.'
-  if (f.primaryMetric === 'judge.rubricScore' && f.rubric.trim() === '')
-    return 'Rubrik puanı hedefi için rubrik metni gerekli.'
   const seen = new Set<string>()
   for (const [i, r] of f.guardrails.entries()) {
     const n = i + 1
@@ -132,8 +118,6 @@ export function validateForm(f: GoalFormState, catalog: GoalMetricDef[]): string
     if (min === null && max === null) return `Guardrail ${n}: alt ya da üst sınır gir.`
     if (min !== null && max !== null && min > max) return `Guardrail ${n}: alt sınır üstten büyük.`
   }
-  if (f.mode === 'auto' && f.autoApplySurfaces.length === 0)
-    return 'Otomatik mod için en az bir tersinir yüzey seç.'
   for (const v of [f.cooldownHours, f.minRuns]) {
     const n = parseNum(v)
     if (Number.isNaN(n) || (n !== null && n < 0)) return 'Cooldown ve minimum koşu negatif olamaz.'

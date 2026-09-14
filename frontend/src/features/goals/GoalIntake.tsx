@@ -1,7 +1,8 @@
-// GoalIntake — the ONLY way a goal enters the store: the user writes the goal
-// in their own words, the goal-writer agent maps it onto the metric catalog and
-// saves a DRAFT. With `goal` set, the same dialog rewrites an existing goal
-// (its id, status and history are kept; an active goal drops back to draft).
+// GoalIntake — the "write it for me" path: the user states the goal in their
+// own words, the goal-writer agent maps it onto the metric catalog and saves a
+// DRAFT for review. (The editor creates a goal directly.) With `goal` set, the
+// same dialog rewrites an existing goal (its id, status and history are kept;
+// an active goal drops back to draft).
 import { useState } from 'react'
 import { Loader2, Sparkles, X } from 'lucide-react'
 import { api } from '@/api'

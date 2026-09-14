@@ -1,6 +1,5 @@
-// Evolution goals (_Docs/83) — writer-only intake + user review/edit.
-// There is no direct create: a goal enters the store through the goal-writer
-// agent (intake), which keeps the user's words verbatim and normalizes the rest.
+// Evolution goals (_Docs/83) — direct create/edit, plus the goal-writer
+// intake that drafts a goal from the user's own words (kept verbatim).
 import { req } from './client'
 import type { Goal, GoalCatalog, GoalIntakeResult, GoalStatus } from '@/types/goal'
 
@@ -9,6 +8,9 @@ export const goalApi = {
     req<Goal[]>(status ? `/api/goals?status=${encodeURIComponent(status)}` : '/api/goals'),
   getGoal: (id: string): Promise<Goal> => req<Goal>(`/api/goals/${encodeURIComponent(id)}`),
   goalCatalog: (): Promise<GoalCatalog> => req<GoalCatalog>('/api/goals/catalog'),
+  // The user creates a goal directly in the editor (server validates).
+  createGoal: (goal: Goal): Promise<Goal> =>
+    req<Goal>('/api/goals', { method: 'POST', body: JSON.stringify(goal) }),
   // The goal-writer agent drafts a new goal (or rewrites goalId) from free text.
   intakeGoal: (text: string, goalId?: string): Promise<GoalIntakeResult> =>
     req<GoalIntakeResult>('/api/goals/intake', {

@@ -1,9 +1,8 @@
-// GoalDetail — the read view of one goal: the user's own words next to the
-// writer's normalized shape, the measurement (primary + guardrails), scope,
-// policy, the writer's open questions and the goal's own change log. Sections
-// are laid out so later phases (fitness trend, proposals, evolution ledger)
-// slot in under the same header without moving anything.
-import { AlertTriangle, History, MessageSquareQuote, Quote } from 'lucide-react'
+// GoalDetail — the read view of one goal: the description (and, for a
+// writer-drafted goal, the user's own words), the fitness trend, proposals,
+// the measurement (primary + guardrails), scope, policy and the goal's own
+// change log.
+import { History, Quote } from 'lucide-react'
 import { Badge, SectionHead } from '@/shared/components'
 import { fullDateTime } from '@/shared/lib/time'
 import type { Goal, GoalCatalog, GoalMetricDef } from '@/types/goal'
@@ -11,11 +10,8 @@ import { GoalFitnessBlock } from './GoalFitnessBlock'
 import { GoalProposals } from './GoalProposals'
 import {
   DIRECTION_LABEL,
-  KIND_LABEL,
   MODE_LABEL,
-  PRIORITY_LABEL,
   SCOPE_LABEL,
-  SURFACE_LABEL,
   authorLabel,
   formatMetricValue,
   metricLabel,
@@ -38,34 +34,10 @@ export function GoalDetail({ goal, catalog, onError, onOpenSession }: Props) {
   const scopeEntries = (Object.keys(SCOPE_LABEL) as (keyof typeof SCOPE_LABEL)[]).filter(
     (k) => (goal.scope[k]?.length ?? 0) > 0,
   )
-  const questions = goal.questions?.filter((q) => q.trim() !== '') ?? []
 
   return (
     <div className="flex flex-col gap-6" data-testid="goal-detail">
-      {questions.length > 0 && (
-        <div className="flex gap-2 rounded-lg border border-[var(--color-warning)]/40 bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] px-3 py-2 text-sm">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
-          <div>
-            <p className="font-medium">Hedef yazıcının açık soruları</p>
-            <ul className="mt-1 list-disc pl-5 text-[var(--color-text-dim)]">
-              {questions.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ul>
-            <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-              Etkinleştirmeden önce düzenleyip soruları boşalt ya da "yeniden yaz" ile cevaplarını
-              ekle.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {goal.summary && <p className="text-sm">{goal.summary}</p>}
-      {goal.description && (
-        <p className="whitespace-pre-wrap text-sm text-[var(--color-text-dim)]">
-          {goal.description}
-        </p>
-      )}
+      {goal.description && <p className="whitespace-pre-wrap text-sm">{goal.description}</p>}
 
       {goal.rawText && (
         <section className="flex flex-col gap-1.5">
@@ -136,12 +108,6 @@ export function GoalDetail({ goal, catalog, onError, onOpenSession }: Props) {
             />
           ))
         )}
-        {goal.rubric && (
-          <div className="mt-1">
-            <p className="text-xs text-[var(--color-text-dim)]">Rubrik</p>
-            <p className="whitespace-pre-wrap text-sm">{goal.rubric}</p>
-          </div>
-        )}
       </section>
 
       <section className="flex flex-col gap-2">
@@ -166,30 +132,12 @@ export function GoalDetail({ goal, catalog, onError, onOpenSession }: Props) {
         <SectionHead>Politika</SectionHead>
         <div className="grid gap-x-6 gap-y-1 text-sm md:grid-cols-2">
           <Row k="Mod" v={MODE_LABEL[goal.policy.mode]} />
-          <Row k="Tür" v={goal.kind ? KIND_LABEL[goal.kind] : '—'} />
-          <Row k="Öncelik" v={`${goal.priority || 3} · ${PRIORITY_LABEL[goal.priority || 3]}`} />
           <Row
             k="Cooldown"
             v={goal.policy.cooldownHours ? `${goal.policy.cooldownHours} sa` : '—'}
           />
           <Row k="En az koşu" v={goal.policy.minRuns ? String(goal.policy.minRuns) : '—'} />
-          {goal.policy.mode === 'auto' && (
-            <Row
-              k="Oto-uygulanır"
-              v={
-                (goal.policy.autoApplySurfaces ?? [])
-                  .map((s) => SURFACE_LABEL[s] ?? s)
-                  .join(', ') || '—'
-              }
-            />
-          )}
         </div>
-        {goal.notes && (
-          <p className="mt-1 flex gap-1.5 text-xs text-[var(--color-text-dim)]">
-            <MessageSquareQuote size={14} className="mt-0.5 shrink-0" />
-            <span className="whitespace-pre-wrap">{goal.notes}</span>
-          </p>
-        )}
       </section>
 
       <section className="flex flex-col gap-2">

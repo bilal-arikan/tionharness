@@ -25,7 +25,6 @@ func goalAPIFixture(t *testing.T) (*Server, *workspace.Workspace, db.Goal) {
 		Name: "Ucuz inceleme", RawText: "incelemeler pahalı",
 		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min"},
 		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: &min}},
-		Questions:  []string{"Hangi reçete?"},
 	}, db.GoalByWriter, "written")
 	if err != nil {
 		t.Fatalf("seed goal: %v", err)
@@ -48,8 +47,8 @@ func goalRequest(wsp *workspace.Workspace, method, target, id string, body any) 
 	return req
 }
 
-// TestGoalHandlers: list, get, user edit (validated), status gate on open
-// questions, delete.
+// TestGoalHandlers: list, direct create (validated), get, user edit
+// (validated), status change, delete.
 func TestGoalHandlers(t *testing.T) {
 	s, wsp, g := goalAPIFixture(t)
 
@@ -60,17 +59,34 @@ func TestGoalHandlers(t *testing.T) {
 		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Activation is refused while a question is open (both via status and via
-	// a full edit that says active).
+	// Direct create from the editor: validated, provenance is the user's, the
+	// raw text is never set on this path; an unknown metric is a 422.
 	rec = httptest.NewRecorder()
-	s.handleSetGoalStatus(rec, goalRequest(wsp, http.MethodPost, "/api/goals/"+g.ID+"/status", g.ID, map[string]string{"status": "active"}))
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "open question") {
-		t.Fatalf("activate with open question: %d %s", rec.Code, rec.Body.String())
+	s.handleCreateGoal(rec, goalRequest(wsp, http.MethodPost, "/api/goals", "", db.Goal{
+		Name: "Hızlı kartlar", RawText: "tampered", CreatedBy: "someone",
+		Primary: db.GoalMetric{Metric: "board.cycleTimeSec"},
+	}))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created db.Goal
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	if created.ID == "" || created.RawText != "" || created.CreatedBy != db.GoalByUser || created.Status != db.GoalStatusDraft || created.Primary.Direction != "min" {
+		t.Fatalf("created = %+v", created)
+	}
+	rec = httptest.NewRecorder()
+	s.handleCreateGoal(rec, goalRequest(wsp, http.MethodPost, "/api/goals", "", db.Goal{Name: "x", Primary: db.GoalMetric{Metric: "recipe.vibes"}}))
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("create with unknown metric must be 422, got %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	s.handleDeleteGoal(rec, goalRequest(wsp, http.MethodDelete, "/api/goals/"+created.ID, created.ID, nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete created: %d", rec.Code)
 	}
 
-	// User edit: clear the question, rename; invalid metric is a 422.
+	// User edit: rename; invalid metric is a 422.
 	edit := g
-	edit.Questions = nil
 	edit.Name = "Kod incelemesi ucuzlasın"
 	rec = httptest.NewRecorder()
 	s.handleUpdateGoal(rec, goalRequest(wsp, http.MethodPut, "/api/goals/"+g.ID, g.ID, edit))
@@ -79,7 +95,7 @@ func TestGoalHandlers(t *testing.T) {
 	}
 	var updated db.Goal
 	_ = json.Unmarshal(rec.Body.Bytes(), &updated)
-	if updated.Name != edit.Name || len(updated.Questions) != 0 || len(updated.History) != 2 || updated.History[1].By != db.GoalByUser {
+	if updated.Name != edit.Name || len(updated.History) != 2 || updated.History[1].By != db.GoalByUser {
 		t.Fatalf("updated = %+v", updated)
 	}
 	bad := updated

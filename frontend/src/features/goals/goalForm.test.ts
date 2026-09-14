@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Goal, GoalMetricDef } from '@/types/goal'
-import { fromFormState, parseNum, toFormState, validateForm } from './goalForm'
+import { emptyGoal, fromFormState, parseNum, toFormState, validateForm } from './goalForm'
 
 const catalog: GoalMetricDef[] = [
   { key: 'recipe.avgCostUSD', label: 'Maliyet', unit: 'usd', defaultDirection: 'min', source: 'r' },
@@ -11,13 +11,6 @@ const catalog: GoalMetricDef[] = [
     defaultDirection: 'max',
     source: 'r',
   },
-  {
-    key: 'judge.rubricScore',
-    label: 'Rubrik',
-    unit: 'score',
-    defaultDirection: 'max',
-    source: 'j',
-  },
 ]
 
 const base: Goal = {
@@ -25,13 +18,10 @@ const base: Goal = {
   name: 'Ucuz inceleme',
   rawText: 'incelemeler pahalı',
   status: 'draft',
-  kind: 'metric',
-  priority: 2,
   scope: { recipes: ['code-review'] },
   primary: { metric: 'recipe.avgCostUSD', direction: 'min', target: 0.5 },
   guardrails: [{ metric: 'recipe.successRate', min: 0.9, max: null }],
   policy: { mode: 'propose', cooldownHours: 72, minRuns: 5 },
-  questions: ['Hangi ajan?'],
   createdAt: 1,
   updatedAt: 1,
   history: [{ at: 1, by: 'agent:goal-writer' }],
@@ -42,22 +32,26 @@ describe('goalForm', () => {
     const f = toFormState(base)
     expect(f.primaryTarget).toBe('0.5')
     expect(f.guardrails).toEqual([{ metric: 'recipe.successRate', min: '0.9', max: '' }])
-    expect(f.questions).toBe('Hangi ajan?')
     const g = fromFormState(base, f)
     expect(g.primary).toEqual(base.primary)
     expect(g.guardrails).toEqual([{ metric: 'recipe.successRate', min: 0.9, max: null }])
     expect(g.scope.recipes).toEqual(['code-review'])
-    expect(g.policy).toEqual({
-      mode: 'propose',
-      autoApplySurfaces: [],
-      cooldownHours: 72,
-      minRuns: 5,
-    })
-    expect(g.questions).toEqual(['Hangi ajan?'])
+    expect(g.policy).toEqual({ mode: 'propose', cooldownHours: 72, minRuns: 5 })
     // Server-owned fields ride along untouched.
     expect(g.id).toBe('GOL1')
     expect(g.rawText).toBe('incelemeler pahalı')
     expect(g.history).toBe(base.history)
+  })
+
+  it('starts a new goal from a blank that fails validation until filled', () => {
+    const blank = emptyGoal()
+    const f = toFormState(blank)
+    expect(validateForm(f, catalog)).toMatch(/Ad zorunlu/)
+    f.name = 'Yeni'
+    expect(validateForm(f, catalog)).toMatch(/Ana metrik seç/)
+    f.primaryMetric = 'recipe.avgCostUSD'
+    expect(validateForm(f, catalog)).toBeNull()
+    expect(fromFormState(blank, f).policy.mode).toBe('propose')
   })
 
   it('parses numbers leniently and drops empty guardrail rows', () => {
@@ -72,24 +66,12 @@ describe('goalForm', () => {
     expect(g.primary.target).toBeNull()
   })
 
-  it('auto mode keeps its surfaces, other modes clear them', () => {
-    const f = toFormState(base)
-    f.mode = 'auto'
-    f.autoApplySurfaces = ['thinkingLevel']
-    expect(fromFormState(base, f).policy.autoApplySurfaces).toEqual(['thinkingLevel'])
-    f.mode = 'off'
-    expect(fromFormState(base, f).policy.autoApplySurfaces).toEqual([])
-  })
-
   it('validates like the server', () => {
     const ok = toFormState(base)
     expect(validateForm(ok, catalog)).toBeNull()
     expect(validateForm({ ...ok, name: ' ' }, catalog)).toMatch(/Ad zorunlu/)
     expect(validateForm({ ...ok, primaryMetric: 'nope' }, catalog)).toMatch(/katalogda yok/)
     expect(validateForm({ ...ok, primaryTarget: 'x' }, catalog)).toMatch(/sayı olmalı/)
-    expect(
-      validateForm({ ...ok, primaryMetric: 'judge.rubricScore', rubric: '' }, catalog),
-    ).toMatch(/rubrik/i)
     expect(
       validateForm(
         { ...ok, guardrails: [{ metric: 'recipe.avgCostUSD', min: '1', max: '' }] },
@@ -108,9 +90,6 @@ describe('goalForm', () => {
         catalog,
       ),
     ).toMatch(/üstten büyük/)
-    expect(validateForm({ ...ok, mode: 'auto', autoApplySurfaces: [] }, catalog)).toMatch(
-      /tersinir/,
-    )
     expect(validateForm({ ...ok, minRuns: '-1' }, catalog)).toMatch(/negatif/)
   })
 })

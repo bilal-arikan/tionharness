@@ -465,9 +465,10 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/workers", s.handleSpawnWorker)
 	mux.HandleFunc("GET /api/recipes/{slug}/optimizer", s.handleRecipeOptimizerState)
 	mux.HandleFunc("POST /api/recipes/{slug}/optimize", s.handleOptimizeRecipe)
-	// Evolution goals (_Docs/83): the writer-only intake + user review/edit.
+	// Evolution goals (_Docs/83): direct create/edit, plus the writer intake.
 	// "catalog" and "intake" are registered before {id} so they never read as ids.
 	mux.HandleFunc("GET /api/goals", s.handleListGoals)
+	mux.HandleFunc("POST /api/goals", s.handleCreateGoal)
 	mux.HandleFunc("GET /api/goals/catalog", s.handleGoalCatalog)
 	mux.HandleFunc("POST /api/goals/intake", s.handleGoalIntake)
 	mux.HandleFunc("GET /api/goals/{id}", s.handleGetGoal)

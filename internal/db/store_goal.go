@@ -50,14 +50,11 @@ func (d *DB) GetGoal(ctx context.Context, id string) (Goal, error) {
 	return dbGet(d, d.goals, id)
 }
 
-// ListGoals returns every goal, active first, then by priority, then newest.
+// ListGoals returns every goal, active first, then newest.
 func (d *DB) ListGoals(ctx context.Context) ([]Goal, error) {
 	return dbList(d, d.goals, func(a, b Goal) bool {
 		if ra, rb := goalStatusRank(a.Status), goalStatusRank(b.Status); ra != rb {
 			return ra < rb
-		}
-		if pa, pb := goalPriority(a.Priority), goalPriority(b.Priority); pa != pb {
-			return pa < pb
 		}
 		return a.CreatedAt > b.CreatedAt
 	}), nil
@@ -152,13 +149,6 @@ func goalStatusRank(s string) int {
 	return 4
 }
 
-func goalPriority(p int) int {
-	if p <= 0 {
-		return 3
-	}
-	return p
-}
-
 // goalChangedFields names the editable fields that differ between two goals,
 // for the revision log.
 func goalChangedFields(a, b Goal) []string {
@@ -169,20 +159,13 @@ func goalChangedFields(a, b Goal) []string {
 		}
 	}
 	add("name", a.Name != b.Name)
-	add("summary", a.Summary != b.Summary)
 	add("description", a.Description != b.Description)
 	add("status", a.Status != b.Status)
-	add("kind", a.Kind != b.Kind)
-	add("priority", a.Priority != b.Priority)
 	add("scope", !stringSliceEq(a.Scope.Recipes, b.Scope.Recipes) || !stringSliceEq(a.Scope.Agents, b.Scope.Agents) ||
 		!stringSliceEq(a.Scope.Automations, b.Scope.Automations) || !stringSliceEq(a.Scope.Tags, b.Scope.Tags))
 	add("primary", a.Primary.Metric != b.Primary.Metric || a.Primary.Direction != b.Primary.Direction || !floatPtrEq(a.Primary.Target, b.Primary.Target))
 	add("guardrails", !guardrailsEq(a.Guardrails, b.Guardrails))
-	add("rubric", a.Rubric != b.Rubric)
-	add("policy", a.Policy.Mode != b.Policy.Mode || a.Policy.CooldownHours != b.Policy.CooldownHours || a.Policy.MinRuns != b.Policy.MinRuns ||
-		!stringSliceEq(a.Policy.AutoApplySurfaces, b.Policy.AutoApplySurfaces))
-	add("questions", !stringSliceEq(a.Questions, b.Questions))
-	add("notes", a.Notes != b.Notes)
+	add("policy", a.Policy.Mode != b.Policy.Mode || a.Policy.CooldownHours != b.Policy.CooldownHours || a.Policy.MinRuns != b.Policy.MinRuns)
 	return out
 }
 

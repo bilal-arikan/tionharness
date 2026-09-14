@@ -11,16 +11,13 @@ import (
 // Evolution goals (_Docs/83 §4.1).
 //
 //	GET    /api/goals                → every goal (?status= filters)
-//	GET    /api/goals/catalog        → metric catalog, auto-apply surfaces, scope candidates
+//	GET    /api/goals/catalog        → metric catalog + scope candidates
+//	POST   /api/goals                → user creates a goal directly (validated)
 //	POST   /api/goals/intake         → {text, goalId?}: the goal-writer agent drafts / rewrites a goal
 //	GET    /api/goals/{id}
 //	PUT    /api/goals/{id}           → user edit (validated; appends a revision)
 //	POST   /api/goals/{id}/status    → {status}: draft | active | paused | archived
 //	DELETE /api/goals/{id}
-//
-// There is deliberately no POST /api/goals: a goal enters the store only
-// through the writer, so every goal carries the user's verbatim statement and
-// a normalized, validated shape.
 
 func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -43,10 +40,30 @@ func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGoalCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"metrics":           goals.Catalog(),
-		"autoApplySurfaces": goals.AutoApplySurfaces,
-		"candidates":        ws(r).Runtime.GoalScopeCandidates(r.Context()),
+		"metrics":    goals.Catalog(),
+		"candidates": ws(r).Runtime.GoalScopeCandidates(r.Context()),
 	})
+}
+
+// handleCreateGoal stores a goal the user built in the editor. Provenance,
+// id and history are the store's; a direct goal carries no RawText.
+func (s *Server) handleCreateGoal(w http.ResponseWriter, r *http.Request) {
+	var g db.Goal
+	if err := decodeJSON(r, &g); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	g.RawText, g.CreatedBy, g.History = "", "", nil
+	goals.Normalize(&g)
+	if err := goals.Validate(g); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	stored, err := ws(r).DB.CreateGoal(r.Context(), g, db.GoalByUser, "created in the editor")
+	if writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusCreated, stored)
 }
 
 func (s *Server) handleGoalIntake(w http.ResponseWriter, r *http.Request) {
@@ -98,12 +115,6 @@ func (s *Server) handleUpdateGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	if g.Status == db.GoalStatusActive {
-		if err := goals.CanActivate(g); err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err.Error())
-			return
-		}
-	}
 	stored, err := ws(r).DB.UpdateGoal(r.Context(), g, db.GoalByUser, "")
 	if writeDBError(w, err, "goal not found") {
 		return
@@ -125,20 +136,7 @@ func (s *Server) handleSetGoalStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unknown status")
 		return
 	}
-	id := r.PathValue("id")
-	if body.Status == db.GoalStatusActive {
-		cur, err := ws(r).DB.GetGoal(r.Context(), id)
-		if writeDBError(w, err, "goal not found") {
-			return
-		}
-		cur.Status = db.GoalStatusActive
-		goals.Normalize(&cur)
-		if err := goals.CanActivate(cur); err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err.Error())
-			return
-		}
-	}
-	g, err := ws(r).DB.SetGoalStatus(r.Context(), id, body.Status, db.GoalByUser)
+	g, err := ws(r).DB.SetGoalStatus(r.Context(), r.PathValue("id"), body.Status, db.GoalByUser)
 	if writeDBError(w, err, "goal not found") {
 		return
 	}
