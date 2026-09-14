@@ -195,6 +195,10 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 		}
 		// codex-cli's sibling of the block above, shared with guardedComplete so
 		// both entry points pin the same home (see PinCodexHome / PinCLIHome).
+		// Workspace plugin configuration is refreshed per turn (the user can toggle
+		// the feature or edit the lists between turns) and the provider instance is
+		// shared, so it must be pushed rather than baked in at construction.
+		t.r.applyCodexPlugins(t.provider)
 		if err := t.r.PinCodexHome(t.provider); err != nil {
 			return noop, err
 		}

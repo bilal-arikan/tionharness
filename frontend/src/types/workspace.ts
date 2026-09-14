@@ -10,6 +10,29 @@ export interface BoardColumnDef {
   color: string
 }
 
+// One codex-cli plugin marketplace configured for a workspace, mirroring codex's
+// own [marketplaces.<name>] table. `name` is what plugin selectors resolve
+// against ("<plugin>@<name>"), so it must match the name inside the
+// marketplace's own marketplace.json.
+export interface CodexMarketplace {
+  name: string
+  source: string
+  sourceType: 'local' | 'git'
+  ref?: string
+}
+
+// A marketplace discovered on this machine (from the user's own codex install),
+// offered for import. `reserved` marks the ones codex refuses to let anyone
+// register from their own source — they can only be used by importing a renamed
+// copy, which is what `suggestedName` is for.
+export interface CodexDiscoveredMarketplace {
+  name: string
+  root: string
+  reserved: boolean
+  suggestedName: string
+  plugins: string[]
+}
+
 // Board grouping axis. The board's columns are DERIVED from this: 'status' uses
 // the workspace's BoardColumnDef list (classic kanban), the others build columns
 // from the tasks themselves. Dragging a card writes the field the axis names.
@@ -115,6 +138,12 @@ export interface WorkspaceSettings {
   terseMode: boolean
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
+  // Codex plugin support: the master switch plus the configured sources and the
+  // enabled "<plugin>@<marketplace>" selectors. Both lists are always present
+  // (possibly empty) — TionHarness ships no marketplace of its own.
+  codexPluginsEnabled: boolean
+  codexMarketplaces: CodexMarketplace[]
+  codexPlugins: string[]
   // In-process shell-output compression (sqz) override: '' = auto (follow sqz-hook
   // detection), 'on' = force on (needs the sqz binary), 'off' = disable.
   shellOutputCompression: '' | 'on' | 'off'
@@ -151,6 +180,9 @@ export type WorkspaceSettingsPatch = Partial<
     | 'terseMode'
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
+    | 'codexPluginsEnabled'
+    | 'codexMarketplaces'
+    | 'codexPlugins'
     | 'shellOutputCompression'
     | 'shellCommandRewrite'
     | 'boardColumns'

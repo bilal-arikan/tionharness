@@ -64,6 +64,29 @@ type codexConfig struct {
 	DisableRequestUserInput bool
 	// Servers renders one [mcp_servers.<key>] block each, in sorted key order.
 	Servers map[string]CLIMCPServer
+	// Marketplaces renders one [marketplaces.<name>] block each, in sorted name
+	// order. Codex resolves plugin selectors against these sources.
+	Marketplaces []CodexMarketplace
+	// Plugins are enabled plugin selectors ("<plugin>@<marketplace>"), each
+	// rendered as [plugins."<selector>"] with enabled = true, in sorted order.
+	//
+	// Rendering these EVERY turn is mandatory, not an optimisation: config.toml is
+	// rewritten from scratch before each turn, and a rewrite that omits the keys
+	// drops every installed plugin back to "not installed" for that turn (measured
+	// on codex 0.153.3 — the cache survives on disk but the plugin goes dark).
+	Plugins []string
+}
+
+// CodexMarketplace is one codex plugin marketplace source. Name is the
+// marketplace's own identifier (the key plugin selectors resolve against),
+// Source a local directory path or a Git location, and SourceType "local" or
+// "git" — the two values codex's [marketplaces] table accepts.
+type CodexMarketplace struct {
+	Name       string
+	Source     string
+	SourceType string
+	// Ref is an optional Git branch/tag/commit; ignored for local sources.
+	Ref string
 }
 
 // renderCodexConfig renders cfg as the text of a codex `config.toml`.
@@ -137,7 +160,60 @@ func renderCodexConfig(cfg codexConfig) string {
 		b.WriteString(renderCodexServer(key, cfg.Servers[key]))
 	}
 
+	// Marketplaces before plugins: a [plugins."x@y"] key whose marketplace is not
+	// declared resolves to nothing. Both are sorted so the rendered text — which
+	// the launch fingerprint hashes — stays byte-identical across runs.
+	for _, m := range sortedCodexMarketplaces(cfg.Marketplaces) {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(renderCodexMarketplace(m))
+	}
+	for _, selector := range sortedStrings(cfg.Plugins) {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "[plugins.%s]\nenabled = true\n", tomlString(selector))
+	}
+
 	return b.String()
+}
+
+// renderCodexMarketplace renders a single [marketplaces.<name>] block.
+//
+// Source is a LITERAL string, not a basic one: a Windows path such as
+// C:\Users\x\.codex is full of backslashes, and inside a basic string TOML reads
+// \U as the start of a unicode escape and fails the whole config with "too few
+// unicode value digits" (measured on codex 0.153.3 — and with --strict-config
+// that kills every turn, not just the plugin).
+func renderCodexMarketplace(m CodexMarketplace) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "[marketplaces.%s]\n", tomlKey(m.Name))
+	sourceType := m.SourceType
+	if sourceType == "" {
+		sourceType = "local"
+	}
+	fmt.Fprintf(&b, "source_type = %s\n", tomlString(sourceType))
+	fmt.Fprintf(&b, "source = %s\n", tomlLiteralString(m.Source))
+	if strings.TrimSpace(m.Ref) != "" {
+		fmt.Fprintf(&b, "ref = %s\n", tomlString(m.Ref))
+	}
+	return b.String()
+}
+
+// sortedCodexMarketplaces returns ms ordered by name, so the rendered config is
+// deterministic regardless of the caller's slice order.
+func sortedCodexMarketplaces(ms []CodexMarketplace) []CodexMarketplace {
+	out := append([]CodexMarketplace(nil), ms...)
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// sortedStrings returns a sorted copy, leaving the caller's slice untouched.
+func sortedStrings(items []string) []string {
+	out := append([]string(nil), items...)
+	sort.Strings(out)
+	return out
 }
 
 // renderCodexServer renders a single [mcp_servers.<key>] block.
@@ -241,6 +317,21 @@ func tomlMultilineString(s string) string {
 	// A leading newline immediately after the opening delimiter is trimmed by
 	// TOML, so start the value on the same line to preserve it verbatim.
 	return `"""` + esc + `"""`
+}
+
+// tomlLiteralString renders s as a TOML literal string ('...'), where nothing
+// is an escape sequence. This is the only safe form for a Windows path: as a
+// basic string C:\Users\... would be read as escape sequences and reject the
+// whole config.
+//
+// A literal string cannot contain a single quote, so one is rewritten as a
+// basic string instead — correct for any path a quote can appear in, and
+// backslashes are escaped there by tomlEscapeBasic.
+func tomlLiteralString(s string) string {
+	if strings.ContainsAny(s, "'\n\r") {
+		return tomlString(s)
+	}
+	return "'" + s + "'"
 }
 
 // tomlEscapeBasic escapes the control and delimiter characters a TOML basic

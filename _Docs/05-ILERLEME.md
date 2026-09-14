@@ -32,6 +32,52 @@ turlarının (spawn/worker/inbox) DB kapanmadan drenajı, kuyrukta bekleyen bir 
   temizleme), `db/store_goal_test.go` (sıralama artık durum + yenilik), frontend
   `goalForm.test.ts` (`emptyGoal` boştan doldurma). `scripts/test.sh full` yeşil.
 
+## Codex plugin desteği (2026-09-14) ✅
+
+- **İstek:** `codex exec` turlarında Codex plugin'lerinin (skill / MCP sunucusu /
+  hook taşıyan paketler) kullanılabilmesi; ayarlardan kapatılabilir, varsayılan
+  açık; sohbet akışında plugin kullanımının adım olarak görünmesi.
+- **Ölçüm — iki yarım birden gerekir (codex 0.153.3):** Config anahtarları
+  (`[marketplaces.<ad>]` + `[plugins."<seçici>"]`) tek başına yetmiyor — elle
+  yazıldığında model "NONE" dedi; aynı evde `codex plugin add` koşulunca (config
+  değişmeden) `visualize:visualize` göründü. Tersi de doğru: cache kurulduktan
+  sonra `config.toml` anahtarsız üzerine yazılınca `plugin list` boşaldı. Bu
+  ikincisi kritik, çünkü `writeCodexConfig` **her turda** dosyayı sıfırdan yazar —
+  yani anahtarları her tur yeniden yazmak zorunluluk, iyileştirme değil.
+- **Uygulama:** `WSSettings.CodexPluginsEnabled` (varsayılan **açık**) +
+  `CodexMarketplaces`/`CodexPlugins` listeleri → `Workspace.codexPluginSpecLocked()`
+  (kapalıysa **boş** spec, tek bir "kapalı" durumu) → `Runtime.SetCodexPlugins`
+  (atomic) → her turun başında `applyCodexPlugins` (PinCodexHome yanında) →
+  `renderCodexConfig` anahtarları her tur yazar, `ensureCodexPlugins` kalıcı
+  sohbet evine (`resume-homes/<sha256>`) bir kez kurar (~600 ms ölçüldü, damga
+  dosyasıyla tekrarsız). Tek kullanımlık gölge evlere (başlık/özet/içgörü)
+  bilerek kurulmaz.
+- **Rezerve adlar:** Codex `openai-bundled` ve uzak katalogları başka kaynaktan
+  eklemeyi reddediyor ("is reserved and cannot be added from this source"). Bu
+  yüzden içe aktarma akışı **kopyala + yeniden adlandır** yapıyor
+  (`POST /api/codex-plugins/import`). Kopyalama asla kendiliğinden değil: bundled
+  plugin'ler OpenAI'ın tescilli dosyaları, karar kullanıcının. TionHarness kendi
+  marketplace'i ile gelmiyor. Keşif (`GET /api/codex-plugins/discover`) yalnız
+  bilinen marketplace konumlarını yokluyor ve her birinin `marketplace.json`'undan
+  başka hiçbir şey okumuyor (codex home'u `auth.json`/`secrets/` de barındırıyor).
+- **`--strict-config` riski:** Tanınmayan anahtar bütün turu düşürür. Anahtarların
+  şemaya uygunluğu canlı doğrulandı; ad/seçici doğrulaması API kenarında
+  (rezerve ad, geçersiz karakter, bozuk seçici, yineleme → 400). **Windows yolu
+  tuzağı:** `source` TOML *literal* string (`'...'`) yazılır — basic string'de
+  `C:\Users\...` içindeki `\U` unicode kaçışı sanılıp config reddediliyor
+  (ölçüldü).
+- **Akış görünürlüğü:** MCP sunucusu sunan plugin'lerin çağrıları zaten
+  `mcp_tool_call` → `Kind:"tool"` adımı olarak geliyor. Skill sunanlar ise
+  JSONL'de **hiçbir iz bırakmıyor** (ölçüldü: yalnız `agent_message`), bu yüzden
+  trace turun neyle **donatıldığını** yazıyor ("bu turda yüklü plugin'ler: …"),
+  kullanımı değil — script yolundan kullanım çıkarımı yanlış sinyal üretirdi.
+- Ayrıntı: `_Docs/84-CODEX-PLUGIN-DESTEGI.md`. Testler:
+  `TestCodexConfigRendersMarketplacesAndPlugins`,
+  `TestCodexConfigWithoutPluginsIsUnchanged`,
+  `TestCodexConfigPluginOrderIsDeterministic`,
+  `TestCodexPluginSpecEmptyWhenDisabled`,
+  `TestValidateCodexMarketplacesRejectsReserved`.
+
 ## Sistem ajanının kendi sağlayıcısı ve modeli her zaman kullanılır (2026-09-11) ✅
 
 - **Karar (kullanıcı onayı):** Ayarlar ▸ Sistem Ajanları kartındaki sağlayıcı/model artık

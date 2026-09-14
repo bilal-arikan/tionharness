@@ -8,6 +8,8 @@ import type {
   WorkspaceConfig,
   WorkspaceConfigPatch,
   LivenessSnapshot,
+  CodexMarketplace,
+  CodexDiscoveredMarketplace,
 } from '@/types'
 import { req } from './client'
 
@@ -60,6 +62,19 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
+  // Codex plugin marketplaces already installed on this machine, offered for
+  // import. Read-only probe: it reads each marketplace's manifest and nothing
+  // else in the codex home.
+  discoverCodexMarketplaces: () => req<CodexDiscoveredMarketplace[]>('/api/codex-plugins/discover'),
+  // Copy one discovered marketplace into this workspace under a name it owns
+  // (codex refuses to register its own reserved names from another source).
+  // Returns the marketplace entry to persist plus the plugins it offers — which
+  // of them to enable stays the user's choice.
+  importCodexMarketplace: (body: { root: string; name: string }) =>
+    req<{ marketplace: CodexMarketplace; availablePlugins: string[] }>(
+      '/api/codex-plugins/import',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   // Pre-flight: probe whether THIS workspace's claude-home is logged in. Spawns a
   // minimal `claude -p` on the backend, so it is on-demand (behind a button).
   checkWorkspaceClaudeAuth: () =>

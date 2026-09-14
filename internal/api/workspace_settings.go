@@ -50,6 +50,15 @@ type workspaceSettingsDTO struct {
 	// system for this workspace (see promptepoch.go).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// CodexPluginsEnabled toggles codex-cli plugin support for this workspace.
+	CodexPluginsEnabled bool `json:"codexPluginsEnabled"`
+
+	// CodexMarketplaces / CodexPlugins are the configured plugin sources and the
+	// enabled "<plugin>@<marketplace>" selectors. Always non-nil so the client can
+	// render an empty list cleanly.
+	CodexMarketplaces []db.CodexMarketplace `json:"codexMarketplaces"`
+	CodexPlugins      []string              `json:"codexPlugins"`
+
 	// ShellOutputCompression is the in-process shell-output token-optimizer
 	// override: "" (auto — follow the sqz-hook opt-in), "on" or "off". Must be
 	// echoed back, otherwise the settings selector always renders "auto" and a
@@ -108,6 +117,11 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
+
+		CodexPluginsEnabled: s.CodexPluginsEnabled,
+		// Non-nil for a clean empty array in JSON (nil marshals to null).
+		CodexMarketplaces: append([]db.CodexMarketplace{}, s.CodexMarketplaces...),
+		CodexPlugins:      append([]string{}, s.CodexPlugins...),
 
 		ShellOutputCompression: s.ShellOutputCompression,
 		ShellCommandRewrite:    s.ShellCommandRewrite,
@@ -196,6 +210,22 @@ func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Re
 	// to pick the right status code.
 	if patch.BoardViews != nil {
 		if err := db.ValidateBoardViews(*patch.BoardViews); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	// Codex renders these straight into config.toml under --strict-config, where a
+	// malformed name or a marketplace codex owns itself ("openai-bundled" and the
+	// remote catalogs) fails EVERY turn, not just the plugin. Reject at the edge so
+	// a bad entry can never be persisted.
+	if patch.CodexMarketplaces != nil {
+		if err := validateCodexMarketplaces(*patch.CodexMarketplaces); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if patch.CodexPlugins != nil {
+		if err := validateCodexPluginSelectors(*patch.CodexPlugins); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

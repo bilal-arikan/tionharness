@@ -33,6 +33,12 @@ type CodexCLI struct {
 	// <configDir>/config.toml before launch. Set by ConfigureCLIMCP.
 	mcpServers map[string]CLIMCPServer
 
+	// Plugin delegation: the marketplaces and plugin selectors rendered into the
+	// same config.toml, and installed into the turn's home before launch. Set by
+	// SetCodexPlugins. Empty = no plugin key is written at all.
+	marketplaces []CodexMarketplace
+	plugins      []string
+
 	// mcpProbe overrides the remote-MCP reachability probe. Nil means the real
 	// network probe; tests set it to stay offline.
 	mcpProbe             codexMCPProbe
@@ -120,6 +126,15 @@ func (c *CodexCLI) ConfigDir() string { return c.configDir }
 // is expressed by which servers are configured at all.
 func (c *CodexCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 	c.mcpServers = spec.Servers
+}
+
+// SetCodexPlugins installs the marketplaces and plugin selectors this provider
+// renders into config.toml and installs into each conversation home. Empty
+// slices switch the feature off: no [marketplaces]/[plugins] key is written and
+// the install step is skipped entirely.
+func (c *CodexCLI) SetCodexPlugins(marketplaces []CodexMarketplace, plugins []string) {
+	c.marketplaces = marketplaces
+	c.plugins = plugins
 }
 
 // codexSandboxArgs maps TionHarness's permission mode onto codex's sandbox flags.
@@ -242,6 +257,12 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		DisableNativeMultiAgent: true,
 		DisableSubAgents:        true,
 		Servers:                 c.mcpServers,
+		// Re-rendered every turn on purpose: config.toml is rewritten from scratch
+		// before each launch, and a rewrite that omits these keys drops every
+		// installed plugin back to "not installed" for that turn (measured on codex
+		// 0.153.3 — the cache survives on disk, but the plugin goes dark).
+		Marketplaces: c.marketplaces,
+		Plugins:      c.plugins,
 	}
 }
 
@@ -343,6 +364,26 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 		dropped, err := writeConfig()
 		if err != nil {
 			return nil, err
+		}
+		// Plugins are installed only into a DURABLE conversation home: a scoped
+		// chat home is provisioned once and reused by every later turn, while the
+		// disposable shadow home of an auxiliary call (title, compaction, insight)
+		// is deleted straight afterwards — installing there would pay the cost on
+		// every single call for turns that never use plugin skills.
+		if req.CLIResumeScope != "" {
+			for _, n := range c.ensureCodexPlugins(ctx, home) {
+				note("[codex] " + n)
+			}
+			// Skill-bearing plugins leave NO trace of their own: measured on codex
+			// 0.153.3, a turn that uses one emits only agent_message — no item type
+			// names the skill. So the trace states what the turn was EQUIPPED with,
+			// which is verifiable, instead of inferring use from script paths, which
+			// would claim "used" for a plugin the model never touched. Plugins that
+			// expose MCP tools need no such note: their calls arrive as real
+			// mcp_tool_call items and already render as tool steps.
+			if len(c.plugins) > 0 {
+				note("[codex] bu turda yüklü plugin'ler: " + strings.Join(sortedStrings(c.plugins), ", "))
+			}
 		}
 		if len(dropped) > 0 {
 			note("[codex] unreachable MCP server(s) omitted from this turn: " +

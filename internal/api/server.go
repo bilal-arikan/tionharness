@@ -491,6 +491,10 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspace-templates", s.handleListWorkspaceTemplates)
 	// Native folder picker (local desktop) for choosing a workspace data dir.
 	mux.HandleFunc("POST /api/pick-folder", s.handlePickFolder)
+	// Codex plugin marketplaces already installed on this machine, offered for
+	// import into the active workspace (never copied without the user asking).
+	mux.HandleFunc("GET /api/codex-plugins/discover", s.handleDiscoverCodexMarketplaces)
+	mux.HandleFunc("POST /api/codex-plugins/import", s.handleImportCodexMarketplace)
 
 	// Per-workspace settings (resolved from X-Workspace-Id).
 	mux.HandleFunc("GET /api/workspace-settings", s.handleGetWorkspaceSettings)

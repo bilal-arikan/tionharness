@@ -365,6 +365,13 @@ type Runtime struct {
 	// ConsumeCacheBreak while the turn's trace is assembled.
 	pendingCacheBreaks sync.Map
 
+	// codexPlugins carries this workspace's codex-cli plugin configuration
+	// (marketplaces + enabled selectors), mirrored from WSSettings the same way
+	// codebaseMemoryEnabled is. Nil/empty means the feature is off or unconfigured,
+	// in which case no [marketplaces]/[plugins] key is rendered and nothing is
+	// installed — byte-identical to the pre-plugin config.
+	codexPlugins atomic.Pointer[CodexPluginSpec]
+
 	// promptEpochEnabled gates the prompt-epoch (frozen prompt-prefix snapshot)
 	// system for this workspace: when on, a session's static system prefix and
 	// tool schemas are frozen at session start and mid-session config drift no
@@ -656,6 +663,20 @@ func (r *Runtime) SetShellCommandRewrite(mode string) {
 		v = shellCompressAuto
 	}
 	r.shellRewriteMode.Store(v)
+}
+
+// SetCodexPlugins installs this workspace's codex plugin configuration. An empty
+// spec (the off state) is stored as-is, so readers never have to distinguish
+// "disabled" from "configured with nothing".
+func (r *Runtime) SetCodexPlugins(spec CodexPluginSpec) { r.codexPlugins.Store(&spec) }
+
+// CodexPluginSpec returns this workspace's codex plugin configuration. The zero
+// value means nothing to render or install.
+func (r *Runtime) CodexPluginSpec() CodexPluginSpec {
+	if spec := r.codexPlugins.Load(); spec != nil {
+		return *spec
+	}
+	return CodexPluginSpec{}
 }
 
 // SetPromptEpoch toggles the prompt-epoch (frozen prompt-prefix snapshot) system

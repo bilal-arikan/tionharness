@@ -3,6 +3,7 @@
 // publish/export-as-template flow now lives in its own "Dışa Aktar" sub-tab.
 import type { WorkspaceSettings } from '@/types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
+import { CodexPluginsSection } from './CodexPluginsSection'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { formatDate } from '@/shared/lib/intl'
 
@@ -76,6 +77,24 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         checked={ws.codebaseMemoryEnabled}
         onChange={(v) => setWsField('codebaseMemoryEnabled', v)}
       />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Codex plugin desteği
+      </div>
+      <Toggle
+        label="Codex plugin'leri"
+        hint="Açıkken bu workspace'in codex-cli turlarında yapılandırılmış marketplace'ler ve plugin'ler kullanılır: her turun config.toml'una [marketplaces]/[plugins] anahtarları yazılır ve her kalıcı sohbet evine bir kez kurulur (ilk turda ~1 sn, sonrakiler bedava). Yardımcı çağrılar (başlık, özet, içgörü) tek kullanımlık evde koştuğu için plugin kurulmaz. Kapalı = hiçbir anahtar yazılmaz ve hiçbir şey kurulmaz (plugin öncesi davranışın aynısı). TionHarness kendi marketplace'i ile gelmez; aşağıdan kendi kaynağını ekleyebilir veya makinendeki Codex plugin'lerini kopyalayabilirsin."
+        checked={ws.codexPluginsEnabled}
+        onChange={(v) => setWsField('codexPluginsEnabled', v)}
+      />
+      {ws.codexPluginsEnabled && (
+        <CodexPluginsSection
+          marketplaces={ws.codexMarketplaces}
+          plugins={ws.codexPlugins}
+          onChangeMarketplaces={(v) => setWsField('codexMarketplaces', v)}
+          onChangePlugins={(v) => setWsField('codexPlugins', v)}
+        />
+      )}
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Prompt cache — donmuş bağlam (prompt epoch)

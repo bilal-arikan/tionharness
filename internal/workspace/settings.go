@@ -91,6 +91,29 @@ type WSSettings struct {
 	// Default on; off = every turn recomposes from live state (pre-epoch behaviour).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// CodexPluginsEnabled toggles codex-cli plugin support for this workspace: the
+	// configured marketplaces and plugins are rendered into every turn's
+	// config.toml and installed once per durable conversation home. Default on;
+	// off = no marketplace/plugin key is written and nothing is installed, which
+	// is exactly the pre-plugin behaviour. See _Docs/84.
+	//
+	// Measured on codex 0.153.3: BOTH halves are required. The config keys alone
+	// leave the plugin "not installed" (its skills never reach the model), and an
+	// installed cache alone goes dark the moment config.toml is rewritten without
+	// the keys — which writeCodexConfig does on every single turn.
+	CodexPluginsEnabled bool `json:"codexPluginsEnabled"`
+
+	// CodexMarketplaces are this workspace's codex plugin marketplaces, rendered
+	// as [marketplaces.<name>] blocks. Empty means the feature is on but nothing
+	// is configured yet, which is the out-of-the-box state: TionHarness ships no
+	// marketplace of its own and never copies one in on its own initiative.
+	CodexMarketplaces []db.CodexMarketplace `json:"codexMarketplaces,omitempty"`
+
+	// CodexPlugins are the enabled plugin selectors ("<plugin>@<marketplace>").
+	// Each renders a [plugins."<selector>"] block and is installed into the
+	// conversation home before the turn runs.
+	CodexPlugins []string `json:"codexPlugins,omitempty"`
+
 	// ShellOutputCompression overrides the in-process shell-output token-optimizer
 	// (sqz) for this workspace: "" (or "auto") = follow sqz-hook detection (default),
 	// "on" = force it on (needs the sqz binary), "off" = disable. See _Docs/17.
@@ -132,6 +155,7 @@ func defaultWSSettings() WSSettings {
 		Instructions:          defaultInstructions,
 		CodebaseMemoryEnabled: true,
 		PromptEpochEnabled:    true,
+		CodexPluginsEnabled:   true,
 	}
 }
 
@@ -157,6 +181,13 @@ type WSSettingsPatch struct {
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
 	ShellOutputCompression *string `json:"shellOutputCompression"`
 	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
+
+	// Codex plugin support: the master switch plus the two lists it renders and
+	// installs. Each list replaces the whole set (add/remove are expressed as a
+	// full rewrite, matching how BoardColumns is edited).
+	CodexPluginsEnabled *bool                  `json:"codexPluginsEnabled"`
+	CodexMarketplaces   *[]db.CodexMarketplace `json:"codexMarketplaces"`
+	CodexPlugins        *[]string              `json:"codexPlugins"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 
@@ -261,6 +292,9 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetDefaultAgentID(s.DefaultAgentId)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
+		// settings.mu is not held here (loadSettings owns w.settings exclusively
+		// during boot), so read the spec through the same helper UpdateSettings uses.
+		w.Runtime.SetCodexPlugins(w.codexPluginSpecLocked())
 		w.Runtime.SetShellCompression(s.ShellOutputCompression)
 		w.Runtime.SetShellCommandRewrite(s.ShellCommandRewrite)
 	}
@@ -394,6 +428,15 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.PromptEpochEnabled != nil {
 		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
 	}
+	if patch.CodexPluginsEnabled != nil {
+		ws.settings.cur.CodexPluginsEnabled = *patch.CodexPluginsEnabled
+	}
+	if patch.CodexMarketplaces != nil {
+		ws.settings.cur.CodexMarketplaces = *patch.CodexMarketplaces
+	}
+	if patch.CodexPlugins != nil {
+		ws.settings.cur.CodexPlugins = *patch.CodexPlugins
+	}
 	if patch.ShellOutputCompression != nil {
 		ws.settings.cur.ShellOutputCompression = *patch.ShellOutputCompression
 	}
@@ -416,6 +459,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	defaultAgentID := ws.settings.cur.DefaultAgentId
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
+	codexPlugins := ws.codexPluginSpecLocked()
 	shellCompression := ws.settings.cur.ShellOutputCompression
 	shellRewrite := ws.settings.cur.ShellCommandRewrite
 	ws.settings.mu.Unlock()
@@ -444,6 +488,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetDefaultAgentID(defaultAgentID)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
+		ws.Runtime.SetCodexPlugins(codexPlugins)
 		ws.Runtime.SetShellCompression(shellCompression)
 		ws.Runtime.SetShellCommandRewrite(shellRewrite)
 	}
