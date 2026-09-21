@@ -94,12 +94,90 @@ describe('PendingTray steer-now action', () => {
 
   it('offers no steer action for a non-queue item', () => {
     const container = renderTray({
-      items: [{ id: 'd-1', text: 'gönderiliyor', kind: 'dispatching', sid: 'S1' }],
+      items: [{ id: 'h-1', text: 'worker bildirimi', kind: 'holding', sid: 'S1' }],
       onRemove: vi.fn(),
       onSteerNow: vi.fn(),
       canSteer: true,
     })
 
-    expect(steerButton(container, 'd-1')).toBeNull()
+    expect(steerButton(container, 'h-1')).toBeNull()
+  })
+})
+
+// A dispatched message has already left for the server and becomes the user's own
+// bubble in the transcript. Rendering it here as well showed the same text twice,
+// in a row the user cannot cancel or act on.
+describe('PendingTray dispatched head', () => {
+  const dispatching: PendingItem = {
+    id: 'd-1',
+    text: 'gönderilmiş mesaj',
+    kind: 'dispatching',
+    sid: 'S1',
+  }
+
+  it('does not render a dispatching item', () => {
+    const container = renderTray({
+      items: [...queued, dispatching],
+      onRemove: vi.fn(),
+    })
+
+    expect(container.textContent).not.toContain('Gönderiliyor')
+    expect(container.textContent).not.toContain('gönderilmiş mesaj')
+    // The genuinely waiting message is untouched.
+    expect(container.textContent).toContain('check the other file')
+  })
+
+  it('renders nothing at all when the dispatched head is the only item', () => {
+    const container = renderTray({ items: [dispatching], onRemove: vi.fn() })
+
+    // Not merely an empty card: the header must not render either, or the user
+    // sees a "Bekleyenler" shell listing nothing.
+    expect(container.textContent).toBe('')
+    expect(container.textContent).not.toContain('Bekleyenler')
+  })
+
+  it('numbers queue positions ignoring the hidden head', () => {
+    const container = renderTray({
+      items: [
+        dispatching,
+        { id: 'm-1', text: 'first waiting', kind: 'queue', sid: 'S1' },
+        { id: 'm-2', text: 'second waiting', kind: 'queue', sid: 'S1' },
+      ],
+      onRemove: vi.fn(),
+    })
+
+    expect(container.textContent).toContain('Sırada #1')
+    expect(container.textContent).toContain('Sırada #2')
+    expect(container.textContent).not.toContain('Sırada #3')
+  })
+
+  it('still renders steer and holding items', () => {
+    const container = renderTray({
+      items: [
+        { id: 'h-1', text: 'worker bildirimi', kind: 'holding', sid: 'S1' },
+        dispatching,
+        { id: 's-1', text: 'yönlendirme', kind: 'steer', sid: 'S1' },
+      ],
+      onRemove: vi.fn(),
+    })
+
+    expect(container.textContent).toContain('Şu an')
+    expect(container.textContent).toContain('worker bildirimi')
+    expect(container.textContent).toContain('Yönlendir')
+    expect(container.textContent).not.toContain('Gönderiliyor')
+  })
+
+  it('counts only visible queue items in the clear-all action', () => {
+    const container = renderTray({
+      items: [
+        dispatching,
+        { id: 'm-1', text: 'first waiting', kind: 'queue', sid: 'S1' },
+        { id: 'm-2', text: 'second waiting', kind: 'queue', sid: 'S1' },
+      ],
+      onRemove: vi.fn(),
+      onClear: vi.fn(),
+    })
+
+    expect(container.textContent).toContain('Kuyruğu temizle (2)')
   })
 })

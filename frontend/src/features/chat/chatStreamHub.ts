@@ -449,9 +449,10 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
             kind: 'queue',
             sid,
           }))
-          // The dispatched head stays visible (as "gönderiliyor") until its user
-          // bubble lands in the transcript: a message must never be in neither
-          // place. Not cancellable — it is already running.
+          // The dispatched head is tracked but NOT rendered by the tray (it shows as
+          // the user's own bubble in the transcript instead). It stays in the model
+          // because the user_message handler above clears it, which is what keeps a
+          // stale head from lingering across turns.
           if (p.inflight) {
             items.unshift({
               id: p.inflight.clientMsgId,
@@ -465,8 +466,12 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // user has something of their own waiting — otherwise the running turn is
           // already obvious from the transcript. This is what makes "my message is
           // waiting behind a worker notification" visible instead of a silent stall.
+          // Gated on the items the tray actually RENDERS: the dispatched head is
+          // hidden, so counting it here would leave a lone "Şu an" row explaining
+          // what a message is waiting behind when nothing of the user's is waiting.
           const holder = p.turns?.running
-          if (items.length > 0 && holder && holder.kind !== 'user') {
+          const waitingShown = items.some((it) => it.kind !== 'dispatching')
+          if (waitingShown && holder && holder.kind !== 'user') {
             items.unshift({
               id: `turn-${holder.kind}-${holder.since}`,
               text: turnKindLabel(holder),

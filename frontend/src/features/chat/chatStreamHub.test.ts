@@ -24,6 +24,7 @@ vi.mock('@/shared/lib/notifyBus', () => ({
 import { HubKind } from '@/api/sessionStream'
 import { emitToast } from '@/shared/lib/notifyBus'
 import { makeHubHandlers, type HubApplyCtx } from './chatStreamHub'
+import type { PendingItem } from './PendingTray'
 
 const SID = 'SES1'
 const GHOST = `live-hub-${SID}`
@@ -303,5 +304,72 @@ describe('subagent live card', () => {
     expect(steps).toHaveLength(1) // one card, grown in place
     expect(steps[0].running).toBeUndefined()
     expect(steps[0].subSteps).toHaveLength(2)
+  })
+})
+
+// queueHarness captures what the tray would receive, so a test can assert the
+// SHAPE of the pending list rather than the rendering.
+function queueHarness() {
+  let queued: PendingItem[] = []
+  const ctx: HubApplyCtx = {
+    sid: SID,
+    activeSessionIdRef: { current: SID },
+    setMessages: () => {},
+    setStreamingSessions: () => {},
+    setPendingSessions: () => {},
+    setPendingAsks: () => {},
+    setQueued: (u) => {
+      queued = typeof u === 'function' ? (u as (p: PendingItem[]) => PendingItem[])(queued) : u
+    },
+    setSteerable: () => {},
+    setPresence: () => {},
+    setTyping: () => {},
+    reload: () => {},
+    notifyEnabled: { current: false },
+    bumpMeter: () => {},
+  }
+  const h = makeHubHandlers(ctx)
+  let seq = 0
+  return {
+    send: (kind: string, payload: unknown) =>
+      h.onEvent({ kind, payload, seq: ++seq, time: 1000 } as never),
+    queued: () => queued,
+  }
+}
+
+describe('queue_update pending items', () => {
+  const holder = { kind: 'coordinator', since: 5 }
+
+  it('keeps the dispatched head in the model for the tray to reconcile', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, { queue: [], inflight: { clientMsgId: 'c-1', text: 'giden' } })
+
+    // Hidden by PendingTray, but still tracked: the user_message handler needs it
+    // to know which head has landed in the transcript.
+    expect(queued().map((q) => q.kind)).toEqual(['dispatching'])
+  })
+
+  it('adds the holding row when a real waiting message sits behind an autonomous turn', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, {
+      queue: [{ clientMsgId: 'c-2', text: 'bekleyen' }],
+      turns: { running: holder },
+    })
+
+    expect(queued().map((q) => q.kind)).toEqual(['holding', 'queue'])
+  })
+
+  // Without this gate the tray showed a lone "Şu an" row explaining what a message
+  // was waiting behind, while the only message was the hidden dispatched head — so
+  // nothing of the user's was actually waiting.
+  it('omits the holding row when the dispatched head is the only pending item', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, {
+      queue: [],
+      inflight: { clientMsgId: 'c-3', text: 'giden' },
+      turns: { running: holder },
+    })
+
+    expect(queued().map((q) => q.kind)).toEqual(['dispatching'])
   })
 })

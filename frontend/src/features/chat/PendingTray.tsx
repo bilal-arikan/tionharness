@@ -1,9 +1,15 @@
 // A staged intervention waiting above the composer while a turn streams:
 // a queued message (sent when the turn ends), a steer (live guidance sent after a
 // short cancellable delay), or the message the server just dispatched
-// ('dispatching' — no longer cancellable, shown until its bubble appears in the
-// transcript so a sent message is never invisible). Queue + steer can be removed
-// before they are applied.
+// ('dispatching' — no longer cancellable). Queue + steer can be removed before
+// they are applied.
+//
+// 'dispatching' is kept in the MODEL but is not rendered: the tray is the list of
+// things still waiting and still cancellable, and a dispatched message is neither.
+// It becomes the user's own bubble in the transcript, so a row here only duplicated
+// it. The kind still drives hub reconciliation (chatStreamHub drops it when the
+// bubble lands) and gates the 'holding' row, so it must not be removed from the
+// data model — only hidden. See hiddenInTray below.
 export interface PendingItem {
   id: string
   text: string
@@ -36,8 +42,15 @@ interface Props {
   onClear?: () => void
 }
 
-import { ArrowUp, CornerDownRight, Hourglass, Loader, Send, X } from 'lucide-react'
+import { ArrowUp, CornerDownRight, Hourglass, Loader, X } from 'lucide-react'
 import { ComposerCard } from './ComposerCard'
+
+// Kinds the tray does not render. A dispatched message is already on its way to the
+// transcript as a user bubble; showing it here too was a duplicate the user cannot
+// act on.
+function hiddenInTray(it: PendingItem): boolean {
+  return it.kind === 'dispatching'
+}
 
 // PendingTray lists the session's WAITING backend queue (+ any steers) above the
 // composer. Queue items show their position (#N), can be promoted to run next,
@@ -51,8 +64,11 @@ export function PendingTray({
   turnRunning = false,
   onClear,
 }: Props) {
-  if (items.length === 0) return null
-  const queueCount = items.filter((it) => it.kind === 'queue').length
+  // Filter BEFORE the empty check: a tray whose only item is the dispatched head
+  // must render nothing at all, not an empty card with the "Bekleyenler" header.
+  const visible = items.filter((it) => !hiddenInTray(it))
+  if (visible.length === 0) return null
+  const queueCount = visible.filter((it) => it.kind === 'queue').length
   let qIndex = 0
   return (
     <ComposerCard tone="muted" className="flex flex-col gap-1.5 px-3 py-2">
@@ -69,7 +85,7 @@ export function PendingTray({
           </button>
         )}
       </div>
-      {items.map((it) => {
+      {visible.map((it) => {
         const pos = it.kind === 'queue' ? ++qIndex : 0
         if (it.kind === 'holding') {
           // What the session is busy with right now (an autonomous turn from the
@@ -90,23 +106,6 @@ export function PendingTray({
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
                 {it.text}
               </span>
-            </div>
-          )
-        }
-        if (it.kind === 'dispatching') {
-          return (
-            <div
-              key={it.id}
-              className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm"
-            >
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-info)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-info)]"
-                title="Sunucuya iletildi, tur başlıyor — artık iptal edilemez"
-              >
-                <Send size={11} />
-                Gönderiliyor
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
             </div>
           )
         }
