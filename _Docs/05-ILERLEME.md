@@ -4,6 +4,56 @@
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+## `monitor` — arka plan kabuğu çıktısında ajanı uyandırma (TSK911, 2026-09-22) ✅
+
+- **İhtiyaç:** Uzun süren bir arka plan işini (dev server, test koşusu) bekleyen
+  ajanın tek seçeneği `shell_manage` (action=output) ile yoklamaktı: bir tur
+  harca, oku, bir şey bulamadıysan `schedule_wake` ile kendine randevu ver,
+  baştan. Bekleyiş turla ödeniyor, her yoklama bağlama çıktı dolduruyordu.
+- **Araç (`internal/tools/builtin_monitor.go`):** `monitor`, `action=start|list|stop`.
+  `start` bir `shell_id` + regex filtre alır; ajan turunu bitirir ve eşleşme
+  olduğunda eşleşen satırları taşıyan **yeni bir turla** uyandırılır. Bekleyiş
+  sıfır tura iner. Ayrıntılı sözleşme: `_Docs/85`.
+- **Kaynak arayüzü (`monitor.go`):** `MonitorSource` — `Poll/Describe/Close`.
+  `done=true` terminal durumdur ve **tam olarak bir kez** raporlanır (dönüp
+  durma yok); `err` ise geçicidir, kaydedilir ve yoklama sürer. Filtreleme
+  bilerek kaynağın işi değil, monitör katmanının işidir — yeni kaynak eklemek
+  `MonitorManager`'a dokunmayı gerektirmesin diye.
+- **Kabuk kaynağı ve imleç ayrımı (`monitor_source_shell.go`):** `bgWriter`'a
+  `drainFrom(cursor)` eklendi; kabuk kaynağı **kendi mutlak bayt imlecini**
+  tutuyor. Böylece monitörün yoklaması, `shell_manage`'in henüz teslim etmediği
+  çıktıyı ne tüketiyor ne gizliyor; tersi de geçerli. İmleç kurulum anındaki
+  çıktı sonundan başlıyor (birikmiş geçmiş tekrar oynatılmıyor) ve terminal
+  durum **son çıktı teslim edildikten sonra** raporlanıyor — son satıra gelen
+  eşleşme kaybolmuyor.
+- **Tek teslim zinciri:** `ScheduleWake`'ten ortak `armWake` çıkarıldı;
+  `WakeNow` onun üzerine kuruldu. Olay uyandırması da aynı
+  `fireWake → ConsumeOneShotSchedule → deliverWake` zincirinden geçiyor, yani
+  **paralel bir teslim yolu yok** ve **en fazla bir kez** (at-most-once)
+  garantisi miras alınıyor. `ScheduleWake`'in 5 sn'lik tabanı olay
+  uyandırmasına uygulanmıyor (bir olaya tepkinin gecikmesi anlamsız olurdu);
+  gerçek gecikmeye scheduler'ın kendi kıskacı karar veriyor.
+- **Sızıntı düzeltmesi:** `Runtime.ReleaseSessionRuntimeState(sessionID)` oturum
+  silinirken (`session_teardown.go`, Faz 7) `monitorMgrs` + `shellMgrs` +
+  `readTrackers` girdilerini bırakıyor ve monitör yöneticisini kapatıyor. Bu üç
+  `sync.Map`'ten önceden hiçbir girdi kaldırılmıyordu: kabuk çalıştırmış ya da
+  dosya okumuş her oturum yöneticisini süreç ömrü boyunca sızdırıyordu.
+  Monitörlerle birlikte bu yalnız bellek değil davranış sorunu da olurdu —
+  yaşayan bir monitör artık var olmayan bir oturumu uyandırabilirdi.
+- **Frenler:** oturum başına 8 monitör (`bgShellMaxLive`=16'dan bilerek düşük),
+  olay başına 2 KB yük, uyandırma başına 10 olay (fazlası **düşen sayısıyla
+  raporlanıyor**, sessizce yutulmuyor), en az 5 sn soğuma (penceredeki
+  eşleşmeler tek uyandırmada birleşiyor), isteğe bağlı `max_fires`. Yoklama tek
+  goroutine + tek 1 sn'lik ticker ile — monitör başına goroutine yok.
+- **Sessiz yutma yok:** bilinmeyen `shell_id` (`NewShellSource`) ve bilinmeyen
+  monitör id'si gerçek hata; köprüde yönetici yoksa açık `IsError` dönüyor.
+  Sessiz bir başarı, ajanı asla gelmeyecek bir uyandırma için turunu bitirmeye
+  yollardı. `stop` ise idempotent.
+- **Kapsam:** v1 yalnız kabuk çıktısı kaynağı. Dosya/URL/WebSocket ertelendi
+  (TSK941); arayüz onları yöneticiye dokunmadan alacak şekilde şekillendi.
+  Monitörler yalnız bellekte — yeniden başlatmada kayboluyor; araç açıklaması
+  bunu ve at-most-once'ı söylüyor.
+
 ## MCP sunucusu tur ortasında düşerse kullanıcı ve ajan haberdar oluyor (TSK915, 2026-09-22) ✅
 
 - **İhtiyaç:** Bir MCP sunucusunun bağlantısı tur ortasında koptuğunda bunu
