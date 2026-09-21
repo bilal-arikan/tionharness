@@ -78,6 +78,11 @@ export interface HubApplyCtx {
   // composer tray; setPresence surfaces "open in N windows" (Faz 4); setTyping
   // surfaces "another window is typing…".
   setQueued: Dispatch<SetStateAction<PendingItem[]>>
+  // setSteerable records whether the session's in-flight turn can actually accept
+  // mid-turn guidance (queue_update.steerable — see api/inbox.go publishQueue).
+  // Only the server knows: it depends on the responding agent's provider and
+  // effective permission mode, neither of which the client resolves.
+  setSteerable: (ok: boolean) => void
   setPresence: (count: number) => void
   setTyping: (active: boolean) => void
   // reload pulls the authoritative transcript (listMessages) — used on a reset,
@@ -111,6 +116,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     setPendingSessions,
     setPendingAsks,
     setQueued,
+    setSteerable,
     setPresence,
     setTyping,
     reload,
@@ -427,7 +433,16 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
             queue?: { clientMsgId: string; text: string }[]
             inflight?: { clientMsgId: string; text: string } | null
             turns?: { running?: TurnEntry | null; waiting?: TurnEntry[] }
+            steerable?: boolean
           }
+          // The server ALWAYS sends this boolean (publishQueue sets it
+          // unconditionally), so `undefined` means we are talking to an older
+          // backend that predates the field — not "no running turn". Default to
+          // false: the action then renders disabled with its reason rather than
+          // offering a steer such a backend may answer "unsupported". Written as an
+          // explicit typeof test, not `?? false`, so the missing-field case stays
+          // visible instead of blending into a plain falsy coalesce.
+          setSteerable(typeof p.steerable === 'boolean' ? p.steerable : false)
           const items: PendingItem[] = (p.queue ?? []).map((q) => ({
             id: q.clientMsgId,
             text: q.text,
@@ -479,6 +494,10 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           setStreamingSessions((p) => withRemoved(p, sid))
           setPendingSessions((p) => withRemoved(p, sid))
           setPendingAsks((p) => withoutKey(p, sid))
+          // The turn is over, so there is no longer anything a steer could reach.
+          // Cleared here rather than waiting for the next queue_update: that event
+          // only fires when the queue changes, which a turn ending need not do.
+          setSteerable(false)
           dropGhost()
           // Pull the authoritative transcript so the persisted turn (full trace,
           // usage, model) replaces the live ghost.

@@ -97,6 +97,11 @@ export function useChatStream(deps: ChatStreamDeps) {
   // events) + its live viewer count (presence, Faz 4). Both are reset when the
   // subscription switches sessions.
   const [queued, setQueued] = useState<PendingItem[]>([])
+  // Whether the ACTIVE session's in-flight turn can accept mid-turn guidance, as
+  // reported by the server on queue_update (it depends on the responding agent's
+  // provider + effective permission mode, which only the backend resolves). Starts
+  // false: until a frame says otherwise there is no turn known to be steerable.
+  const [steerable, setSteerable] = useState(false)
   // Live mirror so a failed cancel/clear can restore the tray it optimistically
   // emptied (the server still holds those messages).
   const queuedRef = useRef(queued)
@@ -386,6 +391,10 @@ export function useChatStream(deps: ChatStreamDeps) {
     // Fresh session view: clear the previous session's queue/presence until this
     // one's first queue_update / presence frame arrives.
     setQueued([])
+    // The flag describes the PREVIOUS session's turn; carrying it over would gate
+    // this session's tray on an unrelated turn's provider. The new session's first
+    // queue_update supplies the real value.
+    setSteerable(false)
     setPresence(1)
     setTypingActive(false)
     const reload = () => {
@@ -402,6 +411,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       setPendingSessions,
       setPendingAsks,
       setQueued,
+      setSteerable,
       setPresence,
       setTyping,
       reload,
@@ -596,6 +606,11 @@ export function useChatStream(deps: ChatStreamDeps) {
   // The active session's WAITING backend queue is already session-scoped (the hub
   // subscription is per active session), so it maps straight through.
   const activeQueued = queued
+  // A steer needs BOTH: a turn actually streaming here (the local, instant signal)
+  // and a turn the server says can carry guidance. Streaming alone used to gate the
+  // tray's steer action, which offered it on turns — claude-cli in auto/read-only,
+  // any codex-cli turn — where the backend could only answer "unsupported".
+  const activeSteerable = activeStreaming && steerable
   // "open in N windows" — >1 means another window is also viewing this session.
   const activePresence = presence
 
@@ -642,5 +657,6 @@ export function useChatStream(deps: ChatStreamDeps) {
     activeAsk,
     activeWakeWait,
     activeQueued,
+    activeSteerable,
   }
 }

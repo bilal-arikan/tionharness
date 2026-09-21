@@ -419,6 +419,28 @@ func (s *Server) publishQueue(wsID, sessionID string, view []queueView, inflight
 		snap := wsp.Runtime.TurnQueue().Snapshot(sessionID)
 		payload["turns"] = snap
 	}
+	// Whether a mid-turn steer can actually REACH the in-flight turn (see
+	// steerableForTurn): the queue tray's "şimdi yönlendir" action converts a waiting
+	// message into live guidance, and on a turn with no steer boundary that request
+	// can only come back "unsupported". Publishing it here lets the tray disable the
+	// action WITH a reason instead of offering an operation that is guaranteed to
+	// fail. Read live at publish time, exactly like "turns" above, so the burst of
+	// changes around a turn boundary coalesces into one read.
+	//
+	// No in-flight turn → false, and that is the honest answer rather than a missing
+	// field: with nothing running there is nothing to steer. steerTargetRun applies
+	// the same rule, so the tray and the endpoint agree.
+	//
+	// s.runs is nil only on a Server assembled without the run registry (queue-routing
+	// unit tests). That is not a missing turn to paper over — such a Server cannot host
+	// a turn at all, so "not steerable" is the correct answer, and the field is still
+	// published so the shape of the event never varies.
+	steerable := false
+	if s.runs != nil {
+		run, _ := s.steerTargetRun(wsID, sessionID)
+		steerable = run != nil && run.steerableFor()
+	}
+	payload["steerable"] = steerable
 	s.publishHub(wsID, sessionID, sessionhub.KindQueueUpdate, payload, false)
 }
 

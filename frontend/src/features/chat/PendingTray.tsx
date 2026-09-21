@@ -22,12 +22,16 @@ interface Props {
   // Convert a waiting message into live guidance for the turn already running
   // ("şimdi yönlendir"). Optional.
   onSteerNow?: (id: string) => void
-  // Whether a turn is actually streaming for this session. With no running turn
-  // there is nothing to steer, so the action is shown disabled (with the reason)
-  // rather than hidden — the button must not appear and vanish as turns come and
-  // go. Whether THIS turn's provider can carry a steer is only known server-side;
-  // a turn that cannot answers "unsupported" and the message stays queued.
+  // Whether a steer can actually land: a turn is streaming AND the server reports
+  // it can carry mid-turn guidance (queue_update.steerable). The action is shown
+  // disabled (with the reason) rather than hidden — the button must not appear and
+  // vanish as turns come and go.
   canSteer?: boolean
+  // Whether a turn is streaming at all, used only to pick the DISABLED reason:
+  // "no turn to steer" and "this turn's provider/mode cannot carry a steer" are
+  // different problems and the user can act on the second one (switch the agent to
+  // "ask" mode). Without it both cases would show the same misleading message.
+  turnRunning?: boolean
   // Clear the whole waiting queue. Optional; shown when 2+ queue items wait.
   onClear?: () => void
 }
@@ -44,6 +48,7 @@ export function PendingTray({
   onSendNext,
   onSteerNow,
   canSteer = false,
+  turnRunning = false,
   onClear,
 }: Props) {
   if (items.length === 0) return null
@@ -133,7 +138,9 @@ export function PendingTray({
                 title={
                   canSteer
                     ? 'Şimdi yönlendir (bu mesajı sıradan alıp çalışan tura ilet)'
-                    : 'Yönlendirilecek çalışan bir tur yok — mesaj sırada kalır'
+                    : turnRunning
+                      ? 'Bu tur canlı yönlendirmeyi desteklemiyor (sağlayıcı/izin modu uygun değil) — mesaj sırada kalır. Canlı yönlendirme için ajanı "ask" moduna al.'
+                      : 'Yönlendirilecek çalışan bir tur yok — mesaj sırada kalır'
                 }
                 data-testid={`pending-steer-${it.id}`}
                 className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-warning)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[var(--color-text-dim)]"

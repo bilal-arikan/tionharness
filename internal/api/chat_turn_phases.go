@@ -194,6 +194,12 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 		effMode = t.req.PermissionMode
 	}
 	t.run.setSteerable(steerableForTurn(agents[0].Provider, effMode))
+	// The admission-queue observer already published a queue_update when this turn
+	// took the session slot (BeginSessionUserTurn, above) — but that happened BEFORE
+	// the line above, so its "steerable" read the not-yet-set zero value. Re-publish
+	// now that the flag is real, or the tray would keep the steer action disabled for
+	// the whole turn on a provider that can in fact carry a steer.
+	t.s.republishQueue(t.wsp.ID, session.ID)
 
 	// Persist the incoming user message once. Stamp the routed recipient agent
 	// (agents[0]) so a multi-agent thread's history can show which agent each

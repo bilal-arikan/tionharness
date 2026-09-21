@@ -460,7 +460,8 @@ export function ChatView({
             onRemove={chat.removePending}
             onSendNext={chat.sendQueuedNext}
             onSteerNow={chat.steerQueued}
-            canSteer={chat.activeStreaming}
+            canSteer={chat.activeSteerable}
+            turnRunning={chat.activeStreaming}
             onClear={chat.clearQueue}
           />
           <WorkerWaitBanner
