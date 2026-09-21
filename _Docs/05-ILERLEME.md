@@ -420,6 +420,26 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
 - **Kapsam dışı (bilinçli):** `@import` çözümlemesi, üst dizin yürüyüşü,
   kullanıcı home talimat dosyaları, dosya içeriğini inline etme.
 - Detay: `_Docs/26-CALISMA-DIZINI.md`, `_Docs/53-HARICI-AJAN-PROMPT-PARITE.md`.
+- **Atıf düzeltmesi (kayıt notu, TSK944):** Bu işin 11 dosyası kendi commit'inde
+  değil, `c46134bb fix(flows): run flow engine drives under the shutdown barrier`
+  (TSK871) mesajı altında commit'lendi. Sebep: TSK871 coder'ı (SES3333) ile bu işin
+  ajanı paylaşılan çalışma ağacında aynı anda stage'liyordu; yarış sonucu iki işin
+  dosyaları tek commit'te birleşti. `c46134bb` gerçekte şu 16 dosyayı taşır ve
+  yalnız 5'i (`internal/agent/flow.go`, `internal/agent/flow_gc.go`,
+  `internal/agent/runtime_prompt.go`, `internal/agent/runtime_close_test.go`,
+  `_Docs/58-QUEUE-SENKRON.md`) TSK871'e aittir. Kalan 11'i bu AGENTS.md fallback
+  işinindir: `internal/agent/instructionfile.go`,
+  `internal/agent/instructionfile_test.go`, `internal/api/workdir_context.go`,
+  `internal/api/session_info.go`,
+  `frontend/src/features/sessions/SessionDetailPanel.tsx`,
+  `frontend/src/types/session.ts`, `frontend/src/i18n/locales/en/common.json`,
+  `frontend/src/i18n/locales/tr/common.json`, `_Docs/26-CALISMA-DIZINI.md`,
+  `_Docs/53-HARICI-AJAN-PROMPT-PARITE.md`, `_Docs/05-ILERLEME.md`.
+  **İçerik kaybı yok, yalnız atıf yanlış.** Düzeltme commit mesajına değil buraya
+  yazıldı: `c46134bb` üstüne `c00a09f4` ve `87fa2e82` (bu işin kendi doküman
+  commit'i) geldiği için amend/rebase paylaşılan dalın geçmişini yeniden yazardı —
+  `CLAUDE.md` git kuralları bunu yasaklıyor. Ders: paylaşılan ağaçta `git add -A`
+  yerine yalnız kendi dosyalarını yol adıyla stage et.
 
 ## Flow motoru turları kapanış bariyerinin arkasına alındı (2026-09-21) ✅
 
