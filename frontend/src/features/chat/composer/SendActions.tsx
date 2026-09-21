@@ -29,6 +29,8 @@ interface Props {
 //   streaming, empty→ Durdur (stop generation)
 //   streaming, typed→ Sıraya / Kes / Yönlendir
 //
+// Kes is also bound to Ctrl/Cmd+Enter in the composer (see Composer.onKeyDown).
+//
 // Every button is an ActionButton: icon + label on wide viewports, icon-only below
 // the `sm` breakpoint. That matters most for the streaming triplet, which would
 // otherwise be three labelled buttons competing for a narrow toolbar row.
@@ -97,7 +99,7 @@ export function SendActions({
         <ActionButton
           onClick={onInterrupt}
           disabled={anyUploading}
-          title="Turu kes ve hemen gönder"
+          title="Turu kes ve hemen gönder (Ctrl/Cmd+Enter)"
           testId="composer-interrupt"
           icon={Scissors}
           label="Kes"

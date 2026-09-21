@@ -103,6 +103,60 @@ function renderComposer(sessionId = 'SES1') {
   return { container, root, render }
 }
 
+type ComposerOverrides = Partial<React.ComponentProps<typeof Composer>>
+
+// Renders the composer with explicit turn-lifecycle props so the keyboard tests
+// can drive the streaming (queue / interrupt) branches.
+function renderComposerWith(overrides: ComposerOverrides) {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  roots.push(root)
+  act(() =>
+    root.render(
+      <Composer
+        disabled={false}
+        sessionId="SES1"
+        onSend={vi.fn()}
+        agents={[agent]}
+        agentId={agent.id}
+        onAgentChange={vi.fn()}
+        commands={[]}
+        {...overrides}
+      />,
+    ),
+  )
+  return { container, root }
+}
+
+function type(container: HTMLElement, value: string) {
+  const textarea = container.querySelector('textarea')!
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+  act(() => {
+    setter.call(textarea, value)
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  return textarea
+}
+
+function pressEnter(
+  container: HTMLElement,
+  init: KeyboardEventInit & { isComposing?: boolean } = {},
+) {
+  const { isComposing, ...eventInit } = init
+  const event = new KeyboardEvent('keydown', {
+    key: 'Enter',
+    bubbles: true,
+    cancelable: true,
+    ...eventInit,
+  })
+  if (isComposing) Object.defineProperty(event, 'isComposing', { value: true })
+  act(() => {
+    container.querySelector('textarea')!.dispatchEvent(event)
+  })
+  return event
+}
+
 function paste(container: HTMLElement, files: File[]) {
   const event = new Event('paste', { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'clipboardData', { value: { files, getData: () => '' } })
@@ -461,5 +515,127 @@ describe('Composer clipboard integration', () => {
     await flush()
     expect(container.textContent).toContain('upload failed')
     expect(mocks.uploadFile).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Composer send-now shortcut', () => {
+  it('interrupts the running turn instead of queueing on Ctrl+Enter', async () => {
+    const onInterrupt = vi.fn()
+    const onQueue = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onInterrupt, onQueue })
+    type(container, 'send now')
+
+    const event = pressEnter(container, { ctrlKey: true })
+    await flush()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onInterrupt).toHaveBeenCalledWith('send now', [])
+    expect(onQueue).not.toHaveBeenCalled()
+    // Accepted interrupt clears the draft.
+    expect(container.querySelector('textarea')!.value).toBe('')
+  })
+
+  it('treats Cmd+Enter the same as Ctrl+Enter', async () => {
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onInterrupt })
+    type(container, 'mac send')
+
+    pressEnter(container, { metaKey: true })
+    await flush()
+
+    expect(onInterrupt).toHaveBeenCalledWith('mac send', [])
+  })
+
+  it('sends normally on Ctrl+Enter while idle', async () => {
+    const onSend = vi.fn()
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ onSend, onInterrupt })
+    type(container, 'idle send')
+
+    pressEnter(container, { ctrlKey: true })
+    await flush()
+
+    expect(onSend).toHaveBeenCalledWith('idle send', [])
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('keeps plain Enter queueing while streaming', async () => {
+    const onQueue = vi.fn()
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onQueue, onInterrupt })
+    type(container, 'later')
+
+    pressEnter(container)
+    await flush()
+
+    expect(onQueue).toHaveBeenCalledWith('later', [])
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('leaves Shift+Enter as a newline', async () => {
+    const onSend = vi.fn()
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ onSend, onInterrupt })
+    type(container, 'multi')
+
+    const event = pressEnter(container, { shiftKey: true })
+    await flush()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('ignores Ctrl+Enter while an IME composition is active', async () => {
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onInterrupt })
+    type(container, 'にほんご')
+
+    const event = pressEnter(container, { ctrlKey: true, isComposing: true })
+    await flush()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(onInterrupt).not.toHaveBeenCalled()
+  })
+
+  it('blocks the shortcut while an attachment is still uploading', async () => {
+    mocks.uploadFile.mockImplementation(() => new Promise(() => {}))
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onInterrupt })
+    type(container, 'with file')
+    pickFiles(container, [new File(['hello'], 'notes.txt', { type: 'text/plain' })])
+    await flush()
+
+    pressEnter(container, { ctrlKey: true })
+    await flush()
+
+    expect(onInterrupt).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')!.value).toBe('with file')
+  })
+
+  it('keeps the draft when the interrupt fails', async () => {
+    const onInterrupt = vi.fn().mockResolvedValue(false)
+    const { container } = renderComposerWith({ streaming: true, onInterrupt })
+    type(container, 'stop failed')
+
+    pressEnter(container, { ctrlKey: true })
+    await flush()
+
+    expect(onInterrupt).toHaveBeenCalledWith('stop failed', [])
+    expect(container.querySelector('textarea')!.value).toBe('stop failed')
+  })
+
+  it('sends now instead of picking a suggestion when the autocomplete menu is open', async () => {
+    const onSend = vi.fn()
+    const { container } = renderComposerWith({ onSend })
+    type(container, '@')
+    await flush()
+    expect(container.textContent).toContain(agent.name)
+
+    pressEnter(container, { ctrlKey: true })
+    await flush()
+
+    // The modifier wins: the menu closes without selecting and the raw text is sent.
+    expect(onSend).toHaveBeenCalledWith('@', [])
   })
 })

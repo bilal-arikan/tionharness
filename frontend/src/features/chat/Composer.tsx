@@ -742,6 +742,25 @@ export function Composer({
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // IME: while a composition is active, Enter commits the candidate and must
+    // never reach the send/queue paths.
+    if (e.key === 'Enter' && (e.nativeEvent as KeyboardEvent).isComposing) return
+    // Ctrl/Cmd+Enter = "send now": while streaming it takes the same path as the
+    // "Kes" button (stop the turn, then send this message as a fresh turn);
+    // idle it is a plain send. It is handled before the autocomplete block on
+    // purpose — with the menu open the modifier wins and the menu is dismissed
+    // without selecting. Selecting first would rewrite the text and then send a
+    // turn the user never saw, and the modifier is an unambiguous send intent.
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      closeMenu()
+      if (streaming) {
+        if (hasContent) void actWithAttachments(onInterrupt)
+      } else {
+        void send()
+      }
+      return
+    }
     if (trigger && items.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
