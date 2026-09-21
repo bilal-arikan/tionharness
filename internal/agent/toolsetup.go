@@ -247,6 +247,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// app-settings master toggle; the runner still enforces depth/cycle/budget/
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
+	// run_adhoc_flow: a multi-round run_subagent plan (fan out, branch, fan out
+	// again) in one call, executed on the orchestration engine. Its runner is bound
+	// next to run_subagent's (withRunAdhocFlow) and shares the same guards.
+	builtins = append(builtins, tools.NewRunAdhocFlowTool())
 
 	// Coordinator/worker tools (M2, _Docs/47). withCoordination installs the runner
 	// on every session's turn, but populates only the capabilities that session
@@ -595,6 +599,19 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}
 		reg.AttachMCP(entries, cfgByServer, caller)
+		// Explicit, bounded warm-up for servers that were not dialed when this turn
+		// started (just enabled, just restarted, or simply cold). It merges the
+		// warmed servers' tools into THIS registry, so they are callable on the next
+		// pass of the tool loop. Registered inside the pool branch: without a pool
+		// there is no connection to wait for. Withheld from the CLI bridge
+		// (cliLazyBridgeExcluded) — those providers own their own MCP clients.
+		reg.Add(tools.NewMCPServerWaitTool(r.newMCPWaiter(reg, agent, mcpScopeKey)))
+		// Explicit, bounded warm-up for servers that were not dialed when this turn
+		// started (just enabled, just restarted, or simply cold). It merges the
+		// warmed servers' tools into THIS registry, so they are callable on the next
+		// pass of the tool loop. Registered inside the pool branch: without a pool
+		// there is no connection to wait for. Withheld from the CLI bridge
+		// (cliLazyBridgeExcluded) — those providers own their own MCP clients.
 		// Bundle-level defaults need the MCP entries to exist, so they run here
 		// rather than next to ApplyToolDefaults. No-op for built-ins today (no
 		// group rows ship), and workspace/agent overrides below still win.
@@ -816,8 +833,8 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 		return nil
 	}
 	// Resolved once per filter build, not per name: it reads the MCP server list.
-	// "" when the workspace has no enabled codebase-memory server (no exemption).
-	exemptServer := r.allowlistExemptServer(ctx)
+	// Empty when the workspace has no enabled infrastructure server (no exemption).
+	exemptServers := r.allowlistExemptServers(ctx)
 	return func(name string) bool {
 		if disabled[name] {
 			return false
@@ -838,8 +855,8 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 			// read-only, hence safe for every profile including the read-only ones.
 			return true
 		}
-		if isExemptTool(name, exemptServer) {
-			return true // repository-reading infrastructure (see allowlistExemptServer)
+		if isExemptTool(name, exemptServers) {
+			return true // repository-reading infrastructure (see allowlistExemptServers)
 		}
 		return agentAllow == nil || agentAllow(name)
 	}
@@ -959,11 +976,19 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"WebFetch":     true, // claude-cli has its own native WebFetch (see claudeOnlyBridgeExclusions)
 	"WebSearch":    true, // claude-cli has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
-	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
+	// run_adhoc_flow needs the ad-hoc runner from the native loop's context, which
+	// the generic bridge dispatcher cannot supply (mirrors tools.bridgeExcluded).
+	"run_adhoc_flow": true,
+	"run_code":       true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
 	// deactivate_tools is a TionHarness-native meta-tool (paired with activate_tools);
 	// the CLI uses its OWN ToolSearch, so this is never bridged — keep it out of the
 	// CLI catalog even though it is name-only on the native path.
 	"deactivate_tools": true,
+	// wait_for_mcp_servers reports on TionHarness's own connection pool, which never
+	// dials for a CLI backend: claude-cli and codex-cli launch and own their MCP
+	// clients themselves, so the pool would answer ServerUnknown for every server
+	// and any verdict it gave would be a fabrication. Withheld for BOTH dialects.
+	"wait_for_mcp_servers": true,
 }
 
 // claudeOnlyBridgeExclusions narrows cliLazyBridgeExcluded to the entries that are

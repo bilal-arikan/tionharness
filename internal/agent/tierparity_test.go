@@ -93,6 +93,7 @@ var goldenTiersAuto = map[string]string{
 	"read_session_debug":    "name-only",
 	"render_template":       "name-only",
 	"request_confirmation":  "full",
+	"run_adhoc_flow":        "name-only",
 	"run_flow":              "hidden",
 	"run_schedule":          "hidden",
 	"run_subagent":          "full",
@@ -113,6 +114,7 @@ var goldenTiersAuto = map[string]string{
 	"update_skill":          "hidden",
 	"update_task":           "hidden",
 	"use_skill":             "full",
+	"wait_for_mcp_servers":  "name-only",
 	"write_config":          "hidden",
 }
 
@@ -189,6 +191,7 @@ var goldenTiersReadOnly = map[string]string{
 	"read_session_debug":    "name-only",
 	"render_template":       "name-only",
 	"request_confirmation":  "full",
+	"run_adhoc_flow":        "name-only",
 	"run_flow":              "hidden",
 	"run_schedule":          "hidden",
 	"run_subagent":          "full",
@@ -209,6 +212,7 @@ var goldenTiersReadOnly = map[string]string{
 	"update_skill":          "hidden",
 	"update_task":           "hidden",
 	"use_skill":             "full",
+	"wait_for_mcp_servers":  "name-only",
 	"write_config":          "hidden",
 }
 
@@ -292,6 +296,11 @@ var envGatedTools = map[string]bool{
 	"secret": true,
 	// Session-context/preferences family: dependency-gated in selfManageBuiltins.
 	"update_user_preferences": true,
+	// Registered only when the workspace has an enabled MCP server AND a pool:
+	// with no server there is nothing to wait for. The test workspace has none, so
+	// its tier is verified only where it is actually built (see the wait tool's own
+	// registration test).
+	"wait_for_mcp_servers": true,
 }
 
 // tierCensus collects the effective visibility tier of every registered built-in

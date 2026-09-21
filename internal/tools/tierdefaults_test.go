@@ -17,8 +17,8 @@ var wantNameOnlyDefaults = []string{
 	"get_session_info", "handoff_session", "insight_apply_finding",
 	"insight_list_findings", "insight_scan", "list_sessions", "mermaid_validate",
 	"notify", "read_lessons", "read_session_debug", "render_template",
-	"send_message", "shell_manage", "skill_validate", "update_artifact",
-	"update_session", "update_user_preferences",
+	"run_adhoc_flow", "send_message", "shell_manage", "skill_validate", "update_artifact",
+	"update_session", "update_user_preferences", "wait_for_mcp_servers",
 }
 
 var wantHiddenDefaults = []string{"list_config", "read_config", "secret", "write_config"}

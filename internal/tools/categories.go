@@ -46,6 +46,7 @@ var builtinCategory = map[string]string{
 	"create_agent": CategoryAgents, "update_agent": CategoryAgents,
 	"delete_agent": CategoryAgents, "list_agents": CategoryAgents,
 	"run_subagent":    CategoryAgents,
+	"run_adhoc_flow":  CategoryAgents,
 	"spawn_session":   CategoryAgents,
 	"handoff_session": CategoryAgents, "send_message": CategoryAgents,
 	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
@@ -93,7 +94,7 @@ var builtinCategory = map[string]string{
 	"import_skill": CategorySkillsMCP, "skill_search": CategorySkillsMCP,
 	"skill_validate": CategorySkillsMCP, "list_mcp_servers": CategorySkillsMCP,
 	"create_mcp_server": CategorySkillsMCP, "toggle_mcp_server": CategorySkillsMCP,
-	"delete_mcp_server": CategorySkillsMCP,
+	"delete_mcp_server": CategorySkillsMCP, "wait_for_mcp_servers": CategorySkillsMCP,
 
 	// Settings, config, workspaces, secrets
 	"get_settings": CategoryConfig, "update_settings": CategoryConfig,

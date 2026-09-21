@@ -75,6 +75,56 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   istek; değişmeyince istememe).
 - Detay: `_Docs/78-ROTA-EKRANI.md` §16.
 
+## `wait_for_mcp_servers` — MCP sunucularını tur ortasında ısıtma (2026-09-21) ✅
+
+- **İhtiyaç:** MCP bağlantıları tembeldir — tur başladığında dial edilmemiş bir
+  sunucu o tura hiç araç katmaz. Bir ajan sunucuyu yeni etkinleştirdiyse veya
+  yeniden başlattıysa, turu bitirip bir sonraki katalog kurulumunun onu
+  yakalamasını ummaktan başka yolu yoktu; beklediği namespace'li araç "yok" gibi
+  görünüyordu.
+- **Çözüm:** `wait_for_mcp_servers` yerleşik aracı — adı verilen (veya `servers`
+  boşsa tüm etkin) MCP sunucuları bağlanana ya da kesin olarak başarısız olana
+  kadar bloklar, sonra araçlarını **canlı** registry'ye ekleyip **aynı turda**
+  çağrılabilir yapar. Yüzey `internal/tools/builtin_mcp_wait.go`, politika
+  `internal/agent/mcpwait.go`, taşıma `Pool.EnsureServers`
+  (`internal/mcp/ensure.go`).
+- **Paralel dial, tek zaman aşımı:** `EnsureServers` her sunucuyu kendi
+  goroutine'inde dialler; maliyet en yavaş sunucu kadardır, toplamı kadar değil
+  (seri olsaydı 5 ölü sunucu 5 × `DefaultDialTimeout` = 100 sn ederdi).
+  `timeoutSeconds` varsayılan 30, üst sınır 120 ve tüm kümeyi kapsar.
+- **Aynı turda çağrılabilirlik iki adım ister:** `Registry.AppendMCP` araçları
+  AttachMCP ile aynı lazy + name-only damgalarıyla birleştirir, ardından araçlar
+  **aktive edilir**. Aktivasyon şart: MCP araçları lazy olduğundan `ActiveDefs`
+  onları aksi halde atlar ve donmuş prompt epoch'unda (`mergeFrozenToolDefs`)
+  aktif olmayan ad gönderilen araç bloğundan tamamen düşer. İkisi de testle
+  pinlendi (aktivasyon kaldırılınca iki test de kırmızıya döner — doğrulandı).
+- **Devre kesici politikası açık:** Açık breaker bu araç tarafından **bir kez**
+  bilerek baypas edilir (breaker otomatik katalog kurulumlarını korumak içindir;
+  açık bir "bu sunucuyu bekle" isteği tam tersi durumdur), sonra başarıda
+  `Clear()` / başarısızlıkta `Note()`.
+- **Scoped sunucular çağıranın kendi slotunu ısıtır:** scope anahtarı
+  `toolsetup.go` ile birebir aynı kurulur (`sid + "|" + agent.ID`); aksi halde
+  ısıtılan bağlantı sonraki çağrıların kullandığı bağlantı olmazdı.
+- **CLI backend'lerinde yok:** claude-cli / codex-cli kendi MCP istemcilerini
+  yönetir, havuz onlar için hiç dial etmez ve her sunucuya `ServerUnknown` der —
+  uydurma durum raporlamak yerine araç `cliLazyBridgeExcluded` ile her iki
+  lehçede de köprüden çıkarıldı.
+- **Hata yutulmaz ama gereksiz yükseltilmez:** bilinmeyen sunucu adı **hatadır**
+  (yazım hatasını var olmayan bir bağlantı ayıklamasına çevirmemek için, hata
+  mevcut etkin sunucuları listeler); ölü sunucu ise hata değil **bulgudur** —
+  bir ölü sunucu dört canlının haberini silmemelidir.
+- **Tier:** `name-only` (`internal/tools/tierdefaults.go`), `tierparity_test.go`
+  altın tablolarına bilinçli olarak eklendi; kaydı etkin MCP sunucusuna bağlı
+  olduğu için `envGatedTools`'a da girdi.
+- **Testler:** `internal/mcp/ensure_test.go` (paralellik ölçümü, sunucu başına
+  sonuç, slot yeniden kullanımı, scope anahtarı), `internal/agent/mcpwait_test.go`
+  (aynı turda `ActiveDefs`, donmuş-epoch merge, bilinmeyen sunucu, ölü sunucu +
+  breaker, açık breaker baypası + `Clear`, scoped slot, CLI köprüsü dışlaması),
+  `internal/tools/registry_appendmcp_test.go`.
+- **Kapsam dışı (bilinçli):** sunucuyu etkinleştirme/yeniden başlatma aracı yok
+  (bu yalnız bekler), otomatik yeniden deneme yok, UI göstergesi yok.
+- Ayrıntı: `_Docs/52-MCP-GATEWAY.md`.
+
 ## Çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (2026-09-21) ✅
 
 - **İhtiyaç:** Çalışma dizini bağlam bloğu yalnız `CLAUDE.md`'yi yokluyordu

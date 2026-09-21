@@ -9,8 +9,11 @@
 > temp-yol churn'ü); wildcard allowlist + içerik-hash fingerprint + session-ömürlü token ile
 > düzeltildi. Salt-okur yüzeyler (oturum bilgisi paneli) registry'yi
 > `agent.WithCatalogNoDial` ile kurar → `Pool.CatalogCached` yalnız canlı bağlantıları
-> okur, soğuk sunucu için dial beklemez (2026-09-06, `_Docs/05`). Harici `/mcp/gateway`
-> sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
+> okur, soğuk sunucu için dial beklemez (2026-09-06, `_Docs/05`). Soğuk sunucuyu tur
+> ortasında ısıtmak için `wait_for_mcp_servers` aracı vardır (2026-09-21): sunucuları
+> **paralel** dialler (`Pool.EnsureServers`), araçlarını canlı registry'ye `AppendMCP` ile
+> ekler ve aktive eder → aynı turda çağrılabilir; CLI backend'lerinde kapalıdır. Harici
+> `/mcp/gateway` sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
 > dosyalar: `internal/interaction/server.go`, `internal/agent/climcp.go`,
 > `internal/providers/claudecli_session.go`.
 
@@ -1082,3 +1085,48 @@ tutulur; RAM'deki `interactionBackend.activated` haritası yalnız bir **önbell
 Testler: `internal/db/activatedtools_test.go` (round-trip, yok-dosya, üzerine
 yazma, bozuk JSON) ve `internal/api/gateway_activation_persist_test.go`
 (aynı oturum + YENİ token → araç hâlâ aktif — asıl regresyon).
+
+## `wait_for_mcp_servers` — tur ortasında sunucu ısıtma (2026-09-21)
+
+MCP bağlantıları tembeldir: tur başladığında dial edilmemiş bir sunucu o tura hiç
+araç katmaz. Bir ajan sunucuyu yeni etkinleştirdiyse/yeniden başlattıysa, eskiden
+turu bitirip bir sonraki katalog kurulumunun onu yakalamasını ummaktan başka yolu
+yoktu. `wait_for_mcp_servers` bu beklemeyi **açık ve sınırlı** hale getirir.
+
+**Akış.** `internal/tools/builtin_mcp_wait.go` (araç yüzeyi) →
+`internal/agent/mcpwait.go` (politika) → `Pool.EnsureServers`
+(`internal/mcp/ensure.go`).
+
+- **Paralel dial, tek zaman aşımı.** `EnsureServers` her sunucuyu kendi
+  goroutine'inde dialler; maliyet en yavaş sunucu kadardır, toplamı kadar değil.
+  Seri olsaydı 5 ölü sunucu 5 × `DefaultDialTimeout` (100 sn) ederdi.
+  `timeoutSeconds` (vars. 30, üst sınır 120) tüm kümeyi kapsar.
+- **Aynı turda çağrılabilirlik.** Ayağa kalkan sunucuların araçları
+  `Registry.AppendMCP` ile **canlı** registry'ye eklenir (AttachMCP ile aynı
+  lazy + name-only damgaları) ve ardından aktive edilir. Aktivasyon şart: MCP
+  araçları lazy olduğu için `ActiveDefs` onları aksi halde atlar, dahası **donmuş
+  prompt epoch'unda** (`mergeFrozenToolDefs`) aktif olmayan ad gönderilen araç
+  bloğundan tamamen düşer. Tur döngüsü her iterasyonda `shipFor()` ile yeniden
+  hesapladığı için araçlar modelin bir sonraki adımında hazırdır.
+- **Devre kesici (circuit breaker) politikası.** Açık bir breaker bu araç
+  tarafından **bir kez** bilerek baypas edilir — breaker otomatik katalog
+  kurulumlarını korumak içindir, açık bir "bu sunucuyu bekle" isteği ise tam
+  tersi durumdur. Sonuç normal şekilde işlenir: başarıda `Clear()` (bir sonraki
+  sıradan kurulum cooldown'ı beklemeden dialler), başarısızlıkta `Note()`.
+- **Scoped sunucular.** Çağıranın **kendi** `(session, agent)` slotu ısıtılır;
+  scope anahtarı `toolsetup.go` ile birebir aynı kurulur (`sid + "|" + agent.ID`),
+  yoksa ısıtılan bağlantı sonraki çağrıların kullandığı bağlantı olmazdı.
+- **CLI backend'lerinde yok.** claude-cli / codex-cli kendi MCP istemcilerini
+  yönetir; havuz onlar için hiç dial etmez ve her sunucuya `ServerUnknown` der.
+  Uydurma bir durum raporlamak yerine araç `cliLazyBridgeExcluded` ile köprüden
+  çıkarılır (her iki lehçe için).
+- **Hatalar yutulmaz ama yükseltilmez.** Bilinmeyen sunucu adı **hatadır**
+  (model yazım hatası yapmıştır; "hazır değil" demek onu var olmayan bir bağlantıyı
+  ayıklamaya yollardı). Ölü sunucu ise hata değil **bulgudur**: sorunun cevabı
+  "hayır"dır ve dört canlı sunucunun haberi bir ölü yüzünden silinmemelidir.
+
+Testler: `internal/mcp/ensure_test.go` (paralellik ölçümü, sunucu başına sonuç,
+slot yeniden kullanımı, scope anahtarı), `internal/agent/mcpwait_test.go`
+(aynı turda `ActiveDefs`'e girme, donmuş-epoch merge'ünden sağ çıkma, bilinmeyen
+sunucu, ölü sunucu + breaker `Note`, açık breaker baypası + `Clear`, scoped slot,
+CLI köprüsünden dışlanma), `internal/tools/registry_appendmcp_test.go`.

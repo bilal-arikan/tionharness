@@ -99,6 +99,14 @@ var defaultToolTiers = map[string]string{
 	"render_template": VisibilityNameOnly,
 	// Background-shell management — reached only after a run_in_background launch.
 	"shell_manage": VisibilityNameOnly,
+	// wait_for_mcp_servers — reached only in the rare turn that enables/restarts an
+	// MCP server or finds a namespaced tool missing. The name states the whole
+	// contract; the schema (two optional fields) is pulled on demand.
+	"wait_for_mcp_servers": VisibilityNameOnly,
+	// run_adhoc_flow — multi-round delegation plans are rare next to plain
+	// run_subagent calls, and its nested steps/tasks schema is large. The first
+	// description line names the capability; the schema is pulled on demand.
+	"run_adhoc_flow": VisibilityNameOnly,
 	// Promoted out of the hidden self-management group: common enough to advertise
 	// by name (handoff at context limit, DM a peer agent) rather than fold into the
 	// self-management skill pointer. This table carries ONE authoritative entry per

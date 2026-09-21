@@ -379,6 +379,53 @@ func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]
 	}
 }
 
+// AppendMCP merges additional catalog entries into an ALREADY-attached MCP
+// catalog, applying the same lazy + tier marks AttachMCP applies. An entry whose
+// namespaced name is already present replaces the old one (a re-listed server
+// may have changed a schema); everything else is appended.
+//
+// This exists for mid-turn catalog growth: a tool that warms a cold MCP server
+// must make that server's tools callable in the SAME turn, and the tool loop
+// recomputes ActiveDefs every iteration — so merging here is enough, with no
+// registry rebuild. cfgByServer is merged too, or the dispatcher would have no
+// route for the new names (Call looks the server up there).
+//
+// The caller and the existing dispatch map are left alone: AppendMCP only ever
+// grows the catalog. Calling it before AttachMCP is a programming error — there
+// would be no caller to dispatch the merged names — so it panics rather than
+// silently registering unreachable tools.
+func (r *Registry) AppendMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig) {
+	if len(entries) == 0 {
+		return
+	}
+	if r.mcpCaller == nil {
+		panic("tools: AppendMCP before AttachMCP — no MCP dispatcher to route the merged tools")
+	}
+	if r.mcpCfgByServer == nil {
+		r.mcpCfgByServer = map[string]mcp.ServerConfig{}
+	}
+	for name, cfg := range cfgByServer {
+		r.mcpCfgByServer[name] = cfg
+	}
+	index := make(map[string]int, len(r.mcpEntries))
+	for i, e := range r.mcpEntries {
+		index[e.NamespacedName] = i
+	}
+	defaults := DefaultTiers()
+	for _, e := range entries {
+		if i, ok := index[e.NamespacedName]; ok {
+			r.mcpEntries[i] = e
+		} else {
+			index[e.NamespacedName] = len(r.mcpEntries)
+			r.mcpEntries = append(r.mcpEntries, e)
+		}
+		r.lazy[e.NamespacedName] = true
+		if tier := defaults.TierFor(e.NamespacedName); tier != "" {
+			r.SetVisibility(e.NamespacedName, tier)
+		}
+	}
+}
+
 // ServerDescriptions returns the curated one-liner for each attached MCP server
 // (server name → description), skipping servers without one. Used to enrich the
 // per-server summary line of the load-on-demand catalog so a semantic hint
@@ -645,6 +692,10 @@ func (r *Registry) HiddenLazyCount(allow func(name string) bool) int {
 var bridgeExcluded = map[string]bool{
 	"WebFetch":     true,
 	"run_subagent": true,
+	// run_adhoc_flow: like run_subagent, its Call needs a runner the native loop
+	// installs on the context (WithRunAdhocFlow); the generic bridge has none, and
+	// there is no explicit CLI bridge for it yet.
+	"run_adhoc_flow": true,
 	// run_code (code-execution mode, _Docs/44) is native-path-only: the CLI has
 	// its own Bash + ToolSearch story, and the tool is eager anyway — this entry
 	// is a defensive guard in case a workspace override ever marks it lazy.
