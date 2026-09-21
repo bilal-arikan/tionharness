@@ -10,6 +10,7 @@ import { laneOriginGlyph } from './rotaLabels'
 import { buildTimeScale, formatGapSpan } from './rotaTimeScale'
 import { formatWait } from './rotaWaits'
 import { formatSegments } from './rotaSegments'
+import { ROTA_FUTURE_W, ROTA_LABEL_W, ROTA_PAD_R, rotaPastWidth } from './rotaActivityGap'
 
 // What the side panel can project from either canvas: a session / flow run
 // bar, a whole trajectory (phase header click), an automation ghost.
@@ -40,13 +41,15 @@ interface Props {
 // Row pitch and label column are deliberately tight: the canvas is a density
 // view, and every pixel of padding is one fewer lane on screen.
 const ROW_H = 22
-/** Lane label column. Exported because the zoom anchor has to know which part
- *  of the canvas does not scale. */
-export const ROTA_LABEL_W = 180
+/** Lane label column. Re-exported because the zoom anchor has to know which
+ *  part of the canvas does not scale; the value itself lives with the rest of
+ *  the axis geometry in rotaActivityGap.ts, which derives seconds-per-pixel
+ *  from it. */
+export { ROTA_LABEL_W }
 const LABEL_W = ROTA_LABEL_W
-const FUTURE_W = 140
+const FUTURE_W = ROTA_FUTURE_W
 const TOP_H = 20
-const PAD_R = 8
+const PAD_R = ROTA_PAD_R
 /** Floor for a wait segment: a wait long enough to draw stays visible even when
  *  the window spans days and its true width would round to zero. */
 const WAIT_MIN_PX = 3
@@ -106,7 +109,7 @@ export function RotaCanvas({
   // strip; never below a minimum so a very long history still scrolls.
   // Zoom stretches the past axis only; the label column and the future strip
   // keep their pixel widths so labels stay put and readable at every level.
-  const pastW = Math.max(240, width - LABEL_W - FUTURE_W - PAD_R) * zoom
+  const pastW = rotaPastWidth(width, zoom)
   const futureSpan = Math.max(1, t1 - now)
   // The past is piecewise (dead air collapsed to a sliver when asked for);
   // the future strip stays linear.

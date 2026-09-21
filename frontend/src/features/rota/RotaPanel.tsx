@@ -21,6 +21,7 @@ import { RotaChipFilter } from './RotaChipFilter'
 import { RotaZoomControl } from './RotaZoomControl'
 import { MIN_ZOOM, anchoredScrollLeft, clampZoom, stepZoom } from './rotaZoom'
 import { ROTA_LABEL_W } from './RotaCanvas'
+import { activityGapSec, rotaPastWidth } from './rotaActivityGap'
 import { laneChipCounts, laneChipFilter } from './rotaChips'
 import { useRotaChips } from './useRotaChips'
 import { useRotaPrefs } from './useRotaPrefs'
@@ -159,7 +160,14 @@ export function RotaPanel({
   // along the bouts it returned. Until the read lands (or when it fails) the
   // second pass is skipped and the bars draw whole.
   const base = layoutRota(lanes, { now, idleCutoffSec: cutoff, laneFilter })
-  const activity = useActivitySpans(base.rows.map((r) => r.session))
+  // The sitting threshold follows the axis the first pass produced: an idle
+  // stretch only splits a bar if it would be wide enough to see at this
+  // window and zoom (rotaActivityGap.ts).
+  const gapSec = activityGapSec(base.now - base.t0, rotaPastWidth(width, zoom))
+  const activity = useActivitySpans(
+    base.rows.map((r) => r.session),
+    gapSec,
+  )
   const layout =
     activity.size > 0
       ? layoutRota(lanes, { now, idleCutoffSec: cutoff, laneFilter, activity })

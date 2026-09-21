@@ -18,11 +18,15 @@ const DEBOUNCE_MS = 400
 
 interface Entry {
   updatedAt: number
+  // The threshold this answer was computed with: the same transcript split at
+  // a different gap is a different answer, so it has to invalidate the entry.
+  gapSec: number
   spans: ActivitySpan[]
 }
 
 export function useActivitySpans(
   sessions: readonly LaneSession[],
+  gapSec: number,
 ): ReadonlyMap<string, ActivitySpan[]> {
   // The answers we hold, keyed by session id. A session absent from a reply
   // (no transcript) is cached as an empty list so it is not asked again until
@@ -32,14 +36,19 @@ export function useActivitySpans(
 
   // The request key: which sessions, at which transcript version. Built as a
   // string so the effect re-runs on a real change, not on every new array.
+  // The gap rides along: zooming past a ladder rung (rotaActivityGap.ts) has
+  // to re-ask, the same way a moved transcript does.
   const want = sessions.slice(0, MAX_IDS).map((s) => `${s.id}:${s.updatedAt}`)
-  const key = want.join(',')
+  const key = `${gapSec}|${want.join(',')}`
 
   useEffect(() => {
     if (want.length === 0) return
     const stale = want
       .map((w) => w.split(':'))
-      .filter(([id, updatedAt]) => cache.current.get(id)?.updatedAt !== Number(updatedAt))
+      .filter(([id, updatedAt]) => {
+        const entry = cache.current.get(id)
+        return entry?.updatedAt !== Number(updatedAt) || entry.gapSec !== gapSec
+      })
       .map(([id]) => id)
     if (stale.length === 0) return
 
@@ -52,7 +61,7 @@ export function useActivitySpans(
         }),
       )
       api
-        .sessionActivity(stale)
+        .sessionActivity(stale, gapSec)
         .then((resp) => {
           if (cancelled) return
           for (const id of stale) {
@@ -60,6 +69,7 @@ export function useActivitySpans(
             // with no transcript) is remembered rather than re-requested.
             cache.current.set(id, {
               updatedAt: asked.get(id) ?? 0,
+              gapSec,
               spans: resp.sessions[id] ?? [],
             })
           }

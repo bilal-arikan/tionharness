@@ -50,7 +50,9 @@ son etkinliği pencere içinde kalan her oturum bir **şerit**, zaman soldan sa�
 - **Oturuşlara bölünmüş çubuk (2026-09-06):** aralıklı bir sohbet çubuğu
   ömrü boyunca tek blok çizilmez; oturumun gerçekten çalıştığı aralıklar ayrı
   bloklar, aralar ince kesikli "omurga" olur; bloklar arasındaki ölü zaman
-  eksen normalizasyonuna da girer (çubuk içi boşluk da kırpılır). Ayrıntı §16.
+  eksen normalizasyonuna da girer (çubuk içi boşluk da kırpılır). İki bloğu
+  ayıran boşluk eşiği sabit değil, **zoom'dan türer** (2026-09-21): boşluk
+  ancak çizilecek kadar genişse çubuğu böler. Ayrıntı §16.
 - **Kenarlar:** `spawned` (turuncu, koordinatör → worker, worker'ın
   `createdAt`'inde), `reported` (mor kesik, tamamlanmış worker → koordinatör,
   `updatedAt`'te), `forked_from` (mor, handoff/spawn/otomasyon → yeni oturum).
@@ -798,6 +800,35 @@ zaten düz çubuğun kendisi. `layoutRota` bunu `RotaBar.segments` olarak taşı
 omurga çizer: bölünmüş çubuk hâlâ **tek** oturum olarak okunur ve bloklar
 eksendeki yerlerini korur. Tooltip'e "4 oturuş · 3 sa 12 dk çalışma · 16 sa
 boşluk" satırı eklenir.
+
+**Eşik artık zoom'dan türüyor (2026-09-21).** Oturuş eşiği sabit 600 sn
+değil: ekseni kim çiziyorsa onun ölçeğinden türetilir. Sabit eşik zoom
+aralığının iki ucunda da yanlıştı — hafta genişliğinde bir pencerede her 10
+dakikalık mola piksel altı bir dilimdir, çubuğu yalnız parçalar; 8x'te bir
+öğleden sonraya bakarken ise aynı eşik, zoom'un görmek için açıldığı kahve
+molalarını gizler.
+
+`frontend/src/features/rota/rotaActivityGap.ts` (saf): `activityGapSec(pencere
+saniyesi, geçmiş ekseni piksel)` saniye/piksel'i hesaplar, bir boşluğun
+çizilmeye değmesi için gereken en az genişliği (**12 px**) saniyeye çevirir ve
+sonucu **yukarı** yuvarlayarak sabit bir merdivene oturtur:
+`[300, 600, 900, 1800, 3600, 7200]`. Merdivenin iki ucu aynı zamanda kelepçedir.
+Sürekli bir değer yerine kova kullanılmasının nedeni istek sayısı: uç tarafında
+önbellek yok (`session_activity.go`), her farklı eşik yeni bir gidiş-dönüş
+demek; merdiven, tekerlekle yapılan yavaş bir zoom'un kare başına istek
+doğurmasını engeller — bir oturum için en çok 6 farklı istek olur.
+
+Ekseni iki yer çiziyor, formül tek: `rotaPastWidth(width, zoom)` da bu modülde
+durur (`ROTA_LABEL_W`/`ROTA_FUTURE_W`/`ROTA_PAD_R` ile birlikte), `RotaCanvas`
+`pastW`'yi oradan alır, `RotaPanel` de eşiği hesaplarken aynı fonksiyonu
+kullanır — panelin saniye/piksel'i fiilen çizilen eksenin ta kendisidir.
+Ölçülecek pencere yoksa (şerit yok, kanvas henüz ölçülmedi) uç varsayılanı
+600 sn'ye düşülür.
+
+`useActivitySpans(sessions, gapSec)` eşiği hem istek anahtarına hem de önbellek
+kaydına taşır: bir kayıt `updatedAt` **veya** `gapSec` değiştiyse bayattır.
+Aynı transcript başka bir eşikle bölündüğünde başka bir cevaptır; zoom bir
+merdiven basamağını geçince yeniden sorulur.
 
 **Ölü zaman normalizasyonu (2026-09-06).** Bölünmüş çubuğun blokları arasındaki
 boşluk artık ölü zaman sayılır: `rotaTimeScale.activitySpans` bir çubuk
