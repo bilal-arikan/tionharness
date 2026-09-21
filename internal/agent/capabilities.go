@@ -36,7 +36,7 @@ type Capability struct {
 
 // capabilities is the ordered registry of optional-tool probes. Append here to
 // teach the agent about a new external tool.
-var capabilities = []Capability{codebaseMemoryCapability, tokenOptimizerCapability, shellEnvironmentCapability}
+var capabilities = []Capability{codebaseMemoryCapability, zvecGrepCapability, tokenOptimizerCapability, shellEnvironmentCapability}
 
 // CapabilityContext concatenates the context blocks of every capability currently
 // present. cwd is the session working directory (may be ""), used by capabilities
@@ -152,7 +152,7 @@ var codebaseMemoryCapability = Capability{
 		}
 		// Reachability, not just presence: the block orders the agent to prefer these
 		// tools over grep, so it may only be written for an agent that can call them.
-		// The allowlist no longer withholds them (allowlistExemptServer), but an
+		// The allowlist no longer withholds them (allowlistExemptServers), but an
 		// operator's EXPLICIT denylist still can — and then the block must go quiet.
 		if filter := r.toolFilter(ctx, agent); filter != nil && !filter(mcp.NamespaceTool(server, "search_code")) {
 			return false

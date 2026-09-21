@@ -1,7 +1,8 @@
 // Package repair is the MCP call guard of the native tool loop: argument
 // pre-checks and prefills (args.go), the not-indexed auto-repair of
-// codebase-memory calls (repair.go), the per-server failure streak / breaker
-// (streaks.go) and the "servers unavailable" turn notice (notice.go). It is pure
+// codebase-memory calls (repair.go) and of zvec-grep calls (zvecgrep.go), the
+// per-server failure streak / breaker (streaks.go) and the "servers unavailable"
+// turn notice (notice.go). It is pure
 // — no runtime, no store — so every rule is unit-tested in isolation; the loop
 // in internal/agent turns its verdicts into synthetic results and hints.
 // Extracted from internal/agent on 2026-09-03 (_Docs/81, step 3).
@@ -75,29 +76,42 @@ func argSupplied(raw json.RawMessage) bool {
 }
 
 // PrefillArgs fills arguments TionHarness can derive itself when the model left
-// them out. Today that is exactly one: `project` on a codebase-memory tool, which
-// is derivable from the session's working directory via the server's own
-// path→id rule. Returns the rewritten call and true when something was filled.
+// them out. Two qualify, and both are pure restatements of the session's working
+// directory:
+//
+//   - `project` on a codebase-memory tool, via the server's own path→id rule;
+//   - `root` on a zvec-grep tool, which is that absolute directory itself (the
+//     daemon resolves a subdirectory to the index of its repository).
+//
+// Returns the rewritten call and true when something was filled.
 //
 // It is deliberately narrow. Inventing values for arbitrary required arguments
-// would paper over real model mistakes; this one is a pure restatement of
-// context TionHarness already knows and the model has no reason to get right.
+// would paper over real model mistakes; these are context TionHarness already
+// knows and the model has no reason to get right.
 func PrefillArgs(call providers.ToolCall, missing []string, sessionCwd string) (providers.ToolCall, bool) {
-	id := mcp.ProjectIDForPath(sessionCwd)
-	if id == "" {
-		return call, false
-	}
+	filled := false
 	for _, name := range missing {
-		if name != "project" {
+		value := ""
+		switch name {
+		case "project":
+			value = mcp.ProjectIDForPath(sessionCwd)
+		case "root":
+			// Only for zvec-grep: another server's `root` means whatever that server
+			// says it means.
+			if IsZvecGrepTool(call.Name) {
+				value = zvecGrepRoot(sessionCwd)
+			}
+		}
+		if value == "" {
 			continue
 		}
-		fixed, err := withProjectArg(call, id)
+		fixed, err := withStringArg(call, name, value)
 		if err != nil {
 			return call, false
 		}
-		return fixed, true
+		call, filled = fixed, true
 	}
-	return call, false
+	return call, filled
 }
 
 // MissingArgsMessage renders the model-facing refusal for a call that omitted

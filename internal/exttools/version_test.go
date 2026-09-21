@@ -54,6 +54,7 @@ func TestRepoDerivation(t *testing.T) {
 		"sqz":                 "ojuschugh1/sqz",
 		"mmdc":                "mermaid-js/mermaid-cli",
 		"codebase-memory-mcp": "DeusData/codebase-memory-mcp",
+		"zg":                  "zvec-ai/zvec-grep",
 		"piper":               "OHF-Voice/piper1-gpl",
 		"whisper-cli":         "ggml-org/whisper.cpp",
 		"ffmpeg":              "",

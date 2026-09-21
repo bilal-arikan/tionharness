@@ -44,12 +44,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		strings.TrimSpace(session.WorkingDir), func() string {
 			return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
 		})
-	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
-	// store (guarded to run at most once per cwd per process; no-op without a cwd or
-	// an enabled codebase-memory server). Deliberately OUTSIDE the static builder:
-	// the builder must stay pure (a frozen turn still calls it for drift detection,
-	// and side effects must run regardless of whether the snapshot serves).
+	// Best-effort: ensure the session's repo is indexed by codebase-memory and by
+	// zvec-grep (each guarded to run at most once per repo per process; no-op
+	// without a cwd or the matching enabled server). Deliberately OUTSIDE the static
+	// builder: the builder must stay pure (a frozen turn still calls it for drift
+	// detection, and side effects must run regardless of whether the snapshot serves).
 	wsp.Runtime.EnsureCodebaseIndexed(ctx, session.WorkingDir)
+	wsp.Runtime.EnsureZvecGrepIndexed(ctx, session.WorkingDir)
 	// Wall-clock awareness: a single date/time line so the agent always knows
 	// "now" without a tool round-trip (there is no get_current_time tool). Volatile
 	// by nature, so it leads the dynamic suffix and never invalidates the cache.

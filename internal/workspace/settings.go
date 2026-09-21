@@ -84,6 +84,12 @@ type WSSettings struct {
 	// offer the codebase_workspace_search tool. Default on; off = fully vanilla.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
 
+	// ZvecGrepEnabled toggles the zvec-grep capability system for this workspace:
+	// when a zvec-grep MCP server is present, inject its prompt block, exempt its
+	// tools from agent allowlists, and index the repository of the session cwd in
+	// the background when it has no index yet. Default on; off = fully vanilla.
+	ZvecGrepEnabled bool `json:"zvecGrepEnabled"`
+
 	// PromptEpochEnabled toggles the prompt-epoch (frozen prompt-prefix snapshot)
 	// system: a session's static system prompt + tool schemas freeze at session
 	// start so mid-session config drift cannot bust the prompt cache; changes
@@ -154,6 +160,7 @@ func defaultWSSettings() WSSettings {
 	return WSSettings{
 		Instructions:          defaultInstructions,
 		CodebaseMemoryEnabled: true,
+		ZvecGrepEnabled:       true,
 		PromptEpochEnabled:    true,
 		CodexPluginsEnabled:   true,
 	}
@@ -178,6 +185,7 @@ type WSSettingsPatch struct {
 
 	TerseMode              *bool   `json:"terseMode"`
 	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
+	ZvecGrepEnabled        *bool   `json:"zvecGrepEnabled"`
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
 	ShellOutputCompression *string `json:"shellOutputCompression"`
 	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
@@ -291,6 +299,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetDefaultAgentID(s.DefaultAgentId)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
+		w.Runtime.SetZvecGrep(s.ZvecGrepEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
 		// settings.mu is not held here (loadSettings owns w.settings exclusively
 		// during boot), so read the spec through the same helper UpdateSettings uses.
@@ -425,6 +434,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.CodebaseMemoryEnabled != nil {
 		ws.settings.cur.CodebaseMemoryEnabled = *patch.CodebaseMemoryEnabled
 	}
+	if patch.ZvecGrepEnabled != nil {
+		ws.settings.cur.ZvecGrepEnabled = *patch.ZvecGrepEnabled
+	}
 	if patch.PromptEpochEnabled != nil {
 		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
 	}
@@ -458,6 +470,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
 	defaultAgentID := ws.settings.cur.DefaultAgentId
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
+	zvecEnabled := ws.settings.cur.ZvecGrepEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	codexPlugins := ws.codexPluginSpecLocked()
 	shellCompression := ws.settings.cur.ShellOutputCompression
@@ -487,6 +500,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetDefaultAgentID(defaultAgentID)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
+		ws.Runtime.SetZvecGrep(zvecEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
 		ws.Runtime.SetCodexPlugins(codexPlugins)
 		ws.Runtime.SetShellCompression(shellCompression)

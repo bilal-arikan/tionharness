@@ -153,6 +153,11 @@ type Runtime struct {
 	// process. Keyed by "<cwd>|<store>"; value is bool. See EnsureCodebaseIndexed.
 	cbmIndexed sync.Map
 
+	// zgIndexed guards the best-effort zvec-grep auto-index so a repository is
+	// indexed at most once per process. Keyed by the index root; value is bool.
+	// See EnsureZvecGrepIndexed.
+	zgIndexed sync.Map
+
 	// shellMgrs holds one *tools.ShellManager per session id, tracking that session's
 	// background shells (run_in_background) so their output can be polled and they can
 	// be stopped across turns. Session-scoped and persistent across turns; keyed by
@@ -275,6 +280,11 @@ type Runtime struct {
 	// the cwd auto-index, and the codebase_workspace_search tool. Default on;
 	// workspace settings can switch the entire feature off. See capabilities.go.
 	codebaseMemoryEnabled atomic.Bool
+
+	// zvecGrepEnabled gates the zvec-grep capability system for this workspace: the
+	// prompt block, the cwd auto-index and the allowlist exemption. Default on, like
+	// codebaseMemoryEnabled. See capabilities_zvecgrep.go.
+	zvecGrepEnabled atomic.Bool
 
 	// shellCompressMode is the per-workspace shell-output compression override:
 	// 0 = auto (follow sqz-hook detection), 1 = force on, 2 = force off. Set from
@@ -757,6 +767,8 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still
 	// behave as "on" rather than silently off.
 	r.codebaseMemoryEnabled.Store(true)
+	// Same for the zvec-grep capability.
+	r.zvecGrepEnabled.Store(true)
 	// Push every admission-queue change (a turn took the slot, released it, or queued
 	// behind it) onto the bus so the API can render the session's live turn queue.
 	r.turns.Observe(r.publishTurnQueue)

@@ -40,6 +40,11 @@ const CodexToolName = "codex"
 // would produce a confident, wrong "outdated" verdict.
 const OpenPencilToolName = "openpencil"
 
+// ZvecGrepToolName is the catalog key for zvec-grep. Named after the executable
+// (`zg`) like ClaudeToolName, because that is what PATH resolution and the version
+// probe use; the npm package and the MCP server call themselves "zvec-grep".
+const ZvecGrepToolName = "zg"
+
 // UpdateKind classifies how a tool is upgraded.
 const (
 	// UpdateCommand: a single idempotent package-manager command TionHarness may run
@@ -344,6 +349,32 @@ var Catalog = []Tool{
 			Note: "Önce bu workspace'te MCP sunucusunu kaldır (aşağıdaki \"MCP'yi kaldır\" düğmesi) — çalışan stdio alt-süreci .exe dosyasını kilitler. Sonra release'ten yeni exe'yi kopyalayıp MCP'yi tekrar ekle.",
 		},
 	},
+	// zvec-grep is codebase-memory's sibling in the search layer: a local hybrid
+	// (full-text + vector) index that answers "where is the thing I can describe
+	// but not name", over code, docs and config alike. `zg server --stdio` starts or
+	// reuses ONE shared daemon, so the process an agent talks to outlives every MCP
+	// client that spawned it.
+	//
+	// That daemon is why the update is manual even though this is an npm package:
+	// it keeps native addons loaded (the zvec binding, onnxruntime, llama.cpp), and
+	// Windows refuses to replace a loaded .node file, so `npm install -g` against a
+	// running daemon fails half-applied. The note tells the user to stop it first.
+	//
+	// The GitHub release feed trails npm (releases/latest was v0.2.0 while npm
+	// shipped 0.2.2, checked 2026-09-14). Compare reads a local version ahead of the
+	// feed as up-to-date, so the lag can never produce a false "outdated".
+	{
+		Name:        ZvecGrepToolName,
+		Desc:        "zvec-grep — yerel hibrit (tam metin + vektör) anlamsal arama indeksi; kod, doküman ve config'i birlikte arar. `zg server --stdio` paylaşılan daemon'u başlatır ya da yeniden kullanır, ajan `zvec_grep_search` aracını çağırır. İndeks repo içinde `.zvec-grep/` klasöründe durur.",
+		URL:         "https://github.com/zvec-ai/zvec-grep",
+		Category:    "dev",
+		Wire:        "mcp",
+		VersionArgs: []string{"--version"},
+		Update: UpdateSpec{
+			Kind: UpdateManual,
+			Note: "Önce `zg server off` ile paylaşılan daemon'u durdur — MCP istemcileri kapansa da çalışmaya devam eder ve native addon'ları (.node) kilitli tutar. Sonra `npm install -g @zvec/zvec-grep` çalıştır. Daemon bir sonraki MCP bağlantısında (`zg server --stdio`) kendiliğinden yeniden başlar.",
+		},
+	},
 	{
 		Name:        OpenPencilToolName,
 		Desc:        "OpenPencil — açık kaynak, ajan-yerlisi vektör tasarım aracı (Rust + GPU-Skia). Ajan `op` CLI'ı ile UI tasarlar, PNG/deck export eder ve tasarımı React/Vue/Svelte/Flutter/SwiftUI koduna çevirir; belgeler git dostu `.op` JSON'udur. `openpencil-design` skill'i bunu sürer. İkilinin adı `op`, ama 1Password CLI de aynı adı kullandığı için PATH'ten körlemesine alınmaz (bkz. Detect).",
@@ -497,6 +528,13 @@ func Detect(name string) (bool, string) {
 		return false, ""
 	case OpenPencilToolName:
 		if p := openPencilExe(); p != "" {
+			return true, p
+		}
+		return false, ""
+	case ZvecGrepToolName:
+		// PATH first, then npm global bin directories that only some shells put on
+		// PATH (see zvecGrepExe).
+		if p := zvecGrepExe(); p != "" {
 			return true, p
 		}
 		return false, ""

@@ -222,10 +222,11 @@ func TestMalformedPermissionsFailClosedAcrossNativeAndCLIPaths(t *testing.T) {
 // test makes it a deliberate one (and forces the doc comment in subagent.go to be
 // revisited with it).
 //
-// Note the empty exemptServer below: this asserts what the ALLOWLIST reaches, not
-// what the agent can ultimately call. codebase-memory is exempt from the allowlist
-// (allowlistExemptServer), so a profile worker DOES reach the code graph — see
-// TestCodebaseMemoryIsExemptFromAllowlist. Everything else still needs a pattern.
+// Note the empty exempt server below: this asserts what the ALLOWLIST reaches, not
+// what the agent can ultimately call. codebase-memory and zvec-grep are exempt from
+// the allowlist (allowlistExemptServers), so a profile worker DOES reach them — see
+// TestCodebaseMemoryIsExemptFromAllowlist and TestZvecGrepIsExemptFromAllowlist.
+// Everything else still needs a pattern.
 func TestProfileAllowlistsReachOnlyValidatorUnityMCP(t *testing.T) {
 	for id, prof := range defaultSubagentProfiles {
 		gate, err := mcpServerGate(db.Agent{AllowedTools: mustJSON(t, prof.AllowedTools)}, "")
@@ -354,8 +355,8 @@ func TestCodebaseMemoryIsExemptFromAllowlist(t *testing.T) {
 	ag := db.Agent{ID: "AGT102", MCPEnabled: true,
 		AllowedTools: `["Read","LS","Glob","Grep","Write","Edit","Bash"]`}
 
-	if got := rt.allowlistExemptServer(ctx); got != "codebase-memory-mcp" {
-		t.Fatalf("allowlistExemptServer = %q, want the configured cbm server name", got)
+	if got := rt.allowlistExemptServers(ctx); len(got) != 1 || got[0] != "codebase-memory-mcp" {
+		t.Fatalf("allowlistExemptServers = %q, want only the configured cbm server name", got)
 	}
 
 	// Native path: the tool filter lets the graph through but still blocks playwright.

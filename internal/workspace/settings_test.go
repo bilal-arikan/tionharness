@@ -19,6 +19,9 @@ func TestDefaultWSSettings(t *testing.T) {
 	if !d.CodebaseMemoryEnabled {
 		t.Error("codebase-memory capability should default on")
 	}
+	if !d.ZvecGrepEnabled {
+		t.Error("zvec-grep capability should default on")
+	}
 	if d.WorktreeBaseRef != "" || d.WorktreeRootDir != "" {
 		t.Fatalf("worktree lifecycle defaults = base %q root %q, want empty fallbacks", d.WorktreeBaseRef, d.WorktreeRootDir)
 	}

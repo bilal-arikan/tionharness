@@ -28,7 +28,7 @@ func (h cliHost) EnabledServers(ctx context.Context) ([]mcp.ServerConfig, error)
 }
 
 func (h cliHost) ServerGate(ctx context.Context, ag db.Agent) (func(string) bool, error) {
-	return mcpServerGate(ag, h.r.allowlistExemptServer(ctx))
+	return mcpServerGate(ag, h.r.allowlistExemptServers(ctx)...)
 }
 
 func (h cliHost) EnabledHooks(ctx context.Context, event string) ([]db.Hook, error) {

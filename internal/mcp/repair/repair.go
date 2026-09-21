@@ -82,6 +82,9 @@ func (m *Guard) Precheck(call providers.ToolCall) (blocked bool, msg string) {
 		return false, ""
 	}
 	if m.poisoned[CallKey(call)] {
+		if IsZvecGrepTool(call.Name) {
+			return true, zvecGrepRepairInstruction(callStringArg(call, "root"))
+		}
 		return true, mcpRepairInstruction(call.Name, "", nil)
 	}
 	return false, ""
@@ -153,13 +156,19 @@ func CallProjectArg(call providers.ToolCall) string {
 // withProjectArg returns a copy of call whose `project` argument is set to id,
 // preserving every other argument. Errors when Input is not a JSON object.
 func withProjectArg(call providers.ToolCall, id string) (providers.ToolCall, error) {
+	return withStringArg(call, "project", id)
+}
+
+// withStringArg returns a copy of call whose `key` argument is set to value,
+// preserving every other argument. Errors when Input is not a JSON object.
+func withStringArg(call providers.ToolCall, key, value string) (providers.ToolCall, error) {
 	args := map[string]any{}
 	if len(call.Input) > 0 {
 		if err := json.Unmarshal(call.Input, &args); err != nil {
 			return call, err
 		}
 	}
-	args["project"] = id
+	args[key] = value
 	raw, err := json.Marshal(args)
 	if err != nil {
 		return call, err

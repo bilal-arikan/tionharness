@@ -58,7 +58,7 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		}
 		// Codex has no --disallowedTools, so NOT mounting the server is the only
 		// enforceable per-agent restriction on this path (see mcpservergate.go).
-		gate, gateErr := mcpServerGate(ag, r.allowlistExemptServer(ctx))
+		gate, gateErr := mcpServerGate(ag, r.allowlistExemptServers(ctx)...)
 		if gateErr != nil {
 			// Fail CLOSED (see writeCLIMCPConfig): an unreadable restriction means the
 			// only enforceable limit on this path cannot be computed, so nothing is

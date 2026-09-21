@@ -46,6 +46,10 @@ type workspaceSettingsDTO struct {
 	// isolated store + auto-index + codebase_workspace_search) for this workspace.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
 
+	// ZvecGrepEnabled toggles the zvec-grep capability system (prompt block +
+	// allowlist exemption + background index of the session repo) for this workspace.
+	ZvecGrepEnabled bool `json:"zvecGrepEnabled"`
+
 	// PromptEpochEnabled toggles the prompt-epoch (frozen prompt-prefix snapshot)
 	// system for this workspace (see promptepoch.go).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
@@ -116,6 +120,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		ThemePreset: s.ThemePreset,
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
+		ZvecGrepEnabled:       s.ZvecGrepEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
 
 		CodexPluginsEnabled: s.CodexPluginsEnabled,
