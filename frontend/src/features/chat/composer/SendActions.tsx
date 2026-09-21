@@ -12,6 +12,11 @@ interface Props {
   hasContent: boolean
   anyUploading: boolean
   disabled: boolean
+  // Whether a live steer can actually REACH the running turn (queue_update.steerable
+  // — the server's verdict, since it depends on the responding agent's provider and
+  // effective permission mode). Gates the Yönlendir button the same way canSteer
+  // gates the tray's "şimdi yönlendir" action.
+  canSteer?: boolean
   // Actions.
   onSend: () => void
   onStop?: () => void
@@ -41,6 +46,7 @@ export function SendActions({
   hasContent,
   anyUploading,
   disabled,
+  canSteer = false,
   onSend,
   onStop,
   onCancelWait,
@@ -107,8 +113,18 @@ export function SendActions({
         />
         <ActionButton
           onClick={onSteer}
-          disabled={!hasText}
-          title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
+          disabled={!hasText || !canSteer}
+          // Shown disabled WITH the reason rather than hidden: the button must not
+          // appear and vanish as turns come and go. Until TSK948 this was gated on
+          // text alone, so on a turn whose provider/mode has no steer boundary it
+          // stayed enabled and the user only learned it could not work from the
+          // server's "unsupported" reply — after the message had already been sent
+          // and silently requeued as a normal turn.
+          title={
+            canSteer
+              ? 'Çalışan turu canlı yönlendir (araç döngüsünde etkili)'
+              : 'Bu tur canlı yönlendirmeyi desteklemiyor (sağlayıcı/izin modu uygun değil) — "Sıraya" ile gönderebilirsin. Canlı yönlendirme için ajanı "ask" moduna al.'
+          }
           testId="composer-steer"
           icon={Compass}
           label="Yönlendir"

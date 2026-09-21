@@ -639,3 +639,43 @@ describe('Composer send-now shortcut', () => {
     expect(onSend).toHaveBeenCalledWith('@', [])
   })
 })
+
+// Before TSK948 the Yönlendir button was gated on text alone, so on a turn whose
+// provider/permission mode has no steer boundary it stayed enabled and the user
+// only learned it could not work from the server's "unsupported" reply — after the
+// message had been sent and silently requeued as a normal turn.
+describe('Composer steer availability', () => {
+  function steerBtn(container: HTMLElement) {
+    return container.querySelector<HTMLButtonElement>('[data-testid="composer-steer"]')
+  }
+
+  it('enables the steer action when the server reports the turn is steerable', () => {
+    const { container } = renderComposerWith({ streaming: true, onSteer: vi.fn(), canSteer: true })
+    type(container, 'yönlendir beni')
+
+    expect(steerBtn(container)?.disabled).toBe(false)
+  })
+
+  it('pre-disables the steer action when the turn cannot carry guidance', async () => {
+    const onSteer = vi.fn()
+    const { container } = renderComposerWith({ streaming: true, onSteer, canSteer: false })
+    type(container, 'yönlendir beni')
+
+    const btn = steerBtn(container)
+    expect(btn?.disabled).toBe(true)
+    // Disabled WITH a reason the user can act on, not silently inert.
+    expect(btn?.title).toContain('desteklemiyor')
+
+    act(() => btn?.click())
+    await flush()
+    expect(onSteer).not.toHaveBeenCalled()
+  })
+
+  it('offers no steer action at all until the composer has content', () => {
+    const { container } = renderComposerWith({ streaming: true, onSteer: vi.fn(), canSteer: true })
+
+    // An empty composer on a streaming turn shows Durdur, not the triplet — so the
+    // steer button is absent rather than merely disabled.
+    expect(steerBtn(container)).toBeNull()
+  })
+})

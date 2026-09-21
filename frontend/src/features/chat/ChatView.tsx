@@ -495,6 +495,7 @@ export function ChatView({
               chat.queueMessage(text, attachments)
             }}
             onSteer={chat.steerTurn}
+            canSteer={chat.activeSteerable}
             onTyping={chat.notifyTyping}
             thinkingLevel={chat.thinkingLevel}
             onThinkingLevelChange={chat.setThinkingLevel}

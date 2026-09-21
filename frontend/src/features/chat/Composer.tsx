@@ -83,6 +83,10 @@ interface Props {
   onInterrupt?: (text: string, attachments: Attachment[]) => void | Promise<boolean | void>
   onQueue?: (text: string, attachments: Attachment[]) => void | Promise<boolean | void>
   onSteer?: (text: string) => void | Promise<boolean | void>
+  // Whether the running turn can actually carry live guidance (the server's
+  // queue_update.steerable verdict). Pre-disables the Yönlendir button instead of
+  // letting the user discover the refusal from the server's reply.
+  canSteer?: boolean
   // Fired on keystrokes to broadcast a cross-window "user is typing" signal.
   onTyping?: () => void
   // Per-turn reasoning level ('' = agent default). Picked from a small menu in
@@ -121,6 +125,7 @@ export function Composer({
   onInterrupt,
   onQueue,
   onSteer,
+  canSteer = false,
   onTyping,
   thinkingLevel = '',
   onThinkingLevelChange,
@@ -1047,6 +1052,7 @@ export function Composer({
               onQueue={() => void actWithAttachments(onQueue)}
               onInterrupt={() => void actWithAttachments(onInterrupt)}
               onSteer={() => void act(onSteer)}
+              canSteer={canSteer}
             />
           </div>
         </div>
