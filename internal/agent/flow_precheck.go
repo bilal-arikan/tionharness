@@ -40,6 +40,13 @@ func (r *Runtime) ValidateFlowGraph(ctx context.Context, g orchestration.Graph) 
 	if err := g.Validate(); err != nil {
 		return err
 	}
+	// Fan-out agent nodes need a calling agent to bind their legs to, which only a
+	// run_adhoc_flow call has; a saved flow would fail them on every run.
+	for _, n := range g.Nodes {
+		if n.IsFanOut() {
+			return fmt.Errorf("node %q: fan-out agent nodes (legs) are only supported in run_adhoc_flow, not in saved flows", n.ID)
+		}
+	}
 	return r.validateFlowPreconditions(ctx, g)
 }
 
@@ -106,6 +113,12 @@ func (r *Runtime) validateFlowPreconditions(ctx context.Context, g orchestration
 		// A coordinator node runs its agent exactly like an agent node does (through
 		// a session turn), so it needs the same "agent exists + provider builds" check.
 		case orchestration.NodeAgent, orchestration.NodeCoordinator:
+			// A fan-out node has no agentId: its leg targets are profiles or agents
+			// resolved against the CALLING agent, which only run_adhoc_flow knows —
+			// it checks them before the run starts (resolveAdhocTargets).
+			if n.IsFanOut() {
+				continue
+			}
 			c, done := checked[n.AgentID]
 			if !done {
 				c = agentCheck{err: r.checkFlowAgent(ctx, n.AgentID)}

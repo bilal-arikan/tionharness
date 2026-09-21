@@ -4,14 +4,16 @@
 > tamamlandı, `go build`/`go vet`/`go test ./...` + frontend `tsc -b` yeşil.
 > Erken notlarda `12-SUBAGENT-ISOLATION.md` adıyla anılmıştı; kalıcı numara **25**.
 >
-> **Özet (2026-09-06):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
+> **Özet (2026-09-21):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
 > da miras bağlam, yerleşik profil ya da mevcut ajan, bloklayan çağrı, geri dönen
 > yalnız final sonuç + artifact **referansları**. Tek çağrıdan **fan-out/fan-in**
 > (`tasks[]` + `strategy` + `max_concurrency`) destekler; stratejiler iki ailedir:
 > *toplayıcı* (`all`, `first-success` — bacakları raporlar) ve *seçici*
 > (`majority`, `reviewer-selects` — birini kazanan ilan edip yalnız onun yanıtını
 > basar, TSK835). Bütçe/derinlik/döngü guard'ları tek yerde (`runAgent`); her
-> çakışma öncelik kuralı değil **hata**dır.
+> çakışma öncelik kuralı değil **hata**dır. Çok turlu planlar (fan-out → dallan →
+> tekrar fan-out) için `run_adhoc_flow` aynı fan-out yolunu orchestration motoru
+> üzerinde, turlar arası **paylaşılan** bütçeyle koşar (TSK912, aşağıda).
 >
 > **Not (2026-09-10):** claude-cli'da Claude Code'un **kendi** `Agent` aracı yalnız
 > salt-okuma araştırma tipleri (Explore/Plan) için menüde (`Settings.
@@ -647,6 +649,75 @@ numaralandırma/kesme, hüküm ayrıştırma, ön koşullar, seçici render'ı v
 `all`/`first-success` için **golden string** regresyon testi),
 `internal/agent/subagent_aggregate_test.go` (toplayıcıların hiç değişmemesi,
 kazanan işaretleme, hakem düşünce çağrının düşmesi, bilinmeyen strateji).
+
+## Çok turlu ad-hoc plan: `run_adhoc_flow` (TSK912, 2026-09-21)
+
+`run_subagent`'ın `tasks[]` fan-out'u **tek tur**dur. "Paralel tara → sonuca göre
+dallan → gerekirse paralel düzelt" gibi bir plan için model eskiden her turu ayrı
+bir çağrıyla sürüyordu. `run_adhoc_flow` bu planı **tek araç çağrısında** koşar;
+yeni bir paralel mekanizma kurmaz, mevcut `internal/orchestration` motorunu ve
+mevcut `runAgentFanOut` yolunu yeniden kullanır.
+
+- **Girdi:** `steps[]` + `max_rounds`. v1 adım tipleri yalnız `parallel`, `branch`,
+  `end`. `parallel` adımının `tasks` elemanları `run_subagent`'ın `tasks`
+  elemanıyla **birebir aynı şema**dır (`fanOutTaskInput`) ve aynı doğrulamadan
+  (`buildFanOutSpec`) geçer. `branch` adımı `on` ile adı verilen parallel adımın
+  çıktısını `equals`/`contains` (adım başına tek mod) ve isteğe bağlı `json_field`
+  ile eşler. Girdi katı çözülür (`DisallowUnknownFields`): bir bacağın içine
+  gömülü `tasks` sessizce yutulmaz, reddedilir.
+- **Derleme (`internal/agent/adhocflow_graph.go`):** her `parallel` adım **tek**
+  `agent` node'a derlenir — yeni node tipi yok; node `AgentID` yerine
+  `Legs` taşır (fan-out biçimi). `branch` adımı, `{{node.<on>}}`'u `{{last}}`'a
+  yükleyen bir `transform` node (adımın kendi id'si) + motorun `branch` node'u
+  (`__route_<id>`) olur. Başa zorunlu `__start` eklenir; `__` öneki kullanıcı
+  adımlarına yasaktır.
+- **Motor kancası:** `orchestration.FanOutRunner` (`RunFanOutNode(ctx, legs)`),
+  `RunAgentNode`'un yanındaki ikinci runner kancasıdır; `internal/agent`'taki
+  uygulaması (`adhocflow_fanout.go`) mevcut `runAgentFanOut`'u çağırır. Böylece
+  `legSpec` fan-out eksenlerini bacaklardan düşürmeye devam eder (N. tur bacağı
+  kendi başına fan-out yapamaz; tekrar fan-out yalnız **graf seviyesinde** olur),
+  derinlik/döngü guard'ları ve "tüm bacaklar düştü ⇒ hata" kuralı bedava gelir.
+- **Gizli (ephemeral) flow satırı:** derlenen graf `Flow{Ephemeral: true}` olarak
+  yazılır ve `FlowRun` ona bağlanır; `get_view kind=flowrun`, iptal ve run
+  soy ağacı değişmeden çalışır. Satır `ListFlows`'tan (UI flow listesi,
+  `list_flows`, özetleyici, yayınlama) **gizlenir**; `GetFlow` ile id'den çözülür.
+  Kayıtlı flow kaydetme yolu (`ValidateFlowGraph`) fan-out node'u reddeder.
+- **Bütçe turlar arası paylaşılır:** sayaç turun ortak atomik sayacıdır, tur
+  başına sıfırlanmaz. Yalnız **tavan** genişler: `DelegationMaxCalls ×
+  max_rounds`, sert üst sınır `AdhocFlowMaxDelegationCalls` (24), ve hiçbir zaman
+  normal tur tavanının altına inmez (`adhocDelegationCeiling`; `runAgent` tavanı
+  `delegationCeiling(ctx, …)` ile okur). `max_rounds` varsayılan ve üst sınırı
+  `AdhocFlowMaxRounds` (3); bir tur = bir parallel adım koşusu. Tur sınırı aşılırsa
+  node hata verir (motorun 50 adım sınırına kadar dönmez).
+- **Hata politikası:** kısmi bacak hatası raporlanır, akış devam eder. Bir turun
+  **tüm** bacakları düşerse node hata verir ve sonraki tura **geçilmez**.
+  Hedefler (profil/ajan) koşu başlamadan çözülür; geçersiz plan hiçbir satır
+  bırakmaz.
+- **Sonuç sözleşmesi — node granülerliği:** dönen JSON
+  `{run_id, status, steps:[{id,status,output}], final, error?}`. Bir parallel
+  adım = bir node = `steps[]`'te **bir** giriş; `output` bacakları özetler (her
+  bacağın hedefi + durumu + final yanıtı, `run_subagent` fan-out ifadesiyle).
+  Bacak sonuçları `State.Trace`'ten değil, fan-out kaydından gelir. Yeni durum
+  makinesi yok: `done`/`failed` `FlowRun.Status`'tan, `skipped` = adım trace'te
+  yok (graf oraya hiç girmedi), `cancelled` = koşu çağıran turun iptaliyle bitti.
+- **Motor çıktısı yalnız cevaplardır:** fan-out node'unun motora verdiği çıktı
+  (branch'in eşlediği, sonraki bacakların `{{last}}`/`{{node.<id>}}` ile okuduğu)
+  yalnız **yanıt veren** bacakları içerir — "FAILED" içeren bir hata metni
+  `contains: FAIL` koluna yanlışlıkla eşleşmesin diye. Tek bacaklı adımda yanıt
+  **aynen** geçer; `equals` ve `json_field` bu yüzden tek bacaklı `on` adımı
+  ister (çok bacaklıda araç reddeder).
+- **Görünüm:** `get_view kind=flowrun` fan-out node'unu **tek, opak** node olarak
+  çizer; v1'de bacak başına sentetik node üretilmez.
+- **Kapsam dışı (v1):** `loop` node, uçuştaki tek bir adımı dışarıdan iptal,
+  tur bittikten sonra ephemeral koşuyu resume/replay (yeniden başlatmada sürülen
+  bir ephemeral koşu, bağlama olmadığından fan-out node'unda açık hatayla düşer),
+  ephemeral flow'u kayıtlı kataloğa terfi ettirme, CLI (claude-cli/codex-cli)
+  köprüsü — araç `bridgeExcluded`/`cliLazyBridgeExcluded`'da.
+- **Bilinen boşluk:** ephemeral flow satırları birikir; `flowRunRetention`
+  süpürücüsü `ListFlows` üzerinden yürüdüğü için onların koşularını budamaz.
+- Kod: `internal/tools/{adhocflow_spec,builtin_adhocflow}.go`,
+  `internal/agent/{adhocflow,adhocflow_graph,adhocflow_fanout}.go`,
+  `internal/orchestration/{model,engine}.go` (`Node.Legs`, `FanOutRunner`).
 
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi

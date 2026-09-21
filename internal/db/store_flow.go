@@ -47,9 +47,19 @@ func (d *DB) GetFlow(ctx context.Context, id string) (Flow, error) {
 	return dbGet(d, d.flows, id)
 }
 
-// ListFlows returns all flows, newest first.
+// ListFlows returns the flow catalog, newest first. Ephemeral flows (the hidden
+// rows backing run_adhoc_flow runs) are excluded: they are not saved flows, and
+// every catalog consumer — the UI flow list, list_flows, summaries, publishing —
+// must not offer them. GetFlow still resolves them by id.
 func (d *DB) ListFlows(ctx context.Context) ([]Flow, error) {
-	return dbList(d, d.flows, func(a, b Flow) bool { return a.CreatedAt > b.CreatedAt }), nil
+	all := dbList(d, d.flows, func(a, b Flow) bool { return a.CreatedAt > b.CreatedAt })
+	out := all[:0]
+	for _, f := range all {
+		if !f.Ephemeral {
+			out = append(out, f)
+		}
+	}
+	return out, nil
 }
 
 // UpdateFlow edits a flow's name/graph.

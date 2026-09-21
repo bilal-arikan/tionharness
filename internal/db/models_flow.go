@@ -53,8 +53,14 @@ type Flow struct {
 	// self-management tool ("" = created by the user). Agents may only
 	// edit/delete agent-created flows.
 	CreatedBy string `json:"createdBy,omitempty"`
-	CreatedAt int64  `json:"createdAt"`
-	UpdatedAt int64  `json:"updatedAt"`
+	// Ephemeral marks a hidden flow row written by run_adhoc_flow to back one
+	// ad-hoc run: the graph the model submitted lives here so get_view
+	// kind=flowrun, cancellation and run lineage work unchanged. It is kept OUT of
+	// the flow catalog (ListFlows), so it never shows up as a saved flow. The
+	// field is omitted when false, so existing flow files need no migration.
+	Ephemeral bool  `json:"ephemeral,omitempty"`
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // FlowRun is one execution instance of a flow. State is the legacy-compatible

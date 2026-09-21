@@ -193,6 +193,9 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// it (and the shared loop guards) from the context. &t.req lets an inherited-
 	// context subagent see the conversation as it stands when the tool fires.
 	t.ctx = r.withRunAgent(t.ctx, agent, &t.req, autonomous)
+	// run_adhoc_flow's runner, bound after withRunAgent so its legs inherit the
+	// same chain position and shared budget counter.
+	t.ctx = r.withRunAdhocFlow(t.ctx, agent, &t.req, autonomous)
 
 	t.emit = serializeStepEmitter(func(s TurnStep) {
 		if onStep != nil {

@@ -65,6 +65,14 @@ type Node struct {
 	// downstream branch node's JSONField for parse-proof routing decisions.
 	// Unsupported providers reply free-text — schemas must stay advisory there.
 	OutputSchema string `json:"outputSchema,omitempty"`
+	// Legs turns an agent node into a FAN-OUT node: instead of running one agent
+	// (AgentID + Prompt) it hands these subagent tasks to the runner's FanOutRunner
+	// hook, which runs them concurrently and returns one combined output. An agent
+	// node carries exactly one of AgentID or Legs (Validate enforces it). Each leg's
+	// Task is a template rendered like Prompt ({{input}}, {{last}}, {{node.<id>}}).
+	// The legs are opaque to the engine: they produce ONE node output and ONE trace
+	// entry, never per-leg entries.
+	Legs []Leg `json:"legs,omitempty"`
 
 	// branch — Branches are the routing arms; an empty Contains is the default
 	// arm. MatchMode decides how Contains is compared to the last output:
@@ -156,6 +164,52 @@ type Node struct {
 	// the visual canvas builder can restore node positions across reloads.
 	X float64 `json:"x,omitempty"`
 	Y float64 `json:"y,omitempty"`
+}
+
+// Leg is one subagent task of a fan-out agent node (see Node.Legs). Its fields
+// mirror one element of run_subagent's "tasks" array so the same vocabulary
+// carries over unchanged; the engine only renders Task and passes the rest
+// through to the runner.
+type Leg struct {
+	Target       string `json:"target"`
+	Task         string `json:"task"`
+	Context      string `json:"context,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Objective    string `json:"objective,omitempty"`
+	OutputFormat string `json:"output_format,omitempty"`
+	Boundaries   string `json:"boundaries,omitempty"`
+}
+
+// IsFanOut reports whether n is an agent node in the fan-out form (Legs set).
+func (n Node) IsFanOut() bool { return n.Type == NodeAgent && len(n.Legs) > 0 }
+
+// validateAgentNode checks the two mutually exclusive agent-node forms: a single
+// agent (AgentID) or a fan-out (Legs). Neither and both are rejected; the
+// single-agent form is checked exactly as before the fan-out form existed.
+func validateAgentNode(n Node) error {
+	if len(n.Legs) == 0 {
+		if n.AgentID == "" {
+			return fmt.Errorf("agent node %q has no agentId", n.ID)
+		}
+		return nil
+	}
+	if n.AgentID != "" {
+		return fmt.Errorf("agent node %q has both an agentId and legs; use one form", n.ID)
+	}
+	// A fan-out node renders each leg's Task, never Prompt. Accepting a Prompt here
+	// would look configured while doing nothing.
+	if strings.TrimSpace(n.Prompt) != "" {
+		return fmt.Errorf("fan-out agent node %q has a prompt; put the instruction in each leg's task", n.ID)
+	}
+	for i, l := range n.Legs {
+		if strings.TrimSpace(l.Task) == "" {
+			return fmt.Errorf("fan-out agent node %q leg %d has no task", n.ID, i)
+		}
+		if strings.TrimSpace(l.Target) == "" {
+			return fmt.Errorf("fan-out agent node %q leg %d has no target", n.ID, i)
+		}
+	}
+	return nil
 }
 
 // Branch is one routing rule of a branch node. An empty Contains is the default
@@ -274,8 +328,8 @@ func (g Graph) Validate() error {
 	for _, n := range g.Nodes {
 		switch n.Type {
 		case NodeAgent:
-			if n.AgentID == "" {
-				return fmt.Errorf("agent node %q has no agentId", n.ID)
+			if err := validateAgentNode(n); err != nil {
+				return err
 			}
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err

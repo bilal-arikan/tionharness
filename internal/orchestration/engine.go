@@ -90,6 +90,15 @@ type CoordinatorRunner interface {
 	RunCoordinatorNode(ctx context.Context, spec CoordinatorSpec) (string, error)
 }
 
+// FanOutRunner is the OPTIONAL hook behind fan-out agent nodes (Node.Legs): it
+// runs the legs — already rendered — as concurrent subagent tasks and returns one
+// combined output for the node. It is the fan-out sibling of RunAgentNode, so the
+// engine stays free of any subagent machinery. Runners that do not implement it
+// make a fan-out node fail with a clear "not wired" error.
+type FanOutRunner interface {
+	RunFanOutNode(ctx context.Context, legs []Leg) (string, error)
+}
+
 // ThreadAgentRunner is an OPTIONAL extension for accumulate-mode graphs: the
 // runner receives the prior conversation thread plus the new user prompt, so the
 // agent's stable system + growing message prefix is reused by the provider's
@@ -276,6 +285,34 @@ func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string,
 	return e.runner.RunAgentNode(ctx, node.AgentID, prompt)
 }
 
+// runFanOutNodeSafe runs one fan-out agent node (Legs set) through the runner's
+// FanOutRunner hook, converting a panic into an error like runAgentNodeSafe. Each
+// leg's Task is rendered against the current state first. It also returns a
+// readable digest of the rendered legs, recorded as the node's trace Input so the
+// run inspector shows what the fan-out was asked to do.
+func (e *Engine) runFanOutNodeSafe(ctx context.Context, node Node, input string, st State) (out, prompt string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("fan-out node %q panicked: %v", node.ID, p)
+		}
+	}()
+	legs := make([]Leg, len(node.Legs))
+	var b strings.Builder
+	for i, l := range node.Legs {
+		l.Task = render(l.Task, input, st)
+		legs[i] = l
+		fmt.Fprintf(&b, "[%d] %s: %s\n", i+1, l.Target, l.Task)
+	}
+	prompt = strings.TrimSpace(b.String())
+	fr, ok := e.runner.(FanOutRunner)
+	if !ok {
+		return "", prompt, fmt.Errorf("runner does not support fan-out agent nodes")
+	}
+	// Tag the context so the runner can attribute per-node side outputs.
+	out, err = fr.RunFanOutNode(WithNodeID(ctx, node.ID), legs)
+	return out, prompt, err
+}
+
 // runCoordinatorNodeSafe runs one coordinator node and converts a panic into an
 // error, mirroring runAgentNodeSafe: a coordinator drives detached worker
 // goroutines, so a panic in its settle path must not take down the process.
@@ -326,10 +363,18 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 		case NodeAgent:
 			e.notify("start", node, st.Steps, "")
 			prompt := render(node.Prompt, input, st)
-			useThread := g.Accumulate && !node.Fresh
+			// A fan-out node's legs run as their own subagent sessions: they never see
+			// or grow the shared thread, exactly like a Fresh node.
+			useThread := g.Accumulate && !node.Fresh && !node.IsFanOut()
 			// Prior-context length this node ran with (before it grows the thread).
 			threadLenBefore := len(st.Thread)
-			out, err := e.runAgentNodeSafe(ctx, node, prompt, st.Thread, useThread)
+			var out string
+			var err error
+			if node.IsFanOut() {
+				out, prompt, err = e.runFanOutNodeSafe(ctx, node, input, st)
+			} else {
+				out, err = e.runAgentNodeSafe(ctx, node, prompt, st.Thread, useThread)
+			}
 			if err != nil {
 				e.notifyError(node, st.Steps, err)
 				return st, fmt.Errorf("node %q (agent): %w", node.ID, err)
@@ -691,7 +736,13 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 			// as prior context — same-agent branches share the cached prefix — but a
 			// child never grows the parent thread; the join is folded once in Run.
 			useChild := g.Accumulate && !child.Fresh
-			out, err := e.runAgentNodeSafe(ctx, child, prompt, st.Thread, useChild)
+			var out string
+			var err error
+			if child.IsFanOut() {
+				out, prompt, err = e.runFanOutNodeSafe(ctx, child, input, st)
+			} else {
+				out, err = e.runAgentNodeSafe(ctx, child, prompt, st.Thread, useChild)
+			}
 			endMs := time.Now().UnixMilli()
 			if err != nil {
 				e.notifyError(child, st.Steps, err)

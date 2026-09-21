@@ -94,6 +94,17 @@ const DefaultIdleResumeMax = 1
 // Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
 const DefaultTurnIdleWatchdogMinutes = 20
 
+// run_adhoc_flow guards (see adhocflow.go). A round is one execution of a
+// parallel step; AdhocFlowMaxRounds is both the default and the ceiling for the
+// caller's max_rounds. The per-turn delegation budget stays SHARED across rounds
+// (resetting it per round would make the cap meaningless), but an ad-hoc run gets
+// a wider ceiling of DelegationMaxCalls × max_rounds, hard-capped at
+// AdhocFlowMaxDelegationCalls — the default 8 barely covers two rounds of four.
+const (
+	AdhocFlowMaxRounds          = 3
+	AdhocFlowMaxDelegationCalls = 24
+)
+
 // Default coordinator/worker guards (see internal/agent/coordination.go). They
 // bound the M2 coordination loop so a coordinator can neither fan out unbounded
 // workers nor spin forever on worker → notify → new-turn feedback.

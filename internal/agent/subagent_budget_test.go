@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -77,4 +79,80 @@ func TestDelegationBudgetSpendAndRefundAreExactInverses(t *testing.T) {
 		t.Fatal("a counterless chain position must always be allowed to spend")
 	}
 	empty.refund()
+}
+
+// TestAdhocDelegationCeiling pins the ad-hoc budget cap: DelegationMaxCalls ×
+// max_rounds, hard-capped at AdhocFlowMaxDelegationCalls, never below the
+// ordinary per-turn cap.
+func TestAdhocDelegationCeiling(t *testing.T) {
+	cases := []struct{ calls, rounds, want int }{
+		{8, 1, 8},
+		{8, 2, 16},
+		{8, 3, AdhocFlowMaxDelegationCalls}, // 24 exactly
+		{10, 3, AdhocFlowMaxDelegationCalls},
+		{50, 3, 50}, // a workspace already above the hard cap keeps its own cap
+	}
+	for _, c := range cases {
+		if got := adhocDelegationCeiling(c.calls, c.rounds); got != c.want {
+			t.Errorf("ceiling(%d calls, %d rounds) = %d, want %d", c.calls, c.rounds, got, c.want)
+		}
+	}
+}
+
+// TestAdhocCeilingHoldsUnderConcurrentLegs: legs of every round spend the SAME
+// shared counter against the widened ceiling, so however many run at once,
+// exactly `ceiling` of them get a unit — the cap is not reset per round.
+func TestAdhocCeilingHoldsUnderConcurrentLegs(t *testing.T) {
+	var n int32
+	st := delegState{depth: 0, visited: map[string]bool{}, calls: &n}
+	ceiling := adhocDelegationCeiling(DefaultMaxDelegationCalls, AdhocFlowMaxRounds)
+	ctx := withDelegationCeiling(context.Background(), ceiling)
+
+	const legs = 64
+	var granted atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < legs; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if st.spend(delegationCeiling(ctx, DefaultMaxDelegationCalls)) {
+				granted.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := int(granted.Load()); got != ceiling {
+		t.Fatalf("%d concurrent legs against a ceiling of %d: %d were granted", legs, ceiling, got)
+	}
+	if got := atomic.LoadInt32(&n); int(got) != ceiling {
+		t.Fatalf("the shared counter must stop at the ceiling; counter is %d", got)
+	}
+}
+
+// TestRunAgentHonoursAdhocCeiling: runAgent reads its cap through
+// delegationCeiling, so a turn that already spent the ordinary cap is refused on
+// the plain path but may continue inside an ad-hoc run.
+func TestRunAgentHonoursAdhocCeiling(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	tun.SetDelegationLimits(0, 2)
+	ctx := context.Background()
+	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "claude-cli"})
+
+	n := int32(2) // the ordinary cap is already spent
+	st := delegState{depth: 0, visited: map[string]bool{caller.ID: true}, calls: &n}
+	base := WithSessionID(context.WithValue(ctx, delegStateKey{}, st), "SES-nope")
+
+	_, err := rt.runAgent(base, caller, nil, false, tools.RunAgentSpec{Target: "explore", Task: "x"})
+	if err == nil || !strings.Contains(err.Error(), "budget (2 per turn) exhausted") {
+		t.Fatalf("the plain path must refuse at the ordinary cap, got %v", err)
+	}
+	widened := withDelegationCeiling(base, adhocDelegationCeiling(2, 2))
+	_, err = rt.runAgent(widened, caller, nil, false, tools.RunAgentSpec{Target: "explore", Task: "x"})
+	if err == nil || strings.Contains(err.Error(), "budget") {
+		t.Fatalf("inside an ad-hoc run the budget must admit the call (it then fails on the missing session), got %v", err)
+	}
+	if got := atomic.LoadInt32(&n); got != 2 {
+		t.Fatalf("the failed child session must refund its unit; counter is %d", got)
+	}
+	drainSpawns(t, rt)
 }

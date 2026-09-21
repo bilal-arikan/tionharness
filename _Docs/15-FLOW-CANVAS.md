@@ -1,11 +1,12 @@
 # 15 — Görsel Flow Builder (React Flow Canvas)
 
-> **Özet (2026-09-03):** Orchestration akışlarının görsel düzenleyicisi — React Flow
+> **Özet (2026-09-21):** Orchestration akışlarının görsel düzenleyicisi — React Flow
 > tabanlı sürükle-bırak node-graph canvas'ı (agent/branch/parallel/delay/transform/loop/
 > start-end/coordinator node tipleri), koşu izleme (RunView, canlı node/step streaming)
 > ve şablon galerisini kapsar. Durum: uygulanmış ve olgun, sık genişletilen bir alan
 > (en son eklenenler: accumulate/cache modu, döngü node'u, coordinator node'u ile
-> dinamik worker fan-out, koşu silme/saklama). En önemli kararlar: veri modeli
+> dinamik worker fan-out, koşu silme/saklama, `run_adhoc_flow`'un katalogda görünmeyen
+> **ephemeral** flow'ları ve `legs` taşıyan fan-out agent node'u). En önemli kararlar: veri modeli
 > `orchestration.Graph{Start,Nodes[]}` backend'de neredeyse değişmeden kalır (yalnız
 > kozmetik `X,Y`), döngüler motor tarafından bilerek desteklenir (acyclic zorunluluğu
 > yok), her koşu artık kendi oturumunda izlenir. Dayandığı dosyalar:
@@ -859,3 +860,30 @@ Not: reçete doğrulama mantığı `internal/api`'den leaf `internal/skills` pak
   bekleyen-akış süpürücüsünün 10 dakikalık döngüsünde (`sweepFlowRunRetention`)
   silinir. Canlı ağaçlar sayılmaz ve silinmez. Kod: `db.DeleteFlowRunTree`,
   `db.PruneFlowRuns` (`store_flow_gc.go`), `Runtime.DeleteFlowRun` (`flow_gc.go`).
+
+## Ephemeral (gizli) flow'lar ve fan-out agent node'u (TSK912, 2026-09-21)
+
+`run_adhoc_flow` aracı, modelin tek çağrıda gönderdiği çok turlu planı bir
+orchestration grafına derler ve koşar. Graf yalnız bellekte tutulmaz: **gizli bir
+`Flow` satırı** olarak yazılır (`Flow.Ephemeral = true`) ve `FlowRun` ona bağlanır.
+Gerekçe: `flowrun` görünümü (`loadFlowRun`) grafı `GetFlow(run.FlowID)` ile çözer;
+satır olmasa zincir çizimi sessizce bozulurdu.
+
+- **Katalogda görünmez:** `db.ListFlows` ephemeral satırları eler — flow listesi
+  (UI, `/api/flows`), `list_flows`, özetleyici ve yayınlama bu satırları hiç
+  görmez. `GetFlow` id ile çözmeye devam eder (koşu görüntüleyici, soy ağacı).
+  Alan `omitempty`'dir; mevcut flow dosyaları için göç gerekmez.
+- **Fan-out agent node'u (`Node.Legs`):** yeni node tipi değildir; bir `agent`
+  node'u ya `agentId` (bugünkü davranış, değişmedi) ya da `legs` taşır — ikisi
+  birden veya hiçbiri `Validate()`'te hata. Bacaklar motordaki
+  `FanOutRunner` kancasıyla koşar; her bacağın `task`'ı `{{last}}` /
+  `{{node.<id>}}` şablonuyla render edilir. `parallel` node'unun çocuğu da
+  olabilir. Kaydetme yolu (`ValidateFlowGraph`) fan-out node'lu grafı reddeder:
+  bacakları bağlayacak çağıran ajan yalnız `run_adhoc_flow` çağrısında vardır.
+- **Koşu görünümü:** fan-out node'u trace'te **tek** giriş, canvas/`flowrun`
+  görünümünde **tek, opak** node'dur; bacak başına node çizilmez. Bacak ayrıntısı
+  aracın döndürdüğü sonuçta ve her bacağın kendi child oturumundadır.
+- **Bilinen boşluk:** ephemeral satırlar birikir; `sweepFlowRunRetention`
+  `ListFlows` üzerinden yürüdüğünden onların koşularını budamaz.
+
+Ayrıntı: `_Docs/25-SUBAGENT-ISOLATION.md` "Çok turlu ad-hoc plan: `run_adhoc_flow`".

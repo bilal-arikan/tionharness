@@ -14,7 +14,9 @@
 > `spawn.go`, `internal/prompts/defaults/coordinator.md`. §1-§13 tek-seviyeli tasarımın
 > tarihçesidir, §14+ güncel ağaç modelini anlatır. §20: M1 fan-out'u artık **seçici
 > stratejiler** taşıyor (`majority`, `reviewer-selects`) — tek `run_subagent` çağrısı
-> kazananı kendisi döndürür, koordinatör N cevabı bağlamına alıp elemez.
+> kazananı kendisi döndürür, koordinatör N cevabı bağlamına alıp elemez. §21: M1 ile
+> M4 arasında **`run_adhoc_flow`** — çok turlu fan-out/dallanma planı tek çağrıda,
+> gizli (ephemeral) bir flow olarak motor üzerinde koşar (TSK912).
 
 > **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
 > edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
@@ -1965,3 +1967,30 @@ Koordinatör açısından iki pratik sonuç:
 - Hakem **tur bütçesine yazılır** (gerçek bir alt-ajan koşusudur) ve düşerse
   çağrı düşer — `all` gibi hepsini döndürmez. Gerekçe ve tüm tasarım kararları:
   `_Docs/25-SUBAGENT-ISOLATION.md` "Seçici stratejiler: açık tasarım kararları".
+
+## 21. `run_adhoc_flow` — çok turlu M1, motor üzerinde (TSK912, 2026-09-21)
+
+M1 (`run_subagent` + `tasks[]`) tek turdur; M4 (kayıtlı flow) önceden çizilmiş bir
+graf ister. İkisinin arasındaki boşluk — "paralel tara, sonuca göre dallan,
+gerekirse paralel düzelt" planını **o anda** kurup **tek çağrıda** koşmak —
+`run_adhoc_flow` ile kapandı.
+
+- Plan `steps[]` (`parallel` / `branch` / `end`) + `max_rounds` olarak gelir;
+  bacak şeması `run_subagent`'ın `tasks` elemanıyla aynıdır, model yeni kelime
+  öğrenmez.
+- Plan bir orchestration grafına derlenir ve **gizli (ephemeral) bir Flow
+  satırı** üzerinde normal bir `FlowRun` olarak koşar: `run_id` gerçek koşu
+  id'sidir, `get_view kind=flowrun` ile incelenir. Satır flow kataloğunda görünmez.
+- Her parallel adım motorda **tek** fan-out `agent` node'udur (`Node.Legs`) ve
+  mevcut `runAgentFanOut` yolundan geçer; tüm M1 guard'ları (derinlik, döngü,
+  `legSpec`, paylaşılan tur bütçesi) aynen geçerlidir. Bütçe turlar arasında
+  sıfırlanmaz; tavan `DelegationMaxCalls × max_rounds`, en fazla 24.
+- Sonuç **node granülerliğindedir**: bir parallel adım `steps[]`'te tek giriştir,
+  `output` bacakları özetler. `flowrun` görünümü fan-out node'unu opak tek node
+  olarak çizer.
+- M2 ile farkı: koordinatör async ve kalıcıdır, worker'lar tur sonrasında da
+  yaşar; `run_adhoc_flow` bloklayan, tur içinde biten, tamamen deterministik
+  rotalı bir plandır. Uzun/açık uçlu iş hâlâ M2'nin işidir.
+
+Tüm tasarım kararları ve kapsam dışı maddeler: `_Docs/25-SUBAGENT-ISOLATION.md`
+"Çok turlu ad-hoc plan: `run_adhoc_flow`".
