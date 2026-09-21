@@ -1,9 +1,80 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: kuyruktaki canlı yönlendirme (steer) butonunun gerçek steerability'ye bağlanması (`steerable` bayrağı `queue_update` olayında, tur sınırında tazeleniyor — `_Docs/59`, `_Docs/07`), steer ve `reviewer-selects` yollarının gerçek test kapsamına alınması (tautolojik `steerableForTurn` testi sabit tabloya çevrildi, `foldSteer()` ve hakem seçimi doğrudan test edildi — `_Docs/59`, `_Docs/25`), arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Rota: aralıksız oturumun çubuğu son etkinlik öbeğinde bitiyor (TSK942, 2026-09-22) ✅
+
+- **Belirti:** Canlı olmayan bir oturumun Rota çubuğu, gerçekte en son bir şey
+  olduğu andan çok sonrasına kadar uzuyordu. Sebep `updatedAt`: bu damga tur
+  dışındaki yazımlarda da ilerliyor (geç gelen başlık yeniden yazımı, durum
+  damgası), dolayısıyla "son etkinlik" ölçüsü olarak güvenilmez.
+- **Değişiklik (`frontend/src/features/rota/rotaLayout.ts`):** yeni
+  `lastActivityEnd(session, activity)` yardımcısı, etkinlik haritası o oturum
+  için öbek (bout) taşıyorsa son öbeğin `end` değerini döner; taşımıyorsa
+  `max(updatedAt, createdAt)`'a düşer. Böylece etkinlik isteği henüz dönmemişken
+  ve uç noktanın hiç bilmediği oturumlarda kanvas eskisi gibi çizilir. Üç yol da
+  bu yardımcıdan geçiyor: `barEnd`, boşta-kalma penceresi eşiği ve `reported`
+  dönüş kenarı — geride ayrı bir `updatedAt` yolu kalmadı. Canlı oturumlar
+  değişmedi, çubukları hâlâ `now`'a kadar uzuyor.
+- **Bilinçli karar:** yardımcı tüm öbekler üzerinde `max()` almıyor, doğrudan
+  son öbeğin `end`'ini okuyor. Uç nokta öbekleri artan sırada döndürüyor
+  (`internal/trajectory/activity.go` sıralı mesaj damgalarını katlıyor) ve
+  `barSegments` de bu sıraya güveniyor; savunma amaçlı bir sıralama eklemek
+  mevcut sözleşmeyi gizlerdi.
+- **Doğrulama:** `rotaLayout.test.ts`'e 5 test (9 → 14): şişmiş `updatedAt`,
+  öbeksiz oturumda fallback, şişmiş damga yüzünden bayat sayılan şeridin
+  düşmesi (haritasız tutuluyor / haritalı düşüyor, iki yön de),
+  canlı çubuğun öbekler daha erken bitse de `now`'a gitmesi, dönüş kenarının
+  son öbeğe oturması. `scripts/test.sh full` yeşil (Go tüm paketler + vitest
+  128 dosya / 920 test), `git diff --check` boş.
+
+## Rota: zoom ref'i render sırasında değil layout effect'te aynalanıyor (TSK949, 2026-09-22) ✅
+
+- **Belirti:** `RotaPanel.tsx` `react-hooks/refs` lint hatası veriyordu —
+  `zoomRef.current = zoom` doğrudan render gövdesinde yapılıyordu.
+- **Değişiklik (`frontend/src/features/rota/RotaPanel.tsx:68-75`):** atama bir
+  `useLayoutEffect` içine taşındı.
+- **Neden ref hâlâ duruyor:** wheel dinleyicisi `preventDefault` için
+  non-passive olmak zorunda, bu yüzden boş deps ile native `addEventListener`
+  üzerinden bir kez kuruluyor (satır 108-136) ve güncel zoom'u ref'ten okuyor.
+  Closure'dan okumak, her zoom değişiminde dinleyiciyi söküp yeniden takmayı
+  gerektirirdi. `useEffect` değil `useLayoutEffect`: commit ile passive effect
+  arasına paint girebilir, hızlı iki wheel tick'i aynı bayat zoom'dan
+  hesaplanırdı.
+- **Doğrulama:** `npx eslint src/features/rota/RotaPanel.tsx` temiz,
+  `npx tsc --noEmit` çıktısız, rota vitest 14/14, `npm run format:check`
+  "All matched files". `useLayoutEffect` import'u satır 7'de doğrulandı — eksik
+  olsaydı test değil çalışma zamanı hatası olurdu.
+
+## `sessionRunInfo` nil registry'de sessizce yalan söylemiyor (TSK950 + TSK947, 2026-09-22) ✅
+
+- **Belirti:** `TestInboxScopedByWorkspace` nil-pointer panic ile düşüyordu:
+  `flushInbox`, `steerTargetRun` üzerinden `chatRuns.sessionRunInfo`'yu çağırıyor,
+  o da nil receiver üzerinde `c.mu`'yu dereference ediyordu.
+- **Kök neden test fixture'ıydı, üretim kodu değil:** `newServer`
+  (`internal/api/server.go:137`) **her zaman** `runs: newChatRuns()` kuruyor —
+  nil `s.runs` üretimde erişilebilir bir durum değil. Panic'e yol açan tek şey,
+  `workspace_session_scope_test.go`'nun `runs` alanını atlayan elle kurulmuş
+  `&Server{inbox: ...}` fixture'ıydı; kardeş fixture'ların hepsi (ör.
+  `session_teardown_test.go:31`) registry'yi veriyor.
+- **Karar — nil receiver geçerli bir durum DEĞİL:** TSK906 çağrı yerine
+  (`inbox.go`) `if s.runs != nil` koymuştu; bu, hatayı düzeltmek yerine
+  örtüyordu. `sessionRunInfo`'da `ok=false` dönmek daha da kötü olurdu: çağıran,
+  run takibi hiç yapamayan bir Server'dan "hiçbir şey çalışmıyor" cevabı okur ve
+  canlı bir tura gönderilen steer/stop sessizce hiçbir şey yapmazdı. Bunun yerine
+  metot nil receiver'da **açık mesajla panic ediyor** (hata, üç katman aşağıda
+  değil, yapıldığı yerde görünür); fixture düzeltildi ve `inbox.go`'daki örtücü
+  guard kaldırıldı.
+- **Doğrulama:** `internal/api` paketi tamamı yeşil; `scripts/test.sh full` yeşil
+  (Go tüm paketler + frontend vitest 128 dosya / 920 test). İlk full koşuda
+  görülen `TestRecoverUndeliveredSteerRequeuesChannelMessages` hatası bu
+  değişiklikle ilgisiz bir Windows `t.TempDir()` temizlik yarışıydı ("Dizin boş
+  değil"); test gövdesi geçiyor, yalnız teardown düşüyordu ve ikinci full koşuda
+  tekrar etmedi (izole `-count=3` de yeşil).
+
 ## MCP kaynakları: `list_mcp_resources` + `read_mcp_resource` (TSK909, 2026-09-22) ✅
 
 - **İhtiyaç:** MCP'nin **veri yarısı** TionHarness'te hiç yoktu. Bir sunucunun
@@ -234,35 +305,6 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   bitiriyor (sessizce ilk bacağa düşmüyor).
 - Detay: `_Docs/59-CLI-STEER-PLANI.md`, `_Docs/25-SUBAGENT-ISOLATION.md`.
 
-
-## `run_adhoc_flow` — çok turlu alt-ajan planı tek çağrıda (TSK912, 2026-09-21) ✅
-
-- **İhtiyaç:** `run_subagent`'ın `tasks[]` fan-out'u tek turdur. "Paralel tara →
-  sonuca göre dallan → gerekirse paralel düzelt" planını model her turu ayrı bir
-  çağrıyla sürmek zorundaydı.
-- **Çözüm:** `run_adhoc_flow` aracı `steps[]` (`parallel` / `branch` / `end`) +
-  `max_rounds` alır, planı orchestration grafına derler ve mevcut motorla koşar.
-  Bacak şeması `run_subagent`'ın `tasks` elemanıyla aynıdır.
-- **Motor:** yeni node tipi yok. `agent` node'u artık ya `agentId` ya da `legs`
-  taşır (ikisi birden/hiçbiri `Validate()`'te hata; mevcut graflar aynen
-  doğrulanır). `legs`'li node `orchestration.FanOutRunner` kancasından geçer; kanca
-  `internal/agent`'ta mevcut `runAgentFanOut`'u çağırır — `legSpec`, derinlik/döngü
-  guard'ları ve "tüm bacaklar düştü ⇒ hata" aynen geçerli.
-- **Gizli flow satırı:** graf `Flow{Ephemeral: true}` olarak yazılır, `FlowRun`
-  ona bağlanır (`get_view kind=flowrun`, iptal, soy ağacı değişmeden çalışır).
-  `ListFlows` ephemeral satırları eler — UI flow listesi ve `list_flows` görmez.
-- **Bütçe:** tur sayacı turlar arası paylaşılır (sıfırlanmaz); ad-hoc koşu için
-  tavan `DelegationMaxCalls × max_rounds`, sert sınır 24, normal tavanın altına
-  inmez. `max_rounds` varsayılan/üst sınır 3 (`AdhocFlowMaxRounds`).
-- **Sonuç:** `{run_id, status, steps:[{id,status,output}], final}` — node
-  granülerliği: bir parallel adım tek giriş, `output` bacakları özetler.
-  `skipped` = trace'te yok, `cancelled` = çağıran tur iptal edildi. Tüm bacakları
-  düşen tur koşuyu durdurur; kısmi hata raporlanır, akış sürer.
-- **Kapsam dışı (v1):** `loop` node, tek adımı dışarıdan iptal, ephemeral koşuyu
-  resume/replay, kataloğa terfi, CLI köprüsü.
-- Detay: `_Docs/25-SUBAGENT-ISOLATION.md`, `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §21,
-  `_Docs/15-FLOW-CANVAS.md`.
-
 ## Arşivlenen oturumun zamanlamaları susuyor (TSK870, 2026-09-22) ✅
 
 - **İhtiyaç:** Arşivlenmiş bir oturumda zamanlanmış tur çalışmaya devam
@@ -333,6 +375,34 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   istek; değişmeyince istememe).
 - Detay: `_Docs/78-ROTA-EKRANI.md` §16.
 
+## `run_adhoc_flow` — çok turlu alt-ajan planı tek çağrıda (TSK912, 2026-09-21) ✅
+
+- **İhtiyaç:** `run_subagent`'ın `tasks[]` fan-out'u tek turdur. "Paralel tara →
+  sonuca göre dallan → gerekirse paralel düzelt" planını model her turu ayrı bir
+  çağrıyla sürmek zorundaydı.
+- **Çözüm:** `run_adhoc_flow` aracı `steps[]` (`parallel` / `branch` / `end`) +
+  `max_rounds` alır, planı orchestration grafına derler ve mevcut motorla koşar.
+  Bacak şeması `run_subagent`'ın `tasks` elemanıyla aynıdır.
+- **Motor:** yeni node tipi yok. `agent` node'u artık ya `agentId` ya da `legs`
+  taşır (ikisi birden/hiçbiri `Validate()`'te hata; mevcut graflar aynen
+  doğrulanır). `legs`'li node `orchestration.FanOutRunner` kancasından geçer; kanca
+  `internal/agent`'ta mevcut `runAgentFanOut`'u çağırır — `legSpec`, derinlik/döngü
+  guard'ları ve "tüm bacaklar düştü ⇒ hata" aynen geçerli.
+- **Gizli flow satırı:** graf `Flow{Ephemeral: true}` olarak yazılır, `FlowRun`
+  ona bağlanır (`get_view kind=flowrun`, iptal, soy ağacı değişmeden çalışır).
+  `ListFlows` ephemeral satırları eler — UI flow listesi ve `list_flows` görmez.
+- **Bütçe:** tur sayacı turlar arası paylaşılır (sıfırlanmaz); ad-hoc koşu için
+  tavan `DelegationMaxCalls × max_rounds`, sert sınır 24, normal tavanın altına
+  inmez. `max_rounds` varsayılan/üst sınır 3 (`AdhocFlowMaxRounds`).
+- **Sonuç:** `{run_id, status, steps:[{id,status,output}], final}` — node
+  granülerliği: bir parallel adım tek giriş, `output` bacakları özetler.
+  `skipped` = trace'te yok, `cancelled` = çağıran tur iptal edildi. Tüm bacakları
+  düşen tur koşuyu durdurur; kısmi hata raporlanır, akış sürer.
+- **Kapsam dışı (v1):** `loop` node, tek adımı dışarıdan iptal, ephemeral koşuyu
+  resume/replay, kataloğa terfi, CLI köprüsü.
+- Detay: `_Docs/25-SUBAGENT-ISOLATION.md`, `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §21,
+  `_Docs/15-FLOW-CANVAS.md`.
+
 ## `wait_for_mcp_servers` — MCP sunucularını tur ortasında ısıtma (2026-09-21) ✅
 
 - **İhtiyaç:** MCP bağlantıları tembeldir — tur başladığında dial edilmemiş bir
@@ -382,6 +452,44 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
 - **Kapsam dışı (bilinçli):** sunucuyu etkinleştirme/yeniden başlatma aracı yok
   (bu yalnız bekler), otomatik yeniden deneme yok, UI göstergesi yok.
 - Ayrıntı: `_Docs/52-MCP-GATEWAY.md`.
+
+## Flow motoru turları kapanış bariyerinin arkasına alındı (2026-09-21) ✅
+
+- **İhtiyaç:** TSK759 kapanış bariyeri spawn/worker/inbox turlarını korurken flow
+  motoru goroutine'leri dışarıda kalmıştı (`internal/agent/flow.go`): `driveFlow`
+  her düğümden sonra workspace DB'sine yazdığı için
+  (`AppendFlowRunStateDelta`, `MarkFlowRunWaiting`, `SetFlowRunState`,
+  `FinishFlowRun`), `CloseMCP` DB'yi kapatırken sürülen bir flow turu aynı
+  "database is closed" yazımlarını üretiyordu. `spawnChildFlow` ve
+  `ResumeWaitingFlow` ayrıca `context.WithoutCancel` kullandığı için bariyerdeki
+  `cancelAllSessions()` onlara hiç ulaşmıyordu; onları bekleyebilecek tek şey
+  `spawnWG.Wait()`'ti.
+- **Çözüm:** Üç çağrı yeri `startBackgroundTurn` ile sarıldı ve her biri red
+  yolunda kendi defter kaydını **gerçekten** geri alıyor: `spawnChildFlow` zaten
+  yazılmış run satırını `FinishFlowRun(FlowFailure, "workspace shutting down")`
+  ile kapatıp çağırana `errSpawnQueueShutdown` döndürüyor (spawn düğümü asla
+  ilerlemeyecek bir çocuk id'si kaydetmesin); `ResumeWaitingFlow`
+  `prepareResume`'un CAS claim'ini `MarkFlowRunWaiting` ile geri veriyor —
+  yazılan state yeniden marshal edilen `st`, `run.State` **değil**, çünkü o
+  `ClaimWaitingFlowRun`'ın döndürdüğü enjeksiyon öncesi snapshot'tır ve
+  kullanılsa teslim edilen girdi sessizce kaybolurdu; `ResumeRunningFlows`
+  döngüye girmeden `backgroundTurnsClosing()` ile erken çıkıyor, red döngü
+  ortasında gelirse döngüden çıkıyor (geri alınacak bir şey yok — bu run'lar
+  zaten "running" kayıtlı, bir sonraki resume'un beklediği durum bu).
+- **Sweeper bilinçli olarak dışarıda:** `StartWaitingFlowSweeper` tek atımlık tur
+  değil sonsuz ticker döngüsüdür ve üretimde ctx'i `context.Background()` olduğu
+  için `Done` dalı hiç tetiklenmez; `spawnWG`'ye alınsaydı her workspace
+  kapanışını grace timeout'a (15sn) sürükleyip `logger.Error` bastırırdı. Onun
+  yerine kapanışa duyarlı erken çıkışlar kondu: her tick'in başında, ayrıca yazan
+  işleyicilerin döngü gövdelerinde — `sweepWaitingFlowsAt`'te run başına (uzun
+  bir süpürmenin ortasına kapanış düşebilir) ve `sweepFlowRunRetention`'da
+  (`flow_gc.go`) flow başına, `PruneFlowRuns` satır sildiği için.
+- **Sonuç:** `runtime_close_test.go`'ya iki regresyon testi eklendi
+  (`TestCloseMCP_WaitsForInFlightFlowDrive`,
+  `TestResumeWaitingFlow_AfterCloseReleasesClaim`); bariyer ve claim geri-alma
+  tek tek devre dışı bırakılarak ikisinin de gerçekten düştüğü doğrulandı. Ayrıntı:
+  `_Docs/58-QUEUE-SENKRON.md` "Flow motoru turları da bariyerin arkasında".
+  (TSK871)
 
 ## Çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (2026-09-21) ✅
 
@@ -441,43 +549,96 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   `CLAUDE.md` git kuralları bunu yasaklıyor. Ders: paylaşılan ağaçta `git add -A`
   yerine yalnız kendi dosyalarını yol adıyla stage et.
 
-## Flow motoru turları kapanış bariyerinin arkasına alındı (2026-09-21) ✅
+## claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesi giderildi (2026-09-21) ✅
 
-- **İhtiyaç:** TSK759 kapanış bariyeri spawn/worker/inbox turlarını korurken flow
-  motoru goroutine'leri dışarıda kalmıştı (`internal/agent/flow.go`): `driveFlow`
-  her düğümden sonra workspace DB'sine yazdığı için
-  (`AppendFlowRunStateDelta`, `MarkFlowRunWaiting`, `SetFlowRunState`,
-  `FinishFlowRun`), `CloseMCP` DB'yi kapatırken sürülen bir flow turu aynı
-  "database is closed" yazımlarını üretiyordu. `spawnChildFlow` ve
-  `ResumeWaitingFlow` ayrıca `context.WithoutCancel` kullandığı için bariyerdeki
-  `cancelAllSessions()` onlara hiç ulaşmıyordu; onları bekleyebilecek tek şey
-  `spawnWG.Wait()`'ti.
-- **Çözüm:** Üç çağrı yeri `startBackgroundTurn` ile sarıldı ve her biri red
-  yolunda kendi defter kaydını **gerçekten** geri alıyor: `spawnChildFlow` zaten
-  yazılmış run satırını `FinishFlowRun(FlowFailure, "workspace shutting down")`
-  ile kapatıp çağırana `errSpawnQueueShutdown` döndürüyor (spawn düğümü asla
-  ilerlemeyecek bir çocuk id'si kaydetmesin); `ResumeWaitingFlow`
-  `prepareResume`'un CAS claim'ini `MarkFlowRunWaiting` ile geri veriyor —
-  yazılan state yeniden marshal edilen `st`, `run.State` **değil**, çünkü o
-  `ClaimWaitingFlowRun`'ın döndürdüğü enjeksiyon öncesi snapshot'tır ve
-  kullanılsa teslim edilen girdi sessizce kaybolurdu; `ResumeRunningFlows`
-  döngüye girmeden `backgroundTurnsClosing()` ile erken çıkıyor, red döngü
-  ortasında gelirse döngüden çıkıyor (geri alınacak bir şey yok — bu run'lar
-  zaten "running" kayıtlı, bir sonraki resume'un beklediği durum bu).
-- **Sweeper bilinçli olarak dışarıda:** `StartWaitingFlowSweeper` tek atımlık tur
-  değil sonsuz ticker döngüsüdür ve üretimde ctx'i `context.Background()` olduğu
-  için `Done` dalı hiç tetiklenmez; `spawnWG`'ye alınsaydı her workspace
-  kapanışını grace timeout'a (15sn) sürükleyip `logger.Error` bastırırdı. Onun
-  yerine kapanışa duyarlı erken çıkışlar kondu: her tick'in başında, ayrıca yazan
-  işleyicilerin döngü gövdelerinde — `sweepWaitingFlowsAt`'te run başına (uzun
-  bir süpürmenin ortasına kapanış düşebilir) ve `sweepFlowRunRetention`'da
-  (`flow_gc.go`) flow başına, `PruneFlowRuns` satır sildiği için.
-- **Sonuç:** `runtime_close_test.go`'ya iki regresyon testi eklendi
-  (`TestCloseMCP_WaitsForInFlightFlowDrive`,
-  `TestResumeWaitingFlow_AfterCloseReleasesClaim`); bariyer ve claim geri-alma
-  tek tek devre dışı bırakılarak ikisinin de gerçekten düştüğü doğrulandı. Ayrıntı:
-  `_Docs/58-QUEUE-SENKRON.md` "Flow motoru turları da bariyerin arkasında".
-  (TSK871)
+- **Belirti (canlı, 2026-09-21):** WS5'te PM ajanı (AGT199) 5 paralel `explore` subagent
+  başlattı; yalnız ilki (SES3288) hemen koştu, diğer 4'ü config'lerini yazıp ~2 dk bekledi
+  ve ilki bitince 23:05:21.965–23:05:22.551 arasında ~200 ms arayla tek tek başladı.
+  `run_subagent` çağrısı `4m11.781s` sürdü (gerçek paralellikte ~2m15s). Aynı gün WS1'de
+  SES682'nin turu, SES681'in turu bitene kadar ~55 sn bekledi. HTTP katmanı etkilenmedi
+  (`/api/version` ~1 ms); yalnız claude-cli turları sıraya girdi.
+- **Kök neden:** `CLISessionPool.Turn` her turda önce `EvictIdle` çağırır. `EvictIdle` havuz
+  kilidi `pl.mu`'yu tutarken her oturumun `s.mu`'sunu `Lock()` ile alıyordu; `CLISession.Turn`
+  ise `s.mu`'yu tur boyunca tutar. Bir oturum tur ortasındayken gelen her tur `pl.mu`'yu
+  tutarak onu bekliyor, arkadakiler `pl.mu`'da sıraya giriyordu. Havuz workspace başına tek
+  olduğundan bu fiilen workspace çapında tek bir kilitti. Hata Faz 4'ten (2026-06-29,
+  `5ad2befc`) beri vardı; paralel subagent fan-out'u görünür yaptı.
+- **Düzeltme:** `EvictIdle` artık `s.mu.TryLock()` kullanır: kilidi alınamayan oturum tur
+  ortasındadır, dolayısıyla boşta değildir ve beklenmeden atlanır. Eviction kuralı değişmedi
+  (30 dk kullanılmamış + en az bir tur). Dosya: `internal/providers/claudecli_session.go`.
+- **Testler:** `internal/providers/claudecli_session_evict_test.go` —
+  `TestCLISessionPoolTurnNotBlockedByBusySession` (A tur ortasındayken B'nin sıcak turu
+  beklemeden tamamlanır) ve `TestCLISessionPoolEvictIdleSkipsBusySession` (meşgul oturum
+  atlanır, boştaki kapatılıp çıkarılır, taze olan kalır). İkisi de düzeltmesiz HEAD'de 3 sn
+  zaman aşımıyla düştü, düzeltmeyle geçiyor; `scripts/test.sh full` temiz.
+- **Kalan:** Soğuk başlatma (`startPersistent`, süreç spawn'ı) hâlâ `pl.mu` altında; eşzamanlı
+  cold start'lar ~200 ms arayla sıralanır. Kilit dışına almak, aynı anahtar için eşzamanlı iki
+  soğuk başlatmada bir sürecin havuz dışında kalmasını (sızıntı) ele almayı gerektirir; bu
+  değişikliğe dahil edilmedi.
+- **Açık bulgu (düzeltilmedi):** Kalıcı süreç, ilk turun context'iyle başlatılıyor
+  (`startPersistent` → `proc.CommandContextNested(ctx, …)` + `proc.TreeKill`); tur bitince
+  `internal/api/chat_stream.go`'daki `defer cancel()` süreci öldürüyor. Sonraki tur
+  `cli session stream already ended: EOF` ile düşüp tek-atış `Complete`'e geçiyor
+  (2026-09-21'de SES681, SES682, SES3287'nin 2. turları).
+
+## Sistem ajanlarında toplu seçim ve toplu sağlayıcı/model düzenleme (2026-09-16) ✅
+
+- **İstek:** Ajanlar ekranındaki çoklu seçim + "Düzenle" (sağlayıcı örneği + model) akışı
+  sistem ajanlarını hiç kapsamıyordu (orada salt-okunurlar). Aynı akış artık
+  **Ayarlar ▸ Sistem Ajanları** ekranında sistem ajanları için var.
+- **Etkileşim:** Roster satırında Ctrl/Cmd+Tık ve Shift+Tık çoklu seçer (açık form satırı
+  seçime katılır), sade tık formu açar ve seçimi temizler; alttaki `SelectionBar`
+  "N seçili" + "Tümü" (Servisler ve Worker'lar birlikte) + "Düzenle" sunar. Esc seçimle birlikte
+  düzenleme panelini de kapatır.
+- **Kapsam:** Ortak `updateAgentProviderModels` / `AgentBulkEditPanel` artık bir `scope`
+  (`'agents' | 'system'`) alır: Ajanlar ekranı yine yalnız sıradan ajanları, sistem paneli
+  yalnız sistem ajanlarını yamar. Yazma yolu tekil düzenlemeyle aynı `PUT /api/agents/{id}`:
+  kilitli yerleşikte değişiklik app-global override katmanına gider (tüm workspace'ler),
+  özelleştirmede yalnız bu workspace'in override'ı pinlenir; panel açıklaması bunu söyler.
+  Yeni endpoint yok.
+- **Hata davranışı:** Toplu yazma artık `Promise.allSettled` ile **tüm** istekler bitince ilk
+  hatayı fırlatır; böylece hata sonrası roster yenilemesi uçuştaki yazmalarla yarışmaz. Kısmi
+  hatada seçim ve panel yeniden deneme için kalır, roster yenilenir; tam başarıda seçim temizlenir.
+- **Dosyalar:** `frontend/src/features/settings/SystemAgentsBulkBar.tsx` (yeni),
+  `SystemAgentsPanel.tsx`, `features/agents/agentBulkEdit.ts`, `AgentBulkEditPanel.tsx`,
+  `i18n/locales/{tr,en}/common.json` (`agents.bulkEdit.systemDescription_*`).
+- **Testler:** `SystemAgentsPanel.test.tsx` (Ctrl+Tık seçimi, toplu yazma + yenileme, kısmi hata,
+  Esc ile panel kapanması, "Tümü" yalnız sistem ajanları), `AgentBulkEditPanel.test.ts`
+  (`system` kapsamı; tüm yazmalar bitmeden reddetmeme — `Promise.all`'a geri dönen mutasyonla
+  kırıldığı doğrulandı), `i18n/catalog.test.ts` (tr/en anahtar paritesi).
+
+## zvec-grep entegrasyonu — codebase-memory paritesi (2026-09-14) ✅
+
+- **İstek:** Harici araçlara zvec-grep desteğini codebase-memory-mcp ile aynı katmanlarda
+  eklemek. Kullanıcı kararları: indeksleme codebase-memory gibi **her zaman otomatik**;
+  zvec-grep de ajan allowlist'inden **muaf** altyapı sunucusu.
+- **Ölçüm (zg 0.2.2):** `zg server --stdio` handshake'i yalnız `zvec_grep_search` yayıyor
+  (zorunlu `root`); indeks repo içinde `.zvec-grep/`; alt dizin ve `\` kökleri repo indeksine
+  çözülüyor; indeksi olmayan kök `[INDEX_MISSING]` döndürüyor; MCP `instructions` alanı
+  TionHarness tarafından modele iletilmiyor; `~/.zvec-grep` daemon durum klasörü (indeks değil).
+- **Backend:** katalog girdisi `zg` (manual update — daemon native addon kilidi);
+  `zvecGrepCapability` prompt bloğu; eksik `root` prefill; `[INDEX_MISSING]` onarımı + arka plan
+  indeksi; `EnsureZvecGrepIndexed` (git repo kökü, `.git/info/exclude`, yerel embedding modeli;
+  home / worktree / mevcut indeks atlanır); `allowlistExemptServers` artık küme;
+  `WSSettings.ZvecGrepEnabled` + DTO.
+- **Frontend:** `ZvecGrepCallout` (tek tık MCP ekle/kaldır), WorkspacePanel toggle'ı, öneri
+  kartları `zvec-add` / `zvec-enable`, paylaşılan `isZvecGrepServer` (backend kuralıyla aynı).
+- **Canlı doğrulamada bulunan:** PowerShell'den başlayan backend `zg`'yi bulamıyordu (nvm-sh bin
+  dizini yalnız Git Bash PATH'inde). `exttools.zvecGrepExe` artık `TIONHARNESS_ZG` → PATH →
+  `%APPDATA%\npm` → `~/.nvm/versions/node/v*/bin` (en yeni sürüm önce) sırasıyla çözer; otomatik
+  indeks de aynı çözücüyü kullanır.
+- **Testler:** `capabilities_zvecgrep_test.go`, `zvecgrep_index_test.go`,
+  `mcpservergate_zvecgrep_test.go`, `repair/zvecgrep_test.go`, `workspace/settings_test.go`
+  (varsayılan açık), `exttools/version_test.go` (release slug), `exttools/zvecgrep_test.go`
+  (çözücü sırası), frontend `zvecGrep.test.ts` +
+  `recommendations.test.ts`. `scripts/test.sh full` yeşil (Go tüm paketler, vitest 868, depcheck,
+  `git diff --check`).
+- **Canlı doğrulama (geçici veri klasörlü instance, PowerShell'den başlatıldı):** `zg` nvm
+  yolundan bulundu (v0.2.2); callout'taki tek tık `zvec_grep` satırını (`zg.cmd server --stdio`)
+  ekledi; ajan bağlamında "# Semantic workspace search available" bloğu ve araç kataloğunda
+  `zvec_grep__zvec_grep_search` göründü (TionHarness MCP havuzu daemon'a bağlandı); kaldır düğmesi
+  satırı sildi.
+- Ayrıntı: `_Docs/54` "zvec-grep capability".
 
 ## Hedef (Goal) modeli sadeleştirildi — doğrudan oluşturma, ölü alanlar kaldırıldı (2026-09-14) ✅
 
