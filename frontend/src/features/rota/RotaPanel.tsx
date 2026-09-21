@@ -66,7 +66,14 @@ export function RotaPanel({
   // Time-axis zoom; 1 fits the panel, above that the canvas host scrolls.
   const [zoom, setZoom] = useState(MIN_ZOOM)
   const zoomRef = useRef(zoom)
-  zoomRef.current = zoom
+  // Mirrored in a layout effect, not during render: writing a ref while
+  // rendering is impure. useLayoutEffect (not useEffect) so the wheel handler
+  // never reads a zoom that is one frame stale — a paint may land between the
+  // commit and a passive effect, and two quick wheel ticks would then both
+  // zoom from the same old value.
+  useLayoutEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
   // Scroll position to restore once the wider canvas has been laid out; set by
   // the wheel handler, applied in the layout effect below.
   const pendingScroll = useRef<number | null>(null)
