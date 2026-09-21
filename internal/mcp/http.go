@@ -48,7 +48,8 @@ type httpClient struct {
 	nextID    int
 	sessionID string // Mcp-Session-Id assigned by the server on initialize (may stay "")
 	closed    bool
-	onChange  func() // invoked (async) on notifications/tools/list_changed
+	onChange  func()                            // invoked (async) on notifications/tools/list_changed
+	onDead    func(err error, pendingCalls int) // stored for contract parity; never fired (see SetOnDisconnect)
 
 	logger     *slog.Logger
 	serverName string
@@ -79,6 +80,18 @@ func DialHTTP(ctx context.Context, url string, headers map[string]string) (*http
 func (c *httpClient) SetOnToolsChanged(fn func()) {
 	c.mu.Lock()
 	c.onChange = fn
+	c.mu.Unlock()
+}
+
+// SetOnDisconnect accepts the unexpected-death callback but never fires it.
+// Streamable HTTP is connectionless between calls: there is no persistent read
+// loop whose exit signals that the server went away, so an unreachable endpoint
+// surfaces as a per-call error instead (and the pool's transparent re-dial in
+// Call handles it). Storing the callback keeps the Client contract uniform and
+// leaves a place for an SSE-stream-death signal if that transport gains one.
+func (c *httpClient) SetOnDisconnect(fn func(err error, pendingCalls int)) {
+	c.mu.Lock()
+	c.onDead = fn
 	c.mu.Unlock()
 }
 

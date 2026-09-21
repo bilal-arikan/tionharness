@@ -352,6 +352,11 @@ type Runtime struct {
 	// Closed via CloseMCP when the workspace is torn down.
 	mcpPool *mcp.Pool
 
+	// mcpDeaths records UNEXPECTED MCP connection losses reported by the pool, so
+	// the next turn on the affected session can tell the model its tools are gone
+	// (mcpdisconnect.go). Clean shutdowns never reach it.
+	mcpDeaths *mcpDisconnectLog
+
 	// cliSessions holds long-lived claude-cli processes (one per session+agent) when
 	// the ClaudePersistentSession setting is on, so warm turns ship only the new user
 	// message. Off by default; nil-safe (recordedComplete falls back to one-shot
@@ -739,6 +744,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		skills:      skillStore,
 		market:      market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:     mcp.NewPool(),
+		mcpDeaths:   newMCPDisconnectLog(),
 		cliSessions: providers.NewCLISessionPool(),
 		workerQueue: make(map[string][]string),
 		spawnWake:   make(chan struct{}, 1),
@@ -772,6 +778,11 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// Push every admission-queue change (a turn took the slot, released it, or queued
 	// behind it) onto the bus so the API can render the session's live turn queue.
 	r.turns.Observe(r.publishTurnQueue)
+	// An MCP server that dies mid-session must not fail silently: publish the loss
+	// to the workspace stream (UI) and remember it for the affected session's next
+	// turn note (mcpdisconnect.go). Only UNEXPECTED deaths arrive here — the pool
+	// filters out every shutdown we initiated.
+	r.mcpPool.SetOnDisconnect(r.handleMCPDisconnect)
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
 	if logger != nil {

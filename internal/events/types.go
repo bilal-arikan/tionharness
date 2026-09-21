@@ -114,6 +114,13 @@ const (
 	// TypeWSAsk: a durable ask was parked outside a turn (a phase gate, Rota F5)
 	// — the API opens the card on the session hub when it sees op=open.
 	TypeWSAsk = WorkspaceStreamPrefix + "ask"
+	// TypeWSMCPStatus: a pooled MCP server connection changed state — currently
+	// only "disconnected" (an unexpected mid-session death; clean shutdowns are
+	// deliberately silent). A STATE CHANGE, not an outcome, so it is a control
+	// type and NOT in NotifyKinds: it refreshes the Tools screen's connection
+	// indicator rather than raising a toast, and no frontend notification-registry
+	// entry mirrors it. Payload is agent.MCPStatusPayload.
+	TypeWSMCPStatus = WorkspaceStreamPrefix + "mcp_status"
 )
 
 // WorkspaceStreamPrefix marks the event types that ride the per-workspace hub

@@ -24,6 +24,14 @@ import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { compareText } from '@/shared/lib/intl'
+import { subscribeWorkspaceStream } from '@/api/workspaceStream'
+import { dataOf, WorkspaceStreamKind, type MCPStatusData } from '@/api/workspaceEvents'
+import {
+  applyDisconnect,
+  clearRecovered,
+  dismissDisconnect,
+  type MCPDisconnectNotice,
+} from './mcpDisconnects'
 
 // The MCP pool snapshot has no SSE signal, so this interval IS the update path —
 // but it only drives an indicator, so it stays coarse and visibility-gated.
@@ -137,6 +145,33 @@ export function useToolsPanelState(
     loadPoolStats()
   }, [loadPoolStats])
   useVisiblePoll(loadPoolStats, POOL_STATS_POLL_MS, [loadPoolStats])
+
+  // Mid-session disconnects (ws:mcp_status). The poll above only samples state
+  // every few seconds and cannot explain WHY a connection went away; the stream
+  // carries the reason and the stranded-call count, and arrives immediately.
+  // Only unexpected deaths are emitted — a clean shutdown never lands here.
+  const [disconnects, setDisconnects] = useState<MCPDisconnectNotice[]>([])
+  const dismissDisconnectNotice = useCallback((server: string) => {
+    setDisconnects((cur) => dismissDisconnect(cur, server))
+  }, [])
+  useEffect(() => {
+    return subscribeWorkspaceStream({
+      onEvent: (ev) => {
+        const data = dataOf<MCPStatusData>(ev, WorkspaceStreamKind.MCPStatus)
+        if (!data) return
+        setDisconnects((cur) => applyDisconnect(cur, data))
+        // The indicator badge is derived from the pool snapshot, so refresh it
+        // now instead of leaving it stale until the next poll tick.
+        loadPoolStats()
+      },
+    })
+  }, [loadPoolStats])
+  // A server the pool reports live again has recovered (Pool.Call re-dials
+  // transparently), so its notice must not linger.
+  useEffect(() => {
+    if (!poolStats) return
+    setDisconnects((cur) => clearRecovered(cur, poolStats.servers))
+  }, [poolStats])
 
   // Servers configured in OTHER workspaces, offered for one-click copy here.
   const [importable, setImportable] = useState<ImportableMCPServer[]>([])
@@ -510,6 +545,8 @@ export function useToolsPanelState(
     startEdit,
     cancelEdit: resetForm,
     poolStats,
+    disconnects,
+    dismissDisconnectNotice,
     importText,
     setImportText,
     importing,

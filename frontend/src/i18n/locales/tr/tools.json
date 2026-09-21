@@ -1,0 +1,10 @@
+{
+  "mcpDisconnect": {
+    "title": "\"{{server}}\" MCP sunucusunun bağlantısı koptu",
+    "titleScoped": "Bu oturum \"{{server}}\" MCP sunucusuyla bağlantısını kaybetti",
+    "pendingCalls_one": "Devam eden {{count}} araç çağrısı yarıda kesildi.",
+    "pendingCalls_other": "Devam eden {{count}} araç çağrısı yarıda kesildi.",
+    "hint": "Yeniden bağlanana kadar araçları kullanılamaz. Sonraki araç çağrısı bağlantıyı otomatik kurar.",
+    "dismiss": "Kapat"
+  }
+}

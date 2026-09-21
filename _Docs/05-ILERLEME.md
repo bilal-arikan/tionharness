@@ -4,6 +4,56 @@
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+## MCP sunucusu tur ortasında düşerse kullanıcı ve ajan haberdar oluyor (TSK915, 2026-09-22) ✅
+
+- **İhtiyaç:** Bir MCP sunucusunun bağlantısı tur ortasında koptuğunda bunu
+  yalnız `internal/mcp/client.go` `failAll` biliyordu ve tek yaptığı log
+  yazmaktı. Tespit **pull-only**'di: kullanıcı araçların sessizce kaybolduğunu
+  görüyor, model ise az önce kullandığı aracın artık "var olmadığını"
+  sanıyordu. Kayıp ancak bir sonraki çağrı denenince anlaşılıyordu.
+- **Tespit (`internal/mcp`):** `Client` arayüzüne `SetOnDisconnect` eklendi;
+  `StdioClient.failAll` geri çağrıyı **yalnızca** mevcut `wasClosed` geçidinin
+  beklenmedik tarafında tetikliyor. Geri çağrı `closed` bayrağıyla **aynı kilit
+  altında** okunuyor — eşzamanlı bir `Close()` geçidin iki yanına birden
+  düşemiyor. Havuz tarafı yeni `internal/mcp/disconnect.go` dosyasında:
+  `Pool.SetOnDisconnect(fn)` + `ensure` içinde bağlama.
+- **Yanlış pozitif yok (kartın çekirdek şartı):** Temiz kapanışların hepsi
+  (`reapScoped` boşta toplama, `CloseSession`, config değişiminde re-dial,
+  `Pool.Close`) `Client.Close()` üzerinden geçtiği için `closed=true` okuma
+  döngüsü çözülmeden önce set ediliyor; yani kasıtlı kapanış **yapısal olarak**
+  olay üretemiyor. Her yol için ayrı test: `internal/mcp/disconnect_test.go`.
+- **Olay yükü:** `server`, `scoped`, `scopeKey`, `error`, `pendingCalls`.
+  `scoped` ayrımı bilinçli — bir oturuma ait scoped bağlantının ölümü, başka
+  oturumlar hâlâ canlı bağlantı tutarken "sunucu düştü" diye gösterilmemeli.
+- **Olay tipi kararı:** `ws:mcp_status` **control** tipi (bir durum değişimi,
+  bir sonuç değil). Bilinçli olarak `NotifyKinds` **dışında** — toast
+  çıkarmıyor, dolayısıyla frontend bildirim kaydında eşlenecek bir giriş de
+  gerekmiyor (`internal/events/types.go` §138 senkron kalıyor).
+- **Ajana not (`internal/agent/mcpdisconnect.go`):** Ölümler
+  `mcpDisconnectLog`'a yazılıyor; native döngü her yinelemenin başında
+  `foldMCPDisconnects()` ile (aynen `foldSteer` gibi) notu konuşmaya ekliyor.
+  Dedupe `take()`'in kendisi: rapor edilen kayıt siliniyor → **sunucu başına
+  turda en fazla bir kez**. Not, araçların **turun geri kalanında**
+  kullanılamaz olduğunu açıkça söylüyor (katalog tur ortasında yeniden
+  kurulmuyor). Shared bağlantı ölümü her oturuma, scoped ölüm yalnız sahibi
+  oturuma gidiyor; `disconnectNoteTTL` (10 dk) sonrası bayat kayıt düşürülüyor.
+- **UI:** Araçlar ekranında `MCPDisconnectNotices` kartı (sebep + yarıda kalan
+  çağrı sayısı), `ws:mcp_status` aboneliği ve havuz anlık görüntüsünün anında
+  tazelenmesi. Sunucu yeniden canlı görülünce kart kendiliğinden kalkıyor
+  (`clearRecovered`) — `Pool.Call` zaten şeffaf re-dial yapıyor. i18n `en`/`tr`
+  (`src/i18n/locales/*/tools.json`).
+- **Kapsam (açıkça):** Yalnız **native** araç döngüsü. `claude-cli` ve
+  `codex-cli` kendi MCP istemcilerini CLI süreci içinde açar; TionHarness o
+  bağlantıları hiç tutmaz, dolayısıyla ölümlerini gözlemleyemez.
+- **Kapsam dışı:** Otomatik yeniden bağlanma döngüsü (bounded retry + eşli
+  "recovered" olayı) bu kartta uygulanmadı — `Pool.Call` zaten bir sonraki
+  kullanımda şeffaf re-dial ettiği için kurtarma yolu mevcut; arka plan retry
+  ayrı bir iş.
+- **Test:** `internal/mcp/disconnect_test.go` (temiz yolların sessizliği +
+  scoped/shared ayrımı), `internal/agent/mcpdisconnect_test.go` (dedupe, oturum
+  kapsamı, TTL, not metni), `frontend/src/features/tools/mcpDisconnects.test.ts`.
+- Detay: `_Docs/52-MCP-GATEWAY.md`.
+
 ## Kuyruktaki steer butonu gerçek steerability'ye bağlandı (2026-09-22) ✅
 
 - **İhtiyaç:** `PendingTray`'deki "canlı yönlendir" butonu her zaman aktifti.

@@ -1,0 +1,10 @@
+{
+  "mcpDisconnect": {
+    "title": "MCP server \"{{server}}\" disconnected",
+    "titleScoped": "This session lost its connection to MCP server \"{{server}}\"",
+    "pendingCalls_one": "{{count}} in-flight tool call was interrupted.",
+    "pendingCalls_other": "{{count}} in-flight tool calls were interrupted.",
+    "hint": "Its tools are unavailable until it reconnects. The next tool call re-dials automatically.",
+    "dismiss": "Dismiss"
+  }
+}

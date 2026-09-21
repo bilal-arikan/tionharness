@@ -49,6 +49,11 @@ type Client interface {
 	// tools/list change. Transports without a server→client channel may never
 	// fire it; that is fine — the pool's TTL still refreshes.
 	SetOnToolsChanged(fn func())
+	// SetOnDisconnect registers a callback fired when the connection dies
+	// UNEXPECTEDLY (server process exited, pipe broke), never on our own Close.
+	// pendingCalls is how many in-flight calls the death stranded. Transports
+	// with no live connection to lose may never fire it.
+	SetOnDisconnect(fn func(err error, pendingCalls int))
 	// SetLogger attaches an optional logger (and owning server name) for
 	// connection-lifecycle / decode-noise diagnostics. Nil-safe.
 	SetLogger(l *slog.Logger, server string)
@@ -112,6 +117,9 @@ type StdioClient struct {
 	pending  map[int]chan reply
 	closed   bool
 	onChange func() // invoked (async) on notifications/tools/list_changed
+	// onDead is invoked (async) exactly once, from failAll, when the read loop
+	// exits WITHOUT a preceding Close() — i.e. the server really died.
+	onDead func(err error, pendingCalls int)
 
 	logger     *slog.Logger // optional: read-loop death / decode noise (nil-safe)
 	serverName string       // server label attached to logs (set with the logger)
@@ -206,6 +214,17 @@ func (c *StdioClient) SetOnToolsChanged(fn func()) {
 	c.mu.Unlock()
 }
 
+// SetOnDisconnect registers the unexpected-death callback. It fires at most once
+// per client, from failAll, and only when the read loop exited without our own
+// Close() having run first — see failAll's wasClosed gate. Registering after the
+// connection has already died does NOT replay the event: the pool wires this
+// immediately after dialing, while the client is still live.
+func (c *StdioClient) SetOnDisconnect(fn func(err error, pendingCalls int)) {
+	c.mu.Lock()
+	c.onDead = fn
+	c.mu.Unlock()
+}
+
 // Alive reports whether the connection is still usable (read loop running and
 // not closed).
 func (c *StdioClient) Alive() bool {
@@ -272,6 +291,9 @@ func (c *StdioClient) failAll(err error) {
 	c.closed = true
 	pend := c.pending
 	c.pending = map[int]chan reply{}
+	// Read the callback under the SAME lock that flips closed: a Close() racing
+	// this read loop must land on one side of the gate, never both.
+	onDead := c.onDead
 	c.mu.Unlock()
 	// A read-loop exit we did NOT initiate means the server process died or its
 	// pipe broke mid-session — surface why, and how many calls were stranded.
@@ -282,6 +304,11 @@ func (c *StdioClient) failAll(err error) {
 			level = slog.LevelInfo
 		}
 		c.log(level, "mcp client: read loop exited (connection lost)", "error", err.Error(), "pending", len(pend))
+		// Notify the pool in its own goroutine: the callback ends up publishing an
+		// event and must never block the read loop's teardown of pending calls.
+		if onDead != nil {
+			go onDead(err, len(pend))
+		}
 	}
 	for _, ch := range pend {
 		ch <- reply{err: fmt.Errorf("mcp read: %w", err)}

@@ -623,6 +623,11 @@ func (t *toolLoopTurn) runNativeLoop() (*providers.Response, []TurnStep, error) 
 		// iteration into the conversation before the next model call.
 		if !t.pendingProgrammatic {
 			t.foldSteer()
+			// An MCP server that died since the last iteration takes its tools with
+			// it for the rest of this turn (the catalog is not rebuilt mid-turn).
+			// Tell the model now, once per server, instead of letting it discover
+			// the loss by calling a tool that no longer answers.
+			t.foldMCPDisconnects()
 		}
 		// Recompute the shipped tool schemas for this step: eager tools plus any
 		// lazy tools activated so far (native-search mode: full deferred catalog,

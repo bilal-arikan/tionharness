@@ -29,6 +29,7 @@ export const WorkspaceStreamKind = {
   Report: 'report',
   Liveness: 'liveness',
   Coordination: 'coordination',
+  MCPStatus: 'mcp_status',
 } as const
 
 // ws:spawn — a coordinator spawned a worker (agent.SpawnEvent).
@@ -142,6 +143,26 @@ export interface AutomationFireData {
   sessionId?: string
   triggerSessionId?: string
   iterationCount?: number
+}
+
+// ws:mcp_status — a pooled MCP server connection changed state. Today the only
+// op is "disconnected": an UNEXPECTED mid-session death. Clean shutdowns (idle
+// reap, session close, config re-dial, pool close) deliberately emit nothing, so
+// receiving this always means a real failure.
+//
+// `scoped` distinguishes a per-(session,agent) connection from the shared
+// workspace-wide one: a scoped death affects only `sessionId`, and must NOT be
+// rendered as "the server is down" while other sessions still hold live
+// connections. Mirrors agent.MCPStatusPayload.
+export interface MCPStatusData {
+  op: 'disconnected'
+  server: string
+  scoped: boolean
+  scopeKey?: string
+  sessionId?: string
+  error?: string
+  pendingCalls: number
+  at: number
 }
 
 // Every workspace hub event carries this payload: the server's navigation

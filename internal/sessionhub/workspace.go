@@ -47,6 +47,7 @@ const (
 	KindWSLiveness         = "liveness"
 	KindWSCoordination     = "coordination"
 	KindWSAsk              = "ask"
+	KindWSMCPStatus        = "mcp_status"
 )
 
 // PublishWorkspace appends one durable event to the workspace stream and fans

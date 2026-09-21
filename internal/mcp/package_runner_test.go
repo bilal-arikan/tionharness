@@ -22,6 +22,8 @@ func (*runnerTestClient) Alive() bool                    { return true }
 func (*runnerTestClient) SetOnToolsChanged(func())       {}
 func (*runnerTestClient) SetLogger(*slog.Logger, string) {}
 
+func (*runnerTestClient) SetOnDisconnect(func(error, int)) {}
+
 func TestCatalogSerializesSamePackageAcrossScopes(t *testing.T) {
 	p := NewPool()
 	defer p.Close()

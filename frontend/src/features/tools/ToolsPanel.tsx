@@ -6,6 +6,7 @@ import { useToolsPanelState } from './useToolsPanelState'
 import { VisibilityBadge } from './VisibilityControls'
 import { ToolDetail } from './ToolDetail'
 import { ServerManagement } from './ServerManagement'
+import { MCPDisconnectNotices } from './MCPDisconnectNotices'
 
 interface Props {
   onError: (msg: string) => void
@@ -66,6 +67,8 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
     startEdit,
     cancelEdit,
     poolStats,
+    disconnects,
+    dismissDisconnectNotice,
     addServer,
     importServers,
     toggleServer,
@@ -339,44 +342,49 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
               onSetVisibility={(tier) => setToolVisibility(selected, tier)}
             />
           ) : (
-            <ServerManagement
-              servers={servers}
-              tools={tools}
-              onServerVisibility={setServerVisibility}
-              testing={testing}
-              testResult={testResult}
-              name={name}
-              setName={setName}
-              transport={transport}
-              setTransport={setTransport}
-              command={command}
-              setCommand={setCommand}
-              argsText={argsText}
-              setArgsText={setArgsText}
-              url={url}
-              setUrl={setUrl}
-              headersText={headersText}
-              setHeadersText={setHeadersText}
-              scope={scope}
-              setScope={setScope}
-              editingId={editingId}
-              onEdit={startEdit}
-              onCancelEdit={cancelEdit}
-              poolStats={poolStats}
-              onAdd={addServer}
-              onToggle={toggleServer}
-              onTest={testServer}
-              onRemove={removeServer}
-              importText={importText}
-              setImportText={setImportText}
-              importing={importing}
-              importMsg={importMsg}
-              onImport={importServers}
-              importable={importable}
-              addingImportable={addingImportable}
-              onLoadImportable={loadImportable}
-              onAddImportable={addImportable}
-            />
+            <>
+              {/* Mid-session MCP losses, above the server list: the row badge only
+                  shows that a connection is gone, not why. */}
+              <MCPDisconnectNotices notices={disconnects} onDismiss={dismissDisconnectNotice} />
+              <ServerManagement
+                servers={servers}
+                tools={tools}
+                onServerVisibility={setServerVisibility}
+                testing={testing}
+                testResult={testResult}
+                name={name}
+                setName={setName}
+                transport={transport}
+                setTransport={setTransport}
+                command={command}
+                setCommand={setCommand}
+                argsText={argsText}
+                setArgsText={setArgsText}
+                url={url}
+                setUrl={setUrl}
+                headersText={headersText}
+                setHeadersText={setHeadersText}
+                scope={scope}
+                setScope={setScope}
+                editingId={editingId}
+                onEdit={startEdit}
+                onCancelEdit={cancelEdit}
+                poolStats={poolStats}
+                onAdd={addServer}
+                onToggle={toggleServer}
+                onTest={testServer}
+                onRemove={removeServer}
+                importText={importText}
+                setImportText={setImportText}
+                importing={importing}
+                importMsg={importMsg}
+                onImport={importServers}
+                importable={importable}
+                addingImportable={addingImportable}
+                onLoadImportable={loadImportable}
+                onAddImportable={addImportable}
+              />
+            </>
           )}
         </div>
       </div>

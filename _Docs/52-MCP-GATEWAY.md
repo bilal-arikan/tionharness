@@ -12,7 +12,11 @@
 > okur, soğuk sunucu için dial beklemez (2026-09-06, `_Docs/05`). Soğuk sunucuyu tur
 > ortasında ısıtmak için `wait_for_mcp_servers` aracı vardır (2026-09-21): sunucuları
 > **paralel** dialler (`Pool.EnsureServers`), araçlarını canlı registry'ye `AppendMCP` ile
-> ekler ve aktive eder → aynı turda çağrılabilir; CLI backend'lerinde kapalıdır. Harici
+> ekler ve aktive eder → aynı turda çağrılabilir; CLI backend'lerinde kapalıdır. Tersi
+> yön de kapalı: bir bağlantı tur ortasında **beklenmedik** biçimde ölürse
+> `Pool.SetOnDisconnect` → `ws:mcp_status` olayı (UI kartı) + sunucu başına turda bir
+> kez ajana sistem notu (2026-09-22, §14). Temiz kapanışlar (reaper, `CloseSession`,
+> config re-dial, `Pool.Close`) yapısal olarak sessizdir. Harici
 > `/mcp/gateway` sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
 > dosyalar: `internal/interaction/server.go`, `internal/agent/climcp.go`,
 > `internal/providers/claudecli_session.go`.
@@ -1130,3 +1134,66 @@ slot yeniden kullanımı, scope anahtarı), `internal/agent/mcpwait_test.go`
 (aynı turda `ActiveDefs`'e girme, donmuş-epoch merge'ünden sağ çıkma, bilinmeyen
 sunucu, ölü sunucu + breaker `Note`, açık breaker baypası + `Clear`, scoped slot,
 CLI köprüsünden dışlanma), `internal/tools/registry_appendmcp_test.go`.
+
+## Tur ortasında bağlantı kopması — bildirim (TSK915, 2026-09-22)
+
+`wait_for_mcp_servers` soğuk sunucuyu **ısıtma** yönünü kapatır; bu bölüm ters
+yönü kapatır: canlı bir bağlantının tur ortasında **ölmesi**. Eskiden bunu yalnız
+`internal/mcp/client.go` `failAll` bilirdi ve tek yaptığı log yazmaktı — kullanıcı
+araçların sessizce kaybolduğunu görür, model ise az önce kullandığı aracın artık
+var olmadığını sanırdı.
+
+**Akış.** `StdioClient.failAll` → `Pool.noteDisconnect`
+(`internal/mcp/disconnect.go`) → `Runtime.handleMCPDisconnect`
+(`internal/agent/mcpdisconnect.go`) → `ws:mcp_status` olayı (UI) + `mcpDisconnectLog`
+(ajan notu).
+
+- **Yalnız beklenmedik ölüm.** Geri çağrı `failAll`'daki mevcut `wasClosed`
+  geçidinin içindedir. Havuzdaki her temiz kapanış yolu (`reapScoped` boşta
+  toplama, `CloseSession`, config değişiminde re-dial, `Pool.Close`)
+  `Client.Close()` üzerinden geçer ve `closed=true`'yu okuma döngüsü çözülmeden
+  önce set eder; yani kasıtlı kapanış **yapısal olarak** olay üretemez. Geri
+  çağrı `closed` ile aynı kilit altında okunur, böylece eşzamanlı bir `Close()`
+  geçidin iki yanına birden düşemez. Her temiz yol için ayrı test vardır
+  (`internal/mcp/disconnect_test.go`).
+- **Yük ve `scoped` ayrımı.** `DisconnectEvent`: `server`, `scoped`, `scopeKey`,
+  `error`, `pendingCalls`. Scoped bir bağlantı tek bir `(oturum, ajan)` çiftine
+  aittir; ölümü "sunucu düştü" diye **workspace geneline** yansıtılmamalıdır —
+  başka oturumlar aynı sunucuya canlı bağlantı tutuyor olabilir. `SessionID()`
+  scope anahtarından oturumu çıkarır.
+- **Olay tipi.** `ws:mcp_status` bir **control** tipidir (durum değişimi, sonuç
+  değil): sıralı/replay edilebilir workspace akışına biner, `NotifyKinds`'a
+  **girmez**, toast çıkarmaz. Dolayısıyla frontend bildirim kaydında eşlenecek
+  bir giriş gerekmez. `op` alanı ileride bir "reconnected" durumunun ikinci bir
+  olay tipi açmadan aynı kanaldan akmasına yer bırakır.
+- **Ajan notu: sunucu başına turda bir kez.** Native döngü her yinelemenin
+  başında `foldMCPDisconnects()` çağırır (aynen `foldSteer` gibi): not hem
+  konuşmaya eklenir (model görür) hem `StepRecovery` kartı olarak yayınlanır
+  (kullanıcı görür). Dedupe ayrı bir bayrak değil, `take()`'in kendisidir —
+  rapor edilen kayıt log'dan silinir. Not, araçların **turun geri kalanında**
+  kullanılamaz olduğunu açıkça söyler; bu doğrudur, çünkü katalog tur ortasında
+  yeniden kurulmaz. Shared bağlantının ölümü her oturuma, scoped ölüm yalnız
+  sahibi oturuma gider; `disconnectNoteTTL` (10 dk) sonrası rapor edilmemiş
+  kayıt düşürülür (havuz o arada çoktan re-dial etmiş olabilir, bayat not
+  yanıltır).
+- **Kapsam: yalnız native döngü.** `claude-cli` ve `codex-cli` kendi MCP
+  istemcilerini CLI süreci içinde açar; TionHarness o bağlantıları hiç tutmaz,
+  dolayısıyla ölümlerini gözlemleyemez. O yolda kayıp yalnız ilgili CLI'ın kendi
+  araç hatası olarak görünür. HTTP taşıması da olay üretmez: Streamable HTTP
+  çağrılar arasında bağlantısızdır, kaybedilecek bir okuma döngüsü yoktur —
+  erişilemeyen uç nokta çağrı başına hata olarak yüzeye çıkar.
+- **UI.** Araçlar ekranı `ws:mcp_status`'a abone olur, kartı
+  `MCPDisconnectNotices` ile gösterir (sebep + yarıda kalan çağrı sayısı) ve
+  havuz anlık görüntüsünü hemen tazeler. Sunucu yeniden canlı göründüğünde kart
+  kendiliğinden kalkar (`clearRecovered`) — `Pool.Call` bir sonraki kullanımda
+  zaten şeffaf re-dial yapar. i18n `en`/`tr`: `src/i18n/locales/*/tools.json`.
+- **Uygulanmadı: otomatik yeniden bağlanma döngüsü.** Sınırlı retry + eşli
+  "recovered" olayı bu kartın kapsamı dışında bırakıldı. Kurtarma yolu zaten
+  vardır (`Pool.Call` şeffaf re-dial); arka plan retry ayrı bir iştir ve
+  yapıldığında `op: "reconnected"` ile aynı olay tipinden akabilir.
+
+Testler: `internal/mcp/disconnect_test.go` (beklenmedik ölümde yük, scoped/shared
+ayrımı, dört temiz yolun sessizliği, `splitEntryKey`),
+`internal/agent/mcpdisconnect_test.go` (shared/scoped oturum kapsamı, `take()`
+dedupe'u, tekrarlı ölümlerin tek kayda inmesi, TTL, not metni),
+`frontend/src/features/tools/mcpDisconnects.test.ts` (kart indirgeyicisi).

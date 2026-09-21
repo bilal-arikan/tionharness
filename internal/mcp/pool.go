@@ -77,9 +77,12 @@ type Pool struct {
 	idleTTL     time.Duration    // scoped-connection idle eviction window (0 = disabled)
 	now         func() time.Time // injectable clock for tests; nil => time.Now
 	onChange    func()           // optional: fired (async) when any server's tools change
-	logger      *slog.Logger     // optional: lifecycle logs to the in-app Logs ring buffer
-	stop        chan struct{}    // closed by Close to stop the reaper goroutine
-	stopOnce    sync.Once
+	// onDisconnect: fired (async) when a pooled connection dies UNEXPECTEDLY.
+	// Never fired for a close we initiated (see disconnect.go).
+	onDisconnect func(DisconnectEvent)
+	logger       *slog.Logger  // optional: lifecycle logs to the in-app Logs ring buffer
+	stop         chan struct{} // closed by Close to stop the reaper goroutine
+	stopOnce     sync.Once
 }
 
 type poolEntry struct {
@@ -212,6 +215,12 @@ func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (Clie
 	}
 	name := e.name
 	client.SetOnToolsChanged(func() { p.invalidate(name) })
+	// Watch for an UNEXPECTED death of this connection. Wired before the client is
+	// published to e.client so a server that dies during the very next call cannot
+	// slip through unobserved. Every close WE initiate (config re-dial just above,
+	// reapScoped, CloseSession, Pool.Close) goes through Client.Close first and is
+	// filtered out at the client's wasClosed gate, so this only fires for real deaths.
+	client.SetOnDisconnect(func(err error, pending int) { p.noteDisconnect(name, err, pending) })
 	// Hand the client the pool's logger so its read loop can report why a
 	// connection later dies (the pool only sees the symptom, not the cause).
 	p.mu.Lock()

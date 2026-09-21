@@ -16,6 +16,10 @@ type fakeClient struct {
 	mu     sync.Mutex
 	tools  []Tool
 	closed bool
+	// onDead is the pool's disconnect hook. It mirrors StdioClient: the fake
+	// fires it only from die(), never from Close(), so a test that closes the
+	// client the way the pool does cannot produce a disconnect event.
+	onDead func(err error, pendingCalls int)
 }
 
 func (c *fakeClient) ListTools(context.Context) ([]Tool, error) {
@@ -43,6 +47,29 @@ func (c *fakeClient) Close() error {
 
 func (c *fakeClient) SetOnToolsChanged(func())       {}
 func (c *fakeClient) SetLogger(*slog.Logger, string) {}
+
+func (c *fakeClient) SetOnDisconnect(fn func(err error, pendingCalls int)) {
+	c.mu.Lock()
+	c.onDead = fn
+	c.mu.Unlock()
+}
+
+// die simulates the server process dying under a live connection: the client
+// goes not-Alive and the disconnect hook fires, exactly as StdioClient.failAll
+// does for a read loop that exited without a preceding Close.
+func (c *fakeClient) die(err error, pending int) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return // already torn down by us; a real client stays quiet here too
+	}
+	c.closed = true
+	fn := c.onDead
+	c.mu.Unlock()
+	if fn != nil {
+		fn(err, pending)
+	}
+}
 
 // hangingServer is a config whose dial never answers, so it can only end at the
 // dial deadline.
