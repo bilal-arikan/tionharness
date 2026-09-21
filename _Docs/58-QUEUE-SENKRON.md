@@ -4,7 +4,9 @@
 > interaction CAS + durable send-queue + presence. Backend uçtan uca yeşil
 > (`go build`/`go vet`, **815 test / 35 paket geçti**), frontend `tsc --noEmit` +
 > `vite build` temiz. Canlı çok-pencere runtime testi kullanıcıda. Uygulama özeti
-> dosya sonunda "Uygulama durumu".
+> dosya sonunda "Uygulama durumu". Son değişiklik (2026-09-22): kuyruk tepsisi
+> dispatch edilmiş head'i (`dispatching`) artık **göstermiyor** — mesaj zaten
+> transkriptte kendi balonu olarak duruyor; kind veri modelinde kalır (bkz. "UI").
 >
 > Amaç: Sohbet akışını "owner window kendi SSE'sini stream'ler + non-owner
 > window'lar inflight snapshot + polling ile kurtarır" ikiliğinden çıkarıp,
@@ -988,10 +990,35 @@ Dışarıdan `running` okuyan üç yer artık kuyruğa soruyor: stall süpürüc
 
 ### UI
 
-Tray üç satır tipi gösterir: **Şu an** (oturumu tutan otonom tur — yalnız kullanıcının
-bekleyeni varken), **Gönderiliyor** (dispatch edilmiş, iptal edilemez; kendi balonu
-transkripte düşünce kaybolur), **Sırada #N** (iptal/öne al). Mesaj hiçbir anda
-"hiçbir yerde" değildir.
+Tray **iki** satır tipi gösterir: **Şu an** (oturumu tutan otonom tur — yalnız
+kullanıcının **görünür** bir bekleyeni varken) ve **Sırada #N** (iptal/öne al).
+
+**`dispatching` satırı gizlendi (2026-09-22).** Tray üçüncü bir satır tipi daha
+biliyordu — dispatch edilmiş head için **Gönderiliyor** — ama o mesaj sunucuya
+çoktan gitmiştir ve transkripte kullanıcının **kendi balonu** olarak düşer. Satır
+aynı mesajı, üstelik kullanıcının üzerinde hiçbir şey yapamayacağı bir biçimde
+(iptal yok, öne al yok) ikinci kez gösteriyordu. Artık `PendingTray.tsx`'te
+`hiddenInTray()` ile **yalnız render'dan** düşürülür:
+
+- Filtre boşluk kontrolünden **önce** uygulanır: tepsideki tek öğe dispatch
+  edilmiş head ise tepsi hiç çizilmez (boş bir başlık kabuğu kalmaz).
+- `#N` numaralandırması ve "Kuyruğu temizle (N)" sayacı yalnız **görünür**
+  öğeleri sayar.
+- **Şu an** satırı da görünür bir bekleyene bağlandı; yoksa dispatch edilmiş
+  head'in varlığı tek başına "başkası oturumu tutuyor" satırı açardı.
+
+`dispatching` **kind'ı veri modelinde kalır** — silinemez: `chatStreamHub.ts`
+`user_message` olayında onu temizler ve eski head'in turlar arasında tepside
+bayat kalmasını engelleyen mekanizma budur. Gizlenen yalnız görüntü katmanıdır.
+
+> **Bilinen boşluk (TSK956).** Sunucunun head'i pop etmesi (`inbox.go`: inflight
+> slotu + `flushInbox`'ın `queue_update`'i) ile `chat_turn_phases.go`'daki
+> `user_message` yayını arasında mesaj **hiçbir yerde görünmez**: kuyruktan
+> düşmüştür, transkriptte henüz balonu yoktur. Normal akışta bu pencere çok
+> kısadır; ancak tur ön-kontrolü (preflight) `persist_error` ile başarısız
+> olursa `user_message` hiç yayınlanmaz ve mesaj **görünmez kalır**. Yani
+> "mesaj hiçbir anda hiçbir yerde değildir" garantisi bu pencerede geçerli
+> değildir.
 
 ### Testler
 

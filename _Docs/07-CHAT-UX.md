@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-09-06):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
+> **Özet (2026-09-06):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -648,6 +648,28 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
     seçenekler `pickerOptions.ts` (`THINKING_OPTIONS`/`PERMISSION_OPTIONS`).
   - `SendActions.tsx` — Gönder/Durdur/Sıraya/Kes/Yönlendir buton kümesi (tur yaşam
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
+  - **Ctrl/Cmd+Enter = "kes ve hemen gönder" (2026-09-22):** Akış sürerken ve
+    composer'da metin varken bu kısayol **Kes** butonuyla **aynı** yolu koşar
+    (`actWithAttachments(onInterrupt)`) — ek dosyalar mesajla birlikte gider,
+    reddedilen bir kesme taslağı composer'da bırakır. Tur akmıyorsa normal
+    gönderimdir. Otomatik-tamamlama menüsü açıkken `Ctrl+Enter` menüyü **seçim
+    yapmadan** kapatır ve yazılan ham metni gönderir (düz `Enter` eskisi gibi
+    seçer): değiştirici tuş belirsiz olmayan bir "gönder" niyetidir, önce seçim
+    yapmak kullanıcının hiç görmediği bir metni gönderirdi. Yükleme sürerken
+    kısayol da buton da pasiftir. IME koruması (`e.nativeEvent.isComposing`)
+    artık **tüm** Enter yollarını kapsar — kompozisyon sürerken Enter adayı
+    onaylar, gönderim yollarına hiç ulaşmaz. "Kes" ipucu metni kısayolu duyurur:
+    "Turu kes ve hemen gönder (Ctrl/Cmd+Enter)".
+
+    **Sınırlar (kısayola değil, altındaki mekanizmaya ait):**
+    - **Sunucu tarafında atomik kesme yok.** `interruptTurn` iki ayrı gidiş-dönüştür:
+      önce `sessionControl stop`, sonra `sendMessage`. İkisi arasında boşalan tur
+      yuvasını kuyrukta bekleyen başka bir mesaj ya da otomatik bir tur (self-wake,
+      worker `<task-notification>`) kapabilir; bu durumda "hemen gönder" mesajı
+      onun **arkasına** düşer.
+    - **claude-cli'da soğuk başlangıç.** `stop` kalıcı süreç havuzundaki sıcak CLI
+      sürecini yıkar (`_Docs/17`), dolayısıyla kesilen turun yerine koşan tur
+      soğuk başlangıç bedelini öder.
   - **Araç müfettişi (`ToolAccessPanel.tsx` + `ToolAccessList.tsx` +
     `toolAccessGroups.ts`):** toolbar'daki 🔧 butonu seçili ajanın **şu an**
     kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: _Bağlamda_

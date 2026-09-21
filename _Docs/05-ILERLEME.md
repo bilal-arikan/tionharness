@@ -54,6 +54,44 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   Monitörler yalnız bellekte — yeniden başlatmada kayboluyor; araç açıklaması
   bunu ve at-most-once'ı söylüyor.
 
+## Composer: "kes ve hemen gönder" kısayolu + tepsideki yinelenen satırın gizlenmesi (2026-09-22) ✅
+
+- **İhtiyaç (tepsi):** Kuyruk tepsisi dispatch edilmiş head'i **Gönderiliyor**
+  satırı olarak gösteriyordu. Ama o mesaj sunucuya çoktan gitmiştir ve aynı anda
+  transkripte kullanıcının **kendi balonu** olarak düşer — yani tepsi aynı
+  mesajı, üstelik üzerinde hiçbir işlem yapılamayan (iptal yok, öne al yok) bir
+  biçimde ikinci kez gösteriyordu.
+- **Çözüm (tepsi):** `PendingTray.tsx` `hiddenInTray()` ile `dispatching`
+  öğelerini **yalnız render'dan** düşürüyor. Filtre boşluk kontrolünden **önce**
+  uygulanıyor: tepsideki tek öğe head ise tepsi hiç çizilmiyor (boş başlık
+  kabuğu kalmıyor). `#N` numaralandırması ve "Kuyruğu temizle (N)" sayacı yalnız
+  görünür öğeleri sayıyor; **Şu an** satırı da görünür bir bekleyene bağlandı.
+- **Kind veri modelinde kalıyor:** `chatStreamHub.ts` `user_message` olayında
+  `dispatching`'i temizliyor ve eski head'in turlar arasında bayat kalmasını
+  engelleyen mekanizma bu — silinemez, yalnız gizlenir.
+- **Bilinen boşluk (TSK956):** Sunucunun head'i pop etmesi (`inbox.go` inflight +
+  `flushInbox` `queue_update`'i) ile `chat_turn_phases.go`'daki `user_message`
+  yayını arasında mesaj hiçbir yerde görünmüyor; ön-kontrol `persist_error` ile
+  düşerse `user_message` hiç yayınlanmadığı için **görünmez kalıyor**.
+- **İhtiyaç (kısayol):** Akan bir turu kesip mesajı hemen göndermek yalnız
+  fareyle, "Kes" butonuna basarak yapılabiliyordu.
+- **Çözüm (kısayol):** `Composer.tsx` `onKeyDown`'da **Ctrl/Cmd+Enter**. Akış
+  sürerken ve metin varken "Kes" ile **aynı** yolu koşuyor
+  (`actWithAttachments(onInterrupt)` — ek dosyalar taşınır, reddedilen kesme
+  taslağı korur); boştayken normal gönderim. Otomatik-tamamlama menüsü açıkken
+  menüyü **seçim yapmadan** kapatıp ham metni gönderiyor (düz `Enter` eskisi gibi
+  seçiyor); yükleme sürerken pasif. IME koruması
+  (`e.nativeEvent.isComposing`) artık tüm Enter yollarını kapsıyor. "Kes" ipucu
+  kısayolu duyuruyor.
+- **Sınırlar:** Sunucu tarafında **atomik kesme yok** — `interruptTurn` iki
+  gidiş-dönüştür (`sessionControl stop`, sonra `sendMessage`); arada boşalan tur
+  yuvasını kuyruktaki başka bir mesaj ya da otomatik bir tur (self-wake, worker
+  bildirimi) kapabilir ve "hemen gönder" mesajı onun arkasına düşer. claude-cli'da
+  `stop` sıcak CLI sürecini yıktığı için kesilen turun yerine koşan tur **soğuk
+  başlangıç** öder.
+- **Test:** `PendingTray.test.tsx`, `chatStreamHub.test.ts`, `Composer.test.tsx`.
+- Detay: `_Docs/58-QUEUE-SENKRON.md`, `_Docs/07-CHAT-UX.md`.
+
 ## MCP sunucusu tur ortasında düşerse kullanıcı ve ajan haberdar oluyor (TSK915, 2026-09-22) ✅
 
 - **İhtiyaç:** Bir MCP sunucusunun bağlantısı tur ortasında koptuğunda bunu
