@@ -1,0 +1,20 @@
+# Paths the code-search indexers (codebase-memory, zvec-grep) must skip.
+#
+# These tools do NOT read .gitignore, so a directory can be invisible to git and
+# still pollute search results. Everything listed here is build output or a
+# throwaway checkout: indexing it produces a second, stale copy of real source
+# files, and a symbol search then returns two hits for one definition.
+
+# Release packaging scratch space. dist/release-test-worktree/ holds a full
+# checkout of the repo (an old internal/agent among it), so without this every
+# symbol in it matches twice.
+dist/
+
+# Build output.
+frontend/dist/
+internal/web/dist/
+website/dist/
+node_modules/
+
+# Live worktrees of other repos; each is its own project and indexed separately.
+.tionharness-worktrees/

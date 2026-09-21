@@ -353,6 +353,15 @@ type Runtime struct {
 	// means "use the constant".
 	spawnDrainGrace time.Duration
 
+	// skipLessonDispatch suppresses the post-turn hata→ders reflection. Test seam
+	// only: fixture turns almost always end in a provider error, and the real pass
+	// launches a claude-cli subprocess that writes a claude-home under the test's
+	// TempDir and holds it open past cleanup. Clearing the LessonReflect tunable
+	// instead would also unregister read_lessons/delete_lesson, which the
+	// tier-parity goldens assert on — so the setting stays on and only the
+	// dispatch is skipped. Always false in production.
+	skipLessonDispatch bool
+
 	// mcpPool holds this workspace's persistent MCP connections (one live session
 	// per enabled server). It replaces dial-per-operation: the per-turn catalog
 	// builds reuse live sessions (no gateway session churn) and a server's

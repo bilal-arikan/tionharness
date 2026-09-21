@@ -5,6 +5,71 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Tur sonrası arka plan geçişleri kapanış bariyerine alındı — Windows TempDir sızıntısı (TSK951/953/955, 2026-09-22) ✅
+
+- **Belirti:** `internal/agent` wake testleri Windows'ta kırmızıydı:
+  `TempDir RemoveAll cleanup: ... Dizin boş değil.` Üç test dönüşümlü düşüyordu
+  (`TestFireWake_DeliversAtMostOnce`, `TestDeliverWake_TargetsOriginalSession`,
+  `TestArchivedSessionRefusesAScheduledTurn`). Ölçüm: bu üç test `-count=10`
+  koşusunda **7 hata + 19 kalıntı temp dizin** üretiyordu.
+- **Kök neden:** `maybeReflectLessons` (hata→ders döngüsü) çıplak bir
+  `go func()` başlatıyordu. `context.WithoutCancel` ile tur bağlamından
+  koptuğu için `cancelAllSessions` ona ulaşamıyor, TSK759 kapanış bariyerine
+  (`startBackgroundTurn`/`spawnWG`) kayıtlı olmadığı için de `CloseMCP` onu
+  beklemiyordu. Test gövdesi dönünce goroutine hâlâ store'a yazıyordu ve
+  Windows açık handle'lı dizini silemediği için `RemoveAll` düşüyordu.
+  Aynı desen iki kardeşte daha vardı: `MaybeEvolveGoal` ve
+  `MaybeOptimizeRecipe` — ikisi de `context.Background()` ile detach olup
+  kapanmakta olan workspace DB'sine yazıyordu.
+- **Değişiklik:** üç çağrı yeri de `r.startBackgroundTurn(...)` ile sarıldı;
+  bariyer kapalıyken dönen `false` her birinde `Debug` log'uyla karşılanıyor
+  (workspace kapanıyorsa yansıtılacak bir şey zaten yok). Bu, flow motoru
+  sürüşleri için `c46134bb`'de uygulanan düzeltmenin aynısı.
+- **İkinci bulgu (asıl yavaşlık):** bariyer artık gerçekten beklediği için
+  ortaya çıktı — fixture'lar `claude-cli` sağlayıcı örneğiyle tohumlandığından
+  hatayla biten her test turu **gerçek bir claude-cli alt süreci** başlatıyor,
+  test'in TempDir'i altına `claude-home/` yazıyor ve dizini açık tutuyordu.
+  Testin ölçtüğü şey bu değil. `LessonReflect` tunable'ını kapatmak yanlış
+  çözümdü: o bayrak `read_lessons`/`delete_lesson` araçlarının kaydını da
+  geçitliyor (`toolsetup.go`) ve tier-parity golden tabloları bunu doğruluyor —
+  denendi, `TestTierParityGoldenAuto`/`ReadOnly` kırmızıya döndü. Bunun yerine
+  `Runtime.skipLessonDispatch` test dikişi eklendi (`spawnDrainGrace` ile aynı
+  kalıp): ayar açık kalıyor, yalnız arka plan sevkiyatı atlanıyor. Doğrudan
+  `rt.reflectLessons(...)` çağıran ders testleri bu bayrağa bakmadığı için
+  etkilenmedi.
+- **Doğrulama:** aynı üç test `-count=10` → yeşil, **0 kalıntı dizin**,
+  17.7 sn yerine 2.7 sn. `scripts/test.sh full` üst üste **3 kez** yeşil
+  (Go tüm paketler + vitest 128 dosya / 926 test + depcheck),
+  `git diff --check` boş.
+- **Kapsam dışı bırakılan:** `TestPendingReportSurvivesProcessRestart` tam
+  paket koşusunda ara sıra bir temp dizin bırakıyor (izole `-count=5`
+  koşusunda temiz, kalıntı yok). Farklı bir etkileşim, bu kartların kök
+  nedeni değil — ayrı kart konusu.
+
+## Depo hijyeni: indeksleyici ignore listesi + kabuk yönlendirme artıkları (TSK943/945/954, 2026-09-22) ✅
+
+- **`.cbmignore` eklendi (TSK954):** `dist/release-test-worktree/` altında
+  deponun tam bir kopyası (eski bir `internal/agent` dahil) duruyor. Git
+  tarafında zaten yok sayılıyor (`.gitignore:4` → `/dist/`, izlenen dosya: 0),
+  ama codebase-memory ve zvec-grep `.gitignore` okumadığı için her sembol
+  aramasında ikinci bir bayat eşleşme üretiyordu. Yeni `.cbmignore` `dist/`,
+  derleme çıktıları, `node_modules/` ve `.tionharness-worktrees/` girdilerini
+  kapsıyor. **Silme yapılmadı** — dizin `git worktree list`'te kayıtlı değil,
+  yani `git worktree remove` konusu değil; fiziksel silme kullanıcı onayı
+  gerektirdiği için ignore yolu tercih edildi.
+- **Kabuk yönlendirme artıkları temizlendi (TSK943):** depo kökündeki 17
+  adet kazara oluşmuş untracked dosya (`0`, `1`, `120`, `300`, `hi`, `%d)`,
+  `'0'`, `max`, `maxResume`, `maxSteps`, `maxStopPasses`, `{}`, `t.name`,
+  `~%ds`, `len(legs)`, `len(outcomes)`, `withRemoved(p`) silindi. Her biri
+  silinmeden önce tek tek doğrulandı: hepsi **0 bayt** ve **izlenmiyor**
+  (`git ls-files --error-unmatch`). `git clean` kullanılmadı — çalışma ağacı
+  paylaşımlı.
+- **TSK945 kapandı (düzeltme gerekmedi):** kartın tarif ettiği
+  `wait_for_mcp_servers` kategori/tier eksiği artık yok — dosya
+  `5705bce6` ile commit'lenmiş, `categories.go:98` ve `tierdefaults.go:109`
+  girdileri mevcut. `internal/tools` hem tam paket hem tek başına koşuda
+  yeşil; sıra-duyarlı bir kalıntı gözlenmedi.
+
 ## Rota: aralıksız oturumun çubuğu son etkinlik öbeğinde bitiyor (TSK942, 2026-09-22) ✅
 
 - **Belirti:** Canlı olmayan bir oturumun Rota çubuğu, gerçekte en son bir şey
@@ -48,6 +113,34 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   `npx tsc --noEmit` çıktısız, rota vitest 14/14, `npm run format:check`
   "All matched files". `useLayoutEffect` import'u satır 7'de doğrulandı — eksik
   olsaydı test değil çalışma zamanı hatası olurdu.
+
+## Preflight'ta ölen turun mesajı artık kaybolmuyor (TSK956, 2026-09-22) ✅
+
+- **Boşluk:** Sunucu kuyruk başını `inflight`'a alıp `queue_update` yayınlıyor,
+  ama kullanıcı balonu ancak tur preflight'ı geçip `user_message` yayınlandığında
+  görünüyor (`chat_turn_phases.go:235`). TSK916'dan sonra tepsi `dispatching`
+  satırını çizmiyor, `performSend` de iyimser balon boyamıyor — yani bu aralıkta
+  mesaj hiçbir yerde görünmüyordu.
+- **Asıl kayıp preflight hatasında:** `session_not_found`, `agent_not_found` ve
+  `persist_error` yollarında `user_message` HİÇ yayınlanmıyor. `user_message`
+  handler'ı `dispatching` öğesini düşüren tek yer olduğu için öğe modelde
+  öksüz kalıyordu; tepsi de onu bilerek çizmediğinden kullanıcının yazdığı metin
+  **hiçbir yerde** kalmıyordu (transkript yok, kuyruk yok, tepsi yok).
+- **Seçilen yol (kartın (c) seçeneği):** Tepsiye **çizilen** yeni bir `failed`
+  türü eklendi; `turn_error` gelince öksüz `dispatching` öğesi ona dönüşüyor.
+  `clientMsgId` ile eşleştiriliyor, böylece bir hata alakasız bir mesajı
+  diriltemiyor. Satır metni koruyor, turun hiç başlamadığını söylüyor ve
+  kullanıcı okuyunca kapatabiliyor. İyimser `tmp-` balonu (b şıkkı) seçilmedi:
+  Faz 3'te bilerek kaldırılmıştı ve mutlu yolu yeniden karmaşıklaştırırdı.
+- **İki yan sızıntı kapatıldı:** (1) `queue_update` tepsiyi sunucunun görüşünden
+  yeniden kuruyor ve sunucu `failed` satırını bilmiyor — bu satırlar artık
+  taşınıyor, yoksa metnin tek kopyası silinecekti. (2) `removePending` artık
+  `failed` satırını yerel olarak kapatıyor; `cancelQueued` çağırmak kuyrukta
+  olmayan bir mesaj için hata döndürüp satırı geri koyardı.
+- **Test:** `chatStreamHub.test.ts`'e dört vaka (dönüşüm, alakasız
+  `clientMsgId`'nin dokunulmazlığı, `queue_update` sonrası kalıcılık, normal
+  `turn_done`'da dönüşüm OLMAMASI) + `PendingTray.test.tsx`'e iki render/kapatma
+  vakası. `src/features/chat` 139 test yeşil, `tsc --noEmit` temiz.
 
 ## `sessionRunInfo` nil registry'de sessizce yalan söylemiyor (TSK950 + TSK947, 2026-09-22) ✅
 

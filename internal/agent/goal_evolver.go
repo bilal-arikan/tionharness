@@ -135,11 +135,16 @@ func (r *Runtime) MaybeEvolveGoal(ctx context.Context, goalID string) {
 	if trigger == "" {
 		return
 	}
-	go func() {
+	// Under the shutdown barrier: an evolver pass writes the goal and its state row,
+	// and context.Background() puts it out of cancelAllSessions' reach, so an
+	// unregistered pass writes into a closing workspace DB.
+	if !r.startBackgroundTurn(func() {
 		if _, err := r.RunGoalEvolver(context.Background(), g.ID, trigger); err != nil {
 			r.logger.Warn("evolver: pass failed", "goal", g.ID, "error", err)
 		}
-	}()
+	}) {
+		r.logger.Debug("evolver: pass skipped, workspace closing", "goal", g.ID)
+	}
 }
 
 // RunGoalEvolver runs one pass now. A manual trigger ignores cooldown and the

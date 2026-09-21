@@ -60,6 +60,12 @@ func (r *Runtime) maybeReflectLessons(ctx context.Context, sessionID string, ste
 	if r == nil || r.db == nil || !r.tun.LessonReflect() || sessionID == "" {
 		return
 	}
+	// Test fixtures suppress only the dispatch, not the setting: LessonReflect also
+	// gates read_lessons/delete_lesson registration, which the tier-parity goldens
+	// assert on. Always false in production.
+	if r.skipLessonDispatch {
+		return
+	}
 	// The stuck gate's own refusal and a user stop teach nothing.
 	if strings.Contains(turnErr, stuckGuardMarker) || turnErr == "stopped" {
 		return
@@ -71,14 +77,22 @@ func (r *Runtime) maybeReflectLessons(ctx context.Context, sessionID string, ste
 	// Detach from the turn's (possibly cancelled) context but keep its values
 	// (session id, call kind) for usage attribution and debug journaling.
 	bg := context.WithoutCancel(ctx)
-	go func() {
+	// Register with the shutdown barrier (TSK759): reflectLessons writes a lesson to
+	// the workspace store, and context.WithoutCancel means cancelAllSessions cannot
+	// reach it. Unregistered, it kept writing while the workspace DB closed under it
+	// — and in tests it outlived t.TempDir()'s RemoveAll, which Windows fails with
+	// "directory not empty". A refusal means the workspace is already closing, so
+	// there is nothing worth reflecting into.
+	if !r.startBackgroundTurn(func() {
 		defer func() {
 			if p := recover(); p != nil {
 				r.logger.Warn("lesson reflection panicked", "session", sessionID, "panic", p)
 			}
 		}()
 		r.reflectLessons(bg, sessionID, evidence, turnLevel)
-	}()
+	}) {
+		r.logger.Debug("lesson reflection skipped: workspace closing", "session", sessionID)
+	}
 }
 
 // collectLessonEvidence pulls the reflectable failures out of a turn trace:

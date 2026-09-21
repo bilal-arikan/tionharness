@@ -28,6 +28,18 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// Unit fixtures should not pay the production five-second worker batch window.
 	// Batching tests opt into a small explicit duration.
 	tun.SetCoordinatorWorkerBatchWindow(-1)
+	// Most fixture turns end in an error (no provider key), which in production
+	// fires the hata→ders reflection — a real background turn that launches a
+	// claude-cli subprocess and writes a claude-home under the fixture's TempDir.
+	// That is production behaviour under test, not the thing under test: it made
+	// every erroring test pay a provider round-trip and left the subprocess holding
+	// the temp dir open past cleanup (Windows then fails RemoveAll).
+	//
+	// The setting itself stays ON — it also gates read_lessons/delete_lesson
+	// registration (toolsetup.go), which the tier-parity golden tables expect.
+	// Only the background dispatch is suppressed, below, once the runtime exists.
+	// A lesson test that wants the real pass calls rt.reflectLessons directly,
+	// which does not consult this switch.
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	registry := providers.NewRegistry()
 	// Real boot always has at least the default claude-cli instance (it migrates
@@ -35,6 +47,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// here to match what every non-test Registry actually looks like.
 	registry.SetInstances([]providers.Instance{{ID: "claude-cli", KindID: "claude-cli"}})
 	rt := NewRuntime(database, registry, tun, workDir, filepath.Dir(workDir), nil, nil, "", "", nil, logger)
+	rt.skipLessonDispatch = true
 	// Background turns (spawn / inbox delivery / wake) run detached and keep writing
 	// to the store after the test body returns. Wait for them to drain before
 	// t.TempDir()'s RemoveAll, or cleanup races a live write ("directory not empty")

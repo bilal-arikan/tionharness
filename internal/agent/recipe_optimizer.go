@@ -133,11 +133,16 @@ func (r *Runtime) MaybeOptimizeRecipe(ctx context.Context, slug, trigger string)
 	if trigger != optimizerTriggerFail && stats.Summarized-prev.RunsSeen < optimizerMinNewRuns {
 		return
 	}
-	go func() {
+	// Under the shutdown barrier: a pass rewrites the recipe and its optimizer state,
+	// detached from the turn context, so without registration it outlives the
+	// workspace it is writing into.
+	if !r.startBackgroundTurn(func() {
 		if _, err := r.RunRecipeOptimizer(context.Background(), slug, trigger); err != nil {
 			r.logger.Warn("optimizer: pass failed", "slug", slug, "trigger", trigger, "error", err)
 		}
-	}()
+	}) {
+		r.logger.Debug("optimizer: pass skipped, workspace closing", "slug", slug)
+	}
 }
 
 // recipeStatsFor aggregates every version of a slug into one row.
