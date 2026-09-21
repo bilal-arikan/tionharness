@@ -4,7 +4,7 @@
 > tamamlandı, `go build`/`go vet`/`go test ./...` + frontend `tsc -b` yeşil.
 > Erken notlarda `12-SUBAGENT-ISOLATION.md` adıyla anılmıştı; kalıcı numara **25**.
 >
-> **Özet (2026-09-21):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
+> **Özet (2026-09-22):** `run_subagent` tek generic alt-ajan primitifidir: izole ya
 > da miras bağlam, yerleşik profil ya da mevcut ajan, bloklayan çağrı, geri dönen
 > yalnız final sonuç + artifact **referansları**. Tek çağrıdan **fan-out/fan-in**
 > (`tasks[]` + `strategy` + `max_concurrency`) destekler; stratejiler iki ailedir:
@@ -14,6 +14,10 @@
 > çakışma öncelik kuralı değil **hata**dır. Çok turlu planlar (fan-out → dallan →
 > tekrar fan-out) için `run_adhoc_flow` aynı fan-out yolunu orchestration motoru
 > üzerinde, turlar arası **paylaşılan** bütçeyle koşar (TSK912, aşağıda).
+> `reviewer-selects` 2026-09-22'de uçtan uca test altına alındı
+> (`internal/agent/subagent_reviewer_select_test.go`): hakemin seçtiği aday
+> gerçekten kazanan bacak oluyor ve var olmayan bir adayı gösteren karar çağrıyı
+> **hata** ile bitiriyor — sessizce ilk bacağa düşmüyor.
 >
 > **Not (2026-09-10):** claude-cli'da Claude Code'un **kendi** `Agent` aracı yalnız
 > salt-okuma araştırma tipleri (Explore/Plan) için menüde (`Settings.
