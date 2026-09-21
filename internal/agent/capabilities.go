@@ -28,10 +28,14 @@ import (
 // resort" — while the graph tools were absent from its tool list, so it followed
 // an instruction it could not obey and treated grep as a fallback it was told to
 // avoid. Presence is still workspace-wide; reachability is per-agent.
+// provider is the agent's provider kind. It reaches Context because the
+// load-on-demand catalog names its schema loader differently per transport
+// (`ToolSearch` on the CLI path, `tool_search` natively), and a block that
+// spells the wrong loader sends the agent at a tool that does not exist.
 type Capability struct {
 	ID      string
 	Detect  func(ctx context.Context, r *Runtime, agent db.Agent) bool
-	Context func(ctx context.Context, r *Runtime, cwd string) string
+	Context func(ctx context.Context, r *Runtime, cwd, provider string) string
 }
 
 // capabilities is the ordered registry of optional-tool probes. Append here to
@@ -49,7 +53,7 @@ func (r *Runtime) CapabilityContext(ctx context.Context, agent db.Agent, cwd str
 		if !c.Detect(ctx, r, agent) {
 			continue
 		}
-		if blk := strings.TrimSpace(c.Context(ctx, r, cwd)); blk != "" {
+		if blk := strings.TrimSpace(c.Context(ctx, r, cwd, agent.Provider)); blk != "" {
 			if b.Len() > 0 {
 				b.WriteString("\n\n")
 			}
@@ -159,7 +163,7 @@ var codebaseMemoryCapability = Capability{
 		}
 		return true
 	},
-	Context: func(ctx context.Context, r *Runtime, cwd string) string {
+	Context: func(ctx context.Context, r *Runtime, cwd, provider string) string {
 		var b strings.Builder
 		servers, err := r.db.ListEnabledMCPServers(ctx)
 		if err != nil {
@@ -170,7 +174,7 @@ var codebaseMemoryCapability = Capability{
 		if state == mcp.ServerDead {
 			return ""
 		}
-		b.WriteString(codebaseMemoryGuidance(servers, state))
+		b.WriteString(codebaseMemoryGuidance(servers, state, provider))
 		if p := projectIDForPath(cwd); p != "" {
 			b.WriteString("\nYour working directory maps to project id `" + p + "` (auto-indexed on first use). " +
 				"If a query reports the project is unknown, run list_projects to confirm the exact id.")
@@ -191,13 +195,32 @@ var codebaseMemoryCapability = Capability{
 // absent from the agent's tool list produced a direct contradiction with the
 // harness's own connection notices, and ordered the agent to prefer tools it
 // could not call — so an unverified connection now says so and names the fallback.
-func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState) string {
+//
+// The block also spells the SCHEMA-LOAD step verbatim. MCP tools default to the
+// name-only tier (tools.MCPBundleWildcard), so they are NOT directly callable:
+// a bare call fails with InputValidationError until their schema is pulled.
+// Measured over SES3320–SES3389 (43 sessions, 2705 tool calls) the graph tools
+// were called 4 times against 141 Grep/Glob calls, and every one of those 4
+// followed an explicit loader call — the block said "use its tools FIRST" while
+// omitting the one step that makes them callable, so the model took the
+// zero-friction path (Grep) instead. Naming the loader is what closes that gap.
+func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState, provider string) string {
 	server := codebaseMemoryServerName(servers)
 	if server == "" {
 		return ""
 	}
 	ns := func(tool string) string {
 		return mcp.NamespaceTool(server, tool)
+	}
+	// The loader differs by transport; see the Capability.Context comment.
+	loadStep := "load their schemas first with `tool_search(\"" + server + "\")` (or " +
+		"`activate_tools`), then call them by the exact names below"
+	if isCLIProviderKind(provider) {
+		loadStep = "load their schemas first with ONE call — " +
+			"`ToolSearch` with query `select:" + ns("search_code") + "," + ns("search_graph") + "," +
+			ns("get_code_snippet") + "` (add " + ns("query_graph") + ", " + ns("trace_path") + ", " +
+			ns("get_architecture") + ", " + ns("index_repository") + " as needed) — then call them by " +
+			"these exact names"
 	}
 	opening := "A codebase-memory MCP server is connected."
 	if state != mcp.ServerAlive {
@@ -212,7 +235,10 @@ func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState) strin
 		ns("search_graph") + " + " + ns("get_code_snippet") + " (read a definition), " +
 		ns("query_graph") + " / " + ns("trace_path") + " (relationships), " +
 		ns("get_architecture") + " (workspace-wide overview). It is faster and far " +
-		"more token-efficient. Do NOT reach for raw shell greps (PowerShell Select-String, " +
+		"more token-efficient. These tools are load-on-demand, NOT directly callable: " +
+		loadStep + ". That one extra step is expected — it is not a sign the server is " +
+		"missing, and it is cheaper than the grep sweep it replaces. " +
+		"Do NOT reach for raw shell greps (PowerShell Select-String, " +
 		"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
 		"only when the index genuinely has no answer for a query. After code changes, re-run " +
 		ns("index_repository") + " (or rely on the background watcher) so results stay fresh."

@@ -28,7 +28,7 @@ var shellEnvironmentCapability = Capability{
 		// no explanation.
 		return r.tun.ShellEnabled() && shellEnvironmentGuidance(tools.POSIXShellFlavor(), tools.POSIXShellExecutable()) != ""
 	},
-	Context: func(ctx context.Context, r *Runtime, cwd string) string {
+	Context: func(ctx context.Context, r *Runtime, cwd, provider string) string {
 		return shellEnvironmentGuidance(tools.POSIXShellFlavor(), tools.POSIXShellExecutable())
 	},
 }

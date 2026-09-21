@@ -134,7 +134,7 @@ var zvecGrepCapability = Capability{
 		}
 		return true
 	},
-	Context: func(ctx context.Context, r *Runtime, cwd string) string {
+	Context: func(ctx context.Context, r *Runtime, cwd, provider string) string {
 		if !r.ZvecGrepEnabled() {
 			return ""
 		}

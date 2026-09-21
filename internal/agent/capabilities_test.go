@@ -50,7 +50,7 @@ func TestCodebaseMemoryCommand(t *testing.T) {
 func TestCodebaseMemoryGuidance(t *testing.T) {
 	stdio := db.MCPServer{Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio, Command: `C:\Progs\codebase-memory-mcp\codebase-memory-mcp.exe`}
 
-	g := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive)
+	g := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive, "claude-cli")
 	for _, want := range []string{
 		"codebase-memory-mcp__search_code",
 		"codebase-memory-mcp__search_graph",
@@ -81,7 +81,7 @@ func TestCodebaseMemoryGuidance(t *testing.T) {
 	// Unverified (pool never dialed it — e.g. the claude-cli provider owns the
 	// tool loop): the hint stays, but it must not claim a connection and must
 	// name the fallback, so it cannot contradict the harness's own notices.
-	u := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerUnknown)
+	u := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerUnknown, "claude-cli")
 	if strings.Contains(u, "MCP server is connected.") {
 		t.Errorf("unverified state must not assert the connection\n%s", u)
 	}
@@ -92,8 +92,43 @@ func TestCodebaseMemoryGuidance(t *testing.T) {
 	}
 
 	// No server -> no hint at all (the capability block vanishes).
-	if got := codebaseMemoryGuidance(nil, mcp.ServerAlive); got != "" {
+	if got := codebaseMemoryGuidance(nil, mcp.ServerAlive, "claude-cli"); got != "" {
 		t.Errorf("expected empty guidance when no codebase-memory server, got %q", got)
+	}
+}
+
+// The graph tools sit in the name-only tier, so a bare call fails until their
+// schema is pulled. Over SES3320-SES3389 they were called 4 times against 141
+// Grep/Glob calls, and all 4 followed an explicit loader call — omitting the
+// load step is what made the cheaper-looking grep win. The block must therefore
+// name the loader VERBATIM, and name the right one per transport: the catalog
+// exposes `ToolSearch` on the CLI path and `tool_search` natively.
+func TestCodebaseMemoryGuidanceNamesSchemaLoadStep(t *testing.T) {
+	stdio := db.MCPServer{Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio, Command: `C:\Progs\codebase-memory-mcp\codebase-memory-mcp.exe`}
+
+	cli := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive, "claude-cli")
+	for _, want := range []string{
+		"load-on-demand",
+		"ToolSearch",
+		"select:codebase-memory-mcp__search_code,codebase-memory-mcp__search_graph",
+	} {
+		if !strings.Contains(cli, want) {
+			t.Errorf("cli guidance missing %q\n%s", want, cli)
+		}
+	}
+	// The native loader name must not leak onto the CLI path: `tool_search` is not
+	// callable there, and sending the agent at a non-existent tool is the same
+	// class of bug as the bare-tool-name guess this block already guards against.
+	if strings.Contains(cli, "tool_search(") {
+		t.Errorf("cli guidance must not name the native loader\n%s", cli)
+	}
+
+	native := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive, "anthropic")
+	if !strings.Contains(native, `tool_search("codebase-memory-mcp")`) {
+		t.Errorf("native guidance missing the native loader call\n%s", native)
+	}
+	if strings.Contains(native, "ToolSearch") {
+		t.Errorf("native guidance must not name the CLI loader\n%s", native)
 	}
 }
 
