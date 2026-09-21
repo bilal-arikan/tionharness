@@ -81,6 +81,13 @@ type sessionInfoResp struct {
 	SizeBytes int64  `json:"sizeBytes"`
 	FileCount int    `json:"fileCount"`
 
+	// InstructionFile names the working-directory instruction file the turn's
+	// prompt points at (CLAUDE.md, else AGENTS.md), empty when the directory has
+	// neither — so the panel can show WHICH conventions file the agent was told
+	// about. Omitted rather than sent empty: the UI renders the row only when a
+	// file was actually found.
+	InstructionFile string `json:"instructionFile,omitempty"`
+
 	ContextTokens   int  `json:"contextTokens"`
 	ContextWindow   int  `json:"contextWindow"` // compaction threshold (effective window)
 	HasSummary      bool `json:"hasSummary"`
@@ -265,6 +272,23 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		resp.Path = dir
 		resp.SizeBytes, resp.FileCount = dirSize(dir)
 	}
+
+	// Which instruction file the turn's working-directory block names. Resolved
+	// from the same cwd composeTurnRequest uses (session override, else workspace
+	// default). A probe failure is reported as an error summary instead of being
+	// read as "no instruction file": the panel must not claim a broken directory
+	// is simply a repo without conventions.
+	cwd := strings.TrimSpace(session.WorkingDir)
+	if cwd == "" {
+		cwd = wsp.Runtime.WorkspaceDefaultDir()
+	}
+	instructionFile, err := agent.ResolveInstructionFile(cwd)
+	if err != nil && resp.ErrorSummary == "" {
+		// Never clobber a real turn error from applyExecutionObservability above:
+		// a failed step is the more actionable signal.
+		resp.ErrorSummary = "workdir_unreadable"
+	}
+	resp.InstructionFile = instructionFile
 
 	// Pending window = messages not yet folded into the summary (what is actually
 	// sent to the model). Mirrors handleSessionContext.

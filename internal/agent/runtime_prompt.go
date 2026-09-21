@@ -221,10 +221,11 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		// caching for every headless run.
 		return strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
 	}
-	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
-	// store (guarded once per cwd per process; no-op without a cwd or an enabled
-	// codebase-memory server). Outside the builder — it must run on frozen turns too.
+	// Best-effort: ensure the session's repo is indexed by codebase-memory and by
+	// zvec-grep (each guarded once per repo per process; no-op without a cwd or the
+	// matching enabled server). Outside the builder — it must run on frozen turns too.
 	r.EnsureCodebaseIndexed(ctx, cwd)
+	r.EnsureZvecGrepIndexed(ctx, cwd)
 	// Serve through the prompt epoch (frozen snapshot) keyed to this session, so a
 	// headless run's prefix is as drift-proof as a chat turn's. Headless sessions
 	// are single-agent (multiAgent=false); drift is surfaced by the dynamic suffix
@@ -336,6 +337,13 @@ func (r *Runtime) workdirConfineBlock(ctx context.Context, confined bool) string
 			"you may also use absolute paths.\n\n")
 	}
 	b.WriteString("- Path: `" + dir + "`\n")
+	// Instruction-file pointer, at parity with the chat path. This matters MOST
+	// here: claude-cli and codex-cli load the project file natively, so for them
+	// the line is only a nudge — the native Go tool loop is the one backend that
+	// loads nothing, and a headless worker running it would otherwise never learn
+	// the repo has conventions to follow. Named, never inlined (see
+	// ResolveInstructionFile).
+	b.WriteString(InstructionFilePromptLine(dir))
 	return strings.TrimSpace(b.String())
 }
 

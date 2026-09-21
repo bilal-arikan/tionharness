@@ -330,7 +330,20 @@ func (r *Runtime) spawnChildFlow(ctx context.Context, flowID, input string, auto
 	}
 	r.emitFlowRunEvent(run)
 	childCtx := context.WithValue(WithCallKind(ctx, KindFlow), subflowDepthKey{}, depth+1)
-	go r.driveFlow(context.WithoutCancel(childCtx), run, g, input, orchestration.NewState(g), autonomous, nil)
+	if !r.startBackgroundTurn(func() {
+		r.driveFlow(context.WithoutCancel(childCtx), run, g, input, orchestration.NewState(g), autonomous, nil)
+	}) {
+		// Nothing was launched, and the run row above is already persisted as running.
+		// Leaving it there would strand a run nobody will ever drive, so fail it
+		// explicitly and report to the caller: the spawn node must see the error
+		// rather than record a child id that never progresses.
+		if ferr := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "workspace shutting down"); ferr != nil {
+			r.logger.Warn("spawn child flow: fail run during shutdown", "run", run.ID, "error", ferr)
+		} else if failed, gerr := r.db.GetFlowRun(ctx, run.ID); gerr == nil {
+			r.emitFlowRunEvent(failed)
+		}
+		return "", errSpawnQueueShutdown
+	}
 	return run.ID, nil
 }
 
@@ -352,6 +365,13 @@ func awaitTimeoutExceeded(timeoutSec int, updatedAt, now int64) bool {
 // It doubles as the host for the running-counter drift check (see
 // runCounterCheckEvery): that check needs a slow, always-on tick and this
 // sweeper already has one, so it costs no extra goroutine or timer.
+//
+// This goroutine is deliberately NOT registered with startBackgroundTurn. It is
+// an endless ticker loop, not a single turn, and its ctx is context.Background()
+// in production (workspace manager), so its Done branch never fires — inside the
+// shutdown barrier it would block spawnWG.Wait() until the grace expires on every
+// single workspace close. Instead each tick checks the barrier and returns early,
+// which is what actually matters: no sweeper write ever lands on a closing store.
 func (r *Runtime) StartWaitingFlowSweeper(ctx context.Context) {
 	go func() {
 		t := time.NewTicker(waitingSweepInterval)
@@ -362,6 +382,9 @@ func (r *Runtime) StartWaitingFlowSweeper(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				if r.backgroundTurnsClosing() {
+					return
+				}
 				r.sweepWaitingFlowsAt(ctx, time.Now().Unix())
 				ticks++
 				if ticks%runCounterCheckEvery == 0 {
@@ -403,6 +426,11 @@ func (r *Runtime) sweepWaitingFlowsAt(ctx context.Context, now int64) {
 		return
 	}
 	for _, run := range runs {
+		// Re-checked per run, not just once per tick: a workspace close can land in
+		// the middle of a long sweep, and the claim+finish pair below writes.
+		if r.backgroundTurnsClosing() {
+			return
+		}
 		flow, err := r.db.GetFlow(ctx, run.FlowID)
 		if err != nil {
 			continue
@@ -446,7 +474,27 @@ func (r *Runtime) ResumeWaitingFlow(ctx context.Context, runID, input string) (d
 	if err != nil {
 		return run, err
 	}
-	go r.driveFlow(context.WithoutCancel(ctx), run, g, run.Input, st, false, nil)
+	if !r.startBackgroundTurn(func() {
+		r.driveFlow(context.WithoutCancel(ctx), run, g, run.Input, st, false, nil)
+	}) {
+		// prepareResume already CAS-claimed the run (waiting→running) and persisted the
+		// delivered input. Nothing will drive it now, so give the claim back:
+		// MarkFlowRunWaiting is the exact inverse. It is handed the freshly marshalled
+		// `st` — NOT run.State, which is the pre-injection snapshot ClaimWaitingFlowRun
+		// returned — so the delivered input survives and the next resume picks up where
+		// this one left off instead of finding a run wedged in "running" forever.
+		state, merr := json.Marshal(st)
+		if merr != nil {
+			return run, fmt.Errorf("marshal state to release resume claim: %w", merr)
+		}
+		if merr := r.db.MarkFlowRunWaiting(ctx, run.ID, string(state)); merr != nil {
+			r.logger.Warn("resume waiting flow: release claim during shutdown", "run", run.ID, "error", merr)
+		} else if waiting, gerr := r.db.GetFlowRun(ctx, run.ID); gerr == nil {
+			run = waiting
+			r.emitFlowRunEvent(waiting)
+		}
+		return run, errSpawnQueueShutdown
+	}
 	return run, nil
 }
 
@@ -944,6 +992,12 @@ func finalFlowAgentID(flow db.Flow, run db.FlowRun) string {
 // ResumeRunningFlows continues any flow runs left in the running state (e.g.
 // after a crash/restart) from their persisted state — the restart-safe path.
 func (r *Runtime) ResumeRunningFlows(ctx context.Context) {
+	// Cheap pre-check: if the barrier is already shut, every drive below would be
+	// refused, so don't even list (let alone write failure rows for) the runs.
+	if r.backgroundTurnsClosing() {
+		r.logger.Warn("resume running flows skipped: workspace shutting down")
+		return
+	}
 	runs, err := r.db.ListRunningFlowRuns(ctx)
 	if err != nil {
 		r.logger.Warn("list running flow runs failed", "error", err)
@@ -979,6 +1033,14 @@ func (r *Runtime) ResumeRunningFlows(ctx context.Context) {
 			continue
 		}
 		r.logger.Info("resuming flow run", "run", run.ID, "from", st.Current)
-		go r.driveFlow(ctx, run, g, run.Input, st, true, nil)
+		if !r.startBackgroundTurn(func() {
+			r.driveFlow(ctx, run, g, run.Input, st, true, nil)
+		}) {
+			// The barrier shut mid-sweep. Every remaining run would be refused too, so
+			// stop here. Nothing to undo: these runs are already persisted as running,
+			// which is exactly the state the next ResumeRunningFlows expects to find.
+			r.logger.Warn("resume running flows halted: workspace shutting down", "run", run.ID)
+			return
+		}
 	}
 }

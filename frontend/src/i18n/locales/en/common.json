@@ -47,6 +47,8 @@
       "description_other": "Provider instance and model will be changed for {{count}} selected agents.",
       "error": "Agents could not be updated.",
       "saving": "Saving…",
+      "systemDescription_one": "Provider instance and model will be changed for {{count}} selected system agent. A change to a built-in applies to every workspace; a change to a customisation applies to this workspace only.",
+      "systemDescription_other": "Provider instance and model will be changed for {{count}} selected system agents. Changes to built-ins apply to every workspace; changes to customisations apply to this workspace only.",
       "title": "Bulk edit provider and model"
     }
   },
@@ -99,5 +101,8 @@
     "tabs": {
       "logs": "Logs"
     }
+  },
+  "session": {
+    "instructionFile": "Instruction file"
   }
 }

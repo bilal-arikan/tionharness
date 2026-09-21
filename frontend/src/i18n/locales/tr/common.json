@@ -47,6 +47,8 @@
       "description_other": "Seçili {{count}} ajanın sağlayıcı örneği ve modeli değiştirilecek.",
       "error": "Ajanlar güncellenemedi.",
       "saving": "Kaydediliyor…",
+      "systemDescription_one": "Seçili {{count}} sistem ajanının sağlayıcı örneği ve modeli değiştirilecek. Yerleşik ajandaki değişiklik tüm workspace'lerde, özelleştirmedeki yalnız bu workspace'te geçerli olur.",
+      "systemDescription_other": "Seçili {{count}} sistem ajanının sağlayıcı örneği ve modeli değiştirilecek. Yerleşik ajanlardaki değişiklik tüm workspace'lerde, özelleştirmelerdeki yalnız bu workspace'te geçerli olur.",
       "title": "Toplu sağlayıcı ve model düzenleme"
     }
   },
@@ -99,5 +101,8 @@
     "tabs": {
       "logs": "Loglar"
     }
+  },
+  "session": {
+    "instructionFile": "Talimat dosyası"
   }
 }

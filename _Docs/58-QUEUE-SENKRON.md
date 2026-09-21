@@ -776,6 +776,42 @@ hiçbir şey başlatılmaz ve çağıran kendi kaydını (slot, session kaydı, 
 geri alır. Test: `internal/agent/runtime_close_test.go`; üretim gecikmesini
 beklememek için `spawnDrainGrace` test dikişi var.
 
+### Flow motoru turları da bariyerin arkasında (2026-09-21, TSK871)
+
+TSK759 spawn/worker/inbox turlarını kapattı ama **flow motoru** goroutine'leri
+dışarıda kalmıştı: `driveFlow` her düğümden sonra workspace DB'sine yazar
+(`AppendFlowRunStateDelta`, `MarkFlowRunWaiting`, `SetFlowRunState`,
+`FinishFlowRun`), yani kapanış sırasında sürülen bir flow turu aynı "database is
+closed" yazımlarını üretiyordu. Üç çağrı yeri (`internal/agent/flow.go`) artık
+`startBackgroundTurn` kullanıyor ve **red yolunu gerçekten ele alıyor**:
+
+- `spawnChildFlow`: run satırı bariyer sorulmadan önce oluşturulmuş oluyor, bu
+  yüzden red durumunda run `FinishFlowRun(FlowFailure, "workspace shutting
+  down")` ile kapatılır ve çağırana `errSpawnQueueShutdown` döner — spawn düğümü
+  asla ilerlemeyen bir çocuk id'si kaydetmesin.
+- `ResumeWaitingFlow`: `prepareResume` run'ı CAS ile claim etmiştir
+  (waiting→running). Red durumunda claim `MarkFlowRunWaiting` ile geri verilir;
+  yazılan state **yeniden marshal edilen `st`**'dir, `run.State` değil (o
+  `ClaimWaitingFlowRun`'ın döndürdüğü enjeksiyon öncesi snapshot'tır), böylece
+  teslim edilen girdi kaybolmaz ve run kalıcı olarak "running" kalmaz.
+- `ResumeRunningFlows`: döngüye girmeden `backgroundTurnsClosing()` ile erken
+  çıkar; red döngü ortasında gelirse geri kalanlar da reddedileceği için döngüden
+  çıkılır. Geri alınacak bir şey yoktur — bu run'lar zaten "running" olarak
+  kayıtlıdır, bir sonraki `ResumeRunningFlows`'un beklediği durum tam olarak bu.
+
+`StartWaitingFlowSweeper` bilinçli olarak bariyere **kaydedilmedi**: o tek atımlık
+bir tur değil, sonsuz ticker döngüsüdür ve üretimde ctx'i `context.Background()`
+olduğu için `Done` dalı hiç tetiklenmez — `spawnWG`'ye alınsaydı her workspace
+kapanışını grace timeout'a (15sn) sürükleyip `logger.Error` bastırırdı. Onun
+yerine kapanışa duyarlı erken çıkışlar kondu: her tick'in başında, ayrıca yazan
+tick işleyicilerinin döngü gövdelerinde (`sweepWaitingFlowsAt`'te run başına —
+uzun bir süpürmenin ortasına kapanış düşebilir; `sweepFlowRunRetention`'da
+(`flow_gc.go`) flow başına, `PruneFlowRuns` satır sildiği için).
+
+Testler (`runtime_close_test.go`): `TestCloseMCP_WaitsForInFlightFlowDrive` ve
+`TestResumeWaitingFlow_AfterCloseReleasesClaim`. İkisi de bariyer/geri-alma
+kaldırıldığında düşmeleri elle doğrulanarak yük taşıdıkları kanıtlandı.
+
 ## Slash komutları hub'a taşındı (durable, 2026-08-04)
 
 `/compact` (+ `/refresh-context`, `/tools`, `/board`, `/flows`) event-sourcing

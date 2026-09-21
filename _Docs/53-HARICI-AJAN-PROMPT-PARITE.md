@@ -47,7 +47,7 @@ suffix'ine (cache breakpoint'ten sonra). İkisi de cache'li prefix'i sabit tutar
 | the external agent project bloğu | TionHarness | Mekanizma |
 |---|---|---|
 | Date/Time | **VAR** | `dateTimeContextBlock()` (saniye hassas, tur başında sabit) |
-| Working Directory | **VAR (daha zengin)** | `workdirContextBlock()`: cwd + git branch + CLAUDE.md; + env marker |
+| Working Directory | **VAR (daha zengin)** | `workdirContextBlock()`: cwd + git branch + talimat dosyası (`CLAUDE.md` önce, `AGENTS.md` fallback — `agent.ResolveInstructionFile`, yalnız ad, içerik inline DEĞİL); + env marker. Headless turlar `workdirConfineBlock()` ile aynı probe'u alır — native Go araç döngüsü talimat dosyasını natively yüklemeyen tek backend olduğu için asıl ihtiyaç orada. Detay: [26-CALISMA-DIZINI.md](26-CALISMA-DIZINI.md) |
 | Session State (`<session_state>`) | **EKLENDİ** | `sessionStateBlock()`: sessionId + permissionMode (read-only/ask/auto) + workspace id/isim/path |
 | Source State (`<sources>`) | **YOK** | MCP tool kataloğu karşılıyor; ayrı durum bloğu ~tekrar |
 | Workspace Capabilities | **YOK** | Runtime içi bilgi; düşük değer |

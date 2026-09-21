@@ -1,6 +1,6 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
-> **Özet (2026-09-03):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
+> **Özet (2026-09-21):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
 > çalışma dizinini (`Session.WorkingDir`) seçebilmesini sağlayan mekanik (the external agent project
 > ilhamlı) — Composer'daki klasör rozeti, workspace varsayılan dizini, spawn/handoff
 > seeding'i ve otonom turlar için `autonomousConfine` freni. Durum: uygulanmış ve
@@ -9,9 +9,13 @@
 > confined bir turda bile shell ile sandbox dışına yazılabilir; bu bilinçli olarak
 > "belgelenmiş, kısıtlanmamış" bırakılmıştır (statik komut ayrıştırması güvenilir
 > değil). Ayrıca Windows'a özgü NT/device-namespace yol kaçışları (`\\?\`, ADS)
-> ayrıca reddedilir. Dayandığı dosyalar: `internal/agent/workdir_ctx.go`,
-> `internal/api/workdir_context.go`, `internal/tools/sandbox.go`,
-> `internal/tools/builtin_shell.go`, `internal/tools/builtin_shell_harden.go`.
+> ayrıca reddedilir. Talimat dosyası çözümlemesi (2026-09-21) **`CLAUDE.md` önce,
+> `AGENTS.md` fallback**: yalnız dosyanın ADI prompta yazılır (içerik asla inline
+> edilmez — CLI'lar zaten natively yüklüyor) ve headless turlar da aynı probe'u
+> alır. Dayandığı dosyalar: `internal/agent/workdir_ctx.go`,
+> `internal/agent/instructionfile.go`, `internal/api/workdir_context.go`,
+> `internal/tools/sandbox.go`, `internal/tools/builtin_shell.go`,
+> `internal/tools/builtin_shell_harden.go`.
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
 > mekaniğinin TionHarness'e uyarlaması.
@@ -35,7 +39,7 @@ graph LR
     B --> C[effectiveWorkDir ctx]
     C --> D[fs/shell sandbox kökü]
     C --> E[claude-cli req.WorkDir]
-    B --> F[Context bloğu:<br/>cwd + git branch + CLAUDE.md]
+    B --> F[Context bloğu:<br/>cwd + git branch + CLAUDE.md/AGENTS.md]
 ```
 
 ### 1. Veri
@@ -53,8 +57,33 @@ graph LR
 ### 3. Bağlam enjeksiyonu (`internal/api/workdir_context.go`)
 - `workdirContextBlock(dir)` — sistem promptunun dinamik (cache-dışı) kısmına
   "Working directory" bloğu ekler: cwd yolu + git branch (`git rev-parse
-  --abbrev-ref HEAD`) + `CLAUDE.md` varsa onu okuma hatırlatması.
+  --abbrev-ref HEAD`) + bulunan talimat dosyasını okuma hatırlatması.
 - `composeTurnRequest` (chat_turn.go) bu bloğu goal'dan hemen sonra ekler.
+
+#### Talimat dosyası çözümlemesi (`internal/agent/instructionfile.go`)
+
+`ResolveInstructionFile(dir)` sıralı aday listesini `os.Stat` ile yoklar:
+**`CLAUDE.md` önce, `AGENTS.md` fallback**. İkisi de varsa CLAUDE.md kazanır ve
+AGENTS.md prompt'ta hiç anılmaz; hiçbiri yoksa satır tamamen atlanır.
+
+- **Dosya içeriği ASLA inline edilmez**, yalnız adı yazılır. claude-cli ve
+  codex-cli proje dosyasını zaten natively yüklüyor; inline etmek aynı baytları
+  iki kez göndermek olurdu.
+- `os.Stat` hatası `fs.ErrNotExist` dışındaysa **yutulmaz**: `ResolveInstructionFile`
+  hatayı döndürür. Prompt kurucularının hata kanalı olmadığı için
+  `InstructionFilePromptLine` bunu ajana görünür bir satıra çevirir ("Could not
+  probe…") — "bu depoda talimat dosyası yok" ile "dizin okunamadı" karıştırılmaz.
+- **Büyük/küçük harf duyarlılığı dosya sisteminindir**, bu fonksiyonun değil:
+  Windows'ta (ve macOS'un varsayılan APFS'inde) diskteki `claude.md` `CLAUDE.md`
+  stat'ını karşılar, Linux'ta karşılamaz. Bu davranışa güvenme.
+- **Headless parite:** `workdirConfineBlock` (`internal/agent/runtime_prompt.go`)
+  aynı probe'u kullanır. Asıl ihtiyaç oradadır — talimat dosyasını natively
+  yüklemeyen tek backend native Go araç döngüsüdür.
+- Kapsam dışı (bilinçli): `@import` çözümlemesi, üst dizin yürüyüşü, kullanıcı
+  home talimat dosyaları.
+- Oturum bilgisi: bulunan ad `GET /api/sessions/{id}` yanıtında
+  `instructionFile` (omitempty) olarak döner; panel satırı yalnız dosya
+  bulunduğunda render eder.
 
 ### 4. UX (`frontend`)
 - `components/chat/WorkDirBadge.tsx` — Composer'da klasör rozeti (Thinking/Permission
@@ -170,7 +199,7 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 ## the external agent project ile fark
 
 - **Eşit:** oturum-başına cwd, klasör rozeti, cwd değiştirme, git branch göstergesi,
-  CLAUDE.md farkındalığı, makine geneli erişim.
+  talimat dosyası (CLAUDE.md/AGENTS.md) farkındalığı, makine geneli erişim.
 - **TionHarness'e özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
   the external agent project interaktif olduğu için buna ihtiyaç duymaz.
 

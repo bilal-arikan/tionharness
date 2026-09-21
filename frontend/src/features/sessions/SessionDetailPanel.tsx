@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Trash2,
   Archive,
@@ -74,6 +75,7 @@ export function SessionDetailPanel({
   onRerun,
   onOpenDebug,
 }: Props) {
+  const { t } = useTranslation()
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
   // is on the LEFT edge and the drag direction is inverted (drag left = wider).
   const { width, startDrag } = useResizableSidebar({
@@ -465,6 +467,12 @@ export function SessionDetailPanel({
                 value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`}
               />
               <Row label="Mesaj sayısı" value={String(info.messageCount)} />
+              {/* Only rendered when the working directory actually has one — an
+                  absent row means "no instruction file", which is the honest
+                  reading of an omitted field. */}
+              {info.instructionFile && (
+                <Row label={t('session.instructionFile')} value={info.instructionFile} />
+              )}
             </Section>
 
             {(info.executionType === 'subagent' || info.category === 'subagent') && (

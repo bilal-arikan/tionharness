@@ -418,6 +418,11 @@ export interface SessionInfo {
   sizeBytes: number
   fileCount: number
 
+  // The working-directory instruction file the turn's prompt points the agent at
+  // (CLAUDE.md, else AGENTS.md). Absent when the directory has neither, so the
+  // panel renders the row only when a file was actually found.
+  instructionFile?: string
+
   contextTokens: number
   contextWindow: number
   hasSummary: boolean

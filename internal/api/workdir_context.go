@@ -2,11 +2,10 @@ package api
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
@@ -35,10 +34,11 @@ func gitBranch(dir string) string {
 
 // workdirContextBlock renders the agent's working directory (cwd) as a
 // system-prompt section, mirroring the external agent project: it tells the agent where its
-// file/shell tools operate, the git branch when the dir is a repo, and whether a
-// CLAUDE.md is present (so it knows to read project conventions). Returns "" when
-// dir is empty. Kept in the dynamic (uncached) suffix because the branch can
-// change mid-session.
+// file/shell tools operate, the git branch when the dir is a repo, and whether an
+// instruction file is present (so it knows to read project conventions). The file
+// is NAMED, not inlined: CLAUDE.md first, AGENTS.md as the fallback — see
+// agent.ResolveInstructionFile. Returns "" when dir is empty. Kept in the dynamic
+// (uncached) suffix because the branch can change mid-session.
 func workdirContextBlock(dir string) string {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
@@ -51,8 +51,6 @@ func workdirContextBlock(dir string) string {
 	if br := gitBranch(dir); br != "" {
 		b.WriteString("- Git branch: `" + br + "`\n")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
-		b.WriteString("- A `CLAUDE.md` is present — read it for project structure, conventions and build/test commands.\n")
-	}
+	b.WriteString(agent.InstructionFilePromptLine(dir))
 	return strings.TrimSpace(b.String())
 }

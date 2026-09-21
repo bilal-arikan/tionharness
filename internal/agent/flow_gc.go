@@ -71,6 +71,11 @@ func (r *Runtime) sweepFlowRunRetention(ctx context.Context) int {
 	}
 	total := 0
 	for _, f := range flows {
+		// PruneFlowRuns deletes rows, so stop the moment the workspace starts closing
+		// rather than pruning into a store that is about to be shut.
+		if r.backgroundTurnsClosing() {
+			return total
+		}
 		ids, perr := r.db.PruneFlowRuns(ctx, f.ID, keep)
 		if perr != nil {
 			r.logger.Warn("flow run retention: prune failed", "flow", f.ID, "error", perr)
