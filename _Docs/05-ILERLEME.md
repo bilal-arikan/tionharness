@@ -5,6 +5,27 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## `dist/release-test-worktree/` bayat kopyası silindi — arama sonuçlarının kirlenmesi (TSK954, 2026-09-22) ✅
+
+- **Belirti:** `dist/release-test-worktree/` altında 27 Ağustos'tan kalma tam
+  bir depo kopyası duruyordu; içindeki eski `internal/agent` ağacı hem
+  codebase-memory hem zvec-grep sonuçlarına karışıyor, bir sembolün "iki yerde"
+  görünmesine yol açıyordu.
+- **Doğrulama (silmeden önce):** `git worktree list` bu dizini listelemiyor —
+  içinde bir `.git` dosyası olmasına rağmen **kayıtlı worktree değil**, prune
+  edilmiş bir kalıntı. `git ls-files dist` boş, yani hiçbir dosyası izlenmiyor.
+- **Değişiklik:** dizin kullanıcı onayıyla `rm -rf` ile kaldırıldı; paylaşımlı
+  ağaç kuralı gereği `git clean` kullanılmadı. Ardından `git worktree prune`
+  koşuldu — kayıt listesi değişmedi, iki geçerli worktree (main +
+  `TionHarness-decider`) yerinde. `git status` artık `dist` ile ilgili hiçbir
+  satır üretmiyor.
+- **Kalıcı koruma:** `.gitignore` `dist/`'i zaten kapsıyordu ama
+  codebase-memory `.gitignore` okumadığı için bir `.cbmignore` girişi eklendi;
+  dizin ileride yeniden oluşursa indeks yine kirlenmez.
+- **Açık kalan:** codebase-memory indeksi hâlâ silinmiş dosyaların kayıtlarını
+  taşıyor. Temizlenmesi `index_repository`'nin yeniden koşmasını gerektiriyor;
+  indeksleme açık izin istediği için bu adım yapılmadı.
+
 ## Tur sonrası arka plan geçişleri kapanış bariyerine alındı — Windows TempDir sızıntısı (TSK951/953/955, 2026-09-22) ✅
 
 - **Belirti:** `internal/agent` wake testleri Windows'ta kırmızıydı:
@@ -113,6 +134,55 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   `npx tsc --noEmit` çıktısız, rota vitest 14/14, `npm run format:check`
   "All matched files". `useLayoutEffect` import'u satır 7'de doğrulandı — eksik
   olsaydı test değil çalışma zamanı hatası olurdu.
+
+## Composer'da "Yönlendir" düğmesi önceden pasifleşiyor (TSK948, 2026-09-22) ✅
+
+- **Boşluk:** `queue_update` zaten `steerable` yayınlıyor (TSK906) ve
+  `PendingTray`'in "şimdi yönlendir" eylemi buna bağlı. Composer'ın kendi
+  "Yönlendir" düğmesi ise yalnız metin varlığına bakıyordu — steer sınırı
+  olmayan bir turda (claude-cli auto/read-only, her codex-cli turu) düğme aktif
+  kalıyor, kullanıcı ancak sunucunun `unsupported` cevabıyla öğreniyordu: mesaj
+  gönderilmiş ve sessizce normal tur olarak sıraya alınmış oluyordu.
+- **Yapılan:** ChatView'ın tepsiye zaten geçirdiği `activeSteerable`, aynı yoldan
+  `Composer` → `SendActions`'a indirildi. Düğme gizlenmiyor, **gerekçesiyle
+  pasif** gösteriliyor (tepsiyle aynı desen): turlar gelip giderken düğmenin
+  belirip kaybolmaması için, ve gerekçe kullanıcının yapabileceği bir şeyi
+  söylüyor (ajanı "ask" moduna al).
+- **Test:** `Composer.test.tsx`'e üç vaka — steerable'da aktif, değilken pasif +
+  gerekçeli başlık + tıklamanın `onSteer` çağırmaması, ve boş composer'da
+  düğmenin hiç render edilmemesi (akış üçlüsü yerine "Durdur" çıkıyor).
+
+## Atomik interrupt: "kes ve hemen gönder" artık sırayı kaptırmıyor (TSK957, 2026-09-22) ✅
+
+- **Yarış:** Ctrl/Cmd+Enter ve "Kes" düğmesi `interruptTurn`'ü **iki ayrı tur**
+  olarak koşuyordu: `sessionControl(stop)`, sonra `sendMessage`. İkisi arasında
+  oturumun tur yuvası boşta ve bu yuvayı isteyen tek kişi kullanıcı değil —
+  kuyruktaki başka bir mesaj ya da otonom bir tur (worker bildirimi, self-wake,
+  zamanlama) `claimRuntimeTurn` ile kapabiliyor. Interrupt mesajı böylece tam da
+  önüne geçmek istediği turdan **sonra** çalışıyordu. Bu pencereyi istemci
+  tarafında sıralamayla kapatmak mümkün değil; yalnız iki yarıyı da tutan sunucu
+  kapatabilir.
+- **Yapılan:** Oturum kontrol uç noktasına `action:"interrupt"` eklendi
+  (`internal/api/inbox_interrupt.go`). **Sıra önemli ve bilinçli:** mesaj önce
+  kuyruğun BAŞINA yazılıyor, tur ondan sonra durduruluyor. Tersi aynı boşluğu
+  yeniden açardı — boşalmış yuva + boş kuyruk, rakip turun ihtiyacı olan şeyin
+  ta kendisi.
+- **Baş'a ekleme de atomik:** `enqueueMessageAtHead` tek kilit tutuşunda ekliyor;
+  mevcut `enqueueMessageFront` (ekle-sonra-öne-al) yapı gereği "best effort" ve
+  iki adımı arasında kuyruk işçisi dispatch edebiliyor.
+- **Tur ayarları korunuyor:** interrupt mesajı normal bir tura dönüştüğü için
+  `agentIds`, `thinkingLevel`, `permissionMode`, `attachments`, `clientMsgId`
+  hepsi taşınıyor. Taşınmasaydı tur sessizce düşürülürdü (yanlış ajan, kaybolan
+  ekler, kullanıcının seçimi yerine ajanın varsayılanı). Çalışan tur bulunamaması
+  hata sayılmıyor: tur kendiliğinden bitmiş olabilir, mesaj yine de sıraya girer.
+- **Ortak hale getirildi:** stop mantığı `stopSessionTurn`'e çıkarıldı; `stop` ve
+  `interrupt` otonom tur durumunu artık birebir aynı kapsıyor.
+- **Test:** Go tarafında dört vaka (bekleyen kuyruğun önüne geçme, 8 eşzamanlı
+  enqueue altında baş konumu + kayıp/çift olmaması, `clientMsgId` ile
+  idempotanlık, tur ayarlarının taşınması) — eşzamanlılık testi kuyruk işçisini
+  `closing` mandalıyla donduruyor, yoksa dispatch hızını ölçerdi. Frontend'de
+  `chatStreamInterrupt.test.ts` dört vaka; kritik olanı **tek istek** atıldığını
+  ve `sessionControl`/`enqueueMessage`'ın hiç çağrılmadığını pinliyor.
 
 ## Preflight'ta ölen turun mesajı artık kaybolmuyor (TSK956, 2026-09-22) ✅
 

@@ -5,9 +5,11 @@
 # throwaway checkout: indexing it produces a second, stale copy of real source
 # files, and a symbol search then returns two hits for one definition.
 
-# Release packaging scratch space. dist/release-test-worktree/ holds a full
-# checkout of the repo (an old internal/agent among it), so without this every
-# symbol in it matches twice.
+# Release packaging scratch space. The release test harness checks the whole
+# repo out under dist/release-test-worktree/, so an old copy of internal/agent
+# can reappear here at any time and make every symbol in it match twice. One
+# such stale checkout was removed by hand in TSK954; this entry keeps the next
+# one out of the index.
 dist/
 
 # Build output.
