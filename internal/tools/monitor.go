@@ -96,11 +96,31 @@ type monitorEntry struct {
 	pending   []MonitorEvent // matches waiting for the cooldown to elapse
 }
 
+// monitorSnapshot is a lock-free, read-only copy of a monitorEntry for reporting.
+// It exists so the entry's mutex is never copied along with its fields.
+type monitorSnapshot struct {
+	id        string
+	src       MonitorSource
+	pattern   *regexp.Regexp
+	cooldown  time.Duration
+	maxFires  int
+	createdAt time.Time
+	state     monitorState
+	reason    string
+	seen      int
+	matched   int
+	delivered int
+	dropped   int
+	lastMatch time.Time
+	lastFire  time.Time
+	lastErr   string
+}
+
 // snapshot copies the mutable fields under the lock for reporting.
-func (e *monitorEntry) snapshot() monitorEntry {
+func (e *monitorEntry) snapshot() monitorSnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return monitorEntry{
+	return monitorSnapshot{
 		id: e.id, src: e.src, pattern: e.pattern, cooldown: e.cooldown,
 		maxFires: e.maxFires, createdAt: e.createdAt,
 		state: e.state, reason: e.reason, seen: e.seen, matched: e.matched,
@@ -370,7 +390,7 @@ func (m *MonitorManager) List() string {
 	if len(entries) == 0 {
 		return "(no monitors)"
 	}
-	snaps := make([]monitorEntry, 0, len(entries))
+	snaps := make([]monitorSnapshot, 0, len(entries))
 	for _, e := range entries {
 		snaps = append(snaps, e.snapshot())
 	}
