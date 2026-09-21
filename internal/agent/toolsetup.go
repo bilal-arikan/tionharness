@@ -164,6 +164,37 @@ func (r *Runtime) shellMgrFor(sessionID string) *tools.ShellManager {
 	return v.(*tools.ShellManager)
 }
 
+// monitorMgrFor returns the monitor manager for a session, creating it on first
+// use and binding it to that session's wake channel. An empty session id
+// (catalog/preview builds with no session on ctx) yields nil, which disables the
+// monitor tool for that build — a monitor with nowhere to wake into is useless.
+//
+// agentID is the agent a match wakes; it is captured at creation time, so the
+// monitor keeps waking the agent that armed it even if another agent later
+// responds in the same session.
+func (r *Runtime) monitorMgrFor(sessionID, agentID string) *tools.MonitorManager {
+	if sessionID == "" {
+		return nil
+	}
+	v, _ := r.monitorMgrs.LoadOrStore(sessionID, tools.NewMonitorManager(
+		func(ctx context.Context, prompt, reason string) (string, error) {
+			return r.WakeNow(ctx, sessionID, agentID, prompt, reason)
+		}))
+	return v.(*tools.MonitorManager)
+}
+
+// SessionMonitorManagers returns the monitor and background-shell managers for a
+// session, creating them on first use — the accessor the claude-cli bridge needs,
+// since a bridged turn builds no native registry of its own. A monitor armed here
+// wakes agentID. Both are nil when shell execution is disabled for the workspace
+// or the session id is empty.
+func (r *Runtime) SessionMonitorManagers(sessionID, agentID string) (*tools.MonitorManager, *tools.ShellManager) {
+	if !r.tun.ShellEnabled() {
+		return nil, nil
+	}
+	return r.monitorMgrFor(sessionID, agentID), r.shellMgrFor(sessionID)
+}
+
 // buildRegistry assembles the tool registry for an agent: built-in tools plus
 // the catalog of every enabled MCP server in the workspace. cfgByServer maps
 // sanitized server names back to their configs for dispatch.
@@ -435,6 +466,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				// One control tool (action=output/kill/list) polls and reaps the
 				// detached processes started with run_in_background.
 				builtins = append(builtins, tools.NewShellManageTool(shellMgr))
+				// monitor is the PUSH counterpart of shell_manage's polling: it watches a
+				// background shell for a pattern and wakes the agent on a match, so a long
+				// wait costs no turns at all. Registered alongside, on the same manager.
+				builtins = append(builtins, tools.NewMonitorTool(
+					r.monitorMgrFor(SessionIDFrom(ctx), agent.ID), shellMgr))
 			}
 			builtins = append(builtins, tools.NewTransformDataTool(sb))
 		}

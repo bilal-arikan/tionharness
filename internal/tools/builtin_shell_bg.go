@@ -56,18 +56,33 @@ func (w *bgWriter) Write(p []byte) (int, error) {
 // process out-ran the reader), so the caller can warn the model.
 func (w *bgWriter) drain() (out string, lost bool) {
 	w.mu.Lock()
+	from := w.delivered
+	w.mu.Unlock()
+	out, next, lost := w.drainFrom(from)
+	w.mu.Lock()
+	w.delivered = next
+	w.mu.Unlock()
+	return out, lost
+}
+
+// drainFrom reads the output from absolute byte position cursor and returns the
+// position to read from next, WITHOUT touching w.delivered. It gives a second
+// reader (a monitor) its own independent cursor, so polling for a match neither
+// consumes nor hides output that shell_manage (action=output) has yet to deliver.
+// lost is true when the requested start had already rolled off the ring.
+func (w *bgWriter) drainFrom(cursor int64) (out string, next int64, lost bool) {
+	w.mu.Lock()
 	defer w.mu.Unlock()
 	bufStart := w.total - int64(len(w.buf)) // absolute position of buf[0]
-	from := w.delivered
+	from := cursor
 	if from < bufStart {
 		from = bufStart
 		lost = true
 	}
-	w.delivered = w.total
 	if from >= w.total {
-		return "", lost
+		return "", w.total, lost
 	}
-	return string(w.buf[from-bufStart:]), lost
+	return string(w.buf[from-bufStart:]), w.total, lost
 }
 
 // bgProc is one tracked background shell process.
@@ -95,6 +110,14 @@ func (p *bgProc) isDone() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.done
+}
+
+// exitStatus reports whether the process finished and, if so, its exit code —
+// the lock-safe pair for a reader outside this file (the monitor shell source).
+func (p *bgProc) exitStatus() (done bool, code int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.done, p.exitCode
 }
 
 func (p *bgProc) statusLine() string {

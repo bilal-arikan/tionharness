@@ -616,6 +616,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 				defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def())
 			}
 		}
+		// monitor rides the same shell gate: it only ever watches a background shell,
+		// so without shell execution it has nothing to observe. The def is built from a
+		// bare tool (schema only); the real managers are installed per turn by
+		// setMonitor, exactly like the shell runner above.
+		defs = append(defs, tools.NewMonitorTool(nil, nil).Def())
 	}
 	// spawn_session is a self-management capability, always advertised now (the
 	// self-manage master toggle was removed). The per-turn spawn tool is installed
@@ -952,6 +957,8 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		// tasks). Pass the tool name so the runner dispatches to the right interpreter
 		// instead of guessing from OS.
 		return b.callShell(ctx, run, bare, args)
+	case "monitor":
+		return b.callMonitor(ctx, run, args)
 	case "run_subagent":
 		return b.callRunSubagent(ctx, run, args)
 	case "activate_tools":

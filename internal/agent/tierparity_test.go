@@ -83,6 +83,7 @@ var goldenTiersAuto = map[string]string{
 	"list_sessions":         "name-only",
 	"list_tasks":            "hidden",
 	"mermaid_validate":      "name-only",
+	"monitor":               "name-only",
 	"move_task":             "hidden",
 	"set_archived_task":     "hidden",
 	"notify":                "name-only",
@@ -181,6 +182,7 @@ var goldenTiersReadOnly = map[string]string{
 	"list_sessions":         "name-only",
 	"list_tasks":            "hidden",
 	"mermaid_validate":      "name-only",
+	"monitor":               "name-only",
 	"move_task":             "hidden",
 	"set_archived_task":     "hidden",
 	"notify":                "name-only",
@@ -281,9 +283,12 @@ var envGatedTools = map[string]bool{
 	// Shell family: registered only when the shell tunable is on AND the backing
 	// shell exists (Unix→Bash, Windows→PowerShell), so which of the two appears
 	// is host-dependent.
-	"Bash":           true,
-	"PowerShell":     true,
-	"shell_manage":   true,
+	"Bash":         true,
+	"PowerShell":   true,
+	"shell_manage": true,
+	// monitor rides the same shell gate as shell_manage: registered only alongside a
+	// live background-shell manager, which needs the shell tunable and a session.
+	"monitor":        true,
 	"transform_data": true,
 	// Code-execution mode: needs the shell tunable, the code-mode tunable and a
 	// ready sandbox.

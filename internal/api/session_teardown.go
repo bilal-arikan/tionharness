@@ -233,6 +233,11 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 	// than pre-emptively blocking the delete here.
 	if wsp.Runtime != nil {
 		wsp.Runtime.CloseSessionMCP(sessionID)
+		// Release the in-memory per-session runtime state (monitors + their poll
+		// goroutine, the background-shell manager, the read tracker). Same phase and
+		// same rationale as the MCP close: it runs after the worker turns stopped, and
+		// a live monitor must not outlive the session it would wake.
+		wsp.Runtime.ReleaseSessionRuntimeState(sessionID)
 	}
 
 	return &preparedSessionRuntime{

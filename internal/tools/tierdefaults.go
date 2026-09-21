@@ -99,6 +99,10 @@ var defaultToolTiers = map[string]string{
 	"render_template": VisibilityNameOnly,
 	// Background-shell management — reached only after a run_in_background launch.
 	"shell_manage": VisibilityNameOnly,
+	// monitor — reached only after a run_in_background launch, when the agent wants
+	// to be woken on output instead of polling. The name carries the intent; the
+	// schema (action + filter) is pulled on demand.
+	"monitor": VisibilityNameOnly,
 	// wait_for_mcp_servers — reached only in the rare turn that enables/restarts an
 	// MCP server or finds a namespaced tool missing. The name states the whole
 	// contract; the schema (two optional fields) is pulled on demand.

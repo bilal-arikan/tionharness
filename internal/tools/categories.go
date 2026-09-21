@@ -35,6 +35,7 @@ var builtinCategory = map[string]string{
 	"LS": CategoryFiles, "Glob": CategoryFiles, "Grep": CategoryFiles,
 	"Bash": CategoryFiles, "PowerShell": CategoryFiles,
 	"shell_manage": CategoryFiles,
+	"monitor":      CategoryFiles,
 	"apply_patch":  CategoryFiles, "run_code": CategoryFiles,
 
 	// Search & web

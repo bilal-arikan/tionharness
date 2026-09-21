@@ -165,6 +165,14 @@ type Runtime struct {
 	// preview) get nil, which disables background execution for that build.
 	shellMgrs sync.Map
 
+	// monitorMgrs holds one *tools.MonitorManager per session id, tracking that
+	// session's armed monitors (the `monitor` tool) and the single goroutine that
+	// polls their sources. Session-scoped and persistent across turns — a monitor
+	// outlives the turn that armed it, which is the whole point: it wakes a LATER
+	// turn. Memory-only; released by ReleaseSessionRuntimeState. Unstamped-session
+	// builds (catalog/preview) get nil, which disables monitoring for that build.
+	monitorMgrs sync.Map
+
 	// workerCancels tracks in-flight worker turns so stop_worker can cancel one.
 	// Keyed by worker session id; value is *workerCtl (cancel func + stopped flag,
 	// so a cancelled turn reports "killed" rather than "failed"). Populated by
@@ -922,6 +930,29 @@ func (r *Runtime) CloseSessionMCP(sessionID string) int {
 	return r.mcpPool.CloseSession(sessionID)
 }
 
+// ReleaseSessionRuntimeState drops the per-session runtime state the Runtime
+// keeps in memory across turns: the monitor manager (stopping its poll goroutine
+// and every armed monitor), the background-shell manager and the file-freshness
+// read tracker. Session deletion calls it.
+//
+// Without this those sync.Map entries were never removed — every session that
+// ever ran a shell or read a file leaked its manager for the life of the process,
+// and a live monitor kept polling (and could still wake) a session that no longer
+// exists. The shells themselves are already terminated by the teardown phases
+// before this runs; this releases the bookkeeping.
+func (r *Runtime) ReleaseSessionRuntimeState(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	// Monitors first: a monitor holds a goroutine and can arm a wake, so it must
+	// stop before the state it observes is dropped.
+	if v, ok := r.monitorMgrs.LoadAndDelete(sessionID); ok {
+		v.(*tools.MonitorManager).Close()
+	}
+	r.shellMgrs.Delete(sessionID)
+	r.readTrackers.Delete(sessionID)
+}
+
 // HasWarmCLISession reports whether the session has a warm (persistent-pool)
 // claude-cli process kept alive between turns. Nil-safe (pool may be unset).
 func (r *Runtime) HasWarmCLISession(sessionID string) bool {
@@ -1441,6 +1472,19 @@ func (r *Runtime) ScheduleWake(ctx context.Context, sessionID, agentID, prompt, 
 		delaySeconds = MaxWakeDelaySec
 	}
 	fireAt := time.Now().Add(time.Duration(delaySeconds) * time.Second).Unix()
+	if _, err := r.armWake(ctx, sessionID, agentID, prompt, reason, fireAt); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Wake armed: in %ds I will continue this conversation on my own. Nothing more to do this turn.", delaySeconds), nil
+}
+
+// armWake persists a one-shot wake row for fireAt and arms the scheduler's timer,
+// returning the schedule id. It is the single arming path shared by ScheduleWake
+// (delay chosen by the agent) and WakeNow (fire immediately): both end in the same
+// fireWake -> ConsumeOneShotSchedule -> deliverWake chain, so a wake keeps its
+// at-most-once guarantee no matter who armed it. There is deliberately NO parallel
+// delivery path.
+func (r *Runtime) armWake(ctx context.Context, sessionID, agentID, prompt, reason string, fireAt int64) (string, error) {
 	sc, err := r.db.CreateSchedule(ctx, db.Schedule{
 		AgentID:   agentID,
 		Prompt:    prompt,
@@ -1455,14 +1499,34 @@ func (r *Runtime) ScheduleWake(ctx context.Context, sessionID, agentID, prompt, 
 		return "", fmt.Errorf("schedule wake: %w", err)
 	}
 	if err := r.reloadSchedules(ctx); err != nil {
-		return "", fmt.Errorf("wake saved (%s) but arming failed: %w", sc.ID, err)
+		return sc.ID, fmt.Errorf("wake saved (%s) but arming failed: %w", sc.ID, err)
 	}
 	// Tell an open session screen that the turn ended into a WAITING state (not a
 	// finished one): phase=armed raises a "waiting to auto-resume" banner with the
 	// reason and a Cancel control, so the chat no longer looks idle while the wake
 	// timer counts down. emitWakePhase carries reason + fireAt for the UI.
 	r.emitWakePhase(sessionID, "armed", reason, fireAt, "⏰ Otomatik uyandırma kuruldu")
-	return fmt.Sprintf("Wake armed: in %ds I will continue this conversation on my own. Nothing more to do this turn.", delaySeconds), nil
+	return sc.ID, nil
+}
+
+// WakeNow arms a one-shot wake that fires as soon as the scheduler can run it —
+// the delivery path for an event the agent asked to be told about (a monitor
+// match). It reuses armWake, so the scheduler's own clamp (armWakeLocked floors an
+// overdue wake at 1s) decides the actual delay; ScheduleWake's MinWakeDelaySec
+// floor deliberately does NOT apply, because the point of an event wake is
+// promptness.
+//
+// At-most-once, like every wake: if the process dies between the timer firing and
+// the turn starting, that event is simply lost. A monitor is a convenience, not a
+// durable queue.
+func (r *Runtime) WakeNow(ctx context.Context, sessionID, agentID, prompt, reason string) (string, error) {
+	if sessionID == "" {
+		return "", fmt.Errorf("an event wake needs an originating chat session")
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return "", fmt.Errorf("prompt is required (what to do when you wake)")
+	}
+	return r.armWake(ctx, sessionID, agentID, prompt, reason, time.Now().Unix())
 }
 
 // emitWakePhase publishes a "chat"-typed wake lifecycle event for a session. The

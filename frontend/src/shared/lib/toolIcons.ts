@@ -30,6 +30,7 @@ import {
   ArrowLeftRight,
   Inbox,
   FolderCog,
+  Radar,
   Pencil,
   // artifacts
   PackageOpen,
@@ -186,6 +187,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   // session edit
   update_session: Pencil,
   shell_manage: FolderCog,
+  monitor: Radar,
   list_sessions: Inbox,
 
   // settings

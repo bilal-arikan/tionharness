@@ -654,6 +654,12 @@ func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 	// Bash be safely disallowed. nil when shell is off (then Bash stays allowed).
 	t.run.setShellRunner(t.wsp.Runtime.NewShellRunner())
 
+	// monitor (CLI path): the push counterpart of shell_manage, wired to the SAME
+	// session-scoped managers the native registry uses — so a monitor armed over the
+	// bridge is the same object a native turn would see, and survives into the turn
+	// it wakes. Nil when shell is off; the bridge then reports it unavailable.
+	t.run.setMonitor(t.wsp.Runtime.SessionMonitorManagers(session.ID, respondingID))
+
 	// Spawn (CLI path): mirror the native built-in for claude-cli agents, which
 	// reach TionHarness tools only through the Interaction MCP bridge. Install a
 	// per-agent spawn tool on the run so the bridge's spawn_session dispatch can

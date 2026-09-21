@@ -99,6 +99,8 @@ type chatRun struct {
 	skillLedger *tools.SkillLedger           // session use_skill dedupe ledger, shared with the native tool
 	skillEpoch  int                          // fold epoch the ledger entries are valid in (session CompactionCount)
 	shell       shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
+	monitor     *tools.MonitorManager        // current session's monitor manager, for the Interaction MCP monitor tool
+	monitorSh   *tools.ShellManager          // current session's shell manager, the source monitor watches
 	runAgent    runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
@@ -379,6 +381,23 @@ func (r *chatRun) shellRunnerFor() shellRunner {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.shell
+}
+
+// setMonitor installs the session's monitor + shell managers so the Interaction
+// MCP monitor tool (CLI path) can arm and list monitors. Nil values disable it
+// (shell off, or a build with no session), and the bridge then reports monitoring
+// is unavailable rather than silently doing nothing.
+func (r *chatRun) setMonitor(m *tools.MonitorManager, sh *tools.ShellManager) {
+	r.mu.Lock()
+	r.monitor, r.monitorSh = m, sh
+	r.mu.Unlock()
+}
+
+// monitorFor returns the current monitor + shell managers (nil when not installed).
+func (r *chatRun) monitorFor() (*tools.MonitorManager, *tools.ShellManager) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.monitor, r.monitorSh
 }
 
 // runAgentRunner runs a run_subagent call for the responding agent (CLI path),
