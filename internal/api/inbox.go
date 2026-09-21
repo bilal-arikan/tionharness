@@ -430,17 +430,8 @@ func (s *Server) publishQueue(wsID, sessionID string, view []queueView, inflight
 	// No in-flight turn → false, and that is the honest answer rather than a missing
 	// field: with nothing running there is nothing to steer. steerTargetRun applies
 	// the same rule, so the tray and the endpoint agree.
-	//
-	// s.runs is nil only on a Server assembled without the run registry (queue-routing
-	// unit tests). That is not a missing turn to paper over — such a Server cannot host
-	// a turn at all, so "not steerable" is the correct answer, and the field is still
-	// published so the shape of the event never varies.
-	steerable := false
-	if s.runs != nil {
-		run, _ := s.steerTargetRun(wsID, sessionID)
-		steerable = run != nil && run.steerableFor()
-	}
-	payload["steerable"] = steerable
+	run, _ := s.steerTargetRun(wsID, sessionID)
+	payload["steerable"] = run != nil && run.steerableFor()
 	s.publishHub(wsID, sessionID, sessionhub.KindQueueUpdate, payload, false)
 }
 

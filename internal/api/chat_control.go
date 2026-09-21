@@ -830,6 +830,15 @@ type runInfo struct {
 // ids repeat across stores, so matching on the id alone reported (and let a caller
 // cancel, or block a delete on) another workspace's running turn.
 func (c *chatRuns) sessionRunInfo(wsID, sessionID string) (runInfo, bool) {
+	// A nil registry is NOT "this session has no running turn" — it is a Server that
+	// was never finished being built. newServer always installs one, so reaching here
+	// with c == nil means a hand-assembled fixture omitted it, and reporting ok=false
+	// would hide that: the caller would read "nothing is running" off a Server that
+	// cannot track runs at all, and a steer/stop aimed at a live turn would silently
+	// do nothing. Fail where the mistake is, not three layers downstream.
+	if c == nil {
+		panic("api: sessionRunInfo on a nil chatRuns registry (Server built without newChatRuns)")
+	}
 	if wsID == "" || sessionID == "" {
 		return runInfo{}, false
 	}

@@ -41,9 +41,11 @@ func TestHubScopedByWorkspace(t *testing.T) {
 // TestInboxScopedByWorkspace: enqueuing into WS1/SES1 must not create or touch the
 // queue of WS2's same-numbered session.
 func TestInboxScopedByWorkspace(t *testing.T) {
-	s := &Server{inbox: newInboxStore()}
+	s := &Server{inbox: newInboxStore(), runs: newChatRuns()}
 	// No workspaces manager: the turn cannot dispatch (workspaceByID returns nil),
-	// which is fine — this asserts the QUEUE routing, not the run.
+	// which is fine — this asserts the QUEUE routing, not the run. The run registry
+	// is still supplied because every Server carries one (see newServer); an empty
+	// registry reports "no in-flight turn", which is what this fixture wants.
 	s.enqueueMessage("WS1", chatReq{SessionID: "SES1", Message: "merhaba"}, "m1")
 
 	s.inbox.lock()
