@@ -53,27 +53,40 @@ func activeRun(t *testing.T, s *Server) *chatRun {
 // the same steer deliverability the chat path does. Before this, the field stayed
 // false and a steer aimed at an autonomous claude-cli turn in "ask" mode was
 // rejected as "unsupported" even though the permission-prompt boundary that
-// carries it exists there. The want is derived from steerableForTurn so the two
-// paths cannot drift apart.
+// carries it exists there.
+//
+// Each want below is the literal expectation for that (provider, mode), spelled
+// out here rather than derived from steerableForTurn: deriving it would make the
+// assertion restate the production logic instead of checking it, and the test
+// would keep passing if that logic regressed. The reasons, per chat_control.go:
+//   - claude-cli "ask": the permission-prompt tool is wired AND callPermission's
+//     allow path reaches steerContext, so a steer has a boundary to ride.
+//   - claude-cli "read-only": prompt tool is wired, but the CLI runs under
+//     --permission-mode plan, where the only call reaching the prompt is
+//     ExitPlanMode, routed away before steerContext. No boundary.
+//   - claude-cli "auto": --dangerously-skip-permissions, never prompts.
+//   - codex-cli: no permission-prompt-tool boundary in ANY mode, so false even
+//     in "ask" (unlike claude-cli).
+//   - anthropic: an API-transport provider, steerable in every mode.
 func TestAutonomousInteractionRecordsSteerable(t *testing.T) {
 	cases := []struct {
 		provider string
 		mode     string
+		want     bool
 	}{
-		{"claude-cli", "ask"},
-		{"claude-cli", "read-only"},
-		{"claude-cli", "auto"},
-		{"codex-cli", "ask"},
-		{"anthropic", "auto"},
+		{"claude-cli", "ask", true},
+		{"claude-cli", "read-only", false},
+		{"claude-cli", "auto", false},
+		{"codex-cli", "ask", false},
+		{"anthropic", "auto", true},
 	}
 	for _, tc := range cases {
 		s, rt := newAutonomousTestServer(t)
 		ag := db.Agent{ID: "AG1", Provider: tc.provider, PermissionMode: tc.mode}
 		_, done := s.autonomousInteraction(rt)(context.Background(), ag, "SES1")
 		got := activeRun(t, s).steerableFor()
-		want := steerableForTurn(tc.provider, tc.mode)
-		if got != want {
-			t.Fatalf("provider=%s mode=%s: steerable = %v, want %v", tc.provider, tc.mode, got, want)
+		if got != tc.want {
+			t.Fatalf("provider=%s mode=%s: steerable = %v, want %v", tc.provider, tc.mode, got, tc.want)
 		}
 		done()
 	}
