@@ -203,6 +203,65 @@ describe('layoutRota', () => {
     expect(l.bars.find((b) => b.rowId === 'ROOT')?.segments).toBeUndefined()
   })
 
+  it('ends a finished bar at its last bout, not at an inflated updatedAt', () => {
+    // W1 reported back at NOW-300; an archive sweep then stamped updatedAt.
+    const s = seedSessions(emptyLanes(), [
+      header({ id: 'W1', runState: 'completed', createdAt: NOW - 800, updatedAt: NOW - 5 }),
+    ])
+    const activity = new Map([
+      [
+        'W1',
+        [
+          { start: NOW - 800, end: NOW - 700 },
+          { start: NOW - 400, end: NOW - 300 },
+        ],
+      ],
+    ])
+    const l = layoutRota(s, { now: NOW, activity })
+    expect(l.bars.find((b) => b.id === 'bar:W1')).toMatchObject({ live: false, end: NOW - 300 })
+  })
+
+  it('falls back to updatedAt for a session the activity map has no bouts for', () => {
+    const l = layoutRota(fixture(), { now: NOW, activity: new Map() })
+    expect(l.bars.find((b) => b.id === 'bar:W1')).toMatchObject({ end: NOW - 300 })
+    expect(l.rows.map((r) => r.id)).toEqual(['ROOT', 'W1', 'W2', 'FORK', 'SOLO'])
+  })
+
+  it('drops a stale lane whose updatedAt was inflated past its last bout', () => {
+    // Header says "touched 5s ago", the transcript says the work ended a day
+    // ago: the idle cutoff must believe the transcript.
+    const s = seedSessions(emptyLanes(), [
+      header({ id: 'SWEPT', createdAt: NOW - 90_000, updatedAt: NOW - 5 }),
+      header({ id: 'SOLO', createdAt: NOW - 200, updatedAt: NOW - 150 }),
+    ])
+    const activity = new Map([['SWEPT', [{ start: NOW - 90_000, end: NOW - 80_000 }]]])
+    expect(layoutRota(s, { now: NOW }).rows.map((r) => r.id)).toEqual(['SWEPT', 'SOLO'])
+    expect(layoutRota(s, { now: NOW, activity }).rows.map((r) => r.id)).toEqual(['SOLO'])
+  })
+
+  it('still runs a live bar to now even when its bouts end earlier', () => {
+    const activity = new Map([['W2', [{ start: NOW - 700, end: NOW - 500 }]]])
+    const l = layoutRota(fixture(), { now: NOW, activity })
+    expect(l.bars.find((b) => b.id === 'bar:W2')).toMatchObject({ live: true, end: NOW })
+  })
+
+  it('lands the report edge on the last bout rather than updatedAt', () => {
+    const activity = new Map([
+      [
+        'W1',
+        [
+          { start: NOW - 800, end: NOW - 600 },
+          { start: NOW - 500, end: NOW - 450 },
+        ],
+      ],
+    ])
+    const l = layoutRota(fixture(), { now: NOW, activity })
+    expect(l.edges.find((e) => e.id === 'edge:W1>ROOT')).toMatchObject({
+      kind: 'reported',
+      at: NOW - 450,
+    })
+  })
+
   it('empty store yields an empty layout with a one-minute window', () => {
     const l = layoutRota(emptyLanes(), { now: NOW })
     expect(l.rows).toEqual([])

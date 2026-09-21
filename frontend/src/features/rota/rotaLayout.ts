@@ -105,8 +105,25 @@ function isLive(s: LaneSession): boolean {
   return !!s.live
 }
 
-function barEnd(s: LaneSession, now: number): number {
-  return isLive(s) ? now : Math.max(s.updatedAt, s.createdAt)
+// lastActivityEnd — when the session last actually did something.
+//
+// The header's updatedAt is NOT that moment: a bulk archive sweep stamps it
+// with now() long after the conversation went quiet, which would stretch the
+// bar (and keep a stale lane inside the idle window) far past the real tail.
+// The activity bouts are the transcript's own timestamps, so their last end is
+// the truth when we have them. Without them — before the fetch lands, or for a
+// session the endpoint knows nothing about — we fall back to the header, which
+// is what the canvas has always drawn.
+function lastActivityEnd(s: LaneSession, activity: RotaLayoutOptions['activity']): number {
+  const spans = activity?.get(s.id)
+  const last = spans && spans.length > 0 ? spans[spans.length - 1] : undefined
+  return last ? last.end : Math.max(s.updatedAt, s.createdAt)
+}
+
+// A live session runs to the clock: its turn in flight is not persisted yet, so
+// the bouts end behind "now" by design.
+function barEnd(s: LaneSession, now: number, activity: RotaLayoutOptions['activity']): number {
+  return isLive(s) ? now : lastActivityEnd(s, activity)
 }
 
 function sessionLabel(s: LaneSession): string {
@@ -123,7 +140,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
   const cutoff = opts.idleCutoffSec ?? DEFAULT_IDLE_CUTOFF
   const laneFilter = opts.laneFilter
   const inWindow = (s: LaneSession) =>
-    isLive(s) || cutoff <= 0 || now - Math.max(s.updatedAt, s.createdAt) <= cutoff
+    isLive(s) || cutoff <= 0 || now - lastActivityEnd(s, opts.activity) <= cutoff
   const keep = (s: LaneSession) => inWindow(s) && (!laneFilter || laneFilter(s))
 
   const rows: RotaRow[] = []
@@ -137,7 +154,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
     rows.push(row)
     rowById.set(s.id, row)
     const start = s.createdAt || s.updatedAt
-    const end = barEnd(s, now)
+    const end = barEnd(s, now, opts.activity)
     // Only a root can be waiting on workers; a member lane has none of its own.
     const waits = depth === 0 ? clipWaits(waitSpans(state, s.id, now, keep), start, end) : undefined
     const segments = barSegments(opts.activity?.get(s.id), start, end, isLive(s))
@@ -180,7 +197,7 @@ export function layoutRota(state: LaneState, opts: RotaLayoutOptions): RotaLayou
           id: `edge:${m.id}>${fromRow.id}`,
           from: m.id,
           to: fromRow.id,
-          at: m.updatedAt,
+          at: lastActivityEnd(m, opts.activity),
           kind: 'reported',
         })
       }
