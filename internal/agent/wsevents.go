@@ -64,6 +64,9 @@ func (r *Runtime) OnSessionChange(ev db.SessionChangeEvent) {
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		})
 	r.onSessionChangeForTrajectory(ev)
+	// Archiving is the user's stop gesture: a schedule bound to the session must
+	// not keep firing into it (schedulearchive.go).
+	r.onSessionArchivedDisableSchedules(ev)
 }
 
 // TrajectoryPayload is the Data shape of a ws:trajectory event — the index row,

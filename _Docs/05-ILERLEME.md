@@ -1,9 +1,51 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-13):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Arşivlenen oturumun zamanlamaları susuyor (TSK870, 2026-09-22) ✅
+
+- **İhtiyaç:** Arşivlenmiş bir oturumda zamanlanmış tur çalışmaya devam
+  ediyordu. Oturum arşivde olduğu için çıktı kullanıcının görmediği bir
+  thread'e yazılıyordu: kullanıcı arşivleyerek işi durdurduğunu sanıyor, oysa
+  cron tablosu ateşlemeye devam ediyordu.
+- **Kök neden:** TSK690'da arşivli oturumu dirilten tetikleyici bilinçli bir
+  allowlist'ti (`KindUser`/`KindPeer`/`KindWorker`/`KindSpawn`) ve `KindWake`
+  dışarıda bırakılmıştı — haklı olarak, çünkü diriltmek kaçak koordinatör
+  kill-switch'ini bozuyordu. Ama "diriltme" ile "hiç koşturma" aynı şey değil:
+  tur diriltilmiyordu, yine de koşuyordu.
+- **Çözüm (kaynakta):** Arşivleme artık bir **durdurma jesti**.
+  `Runtime.onSessionArchivedDisableSchedules` (yeni
+  `internal/agent/schedulearchive.go`) oturuma bağlı zamanlamaları
+  pasifleştirir. `OnSessionChange` (store'un session hook'u) üzerinden
+  bağlandığı için `db.SetSessionState`'ten geçen **tüm** arşiv yolları tek
+  noktadan kapsanır: HTTP uç noktası, `update_session`, `archive_sessions`
+  toplu süpürmesi, koordinatörün terminal worker arşivi, içgörü süpürücüsü.
+- **Bağlanma iki biçimde:** `SessionID` dolu tek-seferlik uyandırmalar ve
+  ajanın ortak `schedule` thread'ine yazan `reuse` modlu cron zamanlamaları.
+  `spawn` modlu zamanlamalar her ateşlemede yeni oturum açtığı için bağlı
+  sayılmaz — geçmiş bir koşuyu arşivlemek zamanlama hakkında bir şey söylemez.
+- **Neden `Enabled`, `Archived` değil:** cron tablosunun okuduğu
+  (`ListEnabledSchedules`) ve arayüzün aç/kapa anahtarı olarak gösterdiği alan
+  `Enabled`. Onu çevirmek durdurmayı hem etkili hem **görünür** kılar. Oturumu
+  geri yüklemek zamanlamaları geri açmaz: otomatik işi yeniden kurmak
+  kullanıcının açık kararı. Pasifleştirme sonrası `reloadSchedules` ile cron
+  tablosu yeniden kurulur — armlanmış tek-seferlik timer aksi halde yine ateşlerdi.
+- **Emniyet ağı:** uçuşta olan ya da süpürmeden kaçan bir `KindWake` turu
+  `claimTurnSlot`'un ilk adımında reddedilir
+  (`refuseWakeOnArchivedSession` → `ErrSessionArchived`) ve `Warn` ile
+  loglanır — atlama **gözlemlenebilir**, sessizce yutulmuyor. Reddedilir ama
+  **diriltilmez**: `KindWake` allowlist'in dışında kalmaya devam ediyor, yani
+  TSK690'ın kill-switch'i bozulmadı. Geçit yalnız `KindWake`'e bakar; diğer
+  turların davranışı aynı.
+- **Test:** `schedulearchive_test.go` — arşivlemenin bağlı zamanlamayı
+  pasifleştirdiği (ve yabancı/`spawn` modlu olanlara dokunmadığı),
+  arşivli oturumda uyandırma turunun slot almadan reddedildiği ve oturumun
+  arşivde kaldığı. Üç mutasyonla doğrulandı (hook çağrısının, geçidin ve
+  `reuse` bağlanmasının kaldırılması ayrı ayrı testi kırmızıya düşürüyor).
+- Detay: `_Docs/02-VERI-MODELI.md` (`state` alanı bloğu).
 
 ## Rota: oturuş eşiği zoom'dan türüyor (TSK908, 2026-09-21) ✅
 

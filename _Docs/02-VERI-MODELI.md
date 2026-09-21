@@ -192,6 +192,25 @@ erDiagram
 >   bakımı) ve `KindCoordinator`/`KindWake`/`KindAutomation` (otomatik yeniden
 >   giriş) de bilerek dışarıdadır: arşiv, kaçak bir koordinatör ağacının
 >   kill-switch'i olarak kalmalıdır (bkz. `_Docs/47`).
+>   **Arşivleme bir DURDURMA jestidir (2026-09-22):** bir oturum arşivlenince ona
+>   bağlı zamanlamalar **pasifleştirilir** (`Enabled=false`) —
+>   `Runtime.onSessionArchivedDisableSchedules`
+>   (`internal/agent/schedulearchive.go`), `OnSessionChange` üzerinden bağlıdır,
+>   yani `db.SetSessionState`'ten geçen **tüm** arşiv yolları (HTTP uç noktası,
+>   `update_session`, `archive_sessions` toplu süpürmesi, koordinatörün terminal
+>   worker arşivi, içgörü süpürücüsü) kapsanır. Bağlanma iki biçimdedir:
+>   `SessionID` dolu tek-seferlik uyandırmalar ve ajanın ortak `schedule`
+>   thread'ine yazan `reuse` modlu cron zamanlamaları; `spawn` modlu zamanlamalar
+>   her ateşlemede yeni oturum açtığı için **bağlı sayılmaz**. Pasifleştirme
+>   `Archived` değil `Enabled` alanını çevirir: cron tablosunun okuduğu
+>   (`ListEnabledSchedules`) ve arayüzün aç/kapa anahtarı olarak gösterdiği alan
+>   budur, yani durdurma hem etkili hem **görünür** olur. Oturumu geri yüklemek
+>   zamanlamaları geri açmaz — otomatik işi yeniden kurmak kullanıcının açık
+>   kararıdır. **Emniyet ağı:** uçuşta olan (ya da süpürmeden kaçan) bir
+>   `KindWake` turu, arşivli oturumda sıra slotunu almadan reddedilir
+>   (`refuseWakeOnArchivedSession` → `ErrSessionArchived`, `claimTurnSlot`'un ilk
+>   adımı) ve `Warn` ile loglanır — sessizce yutulmaz. Reddedilir, **diriltilmez**:
+>   `KindWake` yukarıdaki allowlist'in dışında kalmaya devam eder.
 > - **`run_state`** oturumun **son arka plan (worker) turunun nasıl bittiğini**
 >   saklar; değerler `turnoutcome.go`'daki sabitlerdir: `completed` | `failed` |
 >   `killed` | `timeout` | `incomplete`. Yanında `run_state_at` (unix saniye)

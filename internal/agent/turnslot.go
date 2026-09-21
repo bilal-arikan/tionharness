@@ -71,6 +71,9 @@ func (r *Runtime) claimSessionTurnSlotCtx(ctx context.Context, sessionID string,
 // claimTurnSlot is the single choke point onto the queue. resetCap zeroes the
 // coordinator auto-turn budget (human back in the loop).
 func (r *Runtime) claimTurnSlot(ctx context.Context, sessionID string, kind turnqueue.Kind, label string, resetCap bool) (func(), error) {
+	if err := r.refuseWakeOnArchivedSession(ctx, sessionID, kind); err != nil {
+		return func() {}, err
+	}
 	rel, err := r.turns.Acquire(ctx, sessionID, kind, label)
 	if err != nil {
 		return rel, err
