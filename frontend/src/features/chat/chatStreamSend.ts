@@ -95,8 +95,9 @@ export async function performSend(
 }
 
 // genClientMsgId returns a unique id for a submitted message, used for idempotent
-// enqueue (dedupes double-submits / retries / reconnect replays).
-function genClientMsgId(): string {
+// enqueue (dedupes double-submits / retries / reconnect replays). Shared with the
+// interrupt path, which needs the same replay guard.
+export function genClientMsgId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
   if (c?.randomUUID) return c.randomUUID()
   return `cmid-${Date.now()}-${Math.random().toString(36).slice(2)}`

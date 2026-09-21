@@ -11,6 +11,7 @@ import (
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // inboxItem is one queued user turn awaiting dispatch. The whole chatReq is
@@ -111,6 +112,38 @@ func (s *Server) enqueueMessageFront(wsID string, req chatReq) {
 	if s.enqueueMessage(wsID, req, clientMsgID) {
 		s.moveQueuedToFront(wsID, req.SessionID, clientMsgID)
 	}
+}
+
+// enqueueMessageAtHead inserts a turn directly at the head of the WAITING queue
+// under ONE lock hold. Unlike enqueueMessageFront (append, then promote) there is
+// no window between the two steps in which the queue worker can dispatch — which
+// is what makes it safe for the interrupt action, whose whole promise is that the
+// user's message runs NEXT. Returns false when clientMsgID was already seen (the
+// same replay guard enqueueMessage applies).
+func (s *Server) enqueueMessageAtHead(wsID string, req chatReq, clientMsgID string) bool {
+	if clientMsgID == "" {
+		clientMsgID = uuid.NewString()
+	}
+	// Carry the resolved id on the request too — same reason as enqueueMessage: the
+	// worker stamps it onto the turn's terminal hub events for queue observers.
+	req.ClientMsgID = clientMsgID
+	s.inbox.lock()
+	ib := s.inbox.at(wsID, req.SessionID)
+	if ib == nil {
+		ib = &sessionInbox{seen: make(map[string]bool), wsID: wsID}
+		s.inbox.sessions[scopeKey(wsID, req.SessionID)] = ib
+	}
+	if ib.seen[clientMsgID] {
+		s.inbox.unlock()
+		return false
+	}
+	ib.seen[clientMsgID] = true
+	item := inboxItem{ClientMsgID: clientMsgID, Req: req, WorkspaceID: wsID, EnqueuedAt: time.Now().Unix()}
+	ib.items = append([]inboxItem{item}, ib.items...)
+	s.inbox.unlock()
+	s.flushInbox(wsID, req.SessionID)
+	s.kickInbox(wsID, req.SessionID)
+	return true
 }
 
 // withInbox runs fn under the inbox lock against a session's queue and, when fn
@@ -630,45 +663,71 @@ func (s *Server) handleMoveQueuedFront(w http.ResponseWriter, r *http.Request) {
 }
 
 type sessionControlReq struct {
-	Action string `json:"action"` // "stop" | "steer"
+	Action string `json:"action"` // "stop" | "steer" | "interrupt"
 	Text   string `json:"text"`
+	// The fields below apply to "interrupt" only. The interrupt message becomes a
+	// normal queued turn, so it must carry everything a normal send carries —
+	// dropping them here would silently downgrade the turn (wrong agent, lost
+	// attachments, the agent's default thinking/permission instead of the
+	// composer's current choice).
+	//
+	// ClientMsgID is the replay id: a retried interrupt must not enqueue twice.
+	ClientMsgID    string          `json:"clientMsgId"`
+	AgentIDs       []string        `json:"agentIds"`
+	ThinkingLevel  string          `json:"thinkingLevel"`
+	PermissionMode string          `json:"permissionMode"`
+	Attachments    []db.Attachment `json:"attachments"`
+}
+
+// stopSessionTurn cancels whatever the session is running and reports whether
+// anything was actually stopped. Shared by the "stop" and "interrupt" actions so
+// both cover the autonomous case identically.
+func (s *Server) stopSessionTurn(wsp *workspace.Workspace, sessionID string) bool {
+	// Cancel EVERY run registered for this session, not only the current-generation
+	// one sessionRunInfo reports. A superseded predecessor keeps executing — the
+	// generation fence blocks its durable writes, not its goroutine, provider
+	// subprocess or tools — so cancelling just the visible run left the older
+	// turn's process running after the user pressed stop.
+	runs := s.runs.sessionRuns(wsp.ID, sessionID)
+	for _, run := range runs {
+		run.cancel()
+	}
+	if len(runs) > 0 {
+		return true
+	}
+	// No chat run: the turn may still be an AUTONOMOUS one (schedule / wake /
+	// spawn / coordination), which the runtime tracks separately and which never
+	// enters chatRuns.
+	if wsp.Runtime.CancelSession(sessionID) {
+		// A cancelled autonomous turn leaves no trace of WHY it stopped — the
+		// context just dies. Record the cause in the transcript.
+		s.recordAutonomousStop(wsp, sessionID)
+		return true
+	}
+	return false
 }
 
 // handleSessionControl stops or steers a session's in-flight turn WITHOUT the
 // client needing the runId — the queue runs turns server-side, so control is
 // session-scoped now. "stop" cancels every run the session has registered (a
 // superseded one included); "steer" resolves the run that owns the session and
-// forwards the guidance to it.
+// forwards the guidance to it; "interrupt" stops the turn AND takes the session's
+// next turn slot in one server-side step.
 func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	req, ok := bindJSON[sessionControlReq](w, r)
 	if !ok {
 		return
 	}
-	if s.rejectImmutableSession(w, r, sessionID, "session control (stop/steer)") {
+	if s.rejectImmutableSession(w, r, sessionID, "session control (stop/steer/interrupt)") {
+		return
+	}
+	if req.Action == "interrupt" {
+		s.handleInterrupt(w, r, sessionID, req)
 		return
 	}
 	if req.Action == "stop" {
-		// Cancel EVERY run registered for this session, not only the current-generation
-		// one sessionRunInfo reports. A superseded predecessor keeps executing — the
-		// generation fence blocks its durable writes, not its goroutine, provider
-		// subprocess or tools — so cancelling just the visible run left the older
-		// turn's process running after the user pressed stop.
-		runs := s.runs.sessionRuns(ws(r).ID, sessionID)
-		for _, run := range runs {
-			run.cancel()
-		}
-		if len(runs) > 0 {
-			writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
-			return
-		}
-		// No chat run: the turn may still be an AUTONOMOUS one (schedule / wake /
-		// spawn / coordination), which the runtime tracks separately and which never
-		// enters chatRuns.
-		if ws(r).Runtime.CancelSession(sessionID) {
-			// A cancelled autonomous turn leaves no trace of WHY it stopped — the
-			// context just dies. Record the cause in the transcript.
-			s.recordAutonomousStop(ws(r), sessionID)
+		if s.stopSessionTurn(ws(r), sessionID) {
 			writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
 			return
 		}

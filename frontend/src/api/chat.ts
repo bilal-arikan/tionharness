@@ -193,6 +193,32 @@ export const chatApi = {
       body: JSON.stringify({ action, text }),
     }),
 
+  // Atomic interrupt: stop the in-flight turn AND claim the session's next turn
+  // slot in ONE server-side step. Doing it as stop-then-send left the slot free
+  // between the two round trips, so another queued message or an autonomous turn
+  // (worker notification, self-wake) could take it and the "send now" message ran
+  // after the very turn it was meant to cut in front of.
+  // The message becomes a normal queued turn, so it carries the same per-turn
+  // settings a normal send does — omitting them would silently downgrade it.
+  interruptSession: (
+    sessionId: string,
+    body: {
+      text: string
+      clientMsgId: string
+      agentIds: string[]
+      thinkingLevel: string
+      permissionMode: string
+      attachments: Attachment[]
+    },
+  ) =>
+    req<{ result: string; queued: boolean; stopped: boolean }>(
+      `/api/sessions/${sessionId}/control`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action: 'interrupt', ...body }),
+      },
+    ),
+
   // Broadcast a cross-window "user is typing" signal (ephemeral). clientId lets
   // the sending window ignore its own echo.
   setTyping: (sessionId: string, active: boolean, clientId: string) =>

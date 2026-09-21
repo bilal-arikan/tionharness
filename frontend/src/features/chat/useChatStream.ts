@@ -13,6 +13,7 @@ import type { PendingItem } from './PendingTray'
 import { intersectWith, withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
 import type { AutoLiveEntry, ChatStreamDeps, WakeWait } from './chatStreamTypes'
 import { performSend } from './chatStreamSend'
+import { performInterrupt } from './chatStreamInterrupt'
 import { performRerunLast, performRetry, performRewindTo } from './chatStreamHistory'
 import { clearAutoLiveEntry, performReseedLive } from './chatStreamAutoLive'
 import { makeHubHandlers } from './chatStreamHub'
@@ -262,25 +263,36 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionId, pendingAsks],
   )
 
-  // Interrupt: stop the active session's turn, then enqueue a new message to the
-  // SAME session (it dispatches once the stopped turn unwinds).
-  // Resolves to true when the interrupt went through (turn stopped AND the new
-  // message enqueued); false lets the composer keep the draft for a retry. The
-  // stop is awaited on purpose: if it fails the turn is still running, so
-  // enqueuing here would silently turn an "interrupt" into a "queue behind it".
+  // Interrupt: stop the session's turn AND take its next turn slot in one atomic
+  // server-side step (performInterrupt). This used to be two round trips —
+  // sessionControl('stop') then sendMessage — which left the slot free in between,
+  // so another queued message or an autonomous turn (worker notification,
+  // self-wake, schedule) could claim it and the "send now" message landed AFTER
+  // the turn it was meant to cut ahead of. No client-side sequencing can close
+  // that window; only the server holding both halves can.
+  // Resolves to true when the interrupt was accepted; false lets the composer keep
+  // the draft for a retry.
   const interruptTurn = useCallback(
     async (text: string, attachments?: Attachment[]): Promise<boolean> => {
       const sid = activeSessionId
       if (!sid) return false
-      try {
-        await api.sessionControl(sid, 'stop')
-      } catch (e) {
-        setError((e as Error).message)
-        return false
-      }
-      return await sendMessage(text, sid, attachments)
+      return await performInterrupt(
+        {
+          activeSessionId,
+          sessions,
+          thinkingLevel,
+          permissionMode,
+          setPendingSessions,
+          setQueued,
+          setWakeWaits,
+          setError,
+        },
+        text,
+        sid,
+        attachments ?? [],
+      )
     },
-    [activeSessionId, sendMessage, setError],
+    [activeSessionId, sessions, thinkingLevel, permissionMode, setError],
   )
 
   // ---- post-reload recovery (detached turns still running server-side) ----
