@@ -10,10 +10,16 @@
 // it. The kind still drives hub reconciliation (chatStreamHub drops it when the
 // bubble lands) and gates the 'holding' row, so it must not be removed from the
 // data model — only hidden. See hiddenInTray below.
+//
+// 'failed' is the dispatched head whose turn died in PREFLIGHT (session_not_found,
+// agent_not_found, persist_error): the server never published a user_message, so
+// the text exists nowhere else — not in the transcript, not in the queue. Hiding it
+// like 'dispatching' would lose the user's words silently, so it is rendered, with
+// its text intact and removable once the user has read it.
 export interface PendingItem {
   id: string
   text: string
-  kind: 'queue' | 'steer' | 'dispatching' | 'holding'
+  kind: 'queue' | 'steer' | 'dispatching' | 'holding' | 'failed'
   // The session this intervention belongs to. The tray is filtered to the
   // active session, and queue flush / steer dispatch target this session's
   // turn — so staged items for a background turn never apply to another.
@@ -42,7 +48,7 @@ interface Props {
   onClear?: () => void
 }
 
-import { ArrowUp, CornerDownRight, Hourglass, Loader, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, CornerDownRight, Hourglass, Loader, X } from 'lucide-react'
 import { ComposerCard } from './ComposerCard'
 
 // Kinds the tray does not render. A dispatched message is already on its way to the
@@ -74,7 +80,9 @@ export function PendingTray({
     <ComposerCard tone="muted" className="flex flex-col gap-1.5 px-3 py-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Bekleyenler — işleme alınmadan silebilirsin
+          {visible.some((it) => it.kind === 'failed')
+            ? 'Bekleyenler — başlatılamayan mesaj var'
+            : 'Bekleyenler — işleme alınmadan silebilirsin'}
         </span>
         {onClear && queueCount > 1 && (
           <button
@@ -106,6 +114,35 @@ export function PendingTray({
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
                 {it.text}
               </span>
+            </div>
+          )
+        }
+        if (it.kind === 'failed') {
+          // The turn never started, so this text is the ONLY copy of what the user
+          // typed. Shown in the danger tone with the reason, and removable — the
+          // user can copy it out or dismiss it, but it never disappears on its own.
+          return (
+            <div
+              key={it.id}
+              className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)] px-2.5 py-1.5 text-sm"
+              data-testid={`pending-failed-${it.id}`}
+            >
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-danger)]"
+                title="Bu mesaj için tur başlatılamadı; metin kaybolmasın diye burada tutuluyor"
+              >
+                <AlertTriangle size={11} />
+                Gönderilemedi
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
+              <button
+                onClick={() => onRemove(it.id)}
+                title="Kapat"
+                data-testid={`pending-remove-${it.id}`}
+                className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
+              >
+                <X size={13} />
+              </button>
             </div>
           )
         }

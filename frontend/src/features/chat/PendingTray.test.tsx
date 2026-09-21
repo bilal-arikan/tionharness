@@ -136,6 +136,37 @@ describe('PendingTray dispatched head', () => {
     expect(container.textContent).not.toContain('Bekleyenler')
   })
 
+  // The failed row is the opposite case: its turn never started, so the text is
+  // NOT in the transcript and this row is the only copy left on screen.
+  it('renders a failed head with its text, unlike a dispatching one', () => {
+    const failed: PendingItem = {
+      id: 'd-1',
+      text: 'başlatılamayan mesaj',
+      kind: 'failed',
+      sid: 'S1',
+    }
+    const container = renderTray({ items: [failed], onRemove: vi.fn() })
+
+    expect(container.textContent).toContain('başlatılamayan mesaj')
+    expect(container.textContent).toContain('Gönderilemedi')
+  })
+
+  it('dismisses a failed row through onRemove', () => {
+    const onRemove = vi.fn()
+    const failed: PendingItem = {
+      id: 'd-1',
+      text: 'başlatılamayan mesaj',
+      kind: 'failed',
+      sid: 'S1',
+    }
+    const container = renderTray({ items: [failed], onRemove })
+
+    const btn = container.querySelector<HTMLButtonElement>('[data-testid="pending-remove-d-1"]')
+    expect(btn).not.toBeNull()
+    btn!.click()
+    expect(onRemove).toHaveBeenCalledWith('d-1')
+  })
+
   it('numbers queue positions ignoring the hidden head', () => {
     const container = renderTray({
       items: [

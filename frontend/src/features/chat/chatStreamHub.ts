@@ -479,7 +479,15 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
               sid,
             })
           }
-          setQueued(items)
+          // 'failed' rows are client-side remnants of a turn that died in preflight
+          // (see TurnError below) and the server's queue view knows nothing about
+          // them. Rebuilding the tray from the event alone would erase the user's
+          // only surviving copy of that text, so carry them over; they leave only
+          // when the user dismisses them.
+          setQueued((prev) => [
+            ...prev.filter((p) => p.kind === 'failed' && p.sid === sid),
+            ...items,
+          ])
           break
         }
         case HubKind.Presence: {
@@ -495,7 +503,30 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           break
         }
         case HubKind.TurnDone:
-        case HubKind.TurnError:
+        case HubKind.TurnError: {
+          if (ev.kind === HubKind.TurnError) {
+            // A turn that died in PREFLIGHT never published user_message, so the
+            // dispatched head was never handed over to a transcript bubble and the
+            // UserMessage handler never dropped it. Left alone it would sit in the
+            // model as a 'dispatching' item the tray deliberately does not render —
+            // the user's text would then exist nowhere on screen. Convert it to
+            // 'failed' so the words survive visibly instead of being swallowed.
+            //
+            // Keyed on clientMsgId so only the head THIS error belongs to is
+            // converted and an error cannot resurrect an unrelated message. A turn
+            // that failed AFTER committing already has its transcript bubble and its
+            // head was already dropped, so this is a no-op there.
+            const ep = (ev.payload ?? {}) as { clientMsgId?: string }
+            setQueued((prev) =>
+              prev.map((p) =>
+                p.kind === 'dispatching' &&
+                p.sid === sid &&
+                (!ep.clientMsgId || p.id === ep.clientMsgId)
+                  ? { ...p, kind: 'failed' as const }
+                  : p,
+              ),
+            )
+          }
           setStreamingSessions((p) => withRemoved(p, sid))
           setPendingSessions((p) => withRemoved(p, sid))
           setPendingAsks((p) => withoutKey(p, sid))
@@ -512,6 +543,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // (not per Reply) so a multi-agent turn still costs one refresh.
           bumpMeter()
           break
+        }
       }
     },
     onReset: () => {

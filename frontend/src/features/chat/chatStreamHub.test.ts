@@ -373,3 +373,55 @@ describe('queue_update pending items', () => {
     expect(queued().map((q) => q.kind)).toEqual(['dispatching'])
   })
 })
+
+// A preflight failure (session_not_found, agent_not_found, persist_error) publishes
+// turn_error and NEVER publishes user_message, so the dispatched head is never
+// handed over to a transcript bubble. The tray does not render 'dispatching' items,
+// so without this conversion the user's text would be visible nowhere at all.
+describe('preflight failure keeps the message visible', () => {
+  it('converts the orphaned dispatched head into a failed row', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, { queue: [], inflight: { clientMsgId: 'c-1', text: 'giden' } })
+    expect(queued().map((q) => q.kind)).toEqual(['dispatching'])
+
+    send(HubKind.TurnError, { clientMsgId: 'c-1', reason: 'persist_error', error: 'disk dolu' })
+
+    expect(queued()).toHaveLength(1)
+    expect(queued()[0].kind).toBe('failed')
+    // The whole point: the text the user typed survives the failed turn.
+    expect(queued()[0].text).toBe('giden')
+  })
+
+  it('leaves an unrelated dispatched head alone when the error names another message', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, { queue: [], inflight: { clientMsgId: 'c-1', text: 'giden' } })
+
+    send(HubKind.TurnError, { clientMsgId: 'c-OTHER', reason: 'persist_error' })
+
+    expect(queued().map((q) => q.kind)).toEqual(['dispatching'])
+  })
+
+  it('keeps the failed row when a later queue_update rebuilds the tray', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, { queue: [], inflight: { clientMsgId: 'c-1', text: 'giden' } })
+    send(HubKind.TurnError, { clientMsgId: 'c-1', reason: 'agent_not_found' })
+
+    // The server's queue view knows nothing about the failed row, so a rebuild must
+    // not erase the only surviving copy of the text.
+    send(HubKind.QueueUpdate, { queue: [{ clientMsgId: 'c-2', text: 'bekleyen' }] })
+
+    expect(queued().map((q) => q.kind)).toEqual(['failed', 'queue'])
+    expect(queued()[0].text).toBe('giden')
+  })
+
+  it('drops the dispatched head on a normal turn_done instead of marking it failed', () => {
+    const { send, queued } = queueHarness()
+    send(HubKind.QueueUpdate, { queue: [], inflight: { clientMsgId: 'c-1', text: 'giden' } })
+
+    send(HubKind.TurnDone, {})
+
+    // turn_done means the turn ran; the head was already handed to a transcript
+    // bubble by the user_message handler, so nothing must be resurrected here.
+    expect(queued().every((q) => q.kind !== 'failed')).toBe(true)
+  })
+})

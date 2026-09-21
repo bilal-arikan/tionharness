@@ -508,6 +508,15 @@ export function useChatStream(deps: ChatStreamDeps) {
       const sid = activeSessionId
       if (!sid) return
       const prev = queuedRef.current
+      // A 'failed' row is a CLIENT-SIDE remnant: its message already left the
+      // server queue (it was dispatched) and then died in preflight, so the row
+      // exists only to keep the user's text on screen. Cancelling it on the server
+      // would 404 on a message that is no longer queued and the rollback would put
+      // the row back with an error the user can do nothing about. Dismiss locally.
+      if (prev.some((p) => p.id === id && p.kind === 'failed')) {
+        setQueued(prev.filter((p) => p.id !== id))
+        return
+      }
       setQueued(prev.filter((p) => p.id !== id))
       api.cancelQueued(sid, id).catch((e) => {
         setQueued(prev)
