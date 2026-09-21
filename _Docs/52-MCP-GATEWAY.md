@@ -16,7 +16,12 @@
 > yön de kapalı: bir bağlantı tur ortasında **beklenmedik** biçimde ölürse
 > `Pool.SetOnDisconnect` → `ws:mcp_status` olayı (UI kartı) + sunucu başına turda bir
 > kez ajana sistem notu (2026-09-22, §14). Temiz kapanışlar (reaper, `CloseSession`,
-> config re-dial, `Pool.Close`) yapısal olarak sessizdir. Harici
+> config re-dial, `Pool.Close`) yapısal olarak sessizdir. MCP'nin **veri yarısı** da
+> artık var: `list_mcp_resources` / `read_mcp_resource` (2026-09-22, §15) —
+> `resources/list` + `resources/templates/list` + `resources/read`, sunucu başına
+> izole hata, `initialize` yeteneklerine göre geçitli (`SupportsResources`), ikili
+> içerik scratchpad'e dosya olarak (context'e base64 **girmez**), metin 64 KB'de
+> açıkça kırpılır; yalnız native döngüde. Harici
 > `/mcp/gateway` sunumu (Faz 3) hâlâ opsiyonel/ertelenmiş. Dayandığı
 > dosyalar: `internal/interaction/server.go`, `internal/agent/climcp.go`,
 > `internal/providers/claudecli_session.go`.
@@ -1197,3 +1202,99 @@ ayrımı, dört temiz yolun sessizliği, `splitEntryKey`),
 `internal/agent/mcpdisconnect_test.go` (shared/scoped oturum kapsamı, `take()`
 dedupe'u, tekrarlı ölümlerin tek kayda inmesi, TTL, not metni),
 `frontend/src/features/tools/mcpDisconnects.test.ts` (kart indirgeyicisi).
+
+## 15. MCP kaynakları — `list_mcp_resources` / `read_mcp_resource` (TSK909, 2026-09-22)
+
+MCP'nin iki yüzü vardır: **araçlar** (yan etkili çağrılar) ve **kaynaklar**
+(adreslenebilir içerik — doküman, şema, veri kümesi, üretilmiş dosya). TionHarness
+bugüne dek yalnız araçları konuşuyordu; değeri kaynaklarında olan bir sunucu
+buradaki ajanlar için tamamen görünmezdi. Bu bölüm kaynak yüzeyini anlatır.
+
+### Protokol
+
+Üç metot elle implemente edildi (`internal/mcp/resources.go`), deponun geri
+kalanıyla aynı SDK'sız stilde:
+
+- `resources/list` — sabit URI'li somut kaynaklar.
+- `resources/templates/list` — **parametreli** URI'ler (RFC 6570, `db://{table}`).
+  Alan adı burada `uri` değil `uriTemplate`'tir; `Resource.URI`'ye eşlenip
+  `Template=true` ile işaretlenir.
+- `resources/read` — bir URI'nin arkasındaki içerik blokları.
+
+İki taşıma da (stdio `client.go`, Streamable HTTP `http.go`) aynı üç `Client`
+metodunu uygular: `SupportsResources()`, `ListResources()`, `ReadResource()`.
+
+### Yetenek geçidi — `initialize` sonucu artık saklanıyor
+
+Kaynak desteği MCP'de **opsiyoneldir**. Eskiden `initialize` **sonucu** tamamen
+atılıyordu; şimdi `ServerCapabilities` olarak ayrıştırılıp istemcide tutuluyor
+(`parseInitializeResult`). `capabilities.resources` ilan etmeyen bir sunucuya
+kaynak metodları **hiç sorulmaz** — aksi halde modele JSON-RPC `-32601`
+("method not found") ulaşır ve bu, eksik bir opsiyonel özellikten çok
+TionHarness'te bir bug gibi okunur. Liste çıktısında o sunucu
+"no resource support" satırıyla **açıkça** görünür: sessizce atlanmaz.
+
+### Hata izolasyonu — sunucu başına
+
+`Pool.Resources` her sunucu için bir `ServerResources` döndürür (katalog
+kurulumundaki `errs` haritasının aynı şekli). Dört ayrı durum ayırt edilir ve
+hiçbiri diğerini silmez:
+
+| Durum | Alan | Çıktı |
+| --- | --- | --- |
+| Kaynakları var | `Resources` | listelenir |
+| Kaynağı yok | — | **boş liste**, hata değil |
+| Kaynak desteği yok | `Unsupported` | "no resource support" |
+| Bağlanamadı / liste patladı | `Err` | `ERROR — <sebep>` |
+
+`resources/templates/list` hatası `resources/list`'i **iptal etmez**: somut
+kaynaklar döner, şablon hatası `Note` alanında raporlanır. Tersi geçerli değildir
+— `resources/list` hatası o sunucu için ölümcüldür, geriye raporlanacak bir şey
+kalmaz.
+
+Şekli bozuk bir liste yanıtı **görünür hatadır**, boş liste değil: bozuk sunucu
+ile kaynağı olmayan sunucu ayırt edilebilir kalmalıdır.
+
+### İkili içerik asla context'e girmez
+
+`read_mcp_resource` metin içeriği satır içi döndürür; **ikili** içerik oturum
+scratchpad'i altındaki `mcp-resources/` dizinine dosya olarak yazılır ve
+yol + mimeType + boyut döndürülür. Gerekçe: base64 bağlam penceresinde saf
+israftır (2 MB'lık bir görsel ~700k token) ve model onunla zaten bir şey yapamaz;
+bir yol ise `Read`'e, kabuk komutuna veya başka bir araca verilebilir.
+
+Oturum bağlı değilse yazacak yer yoktur — bu **hata** olarak döner, satır içine
+düşülmez. Satır içine düşmek, bu yolun önlemek için var olduğu şeyin ta kendisi
+olurdu.
+
+Metin içerik `maxResourceTextBytes` (64 KB) ile sınırlıdır ve kırpma **açıkça**
+raporlanır (`TRUNCATED: showing the first N of M bytes`) — model bir önekin
+üzerinde tüm belgeye sahipmiş gibi akıl yürütmez.
+
+### Kapsam ve kayıt
+
+Araçlar `wait_for_mcp_servers` ile **aynı koşulda** kurulur: havuz var **ve** en
+az bir yapılandırılmış sunucu (`toolsetup.go`). `scoped` bir sunucu çağıranın
+kendi `(session, agent)` havuz yuvasından okunur (`mcpScopeKey`) — ikinci bir
+bağlantı açılmaz. Görünürlük kademesi `summary`: isim ne yaptıklarını söyler ama
+"resource"ın araç değil sunucu tarafı belge/şema demek olduğunu söylemez.
+
+### Backend kararı — yalnız native
+
+- **Native Go döngüsü:** buna ihtiyacı olan tek backend. Burada uygulandı.
+- **claude-cli:** MCP istemcilerini `--mcp-config`'ten kendi başlatır ve
+  kaynakları zaten native destekler (`ListMcpResources` / `ReadMcpResource`).
+- **codex-cli:** istemcileri yine kendi sahiplenir, kaynak desteği yoktur.
+  Köprülemek aynı sunucuya **ikinci bir stdio süreci** açardı — yinelenen
+  bağlantı, yinelenen oturum durumu.
+
+İkisi de `cliLazyBridgeExcluded`'dadır (her iki lehçe için de).
+
+Testler: `internal/mcp/resources_test.go` (yetenek geçidi ve "hiç sorulmadı"
+kanıtı, şablon birleştirme, şablon hatasının somut kaynakları düşürmemesi, liste
+hatasının ölümcüllüğü, bozuk yükün görünür hata olması, boş listenin hata
+olmaması, text/blob ayrımı, havuz düzeyinde sunucu başına sonuç),
+`internal/agent/mcpresources_test.go` (kayıt koşulu + kademe, metadata ve şablon
+etiketi, desteklemeyen/boş/bozuk sunucu raporu, bilinmeyen sunucu hatası, ikili
+içeriğin dosyaya yazılması + base64'ün context'e girmediğinin iki yönlü kanıtı,
+kırpma raporu, CLI köprüsünden dışlanma, scoped yuva kullanımı).

@@ -77,6 +77,7 @@ var goldenTiersAuto = map[string]string{
 	"list_flow_runs":        "hidden",
 	"list_flows":            "hidden",
 	"list_hooks":            "hidden",
+	"list_mcp_resources":    "summary",
 	"list_mcp_servers":      "hidden",
 	"list_providers":        "hidden",
 	"list_schedules":        "hidden",
@@ -91,6 +92,7 @@ var goldenTiersAuto = map[string]string{
 	"read_config":           "hidden",
 	"read_lessons":          "name-only",
 	"read_logs":             "hidden",
+	"read_mcp_resource":     "summary",
 	"read_session_debug":    "name-only",
 	"render_template":       "name-only",
 	"request_confirmation":  "full",
@@ -176,6 +178,7 @@ var goldenTiersReadOnly = map[string]string{
 	"list_flow_runs":        "hidden",
 	"list_flows":            "hidden",
 	"list_hooks":            "hidden",
+	"list_mcp_resources":    "summary",
 	"list_mcp_servers":      "hidden",
 	"list_providers":        "hidden",
 	"list_schedules":        "hidden",
@@ -190,6 +193,7 @@ var goldenTiersReadOnly = map[string]string{
 	"read_config":           "hidden",
 	"read_lessons":          "name-only",
 	"read_logs":             "hidden",
+	"read_mcp_resource":     "summary",
 	"read_session_debug":    "name-only",
 	"render_template":       "name-only",
 	"request_confirmation":  "full",
@@ -306,6 +310,11 @@ var envGatedTools = map[string]bool{
 	// its tier is verified only where it is actually built (see the wait tool's own
 	// registration test).
 	"wait_for_mcp_servers": true,
+	// The MCP resource pair rides the SAME gate (pool + at least one enabled
+	// server): with no server there is nothing to list or read. Verified where it
+	// is actually built, in mcpresources_test.go.
+	"list_mcp_resources": true,
+	"read_mcp_resource":  true,
 }
 
 // tierCensus collects the effective visibility tier of every registered built-in

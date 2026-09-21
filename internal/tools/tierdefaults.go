@@ -107,6 +107,12 @@ var defaultToolTiers = map[string]string{
 	// MCP server or finds a namespaced tool missing. The name states the whole
 	// contract; the schema (two optional fields) is pulled on demand.
 	"wait_for_mcp_servers": VisibilityNameOnly,
+	// MCP resources — the data half of MCP. Summary rather than name-only: the
+	// names say WHAT they touch but not that "resource" means a server-side
+	// document/schema/dataset rather than a tool, and an agent that never learns
+	// the distinction simply never looks. One summary line per turn buys that.
+	"list_mcp_resources": VisibilitySummary,
+	"read_mcp_resource":  VisibilitySummary,
 	// run_adhoc_flow — multi-round delegation plans are rare next to plain
 	// run_subagent calls, and its nested steps/tasks schema is large. The first
 	// description line names the capability; the schema is pulled on demand.

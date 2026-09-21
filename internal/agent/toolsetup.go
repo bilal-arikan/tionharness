@@ -642,12 +642,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// there is no connection to wait for. Withheld from the CLI bridge
 		// (cliLazyBridgeExcluded) — those providers own their own MCP clients.
 		reg.Add(tools.NewMCPServerWaitTool(r.newMCPWaiter(reg, agent, mcpScopeKey)))
-		// Explicit, bounded warm-up for servers that were not dialed when this turn
-		// started (just enabled, just restarted, or simply cold). It merges the
-		// warmed servers' tools into THIS registry, so they are callable on the next
-		// pass of the tool loop. Registered inside the pool branch: without a pool
-		// there is no connection to wait for. Withheld from the CLI bridge
-		// (cliLazyBridgeExcluded) — those providers own their own MCP clients.
+		// The RESOURCE half of MCP (_Docs/52): servers whose value is in their
+		// documents/schemas/datasets rather than their tools were invisible before
+		// these two. Registered on the same condition as the wait tool — a pool and
+		// at least one configured server — because without a pooled connection there
+		// is nothing to read resources over. Native-loop only: the CLI backends spawn
+		// their own MCP clients and support resources themselves
+		// (cliLazyBridgeExcluded).
+		reg.Add(tools.NewMCPListResourcesTool(r.newMCPResourceLister(mcpScopeKey)))
+		reg.Add(tools.NewMCPReadResourceTool(r.newMCPResourceReader(mcpScopeKey)))
 		// Bundle-level defaults need the MCP entries to exist, so they run here
 		// rather than next to ApplyToolDefaults. No-op for built-ins today (no
 		// group rows ship), and workspace/agent overrides below still win.
@@ -1025,6 +1028,14 @@ var cliLazyBridgeExcluded = map[string]bool{
 	// clients themselves, so the pool would answer ServerUnknown for every server
 	// and any verdict it gave would be a fabrication. Withheld for BOTH dialects.
 	"wait_for_mcp_servers": true,
+	// list_mcp_resources / read_mcp_resource read through TionHarness's own pool,
+	// which never dials for a CLI backend. claude-cli ships native
+	// ListMcpResources/ReadMcpResource over the clients it owns; codex-cli owns its
+	// clients too, so bridging would open a SECOND stdio subprocess to the same
+	// server — a duplicate connection with duplicate session state. Withheld for
+	// BOTH dialects; native-only is the deliberate decision (_Docs/52).
+	"list_mcp_resources": true,
+	"read_mcp_resource":  true,
 }
 
 // claudeOnlyBridgeExclusions narrows cliLazyBridgeExcluded to the entries that are

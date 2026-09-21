@@ -96,6 +96,7 @@ var builtinCategory = map[string]string{
 	"skill_validate": CategorySkillsMCP, "list_mcp_servers": CategorySkillsMCP,
 	"create_mcp_server": CategorySkillsMCP, "toggle_mcp_server": CategorySkillsMCP,
 	"delete_mcp_server": CategorySkillsMCP, "wait_for_mcp_servers": CategorySkillsMCP,
+	"list_mcp_resources": CategorySkillsMCP, "read_mcp_resource": CategorySkillsMCP,
 
 	// Settings, config, workspaces, secrets
 	"get_settings": CategoryConfig, "update_settings": CategoryConfig,

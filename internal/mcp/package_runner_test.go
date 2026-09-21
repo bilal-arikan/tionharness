@@ -24,6 +24,17 @@ func (*runnerTestClient) SetLogger(*slog.Logger, string) {}
 
 func (*runnerTestClient) SetOnDisconnect(func(error, int)) {}
 
+// This fake exists to exercise the package-runner lock, not the resource
+// surface: it advertises no resource support, exactly as a server that never
+// declared capabilities.resources.
+func (*runnerTestClient) SupportsResources() bool { return false }
+func (*runnerTestClient) ListResources(context.Context) ([]Resource, error) {
+	return nil, ErrResourcesUnsupported
+}
+func (*runnerTestClient) ReadResource(context.Context, string) ([]ResourceContent, error) {
+	return nil, ErrResourcesUnsupported
+}
+
 func TestCatalogSerializesSamePackageAcrossScopes(t *testing.T) {
 	p := NewPool()
 	defer p.Close()

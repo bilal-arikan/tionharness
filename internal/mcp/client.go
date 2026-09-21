@@ -41,6 +41,21 @@ type Client interface {
 	ListTools(ctx context.Context) ([]Tool, error)
 	// CallTool invokes a tool with JSON arguments and flattens the text content.
 	CallTool(ctx context.Context, name string, args json.RawMessage) (CallToolResult, error)
+	// SupportsResources reports whether the server advertised
+	// capabilities.resources on the initialize handshake. Resources are an
+	// OPTIONAL part of MCP, so this gates the two calls below: asking a server
+	// that never advertised them yields a "method not found" error that tells
+	// the caller nothing.
+	SupportsResources() bool
+	// ListResources returns the server's concrete resources AND its resource
+	// TEMPLATES (parameterized URIs, flagged Template=true) as one list. The two
+	// underlying calls are independent: a server that answers resources/list but
+	// fails resources/templates/list still yields the concrete entries, with the
+	// template failure returned alongside them.
+	ListResources(ctx context.Context) ([]Resource, error)
+	// ReadResource fetches the content blocks behind one resource URI. Binary
+	// blocks come back as decoded bytes, never base64 text.
+	ReadResource(ctx context.Context, uri string) ([]ResourceContent, error)
 	// Alive reports whether the connection is still usable.
 	Alive() bool
 	// Close terminates the connection (and any subprocess).
@@ -120,6 +135,11 @@ type StdioClient struct {
 	// onDead is invoked (async) exactly once, from failAll, when the read loop
 	// exits WITHOUT a preceding Close() — i.e. the server really died.
 	onDead func(err error, pendingCalls int)
+
+	// caps is what the server advertised on initialize. Kept because the
+	// OPTIONAL parts of MCP (resources today) may only be exercised on a server
+	// that declared them; the handshake result used to be discarded.
+	caps ServerCapabilities
 
 	logger     *slog.Logger // optional: read-loop death / decode noise (nil-safe)
 	serverName string       // server label attached to logs (set with the logger)
@@ -317,18 +337,45 @@ func (c *StdioClient) failAll(err error) {
 
 // initialize performs the MCP handshake: initialize request + initialized note.
 // It advertises tools.listChanged so servers send incremental updates we honor
-// via the onChange callback.
+// via the onChange callback, and RETAINS the server's own capabilities so the
+// optional surfaces (resources) are only exercised where they exist.
 func (c *StdioClient) initialize(ctx context.Context) error {
-	_, err := c.call(ctx, "initialize", map[string]any{
-		"protocolVersion": protocolVersion,
-		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
-		"clientInfo":      map[string]string{"name": clientName, "version": clientVersion},
-	})
+	raw, err := c.call(ctx, "initialize", initializeParams())
 	if err != nil {
 		return fmt.Errorf("mcp initialize: %w", err)
 	}
+	caps, err := parseInitializeResult(raw)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.caps = caps
+	c.mu.Unlock()
 	// Fire-and-forget the initialized notification (no id, no response).
 	return c.notify("notifications/initialized", map[string]any{})
+}
+
+// SupportsResources reports whether the server declared capabilities.resources.
+func (c *StdioClient) SupportsResources() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.caps.Resources != nil
+}
+
+// ListResources returns the server's concrete resources plus its templates.
+func (c *StdioClient) ListResources(ctx context.Context) ([]Resource, error) {
+	if !c.SupportsResources() {
+		return nil, ErrResourcesUnsupported
+	}
+	return listResources(ctx, c.call)
+}
+
+// ReadResource fetches the content blocks behind one resource URI.
+func (c *StdioClient) ReadResource(ctx context.Context, uri string) ([]ResourceContent, error) {
+	if !c.SupportsResources() {
+		return nil, ErrResourcesUnsupported
+	}
+	return readResource(ctx, c.call, uri)
 }
 
 // CallToolResult is the textual result of a tools/call.

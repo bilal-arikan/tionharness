@@ -50,6 +50,7 @@ type httpClient struct {
 	closed    bool
 	onChange  func()                            // invoked (async) on notifications/tools/list_changed
 	onDead    func(err error, pendingCalls int) // stored for contract parity; never fired (see SetOnDisconnect)
+	caps      ServerCapabilities                // what the server advertised on initialize (gates resources)
 
 	logger     *slog.Logger
 	serverName string
@@ -125,18 +126,45 @@ func (c *httpClient) Alive() bool {
 	return !c.closed
 }
 
-// initialize performs the MCP handshake: initialize request + initialized note.
+// initialize performs the MCP handshake: initialize request + initialized note,
+// retaining the server's advertised capabilities (see SupportsResources).
 func (c *httpClient) initialize(ctx context.Context) error {
-	_, err := c.call(ctx, "initialize", map[string]any{
-		"protocolVersion": protocolVersion,
-		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
-		"clientInfo":      map[string]string{"name": clientName, "version": clientVersion},
-	})
+	raw, err := c.call(ctx, "initialize", initializeParams())
 	if err != nil {
 		return fmt.Errorf("mcp initialize: %w", err)
 	}
+	caps, err := parseInitializeResult(raw)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.caps = caps
+	c.mu.Unlock()
 	// Fire-and-forget the initialized notification (no id, no response).
 	return c.notify(ctx, "notifications/initialized", map[string]any{})
+}
+
+// SupportsResources reports whether the server declared capabilities.resources.
+func (c *httpClient) SupportsResources() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.caps.Resources != nil
+}
+
+// ListResources returns the server's concrete resources plus its templates.
+func (c *httpClient) ListResources(ctx context.Context) ([]Resource, error) {
+	if !c.SupportsResources() {
+		return nil, ErrResourcesUnsupported
+	}
+	return listResources(ctx, c.call)
+}
+
+// ReadResource fetches the content blocks behind one resource URI.
+func (c *httpClient) ReadResource(ctx context.Context, uri string) ([]ResourceContent, error) {
+	if !c.SupportsResources() {
+		return nil, ErrResourcesUnsupported
+	}
+	return readResource(ctx, c.call, uri)
 }
 
 // ListTools returns the tools advertised by the server.

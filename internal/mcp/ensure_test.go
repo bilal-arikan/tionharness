@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -20,6 +21,15 @@ type fakeClient struct {
 	// fires it only from die(), never from Close(), so a test that closes the
 	// client the way the pool does cannot produce a disconnect event.
 	onDead func(err error, pendingCalls int)
+
+	// Resource surface. resourcesOK mirrors a server advertising
+	// capabilities.resources; when false the resource calls answer exactly as a
+	// real client does for a server that never declared support.
+	resourcesOK bool
+	resources   []Resource
+	listErr     error
+	contents    []ResourceContent
+	readErr     error
 }
 
 func (c *fakeClient) ListTools(context.Context) ([]Tool, error) {
@@ -47,6 +57,38 @@ func (c *fakeClient) Close() error {
 
 func (c *fakeClient) SetOnToolsChanged(func())       {}
 func (c *fakeClient) SetLogger(*slog.Logger, string) {}
+
+func (c *fakeClient) SupportsResources() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.resourcesOK
+}
+
+func (c *fakeClient) ListResources(context.Context) ([]Resource, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.resourcesOK {
+		return nil, ErrResourcesUnsupported
+	}
+	return c.resources, c.listErr
+}
+
+func (c *fakeClient) ReadResource(_ context.Context, uri string) ([]ResourceContent, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.resourcesOK {
+		return nil, ErrResourcesUnsupported
+	}
+	if c.readErr != nil {
+		return nil, c.readErr
+	}
+	for _, rc := range c.contents {
+		if rc.URI == uri {
+			return []ResourceContent{rc}, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown resource %q", uri)
+}
 
 func (c *fakeClient) SetOnDisconnect(fn func(err error, pendingCalls int)) {
 	c.mu.Lock()

@@ -4,6 +4,56 @@
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+## MCP kaynakları: `list_mcp_resources` + `read_mcp_resource` (TSK909, 2026-09-22) ✅
+
+- **İhtiyaç:** MCP'nin **veri yarısı** TionHarness'te hiç yoktu. Bir sunucunun
+  değeri araçlarında değil **kaynaklarında** (doküman, şema, veri kümesi,
+  üretilmiş dosya) ise, o sunucu buradaki ajanlar için görünmezdi. Claude Code
+  `ListMcpResources` / `ReadMcpResource` ile bunu zaten sunuyordu; bizde karşılığı
+  yoktu.
+- **Protokol katmanı (`internal/mcp/resources.go`):** `resources/list`,
+  `resources/templates/list` ve `resources/read` elle implemente edildi (SDK yok,
+  deponun geri kalanıyla aynı stil). Her iki taşıma da (`client.go` stdio,
+  `http.go` Streamable HTTP) aynı üç yeni `Client` metodunu uyguluyor:
+  `SupportsResources()`, `ListResources()`, `ReadResource()`.
+- **Yetenek (capability) artık saklanıyor:** `initialize` **sonucu** eskiden
+  atılıyordu; şimdi `ServerCapabilities` olarak ayrıştırılıp istemcide tutuluyor.
+  Kaynak desteği **opsiyoneldir** — `capabilities.resources` ilan etmeyen bir
+  sunucuya hiç sorulmuyor (JSON-RPC "method not found" hatası modele ulaşmıyor) ve
+  listede "kaynak desteği yok" diye **açıkça** yazılıyor. Sessiz atlama yok.
+- **Sunucu başına hata izolasyonu:** `Pool.Resources` her sunucu için bir
+  `ServerResources` döndürüyor (`BuildCatalog`'un `errs` şeklinin aynısı). Bir
+  sunucunun ölü olması diğer dördünün listesini silmiyor. `resources/templates/list`
+  hatası `resources/list`'i **iptal etmiyor**: somut kaynaklar dönüyor, şablon
+  hatası `Note` olarak raporlanıyor.
+- **Şablonlar işaretli:** parametreli URI'ler (`db://{table}`) listeye dahil ama
+  `[TEMPLATE — fill in the {placeholders} before reading]` etiketiyle — model
+  bunları olduğu gibi okumaya kalkmıyor.
+- **Binary asla context'e girmiyor:** ikili içerik base64 olarak satır içine
+  **alınmıyor**; oturum scratchpad'i altına (`mcp-resources/`) dosya olarak
+  yazılıp yol + mimeType + boyut döndürülüyor. 2 MB'lık bir görsel ~700k token'lık
+  gürültü demekti; yol ise modelin `Read` veya kabuk komutuna verebileceği bir şey.
+  Oturum yoksa bu **hata** — satır içine düşmüyor (düşmesi, önlemek için var olan
+  şeyin ta kendisi olurdu).
+- **Kırpma açıkça raporlanıyor:** metin içerik 64 KB ile sınırlı; kırpıldığında
+  `TRUNCATED: showing the first N of M bytes` yazıyor. Sessiz kırpma yok.
+- **Bozuk liste görünür hata:** şekli bozuk bir `resources/list` yanıtı decode
+  hatası olarak yükseliyor — boş liste **değil**. Bozuk sunucu ile boş sunucu
+  ayırt edilebilir kalıyor; kaynağı olmayan sunucu ise hatasız **boş liste**.
+- **Kapsam (scope) doğru:** `scoped` bir sunucu çağıranın kendi
+  `(session, agent)` havuz yuvasından okunuyor (`mcpScopeKey`), ikinci bir
+  bağlantı açılmıyor.
+- **Backend kararı:** yalnız **native** döngü. `claude-cli` kendi MCP
+  istemcilerini `--mcp-config`'ten başlatıyor ve kaynakları zaten native destekliyor;
+  `codex-cli` de kendi istemcilerine sahip — köprülemek aynı sunucuya **ikinci bir
+  stdio süreci** açardı. İkisi için de `cliLazyBridgeExcluded`'da.
+- **Görünürlük:** ikisi de `summary` kademesinde. İsim ne yaptıklarını söylüyor
+  ama "resource"ın araç değil **sunucu tarafı belge/şema** demek olduğunu
+  söylemiyor; bunu öğrenmeyen ajan hiç bakmaz. Turda bir satır bunu satın alıyor.
+- **Dosyalar:** `internal/mcp/{resources.go,pool_resources.go}`,
+  `internal/tools/builtin_mcp_resources.go`, `internal/agent/mcpresources.go`;
+  kayıt `toolsetup.go` (havuz **ve** en az bir yapılandırılmış sunucu koşulu).
+
 ## `monitor` — arka plan kabuğu çıktısında ajanı uyandırma (TSK911, 2026-09-22) ✅
 
 - **İhtiyaç:** Uzun süren bir arka plan işini (dev server, test koşusu) bekleyen
