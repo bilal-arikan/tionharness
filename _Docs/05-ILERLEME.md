@@ -58,6 +58,18 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   kurucu, araç döngüsü ve sohbet turu onu çağırıyor) ama artık yöneticiye
   delege ediyor; ölü kalan `zgIndexed` / `zvecGrepIndexRunning` guard'ları
   defter onların işini üstlendiği için kaldırıldı.
+- **Gerçek dosya sisteminde create doğrulaması:** Geliştirici makinesinde depo
+  kökünde elle kurulmuş `.zvec-grep/` olduğu için create yolu (ve yalnız orada
+  koşan `ensureZvecGrepGitExclude`) canlıda hiç çalışmıyordu.
+  `internal/agent/indexmanager_realfs_test.go` → `TestManagedIndexRealCreateFromMissing`
+  `t.TempDir()` içinde `git init` edilmiş küçük bir depoda **kurulu `zg`** ile
+  (indeksleyici stub'lanmadan) missing → indexing → ready geçişini, `.zvec-grep/`
+  oluşumunu, `.git/info/exclude` girişini (ve `git status`'ta untracked
+  görünmemesini) ve ikinci çağrının yeniden indekslememesini doğrular.
+  `TestManagedIndexRealSkipsScratchpad` gerçek binary çözülebilirken de
+  scratchpad'in indekslenmediğini doğrular. `zg`/`git` yoksa veya `-short`
+  modunda `t.Skip` — uydurma PASS yok. Exclude yazımı geçici olarak bozulunca
+  test FAIL veriyor (mutasyonla doğrulandı).
 - **Sonraki adım (bu kartın kapsamı dışı):** ajan tarafında `search_index`
   aracı (Card C) ve Ayarlar'da indeks paneli (Card D) bu yönetici + endpoint
   üzerine bağlanacak.

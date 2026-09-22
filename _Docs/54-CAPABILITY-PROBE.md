@@ -20,7 +20,9 @@
 > embedding modeli **veya** araç sürümü değişince `rebuild` (eski vektörler farklı
 > bir uzaydan geldiği için `refresh` sessizce anlamsız sonuç verirdi), drop ise
 > yalnız kök yolunu tekrar eden kullanıcı onayıyla. Durum
-> `GET /api/search-indexes`'ten okunur. Ayrıntı: `_Docs/05`. Yetenek yalnız
+> `GET /api/search-indexes`'ten okunur. Create yolu (ve `.git/info/exclude`
+> yazımı) kurulu `zg` ile gerçek bir `git init` deposunda da test edilir
+> (`TestManagedIndexRealCreateFromMissing`; `zg` yoksa skip). Ayrıntı: `_Docs/05`. Yetenek yalnız
 > **enabled bir MCP sunucu satırı** varken tetiklenir: WS5 workspace'ine
 > `zvec_grep` satırı 2026-09-22'de eklendi (TSK974, `_Docs/05`), o tarihe kadar
 > blok bu workspace'te hiç yayınlanmamıştı. Blok yayınlanmasının **tek başına
