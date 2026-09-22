@@ -965,6 +965,9 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// Delete one index. USER action, confirmation-gated (the body must repeat the
 	// root); deliberately not an agent tool.
 	mux.HandleFunc("POST /api/search-indexes/drop", s.handleSearchIndexDrop)
+	// Refresh or rebuild one index on request. Also a USER action: it runs the
+	// action the user named rather than the one the automatic path would decide on.
+	mux.HandleFunc("POST /api/search-indexes/refresh", s.handleSearchIndexRefresh)
 }
 
 // workspaceQueryKeys are the query parameters that scope a request to a workspace,
