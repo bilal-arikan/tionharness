@@ -110,6 +110,16 @@ jobs:
 
       # --- publish -------------------------------------------------------------
 
+      # Release notes are generated from the conventional commits in
+      # <previous version tag>..<this tag> (see internal/changelog). The same
+      # command writes _Docs/CHANGELOG.md and _Docs/release.json, which the feed
+      # step below commits alongside latest.json.
+      - name: Generate changelog
+        run: |
+          go run ./cmd/changelog write "v$VERSION"
+          go run ./cmd/changelog render "v$VERSION" > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+
       # softprops/action-gh-release@v2 (major pinned) creates the release for the
       # tag and uploads every archive plus SHA256SUMS. latest.json is NOT an asset;
       # it is served from Pages.
@@ -118,6 +128,7 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           name: v${{ env.VERSION }}
+          body_path: ${{ runner.temp }}/release-notes.md
           fail_on_unmatched_files: true
           files: |
             dist/release/${{ env.VERSION }}/*.tar.gz
@@ -126,6 +137,11 @@ jobs:
 
       # Only now, with every asset downloadable, does the feed start advertising
       # this version. The reverse order would point clients at 404s.
+      #
+      # The changelog is regenerated AFTER the branch switch rather than carried
+      # over from the earlier step: `git checkout` would discard files written on
+      # the detached tag checkout. Regenerating is cheap and reads the same tag,
+      # so both copies are identical by construction.
       - name: Publish feed to Pages
         run: |
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
@@ -133,16 +149,17 @@ jobs:
           git checkout "$DEFAULT_BRANCH"
           git pull --ff-only origin "$DEFAULT_BRANCH"
           cp "dist/release/$VERSION/latest.json" website/public/latest.json
-          if git diff --quiet -- website/public/latest.json; then
-            echo "latest.json unchanged - nothing to commit."
+          go run ./cmd/changelog write "v$VERSION"
+          if git diff --quiet -- website/public/latest.json _Docs/CHANGELOG.md _Docs/release.json; then
+            echo "feed and changelog unchanged - nothing to commit."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add website/public/latest.json
+          git add website/public/latest.json _Docs/CHANGELOG.md _Docs/release.json
           # [skip ci] keeps this commit from retriggering CI; pages.yml is
           # additionally scoped to website/** so it DOES pick the feed up.
-          git commit -m "chore(release): publish latest.json for v$VERSION [skip ci]"
+          git commit -m "chore(release): publish latest.json and changelog for v$VERSION [skip ci]"
           git push origin "HEAD:$DEFAULT_BRANCH"
           echo "FEED_COMMITTED=1" >> "$GITHUB_ENV"
 

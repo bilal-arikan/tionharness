@@ -9,6 +9,12 @@
 > `latest.json` GitHub Pages. `deploy/release-host/` artık yalnızca **yerel
 > önizleme** aracıdır (aşağıya bakın), üretim bileşeni değildir.
 >
+> **Sürüm notları üretilir, elle yazılmaz (2026-09-22):** `cmd/changelog`,
+> `<önceki sürüm etiketi>..<etiket>` aralığındaki conventional commit'leri tipe
+> göre gruplayıp `_Docs/CHANGELOG.md` (arşiv, en yeni başta) ve
+> `_Docs/release.json` (yalnız en son yayın, duyuru fan-out'unun girdisi)
+> üretir; aynı çıktı GitHub Release gövdesi olur. Ayrıntı: "Changelog üretimi".
+>
 > Not: `_Docs/73-*` numarası lokalizasyona ait olduğu için bu doküman **75** numarasını
 > aldı.
 
@@ -133,6 +139,59 @@ Arşivler ve `SHA256SUMS` GitHub Release asset'i olarak yüklenir; `latest.json`
 Üretimde tek bir kopya sunulur: `https://tionharness.com/latest.json`. Kaynağı depodaki
 `website/public/latest.json` dosyasıdır ve her yayında üzerine yazılır. (Yerel Docker
 önizlemesinde ayrıca `v<version>/latest.json` kopyası da oluşur.)
+
+## Changelog üretimi (conventional commits)
+
+Sürüm notları elle yazılmaz: `cmd/changelog`, `<önceki sürüm etiketi>..<etiket>`
+aralığındaki commit'leri **conventional commit** tipine göre gruplayıp üretir.
+`release-please`/`changesets` gerekmedi — commit disiplini zaten var, ve bu araç
+depoya tek bir bağımlılık eklemeden aynı işi yapıyor.
+
+```bash
+go run ./cmd/changelog render v1.2.3   # Markdown bölümünü yazdır
+go run ./cmd/changelog json   v1.2.3   # release.json'u yazdır
+go run ./cmd/changelog write  v1.2.3   # _Docs/CHANGELOG.md başına ekle + release.json yaz
+```
+
+Kurallar:
+
+- **Aralık** `<önceki sürüm etiketi>..<etiket>`. "Önceki", `v<semver>` biçimindeki
+  **ve etiketin kendi soyunda bulunan** (`--merged`) en yakın etikettir. Depodaki
+  `before-rename` gibi işaret etiketleri bir yayın sınırı **değildir** ve
+  atlanır — aksi halde bir changelog aralığı sessizce kırpılırdı. İlk yayının
+  öncesi yoktur ve tüm geçmişi kapsar; bu bir hata değildir.
+- **Bölüm sırası** okuyucunun önce ne istediğine göre sabit: BREAKING CHANGES,
+  Features, Bug Fixes, Performance, Refactoring, Documentation, Tests, Build, CI,
+  Style, Chores, Reverts, Other.
+- **Bozan değişiklikler** hem en üstteki BREAKING CHANGES bloğunda hem de kendi
+  tür bölümünde görünür: üstteki blok "ne bozulacak", tür bölümü "ne değişti"
+  sorusunu yanıtlar; kopyayı atmak, kategoriye göre okuyandan değişikliği gizlerdi.
+  `!` işareti de `BREAKING CHANGE:` footer'ı da tanınır.
+- **Tanınmayan tip veya conventional olmayan konu satırı düşürülmez**, `Other`
+  altında listelenir. Depo bazı yerlerde bu kuraldan eskidir ve sessizce commit
+  kaybetmektense görünür olması yeğlenir.
+- **Merge commit'leri hariç** (`--no-merges`): kendi başına bir değişiklik
+  taşımazlar, "Merge branch 'x'" konuları `Other`'ı gürültüyle doldururdu.
+- Satırlar `**scope:** konu (kısa hash)` biçiminde. Hash olmadan bir changelog
+  satırından commit'e geri dönülemez.
+- `write` **idempotent**tir: aynı etiket için yeniden koşmak bölümü ikinci kez
+  eklemez, yani yeniden denenen bir yayın job'ı changelog'u bozmaz.
+
+`release.json` her zaman **yalnız en son** yayını anlatır; arşiv `CHANGELOG.md`'nin
+kendisidir. Bu ayrım bilinçli: duyuru fan-out'u (`_Docs/86`) tek bir sürümü
+duyurur, geçmişi değil.
+
+### Hatta nereye bağlı
+
+`release.yml` içinde iki yerde koşar:
+
+1. **Publish GitHub Release öncesi** — `render` çıktısı `body_path` ile Release
+   gövdesi olur.
+2. **Publish feed to Pages içinde** — `write`, `latest.json` ile aynı commit'te
+   `_Docs/CHANGELOG.md` + `_Docs/release.json` dosyalarını default branch'e
+   yazar. Bu adım dal değiştirdiği için changelog **checkout'tan sonra yeniden**
+   üretilir: `git checkout` etiket üzerinde yazılmış dosyaları atardı.
+   Yeniden üretmek ucuz ve aynı etiketi okuduğu için iki kopya yapıca özdeştir.
 
 ## Gereken secret'lar — yok
 
@@ -316,6 +375,10 @@ powershell -NoProfile -File scripts/install.ps1 -FeedUrl http://localhost:8080
 | `website/public/CNAME` | Pages custom domain (`tionharness.com`) |
 | `.gitea/workflows/release.yml` | Etiket → kapı → derleme → `latest.json` doğrulama → rsync (kendi barındırılan sürüm sunucusu, `RELEASE_*` secret'ları) |
 | `scripts/build-release.sh` | Çapraz derleme, arşivleme, `SHA256SUMS`, `latest.json` (`FEED_BASE` + `ARTIFACT_BASE`) |
+| `cmd/changelog` | Conventional commit'lerden changelog üretir (`render` / `json` / `write`) |
+| `internal/changelog` | Commit ayrıştırma, tür gruplama, aralık çözümü, Markdown + JSON render |
+| `_Docs/CHANGELOG.md` | Yayın geçmişi; her yayında en yeni bölüm **başa** eklenir (üretilir, elle yazılmaz) |
+| `_Docs/release.json` | **Yalnız en son** yayının makine-okunur hali — duyuru fan-out'unun girdisi |
 | `scripts/install.sh` | Linux/macOS/Git Bash kurulum script'i (feed + sha256) |
 | `scripts/install.ps1` | Windows PowerShell kurulum script'i (feed + sha256) |
 | `deploy/release-host/sync-release.sh` | Yerel önizleme yayını (üretimde kullanılmaz) |

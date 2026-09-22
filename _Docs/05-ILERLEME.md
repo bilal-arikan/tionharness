@@ -5,6 +5,48 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Changelog üretimi: conventional commit'lerden sürüm notları (TSK351, 2026-09-22) ✅
+
+- **Neydi:** Sürüm notları elle yazılıyordu. Kart, `git log <önceki-etiket>..<etiket>`
+  çıktısını conventional commit tipine göre gruplayıp `_Docs/CHANGELOG.md` +
+  `release.json` üretmeyi istiyordu — `release-please`/`changesets` gerekmeden,
+  çünkü commit disiplini zaten var.
+- **Ne eklendi:** `internal/changelog` (ayrıştırma, gruplama, aralık çözümü,
+  Markdown + JSON render) ve `cmd/changelog` (`render` / `json` / `write`).
+  `cmd/treepin` ile aynı kalıp: küçük bağımsız araç + kendi iç paketi. Depoya
+  yeni bağımlılık eklemedi.
+- **Aralık kararı:** "Önceki etiket", `v<semver>` biçimindeki **ve etiketin kendi
+  soyunda bulunan** (`--merged`) en yakın etikettir. Depodaki `before-rename`
+  gibi işaret etiketleri yayın sınırı sayılmaz — sayılsaydı bir changelog aralığı
+  sessizce kırpılırdı. İlk yayının öncesi yoktur ve tüm geçmişi kapsar; bu bir
+  hata değil, gerçek bir durum.
+- **Hiçbir commit düşmez:** Tanınmayan tip ya da conventional olmayan konu satırı
+  `Other` altında listelenir. Depo bazı yerlerde bu kuraldan eskidir; sessizce
+  commit kaybetmektense görünür olması yeğlendi. Merge commit'leri hariç
+  (`--no-merges`): kendi başına değişiklik taşımazlar.
+- **Bozan değişiklikler iki yerde:** hem en üstteki `BREAKING CHANGES` bloğunda
+  hem kendi tür bölümünde. Üstteki "ne bozulacak", tür bölümü "ne değişti"
+  sorusunu yanıtlar; kopyayı atmak kategoriye göre okuyandan değişikliği gizlerdi.
+  `!` işareti ve `BREAKING CHANGE:` footer'ı birlikte tanınır.
+- **`write` idempotent:** aynı etiket için yeniden koşmak bölümü ikinci kez
+  eklemez, yani yeniden denenen bir yayın job'ı changelog'u bozmaz.
+- **Hatta bağlandı:** `release.yml` iki yerde koşuyor — Release gövdesi için
+  `render` (`body_path`), ve feed commit'i içinde `write` (CHANGELOG + release.json
+  `latest.json` ile aynı commit'te). İkincisi dal değiştirdiği için changelog
+  **checkout'tan sonra yeniden** üretiliyor: `git checkout` etiket üzerinde
+  yazılmış dosyaları atardı.
+- **`release.json` yalnız en son yayını anlatır**, arşiv `CHANGELOG.md`'nin
+  kendisidir. Duyuru fan-out'u (TSK352) tek bir sürümü duyurur, geçmişi değil.
+- **Bilinçli olarak yapılmadı:** Depoda henüz sürüm etiketi yok (`before-rename`
+  bir işaret etiketi), bu yüzden üretilmiş bir `_Docs/CHANGELOG.md` commit'lenmedi
+  — bugün 1390 commit'lik tek bir blok olurdu. Dosya ilk `v*` etiketinde hat
+  tarafından üretilecek.
+- **Doğrulama:** 14 test — conventional konu dilbilgisi (7 alt-vaka), footer
+  biçimli breaking, prose'daki "BREAKING CHANGE"in yanlış eşleşmemesi, bölüm
+  sırası, `Prepend` idempotentliği ve en-yeni-üstte sırası, sürüm etiketi ayrımı
+  (12 alt-vaka), ve tek kullanımlık gerçek bir git deposu üzerinde aralık/işaret
+  etiketi/çok satırlı gövde/merge hariç tutma. `scripts/test.sh full` yeşil.
+
 ## Monitor v2: dosya, URL ve WebSocket kaynakları (TSK941)
 
 - **Neydi:** `monitor` aracı (TSK911, v1) yalnız bir **arka plan kabuğunun**
