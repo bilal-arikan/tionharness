@@ -20,12 +20,16 @@ import (
 // The fs tools resolve every path argument through Sandbox.Resolve, which rejects
 // absolute paths and `..` escapes when confined. The shell tools never call
 // Resolve — a command is an opaque string handed to bash/PowerShell. Confined
-// changes exactly two things on this path:
+// changes exactly three things on this path:
 //
 //  1. hardenShellCmd appends proc.DisableGitSigningEnv() so an agent-run commit
 //     cannot block on a GPG pinentry prompt (see builtin_shell_harden.go).
 //  2. isNetworkMutatingGit blocks `git push` / `git remote add` / `git remote
 //     set-url` — a best-effort substring brake, not a boundary.
+//  3. A foreground command runs inside a process job (runShellCmd): its whole
+//     tree, detached children included, dies when the call returns, and the
+//     tree's process count is capped. A real OS boundary, but for processes and
+//     resources only — not for paths.
 //
 // The only thing that keeps a confined shell near the working directory is
 // cmd.Dir = sb.Root (the process CWD). `sh -c 'echo x > /c/elsewhere/f'` runs
@@ -33,8 +37,9 @@ import (
 // string is not attemptable in a trustworthy way — `cat $(echo /c/x)`,
 // `p=/c/x; cat "$p"`, `cd /c/x && cat f`, `python -c "open('/c/x')"` all defeat
 // any static parse, and a half-guard advertised as "confined" is worse than a
-// documented gap. A real boundary needs OS-level isolation (container / job
-// object), tracked separately.
+// documented gap. A real path boundary needs OS-level identity isolation (a
+// restricted user / AppContainer with ACLs on Root, or a container), tracked
+// separately; the process job above does not provide it.
 const shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
 
 // Shell timeouts are process-global and settings-driven (ShellDefaultTimeoutSec /
@@ -442,7 +447,10 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	w := &shellStreamWriter{onChunk: onChunk, max: shellMaxOutputBytes}
 	cmd.Stdout = w
 	cmd.Stderr = w
-	runErr := cmd.Run()
+	runErr, setupErr := runShellCmd(cmd, sb.Confined)
+	if setupErr != nil {
+		return "", setupErr
+	}
 
 	out := w.buf.Bytes()
 	truncated := w.truncated
