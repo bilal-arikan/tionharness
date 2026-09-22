@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/archive"
@@ -85,7 +85,7 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if field != "" {
-		less, err := tools.SortByField(matches, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(a db.Automation) int64 { return a.UpdatedAt },
 			func(a db.Automation) int64 { return a.CreatedAt },
 			func(a db.Automation) string { return a.Name },
@@ -94,7 +94,7 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(matches, less)
+		slices.SortStableFunc(matches, less)
 	}
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

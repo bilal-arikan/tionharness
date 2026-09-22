@@ -2,7 +2,7 @@ package agent
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -120,6 +120,6 @@ func keysBeyond(m map[string]json.RawMessage, allowed ...string) []string {
 			extra = append(extra, k)
 		}
 	}
-	sort.Strings(extra)
+	slices.Sort(extra)
 	return extra
 }

@@ -1,11 +1,12 @@
 package providers
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -205,14 +206,16 @@ func renderCodexMarketplace(m CodexMarketplace) string {
 // deterministic regardless of the caller's slice order.
 func sortedCodexMarketplaces(ms []CodexMarketplace) []CodexMarketplace {
 	out := append([]CodexMarketplace(nil), ms...)
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b CodexMarketplace) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
 // sortedStrings returns a sorted copy, leaving the caller's slice untouched.
 func sortedStrings(items []string) []string {
 	out := append([]string(nil), items...)
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -413,6 +416,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }

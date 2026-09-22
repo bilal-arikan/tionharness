@@ -5,7 +5,8 @@
 package billing
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -123,12 +124,11 @@ func RollupOf(byModel map[string]db.KindStat) Rollup {
 		roll.CacheReadTokens += st.CacheReadTokens
 		roll.CacheWriteTokens += st.CacheWriteTokens
 	}
-	sort.SliceStable(roll.Rows, func(i, j int) bool {
-		if roll.Rows[i].CostUSD != roll.Rows[j].CostUSD {
-			return roll.Rows[i].CostUSD > roll.Rows[j].CostUSD
+	slices.SortStableFunc(roll.Rows, func(a, b Row) int {
+		if c := cmp.Compare(b.CostUSD, a.CostUSD); c != 0 {
+			return c
 		}
-		return roll.Rows[i].Stat.InputTokens+roll.Rows[i].Stat.OutputTokens >
-			roll.Rows[j].Stat.InputTokens+roll.Rows[j].Stat.OutputTokens
+		return cmp.Compare(b.Stat.InputTokens+b.Stat.OutputTokens, a.Stat.InputTokens+a.Stat.OutputTokens)
 	})
 	return roll
 }

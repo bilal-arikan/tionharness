@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -30,14 +30,23 @@ func (s *countingStore) ListSessions(_ context.Context, agentID string) ([]db.Se
 	// most-recently-updated, then a descending-ID tie-break. Any drift here makes
 	// TestAgentSessionChildrenMatchesStoreFilter compare the cache against an
 	// order production never produces.
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Pinned != out[j].Pinned {
-			return out[i].Pinned
+	slices.SortStableFunc(out, func(a, b db.Session) int {
+		less := func(a, b db.Session) bool {
+			if a.Pinned != b.Pinned {
+				return a.Pinned
+			}
+			if a.UpdatedAt != b.UpdatedAt {
+				return a.UpdatedAt > b.UpdatedAt
+			}
+			return a.ID > b.ID
 		}
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return out[i].ID > out[j].ID
+		return 0
 	})
 	return out, nil
 }

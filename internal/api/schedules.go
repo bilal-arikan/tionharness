@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -61,7 +61,7 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if field != "" {
-		less, err := tools.SortByField(matches, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(sc db.Schedule) int64 { return sc.UpdatedAt },
 			func(sc db.Schedule) int64 { return sc.CreatedAt },
 			func(sc db.Schedule) string { return sc.Name },
@@ -70,7 +70,7 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(matches, less)
+		slices.SortStableFunc(matches, less)
 	}
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

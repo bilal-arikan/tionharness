@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -900,11 +900,20 @@ func (c *chatRuns) sessionRuns(wsID, sessionID string) []*chatRun {
 	c.mu.Unlock()
 	// Map iteration order is random; a stable order keeps the "which run would not
 	// stop?" error deterministic for the same registry state.
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].startedAt.Equal(out[j].startedAt) {
-			return out[i].id < out[j].id
+	slices.SortFunc(out, func(a, b *chatRun) int {
+		less := func(a, b *chatRun) bool {
+			if a.startedAt.Equal(b.startedAt) {
+				return a.id < b.id
+			}
+			return a.startedAt.Before(b.startedAt)
 		}
-		return out[i].startedAt.Before(out[j].startedAt)
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return out
 }

@@ -1,10 +1,11 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -234,7 +235,7 @@ func (b *interactionBackend) activeExtended(token string) []string {
 	for n := range set {
 		out = append(out, n)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -1061,7 +1062,7 @@ func (b *interactionBackend) bundleIndex(run *chatRun) map[string][]string {
 		out[key] = append(out[key], name)
 	}
 	for _, members := range out {
-		sort.Strings(members)
+		slices.Sort(members)
 	}
 	return out
 }
@@ -1083,7 +1084,7 @@ func (b *interactionBackend) listBundles(run *chatRun, keys []string) string {
 			for k := range idx {
 				known = append(known, k)
 			}
-			sort.Strings(known)
+			slices.Sort(known)
 			fmt.Fprintf(&out, "unknown bundle: %s; known bundles: %s\n", key, strings.Join(known, ", "))
 			continue
 		}
@@ -1221,7 +1222,7 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 	for name := range cands {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	// Term-scoring (OR + rank), not strict AND — mirrors the native builtin
 	// tool_search (internal/tools/builtin_activate.go): a tool matches when it
 	// contains AT LEAST ONE query term, ranked by how many distinct terms it hits
@@ -1251,11 +1252,11 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 			ranked = append(ranked, scored{name: name, terms: termHits, nameHits: nameHits})
 		}
 	}
-	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].terms != ranked[j].terms {
-			return ranked[i].terms > ranked[j].terms
+	slices.SortStableFunc(ranked, func(a, b scored) int {
+		if c := cmp.Compare(b.terms, a.terms); c != 0 {
+			return c
 		}
-		return ranked[i].nameHits > ranked[j].nameHits
+		return cmp.Compare(b.nameHits, a.nameHits)
 	})
 	// Each line carries the match's BUNDLE key, mirroring the native renderer
 	// (internal/tools/builtin_activate.go): the bundle vocabulary stays learnable from

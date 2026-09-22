@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -96,7 +96,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(s db.Session) int64 { return s.UpdatedAt },
 		func(s db.Session) int64 { return s.CreatedAt },
 		func(s db.Session) string { return s.Title },
@@ -105,7 +105,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	total := len(matches)
 	if total == 0 {

@@ -3,7 +3,6 @@ package goals
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -270,7 +269,7 @@ func RulesForPrompt() string {
 		}
 		bySurface[r.Surface] = append(bySurface[r.Surface], r)
 	}
-	sort.Strings(order)
+	slices.Sort(order)
 	for _, s := range order {
 		fmt.Fprintf(&b, "- %s:", s)
 		for i, r := range bySurface[s] {

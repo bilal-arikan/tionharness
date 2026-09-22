@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -71,9 +71,18 @@ func (s *Server) handleListWorkspaceTemplates(w http.ResponseWriter, _ *http.Req
 		}
 		out = append(out, item)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		// Pin blank first; otherwise preserve the incoming (name-sorted) order.
-		return out[i].ID == blankTemplateID && out[j].ID != blankTemplateID
+	slices.SortStableFunc(out, func(a, b templateListItem) int {
+		less := func(a, b templateListItem) bool {
+			// Pin blank first; otherwise preserve the incoming (name-sorted) order.
+			return a.ID == blankTemplateID && b.ID != blankTemplateID
+		}
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	writeJSON(w, http.StatusOK, out)
 }

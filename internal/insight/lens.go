@@ -1,10 +1,11 @@
 package insight
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -146,7 +147,9 @@ func (r *Registry) List() []Lens {
 	for _, l := range r.lenses {
 		out = append(out, l)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortStableFunc(out, func(a, b Lens) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out
 }
 

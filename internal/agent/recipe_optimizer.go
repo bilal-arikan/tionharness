@@ -1,11 +1,12 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -385,7 +386,9 @@ func recentSummaries(rows []db.TrajectoryIndexEntry, slug string, n int) []db.Tr
 			out = append(out, e)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
+	slices.SortFunc(out, func(a, b db.TrajectoryIndexEntry) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	if len(out) > n {
 		out = out[:n]
 	}
@@ -497,7 +500,7 @@ func sortedPhaseIDs(m map[string]db.PhaseStat) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

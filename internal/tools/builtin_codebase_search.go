@@ -1,12 +1,12 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
@@ -151,7 +151,9 @@ func (t CodebaseWorkspaceSearchTool) Call(ctx context.Context, input json.RawMes
 		out = append(out, merged{Project: p.Name, Result: json.RawMessage(res)})
 	}
 	// Stable, deterministic ordering by project name.
-	sort.Slice(out, func(i, j int) bool { return out[i].Project < out[j].Project })
+	slices.SortFunc(out, func(a, b merged) int {
+		return cmp.Compare(a.Project, b.Project)
+	})
 
 	resp := map[string]any{
 		"pattern":           args.Pattern,

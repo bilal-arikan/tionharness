@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -294,7 +294,7 @@ func (c *logprobsClient) Decide(ctx context.Context, req Request) (*Response, er
 	for w := range warnings {
 		resp.Warnings = append(resp.Warnings, w)
 	}
-	sort.Strings(resp.Warnings)
+	slices.Sort(resp.Warnings)
 	resp.LatencyMs = time.Since(start).Milliseconds()
 	return resp, nil
 }

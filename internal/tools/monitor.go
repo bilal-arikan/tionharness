@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -394,7 +394,9 @@ func (m *MonitorManager) List() string {
 	for _, e := range entries {
 		snaps = append(snaps, e.snapshot())
 	}
-	sort.Slice(snaps, func(i, j int) bool { return snaps[i].createdAt.Before(snaps[j].createdAt) })
+	slices.SortFunc(snaps, func(a, b monitorSnapshot) int {
+		return a.createdAt.Compare(b.createdAt)
+	})
 	var b strings.Builder
 	for _, s := range snaps {
 		fmt.Fprintf(&b, "%s\t%s\tfilter=%s\t%s\tage=%s\tseen=%d matched=%d delivered=%d dropped=%d",

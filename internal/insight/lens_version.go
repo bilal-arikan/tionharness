@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -26,7 +26,7 @@ func (l Lens) Version() string {
 	b.WriteString("\x00scope\x00")
 	// Scope is a set: sort a copy so a reordered frontmatter list is not a change.
 	scope := append([]string(nil), l.Scope...)
-	sort.Strings(scope)
+	slices.Sort(scope)
 	b.WriteString(strings.Join(scope, ","))
 	b.WriteString("\x00prefilter\x00")
 	b.WriteString(l.Prefilter.versionKey())
@@ -40,14 +40,14 @@ func (l Lens) Version() string {
 func (p Prefilter) versionKey() string {
 	sorted := func(in []string) string {
 		out := append([]string(nil), in...)
-		sort.Strings(out)
+		slices.Sort(out)
 		return strings.Join(out, ",")
 	}
 	keys := make([]string, 0, len(p.MinCount))
 	for k := range p.MinCount {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	var mc strings.Builder
 	for _, k := range keys {
 		fmt.Fprintf(&mc, "%s=%d;", k, p.MinCount[k])

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -174,7 +173,7 @@ func BuiltinToolsByCategory() []CategoryTools {
 	out := make([]CategoryTools, 0, len(orderedCategories))
 	for _, cat := range orderedCategories {
 		names := byCat[cat]
-		sort.Strings(names)
+		slices.Sort(names)
 		out = append(out, CategoryTools{Key: cat, Tools: names})
 	}
 	return out

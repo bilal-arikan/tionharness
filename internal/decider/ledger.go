@@ -3,12 +3,12 @@ package decider
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 )
@@ -318,7 +318,9 @@ func (l *Ledger) Stats(since time.Time) []AuthorityStats {
 		st.ChallengerP50Ms = percentile(challengerLatencies[id], 0.50)
 		out = append(out, *st)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Authority < out[j].Authority })
+	slices.SortFunc(out, func(a, b AuthorityStats) int {
+		return cmp.Compare(a.Authority, b.Authority)
+	})
 	return out
 }
 
@@ -357,7 +359,9 @@ func (l *Ledger) ModelStats(since time.Time) []ModelStats {
 		st.P95Ms = percentile(latencies[id], 0.95)
 		out = append(out, *st)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Instance < out[j].Instance })
+	slices.SortFunc(out, func(a, b ModelStats) int {
+		return cmp.Compare(a.Instance, b.Instance)
+	})
 	return out
 }
 

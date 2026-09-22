@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -99,7 +99,7 @@ func (r *Registry) BundleIndex(allow func(string) bool) map[string][]string {
 		add(e.NamespacedName)
 	}
 	for _, members := range out {
-		sort.Strings(members)
+		slices.Sort(members)
 	}
 	return out
 }

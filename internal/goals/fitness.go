@@ -1,8 +1,9 @@
 package goals
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -188,11 +189,11 @@ func Evaluate(g db.Goal, in FitnessInputs) GoalFitness {
 	for h := range groups {
 		hashes = append(hashes, h)
 	}
-	sort.Slice(hashes, func(i, j int) bool {
-		if first[hashes[i]] != first[hashes[j]] {
-			return first[hashes[i]] < first[hashes[j]]
+	slices.SortFunc(hashes, func(a, b string) int {
+		if c := cmp.Compare(first[a], first[b]); c != 0 {
+			return c
 		}
-		return hashes[i] < hashes[j]
+		return cmp.Compare(a, b)
 	})
 	// The current configuration is listed even with no session yet, so the
 	// user sees "no data under the current config" rather than nothing.
@@ -632,11 +633,11 @@ func agentCounts(rows []SessionRow) []AgentCount {
 	for id, n := range counts {
 		out = append(out, AgentCount{AgentID: id, Sessions: n})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Sessions != out[j].Sessions {
-			return out[i].Sessions > out[j].Sessions
+	slices.SortFunc(out, func(a, b AgentCount) int {
+		if c := cmp.Compare(b.Sessions, a.Sessions); c != 0 {
+			return c
 		}
-		return out[i].AgentID < out[j].AgentID
+		return cmp.Compare(a.AgentID, b.AgentID)
 	})
 	return out
 }

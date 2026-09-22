@@ -1,7 +1,7 @@
 package trajectory
 
 import (
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -120,8 +120,8 @@ func Summarize(t db.Trajectory, cost SessionCostFn, nowSec int64) db.TrajectoryS
 			s.Priced = false
 		}
 	}
-	sort.Strings(s.GhostPhases)
-	sort.Strings(s.UnfiredWatchers)
+	slices.Sort(s.GhostPhases)
+	slices.Sort(s.UnfiredWatchers)
 	if len(s.PerPhase) == 0 {
 		s.PerPhase = nil
 	}

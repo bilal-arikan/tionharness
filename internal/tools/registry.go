@@ -5,12 +5,13 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -522,7 +523,9 @@ func (r *Registry) Defs(allow func(name string) bool) []providers.ToolDef {
 			InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -552,7 +555,9 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 			})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -588,7 +593,9 @@ func (r *Registry) DeferredDefs(allow func(name string) bool, active map[string]
 			InputSchema: mcp.NormalizeSchema(e.Tool.InputSchema),
 		}, r.lazy[e.NamespacedName])
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -637,7 +644,9 @@ func (r *Registry) LazyCatalog(allow func(name string) bool) []providers.ToolDef
 			out = append(out, providers.ToolDef{Name: e.NamespacedName, Description: lazyDescription(e.Tool.Description)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -724,7 +733,9 @@ func (r *Registry) BuiltinDefs(allow func(name string) bool) []providers.ToolDef
 			out = append(out, t.Def())
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -881,7 +892,7 @@ func (r *Registry) unknownToolMessage(name string) string {
 			nearby = append(nearby, d.Name)
 		}
 	}
-	sort.Strings(nearby)
+	slices.Sort(nearby)
 	msg := fmt.Sprintf("unknown tool %q; use tool_search to find the exact tool name", name)
 	if len(nearby) > 0 {
 		msg += "; nearby tools: " + strings.Join(nearby, ", ")

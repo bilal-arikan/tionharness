@@ -1,10 +1,11 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -163,7 +164,9 @@ func (d *DB) ListArtifacts(ctx context.Context, sessionID string) ([]Artifact, e
 			out = append(out, a)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
+	slices.SortStableFunc(out, func(a, b Artifact) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	return out, nil
 }
 

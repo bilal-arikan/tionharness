@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -108,10 +109,10 @@ func SortOrder(sortArg string) (field string, asc bool, err error) {
 	return field, asc, nil
 }
 
-// sortByField is a tiny combinator for the per-tool sort switches: it returns a
-// strict less-than function for a resolved sort key, or an error for a key the
-// entity cannot satisfy. less(i, j) is already direction-aware, so callers can
-// hand it straight to sort.SliceStable.
+// SortByField is a tiny combinator for the per-tool sort switches: it returns a
+// three-way comparator for a resolved sort key, or an error for a key the entity
+// cannot satisfy. The comparator is already direction-aware, so callers can hand
+// it straight to slices.SortStableFunc.
 //
 // The three extraction closures answer "what is this row's updated-at /
 // created-at / name". A nil getter for a key means the entity has no such
@@ -124,10 +125,10 @@ func SortOrder(sortArg string) (field string, asc bool, err error) {
 // otherwise land in a different order on every request. Since offset=0 and
 // offset=20 are separate calls, an unstable tie makes a paging reader skip rows
 // and see others twice. Ordering by id last pins the sequence.
-func SortByField[T any](items []T, field string, asc bool,
+func SortByField[T any](field string, asc bool,
 	updated, created func(T) int64,
 	name func(T) string,
-	id func(T) string) (func(i, j int) bool, error) {
+	id func(T) string) (func(a, b T) int, error) {
 
 	if updated == nil && field == "updated" {
 		return nil, fmt.Errorf("sort field \"updated\" is not supported for this entity")
@@ -141,35 +142,28 @@ func SortByField[T any](items []T, field string, asc bool,
 	if id == nil {
 		return nil, fmt.Errorf("sort requires an id tiebreak for stable paging")
 	}
-	// compare answers "is row i strictly before row j" for the resolved field.
-	// The desc branch calls it with swapped arguments instead of negating the
-	// result: negation makes equal keys compare "i < j" in BOTH directions,
-	// violating strict weak ordering and turning SliceStable's stability into a
-	// reversal of equal-key rows.
-	compare := func(i, j int) bool {
+	// compare is the ascending three-way order for the resolved field with the
+	// id tiebreak; desc swaps the arguments, which keeps equal keys equal (a
+	// strict weak order) so SortStableFunc's stability is preserved.
+	compare := func(a, b T) int {
+		var c int
 		switch field {
 		case "name":
-			a, b := strings.ToLower(name(items[i])), strings.ToLower(name(items[j]))
-			if a != b {
-				return a < b
-			}
+			c = cmp.Compare(strings.ToLower(name(a)), strings.ToLower(name(b)))
 		case "created":
-			if created(items[i]) != created(items[j]) {
-				return created(items[i]) < created(items[j])
-			}
+			c = cmp.Compare(created(a), created(b))
 		default: // updated
-			if updated(items[i]) != updated(items[j]) {
-				return updated(items[i]) < updated(items[j])
-			}
+			c = cmp.Compare(updated(a), updated(b))
 		}
-		return id(items[i]) < id(items[j])
+		if c != 0 {
+			return c
+		}
+		return cmp.Compare(id(a), id(b))
 	}
-	return func(i, j int) bool {
-		if asc {
-			return compare(i, j)
-		}
-		return compare(j, i)
-	}, nil
+	if asc {
+		return compare, nil
+	}
+	return func(a, b T) int { return compare(b, a) }, nil
 }
 
 // splitTags parses a comma-separated tags filter argument ("a, b" → ["a","b"]).

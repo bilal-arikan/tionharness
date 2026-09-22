@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 	"os/exec"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
@@ -54,7 +54,7 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	if field != "" {
 		// Workspaces carry no updated-at (only rename mutates one and it preserves
 		// CreatedAt), so updated_* is a documented alias for created_*.
-		less, err := tools.SortByField(out, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(w workspaceListItem) int64 { return w.CreatedAt },
 			func(w workspaceListItem) int64 { return w.CreatedAt },
 			func(w workspaceListItem) string { return w.Name },
@@ -63,7 +63,7 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(out, less)
+		slices.SortStableFunc(out, less)
 	}
 	page, total := tools.SlicePage(out, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

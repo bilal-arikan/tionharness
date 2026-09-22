@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -118,8 +119,8 @@ func computeAgentStats(in AgentInput, now time.Time) agentStats {
 			st.LastActivity = s.UpdatedAt
 		}
 	}
-	sort.Slice(st.Stuck, func(i, j int) bool {
-		return st.Stuck[i].UpdatedAt > st.Stuck[j].UpdatedAt
+	slices.SortFunc(st.Stuck, func(a, b db.Session) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
 	})
 	return st
 }
@@ -253,7 +254,9 @@ func agentSessionHandleList(sessions []db.Session, now time.Time) ([]Handle, int
 		}
 		live = append(live, s)
 	}
-	sort.Slice(live, func(i, j int) bool { return live[i].UpdatedAt > live[j].UpdatedAt })
+	slices.SortFunc(live, func(a, b db.Session) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 
 	elided := 0
 	if len(live) > agentSessionHandles {

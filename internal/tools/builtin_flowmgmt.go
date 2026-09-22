@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -372,7 +372,7 @@ func (t ListFlowsTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(f db.Flow) int64 { return f.UpdatedAt },
 		func(f db.Flow) int64 { return f.CreatedAt },
 		func(f db.Flow) string { return f.Name },
@@ -381,7 +381,7 @@ func (t ListFlowsTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

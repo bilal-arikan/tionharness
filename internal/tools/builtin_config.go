@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -158,6 +158,6 @@ func (t ConfigListTool) Call(_ context.Context, _ json.RawMessage) (string, erro
 	if len(files) == 0 {
 		return "(config folder is empty)", nil
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 	return strings.Join(files, "\n"), nil
 }

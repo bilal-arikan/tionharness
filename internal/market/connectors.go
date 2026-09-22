@@ -1,13 +1,14 @@
 package market
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -196,7 +197,9 @@ func filterCrossAITools(items []crossaitoolsItem, query string, limit int) []Reg
 			matched = append(matched, it)
 		}
 	}
-	sort.SliceStable(matched, func(i, j int) bool { return matched[i].Stars > matched[j].Stars })
+	slices.SortStableFunc(matched, func(a, b crossaitoolsItem) int {
+		return cmp.Compare(b.Stars, a.Stars)
+	})
 	if limit > 0 && len(matched) > limit {
 		matched = matched[:limit]
 	}

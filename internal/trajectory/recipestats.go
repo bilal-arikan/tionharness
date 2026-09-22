@@ -1,7 +1,8 @@
 package trajectory
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -113,11 +114,11 @@ func RecipeStatsFromIndex(rows []db.TrajectoryIndexEntry) []RecipeStats {
 		}
 		out = append(out, *st)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Slug != out[j].Slug {
-			return out[i].Slug < out[j].Slug
+	slices.SortFunc(out, func(a, b RecipeStats) int {
+		if c := cmp.Compare(a.Slug, b.Slug); c != 0 {
+			return c
 		}
-		return out[i].Version < out[j].Version
+		return cmp.Compare(a.Version, b.Version)
 	})
 	return out
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -465,12 +465,21 @@ func worstRuns(in goals.FitnessInputs, g db.Goal) []db.TrajectoryIndexEntry {
 		}
 		rows = append(rows, t)
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		fi, fj := rows[i].Status != db.TrajStatusDone, rows[j].Status != db.TrajStatusDone
-		if fi != fj {
-			return fi
+	slices.SortFunc(rows, func(a, b db.TrajectoryIndexEntry) int {
+		less := func(a, b db.TrajectoryIndexEntry) bool {
+			fi, fj := a.Status != db.TrajStatusDone, b.Status != db.TrajStatusDone
+			if fi != fj {
+				return fi
+			}
+			return a.Summary.CostUSD > b.Summary.CostUSD
 		}
-		return rows[i].Summary.CostUSD > rows[j].Summary.CostUSD
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	if len(rows) > evolverWorstRuns {
 		rows = rows[:evolverWorstRuns]

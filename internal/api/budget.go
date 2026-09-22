@@ -1,8 +1,9 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"time"
 
@@ -251,8 +252,8 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Heaviest spenders first so the table leads with what matters.
-	sort.SliceStable(rows, func(i, j int) bool {
-		return rows[i].InputTokens+rows[i].OutputTokens > rows[j].InputTokens+rows[j].OutputTokens
+	slices.SortStableFunc(rows, func(a, b agentBudgetRow) int {
+		return cmp.Compare(b.InputTokens+b.OutputTokens, a.InputTokens+a.OutputTokens)
 	})
 
 	// Providers as a slice, costliest first, each carrying its model detail rows
@@ -262,19 +263,19 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		for _, ms := range byModel[name] {
 			ps.Models = append(ps.Models, *ms)
 		}
-		sort.SliceStable(ps.Models, func(i, j int) bool {
-			if ps.Models[i].CostUSD != ps.Models[j].CostUSD {
-				return ps.Models[i].CostUSD > ps.Models[j].CostUSD
+		slices.SortStableFunc(ps.Models, func(a, b modelStat) int {
+			if c := cmp.Compare(b.CostUSD, a.CostUSD); c != 0 {
+				return c
 			}
-			return ps.Models[i].InputTokens+ps.Models[i].OutputTokens > ps.Models[j].InputTokens+ps.Models[j].OutputTokens
+			return cmp.Compare(b.InputTokens+b.OutputTokens, a.InputTokens+a.OutputTokens)
 		})
 		providerRows = append(providerRows, *ps)
 	}
-	sort.SliceStable(providerRows, func(i, j int) bool {
-		if providerRows[i].CostUSD != providerRows[j].CostUSD {
-			return providerRows[i].CostUSD > providerRows[j].CostUSD
+	slices.SortStableFunc(providerRows, func(a, b providerStat) int {
+		if c := cmp.Compare(b.CostUSD, a.CostUSD); c != 0 {
+			return c
 		}
-		return providerRows[i].InputTokens+providerRows[i].OutputTokens > providerRows[j].InputTokens+providerRows[j].OutputTokens
+		return cmp.Compare(b.InputTokens+b.OutputTokens, a.InputTokens+a.OutputTokens)
 	})
 
 	// Trend: aggregate every agent's rows per day over the window.
@@ -308,7 +309,9 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	for _, p := range perDay {
 		trend = append(trend, *p)
 	}
-	sort.SliceStable(trend, func(i, j int) bool { return trend[i].Day < trend[j].Day })
+	slices.SortStableFunc(trend, func(a, b dayPoint) int {
+		return cmp.Compare(a.Day, b.Day)
+	})
 
 	// Window-cumulative totals ("oturumlar arası toplam" / caching ROI): sum the
 	// whole trend window so the screen can show lifetime-over-the-window spend,

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -142,8 +142,8 @@ func TestSettingsPatch_JSONTagsMatchGoldenList(t *testing.T) {
 
 	got := append([]string(nil), tags...)
 	want := append([]string(nil), settingsPatchGoldenFields...)
-	sort.Strings(got)
-	sort.Strings(want)
+	slices.Sort(got)
+	slices.Sort(want)
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("settings.Patch json tags drifted from the golden list.\ngot:  %v\nwant: %v\n\nUpdate settingsPatchGoldenFields (and the frontend SettingsPatch type) to match.", got, want)

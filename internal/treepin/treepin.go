@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -103,7 +103,7 @@ func cleanScope(scope []string) []string {
 		seen[s] = true
 		out = append(out, s)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -117,7 +117,7 @@ func scopeDigest(top string, scope []string) (string, int, error) {
 		return "", 0, err
 	}
 	paths := splitZ(out)
-	sort.Strings(paths)
+	slices.Sort(paths)
 	h := sha256.New()
 	prev := ""
 	n := 0

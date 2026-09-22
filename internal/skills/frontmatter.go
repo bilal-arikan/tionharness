@@ -1,6 +1,9 @@
 package skills
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // frontmatter is the parsed metadata block of a SKILL.md. Unknown keys are kept
 // in scalars/lists so future fields degrade gracefully.
@@ -309,11 +312,14 @@ func parseInlineArray(s string) []string {
 	return out
 }
 
-// setFrontmatterAccess rewrites a SKILL.md's frontmatter so its access mode
-// matches shared. Existing `access:`/`shared:` lines are removed; when shared,
-// a single `access: shared` line is added. All other frontmatter lines and the
-// markdown body are preserved. Newlines are normalised to "\n".
-func setFrontmatterAccess(content string, shared bool) string {
+// setFrontmatterMarker rewrites a SKILL.md's frontmatter so that every line whose
+// key (case-insensitive, before the first colon) is in dropKeys is removed and,
+// when marker is non-empty, that single line is appended to the block. All other
+// frontmatter lines and the markdown body are preserved; newlines are normalised
+// to "\n". A file with no frontmatter and nothing to add is returned unchanged.
+// The four flag setters below are thin views over it: each flag has a default
+// state that carries NO marker and a single line for the other state.
+func setFrontmatterMarker(content string, dropKeys []string, marker string) string {
 	norm := strings.ReplaceAll(content, "\r\n", "\n")
 
 	var fmLines []string
@@ -323,22 +329,21 @@ func setFrontmatterAccess(content string, shared bool) string {
 		rest := norm[len("---\n"):]
 		if before, after, ok := strings.Cut(rest, "\n---"); ok {
 			hadBlock = true
-			block := before
 			body = strings.TrimPrefix(after, "\n") // body after fence
-			for ln := range strings.SplitSeq(block, "\n") {
+			for ln := range strings.SplitSeq(before, "\n") {
 				key := ""
-				if before, _, ok := strings.Cut(ln, ":"); ok {
-					key = strings.ToLower(strings.TrimSpace(before))
+				if k, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(k))
 				}
-				if key == "access" || key == "shared" {
-					continue // drop any existing access marker
+				if slices.Contains(dropKeys, key) {
+					continue // drop any existing marker for this flag
 				}
 				fmLines = append(fmLines, ln)
 			}
 		}
 	}
-	if shared {
-		fmLines = append(fmLines, "access: shared")
+	if marker != "" {
+		fmLines = append(fmLines, marker)
 	}
 
 	// No frontmatter needed (no prior block and nothing to add) → leave body as-is.
@@ -353,139 +358,44 @@ func setFrontmatterAccess(content string, shared bool) string {
 	return b.String()
 }
 
-// setFrontmatterAutoSummary rewrites a SKILL.md's frontmatter so its auto-summary
-// mode matches on. Auto-summary defaults to ON, so an enabled skill carries NO
-// marker: any existing `auto_summary:` (and aliases) line is removed, and only
-// when on is false a single `auto_summary: false` line is added. All other
-// frontmatter lines and the markdown body are preserved.
+// setFrontmatterAccess sets the access mode: private is the default (no marker),
+// shared adds a single `access: shared` line.
+func setFrontmatterAccess(content string, shared bool) string {
+	marker := ""
+	if shared {
+		marker = "access: shared"
+	}
+	return setFrontmatterMarker(content, []string{"access", "shared"}, marker)
+}
+
+// setFrontmatterAutoSummary sets the auto-summary mode: ON is the default (no
+// marker), OFF adds a single `auto_summary: false` line.
 func setFrontmatterAutoSummary(content string, on bool) string {
-	norm := strings.ReplaceAll(content, "\r\n", "\n")
-
-	var fmLines []string
-	body := norm
-	hadBlock := false
-	if strings.HasPrefix(norm, "---\n") {
-		rest := norm[len("---\n"):]
-		if before, after, ok := strings.Cut(rest, "\n---"); ok {
-			hadBlock = true
-			block := before
-			body = strings.TrimPrefix(after, "\n")
-			for ln := range strings.SplitSeq(block, "\n") {
-				key := ""
-				if before, _, ok := strings.Cut(ln, ":"); ok {
-					key = strings.ToLower(strings.TrimSpace(before))
-				}
-				switch key {
-				case "auto_summary", "autosummary", "auto_include", "autoinclude":
-					continue // drop any existing auto-summary marker
-				}
-				fmLines = append(fmLines, ln)
-			}
-		}
-	}
+	marker := ""
 	if !on {
-		fmLines = append(fmLines, "auto_summary: false")
+		marker = "auto_summary: false"
 	}
-
-	if !hadBlock && len(fmLines) == 0 {
-		return body
-	}
-	var b strings.Builder
-	b.WriteString("---\n")
-	b.WriteString(strings.Join(fmLines, "\n"))
-	b.WriteString("\n---\n")
-	b.WriteString(body)
-	return b.String()
+	return setFrontmatterMarker(content, []string{"auto_summary", "autosummary", "auto_include", "autoinclude"}, marker)
 }
 
-// setFrontmatterNameOnly rewrites a SKILL.md's frontmatter so its name-only mode
-// matches on. NameOnly defaults to OFF, so a disabled skill carries NO marker:
-// any existing `name_only:` (and aliases) line is removed, and only when on is
-// true a single `name_only: true` line is added. All other frontmatter lines and
-// the markdown body are preserved.
+// setFrontmatterNameOnly sets the name-only mode: OFF is the default (no
+// marker), ON adds a single `name_only: true` line.
 func setFrontmatterNameOnly(content string, on bool) string {
-	norm := strings.ReplaceAll(content, "\r\n", "\n")
-
-	var fmLines []string
-	body := norm
-	hadBlock := false
-	if strings.HasPrefix(norm, "---\n") {
-		rest := norm[len("---\n"):]
-		if before, after, ok := strings.Cut(rest, "\n---"); ok {
-			hadBlock = true
-			block := before
-			body = strings.TrimPrefix(after, "\n")
-			for ln := range strings.SplitSeq(block, "\n") {
-				key := ""
-				if before, _, ok := strings.Cut(ln, ":"); ok {
-					key = strings.ToLower(strings.TrimSpace(before))
-				}
-				switch key {
-				case "name_only", "nameonly":
-					continue // drop any existing name-only marker
-				}
-				fmLines = append(fmLines, ln)
-			}
-		}
-	}
+	marker := ""
 	if on {
-		fmLines = append(fmLines, "name_only: true")
+		marker = "name_only: true"
 	}
-
-	if !hadBlock && len(fmLines) == 0 {
-		return body
-	}
-	var b strings.Builder
-	b.WriteString("---\n")
-	b.WriteString(strings.Join(fmLines, "\n"))
-	b.WriteString("\n---\n")
-	b.WriteString(body)
-	return b.String()
+	return setFrontmatterMarker(content, []string{"name_only", "nameonly"}, marker)
 }
 
-// setFrontmatterSummaryOnly rewrites a SKILL.md's frontmatter so its summary-only
-// mode matches on. SummaryOnly defaults to OFF, so a disabled skill carries NO
-// marker: any existing `summary_only:` (and aliases) line is removed, and only
-// when on is true a single `summary_only: true` line is added. All other
-// frontmatter lines and the markdown body are preserved.
+// setFrontmatterSummaryOnly sets the summary-only mode: OFF is the default (no
+// marker), ON adds a single `summary_only: true` line.
 func setFrontmatterSummaryOnly(content string, on bool) string {
-	norm := strings.ReplaceAll(content, "\r\n", "\n")
-
-	var fmLines []string
-	body := norm
-	hadBlock := false
-	if strings.HasPrefix(norm, "---\n") {
-		rest := norm[len("---\n"):]
-		if before, after, ok := strings.Cut(rest, "\n---"); ok {
-			hadBlock = true
-			block := before
-			body = strings.TrimPrefix(after, "\n")
-			for ln := range strings.SplitSeq(block, "\n") {
-				key := ""
-				if before, _, ok := strings.Cut(ln, ":"); ok {
-					key = strings.ToLower(strings.TrimSpace(before))
-				}
-				switch key {
-				case "summary_only", "summaryonly":
-					continue // drop any existing summary-only marker
-				}
-				fmLines = append(fmLines, ln)
-			}
-		}
-	}
+	marker := ""
 	if on {
-		fmLines = append(fmLines, "summary_only: true")
+		marker = "summary_only: true"
 	}
-
-	if !hadBlock && len(fmLines) == 0 {
-		return body
-	}
-	var b strings.Builder
-	b.WriteString("---\n")
-	b.WriteString(strings.Join(fmLines, "\n"))
-	b.WriteString("\n---\n")
-	b.WriteString(body)
-	return b.String()
+	return setFrontmatterMarker(content, []string{"summary_only", "summaryonly"}, marker)
 }
 
 // fmField is one ordered frontmatter scalar to write. An empty Val removes the

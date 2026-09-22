@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 func (d *DB) persistMCPLocked(m MCPServer) error {
@@ -142,7 +142,7 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 			blocked = append(blocked, name)
 		}
 	}
-	sort.Strings(blocked) // stable on-disk order (map iteration is random)
+	slices.Sort(blocked) // stable on-disk order (map iteration is random)
 	blockedJSON, err := json.Marshal(blocked)
 	if err != nil {
 		return err

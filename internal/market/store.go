@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -92,12 +92,21 @@ func (s *Store) Reload() {
 	for id := range byID {
 		order = append(order, id)
 	}
-	sort.Slice(order, func(i, j int) bool {
-		a, b := byID[order[i]], byID[order[j]]
-		if strings.EqualFold(a.Name, b.Name) {
-			return a.ID < b.ID
+	slices.SortFunc(order, func(x, y string) int {
+		less := func(x, y string) bool {
+			a, b := byID[x], byID[y]
+			if strings.EqualFold(a.Name, b.Name) {
+				return a.ID < b.ID
+			}
+			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 		}
-		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+		switch {
+		case less(x, y):
+			return -1
+		case less(y, x):
+			return 1
+		}
+		return 0
 	})
 
 	remote := s.loadRemoteCache()
@@ -180,11 +189,20 @@ func (s *Store) List() []Pack {
 		}
 		rem = append(rem, p)
 	}
-	sort.Slice(rem, func(i, j int) bool {
-		if strings.EqualFold(rem[i].Name, rem[j].Name) {
-			return rem[i].ID < rem[j].ID
+	slices.SortFunc(rem, func(a, b Pack) int {
+		less := func(a, b Pack) bool {
+			if strings.EqualFold(a.Name, b.Name) {
+				return a.ID < b.ID
+			}
+			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 		}
-		return strings.ToLower(rem[i].Name) < strings.ToLower(rem[j].Name)
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return append(out, rem...)
 }

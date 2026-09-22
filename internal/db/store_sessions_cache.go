@@ -1,6 +1,6 @@
 package db
 
-import "sort"
+import "slices"
 
 // sessionsSnapshot is the normalised, sorted session list as of one mutation
 // generation. The slice is shared between callers and must never be written
@@ -36,14 +36,23 @@ func (d *DB) sortedSessions() []Session {
 	// Tie-break on ID so equal-UpdatedAt sessions keep a STABLE order across calls
 	// (the source map iterates in random order, so without this the list reshuffles
 	// on every poll).
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Pinned != out[j].Pinned {
-			return out[i].Pinned
+	slices.SortStableFunc(out, func(a, b Session) int {
+		less := func(a, b Session) bool {
+			if a.Pinned != b.Pinned {
+				return a.Pinned
+			}
+			if a.UpdatedAt != b.UpdatedAt {
+				return a.UpdatedAt > b.UpdatedAt
+			}
+			return a.ID > b.ID
 		}
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return out[i].ID > out[j].ID
+		return 0
 	})
 	d.sessionsSorted.Store(&sessionsSnapshot{gen: gen, list: out})
 	return out

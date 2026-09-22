@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -107,11 +107,20 @@ func (t FSGlobTool) Call(_ context.Context, input json.RawMessage) (string, erro
 	}
 	// Most-recently-modified first (ties broken by path for determinism) — the recent
 	// files are usually the ones the agent is working on.
-	sort.Slice(hits, func(i, j int) bool {
-		if !hits[i].mod.Equal(hits[j].mod) {
-			return hits[i].mod.After(hits[j].mod)
+	slices.SortFunc(hits, func(a, b hit) int {
+		less := func(a, b hit) bool {
+			if !a.mod.Equal(b.mod) {
+				return a.mod.After(b.mod)
+			}
+			return a.rel < b.rel
 		}
-		return hits[i].rel < hits[j].rel
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	out := make([]string, len(hits))
 	for i, h := range hits {

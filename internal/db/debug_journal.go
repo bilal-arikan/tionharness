@@ -3,13 +3,14 @@ package db
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -835,8 +836,8 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 		for n := range sum.ByTool {
 			names = append(names, n)
 		}
-		sort.Slice(names, func(i, j int) bool {
-			return sum.ByTool[names[i]].DurMs > sum.ByTool[names[j]].DurMs
+		slices.SortFunc(names, func(a, b string) int {
+			return cmp.Compare(sum.ByTool[b].DurMs, sum.ByTool[a].DurMs)
 		})
 		if len(names) > 5 {
 			names = names[:5]

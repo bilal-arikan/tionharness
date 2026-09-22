@@ -1,9 +1,10 @@
 package db
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // Agent inheritance.
@@ -329,7 +330,9 @@ func (d *DB) childrenLocked(id string) []Agent {
 			out = append(out, a)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	slices.SortStableFunc(out, func(a, b Agent) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	return out
 }
 

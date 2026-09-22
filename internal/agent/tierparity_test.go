@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -359,9 +359,9 @@ func compareTiers(t *testing.T, label string, got, want map[string]string) {
 			extra = append(extra, name+" (is "+gotTier+")")
 		}
 	}
-	sort.Strings(missing)
-	sort.Strings(extra)
-	sort.Strings(changed)
+	slices.Sort(missing)
+	slices.Sort(extra)
+	slices.Sort(changed)
 
 	if len(missing) > 0 {
 		t.Errorf("[%s] %d tool(s) in the golden table are NO LONGER REGISTERED:\n  %s",
@@ -388,7 +388,7 @@ func dumpGolden(t *testing.T, varName string, census map[string]string) {
 	for n := range census {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	var b strings.Builder
 	fmt.Fprintf(&b, "var %s = map[string]string{\n", varName)
 	for _, n := range names {
@@ -426,7 +426,7 @@ func TestTierParitySelfManagedStamp(t *testing.T) {
 			got = append(got, d.Name)
 		}
 	}
-	sort.Strings(got)
+	slices.Sort(got)
 	if os.Getenv("TIER_GOLDEN_DUMP") != "" {
 		var b strings.Builder
 		b.WriteString("var goldenSelfManaged = []string{\n")

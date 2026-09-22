@@ -2,7 +2,7 @@ package db
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -45,7 +45,7 @@ func TriggerKinds() []string {
 	for k := range triggerSpecs {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -426,7 +426,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(sc db.Schedule) int64 { return sc.UpdatedAt },
 		func(sc db.Schedule) int64 { return sc.CreatedAt },
 		func(sc db.Schedule) string { return sc.Name },
@@ -435,7 +435,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

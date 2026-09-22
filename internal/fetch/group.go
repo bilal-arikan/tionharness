@@ -1,8 +1,9 @@
 package fetch
 
 import (
+	"cmp"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -40,7 +41,9 @@ func GroupByMarker(tree Tree, prefix, marker string) []Group {
 	for f := range folders {
 		ordered = append(ordered, f)
 	}
-	sort.Slice(ordered, func(i, j int) bool { return len(ordered[i]) > len(ordered[j]) })
+	slices.SortFunc(ordered, func(a, b string) int {
+		return cmp.Compare(len(b), len(a))
+	})
 
 	byFolder := map[string]*Group{}
 	for f := range folders {
@@ -65,7 +68,9 @@ func GroupByMarker(tree Tree, prefix, marker string) []Group {
 	for _, g := range byFolder {
 		out = append(out, *g)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].RelPath < out[j].RelPath })
+	slices.SortFunc(out, func(a, b Group) int {
+		return cmp.Compare(a.RelPath, b.RelPath)
+	})
 	return out
 }
 
@@ -83,7 +88,7 @@ func FindFiles(tree Tree, prefix string, pred func(name string) bool) []string {
 			out = append(out, p)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

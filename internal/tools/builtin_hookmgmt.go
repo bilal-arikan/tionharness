@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -88,7 +88,7 @@ func (t ListHooksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	// Hooks are never edited in place (no updated timestamp), so the updated_*
 	// keys sort by CreatedAt — the same value as created_*. name_* is rejected by
 	// SortByField because hooks have no name field.
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(h db.Hook) int64 { return h.CreatedAt },
 		func(h db.Hook) int64 { return h.CreatedAt },
 		nil,
@@ -97,7 +97,7 @@ func (t ListHooksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

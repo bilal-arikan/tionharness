@@ -7,7 +7,7 @@ package api
 // source of truth for the counts; this is its clickable sibling.
 
 import (
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -126,11 +126,20 @@ func dashboardActions(sessions []db.Session, tasks []db.Task, runs []db.FlowRun,
 		})
 	}
 
-	sort.SliceStable(out, func(i, j int) bool {
-		if r := severityRank(out[i].Severity) - severityRank(out[j].Severity); r != 0 {
-			return r < 0
+	slices.SortStableFunc(out, func(a, b actionItem) int {
+		less := func(a, b actionItem) bool {
+			if r := severityRank(a.Severity) - severityRank(b.Severity); r != 0 {
+				return r < 0
+			}
+			return a.stamp < b.stamp // oldest first within a severity
 		}
-		return out[i].stamp < out[j].stamp // oldest first within a severity
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return out
 }

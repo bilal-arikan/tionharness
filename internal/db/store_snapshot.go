@@ -1,10 +1,11 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -135,14 +136,14 @@ func (d *DB) ListSnapshots(ctx context.Context) ([]SnapshotIndexEntry, string, e
 	for _, e := range idx.Entries {
 		out = append(out, e)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Seq != out[j].Seq {
-			return out[i].Seq < out[j].Seq
+	slices.SortFunc(out, func(a, b SnapshotIndexEntry) int {
+		if c := cmp.Compare(a.Seq, b.Seq); c != 0 {
+			return c
 		}
-		if out[i].FirstSeen != out[j].FirstSeen {
-			return out[i].FirstSeen < out[j].FirstSeen
+		if c := cmp.Compare(a.FirstSeen, b.FirstSeen); c != 0 {
+			return c
 		}
-		return out[i].Hash < out[j].Hash
+		return cmp.Compare(a.Hash, b.Hash)
 	})
 	return out, idx.Current, nil
 }

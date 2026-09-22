@@ -1,10 +1,11 @@
 package mcp
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -262,11 +263,11 @@ func SuggestServers(want string, known []string) []string {
 			cands = append(cands, scored{name, sim})
 		}
 	}
-	sort.Slice(cands, func(i, j int) bool {
-		if cands[i].sim != cands[j].sim {
-			return cands[i].sim > cands[j].sim
+	slices.SortFunc(cands, func(a, b scored) int {
+		if c := cmp.Compare(b.sim, a.sim); c != 0 {
+			return c
 		}
-		return cands[i].name < cands[j].name
+		return cmp.Compare(a.name, b.name)
 	})
 	out := make([]string, 0, min(len(cands), maxHits))
 	for i, c := range cands {

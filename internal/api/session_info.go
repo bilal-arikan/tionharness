@@ -1,12 +1,13 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"io/fs"
 	"net/http"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -332,7 +333,9 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp.Fillers = append(messageFillers, extra...)
-	sort.SliceStable(resp.Fillers, func(i, j int) bool { return resp.Fillers[i].Tokens > resp.Fillers[j].Tokens })
+	slices.SortStableFunc(resp.Fillers, func(a, b contextFiller) int {
+		return cmp.Compare(b.Tokens, a.Tokens)
+	})
 
 	// Derive the "used" total from the SAME buckets the bar renders, so the header
 	// figure equals the sum of the visible segments exactly (buildFillers already
@@ -551,7 +554,9 @@ func buildFillers(summary string, pending []db.Message, stepsFrom int) ([]contex
 	if trace.Tokens > 0 {
 		fillers = append(fillers, trace)
 	}
-	sort.SliceStable(fillers, func(i, j int) bool { return fillers[i].Tokens > fillers[j].Tokens })
+	slices.SortStableFunc(fillers, func(a, b contextFiller) int {
+		return cmp.Compare(b.Tokens, a.Tokens)
+	})
 	return fillers, nil
 }
 
@@ -818,11 +823,20 @@ func buildAgentStats(ctx context.Context, database *db.DB, session db.Session, h
 		out = append(out, *st)
 	}
 	// Owner first, then by turn count descending.
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].IsOwner != out[j].IsOwner {
-			return out[i].IsOwner
+	slices.SortStableFunc(out, func(a, b sessionAgentStat) int {
+		less := func(a, b sessionAgentStat) bool {
+			if a.IsOwner != b.IsOwner {
+				return a.IsOwner
+			}
+			return a.Turns > b.Turns
 		}
-		return out[i].Turns > out[j].Turns
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return out
 }

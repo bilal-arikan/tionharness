@@ -1,9 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"net/http"
-	"sort"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -108,11 +109,11 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 	// Newest-updated first, with a SessionID tie-break so equal-UpdatedAt rows keep
 	// a STABLE order across polls (otherwise the feed reshuffles every few seconds).
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
+	slices.SortStableFunc(out, func(a, b executionItem) int {
+		if c := cmp.Compare(b.UpdatedAt, a.UpdatedAt); c != 0 {
+			return c
 		}
-		return out[i].SessionID > out[j].SessionID
+		return cmp.Compare(b.SessionID, a.SessionID)
 	})
 
 	// Paging/sorting contract: when any of limit/offset/sort is present the reply
@@ -128,7 +129,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	less, err := tools.SortByField(out, field, asc,
+	less, err := tools.SortByField(field, asc,
 		func(e executionItem) int64 { return e.UpdatedAt },
 		func(e executionItem) int64 { return e.CreatedAt },
 		func(e executionItem) string { return e.Title },
@@ -138,7 +139,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	sort.SliceStable(out, less)
+	slices.SortStableFunc(out, less)
 	page, total := tools.SlicePage(out, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)
 }

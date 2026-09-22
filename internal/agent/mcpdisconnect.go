@@ -1,7 +1,8 @@
 package agent
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +103,9 @@ func (l *mcpDisconnectLog) take(sessionID string) []mcp.DisconnectEvent {
 		out = append(out, d.ev)
 		delete(l.byID, k)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Server < out[j].Server })
+	slices.SortFunc(out, func(a, b mcp.DisconnectEvent) int {
+		return cmp.Compare(a.Server, b.Server)
+	})
 	return out
 }
 

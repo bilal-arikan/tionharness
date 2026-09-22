@@ -1,13 +1,14 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -329,11 +330,11 @@ func (d *DB) ListTrajectories(ctx context.Context, f TrajectoryFilter) []Traject
 		out = append(out, e)
 	}
 	d.trajIndexMu.RUnlock()
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].UpdatedAt != out[j].UpdatedAt {
-			return out[i].UpdatedAt > out[j].UpdatedAt
+	slices.SortFunc(out, func(a, b TrajectoryIndexEntry) int {
+		if c := cmp.Compare(b.UpdatedAt, a.UpdatedAt); c != 0 {
+			return c
 		}
-		return out[i].ID > out[j].ID
+		return cmp.Compare(b.ID, a.ID)
 	})
 	return out
 }

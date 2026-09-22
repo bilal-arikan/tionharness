@@ -8,7 +8,7 @@ package trajectory
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -420,13 +420,22 @@ func ApplyPlan(t *db.Trajectory, plan []PlanPhase) error {
 	for i, p := range plan {
 		order[PhaseNodeID(strings.TrimSpace(p.ID))] = i
 	}
-	sort.SliceStable(t.Nodes, func(i, j int) bool {
-		pi, iok := order[t.Nodes[i].ID]
-		pj, jok := order[t.Nodes[j].ID]
-		if iok != jok {
-			return iok
+	slices.SortStableFunc(t.Nodes, func(a, b db.TrajectoryNode) int {
+		less := func(a, b db.TrajectoryNode) bool {
+			pi, iok := order[a.ID]
+			pj, jok := order[b.ID]
+			if iok != jok {
+				return iok
+			}
+			return iok && pi < pj
 		}
-		return iok && pi < pj
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return nil
 }

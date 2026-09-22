@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -100,7 +100,7 @@ func blockedPatterns(overrides map[string]string) []string {
 			out = append(out, name)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -145,8 +145,8 @@ func applyVisibilityOverrides(reg *tools.Registry, overrides map[string]string, 
 			exact = append(exact, k)
 		}
 	}
-	sort.Strings(broad)
-	sort.Strings(exact)
+	slices.Sort(broad)
+	slices.Sort(exact)
 
 	for _, key := range broad {
 		tier := overrides[key]

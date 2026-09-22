@@ -2,7 +2,7 @@ package db
 
 import (
 	"container/heap"
-	"sort"
+	"slices"
 )
 
 // searchCandidate is a matched message before it is turned into a SearchHit.
@@ -71,6 +71,15 @@ func (h *searchTopK) offer(c searchCandidate) {
 func (h *searchTopK) ranked() []searchCandidate {
 	out := make([]searchCandidate, len(h.items))
 	copy(out, h.items)
-	sort.Slice(out, func(i, j int) bool { return candidateBetter(out[i], out[j]) })
+	slices.SortFunc(out, func(a, b searchCandidate) int {
+		less := func(a, b searchCandidate) bool { return candidateBetter(a, b) }
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
+	})
 	return out
 }

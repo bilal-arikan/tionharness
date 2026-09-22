@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -289,7 +289,7 @@ func (b *Bridge) Summary() string {
 	for n := range b.counts {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	parts := make([]string, 0, len(names))
 	for _, n := range names {
 		if c := b.counts[n]; c > 1 {

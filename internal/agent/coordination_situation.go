@@ -1,9 +1,10 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -103,7 +104,9 @@ func (r *Runtime) coordinatorAgentRosterBlock(ctx context.Context) string {
 	if len(rows) == 0 {
 		return ""
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
+	slices.SortFunc(rows, func(a, b row) int {
+		return cmp.Compare(a.name, b.name)
+	})
 	var b strings.Builder
 	b.WriteString("<available-agents>\n")
 	b.WriteString("Targets for spawn_worker, with what each one is ALLOWED to do:\n")
@@ -141,7 +144,9 @@ func (r *Runtime) reviewGateBlock(ctx context.Context) string {
 	if len(over) == 0 {
 		return ""
 	}
-	sort.Slice(over, func(i, j int) bool { return over[i].ReviewBounces > over[j].ReviewBounces })
+	slices.SortFunc(over, func(a, b db.Task) int {
+		return cmp.Compare(b.ReviewBounces, a.ReviewBounces)
+	})
 	var b strings.Builder
 	b.WriteString("<review-gate-exhausted>\n")
 	for _, t := range over {

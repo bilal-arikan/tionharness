@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -335,7 +335,7 @@ func (d *DB) deliverPendingCLIReplyActivities() error {
 			}
 		}
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	var deliveryErrors []error
 	for _, path := range paths {
 		d.activityDeliveryMu.Lock()

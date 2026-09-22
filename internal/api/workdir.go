@@ -1,11 +1,12 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -125,7 +126,9 @@ func (s *Server) handleBrowseDirs(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, browseEntry{Name: e.Name(), Path: filepath.Join(path, e.Name())})
 	}
-	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	slices.SortFunc(out, func(a, b browseEntry) int {
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 
 	parent := filepath.Dir(path)
 	if parent == path { // already at a root (e.g. "C:\\" or "/")

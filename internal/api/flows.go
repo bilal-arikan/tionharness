@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -44,7 +44,7 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if field != "" {
-		less, err := tools.SortByField(matches, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(f db.Flow) int64 { return f.UpdatedAt },
 			func(f db.Flow) int64 { return f.CreatedAt },
 			func(f db.Flow) string { return f.Name },
@@ -53,7 +53,7 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(matches, less)
+		slices.SortStableFunc(matches, less)
 	}
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

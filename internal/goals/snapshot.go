@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // ConfigSnapshot is the canonical, content-addressed picture of every surface
@@ -127,13 +127,13 @@ func (s ConfigSnapshot) Canonical() ([]byte, error) {
 	if body.Tools.MCPServers == nil {
 		body.Tools.MCPServers = map[string]bool{}
 	}
-	sort.Strings(body.Tools.Disabled)
+	slices.Sort(body.Tools.Disabled)
 	for id, a := range body.Agents {
 		if a.Skills == nil {
 			a.Skills = []string{}
 		}
 		sk := append([]string(nil), a.Skills...)
-		sort.Strings(sk)
+		slices.Sort(sk)
 		a.Skills = sk
 		body.Agents[id] = a
 	}
@@ -265,13 +265,13 @@ func unionKeys(a, b []string) []string {
 			out = append(out, k)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
 func joinSorted(l []string) string {
 	c := append([]string(nil), l...)
-	sort.Strings(c)
+	slices.Sort(c)
 	raw, _ := json.Marshal(c)
 	return string(raw)
 }

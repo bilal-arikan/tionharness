@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -243,16 +244,25 @@ func boardColumns(tasks []db.Task) []boardColumn {
 	for k := range byKey {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		oi, ki := order[keys[i]]
-		oj, kj := order[keys[j]]
-		if ki != kj {
-			return ki // known columns come before unknown ones
+	slices.SortFunc(keys, func(a, b string) int {
+		less := func(a, b string) bool {
+			oi, ki := order[a]
+			oj, kj := order[b]
+			if ki != kj {
+				return ki // known columns come before unknown ones
+			}
+			if ki && kj {
+				return oi < oj
+			}
+			return a < b
 		}
-		if ki && kj {
-			return oi < oj
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return keys[i] < keys[j]
+		return 0
 	})
 
 	out := make([]boardColumn, 0, len(keys))
@@ -309,7 +319,9 @@ func boardSignals(in BoardInput, cols []boardColumn, now time.Time) []string {
 // first. Returns the text and how many cards it dropped.
 func boardDetail(tasks []db.Task, now time.Time) (string, int) {
 	sorted := append([]db.Task(nil), tasks...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	slices.SortFunc(sorted, func(a, b db.Task) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 
 	dropped := 0
 	if len(sorted) > boardFullCards {

@@ -13,7 +13,10 @@
 // lock across callers.
 package liveness
 
-import "sort"
+import (
+	"cmp"
+	"slices"
+)
 
 // State is a session's liveness class. Ordered by "how alive": a session
 // appears once, under the most active state that applies.
@@ -187,6 +190,8 @@ func (b *Builder) Snapshot(cap Capacity, at int64) Snapshot {
 	for _, e := range b.entries {
 		out = append(out, e)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
+	slices.SortFunc(out, func(a, b Entry) int {
+		return cmp.Compare(a.SessionID, b.SessionID)
+	})
 	return Snapshot{Entries: out, Capacity: cap, At: at}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/archive"
@@ -190,7 +190,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(a db.Artifact) int64 { return a.UpdatedAt },
 		func(a db.Artifact) int64 { return a.CreatedAt },
 		func(a db.Artifact) string { return a.Title },
@@ -199,7 +199,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

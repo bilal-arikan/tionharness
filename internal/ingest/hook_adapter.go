@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"path"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -64,7 +64,7 @@ func (hookAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 		for ev := range hooksMap {
 			events = append(events, ev)
 		}
-		sort.Strings(events)
+		slices.Sort(events)
 		for _, event := range events {
 			for _, entry := range hooksMap[event] {
 				for ci, cmd := range entry.Hooks {

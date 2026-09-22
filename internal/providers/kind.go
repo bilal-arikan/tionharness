@@ -1,6 +1,9 @@
 package providers
 
-import "sort"
+import (
+	"cmp"
+	"slices"
+)
 
 // Standard field keys. Kinds declare their instance form using these keys so
 // that a future ResolvedConfig (Faz 2) can map them 1:1 onto its typed fields
@@ -234,8 +237,8 @@ func Kinds() []ProviderKind {
 	for _, k := range kindRegistry {
 		out = append(out, k)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].Manifest().Order < out[j].Manifest().Order
+	slices.SortStableFunc(out, func(a, b ProviderKind) int {
+		return cmp.Compare(a.Manifest().Order, b.Manifest().Order)
 	})
 	return out
 }

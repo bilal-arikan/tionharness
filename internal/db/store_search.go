@@ -1,8 +1,9 @@
 package db
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/textutil"
@@ -83,7 +84,9 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 		}
 		sessions = append(sessions, s)
 	}
-	sort.SliceStable(sessions, func(i, j int) bool { return sessions[i].UpdatedAt > sessions[j].UpdatedAt })
+	slices.SortStableFunc(sessions, func(a, b Session) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 
 	now := now()
 	top := newSearchTopK(limit)

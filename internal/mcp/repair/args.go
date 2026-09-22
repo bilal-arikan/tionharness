@@ -10,7 +10,7 @@ package repair
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -58,7 +58,7 @@ func MissingRequiredArgs(schema, input json.RawMessage) []string {
 			missing = append(missing, name)
 		}
 	}
-	sort.Strings(missing)
+	slices.Sort(missing)
 	return missing
 }
 

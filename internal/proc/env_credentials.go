@@ -3,7 +3,6 @@ package proc
 import (
 	"os"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -128,7 +127,7 @@ func stripCredentialEnv(env []string, exempt func(name string) bool) (kept []str
 			stripped = append(stripped, name)
 		}
 	}
-	sort.Strings(stripped)
+	slices.Sort(stripped)
 	return kept, stripped
 }
 

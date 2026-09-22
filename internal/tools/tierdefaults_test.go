@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -30,7 +30,7 @@ func namesWithTier(m map[string]string, tier string) []string {
 			out = append(out, name)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

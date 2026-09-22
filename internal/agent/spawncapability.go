@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -90,7 +90,7 @@ func agentMutationTools(a db.Agent) (allowed []string, constrained bool, err err
 			}
 		}
 	}
-	sort.Strings(allowed)
+	slices.Sort(allowed)
 	return allowed, true, nil
 }
 

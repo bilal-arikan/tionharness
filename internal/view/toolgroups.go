@@ -1,8 +1,9 @@
 package view
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -88,11 +89,11 @@ func budgetChildren(in BudgetInput) []Handle {
 			a.estimated = true
 		}
 	}
-	sort.SliceStable(order, func(i, j int) bool {
-		if byProvider[order[i]].cost != byProvider[order[j]].cost {
-			return byProvider[order[i]].cost > byProvider[order[j]].cost
+	slices.SortStableFunc(order, func(a, b string) int {
+		if c := cmp.Compare(byProvider[b].cost, byProvider[a].cost); c != 0 {
+			return c
 		}
-		return order[i] < order[j]
+		return cmp.Compare(a, b)
 	})
 	hs := make([]Handle, 0, len(order))
 	for _, name := range order {
@@ -118,11 +119,20 @@ func toolGroupLabel(g ToolGroup) string {
 // then newest. Copies the input; the caller's slice may be a cache snapshot.
 func sortedMCPServers(servers []db.MCPServer) []db.MCPServer {
 	sorted := append([]db.MCPServer(nil), servers...)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		if sorted[i].Enabled != sorted[j].Enabled {
-			return sorted[i].Enabled
+	slices.SortStableFunc(sorted, func(a, b db.MCPServer) int {
+		less := func(a, b db.MCPServer) bool {
+			if a.Enabled != b.Enabled {
+				return a.Enabled
+			}
+			return a.CreatedAt > b.CreatedAt
 		}
-		return sorted[i].CreatedAt > sorted[j].CreatedAt
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return sorted
 }

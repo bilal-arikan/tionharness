@@ -1,10 +1,11 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -21,7 +22,9 @@ func toLazyEntries(catalog []providers.ToolDef) []lazyEntry {
 	for _, d := range catalog {
 		out = append(out, lazyEntry{name: d.Name, desc: d.Description})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
+	slices.SortFunc(out, func(a, b lazyEntry) int {
+		return cmp.Compare(a.name, b.name)
+	})
 	return out
 }
 
@@ -106,7 +109,7 @@ func (t ActivateToolsTool) knownBundleKeys() []string {
 	for k := range t.bundles {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -447,14 +450,14 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 	if len(ranked) == 0 {
 		return lead + fmt.Sprintf("No on-demand tools match %q.", in.Query), nil
 	}
-	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].terms != ranked[j].terms {
-			return ranked[i].terms > ranked[j].terms
+	slices.SortStableFunc(ranked, func(a, b scored) int {
+		if c := cmp.Compare(b.terms, a.terms); c != 0 {
+			return c
 		}
-		if ranked[i].nameHits != ranked[j].nameHits {
-			return ranked[i].nameHits > ranked[j].nameHits
+		if c := cmp.Compare(b.nameHits, a.nameHits); c != 0 {
+			return c
 		}
-		return ranked[i].e.name < ranked[j].e.name
+		return cmp.Compare(a.e.name, b.e.name)
 	})
 	// Rendering (row shape, bundle tag, overflow notice) is shared with the
 	// claude-cli gateway path via RenderToolSearch, so a change to the result

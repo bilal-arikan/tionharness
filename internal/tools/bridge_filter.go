@@ -1,7 +1,8 @@
 package tools
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
@@ -59,7 +60,9 @@ func (r *Registry) BridgeableDefsFiltered(allow func(name string) bool, skipHidd
 		}
 		out = append(out, foldExamples(t.Def()))
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 

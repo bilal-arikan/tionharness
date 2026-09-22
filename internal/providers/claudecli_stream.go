@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,7 +72,7 @@ func salvageCLIEvent(line string) (ev cliEvent, dropped []string, ok bool) {
 			dropped = append(dropped, k)
 		}
 	}
-	sort.Strings(dropped) // map iteration order is unspecified; keep the note stable
+	slices.Sort(dropped) // map iteration order is unspecified; keep the note stable
 	return ev, dropped, true
 }
 

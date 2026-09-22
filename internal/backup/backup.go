@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -278,7 +278,7 @@ func prune(dir, id string, retain int, logger *slog.Logger) {
 		return
 	}
 	// The "<id>-YYYYMMDD-HHMMSS.zip" name sorts chronologically as a string.
-	sort.Strings(archives)
+	slices.Sort(archives)
 	for _, name := range archives[:len(archives)-retain] {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && logger != nil {
 			logger.Warn("prune old backup failed", "file", name, "error", err)

@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/skills"
@@ -196,7 +197,9 @@ func uniqueSortedHandles(handles []Handle) []Handle {
 	for _, handle := range byRef {
 		out = append(out, handle)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Ref.String() < out[j].Ref.String() })
+	slices.SortFunc(out, func(a, b Handle) int {
+		return cmp.Compare(a.Ref.String(), b.Ref.String())
+	})
 	return out
 }
 
@@ -271,7 +274,9 @@ func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string)
 // the same walk still reads.
 func sessionHandleList(sessions []db.Session) []Handle {
 	sorted := append([]db.Session(nil), sessions...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	slices.SortStableFunc(sorted, func(a, b db.Session) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	hs := make([]Handle, 0, len(sorted))
 	for _, s := range sorted {
 		hs = append(hs, Handle{
@@ -287,7 +292,9 @@ func sessionHandleList(sessions []db.Session) []Handle {
 // flow-run handle.
 func flowRunHandleList(runs []db.FlowRun) []Handle {
 	sorted := append([]db.FlowRun(nil), runs...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	slices.SortStableFunc(sorted, func(a, b db.FlowRun) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	hs := make([]Handle, 0, len(sorted))
 	for _, r := range sorted {
 		hs = append(hs, Handle{
@@ -316,7 +323,9 @@ func agentHandleList(agents []db.Agent) []Handle {
 // artifact handle.
 func artifactHandleList(artifacts []db.Artifact) []Handle {
 	sorted := append([]db.Artifact(nil), artifacts...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	slices.SortStableFunc(sorted, func(a, b db.Artifact) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	hs := make([]Handle, 0, len(sorted))
 	for _, a := range sorted {
 		hs = append(hs, Handle{
@@ -331,7 +340,9 @@ func artifactHandleList(artifacts []db.Artifact) []Handle {
 // automationHandleList renders automations (newest first) as automation handles.
 func automationHandleList(automations []db.Automation) []Handle {
 	sorted := append([]db.Automation(nil), automations...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].CreatedAt > sorted[j].CreatedAt })
+	slices.SortStableFunc(sorted, func(a, b db.Automation) int {
+		return cmp.Compare(b.CreatedAt, a.CreatedAt)
+	})
 	hs := make([]Handle, 0, len(sorted))
 	for _, a := range sorted {
 		hs = append(hs, Handle{
@@ -383,7 +394,9 @@ func columnCardHandles(tasks []db.Task, columnKey string) []Handle {
 			cards = append(cards, t)
 		}
 	}
-	sort.Slice(cards, func(i, j int) bool { return cards[i].UpdatedAt > cards[j].UpdatedAt })
+	slices.SortFunc(cards, func(a, b db.Task) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
+	})
 	hs := make([]Handle, 0, len(cards))
 	for _, t := range cards {
 		hs = append(hs, Handle{
@@ -466,16 +479,25 @@ func sessionKindGroupHandles(sessions []db.Session) []Handle {
 	for k := range counts {
 		kinds = append(kinds, k)
 	}
-	sort.Slice(kinds, func(i, j int) bool {
-		ri, iok := rank[kinds[i]]
-		rj, jok := rank[kinds[j]]
-		if iok != jok {
-			return iok
+	slices.SortFunc(kinds, func(a, b string) int {
+		less := func(a, b string) bool {
+			ri, iok := rank[a]
+			rj, jok := rank[b]
+			if iok != jok {
+				return iok
+			}
+			if iok && ri != rj {
+				return ri < rj
+			}
+			return a < b
 		}
-		if iok && ri != rj {
-			return ri < rj
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return kinds[i] < kinds[j]
+		return 0
 	})
 	hs := make([]Handle, 0, len(kinds))
 	for _, k := range kinds {

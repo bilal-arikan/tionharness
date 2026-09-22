@@ -1,7 +1,7 @@
 package providers
 
 import (
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -48,7 +48,7 @@ func codexNamedMCPServers(msg string, servers map[string]CLIMCPServer) []string 
 			named = append(named, key)
 		}
 	}
-	sort.Strings(named)
+	slices.Sort(named)
 	return named
 }
 
@@ -63,7 +63,7 @@ func codexRemoteServerKeys(servers map[string]CLIMCPServer) []string {
 			keys = append(keys, key)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 

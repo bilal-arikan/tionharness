@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/archive"
@@ -543,7 +543,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(a db.Automation) int64 { return a.UpdatedAt },
 		func(a db.Automation) int64 { return a.CreatedAt },
 		func(a db.Automation) string { return a.Name },
@@ -552,7 +552,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

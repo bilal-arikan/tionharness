@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -280,7 +280,7 @@ func renderBindingListing(modules map[string][]string) string {
 	for m := range modules {
 		names = append(names, m)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Tool bindings regenerated under %s/ (on PYTHONPATH for run_code scripts).\n"+

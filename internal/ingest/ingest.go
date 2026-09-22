@@ -11,7 +11,8 @@
 package ingest
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -107,11 +108,11 @@ func Scan(source, location string) (ScanResult, error) {
 	if dropped > 0 {
 		res.Warnings = append(res.Warnings, plural(dropped, "duplicate artifact")+" skipped (same kind+slug in a mirrored/nested copy, e.g. plugins/ or dist/)")
 	}
-	sort.Slice(res.Items, func(i, j int) bool {
-		if res.Items[i].Kind != res.Items[j].Kind {
-			return res.Items[i].Kind < res.Items[j].Kind
+	slices.SortFunc(res.Items, func(a, b Discovered) int {
+		if c := cmp.Compare(a.Kind, b.Kind); c != 0 {
+			return c
 		}
-		return res.Items[i].Slug < res.Items[j].Slug
+		return cmp.Compare(a.Slug, b.Slug)
 	})
 	if len(res.Items) == 0 {
 		res.Warnings = append(res.Warnings, "no importable artifacts (SKILL.md / agents / commands / MCP config) found")
@@ -268,7 +269,7 @@ func sortedKeys(m map[string][]byte) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

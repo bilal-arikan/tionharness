@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -279,7 +279,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, matches)
 		return
 	}
-	less, err := tools.SortByField(matches, field, asc,
+	less, err := tools.SortByField(field, asc,
 		func(a db.Artifact) int64 { return a.UpdatedAt },
 		func(a db.Artifact) int64 { return a.CreatedAt },
 		func(a db.Artifact) string { return a.Title },
@@ -289,7 +289,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)
 }

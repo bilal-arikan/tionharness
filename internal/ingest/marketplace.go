@@ -2,7 +2,7 @@ package ingest
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/fetch"
@@ -57,7 +57,7 @@ func pluginRoots(tree fetch.Tree, userPrefix string) (roots []string, marketName
 	if len(roots) == 0 {
 		return []string{""}, ""
 	}
-	sort.Strings(roots)
+	slices.Sort(roots)
 	return roots, strings.TrimSpace(doc.Name)
 }
 

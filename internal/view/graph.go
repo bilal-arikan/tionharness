@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // GraphEdge is one directed structural relationship in the whole-workspace map:
@@ -102,18 +103,27 @@ func (p *Projector) GraphStructure(ctx context.Context) ([]Handle, []GraphEdge, 
 	for _, handle := range nodes {
 		out.Nodes = append(out.Nodes, handle)
 	}
-	sort.Slice(out.Nodes, func(i, j int) bool {
-		return out.Nodes[i].Ref.String() < out.Nodes[j].Ref.String()
+	slices.SortFunc(out.Nodes, func(a, b Handle) int {
+		return cmp.Compare(a.Ref.String(), b.Ref.String())
 	})
 	for edge := range edges {
 		out.Edges = append(out.Edges, edge)
 	}
-	sort.Slice(out.Edges, func(i, j int) bool {
-		a, b := out.Edges[i], out.Edges[j]
-		if a.Source != b.Source {
-			return a.Source.String() < b.Source.String()
+	slices.SortFunc(out.Edges, func(x, y GraphEdge) int {
+		less := func(x, y GraphEdge) bool {
+			a, b := x, y
+			if a.Source != b.Source {
+				return a.Source.String() < b.Source.String()
+			}
+			return a.Target.String() < b.Target.String()
 		}
-		return a.Target.String() < b.Target.String()
+		switch {
+		case less(x, y):
+			return -1
+		case less(y, x):
+			return 1
+		}
+		return 0
 	})
 	return out.Nodes, out.Edges, nil
 }

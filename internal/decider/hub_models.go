@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"sort"
 )
 
 // cachedClient is the backend client of one decision model, valid while key
@@ -74,7 +73,7 @@ func (h *Hub) ModelUsers(id string) []string {
 			authorities = append(authorities, aid)
 		}
 	}
-	sort.Strings(authorities)
+	slices.Sort(authorities)
 	if cfg.DefaultModel == id {
 		return append([]string{"default"}, authorities...)
 	}
@@ -105,11 +104,20 @@ func providerCandidates(b Backend, all []InstanceInfo) []InstanceInfo {
 			out = append(out, inst)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if ri, rj := rank(out[i].Kind), rank(out[j].Kind); ri != rj {
-			return ri < rj
+	slices.SortStableFunc(out, func(a, b InstanceInfo) int {
+		less := func(a, b InstanceInfo) bool {
+			if ri, rj := rank(a.Kind), rank(b.Kind); ri != rj {
+				return ri < rj
+			}
+			return a.ID < b.ID
 		}
-		return out[i].ID < out[j].ID
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return out
 }

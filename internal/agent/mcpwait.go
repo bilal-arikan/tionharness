@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -151,7 +151,7 @@ func selectMCPServers(enabled []db.MCPServer, want []string) ([]db.MCPServer, er
 		for _, m := range enabled {
 			available = append(available, m.Name)
 		}
-		sort.Strings(available)
+		slices.Sort(available)
 		return nil, fmt.Errorf("wait_for_mcp_servers: no enabled MCP server named %s (enabled: %s)",
 			strings.Join(unknown, ", "), strings.Join(available, ", "))
 	}

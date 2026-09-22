@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,7 +58,7 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if field != "" {
-		less, err := tools.SortByField(matches, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(tk db.Task) int64 { return tk.UpdatedAt },
 			func(tk db.Task) int64 { return tk.CreatedAt },
 			func(tk db.Task) string { return tk.Title },
@@ -67,7 +67,7 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(matches, less)
+		slices.SortStableFunc(matches, less)
 	}
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

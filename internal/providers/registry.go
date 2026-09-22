@@ -1,10 +1,11 @@
 package providers
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os/exec"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -168,7 +169,9 @@ func (r *Registry) ListInstances() []InstanceSummary {
 	for i := range out {
 		out[i].Available = r.Available(out[i].ID)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortFunc(out, func(a, b InstanceSummary) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out
 }
 
@@ -361,7 +364,7 @@ func (r *Registry) FirstAvailableOfKind(kind string) string {
 		}
 	}
 	r.mu.RUnlock()
-	sort.Strings(ids)
+	slices.Sort(ids)
 	for _, id := range ids {
 		if r.Available(id) {
 			return id

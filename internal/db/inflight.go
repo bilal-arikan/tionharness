@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
-	"sort"
+	"slices"
 )
 
 // inflightFile is the per-session sidecar holding the assistant turn that is
@@ -146,7 +146,7 @@ func (d *DB) recoverInflight() error {
 	d.mu.RUnlock()
 	// Map iteration is random; sort so recovery order (and therefore the ids of
 	// any recovered messages) is reproducible across boots.
-	sort.Strings(ids)
+	slices.Sort(ids)
 
 	type sidecar struct {
 		id string

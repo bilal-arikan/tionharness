@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -157,7 +157,7 @@ func (r *Runtime) GoalScopeCandidates(ctx context.Context) GoalScopeCandidates {
 				}
 			}
 		}
-		sort.Strings(out.Tags)
+		slices.Sort(out.Tags)
 	}
 	return out
 }

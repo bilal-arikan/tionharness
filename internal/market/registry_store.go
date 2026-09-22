@@ -1,6 +1,7 @@
 package market
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -8,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -37,8 +38,8 @@ func (s *Store) registriesPath() string {
 // ListRegistries returns the configured remote registries (sorted by name).
 func (s *Store) ListRegistries() []Registry {
 	regs := s.loadRegistries()
-	sort.Slice(regs, func(i, j int) bool {
-		return strings.ToLower(regs[i].Name) < strings.ToLower(regs[j].Name)
+	slices.SortFunc(regs, func(a, b Registry) int {
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 	return regs
 }

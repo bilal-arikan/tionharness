@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,7 +134,7 @@ func dedupeInstancesLastWins(list []ProviderInstance) ([]ProviderInstance, []str
 	for id := range seenDup {
 		dropped = append(dropped, id)
 	}
-	sort.Strings(dropped)
+	slices.Sort(dropped)
 	return out, dropped
 }
 

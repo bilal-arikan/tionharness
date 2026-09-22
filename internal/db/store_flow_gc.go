@@ -1,9 +1,10 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // Flow run garbage collection (_Docs/77 R8).
@@ -79,11 +80,11 @@ func (d *DB) PruneFlowRuns(ctx context.Context, flowID string, keep int) ([]stri
 			terminal = append(terminal, r)
 		}
 	}
-	sort.Slice(terminal, func(i, j int) bool {
-		if terminal[i].CreatedAt != terminal[j].CreatedAt {
-			return terminal[i].CreatedAt > terminal[j].CreatedAt
+	slices.SortFunc(terminal, func(a, b FlowRun) int {
+		if c := cmp.Compare(b.CreatedAt, a.CreatedAt); c != 0 {
+			return c
 		}
-		return terminal[i].ID > terminal[j].ID
+		return cmp.Compare(b.ID, a.ID)
 	})
 	if len(terminal) <= keep {
 		return nil, nil

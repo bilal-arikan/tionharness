@@ -1,6 +1,6 @@
 package db
 
-import "sort"
+import "slices"
 
 // This file holds the generic, entity-agnostic building blocks that the
 // per-entity stores (task/hook/flow/schedule/mcp/...) delegate to. They keep the
@@ -35,7 +35,16 @@ func dbList[T any](d *DB, m map[string]T, less func(a, b T) bool) []T {
 		out = append(out, v)
 	}
 	if less != nil {
-		sort.SliceStable(out, func(i, j int) bool { return less(out[i], out[j]) })
+		slices.SortStableFunc(out, func(a, b T) int {
+			less := func(a, b T) bool { return less(a, b) }
+			switch {
+			case less(a, b):
+				return -1
+			case less(b, a):
+				return 1
+			}
+			return 0
+		})
 	}
 	return out
 }
@@ -52,7 +61,16 @@ func dbFilter[T any](d *DB, m map[string]T, keep func(T) bool, less func(a, b T)
 		}
 	}
 	if less != nil {
-		sort.SliceStable(out, func(i, j int) bool { return less(out[i], out[j]) })
+		slices.SortStableFunc(out, func(a, b T) int {
+			less := func(a, b T) bool { return less(a, b) }
+			switch {
+			case less(a, b):
+				return -1
+			case less(b, a):
+				return 1
+			}
+			return 0
+		})
 	}
 	return out
 }

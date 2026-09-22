@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -126,15 +126,24 @@ func pairParagraphs(removed, added []string) []int {
 	// Sorting once by (score desc, i asc, j asc) makes a single forward pass
 	// equivalent to repeatedly picking the best remaining candidate — same result
 	// as the old rescan-per-round greedy, without its O(k²).
-	sort.Slice(cands, func(a, b int) bool {
-		x, y := cands[a], cands[b]
-		if x.score != y.score {
-			return x.score > y.score
+	slices.SortFunc(cands, func(p, q cand) int {
+		less := func(p, q cand) bool {
+			x, y := p, q
+			if x.score != y.score {
+				return x.score > y.score
+			}
+			if x.i != y.i {
+				return x.i < y.i
+			}
+			return x.j < y.j
 		}
-		if x.i != y.i {
-			return x.i < y.i
+		switch {
+		case less(p, q):
+			return -1
+		case less(q, p):
+			return 1
 		}
-		return x.j < y.j
+		return 0
 	})
 	for _, c := range cands {
 		if pairTo[c.i] < 0 && !usedAdd[c.j] {

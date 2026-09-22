@@ -1,10 +1,11 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -148,7 +149,9 @@ func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, defs []provi
 
 	// row builds one group row: sorted member names plus the two cost figures.
 	row := func(key, kind, label string, members []providers.ToolDef) agentToolGroup {
-		sort.Slice(members, func(i, j int) bool { return members[i].Name < members[j].Name })
+		slices.SortFunc(members, func(a, b providers.ToolDef) int {
+			return cmp.Compare(a.Name, b.Name)
+		})
 		names := make([]string, 0, len(members))
 		for _, d := range members {
 			names = append(names, d.Name)
@@ -189,7 +192,7 @@ func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, defs []provi
 	for ns := range byNS {
 		nss = append(nss, ns)
 	}
-	sort.Strings(nss)
+	slices.Sort(nss)
 	for _, ns := range nss {
 		label := ns
 		if name, found := serverByNS[ns]; found {

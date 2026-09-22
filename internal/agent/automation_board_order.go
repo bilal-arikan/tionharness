@@ -1,7 +1,8 @@
 package agent
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -48,10 +49,10 @@ func selectBoardAutomations(autos []db.Automation, ev db.BoardChangeEvent) []db.
 // sortBoardAutomations orders matches by BoardPriority ascending, then by ID, so
 // the fire sequence is stable across process restarts.
 func sortBoardAutomations(matches []db.Automation) {
-	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].BoardPriority != matches[j].BoardPriority {
-			return matches[i].BoardPriority < matches[j].BoardPriority
+	slices.SortStableFunc(matches, func(a, b db.Automation) int {
+		if c := cmp.Compare(a.BoardPriority, b.BoardPriority); c != 0 {
+			return c
 		}
-		return matches[i].ID < matches[j].ID
+		return cmp.Compare(a.ID, b.ID)
 	})
 }

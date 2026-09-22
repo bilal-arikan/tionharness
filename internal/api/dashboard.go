@@ -16,9 +16,10 @@ package api
 //     one, so a wrong projection is visible to the user.
 
 import (
+	"cmp"
 	"context"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"time"
 
@@ -222,16 +223,25 @@ func boardByColumn(tasks []db.Task) []namedCount {
 	for k := range counts {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		oi, ki := order[keys[i]]
-		oj, kj := order[keys[j]]
-		if ki != kj {
-			return ki
+	slices.SortFunc(keys, func(a, b string) int {
+		less := func(a, b string) bool {
+			oi, ki := order[a]
+			oj, kj := order[b]
+			if ki != kj {
+				return ki
+			}
+			if ki && kj {
+				return oi < oj
+			}
+			return a < b
 		}
-		if ki && kj {
-			return oi < oj
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return keys[i] < keys[j]
+		return 0
 	})
 
 	out := make([]namedCount, 0, len(keys))
@@ -302,11 +312,11 @@ func sortedCounts(counts map[string]int) []namedCount {
 	for k, v := range counts {
 		out = append(out, namedCount{Name: k, Count: v})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
+	slices.SortFunc(out, func(a, b namedCount) int {
+		if c := cmp.Compare(b.Count, a.Count); c != 0 {
+			return c
 		}
-		return out[i].Name < out[j].Name
+		return cmp.Compare(a.Name, b.Name)
 	})
 	return out
 }

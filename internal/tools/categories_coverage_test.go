@@ -6,7 +6,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -75,7 +75,7 @@ func declaredToolNames(t *testing.T) map[string]string {
 			names[n] = filepath.Base(name)
 		}
 	}
-	sort.Strings(unreadable)
+	slices.Sort(unreadable)
 	if len(unreadable) > 0 {
 		t.Fatalf("%d Def() method(s) whose tool name the AST scan could not read — give Name a plain string literal, or add the receiver to indirectDefReceivers:\n  %s",
 			len(unreadable), strings.Join(unreadable, "\n  "))
@@ -152,7 +152,7 @@ func TestEveryBuiltinToolHasACategory(t *testing.T) {
 			missing = append(missing, name+" ("+declared[name]+")")
 		}
 	}
-	sort.Strings(missing)
+	slices.Sort(missing)
 	if len(missing) > 0 {
 		t.Fatalf("%d built-in tool(s) missing from builtinCategory (they fall into %q in the UI):\n  %s",
 			len(missing), CategoryOther, strings.Join(missing, "\n  "))
@@ -169,7 +169,7 @@ func TestNoStaleCategoryEntries(t *testing.T) {
 			stale = append(stale, name)
 		}
 	}
-	sort.Strings(stale)
+	slices.Sort(stale)
 	if len(stale) > 0 {
 		t.Fatalf("%d builtinCategory entry/entries name no declared tool: %s",
 			len(stale), strings.Join(stale, ", "))

@@ -2,7 +2,7 @@ package goals
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // Robust per-bucket statistics for the configuration-version breakdown
@@ -60,7 +60,7 @@ func distributionOf(samples []float64) (Distribution, bool) {
 		return Distribution{}, false
 	}
 	s := append([]float64(nil), samples...)
-	sort.Float64s(s)
+	slices.Sort(s)
 	var sum float64
 	for _, v := range s {
 		sum += v

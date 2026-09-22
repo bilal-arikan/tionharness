@@ -2,7 +2,7 @@ package tools
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -100,7 +100,7 @@ type sortRow struct {
 func sortIDs(t *testing.T, rows []sortRow, field string, asc bool) []string {
 	t.Helper()
 	cp := append([]sortRow(nil), rows...)
-	less, err := SortByField(cp, field, asc,
+	less, err := SortByField(field, asc,
 		func(r sortRow) int64 { return r.Upd },
 		func(r sortRow) int64 { return 0 },
 		func(r sortRow) string { return r.ID },
@@ -109,7 +109,7 @@ func sortIDs(t *testing.T, rows []sortRow, field string, asc bool) []string {
 	if err != nil {
 		t.Fatalf("SortByField: %v", err)
 	}
-	sort.SliceStable(cp, less)
+	slices.SortStableFunc(cp, less)
 	out := make([]string, len(cp))
 	for i, r := range cp {
 		out[i] = r.ID
@@ -151,7 +151,7 @@ func TestSortByFieldTiesAreDeterministic(t *testing.T) {
 // TestSortByFieldRequiresID: the tiebreak is mandatory, so no future call site
 // can silently reintroduce map-order-dependent paging.
 func TestSortByFieldRequiresID(t *testing.T) {
-	_, err := SortByField([]sortRow{}, "updated", true,
+	_, err := SortByField("updated", true,
 		func(r sortRow) int64 { return r.Upd },
 		func(r sortRow) int64 { return 0 },
 		nil,

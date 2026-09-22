@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 )
 
 // activatedToolsFile is the per-session sidecar holding the set of on-demand
@@ -50,7 +50,7 @@ func (d *DB) WriteActivatedTools(sessionID string, names []string) error {
 	if len(out) == 0 {
 		return d.ClearActivatedTools(sessionID)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return atomicWriteJSON(d.activatedToolsPath(sessionID), activatedToolsDoc{Tools: out})
 }
 

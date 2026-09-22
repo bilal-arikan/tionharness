@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -64,8 +64,17 @@ func zvecGrepCandidates() []string {
 		return out
 	}
 	versions, _ := filepath.Glob(filepath.Join(home, ".nvm", "versions", "node", "v*"))
-	sort.Slice(versions, func(i, j int) bool {
-		return nodeVersionLess(filepath.Base(versions[j]), filepath.Base(versions[i]))
+	slices.SortFunc(versions, func(a, b string) int {
+		less := func(a, b string) bool {
+			return nodeVersionLess(filepath.Base(b), filepath.Base(a))
+		}
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	for _, v := range versions {
 		out = append(out, filepath.Join(v, "bin", exe))

@@ -3,7 +3,6 @@ package decider
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"sync"
 )
 
@@ -127,14 +126,23 @@ func Authorities() []Authority {
 	}
 	authoritiesMu.RUnlock()
 	groupRank := func(g string) int { return slices.Index(Groups(), g) }
-	sort.Slice(out, func(i, j int) bool {
-		if gi, gj := groupRank(out[i].Group), groupRank(out[j].Group); gi != gj {
-			return gi < gj
+	slices.SortFunc(out, func(a, b Authority) int {
+		less := func(a, b Authority) bool {
+			if gi, gj := groupRank(a.Group), groupRank(b.Group); gi != gj {
+				return gi < gj
+			}
+			if a.Order != b.Order {
+				return a.Order < b.Order
+			}
+			return a.ID < b.ID
 		}
-		if out[i].Order != out[j].Order {
-			return out[i].Order < out[j].Order
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
 		}
-		return out[i].ID < out[j].ID
+		return 0
 	})
 	return out
 }

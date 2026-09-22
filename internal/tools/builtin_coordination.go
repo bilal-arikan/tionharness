@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -478,7 +477,7 @@ func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string,
 	// Sort the FILTERED rows (matches), not the raw rows: less compares by index,
 	// and matches is a strict subset — indexing rows with matches' positions
 	// compares wrong elements whenever a state filter is active.
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(w WorkerRow) int64 { return w.UpdatedAt },
 		func(w WorkerRow) int64 { return w.CreatedAt },
 		func(w WorkerRow) string { return w.AgentName },
@@ -487,7 +486,7 @@ func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	return pageResult(page, total, offset, limit)

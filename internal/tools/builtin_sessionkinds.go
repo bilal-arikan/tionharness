@@ -3,7 +3,6 @@ package tools
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -98,6 +97,6 @@ func sortedKinds(set map[string]struct{}) string {
 	for k := range set {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return strings.Join(out, ", ")
 }

@@ -12,11 +12,12 @@ package insight
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -339,11 +340,11 @@ func (s *FindingStore) List(lensID string, channel Channel) []Finding {
 		}
 		kept = append(kept, scored{f: f, score: f.PriorityScore()})
 	}
-	sort.SliceStable(kept, func(i, j int) bool {
-		if kept[i].score != kept[j].score {
-			return kept[i].score > kept[j].score
+	slices.SortStableFunc(kept, func(a, b scored) int {
+		if c := cmp.Compare(b.score, a.score); c != 0 {
+			return c
 		}
-		return kept[i].f.LastSeen > kept[j].f.LastSeen
+		return cmp.Compare(b.f.LastSeen, a.f.LastSeen)
 	})
 	out := make([]Finding, len(kept))
 	for i, k := range kept {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,7 +142,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(tk db.Task) int64 { return tk.UpdatedAt },
 		func(tk db.Task) int64 { return tk.CreatedAt },
 		func(tk db.Task) string { return tk.Title },
@@ -151,7 +151,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

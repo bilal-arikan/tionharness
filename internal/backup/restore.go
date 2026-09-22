@@ -1,10 +1,11 @@
 package backup
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -55,7 +56,9 @@ func (m *Manager) ListArchives(targets []Target) []WorkspaceArchives {
 				})
 			}
 			// Newest first ("<id>-YYYYMMDD-HHMMSS.zip" sorts chronologically).
-			sort.Slice(wa.Archives, func(i, j int) bool { return wa.Archives[i].Name > wa.Archives[j].Name })
+			slices.SortFunc(wa.Archives, func(a, b ArchiveFile) int {
+				return cmp.Compare(b.Name, a.Name)
+			})
 		}
 		out = append(out, wa)
 	}

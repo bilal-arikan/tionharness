@@ -1,8 +1,9 @@
 package view
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -220,11 +221,11 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 	st.FailedCards = cardsInColumn(boardColumns(in.Tasks), db.BoardFailed)
 
 	// Newest trouble first, so a truncated signal line names what changed last.
-	sort.Slice(st.StuckSessions, func(i, j int) bool {
-		return st.StuckSessions[i].UpdatedAt > st.StuckSessions[j].UpdatedAt
+	slices.SortFunc(st.StuckSessions, func(a, b db.Session) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
 	})
-	sort.Slice(st.FailedRuns, func(i, j int) bool {
-		return st.FailedRuns[i].UpdatedAt > st.FailedRuns[j].UpdatedAt
+	slices.SortFunc(st.FailedRuns, func(a, b db.FlowRun) int {
+		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
 	})
 	return st
 }

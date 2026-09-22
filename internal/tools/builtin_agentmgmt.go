@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -602,7 +602,7 @@ func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err != nil {
 		return "", err
 	}
-	less, err := SortByField(matches, field, asc,
+	less, err := SortByField(field, asc,
 		func(a db.Agent) int64 { return a.UpdatedAt },
 		func(a db.Agent) int64 { return a.CreatedAt },
 		func(a db.Agent) string { return a.Name },
@@ -611,7 +611,7 @@ func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {

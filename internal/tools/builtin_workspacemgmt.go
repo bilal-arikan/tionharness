@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -134,7 +134,7 @@ func (t ListWorkspacesTool) Call(ctx context.Context, input json.RawMessage) (st
 	}
 	// Workspaces carry no updated-at: only rename mutates a workspace and it
 	// preserves CreatedAt, so updated_* is a documented alias for created_*.
-	less, err := SortByField(list, field, asc,
+	less, err := SortByField(field, asc,
 		func(w WorkspaceInfo) int64 { return w.CreatedAt },
 		func(w WorkspaceInfo) int64 { return w.CreatedAt },
 		func(w WorkspaceInfo) string { return w.Name },
@@ -143,7 +143,7 @@ func (t ListWorkspacesTool) Call(ctx context.Context, input json.RawMessage) (st
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(list, less)
+	slices.SortStableFunc(list, less)
 
 	page, total := SlicePage(list, offset, limit)
 	type row struct {

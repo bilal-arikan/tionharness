@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -334,11 +334,20 @@ func (t FSListDirTool) Call(_ context.Context, input json.RawMessage) (string, e
 	if len(entries) == 0 {
 		return "(empty directory)", nil
 	}
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].IsDir() != entries[j].IsDir() {
-			return entries[i].IsDir() // directories first
+	slices.SortFunc(entries, func(a, b os.DirEntry) int {
+		less := func(a, b os.DirEntry) bool {
+			if a.IsDir() != b.IsDir() {
+				return a.IsDir() // directories first
+			}
+			return a.Name() < b.Name()
 		}
-		return entries[i].Name() < entries[j].Name()
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	var b strings.Builder
 	for i, e := range entries {

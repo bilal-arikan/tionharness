@@ -9,7 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 )
 
@@ -198,7 +198,7 @@ func (d *DB) loadFlowRunStateDeltas(id string) ([]FlowRunStateDelta, error) {
 			files = append(files, entry.Name())
 		}
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 	deltas := make([]FlowRunStateDelta, 0, len(files))
 	for _, name := range files {
 		data, err := os.ReadFile(filepath.Join(d.flowRunDeltaDir(id), name))

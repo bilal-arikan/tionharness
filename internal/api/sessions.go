@@ -3,7 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -139,7 +139,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, matches)
 		return
 	}
-	less, err := tools.SortByField(matches, field, asc,
+	less, err := tools.SortByField(field, asc,
 		func(s db.Session) int64 { return s.UpdatedAt },
 		func(s db.Session) int64 { return s.CreatedAt },
 		func(s db.Session) string { return s.Title },
@@ -149,7 +149,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	sort.SliceStable(matches, less)
+	slices.SortStableFunc(matches, less)
 	page, total := tools.SlicePage(matches, offset, limit)
 	writeJSON(w, http.StatusOK, struct {
 		Items      []db.Session   `json:"items"`
@@ -396,7 +396,7 @@ func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	for id := range running {
 		ids = append(ids, id)
 	}
-	sort.Strings(ids)
+	slices.Sort(ids)
 	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": ids})
 }
 

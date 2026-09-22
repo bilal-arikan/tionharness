@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -143,7 +143,7 @@ func (b *mcpBackend) Tools(sid string) []ToolSpec {
 	for name := range s.activated {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		out = append(out, s.activated[name]...)
 	}
@@ -323,7 +323,7 @@ func (b *mcpBackend) callActiveTools(sid string) (CallResult, error) {
 	for name := range s.activated {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	var lines []string
 	for _, name := range names {
 		lines = append(lines, fmt.Sprintf("- %s (%d tools)", name, len(s.activated[name])))

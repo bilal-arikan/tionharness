@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -75,8 +75,8 @@ func TestNotifyKindsMatchFrontendRegistry(t *testing.T) {
 			extraInFrontend = append(extraInFrontend, k)
 		}
 	}
-	sort.Strings(missingInFrontend)
-	sort.Strings(extraInFrontend)
+	slices.Sort(missingInFrontend)
+	slices.Sort(extraInFrontend)
 
 	if len(missingInFrontend) > 0 {
 		t.Errorf("backend emits these notify kinds but frontend/src/shared/lib/notifyTypes.ts does not list them (they would be un-mutable in Settings): %v", missingInFrontend)

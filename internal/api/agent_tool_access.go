@@ -1,8 +1,9 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
-	"sort"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -150,7 +151,9 @@ func (s *Server) handleAgentToolAccess(w http.ResponseWriter, r *http.Request) {
 			}
 			out = append(out, e)
 		}
-		sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		slices.SortStableFunc(out, func(a, b toolAccessEntry) int {
+			return cmp.Compare(a.Name, b.Name)
+		})
 		return out
 	}
 
@@ -214,7 +217,7 @@ func (s *Server) handleAgentToolAccess(w http.ResponseWriter, r *http.Request) {
 			blocked = append(blocked, name)
 		}
 	}
-	sort.Strings(blocked)
+	slices.Sort(blocked)
 
 	// Group cost rows are derived from the FULL catalog (ToolCatalog), not from
 	// the eager/lazy split above: the lazy catalog carries name+description only,

@@ -1,10 +1,11 @@
 package decider
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -104,7 +105,9 @@ func Selected(resps []*Response, cands []Candidate, threshold float64, maxK int)
 			}
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Probability > out[j].Probability })
+	slices.SortStableFunc(out, func(a, b Scored) int {
+		return cmp.Compare(b.Probability, a.Probability)
+	})
 	if maxK > 0 && len(out) > maxK {
 		out = out[:maxK]
 	}

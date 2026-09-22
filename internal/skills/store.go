@@ -6,7 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,12 +88,21 @@ func (s *Store) Reload() {
 	for slug := range bySlug {
 		order = append(order, slug)
 	}
-	sort.Slice(order, func(i, j int) bool {
-		a, b := bySlug[order[i]], bySlug[order[j]]
-		if strings.EqualFold(a.Name, b.Name) {
-			return a.Slug < b.Slug
+	slices.SortFunc(order, func(x, y string) int {
+		less := func(x, y string) bool {
+			a, b := bySlug[x], bySlug[y]
+			if strings.EqualFold(a.Name, b.Name) {
+				return a.Slug < b.Slug
+			}
+			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 		}
-		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+		switch {
+		case less(x, y):
+			return -1
+		case less(y, x):
+			return 1
+		}
+		return 0
 	})
 
 	s.mu.Lock()

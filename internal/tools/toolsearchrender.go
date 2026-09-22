@@ -2,7 +2,7 @@ package tools
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -73,7 +73,7 @@ func RenderToolSearch(rows []ToolSearchRow, opts ToolSearchRenderOpts) string {
 			seen[key] = true
 			dropped = append(dropped, key)
 		}
-		sort.Strings(dropped)
+		slices.Sort(dropped)
 		more = fmt.Sprintf("\n…and %d more; refine the query.", hidden)
 		if len(dropped) > 0 || !opts.OmitEmptyDroppedBundles {
 			more += " The rest live in: " + strings.Join(dropped, ", ") + "."

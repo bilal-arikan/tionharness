@@ -1,7 +1,7 @@
 package api
 
 import (
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -17,7 +17,7 @@ func TestActiveSessionIDsWorkspaceScope(t *testing.T) {
 	runs.register("rA2", "sA2", "wsA", func() {})
 
 	got := runs.activeSessionIDs("wsA")
-	sort.Strings(got)
+	slices.Sort(got)
 	if want := []string{"sA", "sA2"}; !equalStrs(got, want) {
 		t.Fatalf("wsA scope = %v, want %v", got, want)
 	}
@@ -34,7 +34,7 @@ func TestActiveSessionIDsWorkspaceScope(t *testing.T) {
 
 	// Unscoped ("") returns every workspace's sessions.
 	all := runs.activeSessionIDs("")
-	sort.Strings(all)
+	slices.Sort(all)
 	if want := []string{"sA", "sA2", "sB"}; !equalStrs(all, want) {
 		t.Fatalf("unscoped = %v, want %v", all, want)
 	}

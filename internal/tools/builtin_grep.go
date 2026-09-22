@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -224,7 +223,7 @@ func (t FSGrepTool) collectFiles(args grepArgs, want func(string) bool) ([]strin
 			}
 			files = append(files, sub...)
 		}
-		sort.Strings(files)
+		slices.Sort(files)
 		return dedupeSorted(files), t.sb.Root, nil
 	}
 	if !t.sb.Ready() {
@@ -366,7 +365,7 @@ func walkGrepFiles(root string, args grepArgs, want func(string) bool) ([]string
 	}
 	// Lexical path order so content output is deterministic and matches the rg fast
 	// path (rg is run with --sort path).
-	sort.Strings(files)
+	slices.Sort(files)
 	return files, root, err
 }
 
@@ -398,7 +397,7 @@ func grepFilesWithMatches(files []string, root string, re *regexp.Regexp, limit 
 	if len(out) == 0 {
 		return "No matches."
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	res := strings.Join(out, "\n")
 	// Only warn when the cap was actually hit — a truthful signal, not noise.
 	if truncated {
@@ -427,7 +426,7 @@ func grepCount(files []string, root string, re *regexp.Regexp, multiline bool, l
 	if len(out) == 0 {
 		return "No matches."
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	res := strings.Join(out, "\n")
 	// Only warn when the cap was actually hit — a truthful signal, not noise.
 	if truncated {

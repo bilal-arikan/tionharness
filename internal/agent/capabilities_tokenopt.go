@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -75,7 +75,7 @@ func (r *Runtime) detectTokenOptimizers(ctx context.Context) tokenOptimizerState
 			}
 		}
 	}
-	sort.Strings(st.matchers)
+	slices.Sort(st.matchers)
 	return st
 }
 
@@ -100,7 +100,7 @@ func (r *Runtime) effectiveTokenOptimizers(ctx context.Context) tokenOptimizerSt
 		st.rtk = true
 		st.matchers = append(st.matchers, "*")
 	}
-	sort.Strings(st.matchers)
+	slices.Sort(st.matchers)
 	return st
 }
 

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -1185,7 +1185,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 			}
 			counts[srv]++
 		}
-		sort.Strings(order)
+		slices.Sort(order)
 		// findHint carries its own backticks so the CLI form can spell out the
 		// ToolSearch query syntax (`select:<name>`); without it agents call
 		// ToolSearch with an invented parameter and get an InputValidationError.
@@ -1213,7 +1213,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider s
 		for k := range bundles {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		parts := make([]string, 0, len(keys))
 		for _, k := range keys {
 			parts = append(parts, fmt.Sprintf("%s (%d)", k, bundles[k]))

@@ -2,7 +2,7 @@ package view
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,11 +66,20 @@ func ProjectTools(in ToolsInput, level Level) (View, error) {
 	servers := append([]db.MCPServer(nil), in.MCPServers...)
 	// Enabled servers first, then newest — the reader cares about the live pool
 	// before the dormant configs.
-	sort.SliceStable(servers, func(i, j int) bool {
-		if servers[i].Enabled != servers[j].Enabled {
-			return servers[i].Enabled
+	slices.SortStableFunc(servers, func(a, b db.MCPServer) int {
+		less := func(a, b db.MCPServer) bool {
+			if a.Enabled != b.Enabled {
+				return a.Enabled
+			}
+			return a.CreatedAt > b.CreatedAt
 		}
-		return servers[i].CreatedAt > servers[j].CreatedAt
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 
 	limit := len(servers)
@@ -127,7 +136,7 @@ func toolVisibilityLine(tiers map[string]string) string {
 	for name, tier := range tiers {
 		pairs = append(pairs, name+"="+tier)
 	}
-	sort.Strings(pairs)
+	slices.Sort(pairs)
 	return strings.Join(clipList(pairs, toolsServerRows), ", ")
 }
 

@@ -7,12 +7,13 @@
 package secrets
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 )
@@ -111,7 +112,9 @@ func (v *Vault) List() []Meta {
 			UpdatedAt:   e.UpdatedAt,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Meta) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -193,7 +196,9 @@ func (v *Vault) persistLocked() error {
 	for _, e := range v.items {
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	slices.SortFunc(entries, func(a, b Entry) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		return err

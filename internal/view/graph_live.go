@@ -1,8 +1,9 @@
 package view
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -118,6 +119,8 @@ func (p *Projector) graphLive(ctx context.Context, cache *structuralCache) ([]Gr
 			Agent:   GraphLiveAgent{ID: a.ID, Name: a.Name, Emoji: a.Avatar, Color: a.Color},
 		})
 	}
-	sort.Slice(live, func(i, j int) bool { return live[i].Session.ID < live[j].Session.ID })
+	slices.SortFunc(live, func(a, b GraphLive) int {
+		return cmp.Compare(a.Session.ID, b.Session.ID)
+	})
 	return live, meta, nil
 }

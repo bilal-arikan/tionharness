@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -223,7 +223,9 @@ func (m *ShellManager) pruneDoneLocked() {
 	if len(done) <= bgShellKeepDone {
 		return
 	}
-	sort.Slice(done, func(i, j int) bool { return done[i].startedAt.Before(done[j].startedAt) })
+	slices.SortFunc(done, func(a, b *bgProc) int {
+		return a.startedAt.Compare(b.startedAt)
+	})
 	for _, p := range done[:len(done)-bgShellKeepDone] {
 		delete(m.procs, p.id)
 	}
@@ -287,7 +289,9 @@ func (m *ShellManager) List() string {
 	if len(procs) == 0 {
 		return "(no background shells)"
 	}
-	sort.Slice(procs, func(i, j int) bool { return procs[i].startedAt.Before(procs[j].startedAt) })
+	slices.SortFunc(procs, func(a, b *bgProc) int {
+		return a.startedAt.Compare(b.startedAt)
+	})
 	var b strings.Builder
 	for _, p := range procs {
 		cmd := p.command

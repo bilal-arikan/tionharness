@@ -1,11 +1,12 @@
 package db
 
 import (
+	"cmp"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -163,7 +164,9 @@ func (d *DB) cleanupOrphanUploads() {
 	})
 	// Remove directories deepest-first; os.Remove only succeeds when empty, so any
 	// folder still holding a referenced file is preserved.
-	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	slices.SortFunc(dirs, func(a, b string) int {
+		return cmp.Compare(len(b), len(a))
+	})
 	for _, dir := range dirs {
 		_ = os.Remove(dir)
 	}

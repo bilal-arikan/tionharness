@@ -3,7 +3,7 @@ package changelog
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -117,6 +117,6 @@ func SortedTypes() []string {
 	for t := range typeTitles {
 		out = append(out, t)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }

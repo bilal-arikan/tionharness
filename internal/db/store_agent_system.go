@@ -1,10 +1,10 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -257,7 +257,9 @@ func (d *DB) ensureSystemAgent(ctx context.Context, def SystemAgentDefinition) e
 		_, err := d.CreateAgent(ctx, canonical)
 		return err
 	}
-	sort.SliceStable(children, func(i, j int) bool { return children[i].CreatedAt < children[j].CreatedAt })
+	slices.SortStableFunc(children, func(a, b Agent) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	root := children[0]
 	imposeCanonical(&root, canonical)
 	root.UpdatedAt = now()

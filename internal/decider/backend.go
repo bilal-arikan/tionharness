@@ -1,9 +1,10 @@
 package decider
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -185,7 +186,9 @@ func Manifests() []Manifest {
 		out = append(out, b.Manifest())
 	}
 	backendsMu.RUnlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortFunc(out, func(a, b Manifest) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out
 }
 

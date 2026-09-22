@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -122,7 +122,7 @@ func codexPluginFingerprint(ms []CodexMarketplace, plugins []string) string {
 		}
 		return p
 	}()...)
-	sort.Strings(parts)
+	slices.Sort(parts)
 	return strings.Join(parts, "\n")
 }
 

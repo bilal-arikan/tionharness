@@ -4,6 +4,7 @@
 package workspace
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -357,7 +358,9 @@ func formatLoadPhases(phases map[string]int64) string {
 			list = append(list, kv{name, ms})
 		}
 	}
-	sort.Slice(list, func(i, j int) bool { return list[i].ms > list[j].ms })
+	slices.SortFunc(list, func(a, b kv) int {
+		return cmp.Compare(b.ms, a.ms)
+	})
 	var b strings.Builder
 	for i, e := range list {
 		if i > 0 {
@@ -629,7 +632,9 @@ func (m *Manager) ListWithDegraded() []ListEntry {
 	for _, d := range m.degraded {
 		out = append(out, ListEntry{Meta: d.Meta, Degraded: true, Reason: d.Reason})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	slices.SortStableFunc(out, func(a, b ListEntry) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	return out
 }
 
@@ -1166,7 +1171,9 @@ func (m *Manager) loadMetas() ([]Meta, error) {
 	if err := json.Unmarshal(data, &metas); err != nil {
 		return nil, fmt.Errorf("workspace registry %s is corrupt: %w", m.metaPath(), err)
 	}
-	sort.SliceStable(metas, func(i, j int) bool { return metas[i].CreatedAt < metas[j].CreatedAt })
+	slices.SortStableFunc(metas, func(a, b Meta) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	return metas, nil
 }
 
@@ -1191,7 +1198,9 @@ func (m *Manager) registryMetasLocked() []Meta {
 	for _, d := range m.degraded {
 		out = append(out, d.Meta)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	slices.SortStableFunc(out, func(a, b Meta) int {
+		return cmp.Compare(a.CreatedAt, b.CreatedAt)
+	})
 	return out
 }
 

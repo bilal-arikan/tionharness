@@ -9,18 +9,20 @@ package tts
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 
-	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // synthTimeout caps one synthesis run so a stuck binary can never hang a request.
@@ -140,7 +142,9 @@ func Voices() []Voice {
 			out = append(out, Voice{ID: stem, Name: stem, Lang: langFromName(stem)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Voice) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 

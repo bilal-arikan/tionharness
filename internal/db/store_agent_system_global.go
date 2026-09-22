@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -98,7 +98,7 @@ func (g *GlobalSystemAgentOverrides) Keys() []string {
 	for k := range g.m {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

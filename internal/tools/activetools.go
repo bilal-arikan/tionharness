@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -95,7 +95,7 @@ func (a *ActiveTools) OpenBundles() []string {
 	for k := range a.groups {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -239,6 +239,6 @@ func (a *ActiveTools) Prune(maxIdle int) (pruned []string) {
 			pruned = append(pruned, n)
 		}
 	}
-	sort.Strings(pruned)
+	slices.Sort(pruned)
 	return pruned
 }

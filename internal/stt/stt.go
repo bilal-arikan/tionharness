@@ -10,18 +10,20 @@ package stt
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 
-	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // transcribeTimeout caps one transcription run.
@@ -118,7 +120,9 @@ func Models() []Model {
 			out = append(out, Model{ID: stem, Name: stem})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Model) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	return out
 }
 

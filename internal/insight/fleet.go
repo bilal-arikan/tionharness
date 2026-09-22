@@ -1,6 +1,6 @@
 package insight
 
-import "sort"
+import "slices"
 
 // Fleet-level rollup. app-fix findings describe bugs in TionHarness ITSELF, so the
 // same bug legitimately surfaces in several workspaces (each scanning its own
@@ -62,11 +62,20 @@ func RollupAppFix(byWorkspace map[string][]Finding) []FleetFinding {
 	for _, key := range order {
 		out = append(out, *merged[key])
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if pi, pj := out[i].PriorityScore(), out[j].PriorityScore(); pi != pj {
-			return pi > pj
+	slices.SortStableFunc(out, func(a, b FleetFinding) int {
+		less := func(a, b FleetFinding) bool {
+			if pi, pj := a.PriorityScore(), b.PriorityScore(); pi != pj {
+				return pi > pj
+			}
+			return a.LastSeen > b.LastSeen
 		}
-		return out[i].LastSeen > out[j].LastSeen
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 	return out
 }

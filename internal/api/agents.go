@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"slices"
-	"sort"
 	"strings"
 
 	agentpkg "github.com/bilal-arikan/tionharness/internal/agent"
@@ -86,7 +85,7 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if field != "" {
-		less, err := tools.SortByField(matches, field, asc,
+		less, err := tools.SortByField(field, asc,
 			func(a db.Agent) int64 { return a.UpdatedAt },
 			func(a db.Agent) int64 { return a.CreatedAt },
 			func(a db.Agent) string { return a.Name },
@@ -95,7 +94,7 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		sort.SliceStable(matches, less)
+		slices.SortStableFunc(matches, less)
 	}
 	page, total := tools.SlicePage(matches, offset, limit)
 	pageJSONResponse(w, page, total, offset, limit)

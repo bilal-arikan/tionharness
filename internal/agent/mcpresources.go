@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -97,7 +97,7 @@ func enabledMCPNames(servers []db.MCPServer) []string {
 	for _, m := range servers {
 		out = append(out, m.Name)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

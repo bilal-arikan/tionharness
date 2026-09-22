@@ -1,9 +1,10 @@
 package conversation
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
-	"sort"
+	"slices"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
@@ -21,7 +22,9 @@ const fingerprintHexLen = 16
 func CatalogFingerprint(defs []providers.ToolDef) string {
 	sorted := make([]providers.ToolDef, len(defs))
 	copy(sorted, defs)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	slices.SortStableFunc(sorted, func(a, b providers.ToolDef) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 	h := sha256.New()
 	for _, d := range sorted {
 		writeFramed(h, d.Name)

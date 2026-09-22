@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -138,11 +138,20 @@ func formatMCPWaitResults(results []MCPServerWaitResult, timeout int) string {
 	}
 	sorted := make([]MCPServerWaitResult, len(results))
 	copy(sorted, results)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		if sorted[i].Ready != sorted[j].Ready {
-			return sorted[i].Ready
+	slices.SortStableFunc(sorted, func(a, b MCPServerWaitResult) int {
+		less := func(a, b MCPServerWaitResult) bool {
+			if a.Ready != b.Ready {
+				return a.Ready
+			}
+			return a.Server < b.Server
 		}
-		return sorted[i].Server < sorted[j].Server
+		switch {
+		case less(a, b):
+			return -1
+		case less(b, a):
+			return 1
+		}
+		return 0
 	})
 
 	var b strings.Builder

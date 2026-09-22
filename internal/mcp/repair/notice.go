@@ -2,7 +2,7 @@ package repair
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -79,7 +79,7 @@ func (c *FailureCollector) List() []FailedServer {
 	for n := range c.items {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	out := make([]FailedServer, 0, len(names))
 	for _, n := range names {
 		out = append(out, FailedServer{Name: n, Err: c.items[n]})
