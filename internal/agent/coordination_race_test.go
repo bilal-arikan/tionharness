@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -195,6 +196,13 @@ func TestPendingReportSurvivesProcessRestart(t *testing.T) {
 	if again, _ := rt2.db.ListPendingCoordinatorReports(ctx); len(again) != 0 {
 		t.Errorf("the report should be closed after delivery, still pending: %+v", again)
 	}
+
+	// settleReportBackstop notified the root, which started a coordinator drain in
+	// its own goroutine. Let both runtimes' background work finish before the test
+	// returns, or those writes race the t.TempDir() cleanup and Windows fails
+	// RemoveAll on the still-open session file.
+	drainSpawns(t, rt2)
+	drainSpawns(t, rt)
 }
 
 // runtimeOverStore builds a Runtime on an EXPLICIT store directory, so a test can
@@ -208,6 +216,22 @@ func runtimeOverStore(t *testing.T, storeDir, workDir string) *Runtime {
 		t.Fatalf("db open: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	return NewRuntime(database, providers.NewRegistry(), NewTunables(), workDir, filepath.Dir(workDir), nil, nil, "", "",
+	rt := NewRuntime(database, providers.NewRegistry(), NewTunables(), workDir, filepath.Dir(workDir), nil, nil, "", "",
 		nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// Same fixture hygiene newTestRuntime applies, for the same reason: a fixture
+	// turn ends in an error (no provider key), which in production fires the
+	// hata→ders reflection — a real background turn that launches a claude-cli
+	// subprocess and writes a claude-home under the fixture's TempDir. It then
+	// holds that directory open past cleanup and Windows fails RemoveAll.
+	rt.skipLessonDispatch = true
+	// Registered AFTER the db-close cleanup so LIFO drains the background turns
+	// first, then closes the db, then lets t.TempDir() remove the directory.
+	t.Cleanup(func() {
+		rt.CloseMCP()
+		deadline := time.Now().Add(5 * time.Second)
+		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0 || rt.trajectoryWorkPending()) && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+	})
+	return rt
 }

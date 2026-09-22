@@ -153,6 +153,40 @@ tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekl
   (12 alt-vaka), ve tek kullanımlık gerçek bir git deposu üzerinde aralık/işaret
   etiketi/çok satırlı gövde/merge hariç tutma. `scripts/test.sh full` yeşil.
 
+## `TestPendingReportSurvivesProcessRestart` temp dizin kalıntısı giderildi (TSK973, 2026-09-22) ✅
+
+- **Belirti (Windows, full-suite):** Test geçiyor ama `t.TempDir()` temizliği
+  patlıyordu: `TempDir RemoveAll cleanup: unlinkat ...\store: Dizin boş değil.`
+  `-count=5` koşusunda 5 koşudan 3'ü bu şekilde FAIL veriyordu, yani kalıcı bir
+  hata — rastgele bir flake değil.
+- **Yanlış teşhis (kartın ilk tahmini):** "diğer wake testlerindeki
+  `drainSpawns` kalıbı eksik". `drainSpawns` eklendi ama hata sürdü.
+- **Gerçek kök neden (ölçümle bulundu):** Geçici bir probe testi, drenajdan 6 sn
+  sonra her iki runtime için `active=0 queued=0 traj=false` ve tek `coordSlot`'un
+  `driving/pending/workerPending/turnBusy` alanlarının hepsinin `false` olduğunu
+  gösterdi. Tüm sayaçlar boşken cleanup hâlâ patlıyordu; demek ki dizini açık
+  tutan şey spawn/drain değildi. Sebep: `runtimeOverStore` fixture'ı
+  `newTestRuntime`'ın iki hijyen adımını uygulamıyordu. Sağlayıcı anahtarı
+  olmayan fixture turu hata ile biter, bu hata→ders refleksiyonunu tetikler, o da
+  **gerçek bir claude-cli alt süreci** başlatıp fixture'ın TempDir'i altına
+  claude-home yazar ve dizini cleanup'tan sonra da açık tutar. Windows açık
+  dosyayı unlink etmeyi reddettiği için `RemoveAll` fail eder. (Aynı gerekçe
+  `toolsetup_test.go:31-36`'da zaten yazılıydı; eksik olan onun uygulanmasıydı.)
+- **Çözüm (`internal/agent/coordination_race_test.go`):** `runtimeOverStore`
+  artık `newTestRuntime` ile aynı kalıbı uyguluyor — (1) `skipLessonDispatch =
+  true` ile arka plan ders turunu ve dolayısıyla alt süreci bastırır, (2)
+  db-close cleanup'ından **sonra** kaydedilen ikinci `t.Cleanup` ile
+  `CloseMCP()` + 5 sn drenaj yapar; LIFO sayesinde sıra turlar drene → db kapanır
+  → TempDir silinir. Ayrıca testin sonuna `drainSpawns` çağrıları eklendi
+  (`settleReportBackstop` kökü uyandırıp kendi goroutine'inde coordinator drain
+  başlatıyor).
+- **Doğrulama:** Düzeltme öncesi `-count=5` → 3 FAIL; sonrası `-count=5` → ok
+  (27.1s), sıfır cleanup hatası. `scripts/test.sh full` tamamen yeşil (tüm Go
+  paketleri, frontend vitest 133 dosya / 962 test, depcheck ok).
+- **Ders:** Bir fixture "runtime kuran" ikinci bir yol açıyorsa, ana fixture'ın
+  hijyen adımlarını da devralmalı; yoksa üretim davranışı (ders refleksiyonu)
+  testin altında sessizce alt süreç başlatır.
+
 ## Monitor v2: dosya, URL ve WebSocket kaynakları (TSK941)
 
 - **Neydi:** `monitor` aracı (TSK911, v1) yalnız bir **arka plan kabuğunun**
