@@ -2,7 +2,7 @@
 // in-pane header (see HEADERLESS_VIEWS). On chat it shows the session title and
 // the folder/context/debug/detail shortcuts; on workspace/settings it hosts the
 // category-rail toggle. Both list toggles work at every width.
-import { Network, PanelLeft, PanelRight, ScanEye, Workflow } from 'lucide-react'
+import { Network, PanelLeft, PanelRight, ScanEye } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -26,8 +26,6 @@ export interface AppHeaderProps {
   onToggleNav: () => void
   onOpenContextPreview: () => void
   onOpenCoord: () => void
-  onOpenSessionFlow: () => void
-  sessionFlowActive: boolean
   onToggleDetail: () => void
   onError: (msg: string) => void
   // Rota (F1b): open the Rota screen zoomed on a trajectory (mini rota strip).
@@ -47,8 +45,6 @@ export function AppHeader({
   onToggleNav,
   onOpenContextPreview,
   onOpenCoord,
-  onOpenSessionFlow,
-  sessionFlowActive,
   onToggleDetail,
   onError,
   onOpenTrajectory,
@@ -146,24 +142,6 @@ export function AppHeader({
             </button>
             {/* Debug / observability lives in the "Oturum bilgisi" detail panel's
                 action list (SessionDetailPanel), not in this header. */}
-            {/* Toggle this session's transcript as an inline, completed flow run. */}
-            <button
-              onClick={onOpenSessionFlow}
-              aria-pressed={sessionFlowActive}
-              title={
-                sessionFlowActive
-                  ? 'Sohbet transkriptine dön'
-                  : 'Bu oturumu anlık bir akış olarak gör'
-              }
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
-                sessionFlowActive
-                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
-              }`}
-            >
-              <Workflow size={15} className="shrink-0" />
-              <span className="hidden sm:inline">Akış</span>
-            </button>
             <button
               onClick={onToggleDetail}
               title="Oturum bilgisi panelini aç/kapat"

@@ -276,7 +276,7 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	// Link run ↔ transcript session NOW, before the first node runs: the session
 	// was created up front by runFlowRecorded so the executions feed shows the run
 	// live, and every consumer that walks from a session to its exact run (the
-	// chat "Akış olarak gör", the trajectory projection) must not have to wait for
+	// trajectory projection, the Rota layout) must not have to wait for
 	// the run to finish — or fall back to matching timestamps.
 	if sid := flowTranscriptSessionFromContext(ctx); sid != "" {
 		if lerr := r.db.SetFlowRunSession(ctx, run.ID, sid); lerr != nil {
@@ -694,8 +694,8 @@ func (r *Runtime) runFlowRecorded(ctx context.Context, flowID, input string, aut
 	// recordFlowSessionTurn below reuses the same one.
 	// Each run gets its OWN session (per-run isolation): keyed for attribution by
 	// SourceID = flow.ID (the network graph + executions feed still resolve it to
-	// the flow) but NEVER reused, so a run's transcript — and its "Akış olarak gör"
-	// reification — shows exactly one run. Created up front so the executions feed
+	// the flow) but NEVER reused, so a run's transcript shows exactly one run.
+	// Created up front so the executions feed
 	// shows it running, then the same session id is threaded into the turn record.
 	sessionID := ""
 	inputRecorded := false
@@ -755,8 +755,8 @@ func (r *Runtime) runFlowRecorded(ctx context.Context, flowID, input string, aut
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
 	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID, inputRecorded); recorded != "" {
 		sessionID = recorded
-		// Link the run to its transcript session so the chat "Akış olarak gör"
-		// can resolve back to this exact run's REAL graph instead of reifying.
+		// Link the run to its transcript session so consumers can resolve a
+		// flow session back to this exact run.
 		if err := r.db.SetFlowRunSession(ctx, run.ID, sessionID); err != nil {
 			r.logger.Warn("link flow run to session failed", "run", run.ID, "session", sessionID, "error", err)
 		} else {

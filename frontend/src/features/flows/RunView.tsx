@@ -29,13 +29,13 @@ interface Props {
   // refresh the runs list without waiting for the next poll.
   onResumed?: () => void
   // Move the run's input out of the top detail row and into the step-trace panel
-  // as its first "Girdi" entry (chat flow view: the input reads inline with the
-  // steps instead of a separate header row). Koşular keeps the top row.
+  // as its first "Girdi" entry (the input reads inline with the steps instead of
+  // a separate header row).
   inputInTrace?: boolean
   // Live progress of the child runs THIS run launched, keyed by the subflow/spawn
   // node that launched each. Rendered as a rollup line on that node, so a composed
   // run is not a dead box while all the work happens in a child. Absent = the
-  // host does not track the run tree (chat-inline views).
+  // host does not track the run tree.
   childProgress?: Record<string, ChildProgress>
   // Descend into the child run a subflow/spawn node launched (double-click).
   // Absent = no nesting; the double-click is then inert.
@@ -428,7 +428,7 @@ export function RunView({
         ) : traceOpen ? (
           <div className={`overflow-y-auto px-4 pb-4 ${graph ? 'max-h-[40vh]' : 'min-h-0 flex-1'}`}>
             <ol className="space-y-2">
-              {/* Run input as the first step-trace entry (chat flow view): the
+              {/* Run input as the first step-trace entry: the
                   girdi reads inline with the steps instead of a top header row. */}
               {inputInTrace && run.input && (
                 <li className="rounded border-l-2 border-[var(--color-accent)] bg-[var(--color-surface-2)] p-2 text-sm">

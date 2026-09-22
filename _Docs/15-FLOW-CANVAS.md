@@ -566,44 +566,21 @@ loop için `CompactEachIter` (her iterasyonda thread katlama — cache'i kırar,
 fallback, parallel fold) + `loop_test.go` (maxIters/until çıkış, Validate bound/body). Backend
 243 test yeşil; `tsc -b` + `vite build` yeşil.
 
-### Session → Flow köprüsü ("Akış" inline görünüm, 2026-07-25)
-Chat header'ındaki **"Akış" toggle'ı** (`AppHeader`, Debug'ın yanında; aktifken accent) mevcut
-oturumu **tamamlanmış bir flow KOŞUSU** olarak sohbet alanında **inline** gösterir (popup değil;
-"Sohbete dön" ile geri). Kilit karar: transkript bir flow *tanımı* değil, *koşusu* olarak üretilir →
-`sessionToFlowRun` (`features/flows/sessionToFlow.ts`, saf/backend'siz) hem grafiği hem **sentetik
-`{flow, run}`**'ı kurar; `FlowState.trace` her node'un **çıktısını = asistan cevabını** taşır.
-Böylece `RunView` yeniden kullanılır (`SessionFlowInline`): canvas'ta node = user prompt'u (başlık),
-**"Adım izi"nde agent cevabı** görünür — önceki "yalnız bizim mesajlarımız görünüyordu" sorunu çözülür.
-Her assistant turn'ü bir agent node; `next` ile lineer; `accumulate:true` (sohbet tek büyüyen konuşma).
-(2026-07-27: reify edilen graf zorunlu **Start node** ile başlar — `sessionToFlowRun` bir `start`
-node'u prepend eder, trace'te done görünür; adım sayacı start'ı saymaz.)
-Dal/paralel yapısı düz transkriptten çıkarılamaz → reify sonucu daima lineer. Reset: aktif oturum
-değişince inline görünüm kapanır. (Ters yön — flow koşusunu çok-turlu session olarak render — mevcut
-per-node step-kartı kaydıyla zaten karşılanıyor.) (2026-07-27: **"Flow olarak kaydet" butonu ve
-özelliği kaldırıldı** — `SessionFlowInline` artık yalnız görüntüler, `api.createFlow` çağırmaz;
-`onError` prop'u da söküldü.)
+### Session → Flow köprüsü (kaldırıldı, 2026-09-22)
+Chat header'ındaki **"Akış" toggle'ı** ("Bu oturumu anlık bir akış olarak gör") ve onun inline
+görünümü (`SessionFlowInline.tsx` + transkripti sentetik bir flow koşusuna reify eden
+`sessionToFlow.ts`) **tamamen kaldırıldı** (TSK1039); özellik ileride sıfırdan yeniden
+tasarlanacak. Kullanılmayan `api.getFlow` istemci çağrısı da söküldü.
 
-**Gerçek flow oturumu → gerçek graf (2026-07-27):** Bir flow koşusunun transkript oturumunu
-"Akış olarak gör" ile açınca artık transkript **reify edilmez** — koşunun **gerçek grafiği/düzeni**
-gösterilir (Koşular tab'ıyla birebir aynı düzen; "dizilim farklı" sorunu çözüldü). Mekanizma:
-`db.FlowRun`'a **`SessionID`** alanı eklendi; `RunFlowRecorded` nihai `sessionID`'yi
-`db.SetFlowRunSession` ile koşuya damgalar (yeni koşular için kesin bağ). `SessionFlowInline` artık
-`sessionKind`+`sourceId`+`sessionCreatedAt` alır: `kind==='flow'` ise **`api.listFlows()` +
-`api.listFlowRuns(sourceId)`** ile flow'u ve koşuyu bulur → gerçek `{flow, run}`'ı `RunView`'e verir
-(görüntüleme-only; kaydet yok). Koşu eşleştirme **iki aşamalı**: önce `run.sessionId === sessionId`
-(yeni koşular), yoksa **en yakın `createdAt`** (eski koşular — per-run oturum koşuyla ~aynı saniyede
-yaratılır; 5 sn tolerans, aşılırsa reify). Bu sayede **backend restart gerekmeden** eski koşular da
-(örn. SES200 → RUN11) gerçek grafiği gösterir. Eşleşme yoksa (flow silinmiş / koşu silinmiş) veya
-oturum flow-kaynaklı değilse reify. (`GET /api/flows/{id}` / `handleGetFlow` de eklendi ama zorunlu
-değil — frontend `listFlows` kullanır.)
+Kalanlar (başka tüketicileri olduğu için): `db.FlowRun.SessionID` + `db.SetFlowRunSession`
+(koşu ↔ transkript oturumu bağı; Rota düzeni, Insight Koşular sekmesi ve trajectory
+projeksiyonu kullanır), REST CRUD yüzeyinin parçası olan `GET /api/flows/{id}`
+(`handleGetFlow`), `RunView`'in `hideSummary`/`inputInTrace` prop'ları (artık yalnız
+`RunTreeView` üzerinden Koşular sekmesi) ve node inline çıktı önizlemesi.
 
 **Node inline çıktı önizlemesi:** `FlowRFNode.data.output` (koşu görünümlerinde `RunView` node data'sına
 canlı/trace'ten geçirilir); `AgentNode` node `done` olduğunda cevabı yeşil kenarlı `line-clamp-3`
 kutuda gösterir (`data-testid="flow-node-output"`) → canvas'ta prompt **ve** çıktı birlikte görünür.
-
-**E2E doğrulaması (Playwright, headless chromium, canlı dev :5173):** 6/6 kontrol geçti — header
-"Akış" toggle → inline canvas render, **9 node çıktı önizlemesi** (agent cevapları), "Sohbete dön"
-geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biriktir (cache)** toggle'ı.
 
 ### İyileştirmeler (2026-07-25, ikinci tur)
 - **Dikey auto-layout:** `autoLayout` (flowGraph.ts) artık BFS derinliğini **y** (yukarı→aşağı),
@@ -616,10 +593,8 @@ geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biri
   (yalnız açıkça `false` olan akış kapalı; alan yoksa/eski akış → açık).
 - **Flow-run oturumu → çok-node açılımı (bugfix):** bir flow koşusu oturuma **tek assistant turn**
   olarak, node'lar o turn'ün `steps`'ine gömülü kaydedilir (`flowStateToSteps`, her node bir text
-  step `**title**\n\n<çıktı>`). `sessionToFlowRun` artık bu turn'ü açar: `steps` **≥2 ve hepsi text**
-  ise her step bir node olur (başlık bold header'dan, çıktı gövdeden) → reify edilen akış orijinal
-  grafiği yansıtır (önceden tek node'a çöküyordu). Normal sohbet turn'ü (thinking/tool step'li) tek
-  node kalır. Doğrulandı: gerçek `SES194` (FLW5 "Yanıtla & Doğrula") → 2 node (Yanıtla, Doğrula).
+  step `**title**\n\n<çıktı>`). (Bu turn'ü node'lara açan `sessionToFlowRun`
+  2026-09-22'de "Akış" toggle'ıyla birlikte kaldırıldı.)
 
 ### Flows tab'ları deep-link + Koşular'da Girdi → Adım izi (2026-07-27)
 - **3 tab için ayrı URL:** FlowsPanel sol-kolon tab'ı (`flows`|`templates`|`runs`) artık URL'de:
@@ -629,7 +604,7 @@ geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biri
   FlowsPanel controlled `tab`/`onTabChange` prop'larını alır (`setTab` = `Dispatch<SetStateAction>`
   imzasını korur ama sonucu parent'a yazar). Reload/`geri`/`ileri` doğru tab'a düşer, link paylaşılır.
 - **Koşular'da Girdi Adım izi'nde:** Koşular tab'ındaki `RunView` de `inputInTrace` alır → üstteki
-  "Girdi:" satırı yerine alt Adım izi panelinin ilk öğesi (sohbet flow görünümüyle aynı davranış).
+  "Girdi:" satırı yerine alt Adım izi panelinin ilk öğesi.
 
 ### Editörden çalıştır → Koşular tab'ına yönlendir (2026-07-25)
 Editörden "Çalıştır" artık koşuyu **editör canvas'ına boyamaz** (eski `setNodeStatus`/`liveNodes`
@@ -642,12 +617,12 @@ E2E: Çalıştır → Koşular tab aktif + RunView + 2 node çıktısı.
 
 ### Per-run flow oturumu (2026-07-25)
 Eskiden bir flow'un tüm koşuları **tek** transcript oturumunda birikiyordu
-(`GetOrCreateSourceSession("flow", flow.ID)`, flow başına bir session) → "Akış olarak gör"
-N koşuyu tek zincire karıştırıyordu. Artık **her koşu kendi oturumunu** alır: `RunFlowRecorded`
+(`GetOrCreateSourceSession("flow", flow.ID)`, flow başına bir session) → bir oturumun
+transkripti N koşuyu tek zincire karıştırıyordu. Artık **her koşu kendi oturumunu** alır: `RunFlowRecorded`
 `db.CreateSession` ile (kind `flow`, **`SourceID = flow.ID`** korunur — Ağ grafiği + Aktivite feed
 flow'a bu alanla bağlanır; graph.go/executions.go bozulmaz) **yeni** bir session yaratır, id'yi
 `recordFlowSessionTurn`'e geçirir (çift-oluşturmayı önler; boşsa fallback create). Böylece bir koşunun
-transkripti — ve reify'ı — tam olarak **tek koşu** gösterir. `RunFlow` (kayıtsız, `handleSessionRunFlow`)
+transkripti tam olarak **tek koşu** gösterir. `RunFlow` (kayıtsız, `handleSessionRunFlow`)
 oturuma dokunmaz → etkilenmez. Test: `flow_session_test.go` (iki koşu → iki ayrı session, kind/sourceID,
 2 mesaj). **Bilinen kozmetik sınır:** `executions.go lastStatusFor` flow session'ı için flow'un **en
 yeni** koşusunun statüsünü döndürür → eski bir koşu-oturumu daha yeni bir koşu oluşunca statü çipinde

@@ -24,7 +24,7 @@ export type NodeStatus = 'running' | 'done' | 'error' | 'waiting'
 // so an auto-arranged graph stays compact and readable without much panning.
 const COL_W = 230
 // Vertical gap between layered rows. Just clears a node with a prompt + 3-line
-// output preview (run/session-flow views); tighter would risk overlap.
+// output preview (run views); tighter would risk overlap.
 const ROW_H = 120
 
 // edgeId builds a stable id for a routing edge. `slot` distinguishes a branch's

@@ -146,9 +146,8 @@ export interface FlowNodeEvent {
 export interface FlowRun {
   id: string
   flowId: string
-  // Per-run transcript session this run produced (Session.kind "flow"). Lets the
-  // chat "Akış olarak gör" resolve a flow session back to its exact run + real
-  // graph. Empty on runs recorded before the link existed.
+  // Per-run transcript session this run produced (Session.kind "flow"). Empty on
+  // runs recorded before the link existed.
   sessionId?: string
   // Run lineage (subflow / spawn / the run_flow tool). All three are omitted by
   // the backend on a root run, so absent means "this run is a root" — see

@@ -69,9 +69,8 @@ type FlowRun struct {
 	ID     string `json:"id"`
 	FlowID string `json:"flowId"`
 	// SessionID links this run to the per-run transcript session it produced
-	// (Session.Kind "flow"), so the chat view can resolve a flow session back to
-	// the exact run — and its REAL graph/layout — instead of reifying the
-	// transcript into a synthetic linear chain. Empty on pre-link runs.
+	// (Session.Kind "flow"), so a flow session resolves back to the exact run.
+	// Empty on pre-link runs.
 	SessionID   string `json:"sessionId,omitempty"`
 	DispatchKey string `json:"dispatchKey,omitempty"`
 	// ParentRunID is the run that launched this one — a subflow/spawn node, or an

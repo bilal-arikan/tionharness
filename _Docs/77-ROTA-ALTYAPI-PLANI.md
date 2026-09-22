@@ -112,9 +112,8 @@ yok → `Lineage()` doğru); `TestRunFlowStampsSessionAtStart`;
   altına çekildi; hook create/state/runstate/origin/delete op'larıyla ateşleniyor.
 - `FlowRun.SessionID` artık `RunFlow` içinde satır oluşur oluşmaz damgalanıyor; koşu
   sonundaki `SetFlowRunSession` fallback yolu (oturum geç açılırsa) korunuyor.
-- Frontend'deki 5 sn `createdAt` eşleştirmesi (`SessionFlowInline.tsx`) tamamen
-  silinmedi: yalnız akışın **hiçbir** koşusu `sessionId` taşımıyorsa (link öncesi
-  mağaza) devrede; tek bir bağlı koşu varsa kesin eşleşme şart.
+- Frontend'deki 5 sn `createdAt` eşleştirmesi (`SessionFlowInline.tsx`) 2026-09-22'de
+  sohbetteki "Akış" görünümüyle birlikte tamamen kaldırıldı (TSK1039).
 - `run_flow` child run'ının `ParentNodeID`'si: `runLineage` zaten düğüm id'sini ctx'ten
   okuyor; ayrı düzeltme gerekmedi, doğrulama R8'de test edilecek.
 - Testler: `models_session_origin_test.go` (türetim tablosu, damga, eski header
