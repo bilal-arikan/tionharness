@@ -4,247 +4,176 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 )
 
-// Mode is how one site uses the decider.
+// Mode is how one authority uses the decider.
 type Mode string
 
 const (
-	// ModeOff: the site never consults the decider.
+	// ModeOff: the authority never consults the decider.
 	ModeOff Mode = "off"
-	// ModeShadow: the site keeps deciding the way it always has; the decider is
-	// asked in the background and its answer is only logged next to the
-	// existing verdict, so agreement can be measured before switching on.
+	// ModeShadow: the authority keeps deciding the way it always has; the
+	// decider is asked in the background and its answer is only logged next to
+	// the existing verdict, so agreement can be measured before switching on.
 	ModeShadow Mode = "shadow"
-	// ModeOn: the decider's answer drives the site's behaviour. When the
-	// decider is unreachable the site falls back to its previous logic.
+	// ModeOn: the decider's answer drives the authority's behaviour. When no
+	// model can answer, the authority falls back to its previous logic (or,
+	// if it is fail-closed, refuses).
 	ModeOn Mode = "on"
 )
 
-// Site ids: every place in the app that can consult the decider.
-const (
-	// SiteStallJudge: "did the coordinator stop without doing what it said?"
-	SiteStallJudge = "stall-judge"
-	// SiteToolRisk: a second look at shell commands that would run without a
-	// human decision (auto mode, or an "always allow" grant).
-	SiteToolRisk = "tool-risk"
-	// SiteFlowJudge: branch/loop nodes whose match mode is "judge".
-	SiteFlowJudge = "flow-judge"
-	// SitePhaseGate: Rota phase gates of kind "judge".
-	SitePhaseGate = "phase-gate"
-)
-
-// Site describes one consumer of the decider for the settings UI.
-type Site struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	// Modes are the modes the site supports. Explicit sites have no previous
-	// logic to compare against, so they offer no shadow mode.
-	Modes            []Mode  `json:"modes"`
-	DefaultMode      Mode    `json:"defaultMode"`
-	DefaultThreshold float64 `json:"defaultThreshold"`
-	// ThresholdHint says what the threshold means at this site.
-	ThresholdHint string `json:"thresholdHint"`
-	// Explicit sites act only where the user asked for a judgement (a flow
-	// node's "judge" match mode, a "judge" phase gate).
-	Explicit bool `json:"explicit"`
+func (m Mode) valid() bool {
+	return m == ModeOff || m == ModeShadow || m == ModeOn
 }
 
-var sites = []Site{
-	{
-		ID:               SiteStallJudge,
-		Label:            "Coordinator stall judge",
-		Description:      "Decides whether a coordinator's last message promised worker spawns it never made. Replaces a Haiku call per idle coordinator turn.",
-		Modes:            []Mode{ModeOff, ModeShadow, ModeOn},
-		DefaultMode:      ModeShadow,
-		DefaultThreshold: 0.7,
-		ThresholdHint:    "Minimum probability of \"stalled\" before the coordinator is nudged.",
-	},
-	{
-		ID:               SiteToolRisk,
-		Label:            "Shell command risk check",
-		Description:      "Takes a second look at shell commands that would run without asking (auto mode or an \"always allow\" grant). In on mode a risky command is turned into an approval prompt; it never blocks an unattended run.",
-		Modes:            []Mode{ModeOff, ModeShadow, ModeOn},
-		DefaultMode:      ModeShadow,
-		DefaultThreshold: 0.8,
-		ThresholdHint:    "Minimum probability that the command needs approval before the user is asked.",
-	},
-	{
-		ID:               SiteFlowJudge,
-		Label:            "Flow judge nodes",
-		Description:      "Branch and loop nodes whose match mode is \"judge\" ask the decider which arm the last output belongs to, or whether the loop's exit condition holds.",
-		Modes:            []Mode{ModeOff, ModeOn},
-		DefaultMode:      ModeOn,
-		DefaultThreshold: 0.6,
-		ThresholdHint:    "Minimum probability for an arm to be taken (otherwise the default arm) or for the exit condition to count as met.",
-		Explicit:         true,
-	},
-	{
-		ID:               SitePhaseGate,
-		Label:            "Rota judge gates",
-		Description:      "Phase gates of kind \"judge\" ask the decider whether the phase's exit condition holds, judged against the root session's recent transcript.",
-		Modes:            []Mode{ModeOff, ModeOn},
-		DefaultMode:      ModeOn,
-		DefaultThreshold: 0.8,
-		ThresholdHint:    "Minimum probability that the exit condition holds before the gate opens.",
-		Explicit:         true,
-	},
-}
-
-// Sites lists every known site.
-func Sites() []Site {
-	return slices.Clone(sites)
-}
-
-// SiteByID returns the site with id.
-func SiteByID(id string) (Site, bool) {
-	for _, s := range sites {
-		if s.ID == id {
-			return s, true
-		}
-	}
-	return Site{}, false
-}
-
-// SiteConfig is one site's settings.
-type SiteConfig struct {
+// AuthorityConfig is one authority's settings.
+type AuthorityConfig struct {
 	Mode      Mode    `json:"mode"`
 	Threshold float64 `json:"threshold"`
+	// Model is the decision model (instance id) that answers for the
+	// authority. "" = the default model.
+	Model string `json:"model,omitempty"`
+	// Fallback is asked when Model cannot answer (unreachable, backing off,
+	// timed out, rejected): a local model first, a hosted one behind it.
+	Fallback string `json:"fallback,omitempty"`
+	// Challenger is asked the same question in the background after every
+	// answer; the two verdicts land in the ledger, so a new model can be
+	// measured against the current one on real traffic before it takes over.
+	Challenger string `json:"challenger,omitempty"`
 }
 
-// Config is the decider's persisted configuration.
+// Config is the decider's persisted configuration: the master switch, the
+// default decision model and every authority's settings. The decision models
+// themselves live in their own store (ModelStore).
 type Config struct {
-	// Enabled is the master switch; while false every site is off.
+	// Enabled is the master switch; while false every authority is off.
 	Enabled bool `json:"enabled"`
-	// Backend is the registered backend id.
-	Backend string `json:"backend"`
-	// ProviderInstanceID names the provider instance whose credentials the
-	// backend uses. "" = the first enabled instance the backend accepts.
-	ProviderInstanceID string `json:"providerInstanceId"`
-	// Model is the decision model id. "" = the backend's default.
-	Model string `json:"model"`
-	// TimeoutMs bounds one attempt of a call.
-	TimeoutMs int `json:"timeoutMs"`
-	// Sites holds per-site settings; a missing site uses its defaults.
-	Sites map[string]SiteConfig `json:"sites"`
+	// DefaultModel answers for every authority that names no model of its own.
+	// "" = the first enabled model.
+	DefaultModel string `json:"defaultModel"`
+	// Authorities holds per-authority settings; a missing one uses its defaults.
+	Authorities map[string]AuthorityConfig `json:"authorities"`
 }
 
-// Bounds applied by Normalized.
+// Bounds applied by Normalized and to model settings.
 const (
 	minTimeoutMs = 500
-	maxTimeoutMs = 15000
+	maxTimeoutMs = 60000
 	minThreshold = 0.5
 	maxThreshold = 0.99
 )
 
 // DefaultConfig is the configuration used before the user saves one: switched
-// off, OpenRouter + pinned Jev, every site at its default mode.
+// off, every authority at its default mode.
 func DefaultConfig() Config {
-	return Config{
-		Backend:   OpenRouterBackendID,
-		Model:     JevModel,
-		TimeoutMs: int(DefaultTimeout / time.Millisecond),
-	}.Normalized()
+	return Config{}.Normalized()
 }
 
 // Normalized fills defaults and clamps values into range. It never fails;
-// Validate reports what cannot be repaired.
+// Validate reports what cannot be repaired. Settings of an authority that is no
+// longer registered are dropped.
 func (c Config) Normalized() Config {
-	out := c
-	out.Backend = strings.TrimSpace(out.Backend)
-	if out.Backend == "" {
-		out.Backend = OpenRouterBackendID
-	}
-	out.ProviderInstanceID = strings.TrimSpace(out.ProviderInstanceID)
-	out.Model = strings.TrimSpace(out.Model)
-	if out.Model == "" {
-		if b, ok := Lookup(out.Backend); ok {
-			out.Model = b.Manifest().DefaultModel
+	out := Config{Enabled: c.Enabled, DefaultModel: strings.TrimSpace(c.DefaultModel)}
+	registered := Authorities()
+	out.Authorities = make(map[string]AuthorityConfig, len(registered))
+	for _, a := range registered {
+		ac := c.Authorities[a.ID]
+		if ac.Mode == "" {
+			ac.Mode = a.DefaultMode
 		}
-	}
-	if out.TimeoutMs <= 0 {
-		out.TimeoutMs = int(DefaultTimeout / time.Millisecond)
-	}
-	out.TimeoutMs = min(max(out.TimeoutMs, minTimeoutMs), maxTimeoutMs)
-	sitesOut := make(map[string]SiteConfig, len(sites))
-	for _, s := range sites {
-		sc, ok := c.Sites[s.ID]
-		if !ok || sc.Mode == "" {
-			sc.Mode = s.DefaultMode
-		}
-		if !slices.Contains(s.Modes, sc.Mode) {
-			// An explicit site has no shadow mode (there is no previous verdict
-			// to compare against), so shadow reads as on there. Any other
-			// unsupported value reads as off.
-			if s.Explicit && sc.Mode == ModeShadow {
-				sc.Mode = ModeOn
+		if !slices.Contains(a.Modes, ac.Mode) {
+			// An explicit authority has no shadow mode (there is no previous
+			// verdict to compare against), so shadow reads as on there. Any
+			// other unsupported value reads as off.
+			if a.Explicit && ac.Mode == ModeShadow {
+				ac.Mode = ModeOn
 			} else {
-				sc.Mode = ModeOff
+				ac.Mode = ModeOff
 			}
 		}
-		if sc.Threshold == 0 {
-			sc.Threshold = s.DefaultThreshold
+		if ac.Threshold == 0 {
+			ac.Threshold = a.DefaultThreshold
 		}
-		sc.Threshold = min(max(sc.Threshold, minThreshold), maxThreshold)
-		sitesOut[s.ID] = sc
+		ac.Threshold = min(max(ac.Threshold, minThreshold), maxThreshold)
+		ac.Model = strings.TrimSpace(ac.Model)
+		ac.Fallback = strings.TrimSpace(ac.Fallback)
+		ac.Challenger = strings.TrimSpace(ac.Challenger)
+		if ac.Fallback != "" && ac.Fallback == ac.Model {
+			ac.Fallback = ""
+		}
+		if ac.Challenger != "" && ac.Challenger == ac.Model {
+			ac.Challenger = ""
+		}
+		out.Authorities[a.ID] = ac
 	}
-	out.Sites = sitesOut
 	return out
 }
 
-// Validate reports settings that Normalized cannot repair: an unknown backend,
-// an unknown site, or a mode that is not one of off/shadow/on.
-func (c Config) Validate() error {
-	if _, ok := Lookup(strings.TrimSpace(c.Backend)); c.Backend != "" && !ok {
-		return fmt.Errorf("unknown decision backend %q", c.Backend)
+// withoutMissingModels clears every reference to a decision model known does
+// not report: the default model and each authority's model, fallback and
+// challenger. A deleted model therefore never leaves an authority pointing at
+// nothing; the authority falls back to the default model.
+func (c Config) withoutMissingModels(known func(id string) bool) Config {
+	out := c
+	if out.DefaultModel != "" && !known(out.DefaultModel) {
+		out.DefaultModel = ""
 	}
-	for id, sc := range c.Sites {
-		if _, ok := SiteByID(id); !ok {
-			return fmt.Errorf("unknown decider site %q", id)
+	out.Authorities = make(map[string]AuthorityConfig, len(c.Authorities))
+	for id, ac := range c.Authorities {
+		for _, ref := range []*string{&ac.Model, &ac.Fallback, &ac.Challenger} {
+			if *ref != "" && !known(*ref) {
+				*ref = ""
+			}
 		}
-		switch sc.Mode {
-		case "", ModeOff, ModeShadow, ModeOn:
-		default:
-			return fmt.Errorf("site %q: unknown mode %q", id, sc.Mode)
+		out.Authorities[id] = ac
+	}
+	return out
+}
+
+// Validate reports settings that Normalized cannot repair: an unknown
+// authority, a mode that is not one of off/shadow/on, a threshold outside 0..1.
+// Model references are checked by the Hub, which knows the models.
+func (c Config) Validate() error {
+	for id, ac := range c.Authorities {
+		if _, ok := AuthorityByID(id); !ok {
+			return fmt.Errorf("unknown decision authority %q", id)
 		}
-		if sc.Threshold < 0 || sc.Threshold > 1 {
-			return fmt.Errorf("site %q: threshold %v is outside 0..1", id, sc.Threshold)
+		if ac.Mode != "" && !ac.Mode.valid() {
+			return fmt.Errorf("authority %q: unknown mode %q", id, ac.Mode)
+		}
+		if ac.Threshold < 0 || ac.Threshold > 1 {
+			return fmt.Errorf("authority %q: threshold %v is outside 0..1", id, ac.Threshold)
 		}
 	}
 	return nil
 }
 
-// SiteMode is the effective mode of a site: off while the master switch is off.
-func (c Config) SiteMode(site string) Mode {
+// Authority returns an authority's settings, its defaults when unset.
+func (c Config) Authority(id string) AuthorityConfig {
+	if ac, ok := c.Authorities[id]; ok {
+		return ac
+	}
+	if a, ok := AuthorityByID(id); ok {
+		return AuthorityConfig{Mode: a.DefaultMode, Threshold: a.DefaultThreshold}
+	}
+	return AuthorityConfig{Mode: ModeOff, Threshold: 0.8}
+}
+
+// Mode is the effective mode of an authority: off while the master switch is off.
+func (c Config) Mode(authority string) Mode {
 	if !c.Enabled {
 		return ModeOff
 	}
-	if sc, ok := c.Sites[site]; ok && sc.Mode != "" {
-		return sc.Mode
-	}
-	if s, ok := SiteByID(site); ok {
-		return s.DefaultMode
+	if m := c.Authority(authority).Mode; m != "" {
+		return m
 	}
 	return ModeOff
 }
 
-// SiteThreshold is the configured threshold of a site (its default when unset).
-func (c Config) SiteThreshold(site string) float64 {
-	if sc, ok := c.Sites[site]; ok && sc.Threshold > 0 {
-		return sc.Threshold
-	}
-	if s, ok := SiteByID(site); ok {
-		return s.DefaultThreshold
+// Threshold is the configured threshold of an authority (its default when unset).
+func (c Config) Threshold(authority string) float64 {
+	if t := c.Authority(authority).Threshold; t > 0 {
+		return t
 	}
 	return 0.8
-}
-
-// Timeout is the per-attempt timeout.
-func (c Config) Timeout() time.Duration {
-	if c.TimeoutMs <= 0 {
-		return DefaultTimeout
-	}
-	return time.Duration(c.TimeoutMs) * time.Millisecond
 }

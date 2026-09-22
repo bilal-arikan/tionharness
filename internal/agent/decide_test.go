@@ -103,16 +103,18 @@ func (f stubSource) Instances() []decider.InstanceInfo {
 
 func (stubSource) Generation() uint64 { return 1 }
 
-// wireDecider enables the decider on tun against stub, with every site at mode.
+// wireDecider enables the decider on tun against stub, with the given
+// authorities at mode. The hub's seeded default model (Jev through OpenRouter)
+// borrows the stub's provider credentials.
 func wireDecider(t *testing.T, tun *Tunables, stub *decisionStub, modes map[string]decider.Mode) *decider.Hub {
 	t.Helper()
 	hub := decider.NewHub(decider.HubOptions{Source: stubSource{url: stub.URL}})
-	cfg := decider.DefaultConfig()
+	cfg := hub.Config()
 	cfg.Enabled = true
-	for site, m := range modes {
-		sc := cfg.Sites[site]
-		sc.Mode = m
-		cfg.Sites[site] = sc
+	for id, m := range modes {
+		ac := cfg.Authorities[id]
+		ac.Mode = m
+		cfg.Authorities[id] = ac
 	}
 	if _, err := hub.Update(cfg); err != nil {
 		t.Fatal(err)
@@ -127,13 +129,13 @@ func waitBackground(rt *Runtime) { rt.spawnWG.Wait() }
 func TestDecideBillsCallerUnderBackendProvider(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteStallJudge: decider.ModeOn})
+	wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeOn})
 	ctx := context.Background()
 	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Coord", Provider: "claude-cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rt.decide(ctx, decider.SiteStallJudge, caller, stallDecisionRequest("spawned 3 workers")); err != nil {
+	if _, err := rt.decide(ctx, authStallJudge, caller, stallDecisionRequest("spawned 3 workers")); err != nil {
 		t.Fatal(err)
 	}
 	u, err := rt.db.GetUsageToday(ctx, caller.ID)
@@ -151,7 +153,7 @@ func TestDecideBillsCallerUnderBackendProvider(t *testing.T) {
 func TestStallJudgeOnModeAnswersWithoutLLM(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteStallJudge: decider.ModeOn})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeOn})
 	agent := db.Agent{ID: "AGT1", Name: "Coord"}
 
 	stub.set(func(s *decisionStub) { s.noul[stallQuestionKey] = 0.94 })
@@ -173,7 +175,7 @@ func TestStallJudgeOnModeAnswersWithoutLLM(t *testing.T) {
 func TestStallJudgeShadowComparesInBackground(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteStallJudge: decider.ModeShadow})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeShadow})
 	stub.set(func(s *decisionStub) { s.noul[stallQuestionKey] = 0.9 })
 
 	// The LLM said "not stalled"; the decider disagrees. Behaviour is the LLM's,
@@ -189,7 +191,7 @@ func TestStallJudgeShadowComparesInBackground(t *testing.T) {
 		t.Errorf("shadow record = %+v", r)
 	}
 	// Off: nothing is asked.
-	wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteStallJudge: decider.ModeOff})
+	wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeOff})
 	before := stub.calls()
 	rt.shadowCoordinatorStalled(context.Background(), db.Agent{ID: "AGT1"}, "x", false)
 	waitBackground(rt)
@@ -201,12 +203,58 @@ func TestStallJudgeShadowComparesInBackground(t *testing.T) {
 func TestStallJudgeFallsBackWhenDeciderFails(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteStallJudge: decider.ModeOn})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeOn})
 	stub.set(func(s *decisionStub) { s.status = http.StatusBadRequest })
 	if _, ok := rt.decideCoordinatorStalled(context.Background(), db.Agent{ID: "AGT1"}, "x"); ok {
 		t.Fatal("a failed decision must hand over to the LLM judge")
 	}
 	if recs := hub.Recent(1); len(recs) != 1 || recs[0].Error != "http_400" {
 		t.Errorf("ledger = %+v, want the failure recorded", recs)
+	}
+}
+
+func TestDecideChallengerIsBilledAndSpeaksTheAuthorityVocabulary(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	stub := newDecisionStub(t)
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authStallJudge: decider.ModeOn})
+	rival, err := hub.UpsertModel(decider.ModelInput{Backend: decider.SystemOneBackendID, Label: "local", Enabled: true, Model: decider.OpenJevModel, BaseURL: stub.URL + "/v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := hub.Config()
+	ac := cfg.Authorities[authStallJudge]
+	ac.Challenger = rival.ID
+	cfg.Authorities[authStallJudge] = ac
+	if _, err := hub.Update(cfg); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	caller, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Coord", Provider: "claude-cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub.set(func(s *decisionStub) { s.noul[stallQuestionKey] = 0.95 })
+	if stalled, ok := rt.decideCoordinatorStalled(ctx, caller, "spawned 3 workers"); !ok || !stalled {
+		t.Fatalf("stalled = %v ok = %v", stalled, ok)
+	}
+	waitBackground(rt)
+	var challenger *decider.Record
+	for _, r := range hub.Recent(5) {
+		if r.Role == decider.RoleChallenger {
+			challenger = &r
+		}
+	}
+	if challenger == nil || challenger.Instance != rival.ID || challenger.Outcome != "stalled" || challenger.Baseline != "stalled" || !challenger.Agrees() {
+		t.Fatalf("challenger record = %+v", challenger)
+	}
+	u, err := rt.db.GetUsageToday(ctx, caller.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := u.ByKind[db.UsageKindDecide]; st.Calls != 2 {
+		t.Errorf("decide calls = %d, want the primary and the challenger", st.Calls)
+	}
+	if st := u.ByModel[db.ModelKey("local", decider.OpenJevModel)]; st.Calls != 1 {
+		t.Errorf("usage by model = %+v; the local challenger bills under the free \"local\" provider", u.ByModel)
 	}
 }

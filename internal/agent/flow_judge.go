@@ -11,9 +11,9 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
-// Decider site "flow-judge": flowRunner implements orchestration.JudgeRunner, so
-// branch and loop nodes in the "judge" match mode are decided by the decision
-// model. Errors are returned to the engine, which falls back to the default arm
+// Decision authority "flow-judge": flowRunner implements
+// orchestration.JudgeRunner, so branch and loop nodes in the "judge" match
+// mode are decided by the decision model. Errors are returned to the engine, which falls back to the default arm
 // (branch) or keeps looping up to the cap (loop).
 
 const (
@@ -35,27 +35,35 @@ func (f flowRunner) JudgeBranch(ctx context.Context, req orchestration.JudgeRequ
 	for i, o := range req.Options {
 		options[flowArmOption(i)] = o
 	}
-	resp, err := f.rt.decide(ctx, decider.SiteFlowJudge, f.judgeCaller(ctx, req.AgentID), decider.Request{
+	threshold := f.rt.deciderThreshold(authFlowJudge)
+	outcome := func(resp *decider.Response) (string, float64) {
+		choice, strength, ok := decider.Pick(resp, flowArmKey, threshold)
+		if _, known := flowArmIndex(choice, len(req.Options)); !ok || !known {
+			return "unsure", strength
+		}
+		return choice, strength
+	}
+	ref := flowRunIDFromContext(ctx)
+	resp, err := f.rt.decide(ctx, authFlowJudge, f.judgeCaller(ctx, req.AgentID), decider.Request{
 		State:     truncateRunes(req.Value, flowJudgeValueRunes),
 		Questions: map[string]decider.Question{flowArmKey: decider.Choice(question, options)},
-	})
-	rec := decider.NewRecord(decider.SiteFlowJudge, decider.ModeOn, resp, err)
-	rec.Ref = flowRunIDFromContext(ctx)
+	}, decider.WithRef(ref), decider.WithOutcome(outcome))
+	rec := decider.NewRecord(authFlowJudge, decider.ModeOn, resp, err)
+	rec.Ref = ref
 	if err != nil {
 		if !decisionOff(err) {
 			f.rt.logDecision(rec)
 		}
 		return -1, 0, err
 	}
-	a := resp.Answers[flowArmKey]
-	pick, ok := flowArmIndex(a.Choice, len(req.Options))
-	strength := a.Strength()
-	if !ok || strength < f.rt.deciderThreshold(decider.SiteFlowJudge) {
+	choice, strength, ok := decider.Pick(resp, flowArmKey, threshold)
+	pick, known := flowArmIndex(choice, len(req.Options))
+	if !ok || !known {
 		rec.Outcome, rec.Strength = "unsure", strength
 		f.rt.logDecision(rec)
 		return -1, strength, nil
 	}
-	rec.Outcome, rec.Strength, rec.Applied = a.Choice, strength, true
+	rec.Outcome, rec.Strength, rec.Applied = choice, strength, true
 	f.rt.logDecision(rec)
 	return pick, strength, nil
 }
@@ -66,13 +74,19 @@ func (f flowRunner) JudgeCondition(ctx context.Context, req orchestration.JudgeR
 	if q := strings.TrimSpace(req.Question); q != "" {
 		instructions = q + "\nCondition: " + req.Condition
 	}
-	resp, err := f.rt.decide(ctx, decider.SiteFlowJudge, f.judgeCaller(ctx, req.AgentID), decider.Request{
+	threshold := f.rt.deciderThreshold(authFlowJudge)
+	outcome := func(resp *decider.Response) (string, float64) {
+		a := resp.Answers[flowConditionKey]
+		return strconv.FormatBool(a.Yes(threshold)), a.Probability
+	}
+	ref := flowRunIDFromContext(ctx)
+	resp, err := f.rt.decide(ctx, authFlowJudge, f.judgeCaller(ctx, req.AgentID), decider.Request{
 		State: truncateRunes(req.Value, flowJudgeValueRunes),
 		Questions: map[string]decider.Question{flowConditionKey: decider.Noul(instructions,
 			req.Condition, "The condition does not hold yet.")},
-	})
-	rec := decider.NewRecord(decider.SiteFlowJudge, decider.ModeOn, resp, err)
-	rec.Ref = flowRunIDFromContext(ctx)
+	}, decider.WithRef(ref), decider.WithOutcome(outcome))
+	rec := decider.NewRecord(authFlowJudge, decider.ModeOn, resp, err)
+	rec.Ref = ref
 	if err != nil {
 		if !decisionOff(err) {
 			f.rt.logDecision(rec)
@@ -80,7 +94,7 @@ func (f flowRunner) JudgeCondition(ctx context.Context, req orchestration.JudgeR
 		return false, 0, err
 	}
 	a := resp.Answers[flowConditionKey]
-	holds := a.Yes(f.rt.deciderThreshold(decider.SiteFlowJudge))
+	holds := a.Yes(threshold)
 	rec.Outcome, rec.Strength, rec.Applied = strconv.FormatBool(holds), a.Probability, true
 	f.rt.logDecision(rec)
 	return holds, a.Probability, nil

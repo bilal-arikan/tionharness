@@ -1,20 +1,25 @@
 package decider
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 )
 
-// Limits on a request's shape. They are far below what the services accept and
-// exist to catch a caller bug (a question per file in a repository) before it
-// turns into an expensive or rejected call.
+// Limits on a request's shape. They catch a caller bug (a question per file in
+// a repository) before it turns into an expensive or rejected call; a backend
+// may accept less (Manifest.Limits), which the Hub checks per model.
 const (
 	maxQuestions    = 64
 	maxQuestionKey  = 64
-	maxChoiceOption = 32
+	maxChoiceOption = 64
 	maxScoreLevels  = 16
 )
+
+// ErrInvalidRequest wraps every error Validate reports: the request itself is
+// malformed, so no other model would do better with it.
+var ErrInvalidRequest = errors.New("invalid decision request")
 
 // Noul builds a yes/no question. ifTrue and ifFalse describe when the answer is
 // yes and no; pass both, or neither.
@@ -35,7 +40,7 @@ func Score(instructions string, levels ...string) Question {
 
 // Normalized returns a copy of the request with every question made acceptable
 // to the services: a noul question with only one side described gets a neutral
-// description for the other (the Decisions API rejects a half-specified pair).
+// description for the other (the System One API rejects a half-specified pair).
 func (r Request) Normalized() Request {
 	out := r
 	out.Questions = make(map[string]Question, len(r.Questions))
@@ -56,8 +61,16 @@ func (r Request) Normalized() Request {
 }
 
 // Validate checks a request before it is sent: a state, at least one question,
-// well-formed keys, and criteria shaped for each question's type.
+// well-formed keys, and criteria shaped for each question's type. Every error
+// wraps ErrInvalidRequest.
 func (r Request) Validate() error {
+	if err := r.validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+	return nil
+}
+
+func (r Request) validate() error {
 	if r.State == nil {
 		return fmt.Errorf("decision request has no state")
 	}
@@ -76,6 +89,30 @@ func (r Request) Validate() error {
 		}
 		if err := r.Questions[k].validate(); err != nil {
 			return fmt.Errorf("question %q: %w", k, err)
+		}
+	}
+	return nil
+}
+
+// ValidateFor checks the request against one backend's limits on top of the
+// general ones (a local adapter labels options with single letters, System One
+// accepts at most ten score levels). A limit error does not wrap
+// ErrInvalidRequest: another model may well accept the same request.
+func (r Request) ValidateFor(l Limits) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+	return r.checkLimits(l)
+}
+
+func (r Request) checkLimits(l Limits) error {
+	for _, k := range sortedKeys(r.Questions) {
+		q := r.Questions[k]
+		switch {
+		case q.Type == QuestionChoice && l.MaxOptions > 0 && len(q.Options) > l.MaxOptions:
+			return fmt.Errorf("question %q has %d options; this model accepts at most %d", k, len(q.Options), l.MaxOptions)
+		case q.Type == QuestionScore && l.MaxLevels > 0 && len(q.Levels) > l.MaxLevels:
+			return fmt.Errorf("question %q has %d levels; this model accepts at most %d", k, len(q.Levels), l.MaxLevels)
 		}
 	}
 	return nil

@@ -12,13 +12,14 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
-// Decider site "tool-risk": a second look at command-execution calls that would
-// run WITHOUT a human decision — every exec call in auto mode, and exec calls a
-// standing "always allow" grant covers in ask mode. A family grant such as
-// Bash(git *) also covers `git push --force`; auto mode covers everything.
+// Decision authority "tool-risk": a second look at command-execution calls
+// that would run WITHOUT a human decision — every exec call in auto mode, and
+// exec calls a standing "always allow" grant covers in ask mode. A family grant
+// such as Bash(git *) also covers `git push --force`; auto mode covers
+// everything.
 //
-// The site only ever tightens, and only toward a human: in on mode a command the
-// decision model thinks needs approval becomes an approval prompt — but only
+// The check only ever tightens, and only toward a human: in on mode a command
+// the decision model thinks needs approval becomes an approval prompt — but only
 // when someone is there to answer it. An unattended run (no prompter) is never
 // delayed or blocked; its commands are just measured, as in shadow mode.
 
@@ -38,9 +39,9 @@ type toolRiskCheck func(ctx context.Context, call providers.ToolCall) (flagged b
 type toolRiskCheckKey struct{}
 
 // withToolRiskCheck installs the tool-risk check for calls made by agent. When
-// the site is off it installs nothing, so permGate pays nothing.
+// the authority is off it installs nothing, so permGate pays nothing.
 func (r *Runtime) withToolRiskCheck(ctx context.Context, agent db.Agent) context.Context {
-	mode := r.deciderMode(decider.SiteToolRisk)
+	mode := r.deciderMode(authToolRisk)
 	if mode == decider.ModeOff {
 		return ctx
 	}
@@ -69,7 +70,7 @@ func toolRiskFlagged(ctx context.Context, call providers.ToolCall) (bool, string
 // an approval prompt. agent may be zero-valued when the caller cannot tell which
 // agent is asking; the decision is then logged but billed to no agent budget.
 func (r *Runtime) ToolRiskFlagged(ctx context.Context, agent db.Agent, toolName string, input json.RawMessage, interactive bool) (bool, string) {
-	mode := r.deciderMode(decider.SiteToolRisk)
+	mode := r.deciderMode(authToolRisk)
 	if mode == decider.ModeOff {
 		return false, ""
 	}
@@ -91,7 +92,7 @@ func (r *Runtime) checkToolRisk(ctx context.Context, agent db.Agent, call provid
 		return false, ""
 	}
 	req := toolRiskRequest(call.Name, cmd)
-	threshold := r.deciderThreshold(decider.SiteToolRisk)
+	threshold := r.deciderThreshold(authToolRisk)
 	outcome := func(resp *decider.Response) (string, float64) {
 		a := resp.Answers[riskApprovalKey]
 		if a.Yes(threshold) {
@@ -101,11 +102,11 @@ func (r *Runtime) checkToolRisk(ctx context.Context, agent db.Agent, call provid
 	}
 	ref := SessionIDFrom(ctx)
 	if mode != decider.ModeOn || !interactive {
-		r.backgroundDecision(ctx, decider.SiteToolRisk, mode, agent, req, "run", ref, outcome)
+		r.backgroundDecision(ctx, authToolRisk, mode, agent, req, "run", ref, outcome)
 		return false, ""
 	}
-	resp, err := r.decide(ctx, decider.SiteToolRisk, agent, req)
-	rec := decider.NewRecord(decider.SiteToolRisk, decider.ModeOn, resp, err)
+	resp, err := r.decide(ctx, authToolRisk, agent, req, decider.WithOutcome(outcome))
+	rec := decider.NewRecord(authToolRisk, decider.ModeOn, resp, err)
 	rec.Baseline, rec.Ref = "run", ref
 	if err != nil {
 		if !decisionOff(err) {

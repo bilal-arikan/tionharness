@@ -416,9 +416,10 @@ func (r *Runtime) judgeCoordinatorStalledUncached(ctx context.Context, agent db.
 	if r.stallJudgeFn != nil {
 		return r.stallJudgeFn(ctx, agent, text)
 	}
-	// Decider site "stall-judge" (decide_stall.go): in on mode a decision model
-	// answers instead of the LLM judge; in shadow mode it is asked afterwards,
-	// in the background, and only logged next to the LLM's verdict.
+	// Decision authority "stall-judge" (decide_stall.go): in on mode a
+	// decision model answers instead of the LLM judge; in shadow mode it is
+	// asked afterwards, in the background, and only logged next to the LLM's
+	// verdict.
 	if stalled, ok := r.decideCoordinatorStalled(ctx, agent, text); ok {
 		return stalled, nil
 	}

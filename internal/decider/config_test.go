@@ -8,59 +8,50 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	c := DefaultConfig()
-	if c.Enabled {
-		t.Error("the decider must start switched off")
+	if c.Enabled || c.DefaultModel != "" {
+		t.Errorf("defaults = %+v; the decider must start switched off", c)
 	}
-	if c.Backend != OpenRouterBackendID || c.Model != JevModel || c.TimeoutMs != 3000 {
-		t.Errorf("defaults = %+v", c)
-	}
-	for _, s := range Sites() {
-		sc, ok := c.Sites[s.ID]
-		if !ok || sc.Mode != s.DefaultMode || sc.Threshold != s.DefaultThreshold {
-			t.Errorf("site %s default = %+v", s.ID, sc)
+	for _, a := range Authorities() {
+		ac, ok := c.Authorities[a.ID]
+		if !ok || ac.Mode != a.DefaultMode || ac.Threshold != a.DefaultThreshold {
+			t.Errorf("authority %s default = %+v", a.ID, ac)
 		}
-		// Every site is off while the master switch is off.
-		if c.SiteMode(s.ID) != ModeOff {
-			t.Errorf("site %s is %s with the master switch off", s.ID, c.SiteMode(s.ID))
+		// Every authority is off while the master switch is off.
+		if c.Mode(a.ID) != ModeOff {
+			t.Errorf("authority %s is %s with the master switch off", a.ID, c.Mode(a.ID))
 		}
 	}
 }
 
 func TestNormalizedClampsAndRepairs(t *testing.T) {
 	c := Config{
-		Enabled:   true,
-		TimeoutMs: 60000,
-		Sites: map[string]SiteConfig{
-			SiteToolRisk:  {Mode: ModeOn, Threshold: 0.2},
-			SiteFlowJudge: {Mode: ModeShadow}, // explicit site: no shadow mode
-			SiteStallJudge: {
-				Mode: "bogus",
-			},
+		Enabled: true,
+		Authorities: map[string]AuthorityConfig{
+			testGate:     {Mode: ModeOn, Threshold: 0.2, Model: "DM2", Fallback: "DM2", Challenger: "DM3"},
+			testExplicit: {Mode: ModeShadow}, // explicit authority: no shadow mode
+			"retired":    {Mode: ModeOn},
 		},
 	}.Normalized()
-	if c.TimeoutMs != maxTimeoutMs {
-		t.Errorf("timeout = %d, want clamped to %d", c.TimeoutMs, maxTimeoutMs)
+	if got := c.Authorities[testGate]; got.Mode != ModeOn || got.Threshold != minThreshold || got.Fallback != "" || got.Challenger != "DM3" {
+		t.Errorf("gate = %+v, want on, threshold clamped to %v, a fallback equal to the model dropped", got, minThreshold)
 	}
-	if got := c.Sites[SiteToolRisk]; got.Mode != ModeOn || got.Threshold != minThreshold {
-		t.Errorf("tool-risk = %+v, want on with threshold clamped to %v", got, minThreshold)
+	if c.Mode(testExplicit) != ModeOn {
+		t.Errorf("explicit authority in shadow = %s, want on", c.Mode(testExplicit))
 	}
-	if c.SiteMode(SiteFlowJudge) != ModeOn {
-		t.Errorf("explicit site in shadow = %s, want on", c.SiteMode(SiteFlowJudge))
+	if _, ok := c.Authorities["retired"]; ok {
+		t.Error("settings of an unregistered authority survived")
 	}
-	if c.SiteMode(SiteStallJudge) != ModeOff {
-		t.Errorf("unknown mode = %s, want off", c.SiteMode(SiteStallJudge))
-	}
-	if c.Backend != OpenRouterBackendID || c.Model != JevModel {
-		t.Errorf("backend/model defaults not filled: %+v", c)
+	bogus := Config{Enabled: true, Authorities: map[string]AuthorityConfig{testGate: {Mode: "bogus"}}}.Normalized()
+	if bogus.Mode(testGate) != ModeOff {
+		t.Errorf("unknown mode = %s, want off", bogus.Mode(testGate))
 	}
 }
 
 func TestConfigValidate(t *testing.T) {
 	bad := []Config{
-		{Backend: "nope"},
-		{Sites: map[string]SiteConfig{"mystery": {Mode: ModeOn}}},
-		{Sites: map[string]SiteConfig{SiteToolRisk: {Mode: "loud"}}},
-		{Sites: map[string]SiteConfig{SiteToolRisk: {Mode: ModeOn, Threshold: 1.5}}},
+		{Authorities: map[string]AuthorityConfig{"mystery": {Mode: ModeOn}}},
+		{Authorities: map[string]AuthorityConfig{testGate: {Mode: "loud"}}},
+		{Authorities: map[string]AuthorityConfig{testGate: {Mode: ModeOn, Threshold: 1.5}}},
 	}
 	for i, c := range bad {
 		if err := c.Validate(); err == nil {
@@ -72,30 +63,55 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestWithoutMissingModels(t *testing.T) {
+	c := Config{DefaultModel: "gone", Authorities: map[string]AuthorityConfig{
+		testGate: {Model: "DM1", Fallback: "gone", Challenger: "gone"},
+	}}
+	known := func(id string) bool { return id == "DM1" }
+	out := c.withoutMissingModels(known)
+	if out.DefaultModel != "" || out.Authorities[testGate] != (AuthorityConfig{Model: "DM1"}) {
+		t.Errorf("pruned = %+v", out)
+	}
+	if c.Authorities[testGate].Fallback != "gone" {
+		t.Error("withoutMissingModels mutated its receiver")
+	}
+}
+
 func TestConfigRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	if c, err := LoadConfig(dir); err != nil || c.Enabled {
-		t.Fatalf("missing file: %+v, %v", c, err)
+	if c, legacy, err := loadConfig(dir); err != nil || c.Enabled || legacy != nil {
+		t.Fatalf("missing file: %+v, %+v, %v", c, legacy, err)
 	}
 	want := DefaultConfig()
 	want.Enabled = true
-	want.ProviderInstanceID = "PRV3"
-	want.Sites[SiteStallJudge] = SiteConfig{Mode: ModeOn, Threshold: 0.75}
-	if err := SaveConfig(dir, want); err != nil {
+	want.DefaultModel = "DM2"
+	want.Authorities[testGate] = AuthorityConfig{Mode: ModeOn, Threshold: 0.75, Fallback: "DM1"}
+	if err := saveConfig(dir, want); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadConfig(dir)
-	if err != nil {
-		t.Fatal(err)
+	got, legacy, err := loadConfig(dir)
+	if err != nil || legacy != nil {
+		t.Fatalf("load: %v legacy=%+v", err, legacy)
 	}
-	if !got.Enabled || got.ProviderInstanceID != "PRV3" || got.Sites[SiteStallJudge].Threshold != 0.75 {
+	if !got.Enabled || got.DefaultModel != "DM2" || got.Authorities[testGate] != want.Authorities[testGate] {
 		t.Errorf("round trip = %+v", got)
 	}
 	// A corrupt file is reported, never silently replaced.
 	if err := os.WriteFile(filepath.Join(dir, configFileName), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadConfig(dir); err == nil {
+	if _, _, err := loadConfig(dir); err == nil {
 		t.Error("corrupt config loaded without error")
+	}
+}
+
+func TestSeedModel(t *testing.T) {
+	fresh := seedModel(nil)
+	if fresh.Backend != OpenRouterBackendID || fresh.Model != JevModel || fresh.Credentials != CredentialsProvider || !fresh.Enabled {
+		t.Errorf("fresh seed = %+v", fresh)
+	}
+	legacy := seedModel(&legacyConnection{Backend: "nope", ProviderInstanceID: "PRV7", Model: "typesafe/jev-2", TimeoutMs: 2000})
+	if legacy.Backend != OpenRouterBackendID || legacy.ProviderInstanceID != "PRV7" || legacy.Model != "typesafe/jev-2" || legacy.TimeoutMs != 2000 {
+		t.Errorf("legacy seed = %+v; an unknown backend keeps the default", legacy)
 	}
 }

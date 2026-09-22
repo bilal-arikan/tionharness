@@ -1,6 +1,7 @@
 package decider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,13 +11,18 @@ import (
 var (
 	// ErrDisabled: the decider is switched off in settings.
 	ErrDisabled = errors.New("decider is disabled")
-	// ErrSiteOff: the calling site is set to off.
-	ErrSiteOff = errors.New("decider is off for this site")
-	// ErrNoEndpoint: no enabled provider instance can reach the configured backend.
+	// ErrSiteOff: the calling authority is set to off.
+	ErrSiteOff = errors.New("decider is off for this authority")
+	// ErrNoModel: no decision model is configured (or the one named is gone).
+	ErrNoModel = errors.New("no decision model is configured")
+	// ErrModelDisabled: the decision model is switched off in its settings.
+	ErrModelDisabled = errors.New("decision model is disabled")
+	// ErrNoEndpoint: no enabled provider instance can lend the decision model
+	// its credentials.
 	ErrNoEndpoint = errors.New("no provider instance can reach the decision backend")
-	// ErrBackoff: the endpoint failed recently and is being rested; callers fall
+	// ErrBackoff: the model failed recently and is being rested; callers fall
 	// back to their own logic instead of paying another timeout.
-	ErrBackoff = errors.New("decision endpoint is backing off after recent failures")
+	ErrBackoff = errors.New("decision model is backing off after recent failures")
 )
 
 // HTTPError is a non-2xx answer from a decision service. Its message follows
@@ -33,8 +39,9 @@ func (e *HTTPError) Error() string {
 }
 
 // IsAuthError reports a credential or billing rejection (401/402/403). Retrying
-// with the same configuration cannot succeed, so the Hub quarantines the
-// endpoint until the provider settings change or the quarantine expires.
+// with the same configuration cannot succeed, so the Hub quarantines the model
+// until its settings (or the provider settings it borrows from) change or the
+// quarantine expires.
 func IsAuthError(err error) bool {
 	var he *HTTPError
 	if !errors.As(err, &he) {
@@ -45,6 +52,13 @@ func IsAuthError(err error) bool {
 		return true
 	}
 	return false
+}
+
+// fallbackWorthy reports whether another model might answer where this one
+// failed: anything but a malformed request (which no model can fix) and the
+// caller giving up.
+func fallbackWorthy(ctx context.Context, err error) bool {
+	return err != nil && ctx.Err() == nil && !errors.Is(err, ErrInvalidRequest)
 }
 
 // errorClass is the short, stable label a ledger record stores instead of the
@@ -59,8 +73,14 @@ func errorClass(err error) string {
 		return fmt.Sprintf("http_%d", he.Status)
 	case errors.Is(err, ErrNoEndpoint):
 		return "no_endpoint"
+	case errors.Is(err, ErrNoModel):
+		return "no_model"
+	case errors.Is(err, ErrModelDisabled):
+		return "model_disabled"
 	case errors.Is(err, ErrBackoff):
 		return "backoff"
+	case errors.Is(err, ErrInvalidRequest):
+		return "invalid_request"
 	case errors.Is(err, ErrDisabled), errors.Is(err, ErrSiteOff):
 		return "off"
 	case isTimeout(err):

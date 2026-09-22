@@ -13,37 +13,54 @@ import (
 	"time"
 )
 
+// Role says why a ledger record exists.
+type Role string
+
+const (
+	// RolePrimary (empty) is the answer the authority used (or would use).
+	RolePrimary Role = ""
+	// RoleChallenger is a challenger model's answer to the same question,
+	// kept only to measure agreement with the primary answer.
+	RoleChallenger Role = "challenger"
+)
+
 // Record is one decision as the ledger keeps it: enough to measure agreement,
-// latency and spend per site, and deliberately nothing of the state that was
-// judged (the ledger is a metrics log, not a transcript).
+// latency and spend per authority and per model, and deliberately nothing of
+// the state that was judged (the ledger is a metrics log, not a transcript).
 type Record struct {
 	// At is when the decision finished, in unix milliseconds.
-	At   int64  `json:"at"`
-	Site string `json:"site"`
-	Mode Mode   `json:"mode"`
-	// Model is the requested model id.
-	Model       string  `json:"model,omitempty"`
+	At        int64  `json:"at"`
+	Authority string `json:"authority"`
+	Mode      Mode   `json:"mode"`
+	Role      Role   `json:"role,omitempty"`
+	// Instance is the decision model (settings entry) that answered.
+	Instance string `json:"instance,omitempty"`
+	// Model is the requested service model id.
+	Model string `json:"model,omitempty"`
+	// Fallback is set when the primary model failed and the fallback answered.
+	Fallback    bool    `json:"fallback,omitempty"`
 	LatencyMs   int64   `json:"latencyMs,omitempty"`
 	InputTokens int     `json:"inputTokens,omitempty"`
 	CostUSD     float64 `json:"costUsd,omitempty"`
-	// Outcome is the decider's verdict in the site's own vocabulary ("stalled",
-	// "ask", "arm 2", "pass"); empty when the call failed.
+	// Outcome is the verdict in the authority's own vocabulary ("stalled",
+	// "ask", "arm2", "pass"); empty when the call failed.
 	Outcome string `json:"outcome,omitempty"`
 	// Strength is the probability or confidence behind Outcome.
 	Strength float64 `json:"strength,omitempty"`
-	// Baseline is the verdict of the site's existing logic, in the same
-	// vocabulary as Outcome. Set in shadow mode (and wherever both exist).
+	// Baseline is the verdict Outcome is compared with: the authority's
+	// existing logic in shadow mode, the primary model's verdict on a
+	// challenger record.
 	Baseline string `json:"baseline,omitempty"`
-	// Applied is set when the decider's verdict drove behaviour.
+	// Applied is set when the verdict drove behaviour.
 	Applied bool `json:"applied,omitempty"`
 	// Error is a short error class ("timeout", "http_401"), never raw text.
 	Error string `json:"error,omitempty"`
-	// Ref correlates the record with a session or flow run id.
+	// Ref correlates the record with a session, flow run or trajectory id.
 	Ref string `json:"ref,omitempty"`
 }
 
-// Compared reports whether both the decider and the site's existing logic
-// produced a verdict, so the record counts toward agreement.
+// Compared reports whether both verdicts exist, so the record counts toward
+// agreement.
 func (r Record) Compared() bool {
 	return r.Error == "" && r.Outcome != "" && r.Baseline != ""
 }
@@ -53,15 +70,38 @@ func (r Record) Agrees() bool {
 	return r.Compared() && r.Outcome == r.Baseline
 }
 
-// SiteStats aggregates a site's records over a window.
-type SiteStats struct {
-	Site     string  `json:"site"`
+// AuthorityStats aggregates an authority's records over a window.
+type AuthorityStats struct {
+	Authority string `json:"authority"`
+	// Primary answers.
+	Calls     int     `json:"calls"`
+	Errors    int     `json:"errors"`
+	Shadow    int     `json:"shadow"`
+	Compared  int     `json:"compared"`
+	Agreed    int     `json:"agreed"`
+	Applied   int     `json:"applied"`
+	Fallbacks int     `json:"fallbacks"`
+	P50Ms     int64   `json:"p50Ms"`
+	P95Ms     int64   `json:"p95Ms"`
+	CostUSD   float64 `json:"costUsd"`
+	LastAt    int64   `json:"lastAt,omitempty"`
+	// Challenger comparisons.
+	ChallengerCalls    int     `json:"challengerCalls"`
+	ChallengerErrors   int     `json:"challengerErrors"`
+	ChallengerCompared int     `json:"challengerCompared"`
+	ChallengerAgreed   int     `json:"challengerAgreed"`
+	ChallengerP50Ms    int64   `json:"challengerP50Ms"`
+	ChallengerCostUSD  float64 `json:"challengerCostUsd"`
+	// Challenger is the model of the most recent challenger record.
+	Challenger string `json:"challenger,omitempty"`
+}
+
+// ModelStats aggregates one decision model's calls over a window, whatever
+// authority or role they served.
+type ModelStats struct {
+	Instance string  `json:"instance"`
 	Calls    int     `json:"calls"`
 	Errors   int     `json:"errors"`
-	Shadow   int     `json:"shadow"`
-	Compared int     `json:"compared"`
-	Agreed   int     `json:"agreed"`
-	Applied  int     `json:"applied"`
 	P50Ms    int64   `json:"p50Ms"`
 	P95Ms    int64   `json:"p95Ms"`
 	CostUSD  float64 `json:"costUsd"`
@@ -113,7 +153,18 @@ func readLedgerTail(path string, capacity int) []Record {
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for sc.Scan() {
 		var rec Record
-		if json.Unmarshal(sc.Bytes(), &rec) == nil && rec.Site != "" {
+		if json.Unmarshal(sc.Bytes(), &rec) != nil {
+			continue
+		}
+		if rec.Authority == "" {
+			// Lines written before authorities were named so called them sites.
+			var legacy struct {
+				Site string `json:"site"`
+			}
+			_ = json.Unmarshal(sc.Bytes(), &legacy)
+			rec.Authority = legacy.Site
+		}
+		if rec.Authority != "" {
 			out = append(out, rec)
 		}
 	}
@@ -186,29 +237,53 @@ func (l *Ledger) Recent(n int) []Record {
 	return out
 }
 
-// Stats aggregates the in-memory records at or after since, one entry per
-// site that has any, sorted by site id.
-func (l *Ledger) Stats(since time.Time) []SiteStats {
+// since returns the in-memory records at or after t, oldest first.
+func (l *Ledger) since(t time.Time) []Record {
+	cutoff := t.UnixMilli()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]Record, 0, len(l.ring))
+	for _, r := range l.ring {
+		if r.At >= cutoff {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Stats aggregates the records at or after since, one entry per authority that
+// has any, sorted by authority id.
+func (l *Ledger) Stats(since time.Time) []AuthorityStats {
 	if l == nil {
 		return nil
 	}
-	cutoff := since.UnixMilli()
-	l.mu.Lock()
-	recs := make([]Record, 0, len(l.ring))
-	for _, r := range l.ring {
-		if r.At >= cutoff {
-			recs = append(recs, r)
-		}
-	}
-	l.mu.Unlock()
-
-	bySite := map[string]*SiteStats{}
+	byAuth := map[string]*AuthorityStats{}
 	latencies := map[string][]int64{}
-	for _, r := range recs {
-		st := bySite[r.Site]
+	challengerLatencies := map[string][]int64{}
+	for _, r := range l.since(since) {
+		st := byAuth[r.Authority]
 		if st == nil {
-			st = &SiteStats{Site: r.Site}
-			bySite[r.Site] = st
+			st = &AuthorityStats{Authority: r.Authority}
+			byAuth[r.Authority] = st
+		}
+		if r.Role == RoleChallenger {
+			st.ChallengerCalls++
+			st.ChallengerCostUSD += r.CostUSD
+			st.Challenger = r.Instance
+			if r.Error != "" {
+				st.ChallengerErrors++
+				continue
+			}
+			if r.Compared() {
+				st.ChallengerCompared++
+				if r.Agrees() {
+					st.ChallengerAgreed++
+				}
+			}
+			if r.LatencyMs > 0 {
+				challengerLatencies[r.Authority] = append(challengerLatencies[r.Authority], r.LatencyMs)
+			}
+			continue
 		}
 		st.Calls++
 		st.CostUSD += r.CostUSD
@@ -216,6 +291,9 @@ func (l *Ledger) Stats(since time.Time) []SiteStats {
 		if r.Error != "" {
 			st.Errors++
 			continue
+		}
+		if r.Fallback {
+			st.Fallbacks++
 		}
 		if r.Mode == ModeShadow {
 			st.Shadow++
@@ -230,16 +308,56 @@ func (l *Ledger) Stats(since time.Time) []SiteStats {
 			st.Applied++
 		}
 		if r.LatencyMs > 0 {
-			latencies[r.Site] = append(latencies[r.Site], r.LatencyMs)
+			latencies[r.Authority] = append(latencies[r.Authority], r.LatencyMs)
 		}
 	}
-	out := make([]SiteStats, 0, len(bySite))
-	for site, st := range bySite {
-		st.P50Ms = percentile(latencies[site], 0.50)
-		st.P95Ms = percentile(latencies[site], 0.95)
+	out := make([]AuthorityStats, 0, len(byAuth))
+	for id, st := range byAuth {
+		st.P50Ms = percentile(latencies[id], 0.50)
+		st.P95Ms = percentile(latencies[id], 0.95)
+		st.ChallengerP50Ms = percentile(challengerLatencies[id], 0.50)
 		out = append(out, *st)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Site < out[j].Site })
+	sort.Slice(out, func(i, j int) bool { return out[i].Authority < out[j].Authority })
+	return out
+}
+
+// ModelStats aggregates the records at or after since per decision model,
+// sorted by model id. Records without a model (a call that never reached one)
+// are left out.
+func (l *Ledger) ModelStats(since time.Time) []ModelStats {
+	if l == nil {
+		return nil
+	}
+	byModel := map[string]*ModelStats{}
+	latencies := map[string][]int64{}
+	for _, r := range l.since(since) {
+		if r.Instance == "" {
+			continue
+		}
+		st := byModel[r.Instance]
+		if st == nil {
+			st = &ModelStats{Instance: r.Instance}
+			byModel[r.Instance] = st
+		}
+		st.Calls++
+		st.CostUSD += r.CostUSD
+		st.LastAt = max(st.LastAt, r.At)
+		if r.Error != "" {
+			st.Errors++
+			continue
+		}
+		if r.LatencyMs > 0 {
+			latencies[r.Instance] = append(latencies[r.Instance], r.LatencyMs)
+		}
+	}
+	out := make([]ModelStats, 0, len(byModel))
+	for id, st := range byModel {
+		st.P50Ms = percentile(latencies[id], 0.50)
+		st.P95Ms = percentile(latencies[id], 0.95)
+		out = append(out, *st)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Instance < out[j].Instance })
 	return out
 }
 

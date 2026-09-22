@@ -73,7 +73,7 @@ func toolRiskContext(rt *Runtime, answer string, withPrompter bool) (context.Con
 func TestToolRiskAutoModeFlagsRiskyCommand(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteToolRisk: decider.ModeOn})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authToolRisk: decider.ModeOn})
 	stub.set(func(s *decisionStub) { s.noul[riskApprovalKey] = 0.96 })
 
 	ctx, shown := toolRiskContext(rt, tools.PermAllowAlways, true)
@@ -112,7 +112,7 @@ func TestToolRiskAutoModeFlagsRiskyCommand(t *testing.T) {
 func TestToolRiskNeverBlocksUnattendedRuns(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteToolRisk: decider.ModeOn})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authToolRisk: decider.ModeOn})
 	stub.set(func(s *decisionStub) { s.noul[riskApprovalKey] = 0.99 })
 
 	ctx, _ := toolRiskContext(rt, "", false) // no prompter: autonomous run
@@ -129,7 +129,7 @@ func TestToolRiskNeverBlocksUnattendedRuns(t *testing.T) {
 func TestToolRiskRechecksFamilyGrantsInAskMode(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteToolRisk: decider.ModeOn})
+	wireDecider(t, tun, stub, map[string]decider.Mode{authToolRisk: decider.ModeOn})
 
 	ctx, shown := toolRiskContext(rt, tools.PermAllowOnce, true)
 	tools.GrantsFrom(ctx).GrantRule(tools.PermRule{Tool: "Bash", ArgGlob: "git *"})
@@ -147,7 +147,7 @@ func TestToolRiskRechecksFamilyGrantsInAskMode(t *testing.T) {
 func TestToolRiskShadowAndOffNeverPrompt(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	stub := newDecisionStub(t)
-	hub := wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteToolRisk: decider.ModeShadow})
+	hub := wireDecider(t, tun, stub, map[string]decider.Mode{authToolRisk: decider.ModeShadow})
 	stub.set(func(s *decisionStub) { s.noul[riskApprovalKey] = 0.99 })
 
 	ctx, shown := toolRiskContext(rt, tools.PermDeny, true)
@@ -159,7 +159,7 @@ func TestToolRiskShadowAndOffNeverPrompt(t *testing.T) {
 		t.Errorf("shadow ledger = %+v", recs)
 	}
 
-	wireDecider(t, tun, stub, map[string]decider.Mode{decider.SiteToolRisk: decider.ModeOff})
+	wireDecider(t, tun, stub, map[string]decider.Mode{authToolRisk: decider.ModeOff})
 	ctx, shown = toolRiskContext(rt, tools.PermDeny, true)
 	calls := stub.calls()
 	if ok, _ := permGate(ctx, "auto", shellCall("git push --force")); !ok || len(*shown) != 0 || stub.calls() != calls {

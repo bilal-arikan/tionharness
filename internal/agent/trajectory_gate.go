@@ -108,7 +108,7 @@ func (r *Runtime) checkPhaseGate(ctx context.Context, t db.Trajectory, phase db.
 		}
 		return false, true, ""
 	case "judge":
-		// Decider site "phase-gate" (trajectory_gate_judge.go).
+		// Decision authority "phase-gate" (trajectory_gate_judge.go).
 		pass, reason := r.judgePhaseGate(ctx, t, phase, value)
 		return pass, false, reason
 	default:

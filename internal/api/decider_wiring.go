@@ -5,9 +5,10 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-// registryEndpoints adapts the provider registry to decider.EndpointSource. The
-// decider package imports nothing internal, so the bridge lives here, next to
-// the other wiring of process-wide services.
+// registryEndpoints adapts the provider registry to decider.EndpointSource, so a
+// decision model can borrow a provider account's credentials. The decider
+// package imports nothing internal, so the bridge lives here, next to the other
+// wiring of process-wide services.
 type registryEndpoints struct {
 	reg *providers.Registry
 }
@@ -42,11 +43,18 @@ func (r registryEndpoints) Generation() uint64 {
 
 // initDecider builds the process-wide decision-model hub over the provider
 // registry and hands it to the shared tunables, where every workspace runtime
-// finds it. Its settings live in <dataDir>/decider.json, apart from settings.json.
+// finds it. Its settings live in <dataDir>/decider.json and its models in
+// <dataDir>/decider/models.json, apart from settings.json; a model's own API
+// key is sealed with the provider-secret cipher.
 func (s *Server) initDecider() {
+	var secrets decider.SecretBox
+	if s.providerStore != nil {
+		secrets = s.providerStore.Cipher()
+	}
 	hub := decider.NewHub(decider.HubOptions{
 		DataDir: s.dataDir,
 		Source:  registryEndpoints{reg: s.providers},
+		Secrets: secrets,
 		Logger:  s.logger.With("subsystem", "decider"),
 	})
 	s.tun.SetDecider(hub)

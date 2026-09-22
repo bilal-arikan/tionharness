@@ -51,9 +51,9 @@ func permGate(ctx context.Context, mode string, call providers.ToolCall) (bool, 
 	risk := tools.Classify(call.Name)
 	switch mode {
 	case "", "auto":
-		// Decider site "tool-risk" (decide_toolrisk.go): a command about to run
-		// unasked gets a second look, and one the decision model thinks needs
-		// approval becomes a prompt — only ever when someone can answer it.
+		// Decision authority "tool-risk" (decide_toolrisk.go): a command about
+		// to run unasked gets a second look, and one the decision model thinks
+		// needs approval becomes a prompt — only ever when someone can answer it.
 		if flagged, why := toolRiskFlagged(ctx, call); flagged {
 			return askPermission(ctx, call, RiskFlagged, why)
 		}

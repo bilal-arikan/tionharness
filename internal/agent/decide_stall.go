@@ -7,8 +7,8 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/decider"
 )
 
-// Decider site "stall-judge": the phantom-spawn judge as one yes/no question.
-// It asks exactly what the stall-judge system agent is asked
+// Decision authority "stall-judge": the phantom-spawn judge as one yes/no
+// question. It asks exactly what the stall-judge system agent is asked
 // (prompts/defaults/stall-judge.md), so a shadow comparison measures the model,
 // not two different questions.
 
@@ -38,15 +38,24 @@ func stallVerdict(stalled bool) string {
 	return "ok"
 }
 
+// stallOutcome renders a stall decision in the ledger's vocabulary.
+func stallOutcome(threshold float64) func(*decider.Response) (string, float64) {
+	return func(resp *decider.Response) (string, float64) {
+		a := resp.Answers[stallQuestionKey]
+		return stallVerdict(a.Yes(threshold)), a.Probability
+	}
+}
+
 // decideCoordinatorStalled is the on-mode path: the decider's verdict replaces
-// the LLM judge. ok=false means "no verdict, run the LLM judge" (site not on,
-// or the decider failed).
+// the LLM judge. ok=false means "no verdict, run the LLM judge" (authority not
+// on, or no model could answer).
 func (r *Runtime) decideCoordinatorStalled(ctx context.Context, agent db.Agent, text string) (stalled, ok bool) {
-	if r.deciderMode(decider.SiteStallJudge) != decider.ModeOn {
+	if r.deciderMode(authStallJudge) != decider.ModeOn {
 		return false, false
 	}
-	resp, err := r.decide(ctx, decider.SiteStallJudge, agent, stallDecisionRequest(text))
-	rec := decider.NewRecord(decider.SiteStallJudge, decider.ModeOn, resp, err)
+	threshold := r.deciderThreshold(authStallJudge)
+	resp, err := r.decide(ctx, authStallJudge, agent, stallDecisionRequest(text), decider.WithOutcome(stallOutcome(threshold)))
+	rec := decider.NewRecord(authStallJudge, decider.ModeOn, resp, err)
 	if err != nil {
 		if !decisionOff(err) {
 			r.logger.Info("stall decision unavailable; using the LLM judge", "agent", agent.ID, "error", err)
@@ -55,19 +64,15 @@ func (r *Runtime) decideCoordinatorStalled(ctx context.Context, agent db.Agent, 
 		return false, false
 	}
 	a := resp.Answers[stallQuestionKey]
-	stalled = a.Yes(r.deciderThreshold(decider.SiteStallJudge))
+	stalled = a.Yes(threshold)
 	rec.Outcome, rec.Strength, rec.Applied = stallVerdict(stalled), a.Probability, true
 	r.logDecision(rec)
 	return stalled, true
 }
 
 // shadowCoordinatorStalled compares the LLM judge's verdict with the decider's,
-// in the background, when the site is in shadow mode.
+// in the background, when the authority is in shadow mode.
 func (r *Runtime) shadowCoordinatorStalled(ctx context.Context, agent db.Agent, text string, llmStalled bool) {
-	threshold := r.deciderThreshold(decider.SiteStallJudge)
-	r.shadowDecision(ctx, decider.SiteStallJudge, agent, stallDecisionRequest(text), stallVerdict(llmStalled), SessionIDFrom(ctx),
-		func(resp *decider.Response) (string, float64) {
-			a := resp.Answers[stallQuestionKey]
-			return stallVerdict(a.Yes(threshold)), a.Probability
-		})
+	r.shadowDecision(ctx, authStallJudge, agent, stallDecisionRequest(text), stallVerdict(llmStalled), SessionIDFrom(ctx),
+		stallOutcome(r.deciderThreshold(authStallJudge)))
 }

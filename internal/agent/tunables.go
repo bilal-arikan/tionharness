@@ -334,7 +334,7 @@ type Tunables struct {
 
 	// decider is the app-wide decision-model hub (internal/decider), shared by
 	// every workspace runtime. nil until the API server wires it (tests: never),
-	// in which case every decider site behaves as off. See tunables_decider.go.
+	// in which case every decision authority behaves as off. See tunables_decider.go.
 	decider *decider.Hub
 }
 

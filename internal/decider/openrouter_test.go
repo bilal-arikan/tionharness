@@ -13,18 +13,6 @@ import (
 	"time"
 )
 
-// noRetryPause makes the one-retry path instant for the duration of a test.
-func noRetryPause(t *testing.T) {
-	t.Helper()
-	prev := retryPause
-	retryPause = 0
-	t.Cleanup(func() { retryPause = prev })
-}
-
-func bearer(key string) func(http.Header) {
-	return func(h http.Header) { h.Set("Authorization", "Bearer "+key) }
-}
-
 // liveShapedResponse is the body OpenRouter returned for a four-question probe
 // on 2026-09-21 (typesafe/jev-1.13), trimmed to the fields the client reads.
 const liveShapedResponse = `{
@@ -98,9 +86,11 @@ func TestOpenRouterDecideRequestAndResponseShape(t *testing.T) {
 	if a := resp.Answers["model_tier"]; a.Choice != "balanced" || a.Strength() != 0.77 {
 		t.Errorf("choice answer = %+v", a)
 	}
-	if resp.Model != JevModel || resp.ServedModel != "typesafe/jev-1.13-20260917" {
+	if resp.Model != JevModel || resp.ServedModel != "typesafe/jev-1.13-20260917" || resp.BilledModel() != JevModel {
 		t.Errorf("model = %q served = %q; usage must be billed under the requested id", resp.Model, resp.ServedModel)
 	}
+	// The Decisions API exists only at OpenRouter: a proxy in front of it (here
+	// a loopback test server) is still OpenRouter spend.
 	if resp.Usage.InputTokens != 606 || resp.Usage.CostUSD != 2.5452e-05 || resp.BillingProvider != "openrouter" {
 		t.Errorf("usage = %+v billing = %q", resp.Usage, resp.BillingProvider)
 	}
@@ -220,15 +210,19 @@ func TestOpenRouterAccepts(t *testing.T) {
 	if b.Accepts("openai-compat", "https://api.example.com/v1") || b.Accepts("anthropic", "") {
 		t.Error("an instance that cannot reach OpenRouter was accepted")
 	}
+	if _, err := b.New(Endpoint{Kind: "anthropic"}, ClientOptions{}); err == nil {
+		t.Error("a client was built over an unusable provider")
+	}
 }
 
 func TestIsDecisionModel(t *testing.T) {
-	for _, m := range []string{JevModel, JevLatestModel, "TypeSafe/jev-2", " typesafe/jev-1.13 "} {
+	for _, m := range []string{JevModel, JevLatestModel, "TypeSafe/jev-2", " typesafe/jev-1.13 ", JevNativeModel, OpenJevModel} {
 		if !IsDecisionModel(m) {
 			t.Errorf("IsDecisionModel(%q) = false", m)
 		}
 	}
-	for _, m := range []string{"", "anthropic/claude-sonnet-5", "openai/gpt-5.5"} {
+	// An LLM-logprobs model is an ordinary chat model: it stays usable for chat.
+	for _, m := range []string{"", "anthropic/claude-sonnet-5", "openai/gpt-5.5", "qwen3:4b", "gemma3:4b"} {
 		if IsDecisionModel(m) {
 			t.Errorf("IsDecisionModel(%q) = true", m)
 		}

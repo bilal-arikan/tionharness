@@ -9,13 +9,13 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/decider"
 )
 
-// Decider site "phase-gate": a Rota phase gate of kind "judge". The gate's value
-// is the phase's exit condition in plain words ("the reviewer approved the
-// change and no blocking issue is open"); the decision model judges it against
-// the root session's recent transcript. Unlike the "verdict" gate it needs no
-// exact marker line, so a validator that words its approval differently — or
-// wraps it in a code fence — still opens the gate, and a template echo of
-// "VERDICT: PASS | FAIL" does not.
+// Decision authority "phase-gate": a Rota phase gate of kind "judge". The
+// gate's value is the phase's exit condition in plain words ("the reviewer
+// approved the change and no blocking issue is open"); the decision model
+// judges it against the root session's recent transcript. Unlike the "verdict"
+// gate it needs no exact marker line, so a validator that words its approval
+// differently — or wraps it in a code fence — still opens the gate, and a
+// template echo of "VERDICT: PASS | FAIL" does not.
 //
 // The gate fails closed: when the decider cannot answer, the phase stays
 // blocked with the reason, exactly like an unmet condition.
@@ -43,14 +43,22 @@ func (r *Runtime) judgePhaseGate(ctx context.Context, t db.Trajectory, phase db.
 	if label == "" {
 		label = phase.ID
 	}
-	resp, err := r.decide(ctx, decider.SitePhaseGate, r.gateCaller(ctx, t), decider.Request{
+	threshold := r.deciderThreshold(authPhaseGate)
+	outcome := func(resp *decider.Response) (string, float64) {
+		a := resp.Answers[phaseGateKey]
+		if a.Yes(threshold) {
+			return "pass", a.Probability
+		}
+		return "blocked", a.Probability
+	}
+	resp, err := r.decide(ctx, authPhaseGate, r.gateCaller(ctx, t), decider.Request{
 		State: transcript,
 		Questions: map[string]decider.Question{phaseGateKey: decider.Noul(
 			fmt.Sprintf("Judging by this transcript, has the exit condition of the %q phase been met? Condition: %s", label, condition),
 			condition,
 			"The condition has not been met yet, or the transcript does not show that it has.")},
-	})
-	rec := decider.NewRecord(decider.SitePhaseGate, decider.ModeOn, resp, err)
+	}, decider.WithRef(t.ID), decider.WithOutcome(outcome))
+	rec := decider.NewRecord(authPhaseGate, decider.ModeOn, resp, err)
 	rec.Ref = t.ID
 	if err != nil {
 		if !decisionOff(err) {
@@ -59,12 +67,9 @@ func (r *Runtime) judgePhaseGate(ctx context.Context, t db.Trajectory, phase db.
 		return false, "judge gate unavailable: " + err.Error()
 	}
 	a := resp.Answers[phaseGateKey]
-	threshold := r.deciderThreshold(decider.SitePhaseGate)
 	pass := a.Yes(threshold)
-	rec.Outcome, rec.Strength, rec.Applied = "blocked", a.Probability, true
-	if pass {
-		rec.Outcome = "pass"
-	}
+	rec.Outcome, rec.Strength = outcome(resp)
+	rec.Applied = true
 	r.logDecision(rec)
 	if pass {
 		return true, ""

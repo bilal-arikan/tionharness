@@ -14,7 +14,7 @@ import (
 // own settings page instead.
 func rejectDecisionModel(model string) error {
 	if decider.IsDecisionModel(model) {
-		return fmt.Errorf("%q is a decision model (typed yes/no, choice and score answers) and cannot run an agent; set it under Settings → Decision model instead", model)
+		return fmt.Errorf("%q is a decision model (typed yes/no, choice and score answers) and cannot run an agent; add it under Settings → Providers → Decision providers instead", model)
 	}
 	return nil
 }

@@ -11,7 +11,7 @@ type QuestionType string
 
 const (
 	// QuestionNoul is a yes/no question answered with the probability that the
-	// statement holds ("noul" is the Decisions API's name for it).
+	// statement holds ("noul" is the System One API's name for it).
 	QuestionNoul QuestionType = "noul"
 	// QuestionChoice picks exactly one option out of a labelled set.
 	QuestionChoice QuestionType = "choice"
@@ -22,7 +22,7 @@ const (
 // Question is one typed question. Which criteria fields apply depends on Type:
 //
 //   - noul:   True/False describe when the answer is yes/no. Optional, but
-//     the Decisions API rejects one side without the other, so Normalize
+//     the System One API rejects one side without the other, so Normalize
 //     fills a missing side.
 //   - choice: Options maps an option key to its description (at least two).
 //   - score:  Levels lists the scale, lowest first (at least two).
@@ -45,8 +45,8 @@ type Request struct {
 	// Questions maps a caller-chosen key to its question; answers come back
 	// under the same keys.
 	Questions map[string]Question `json:"questions"`
-	// Model overrides the configured model for this one request ("" = use the
-	// configured model).
+	// Model overrides the decision model's configured service model id for
+	// this one request ("" = the model instance's own id).
 	Model string `json:"model,omitempty"`
 }
 
@@ -116,22 +116,42 @@ type Response struct {
 	ID string `json:"id,omitempty"`
 	// Backend is the backend that served the call.
 	Backend string `json:"backend"`
-	// Model is the model id that was REQUESTED. Usage is billed under this id:
-	// the served snapshot (ServedModel) is not in any price table.
+	// Instance is the decision model instance (settings entry) that answered;
+	// set by the Hub.
+	Instance string `json:"instance,omitempty"`
+	// Model is the service model id that was REQUESTED.
 	Model string `json:"model"`
 	// ServedModel is the concrete model/snapshot the service says answered.
 	ServedModel string `json:"servedModel,omitempty"`
-	// BillingProvider is the price-table provider this call is billed under
-	// (e.g. "openrouter").
+	// BillingProvider and BillingModel are the price-table provider and model
+	// id the call is billed under ("openrouter" + "typesafe/jev-1.13", "local"
+	// for a server on the user's own network). BillingModel "" = Model. The
+	// served snapshot is never used for billing: no price table lists it.
 	BillingProvider string `json:"billingProvider,omitempty"`
+	BillingModel    string `json:"billingModel,omitempty"`
+	// Fallback is set when the authority's primary model could not answer and
+	// its fallback model did.
+	Fallback bool `json:"fallback,omitempty"`
+	// Warnings say how far the answers can be trusted when the backend had to
+	// degrade (e.g. a local model returned no token probabilities, so every
+	// answer is a hard 0/1).
+	Warnings []string `json:"warnings,omitempty"`
 	// Answers holds one answer per requested question key.
 	Answers   map[string]Answer `json:"answers"`
 	Usage     Usage             `json:"usage"`
 	LatencyMs int64             `json:"latencyMs"`
 }
 
+// BilledModel is the model id the call is billed under.
+func (r *Response) BilledModel() string {
+	if r.BillingModel != "" {
+		return r.BillingModel
+	}
+	return r.Model
+}
+
 // Decider answers typed questions about a state. Backends build one per
-// endpoint + model; the Hub wraps the active one.
+// endpoint + model; the Hub wraps them.
 type Decider interface {
 	Decide(ctx context.Context, req Request) (*Response, error)
 }
