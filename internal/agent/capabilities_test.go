@@ -225,7 +225,7 @@ func TestEnsureCodebaseIndexedRunsDifferentPathsConcurrently(t *testing.T) {
 	root := t.TempDir()
 	r.EnsureCodebaseIndexed(context.Background(), filepath.Join(root, "repo-a"))
 	r.EnsureCodebaseIndexed(context.Background(), filepath.Join(root, "repo-b"))
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		select {
 		case <-started:
 		case <-time.After(time.Second):

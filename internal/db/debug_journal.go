@@ -607,10 +607,7 @@ func trimDebugRecords(records []DebugEvent, visibleKeep int) ([]DebugEvent, int)
 			visible++
 		}
 	}
-	dropVisible := visible - visibleKeep
-	if dropVisible < 0 {
-		dropVisible = 0
-	}
+	dropVisible := max(visible-visibleKeep, 0)
 	out := make([]DebugEvent, 0, len(records)-dropVisible)
 	keptVisible := 0
 	seenVisible := 0

@@ -48,7 +48,7 @@ func TestLatestReleaseCachesWithinTTL(t *testing.T) {
 	hits := 0
 	serveLatest(t, http.StatusOK, "v1.2.3", &hits)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		rel, stale, err := LatestRelease(t.Context(), "owner/repo")
 		if err != nil {
 			t.Fatalf("call %d: %v", i, err)

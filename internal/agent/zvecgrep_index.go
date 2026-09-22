@@ -177,7 +177,7 @@ func ensureZvecGrepGitExclude(root string) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		switch strings.TrimSpace(line) {
 		case zvecGrepIndexDir, zvecGrepIndexDir + "/", "/" + zvecGrepIndexDir, "/" + zvecGrepIndexDir + "/":
 			return nil

@@ -179,7 +179,7 @@ func TestCodexRPCStderrReadIsRaceFree(t *testing.T) {
 	go func() {
 		defer close(written)
 		close(writing)
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_, _ = stderr.Write([]byte("codex: starting up\n"))
 		}
 	}()

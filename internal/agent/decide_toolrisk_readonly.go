@@ -3,6 +3,7 @@ package agent
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -123,12 +124,7 @@ func readOnlySegment(seg string) bool {
 		}
 		return true
 	case "gofmt":
-		for _, a := range args {
-			if a == "-w" {
-				return false
-			}
-		}
-		return true
+		return !slices.Contains(args, "-w")
 	case "npm", "pnpm", "yarn":
 		if len(args) >= 2 && args[0] == "run" {
 			return readOnlyNpmScripts[args[1]]

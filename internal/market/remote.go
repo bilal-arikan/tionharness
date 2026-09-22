@@ -179,10 +179,7 @@ func entryToPack(e RegistryEntry, registryName string) Pack {
 func compareVersions(a, b string) int {
 	pa := versionParts(a)
 	pb := versionParts(b)
-	n := len(pa)
-	if len(pb) > n {
-		n = len(pb)
-	}
+	n := max(len(pb), len(pa))
 	for i := 0; i < n; i++ {
 		var x, y int
 		if i < len(pa) {

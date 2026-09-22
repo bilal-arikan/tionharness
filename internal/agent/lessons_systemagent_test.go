@@ -70,7 +70,7 @@ func TestInsightScanStopsAfterPermanentProviderFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create caller: %v", err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		session, createErr := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "Failure evidence"})
 		if createErr != nil {
 			t.Fatalf("create session: %v", createErr)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -140,9 +141,9 @@ func FindRun(root, ref string) (RunRecord, bool) {
 	if err != nil {
 		return RunRecord{}, false
 	}
-	for i := len(all) - 1; i >= 0; i-- {
-		if all[i].ID == ref || (all[i].SessionID != "" && all[i].SessionID == ref) {
-			return all[i], true
+	for _, a := range slices.Backward(all) {
+		if a.ID == ref || (a.SessionID != "" && a.SessionID == ref) {
+			return a, true
 		}
 	}
 	return RunRecord{}, false

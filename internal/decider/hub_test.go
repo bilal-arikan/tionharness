@@ -279,7 +279,7 @@ func TestHubChallenger(t *testing.T) {
 			billed = append(billed, r.Instance)
 			billedMu.Unlock()
 		}),
-		WithBackground(func(f func()) { wg.Add(1); go func() { defer wg.Done(); f() }() }),
+		WithBackground(func(f func()) { ; wg.Go(func() { ; f() }) }),
 		WithRef("SES1"),
 	)
 	if err != nil || resp.Instance != "DM1" {
@@ -316,7 +316,7 @@ func TestHubChallenger(t *testing.T) {
 			}
 			return "ok", r.Answers["q"].Probability
 		}),
-		WithBackground(func(f func()) { wg.Add(1); go func() { defer wg.Done(); f() }() }),
+		WithBackground(func(f func()) { ; wg.Go(func() { ; f() }) }),
 	)
 	if err != nil {
 		t.Fatal(err)

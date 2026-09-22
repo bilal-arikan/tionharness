@@ -29,7 +29,7 @@ func overheadFixture(t *testing.T, turns int, trace string) (*db.DB, db.Agent, d
 		t.Fatalf("create session: %v", err)
 	}
 	history := make([]db.Message, 0, turns*2)
-	for i := 0; i < turns; i++ {
+	for range turns {
 		history = append(history,
 			db.Message{Role: providers.RoleUser, Text: strings.Repeat("question ", 40)},
 			db.Message{Role: providers.RoleAssistant, Text: strings.Repeat("answer ", 40), Steps: trace})

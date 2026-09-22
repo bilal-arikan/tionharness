@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -332,9 +333,9 @@ const replyTailWindow = 16
 // turn can append a newer user message, so the scan runs from the end for the
 // last assistant ROLE rather than trusting the very last message.
 func lastAssistant(msgs []db.Message) (db.Message, bool) {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == providers.RoleAssistant {
-			return msgs[i], true
+	for _, msg := range slices.Backward(msgs) {
+		if msg.Role == providers.RoleAssistant {
+			return msg, true
 		}
 	}
 	return db.Message{}, false

@@ -11,7 +11,7 @@ func fitnessFixture() (db.Goal, FitnessInputs) {
 		ID: "GOL1", Status: db.GoalStatusActive,
 		Scope:      db.GoalScope{Recipes: []string{"code-review"}},
 		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min", Target: f(1)},
-		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: f(0.9)}, {Metric: "usage.tokensPerSession", Max: f(5000)}},
+		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: new(0.9)}, {Metric: "usage.tokensPerSession", Max: f(5000)}},
 	}
 	sum := func(cost float64, sessions int) *db.TrajectorySummary {
 		return &db.TrajectorySummary{DurationSec: 100, Tokens: 1000, CostUSD: cost, Sessions: sessions, GateWaitSec: 10, GhostPhases: []string{"ship"}}

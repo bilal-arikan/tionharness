@@ -78,7 +78,7 @@ func TestProjectTrajectoryLevels(t *testing.T) {
 
 func TestProjectTrajectoryElidesHandles(t *testing.T) {
 	tr := sampleTrajectory()
-	for i := 0; i < trajectoryTopN+3; i++ {
+	for i := range trajectoryTopN + 3 {
 		id := "X" + string(rune('a'+i))
 		tr.Nodes = append(tr.Nodes, db.TrajectoryNode{ID: "s:" + id, Kind: db.TrajNodeSession, RefKind: "session", RefID: id, State: db.TrajStateDone})
 	}

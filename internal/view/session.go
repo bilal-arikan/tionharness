@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -217,10 +218,10 @@ func sessionTodoLine(msgs []db.Message) string {
 // lastErrorStep returns the newest failure in the tail — an error step or a tool
 // call that came back as an error.
 func lastErrorStep(msgs []db.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := DecodeSteps(msgs[i].Steps)
-		for j := len(steps) - 1; j >= 0; j-- {
-			s := steps[j]
+	for _, msg := range slices.Backward(msgs) {
+		steps := DecodeSteps(msg.Steps)
+		for _, s := range slices.Backward(steps) {
+
 			if s.Kind == "error" {
 				return orDash(s.Reason) + ": " + s.Text
 			}
@@ -237,10 +238,9 @@ func sessionRecent(msgs []db.Message, now time.Time) string {
 	if len(msgs) == 0 {
 		return ""
 	}
-	start := len(msgs) - sessionRecentTurns*2 // a turn is roughly a user + reply pair
-	if start < 0 {
-		start = 0
-	}
+	start := max(
+		// a turn is roughly a user + reply pair
+		len(msgs)-sessionRecentTurns*2, 0)
 	var l lines
 	for _, m := range msgs[start:] {
 		text := m.Text

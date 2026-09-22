@@ -318,7 +318,7 @@ func TestLedgerCompactBoundsFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Same (lens,session) recorded 20 times → 20 appended lines.
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if err := l.Record(LedgerEntry{LensID: "x", SessionID: "S1", SeenFingerprint: "fp", ScannedAt: int64(i)}); err != nil {
 			t.Fatal(err)
 		}
@@ -344,7 +344,7 @@ func TestLedgerCompactBoundsFile(t *testing.T) {
 func TestRunLogTrims(t *testing.T) {
 	root := t.TempDir()
 	const extra = 3 // just enough over the cap to prove trimming, without O(n²) churn
-	for i := 0; i < maxRunRecords+extra; i++ {
+	for i := range maxRunRecords + extra {
 		if err := AppendRun(root, RunRecord{At: int64(i)}); err != nil {
 			t.Fatal(err)
 		}

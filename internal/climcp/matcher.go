@@ -47,7 +47,7 @@ func MatcherRegex(matcher string) string {
 		seen[frag] = true
 		alts = append(alts, frag)
 	}
-	for _, part := range strings.Split(m, ",") {
+	for part := range strings.SplitSeq(m, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

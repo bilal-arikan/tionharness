@@ -31,10 +31,7 @@ func loadWorkers(n int) int {
 	if n <= 1 {
 		return 1
 	}
-	w := runtime.NumCPU() * 2
-	if w > maxLoadWorkers {
-		w = maxLoadWorkers
-	}
+	w := min(runtime.NumCPU()*2, maxLoadWorkers)
 	if w > n {
 		w = n
 	}
@@ -68,16 +65,14 @@ func parallelLoad[In, Out any](items []In, fn func(In) (Out, error)) ([]Out, err
 	} else {
 		idx := make(chan int)
 		var wg sync.WaitGroup
-		for w := 0; w < workers; w++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range workers {
+			wg.Go(func() {
 				// Each goroutine writes only the slots it pulls off idx, so the
 				// shared slices need no lock.
 				for i := range idx {
 					out[i], errs[i] = fn(items[i])
 				}
-			}()
+			})
 		}
 		for i := range items {
 			idx <- i

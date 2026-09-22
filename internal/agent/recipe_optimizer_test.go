@@ -62,7 +62,7 @@ func TestRecipeGrowthBudget(t *testing.T) {
 	if err := spec.Validate(); err != nil {
 		t.Fatalf("within budget must validate: %v", err)
 	}
-	for i := 0; i < skills.RecipeGrowthBudget; i++ {
+	for range skills.RecipeGrowthBudget {
 		spec.Watchers = append(spec.Watchers, "w")
 	}
 	if err := spec.Validate(); err == nil || !strings.Contains(err.Error(), "growth budget") {

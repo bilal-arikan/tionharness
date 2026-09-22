@@ -2,7 +2,8 @@ package settings
 
 import "testing"
 
-func strptr(s string) *string { return &s }
+//go:fix inline
+func strptr(s string) *string { return new(s) }
 
 func TestValidateRejectsBadEnums(t *testing.T) {
 	cases := []struct {
@@ -10,16 +11,16 @@ func TestValidateRejectsBadEnums(t *testing.T) {
 		patch Patch
 		ok    bool
 	}{
-		{"good theme", Patch{Theme: strptr("light")}, true},
-		{"bad theme", Patch{Theme: strptr("neon")}, false},
-		{"bad language", Patch{Language: strptr("de")}, false},
-		{"bad permission", Patch{DefaultPermissionMode: strptr("yolo")}, false},
-		{"empty permission ok", Patch{DefaultPermissionMode: strptr("")}, true},
-		{"good auto-compact mode", Patch{AutoCompactMode: strptr("native")}, true},
-		{"bad auto-compact mode", Patch{AutoCompactMode: strptr("aggressive")}, false},
-		{"empty auto-compact mode ok", Patch{AutoCompactMode: strptr("")}, true},
-		{"bad accent", Patch{Accent: strptr("purple")}, false},
-		{"good accent", Patch{Accent: strptr("#8b5cf6")}, true},
+		{"good theme", Patch{Theme: new("light")}, true},
+		{"bad theme", Patch{Theme: new("neon")}, false},
+		{"bad language", Patch{Language: new("de")}, false},
+		{"bad permission", Patch{DefaultPermissionMode: new("yolo")}, false},
+		{"empty permission ok", Patch{DefaultPermissionMode: new("")}, true},
+		{"good auto-compact mode", Patch{AutoCompactMode: new("native")}, true},
+		{"bad auto-compact mode", Patch{AutoCompactMode: new("aggressive")}, false},
+		{"empty auto-compact mode ok", Patch{AutoCompactMode: new("")}, true},
+		{"bad accent", Patch{Accent: new("purple")}, false},
+		{"good accent", Patch{Accent: new("#8b5cf6")}, true},
 		{"empty patch", Patch{}, true},
 	}
 	for _, c := range cases {
@@ -37,7 +38,7 @@ func TestApplyRejectsInvalidPatch(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	before := st.Get().Theme
-	if _, err := st.Apply(Patch{Theme: strptr("neon")}); err == nil {
+	if _, err := st.Apply(Patch{Theme: new("neon")}); err == nil {
 		t.Fatal("expected Apply to reject invalid theme")
 	}
 	if st.Get().Theme != before {

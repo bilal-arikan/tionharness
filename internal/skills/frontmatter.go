@@ -90,12 +90,12 @@ func splitFrontmatter(content string) (fmText, body string) {
 	}
 	rest := s[len("---\n"):]
 	// The closing fence is a line that is exactly "---".
-	end := strings.Index(rest, "\n---")
-	if end < 0 {
+	before, after0, ok := strings.Cut(rest, "\n---")
+	if !ok {
 		return "", s
 	}
-	fmText = rest[:end]
-	after := rest[end+len("\n---"):]
+	fmText = before
+	after := after0
 	after = strings.TrimPrefix(after, "\n")
 	// Tolerate a trailing newline right after the closing fence marker.
 	if strings.HasPrefix(after, "\n") {
@@ -139,12 +139,12 @@ func parseFrontmatter(content string) (frontmatter, string) {
 		}
 		curList = ""
 
-		colon := strings.Index(line, ":")
-		if colon < 0 {
+		before, after, ok := strings.Cut(line, ":")
+		if !ok {
 			continue
 		}
-		key := strings.ToLower(strings.TrimSpace(line[:colon]))
-		val := strings.TrimSpace(line[colon+1:])
+		key := strings.ToLower(strings.TrimSpace(before))
+		val := strings.TrimSpace(after)
 		if key == "" {
 			continue
 		}
@@ -323,14 +323,14 @@ func setFrontmatterAccess(content string, shared bool) string {
 	hadBlock := false
 	if strings.HasPrefix(norm, "---\n") {
 		rest := norm[len("---\n"):]
-		if end := strings.Index(rest, "\n---"); end >= 0 {
+		if before, after, ok := strings.Cut(rest, "\n---"); ok {
 			hadBlock = true
-			block := rest[:end]
-			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n") // body after fence
-			for _, ln := range strings.Split(block, "\n") {
+			block := before
+			body = strings.TrimPrefix(after, "\n") // body after fence
+			for ln := range strings.SplitSeq(block, "\n") {
 				key := ""
-				if i := strings.Index(ln, ":"); i >= 0 {
-					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				if before, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(before))
 				}
 				if key == "access" || key == "shared" {
 					continue // drop any existing access marker
@@ -368,14 +368,14 @@ func setFrontmatterAutoSummary(content string, on bool) string {
 	hadBlock := false
 	if strings.HasPrefix(norm, "---\n") {
 		rest := norm[len("---\n"):]
-		if end := strings.Index(rest, "\n---"); end >= 0 {
+		if before, after, ok := strings.Cut(rest, "\n---"); ok {
 			hadBlock = true
-			block := rest[:end]
-			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
-			for _, ln := range strings.Split(block, "\n") {
+			block := before
+			body = strings.TrimPrefix(after, "\n")
+			for ln := range strings.SplitSeq(block, "\n") {
 				key := ""
-				if i := strings.Index(ln, ":"); i >= 0 {
-					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				if before, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(before))
 				}
 				switch key {
 				case "auto_summary", "autosummary", "auto_include", "autoinclude":
@@ -413,14 +413,14 @@ func setFrontmatterNameOnly(content string, on bool) string {
 	hadBlock := false
 	if strings.HasPrefix(norm, "---\n") {
 		rest := norm[len("---\n"):]
-		if end := strings.Index(rest, "\n---"); end >= 0 {
+		if before, after, ok := strings.Cut(rest, "\n---"); ok {
 			hadBlock = true
-			block := rest[:end]
-			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
-			for _, ln := range strings.Split(block, "\n") {
+			block := before
+			body = strings.TrimPrefix(after, "\n")
+			for ln := range strings.SplitSeq(block, "\n") {
 				key := ""
-				if i := strings.Index(ln, ":"); i >= 0 {
-					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				if before, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(before))
 				}
 				switch key {
 				case "name_only", "nameonly":
@@ -458,14 +458,14 @@ func setFrontmatterSummaryOnly(content string, on bool) string {
 	hadBlock := false
 	if strings.HasPrefix(norm, "---\n") {
 		rest := norm[len("---\n"):]
-		if end := strings.Index(rest, "\n---"); end >= 0 {
+		if before, after, ok := strings.Cut(rest, "\n---"); ok {
 			hadBlock = true
-			block := rest[:end]
-			body = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
-			for _, ln := range strings.Split(block, "\n") {
+			block := before
+			body = strings.TrimPrefix(after, "\n")
+			for ln := range strings.SplitSeq(block, "\n") {
 				key := ""
-				if i := strings.Index(ln, ":"); i >= 0 {
-					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				if before, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(before))
 				}
 				switch key {
 				case "summary_only", "summaryonly":
@@ -513,11 +513,11 @@ func setFrontmatterFields(content string, fields []fmField, body *string) string
 	curBody := norm
 	if strings.HasPrefix(norm, "---\n") {
 		rest := norm[len("---\n"):]
-		if end := strings.Index(rest, "\n---"); end >= 0 {
-			block := rest[:end]
-			curBody = strings.TrimPrefix(rest[end+len("\n---"):], "\n")
+		if before, after, ok := strings.Cut(rest, "\n---"); ok {
+			block := before
+			curBody = strings.TrimPrefix(after, "\n")
 			skipList := false // dropping block-list items of a managed key
-			for _, ln := range strings.Split(block, "\n") {
+			for ln := range strings.SplitSeq(block, "\n") {
 				if strings.HasPrefix(strings.TrimSpace(ln), "- ") {
 					if !skipList {
 						kept = append(kept, ln)
@@ -526,8 +526,8 @@ func setFrontmatterFields(content string, fields []fmField, body *string) string
 				}
 				skipList = false
 				key := ""
-				if i := strings.Index(ln, ":"); i >= 0 {
-					key = strings.ToLower(strings.TrimSpace(ln[:i]))
+				if before, _, ok := strings.Cut(ln, ":"); ok {
+					key = strings.ToLower(strings.TrimSpace(before))
 				}
 				if key != "" && managed[key] {
 					skipList = true // also drop any items that belonged to it

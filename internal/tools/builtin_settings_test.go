@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"strings"
 	"testing"
 )
@@ -26,9 +27,7 @@ func (f *fakeSettingsBridge) Apply(patchJSON string) (string, error) {
 	if err := json.Unmarshal([]byte(patchJSON), &patch); err != nil {
 		return "", err
 	}
-	for k, v := range patch {
-		f.state[k] = v
-	}
+	maps.Copy(f.state, patch)
 	return f.Snapshot()
 }
 

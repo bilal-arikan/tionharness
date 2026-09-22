@@ -111,14 +111,12 @@ func TestAdhocCeilingHoldsUnderConcurrentLegs(t *testing.T) {
 	const legs = 64
 	var granted atomic.Int32
 	var wg sync.WaitGroup
-	for i := 0; i < legs; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range legs {
+		wg.Go(func() {
 			if st.spend(delegationCeiling(ctx, DefaultMaxDelegationCalls)) {
 				granted.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if got := int(granted.Load()); got != ceiling {

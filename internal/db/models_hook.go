@@ -1,5 +1,7 @@
 package db
 
+import "slices"
+
 // Hook event names. These mirror Claude Code's hook contract so the same
 // external hook scripts work against TionHarness's native tool loop AND its turn
 // lifecycle. The first two fire AROUND a tool call (native path only, since
@@ -29,12 +31,7 @@ var LifecycleEvents = []string{
 // IsLifecycleEvent reports whether e is a turn/session lifecycle event (i.e. not
 // one of the two tool-call events).
 func IsLifecycleEvent(e string) bool {
-	for _, x := range LifecycleEvents {
-		if x == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(LifecycleEvents, e)
 }
 
 // ValidHookEvent reports whether e is any supported hook event (tool or lifecycle).

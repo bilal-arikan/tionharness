@@ -69,7 +69,7 @@ func formatSessionLine(s db.Session, now int64) string {
 
 // summarySnippet returns the first non-empty line of a rolling summary, capped.
 func summarySnippet(summary string) string {
-	for _, ln := range strings.Split(summary, "\n") {
+	for ln := range strings.SplitSeq(summary, "\n") {
 		if ln = strings.TrimSpace(ln); ln != "" {
 			return clip(ln, 120)
 		}

@@ -845,11 +845,9 @@ func (r *Runtime) startCoordinatorDrain(coordSessionID string, slot *coordSlot, 
 	if r.coordClosing {
 		return false
 	}
-	r.coordWG.Add(1)
-	go func() {
-		defer r.coordWG.Done()
+	r.coordWG.Go(func() {
 		r.drainCoordinator(r.coordCtx, coordSessionID, slot, runCtx, cancelRun, run)
-	}()
+	})
 	return true
 }
 
@@ -875,11 +873,9 @@ func (r *Runtime) startBackgroundTurn(fn func()) bool {
 	if r.spawnClosing {
 		return false
 	}
-	r.spawnWG.Add(1)
-	go func() {
-		defer r.spawnWG.Done()
+	r.spawnWG.Go(func() {
 		fn()
-	}()
+	})
 	return true
 }
 
@@ -1365,7 +1361,6 @@ func (r *Runtime) FireTurnFailed(sessionID, agentID, output string) {
 	r.turnHooksMu.RUnlock()
 	tf := TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output}
 	for _, fn := range hooks {
-		fn := fn
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
 			defer cancel()
@@ -1387,7 +1382,6 @@ func (r *Runtime) FireTurnFinished(sessionID, agentID, output string) {
 	r.turnHooksMu.RUnlock()
 	tf := TurnFinished{SessionID: sessionID, AgentID: agentID, Output: output}
 	for _, fn := range hooks {
-		fn := fn
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
 			defer cancel()
@@ -1421,7 +1415,6 @@ func (r *Runtime) FireUsageRecorded(u UsageRecorded) {
 		return
 	}
 	for _, fn := range hooks {
-		fn := fn
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
 			defer cancel()

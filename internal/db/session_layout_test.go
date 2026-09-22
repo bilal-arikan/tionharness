@@ -185,7 +185,7 @@ func TestHeaderEditLeavesTranscriptFileUntouched(t *testing.T) {
 	defer d.Close()
 	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
 	sess, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "ilk"})
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := d.AddMessage(ctx, Message{SessionID: sess.ID, Role: "user", Text: "m"}); err != nil {
 			t.Fatalf("add msg: %v", err)
 		}

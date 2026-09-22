@@ -61,7 +61,7 @@ func nativeChecklistFromTrace(trace []providers.TraceStep) []tools.TodoSinkItem 
 // bareToolName strips the Interaction MCP namespace a claude-cli trace carries
 // (both tiers) so a bridged call and a native one compare by their plain name.
 func bareToolName(tool string) string {
-	if s := strings.TrimPrefix(tool, interactionToolPrefix); s != tool {
+	if s, ok := strings.CutPrefix(tool, interactionToolPrefix); ok {
 		return s
 	}
 	return strings.TrimPrefix(tool, extendedToolPrefix)

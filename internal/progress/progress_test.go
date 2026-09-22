@@ -73,7 +73,7 @@ func TestLoadEmptyDir(t *testing.T) {
 func TestSaveTrimsLog(t *testing.T) {
 	dir := t.TempDir()
 	var log []LogEntry
-	for i := 0; i < maxLog+10; i++ {
+	for i := range maxLog + 10 {
 		log = append(log, LogEntry{TS: int64(i), Note: "n"})
 	}
 	if err := Save(dir, Record{Log: log}); err != nil {

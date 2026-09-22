@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -27,12 +28,7 @@ func ValidThinkingLevels() []string {
 // IsValidThinkingLevel reports whether level is one of the accepted tokens. The
 // empty string is not.
 func IsValidThinkingLevel(level string) bool {
-	for _, v := range validThinkingLevels {
-		if v == level {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(validThinkingLevels, level)
 }
 
 // StorableThinkingLevels returns the tiers that may legally be STORED for a
@@ -76,12 +72,7 @@ func StorableThinkingLevelsFor(providerKind, model string) []string {
 
 // containsTier reports whether a tier ramp carries one token.
 func containsTier(tiers []string, want string) bool {
-	for _, t := range tiers {
-		if t == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tiers, want)
 }
 
 // ValidateThinkingLevel checks a requested reasoning level twice: that the token
@@ -105,10 +96,8 @@ func ValidateThinkingLevelForProvider(providerKind, model, level string) error {
 		return fmt.Errorf("unknown thinkingLevel %q (one of: %s)", level, strings.Join(validThinkingLevels, ", "))
 	}
 	tiers := StorableThinkingLevelsFor(providerKind, model)
-	for _, t := range tiers {
-		if t == level {
-			return nil
-		}
+	if slices.Contains(tiers, level) {
+		return nil
 	}
 	return fmt.Errorf("thinkingLevel %q is not supported by model %q (supported: %s)",
 		level, model, strings.Join(tiers, ", "))

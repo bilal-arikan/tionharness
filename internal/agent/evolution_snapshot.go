@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,9 +86,7 @@ func (r *Runtime) BuildSnapshot(ctx context.Context) (goals.ConfigSnapshot, erro
 	}
 	if tc, err := r.db.GetWorkspaceToolConfig(ctx); err == nil {
 		snap.Tools.Disabled = append(snap.Tools.Disabled, tc.DisabledTools...)
-		for k, v := range tc.ToolVisibility {
-			snap.Tools.Visibility[k] = v
-		}
+		maps.Copy(snap.Tools.Visibility, tc.ToolVisibility)
 	}
 	if servers, err := r.db.ListMCPServers(ctx); err == nil {
 		for _, s := range servers {

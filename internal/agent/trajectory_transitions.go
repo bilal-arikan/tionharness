@@ -32,7 +32,6 @@ func (r *Runtime) observeTrajectoryTransitions(ev db.TrajectoryChangeEvent) {
 		fn = func(context.Context, TrajectoryTransition) {}
 	}
 	for _, tr := range transitions {
-		tr := tr
 		if tr.Kind == TrajTransitionEnd {
 			// The end-of-run summary (F3) lands before the trajectory_end rules
 			// run, so their prompts and the curator see final numbers.

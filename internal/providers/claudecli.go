@@ -522,7 +522,7 @@ func (c *ClaudeCLI) completeWithArgs(ctx context.Context, args []string, prompt,
 	if req.cliCompaction == nil {
 		req.cliCompaction = newCLICompactionEmitter(req)
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	for range 2 {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
 		if err == nil {
 			foldFailedAttempts(resp, failed)
@@ -662,8 +662,8 @@ func cliBaseEnv(extra ...string) []string {
 	out := make([]string, 0, len(src)+len(extra))
 	for _, kv := range src {
 		k := kv
-		if i := strings.IndexByte(kv, '='); i >= 0 {
-			k = kv[:i]
+		if before, _, ok := strings.Cut(kv, "="); ok {
+			k = before
 		}
 		if k == "CLAUDE_CODE_GIT_BASH_PATH" {
 			out = append(out, kv) // keep: needed to find bash on Windows
@@ -933,8 +933,7 @@ readLoop:
 		}
 	}
 	runErr := cmd.Wait()
-	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 		processExitCode = exitErr.ExitCode()
 	}
 

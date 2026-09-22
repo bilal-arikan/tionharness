@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -45,9 +46,9 @@ func (p *stalledStreamProvider) Complete(ctx context.Context, req providers.Requ
 
 func (p *stalledStreamProvider) Stream(ctx context.Context, req providers.Request, onDelta func(providers.StreamDelta)) (*providers.Response, error) {
 	p.mu.Lock()
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == providers.RoleUser {
-			p.prompts[req.Messages[i].Text] = true
+	for _, v := range slices.Backward(req.Messages) {
+		if v.Role == providers.RoleUser {
+			p.prompts[v.Text] = true
 			break
 		}
 	}

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -81,12 +82,7 @@ type SessionOrigin struct {
 
 // IsValidOriginKind reports whether k is one of the Origin* constants.
 func IsValidOriginKind(k string) bool {
-	for _, o := range originKinds {
-		if o == k {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(originKinds, k)
 }
 
 // validateOrigin rejects an origin with an unknown kind. An empty kind is a bug

@@ -73,7 +73,7 @@ func TestPruneFlowRunsKeepsNewestTerminalRoots(t *testing.T) {
 	ctx := context.Background()
 	d, flowID := gcStore(t)
 	var roots []FlowRun
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		r, _ := d.CreateFlowRun(ctx, FlowRun{FlowID: flowID})
 		roots = append(roots, r)
 	}

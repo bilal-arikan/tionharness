@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"time"
 )
@@ -81,9 +82,7 @@ func (d *DB) ModelResolutions(ctx context.Context) map[string]ModelResolution {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	out := make(map[string]ModelResolution, len(d.modelResolutions))
-	for k, v := range d.modelResolutions {
-		out[k] = v
-	}
+	maps.Copy(out, d.modelResolutions)
 	return out
 }
 
@@ -95,8 +94,6 @@ func (d *DB) loadModelResolutions() error {
 	if err := readJSONFile(d.dir(modelResolutionsFile), &m); err != nil {
 		return nil
 	}
-	for k, v := range m {
-		d.modelResolutions[k] = v
-	}
+	maps.Copy(d.modelResolutions, m)
 	return nil
 }

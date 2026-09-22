@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -675,9 +676,9 @@ func (e *AutomationEngine) turnVars(ctx context.Context, a db.Automation, sess d
 	// produced {{result}}. Useful for carrying the original instruction forward.
 	prevPrompt := ""
 	if msgs, err := e.db.ListMessages(ctx, sess.ID); err == nil {
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if msgs[i].Role == "user" {
-				prevPrompt = msgs[i].Text
+		for _, msg := range slices.Backward(msgs) {
+			if msg.Role == "user" {
+				prevPrompt = msg.Text
 				break
 			}
 		}
@@ -793,12 +794,7 @@ func renderAutomationPrompt(tmpl string, vars map[string]string) string {
 
 // containsTag reports whether tags contains tag (exact match).
 func containsTag(tags []string, tag string) bool {
-	for _, t := range tags {
-		if t == tag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tags, tag)
 }
 
 // automationLabel returns a human label for an automation (name, else trigger tag).

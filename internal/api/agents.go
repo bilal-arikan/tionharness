@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -321,10 +322,8 @@ func (s *Server) agentRunning(ctx context.Context, wsp *workspace.Workspace, age
 		if sess.AgentID == agentID {
 			return true, sess.ID
 		}
-		for _, p := range sess.Participants {
-			if p == agentID {
-				return true, sess.ID
-			}
+		if slices.Contains(sess.Participants, agentID) {
+			return true, sess.ID
 		}
 	}
 	return false, ""

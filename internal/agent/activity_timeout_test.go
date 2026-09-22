@@ -144,7 +144,7 @@ func TestSemanticTrackerDeduplicatesAlternatingSources(t *testing.T) {
 		t.Fatal("first output from each source must count")
 	}
 	seq := tracker.Snapshot().Sequence
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tracker.ObserveStep(a)
 		tracker.ObserveStep(b)
 	}
@@ -179,7 +179,7 @@ func TestSemanticTrackerBoundsSourceState(t *testing.T) {
 	ctx, stop := WithActivityTimeout(context.Background(), 0, time.Second)
 	defer stop()
 	tracker := ActivityTrackerFrom(ctx)
-	for i := 0; i < maxActivitySources+50; i++ {
+	for i := range maxActivitySources + 50 {
 		tracker.ObserveStep(TurnStep{Kind: StepToolDelta, ID: time.Duration(i).String(), Output: "chunk"})
 	}
 	tracker.mu.Lock()
@@ -242,12 +242,10 @@ func TestOperationLeaseStopsOpaqueCall(t *testing.T) {
 func TestActivityStopIsConcurrentAndIdempotent(t *testing.T) {
 	_, stop := WithActivityTimeout(context.Background(), 0, time.Second)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			stop()
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -2,6 +2,7 @@ package goals
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -295,12 +296,7 @@ func RulesForPrompt() string {
 }
 
 func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(l, s)
 }
 
 func hasGuardrail(g db.Goal, metric string) bool {

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -664,12 +665,7 @@ func validateSessionEnums(s Session) error {
 }
 
 func oneOf(v string, allowed ...string) bool {
-	for _, candidate := range allowed {
-		if v == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, v)
 }
 
 func (d *DB) createSessionLocked(s Session) (Session, error) {
@@ -1685,10 +1681,8 @@ func addParticipant(list []string, kind, id string) []string {
 	if kind != AuthorAgent || id == "" || id == UserParticipantID || id == BroadcastRecipientID {
 		return list
 	}
-	for _, x := range list {
-		if x == id {
-			return list
-		}
+	if slices.Contains(list, id) {
+		return list
 	}
 	return append(list, id)
 }

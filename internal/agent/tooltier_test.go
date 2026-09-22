@@ -110,7 +110,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 
 	// Many MCP tools (> limit) → summarised per server, individuals dropped.
 	big := []providers.ToolDef{{Name: "create_agent", Description: "self-mgmt"}}
-	for i := 0; i < lazyCatalogMCPListLimit+5; i++ {
+	for i := range lazyCatalogMCPListLimit + 5 {
 		big = append(big, providers.ToolDef{
 			Name:        fmt.Sprintf("bigsrv__tool%d", i),
 			Description: "an mcp tool",

@@ -15,7 +15,8 @@ func openInheritDB(t *testing.T) (*DB, context.Context) {
 	return d, context.Background()
 }
 
-func strp(s string) *string { return &s }
+//go:fix inline
+func strp(s string) *string { return new(s) }
 
 // TestDeriveAgentInheritsEverything: a fresh child resolves to its parent's
 // values with no overrides, and follows later parent edits.
@@ -35,7 +36,7 @@ func TestDeriveAgentInheritsEverything(t *testing.T) {
 	if child.Soul != "base soul" || child.Model != "sonnet" || child.Provider != "anthropic" || child.Color != "#111111" || !child.MCPEnabled || len(child.Skills) != 1 {
 		t.Fatalf("child did not inherit: %+v", child)
 	}
-	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Soul: strp("new soul"), Model: strp("opus")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Soul: new("new soul"), Model: new("opus")}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := d.GetAgent(ctx, child.ID)
@@ -51,7 +52,7 @@ func TestUpdateAgentMarksAndResetsOverrides(t *testing.T) {
 	parent, _ := d.CreateAgent(ctx, Agent{Name: "Base", Soul: "base soul", Model: "sonnet"})
 	child, _ := d.DeriveAgent(ctx, parent.ID, DeriveAgentOptions{Name: "Kid"})
 
-	got, err := d.UpdateAgent(ctx, child.ID, AgentProfilePatch{Model: strp("haiku"), Name: strp("Kid2")})
+	got, err := d.UpdateAgent(ctx, child.ID, AgentProfilePatch{Model: new("haiku"), Name: new("Kid2")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func TestUpdateAgentMarksAndResetsOverrides(t *testing.T) {
 		t.Fatalf("after model edit: model=%q soul=%q overrides=%v", got.Model, got.Soul, got.Overrides)
 	}
 	// Parent model change does not reach the pinned child field.
-	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Model: strp("opus")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Model: new("opus")}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = d.GetAgent(ctx, child.ID)
@@ -107,7 +108,7 @@ func TestReparentTransitions(t *testing.T) {
 	a, _ := d.CreateAgent(ctx, Agent{Name: "A", Soul: "A soul", Model: "opus"})
 	b, _ := d.CreateAgent(ctx, Agent{Name: "B", Soul: "B soul", Model: "haiku"})
 
-	got, err := d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: strp(a.ID)})
+	got, err := d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: new(a.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,24 +120,24 @@ func TestReparentTransitions(t *testing.T) {
 		t.Fatalf("reset after re-parent should inherit: %q", got.Soul)
 	}
 	// Cycle: A cannot inherit from its own child.
-	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{ParentID: strp(b.ID)}); !errors.Is(err, ErrAgentParentCycle) {
+	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{ParentID: new(b.ID)}); !errors.Is(err, ErrAgentParentCycle) {
 		t.Fatalf("cycle accepted: %v", err)
 	}
-	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{ParentID: strp(a.ID)}); !errors.Is(err, ErrAgentParentCycle) {
+	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{ParentID: new(a.ID)}); !errors.Is(err, ErrAgentParentCycle) {
 		t.Fatalf("self-parent accepted: %v", err)
 	}
-	if _, err := d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: strp("AGT999")}); !errors.Is(err, ErrAgentParentNotFound) {
+	if _, err := d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: new("AGT999")}); !errors.Is(err, ErrAgentParentNotFound) {
 		t.Fatalf("unknown parent accepted: %v", err)
 	}
 	// child → root freezes the effective values.
-	got, err = d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: strp("")})
+	got, err = d.UpdateAgent(ctx, b.ID, AgentProfilePatch{ParentID: new("")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.ParentID != "" || len(got.Overrides) != 0 || got.Soul != "A soul" || got.Model != "haiku" {
 		t.Fatalf("child→root did not materialise: %+v", got)
 	}
-	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{Soul: strp("changed")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, a.ID, AgentProfilePatch{Soul: new("changed")}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ = d.GetAgent(ctx, b.ID); got.Soul != "A soul" {
@@ -150,11 +151,11 @@ func TestDeleteReparentsChildren(t *testing.T) {
 	d, ctx := openInheritDB(t)
 	root, _ := d.CreateAgent(ctx, Agent{Name: "Root", Soul: "root soul", Model: "opus", Color: "#000000"})
 	mid, _ := d.DeriveAgent(ctx, root.ID, DeriveAgentOptions{Name: "Mid"})
-	if _, err := d.UpdateAgent(ctx, mid.ID, AgentProfilePatch{Model: strp("haiku")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, mid.ID, AgentProfilePatch{Model: new("haiku")}); err != nil {
 		t.Fatal(err)
 	}
 	leaf, _ := d.DeriveAgent(ctx, mid.ID, DeriveAgentOptions{Name: "Leaf"})
-	if _, err := d.UpdateAgent(ctx, leaf.ID, AgentProfilePatch{Color: strp("#ffffff")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, leaf.ID, AgentProfilePatch{Color: new("#ffffff")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.DeleteAgent(ctx, mid.ID); err != nil {
@@ -233,7 +234,7 @@ func TestSessionSeedsFromEffectiveAgent(t *testing.T) {
 	d, ctx := openInheritDB(t)
 	parent, _ := d.CreateAgent(ctx, Agent{Name: "Base", Model: "opus", CoordinatorMode: true, CoordinatorWorkflow: "wf"})
 	child, _ := d.DeriveAgent(ctx, parent.ID, DeriveAgentOptions{})
-	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Model: strp("sonnet")}); err != nil {
+	if _, err := d.UpdateAgent(ctx, parent.ID, AgentProfilePatch{Model: new("sonnet")}); err != nil {
 		t.Fatal(err)
 	}
 	s, err := d.CreateSession(ctx, Session{AgentID: child.ID, Title: "t"})

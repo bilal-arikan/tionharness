@@ -1,5 +1,7 @@
 package tools
 
+import "slices"
+
 import "testing"
 
 // TestBridgeableDefsFilteredSkipsHidden verifies the POC hidden-tier exclusion:
@@ -82,10 +84,5 @@ func TestBridgeableDefsIncludesGetViewEagerExtra(t *testing.T) {
 }
 
 func contains2(ss []string, want string) bool {
-	for _, s := range ss {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ss, want)
 }

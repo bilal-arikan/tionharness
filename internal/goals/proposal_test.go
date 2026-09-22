@@ -12,7 +12,7 @@ func proposalGoal() db.Goal {
 		ID: "GOL1", Status: db.GoalStatusActive,
 		Scope:      db.GoalScope{Agents: []string{"AGT1"}},
 		Primary:    db.GoalMetric{Metric: "usage.costUSDPerSession", Direction: "min"},
-		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: f(0.2)}},
+		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: new(0.2)}},
 	}
 }
 

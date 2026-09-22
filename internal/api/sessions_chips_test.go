@@ -54,7 +54,7 @@ func listSessionsPage(t *testing.T, server *Server, wsp *db.DB, query string) ch
 func TestListSessionsChipFilterPagesFilteredSet(t *testing.T) {
 	server, wsp := newWorkspaceServer(t)
 	ctx := context.Background()
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if _, err := wsp.DB.CreateSession(ctx, db.Session{
 			Kind: "worker", Title: fmt.Sprintf("worker-%d", i),
 			Category: db.CategoryWorker, CoordinatorSessionID: "SES1",
@@ -62,7 +62,7 @@ func TestListSessionsChipFilterPagesFilteredSet(t *testing.T) {
 			t.Fatalf("create worker: %v", err)
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := wsp.DB.CreateSession(ctx, db.Session{Title: fmt.Sprintf("chat-%d", i)}); err != nil {
 			t.Fatalf("create chat: %v", err)
 		}

@@ -73,7 +73,7 @@ func TestRegistryCallDeferredAutoActivation(t *testing.T) {
 		}
 	})
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		reg := NewRegistry()
 		reg.ConfigureAutoActivation(NewActiveTools(), nil)
 		res := reg.Call(context.Background(), providers.ToolCall{Name: "still_missing"})

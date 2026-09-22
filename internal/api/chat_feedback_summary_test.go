@@ -84,7 +84,7 @@ func TestFeedbackBlockRendersVerdictsAndAges(t *testing.T) {
 // bounded to the newest few.
 func TestFeedbackBlockCapsEntries(t *testing.T) {
 	var history []db.Message
-	for i := 0; i < feedbackMaxEntries+5; i++ {
+	for i := range feedbackMaxEntries + 5 {
 		history = append(history, usr("q"), asst(fmt.Sprintf("reply-%d", i), -1, ""))
 	}
 	got := recentFeedbackBlock(history)

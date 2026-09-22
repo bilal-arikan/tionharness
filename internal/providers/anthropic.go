@@ -668,13 +668,13 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		return nil, fmt.Errorf("anthropic HTTP %d: %s%s", status, string(raw), raSuffix)
 	}
 
-	var text string
+	var text strings.Builder
 	var calls []ToolCall
 	var trace []TraceStep
 	for _, c := range parsed.Content {
 		switch c.Type {
 		case "text":
-			text += c.Text
+			text.WriteString(c.Text)
 		case "thinking":
 			// Extended-reasoning block (precedes the answer); surface it as a
 			// thinking trace step, mirroring the keyless claude-cli path.
@@ -731,7 +731,7 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 	}
 
 	return &Response{
-		Text:        text,
+		Text:        text.String(),
 		ToolCalls:   calls,
 		RawContent:  rawContent,
 		ContainerID: containerID,

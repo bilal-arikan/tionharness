@@ -81,7 +81,7 @@ func firstLabelInText(text string, ls labelSet) (string, bool) {
 	if i := strings.LastIndex(text, "</think>"); i >= 0 {
 		text = text[i+len("</think>"):]
 	}
-	for _, w := range strings.Fields(text) {
+	for w := range strings.FieldsSeq(text) {
 		if l, ok := ls.match(w); ok {
 			return l, true
 		}

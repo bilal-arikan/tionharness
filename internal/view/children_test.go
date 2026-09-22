@@ -275,7 +275,7 @@ func TestChildrenLeavesAndErrors(t *testing.T) {
 func TestChildrenCapsAtTopN(t *testing.T) {
 	now := time.Now().Unix()
 	var sessions []db.Session
-	for i := 0; i < categoryTopN+15; i++ {
+	for i := range categoryTopN + 15 {
 		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
 	}
 	p := NewProjector(&fakeStore{sessions: sessions})
@@ -295,7 +295,7 @@ func TestNeighborhoodRootLeafMultiParentCycleSelfLoopAndNoCap(t *testing.T) {
 		{ID: "B", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "A"},
 		{ID: "SELF", AgentID: "AG1", UpdatedAt: now, CoordinatorSessionID: "SELF"},
 	}
-	for i := 0; i < categoryTopN+15; i++ {
+	for i := range categoryTopN + 15 {
 		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
 	}
 	p := NewProjector(&fakeStore{

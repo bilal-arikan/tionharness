@@ -103,7 +103,7 @@ func TestFlowRunCounterDeleteFlowReleasesRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateFlow: %v", err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if _, err := d.CreateFlowRun(ctx, FlowRun{FlowID: flow.ID}); err != nil {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
@@ -175,7 +175,7 @@ func TestFlowRunCounterRandomizedOps(t *testing.T) {
 	rng := rand.New(rand.NewSource(1337))
 
 	var ids []string
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		switch rng.Intn(5) {
 		case 0:
 			r, err := d.CreateFlowRun(ctx, FlowRun{FlowID: "FLW1"})

@@ -8,14 +8,15 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-func f(v float64) *float64 { return &v }
+//go:fix inline
+func f(v float64) *float64 { return new(v) }
 
 func validGoal() db.Goal {
 	return db.Goal{
 		Name:       "Kod inceleme ucuzlasın",
 		Status:     db.GoalStatusDraft,
 		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min"},
-		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: f(0.9)}},
+		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: new(0.9)}},
 		Policy:     db.GoalPolicy{Mode: db.GoalModePropose},
 	}
 }
@@ -38,7 +39,7 @@ func TestValidateRules(t *testing.T) {
 		{"bad direction", func(g *db.Goal) { g.Primary.Direction = "up" }, "direction must be"},
 		{"guardrail unknown", func(g *db.Goal) { g.Guardrails[0].Metric = "nope" }, "unknown metric"},
 		{"guardrail no bound", func(g *db.Goal) { g.Guardrails[0].Min = nil }, "needs a min or a max"},
-		{"guardrail min>max", func(g *db.Goal) { g.Guardrails[0].Max = f(0.5) }, "min above max"},
+		{"guardrail min>max", func(g *db.Goal) { g.Guardrails[0].Max = new(0.5) }, "min above max"},
 		{"guardrail equals primary", func(g *db.Goal) { g.Guardrails[0].Metric = "recipe.avgCostUSD" }, "already the primary"},
 		{"guardrail duplicate", func(g *db.Goal) {
 			g.Guardrails = append(g.Guardrails, db.GoalGuardrail{Metric: "recipe.successRate", Max: f(1)})
@@ -94,8 +95,8 @@ func TestFromDraft(t *testing.T) {
 	d := db.Goal{
 		Name: "Ucuz inceleme", Description: "d",
 		Scope:      db.GoalScope{Recipes: []string{"code-review"}},
-		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min", Target: f(0.5)},
-		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: f(0.9)}},
+		Primary:    db.GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min", Target: new(0.5)},
+		Guardrails: []db.GoalGuardrail{{Metric: "recipe.successRate", Min: new(0.9)}},
 		Policy:     db.GoalPolicy{Mode: "off", CooldownHours: 72, MinRuns: 5},
 		// Fields the writer must not decide are ignored even if present.
 		ID: "GOL99", Status: db.GoalStatusActive, CreatedBy: "someone", History: []db.GoalRevision{{At: 1}},

@@ -1,5 +1,7 @@
 package api
 
+import "slices"
+
 // recoverUndeliveredSteer rescues, at turn end, every steer message the turn
 // never actually consumed, and enqueues it as the next message for the session.
 // Two sources, both empty on a normal turn:
@@ -21,10 +23,10 @@ func (s *Server) recoverUndeliveredSteer(run *chatRun, wsID string, req chatReq)
 	if msg := run.takeSteer(); msg != "" {
 		undelivered = append(undelivered, msg)
 	}
-	for i := len(undelivered) - 1; i >= 0; i-- {
+	for _, u := range slices.Backward(undelivered) {
 		s.enqueueMessageFront(wsID, chatReq{
 			SessionID: req.SessionID,
-			Message:   undelivered[i],
+			Message:   u,
 			AgentIDs:  req.AgentIDs,
 		})
 	}

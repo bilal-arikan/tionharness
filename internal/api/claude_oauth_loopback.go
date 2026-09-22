@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -207,18 +208,18 @@ func writeLoopbackPage(w http.ResponseWriter, ok bool, detail string) {
 
 // escHTML escapes a detail string for safe inclusion in the loopback HTML.
 func escHTML(s string) string {
-	r := ""
+	var r strings.Builder
 	for _, ch := range s {
 		switch ch {
 		case '<':
-			r += "&lt;"
+			r.WriteString("&lt;")
 		case '>':
-			r += "&gt;"
+			r.WriteString("&gt;")
 		case '&':
-			r += "&amp;"
+			r.WriteString("&amp;")
 		default:
-			r += string(ch)
+			r.WriteString(string(ch))
 		}
 	}
-	return r
+	return r.String()
 }

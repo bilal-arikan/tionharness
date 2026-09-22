@@ -66,7 +66,7 @@ type Pack struct {
 
 	// Payload is the kind-specific body. It is an opaque JSON object at the
 	// envelope level; install/publish decode it into the typed payloads below.
-	Payload Payload `json:"payload,omitempty"`
+	Payload Payload `json:"payload"`
 
 	// Files are bundled resource files shipped with the pack, keyed by path relative
 	// to the entity's folder (e.g. "references/guide.md"). Consumed by the skill

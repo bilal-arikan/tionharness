@@ -219,10 +219,7 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 
 	timeout := runCodeDefaultTimeout
 	if args.TimeoutSec > 0 {
-		timeout = time.Duration(args.TimeoutSec) * time.Second
-		if timeout > runCodeMaxTimeout {
-			timeout = runCodeMaxTimeout
-		}
+		timeout = min(time.Duration(args.TimeoutSec)*time.Second, runCodeMaxTimeout)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

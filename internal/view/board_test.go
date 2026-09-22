@@ -72,7 +72,7 @@ func TestBoardCardSurfacesEverySignal(t *testing.T) {
 func TestBoardFullListsCardsAndCountsDropped(t *testing.T) {
 	now := time.Now()
 	in := boardFixture(now)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		in.Tasks = append(in.Tasks, db.Task{
 			ID:    "X" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
 			Title: "filler", BoardState: db.BoardTodo, UpdatedAt: now.Unix(),
@@ -187,7 +187,7 @@ func TestBoardFlagsReviewTreadmill(t *testing.T) {
 	// Assert on the treadmill LINE, not the whole view: T10 legitimately appears
 	// in the unrelated "changed in 24h" signal.
 	var line string
-	for _, ln := range strings.Split(txt, "\n") {
+	for ln := range strings.SplitSeq(txt, "\n") {
 		if strings.Contains(ln, "doğrulama bütçesini doldurdu") {
 			line = ln
 			break

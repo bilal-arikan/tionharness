@@ -81,8 +81,8 @@ func agentMutationTools(a db.Agent) (allowed []string, constrained bool, err err
 		}
 		// A trailing-wildcard pattern can still cover a mutation tool (the same
 		// prefix rule patternPredicate applies).
-		if strings.HasSuffix(p, "*") {
-			prefix := strings.TrimSuffix(p, "*")
+		if before, ok := strings.CutSuffix(p, "*"); ok {
+			prefix := before
 			for name := range mutationTools {
 				if strings.HasPrefix(name, prefix) {
 					allowed = append(allowed, name)

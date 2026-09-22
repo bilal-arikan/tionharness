@@ -115,7 +115,7 @@ func PruneInFlightToolResultsMin(msgs []providers.Message, keepRecent, minBytes 
 	out := msgs
 	cloned := false
 	stat := PruneStat{}
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		src := msgs[i]
 		if len(src.ToolResults) == 0 {
 			continue

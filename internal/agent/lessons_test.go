@@ -171,7 +171,7 @@ func TestLessonsContextBlock_AgentPriority(t *testing.T) {
 
 	// Six newer lessons from other agents + one OLDER lesson from AGT1: without
 	// prioritization AGT1's would fall outside the newest-5 window.
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		_, _ = rt.db.AddLesson(db.Lesson{Time: base - int64(10*i), AgentID: "OTHER", Signature: sig("o", i), Text: "other lesson"})
 	}
 	_, _ = rt.db.AddLesson(db.Lesson{Time: base - 900, AgentID: "AGT1", Signature: "mine", Text: "my own hard-won lesson"})
@@ -212,7 +212,7 @@ func TestLessonsContextBlock_LowTrustLessonsAreNotFiltered(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	tun.SetLessonReflect(true)
 	base := time.Now().Unix()
-	for i := 0; i < lessonsInjectCount; i++ {
+	for i := range lessonsInjectCount {
 		addLessonForTest(t, rt, db.Lesson{
 			Time:      base - int64(i),
 			Signature: sig("low", i),

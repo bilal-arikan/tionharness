@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -48,9 +49,9 @@ func needsAutoContinue(steps []TurnStep) bool {
 		return false
 	}
 	// Open todos in the LATEST checklist snapshot → work explicitly unfinished.
-	for i := len(steps) - 1; i >= 0; i-- {
-		if steps[i].Kind == StepTodo {
-			for _, t := range steps[i].Todos {
+	for _, step := range slices.Backward(steps) {
+		if step.Kind == StepTodo {
+			for _, t := range step.Todos {
 				if t.Status == "pending" || t.Status == "in_progress" {
 					return true
 				}
@@ -60,12 +61,12 @@ func needsAutoContinue(steps []TurnStep) bool {
 	}
 	// Ended on a lazy-tool activation (skip trailing narration/thinking to find the
 	// last real action).
-	for i := len(steps) - 1; i >= 0; i-- {
-		switch steps[i].Kind {
+	for _, step := range slices.Backward(steps) {
+		switch step.Kind {
 		case StepText, StepThinking:
 			continue
 		case StepTool:
-			if autoContinueTools[steps[i].Tool] {
+			if autoContinueTools[step.Tool] {
 				return true
 			}
 		}
@@ -125,7 +126,7 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 	}
 	max := r.tun.AutoContinueMax()
 	steps := lastSteps
-	for i := 0; i < max; i++ {
+	for i := range max {
 		if !r.shouldAutoContinue(sessionID, steps) {
 			return
 		}

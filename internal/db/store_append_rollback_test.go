@@ -81,7 +81,7 @@ func TestAddMessageRollsBackWhenAppendFails(t *testing.T) {
 // that entity, not the whole store (and, one level up, not the whole workspace).
 func TestLoadJSONDirSkipsCorruptFile(t *testing.T) {
 	dir := t.TempDir()
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		body := `{"id":"AGT` + strconv.Itoa(i) + `","name":"a"}`
 		if i == 25 {
 			body = `{"id": THIS IS NOT JSON`

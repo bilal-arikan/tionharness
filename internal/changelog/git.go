@@ -44,7 +44,7 @@ func PreviousTag(dir, tag string) (string, error) {
 		return "", err
 	}
 	var seen bool
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		t := strings.TrimSpace(line)
 		if t == "" || !isVersionTag(t) {
 			continue
@@ -103,7 +103,7 @@ func Commits(dir, from, to string) ([]Commit, error) {
 	}
 
 	var commits []Commit
-	for _, rec := range strings.Split(out, recordSep) {
+	for rec := range strings.SplitSeq(out, recordSep) {
 		rec = strings.TrimLeft(rec, "\n")
 		if strings.TrimSpace(rec) == "" {
 			continue

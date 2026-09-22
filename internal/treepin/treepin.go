@@ -201,7 +201,7 @@ func dirtyPaths(dir string, scope []string) ([]string, error) {
 
 func splitZ(s string) []string {
 	var out []string
-	for _, p := range strings.Split(s, "\x00") {
+	for p := range strings.SplitSeq(s, "\x00") {
 		if p != "" {
 			out = append(out, p)
 		}

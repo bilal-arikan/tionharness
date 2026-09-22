@@ -1,5 +1,7 @@
 package db
 
+import "maps"
+
 import "context"
 
 // ListSessionUsage returns a copy of every session's lifetime usage rollup,
@@ -9,9 +11,7 @@ func (d *DB) ListSessionUsage(ctx context.Context) map[string]SessionUsage {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	out := make(map[string]SessionUsage, len(d.sessionUsage))
-	for id, u := range d.sessionUsage {
-		out[id] = u
-	}
+	maps.Copy(out, d.sessionUsage)
 	return out
 }
 

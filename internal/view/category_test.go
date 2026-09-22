@@ -9,7 +9,7 @@ import (
 // sessionMemberHandles builds n session handles for a category fixture.
 func sessionMemberHandles(n int) []Handle {
 	hs := make([]Handle, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := fmt.Sprintf("SES%d", i)
 		hs = append(hs, Handle{Label: "session:" + id, Ref: Ref{Kind: KindSession, ID: id}, Level: LevelCard})
 	}
@@ -114,7 +114,7 @@ func TestCategoryFullListsMembersCardDoesNot(t *testing.T) {
 // view is not showing, and reporting one of them understates the gap.
 func TestCategoryFullElisionAddsToTopNOverflow(t *testing.T) {
 	members := make([]Handle, 0, categoryTopN+7)
-	for i := 0; i < categoryTopN+7; i++ {
+	for i := range categoryTopN + 7 {
 		members = append(members, Handle{
 			Label: strings.Repeat("uzun-oturum-basligi-", 6),
 			Ref:   Ref{Kind: KindSession, ID: "SES" + string(rune('A'+i%26))},

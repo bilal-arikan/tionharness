@@ -158,7 +158,7 @@ func TestListIsOrderedAndStable(t *testing.T) {
 		t.Fatalf("unordered by root: %+v", first)
 	}
 	// Map iteration is randomised per range; the API must not reshuffle on poll.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if got := m.List(); got[0].Root != first[0].Root || got[2].Root != first[2].Root {
 			t.Fatal("List order changed between calls")
 		}

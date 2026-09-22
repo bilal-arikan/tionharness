@@ -34,8 +34,7 @@ func WithUsage(err error, model string, u Usage, providerCalls int) error {
 	if err == nil || u == (Usage{}) {
 		return err
 	}
-	var existing *UsageError
-	if errors.As(err, &existing) {
+	if _, ok := errors.AsType[*UsageError](err); ok {
 		return err
 	}
 	return &UsageError{Err: err, Model: model, Usage: u, ProviderCalls: providerCalls}
@@ -43,8 +42,7 @@ func WithUsage(err error, model string, u Usage, providerCalls int) error {
 
 // UsageFromError reports the billable usage carried by a failed turn, if any.
 func UsageFromError(err error) (*UsageError, bool) {
-	var ue *UsageError
-	if errors.As(err, &ue) {
+	if ue, ok := errors.AsType[*UsageError](err); ok {
 		return ue, true
 	}
 	return nil, false

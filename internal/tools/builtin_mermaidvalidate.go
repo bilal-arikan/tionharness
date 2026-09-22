@@ -69,7 +69,7 @@ func (MermaidValidateTool) Call(_ context.Context, input json.RawMessage) (strin
 	// 1) Diagram type header: first meaningful line (skip blank + %% comments and
 	// an optional ```mermaid fence) must start with a known type.
 	dtype := ""
-	for _, raw := range strings.Split(code, "\n") {
+	for raw := range strings.SplitSeq(code, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "%%") || strings.HasPrefix(line, "```") {
 			continue

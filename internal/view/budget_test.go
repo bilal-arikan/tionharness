@@ -60,7 +60,7 @@ func TestBudgetBodyListsModelRows(t *testing.T) {
 
 func TestBudgetCardCapsModelsAndCountsElided(t *testing.T) {
 	in := budgetFixture()
-	for i := 0; i < budgetModelRows+3; i++ {
+	for i := range budgetModelRows + 3 {
 		in.Rollup.Rows = append(in.Rollup.Rows, billing.Row{
 			Provider: "p", Model: string(rune('a' + i)), CostUSD: 0.01, Priced: true,
 			Stat: db.KindStat{Calls: 1, InputTokens: 100},

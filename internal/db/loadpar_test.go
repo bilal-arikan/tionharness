@@ -39,7 +39,7 @@ func TestParallelLoadReturnsFirstErrorByInputOrder(t *testing.T) {
 	errLate := errors.New("late")
 	errEarly := errors.New("early")
 
-	for attempt := 0; attempt < 50; attempt++ {
+	for attempt := range 50 {
 		in := make([]int, 100)
 		for i := range in {
 			in[i] = i
@@ -121,7 +121,7 @@ func TestConcurrentBootLoadsEverySession(t *testing.T) {
 
 	const sessions = 60
 	want := map[string][]string{} // session id -> message texts
-	for i := 0; i < sessions; i++ {
+	for i := range sessions {
 		s, err := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: fmt.Sprintf("S%d", i)})
 		if err != nil {
 			t.Fatalf("create session %d: %v", i, err)

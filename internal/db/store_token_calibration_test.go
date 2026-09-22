@@ -29,7 +29,7 @@ func TestObserveTokenCalibrationRunsWindowedMean(t *testing.T) {
 	}
 	// Past the window the newest sample keeps at least 1/window of the weight:
 	// 20 identical samples then one outlier moves the mean by outlier/window.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if _, err := d.ObserveTokenCalibration(ctx, TokenCalibration{Key: key, Tokens: 200}); err != nil {
 			t.Fatal(err)
 		}

@@ -165,10 +165,10 @@ func backlogSignatures(path string) (map[string]bool, error) {
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		const marker = "<!-- insight-sig:"
-		if i := strings.Index(line, marker); i >= 0 {
-			rest := line[i+len(marker):]
-			if j := strings.Index(rest, " -->"); j >= 0 {
-				if sig := strings.TrimSpace(rest[:j]); sig != "" {
+		if _, after, ok := strings.Cut(line, marker); ok {
+			rest := after
+			if before, _, ok := strings.Cut(rest, " -->"); ok {
+				if sig := strings.TrimSpace(before); sig != "" {
 					out[sig] = true
 				}
 			}

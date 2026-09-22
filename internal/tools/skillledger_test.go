@@ -98,7 +98,7 @@ func TestUseSkillForceResendsAndRearms(t *testing.T) {
 func TestUseSkillWithoutLedgerAlwaysSendsBody(t *testing.T) {
 	lib := &stubSkillLib{body: "STEP ONE: do the thing."}
 	tool := NewUseSkillTool(lib)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if out := callSkill(t, context.Background(), tool, "doctrine", false); !strings.Contains(out, lib.body) {
 			t.Fatalf("load %d without a ledger must carry the body, got %q", i, out)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -34,13 +35,9 @@ func newDecisionStub(t *testing.T) *decisionStub {
 		s.bodies = append(s.bodies, string(body))
 		status := s.status
 		noul := make(map[string]float64, len(s.noul))
-		for k, v := range s.noul {
-			noul[k] = v
-		}
+		maps.Copy(noul, s.noul)
 		choice := make(map[string]string, len(s.choice))
-		for k, v := range s.choice {
-			choice[k] = v
-		}
+		maps.Copy(choice, s.choice)
 		s.mu.Unlock()
 		if status != 0 {
 			w.WriteHeader(status)

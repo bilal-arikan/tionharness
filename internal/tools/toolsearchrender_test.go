@@ -22,7 +22,7 @@ func toolSearchProbeCatalog() []providers.ToolDef {
 		{Name: "alpha_probe", Description: "short probe desc"},
 		{Name: "mcp__srv__probe", Description: "mcp probe desc"},
 	}
-	for i := 0; i < 35; i++ {
+	for i := range 35 {
 		cat = append(cat, providers.ToolDef{Name: fmt.Sprintf("bulk_probe_%02d", i), Description: "bulk probe desc"})
 	}
 	return cat

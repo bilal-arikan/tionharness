@@ -25,7 +25,7 @@ func seedTranscript(t *testing.T, n int) (*DB, Session, []string) {
 		t.Fatalf("create session: %v", err)
 	}
 	ids := make([]string, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m, err := d.AddMessage(ctx, Message{SessionID: sess.ID, Role: "user", Text: "m"})
 		if err != nil {
 			t.Fatalf("append %d: %v", i, err)

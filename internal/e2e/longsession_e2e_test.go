@@ -30,7 +30,7 @@ func TestLongSession_CompactsWhenOverBudget(t *testing.T) {
 	ctx := context.Background()
 	const backlog = 24
 	pad := strings.Repeat("context ", 12)
-	for i := 0; i < backlog; i++ {
+	for i := range backlog {
 		role := providers.RoleUser
 		if i%2 == 1 {
 			role = providers.RoleAssistant

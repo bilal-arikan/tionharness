@@ -39,7 +39,7 @@ func TestNotifyNewAnomalies(t *testing.T) {
 	// 3 calls, big prompt spend, almost no cache reads → warn low_cache_hit.
 	// The majority-thinking output also raises info high_thinking, which must be
 	// excluded from toasts.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = rt.db.AppendDebugEvent(sess.ID, db.DebugEvent{
 			Type: db.DebugLLMCall, Model: "m", In: 10000, Out: 3000, Think: 2000, CacheRead: 500,
 		}, 0)

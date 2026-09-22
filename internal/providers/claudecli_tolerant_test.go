@@ -71,7 +71,7 @@ func TestCLIParserSalvagesEventAndReportsDroppedField(t *testing.T) {
 
 func TestCLIParserSummarizesRepeatedParseDrops(t *testing.T) {
 	p := newCLIParser("", nil)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		p.feed(`{"type":"assistant"`) // unterminated → not salvageable
 	}
 	p.feed(`{"type":"result","result":"done","session_id":"s"}`)

@@ -91,10 +91,8 @@ func TestDeleteLiveRollbackIsNotObservable(t *testing.T) {
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	var misses atomic.Int64
-	for i := 0; i < 4; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 4 {
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -111,10 +109,10 @@ func TestDeleteLiveRollbackIsNotObservable(t *testing.T) {
 					misses.Add(1)
 				}
 			}
-		}()
+		})
 	}
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if err := m.Delete("WS2"); err == nil {
 			close(stop)
 			wg.Wait()

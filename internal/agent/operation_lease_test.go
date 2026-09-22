@@ -58,8 +58,7 @@ func TestRunWithOperationLeaseRecoversOperationPanic(t *testing.T) {
 	if result != "" {
 		t.Fatalf("panic result = %q, want zero value", result)
 	}
-	var panicErr *OperationPanicError
-	if !errors.As(err, &panicErr) {
+	if _, ok := errors.AsType[*OperationPanicError](err); !ok {
 		t.Fatalf("error = %T %v, want OperationPanicError", err, err)
 	}
 	if !strings.Contains(err.Error(), "provider exploded") || !strings.Contains(err.Error(), "TestRunWithOperationLeaseRecoversOperationPanic") {
@@ -72,8 +71,7 @@ func TestRunWithOperationLeasePanicReleasesAdmissionAndAccounting(t *testing.T) 
 	_, err := RunWithOperationLease(context.Background(), func(context.Context) (string, error) {
 		panic("slot test")
 	})
-	var panicErr *OperationPanicError
-	if !errors.As(err, &panicErr) {
+	if _, ok := errors.AsType[*OperationPanicError](err); !ok {
 		t.Fatalf("panic error = %v", err)
 	}
 	waitForOperationLeaseCleanup(t)
@@ -86,7 +84,7 @@ func TestRunWithOperationLeasePanicReleasesAdmissionAndAccounting(t *testing.T) 
 }
 
 func TestRunWithOperationLeaseCancellationWinsPanicResult(t *testing.T) {
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		parent, cancel := context.WithCancelCause(context.Background())
 		ctx, stop := WithActivityTimeout(parent, 0, time.Second)
 		started := make(chan struct{})
@@ -112,7 +110,7 @@ func TestRunWithOperationLeaseCancellationWinsPanicResult(t *testing.T) {
 }
 
 func TestRunWithOperationLeaseCancellationWinsReadyResult(t *testing.T) {
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		parent, cancel := context.WithCancelCause(context.Background())
 		ctx, stop := WithActivityTimeout(parent, 0, time.Second)
 		started := make(chan struct{})
@@ -146,7 +144,7 @@ func TestRunWithOperationLeaseAdmissionIsBoundedAndRecovers(t *testing.T) {
 	var callers sync.WaitGroup
 	callers.Add(maxConcurrentOperationLeases)
 	errs := make(chan error, maxConcurrentOperationLeases)
-	for i := 0; i < maxConcurrentOperationLeases; i++ {
+	for range maxConcurrentOperationLeases {
 		go func() {
 			defer callers.Done()
 			ctx, stop := WithActivityTimeout(context.Background(), 0, 40*time.Millisecond)

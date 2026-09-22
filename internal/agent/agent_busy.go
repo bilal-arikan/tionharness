@@ -1,5 +1,7 @@
 package agent
 
+import "slices"
+
 import "context"
 
 // ExternalActiveSessions reports session ids with a turn in flight that this
@@ -44,10 +46,8 @@ func (r *Runtime) AgentBusy(ctx context.Context, agentID string) (bool, string) 
 		if sess.AgentID == agentID {
 			return true, sess.ID
 		}
-		for _, p := range sess.Participants {
-			if p == agentID {
-				return true, sess.ID
-			}
+		if slices.Contains(sess.Participants, agentID) {
+			return true, sess.ID
 		}
 	}
 	return false, ""

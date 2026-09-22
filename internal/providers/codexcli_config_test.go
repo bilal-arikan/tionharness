@@ -315,7 +315,7 @@ func TestCodexConfigDeterministicAcrossRenders(t *testing.T) {
 		"b": {Command: "b"},
 	}}
 	first := renderCodexConfig(cfg)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if got := renderCodexConfig(cfg); got != first {
 			t.Fatalf("render is not deterministic on iteration %d:\n%s\nvs\n%s", i, got, first)
 		}

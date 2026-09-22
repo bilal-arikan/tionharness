@@ -87,7 +87,7 @@ func TestCatalogAllowsDifferentPackagesInParallel(t *testing.T) {
 			p.Catalog(context.Background(), []ServerConfig{cfg})
 		}(pkg)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):

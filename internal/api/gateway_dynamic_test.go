@@ -178,7 +178,7 @@ func TestGatewayToolSearchTagsBundle(t *testing.T) {
 	if !strings.Contains(res.Text, want) {
 		t.Fatalf("tool_search row must carry its bundle tag %q, got:\n%s", want, res.Text)
 	}
-	for _, line := range strings.Split(res.Text, "\n") {
+	for line := range strings.SplitSeq(res.Text, "\n") {
 		if strings.Contains(line, "secret_click") && strings.Contains(line, "[mcp:") {
 			t.Fatalf("MCP-namespaced tools must not be tagged on the gateway path, got %q", line)
 		}

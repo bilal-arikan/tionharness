@@ -160,7 +160,7 @@ func TestHandleListAgentsPagination(t *testing.T) {
 		t.Fatalf("open db: %v", err)
 	}
 	defer database.Close()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := database.CreateAgent(ctx, db.Agent{Name: fmt.Sprintf("Agent%d", i), Provider: "anthropic"}); err != nil {
 			t.Fatalf("create agent: %v", err)
 		}

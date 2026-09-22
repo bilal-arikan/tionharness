@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,9 +48,7 @@ func OpenGlobalModelResolutions(dataDir string) (*GlobalModelResolutions, error)
 		}
 		return nil, fmt.Errorf("read %s: %w", g.path, err)
 	}
-	for k, v := range m {
-		g.m[k] = v
-	}
+	maps.Copy(g.m, m)
 	return g, nil
 }
 

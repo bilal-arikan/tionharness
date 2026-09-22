@@ -67,7 +67,7 @@ func TestNativeCompactionResumeFieldsRequireASessionReload(t *testing.T) {
 	}
 
 	rawHistory := make([]db.Message, 0, reloadHistoryLen)
-	for i := 0; i < reloadHistoryLen; i++ {
+	for i := range reloadHistoryLen {
 		role := providers.RoleUser
 		if i%2 == 1 {
 			role = providers.RoleAssistant

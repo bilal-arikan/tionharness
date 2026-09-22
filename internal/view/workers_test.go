@@ -166,7 +166,7 @@ func TestWorkersIdleCompletedFleetGetsNoSpawnNudge(t *testing.T) {
 func TestWorkersWideFleetIsCappedButCountsStayWhole(t *testing.T) {
 	now := time.Now()
 	in := WorkersInput{Now: now}
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		in.Workers = append(in.Workers, Worker{
 			SessionID: fmt.Sprintf("SESf%d", i), AgentName: fmt.Sprintf("done%d", i), Summary: "ok",
 		})

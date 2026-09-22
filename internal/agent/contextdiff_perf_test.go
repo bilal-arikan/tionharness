@@ -16,7 +16,7 @@ import (
 func driftPrefixes(n int) (frozen, live string) {
 	var f, l strings.Builder
 	const body = "common line one\ncommon line two\ncommon line three"
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := itoa(i)
 		f.WriteString("# block " + id + " old\n" + body + "\nold tail " + id + "\n\n")
 		l.WriteString("# block " + id + " new\n" + body + "\nnew tail " + id + "\n\n")

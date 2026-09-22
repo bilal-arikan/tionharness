@@ -152,10 +152,10 @@ func TestSettingsPatch_JSONTagsMatchGoldenList(t *testing.T) {
 
 func patchJSONTags(t *testing.T) []string {
 	t.Helper()
-	typ := reflect.TypeOf(settings.Patch{})
+	typ := reflect.TypeFor[settings.Patch]()
 	tags := make([]string, 0, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
+	for f := range typ.Fields() {
+		f := f
 		tag := f.Tag.Get("json")
 		name, _, _ := strings.Cut(tag, ",")
 		if name == "" || name == "-" {

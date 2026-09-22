@@ -68,7 +68,7 @@ func TestBoutsCapsCountByFoldingTheOldest(t *testing.T) {
 	base := int64(1_700_000_000)
 	// One timestamp per hour: every one of them is its own bout.
 	var times []int64
-	for i := int64(0); i < MaxBouts+10; i++ {
+	for i := range int64(MaxBouts + 10) {
 		times = append(times, base+i*3600)
 	}
 	got := Bouts(times, DefaultBoutGapSec)

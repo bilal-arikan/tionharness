@@ -84,7 +84,7 @@ func TestLimitErrorText(t *testing.T) {
 }
 
 func TestRetryBackoff_BoundedAndGrowing(t *testing.T) {
-	for attempt := 0; attempt < 8; attempt++ {
+	for attempt := range 8 {
 		d := retryBackoff(attempt)
 		if d <= 0 {
 			t.Errorf("retryBackoff(%d) = %v, want > 0", attempt, d)

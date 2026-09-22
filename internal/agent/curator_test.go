@@ -33,7 +33,7 @@ func TestCuratorArchivesAgentMadeAndSuggestsUserMade(t *testing.T) {
 	expiredAgent := mk(db.Automation{Name: "old", CreatedBy: "automation:AUT1", ExpiresAt: now - 10})
 	healthy := mk(db.Automation{Name: "fine", CreatedBy: "AGT1"})
 	for _, a := range []db.Automation{exhaustedAgent, exhaustedUser, pinned} {
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			if err := rt.db.RecordAutomationFire(ctx, a.ID, "SESx", ""); err != nil {
 				t.Fatal(err)
 			}

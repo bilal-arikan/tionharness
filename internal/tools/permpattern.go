@@ -116,7 +116,7 @@ func DeriveGrantRule(tool, arg string) PermRule {
 // leading env-assignments so "GIT_PAGER=cat git log" → "git". Returns "" when
 // nothing usable is found.
 func commandHead(cmd string) string {
-	for _, f := range strings.Fields(cmd) {
+	for f := range strings.FieldsSeq(cmd) {
 		if strings.Contains(f, "=") && !strings.HasPrefix(f, "-") {
 			continue // VAR=value prefix
 		}

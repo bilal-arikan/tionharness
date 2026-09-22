@@ -240,7 +240,7 @@ func TestWaitForMCPServersBypassesOpenBreakerAndClearsOnSuccess(t *testing.T) {
 	enableMCPServer(t, rt, "fake", backend.URL)
 
 	// Drive the breaker open, as a run of failed catalog builds would.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		rt.mcpFailStreaks.Note("fake")
 	}
 	if isOpen, _, _ := rt.mcpFailStreaks.Open("fake"); !isOpen {

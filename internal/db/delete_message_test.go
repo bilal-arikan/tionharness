@@ -19,7 +19,7 @@ func TestDeleteMessage(t *testing.T) {
 	sess, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "T"})
 
 	var ids []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		m, _ := d.AddMessage(ctx, Message{SessionID: sess.ID, Role: "user", Text: "m"})
 		ids = append(ids, m.ID)
 	}

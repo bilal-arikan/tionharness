@@ -115,7 +115,7 @@ func rejectWindowsPathTricks(path string) error {
 			return fmt.Errorf("path %q uses the Windows NT/device namespace (%s), which is not allowed in a confined sandbox: use a plain drive-qualified path (C:\\...) or a path relative to the working directory", path, prefix)
 		}
 	}
-	for _, elem := range strings.Split(slashed, `\`) {
+	for elem := range strings.SplitSeq(slashed, `\`) {
 		if strings.EqualFold(elem, "GLOBALROOT") {
 			return fmt.Errorf("path %q addresses a GLOBALROOT device path, which is not allowed in a confined sandbox: use a plain drive-qualified path (C:\\...) or a path relative to the working directory", path)
 		}

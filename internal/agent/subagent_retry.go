@@ -49,12 +49,10 @@ func (r *Runtime) resolveRetryLineage(ctx context.Context, parentSessionID, retr
 	if prev.RunState == runStateRunning {
 		return "", 0, fmt.Errorf("retry_of %s is still running; stop it or wait for it to finish before retrying", retryOf)
 	}
-	attempt = prev.Attempt
-	if attempt < 1 {
+	attempt = max(prev.Attempt,
 		// Runs that predate the lineage fields carry no attempt number; they are the
 		// first try by definition.
-		attempt = 1
-	}
+		1)
 	return prev.ID, attempt + 1, nil
 }
 

@@ -12,11 +12,11 @@ func TestUILanguageValidation(t *testing.T) {
 		patch Patch
 		ok    bool
 	}{
-		{"ui empty is the follow state", Patch{UILanguage: strptr("")}, true},
-		{"ui en", Patch{UILanguage: strptr("en")}, true},
-		{"ui tr", Patch{UILanguage: strptr("tr")}, true},
-		{"ui unknown rejected", Patch{UILanguage: strptr("de")}, false},
-		{"agent language may not be empty", Patch{Language: strptr("")}, false},
+		{"ui empty is the follow state", Patch{UILanguage: new("")}, true},
+		{"ui en", Patch{UILanguage: new("en")}, true},
+		{"ui tr", Patch{UILanguage: new("tr")}, true},
+		{"ui unknown rejected", Patch{UILanguage: new("de")}, false},
+		{"agent language may not be empty", Patch{Language: new("")}, false},
 	}
 	for _, c := range cases {
 		if err := Validate(c.patch); (err == nil) != c.ok {

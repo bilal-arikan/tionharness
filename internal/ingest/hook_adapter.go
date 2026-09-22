@@ -68,7 +68,6 @@ func (hookAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 		for _, event := range events {
 			for _, entry := range hooksMap[event] {
 				for ci, cmd := range entry.Hooks {
-					cmd := cmd
 					if strings.TrimSpace(cmd.Command) == "" {
 						continue
 					}

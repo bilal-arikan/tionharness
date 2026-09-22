@@ -155,7 +155,7 @@ func TestProbeRelistOrdering(t *testing.T) {
 	var aCount, bCount, noStream, raceSeen int
 	var deltas []time.Duration
 
-	for i := 0; i < iters; i++ {
+	for i := range iters {
 		var verdict string
 		backend := newProbeBackend(token, holdMs, func(s string) { verdict = s })
 		srv := NewServer(backend, nil)

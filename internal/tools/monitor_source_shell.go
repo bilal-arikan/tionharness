@@ -54,7 +54,7 @@ func (s *shellSource) Poll(_ context.Context) ([]MonitorEvent, bool, string, err
 			Payload: "[earlier output rolled off the 256KB buffer before the monitor read it]",
 		})
 	}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue

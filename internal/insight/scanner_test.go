@@ -41,14 +41,14 @@ func TestScanAgeFilterSkipsOldSessions(t *testing.T) {
 // whatever `emit` returns, so the whole pipeline is exercised without a model.
 // callCount is atomic because the scanner runs Analyze concurrently (bounded pool).
 type fakeAnalyzer struct {
-	callCount int64
+	callCount atomic.Int64
 	emit      func(req AnalysisRequest) []Finding
 }
 
-func (f *fakeAnalyzer) calls() int { return int(atomic.LoadInt64(&f.callCount)) }
+func (f *fakeAnalyzer) calls() int { return int(f.callCount.Load()) }
 
 func (f *fakeAnalyzer) Analyze(_ context.Context, req AnalysisRequest) ([]Finding, error) {
-	atomic.AddInt64(&f.callCount, 1)
+	f.callCount.Add(1)
 	if f.emit != nil {
 		return f.emit(req), nil
 	}
@@ -254,7 +254,7 @@ func TestScanMaxAnalyzedCaps(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Five sessions that all trip the tool-errors prefilter.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		s, _ := database.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "err"})
 		if _, err := database.AddMessage(ctx, db.Message{SessionID: s.ID, Role: "assistant", Steps: stepsJSON("error")}); err != nil {
 			t.Fatal(err)

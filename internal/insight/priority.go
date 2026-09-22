@@ -40,10 +40,7 @@ func (f Finding) PriorityScore() int {
 	case "med", "medium":
 		sev = sevWeightMed
 	}
-	occ := f.Occurrences
-	if occ > occurrenceCap {
-		occ = occurrenceCap
-	}
+	occ := min(f.Occurrences, occurrenceCap)
 	score := sev + occ
 	if f.Regressed {
 		score += regressedBonus

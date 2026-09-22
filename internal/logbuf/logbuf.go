@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"unicode/utf8"
@@ -92,12 +93,12 @@ func (b *Buffer) Collect(limit int, keep func(Entry) bool) []Entry {
 		cap = len(b.entries)
 	}
 	out := make([]Entry, 0, cap)
-	for i := len(b.entries) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(b.entries) {
 		if limit > 0 && len(out) >= limit {
 			break
 		}
-		if keep(b.entries[i]) {
-			out = append(out, b.entries[i])
+		if keep(v) {
+			out = append(out, v)
 		}
 	}
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {

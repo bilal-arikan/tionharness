@@ -116,9 +116,9 @@ func TestPostJSON_TransportError(t *testing.T) {
 
 func TestPostJSON_RetriesThenSucceeds(t *testing.T) {
 	withRetry(t, retryPolicy{maxAttempts: 4, baseDelay: time.Millisecond, maxDelay: 2 * time.Millisecond})
-	var calls int32
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&calls, 1) < 3 {
+		if calls.Add(1) < 3 {
 			w.WriteHeader(http.StatusServiceUnavailable) // 503 → retryable
 			return
 		}
@@ -137,16 +137,16 @@ func TestPostJSON_RetriesThenSucceeds(t *testing.T) {
 	if status != http.StatusOK || !out.OK {
 		t.Errorf("status=%d ok=%v, want 200 true", status, out.OK)
 	}
-	if got := atomic.LoadInt32(&calls); got != 3 {
+	if got := calls.Load(); got != 3 {
 		t.Errorf("server saw %d calls, want 3 (2 retries)", got)
 	}
 }
 
 func TestPostJSON_RetryExhaustionReturnsLastResponse(t *testing.T) {
 	withRetry(t, retryPolicy{maxAttempts: 2, baseDelay: time.Millisecond, maxDelay: 2 * time.Millisecond})
-	var calls int32
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"error":"down"}`))
 	}))
@@ -163,16 +163,16 @@ func TestPostJSON_RetryExhaustionReturnsLastResponse(t *testing.T) {
 	if string(raw) != `{"error":"down"}` {
 		t.Errorf("raw = %q", string(raw))
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Errorf("server saw %d calls, want 2", got)
 	}
 }
 
 func TestPostJSON_NonRetryableStatusNotRetried(t *testing.T) {
 	withRetry(t, retryPolicy{maxAttempts: 4, baseDelay: time.Millisecond, maxDelay: 2 * time.Millisecond})
-	var calls int32
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		w.WriteHeader(http.StatusBadRequest) // 400 → not retryable
 		_, _ = w.Write([]byte(`{}`))
 	}))
@@ -186,7 +186,7 @@ func TestPostJSON_NonRetryableStatusNotRetried(t *testing.T) {
 	if status != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", status)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Errorf("server saw %d calls, want 1 (no retry)", got)
 	}
 }

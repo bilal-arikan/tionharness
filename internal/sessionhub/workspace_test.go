@@ -39,7 +39,7 @@ func TestWorkspacePublishAndReplay(t *testing.T) {
 // reports ok=false (reset) instead of a silent gap.
 func TestWorkspaceRingIsLargerAndResetsWhenExceeded(t *testing.T) {
 	h := New("e", 4) // session ring 4 → workspace ring 16
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		h.PublishWorkspace("WS1", KindWSFlowRun, raw("s"))
 	}
 	if evs, ok := h.ReplayWorkspace("WS1", 4); !ok || len(evs) != 16 {

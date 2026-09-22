@@ -138,7 +138,7 @@ func codexPluginAlreadyPresent(msg string) bool {
 // codexPluginErrLine reduces a codex CLI failure to its most useful single line,
 // so a trace note stays readable instead of carrying a full usage dump.
 func codexPluginErrLine(msg string) string {
-	for _, line := range strings.Split(msg, "\n") {
+	for line := range strings.SplitSeq(msg, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

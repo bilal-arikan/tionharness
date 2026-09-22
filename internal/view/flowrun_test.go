@@ -151,7 +151,7 @@ func TestFlowRunLongChainReportsElision(t *testing.T) {
 	in.Graph.Nodes = nil
 	in.State.Trace = nil
 	t0 := now.Add(-time.Minute).Unix()
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		id := "n" + string(rune('a'+i%26))
 		in.Graph.Nodes = append(in.Graph.Nodes, orchestration.Node{ID: id, Type: orchestration.NodeTransform})
 		in.State.Trace = append(in.State.Trace, orchestration.TraceEntry{

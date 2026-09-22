@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -72,8 +73,8 @@ func requestHasTool(req providers.Request, name string) bool {
 }
 
 func lastToolResult(req providers.Request) (providers.ToolResult, bool) {
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		results := req.Messages[i].ToolResults
+	for _, v := range slices.Backward(req.Messages) {
+		results := v.ToolResults
 		if len(results) > 0 {
 			return results[len(results)-1], true
 		}
@@ -196,7 +197,7 @@ func TestLoop_ReactiveCompact(t *testing.T) {
 	// Enough alternating turns that compaction finds an assistant fold boundary
 	// at or before len-reactiveKeepRecent.
 	var msgs []providers.Message
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		msgs = append(msgs, providers.Message{Role: providers.RoleUser, Text: "u"})
 		msgs = append(msgs, providers.Message{Role: providers.RoleAssistant, Text: "a"})
 	}

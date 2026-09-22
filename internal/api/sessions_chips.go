@@ -1,6 +1,7 @@
 package api
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -64,12 +65,7 @@ var sessionChipKeys = []string{
 }
 
 func isSessionChipKey(k string) bool {
-	for _, c := range sessionChipKeys {
-		if c == k {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(sessionChipKeys, k)
 }
 
 // kindChipKey maps a Session.Kind to the chip that owns it (mirrors the
@@ -120,7 +116,7 @@ func parseChips(raw string, given bool) (map[string]bool, bool) {
 		return nil, false
 	}
 	sel := make(map[string]bool)
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		if k := strings.TrimSpace(part); k != "" {
 			sel[k] = true
 		}

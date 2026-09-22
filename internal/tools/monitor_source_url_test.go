@@ -78,7 +78,7 @@ func TestURLSourceRespectsInterval(t *testing.T) {
 
 	src := newLoopbackURLSource(t, srv.URL, time.Hour)
 	src.Poll(context.Background()) // baseline, consumes the one allowed fetch
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		src.Poll(context.Background())
 	}
 	if hits != 1 {
@@ -109,7 +109,7 @@ func TestURLSourceTerminatesAfterRepeatedFailures(t *testing.T) {
 	src := newLoopbackURLSource(t, url, 0)
 	var done bool
 	var reason string
-	for i := 0; i < urlSourceMaxFailures; i++ {
+	for i := range urlSourceMaxFailures {
 		src.next = time.Now()
 		var err error
 		_, done, reason, err = src.Poll(context.Background())

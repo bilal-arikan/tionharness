@@ -163,11 +163,9 @@ func TestCLICompactionSuccessConcurrentDuplicateIsIdempotent(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, 32)
 	for range 32 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			errs <- d.AppendCLICompactionEvent(session.ID, "agent", ev)
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)
@@ -242,7 +240,7 @@ func TestCLICompactionSuccessDedupeSurvivesPruning(t *testing.T) {
 	if err := d.appendCLICompactionEvent(session.ID, "agent", old, 4); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		if err := d.AppendDebugEvent(session.ID, DebugEvent{Type: DebugTurn, Name: "filler"}, 4); err != nil {
 			t.Fatal(err)
 		}
@@ -359,7 +357,7 @@ func TestCLICompactionSuccessCheckpointAndJournalStayBounded(t *testing.T) {
 	}
 	const cap = 16
 	var last providers.CLICompactionEvent
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		last = providers.CLICompactionEvent{
 			Phase: providers.CLICompactionSuccess, Provider: "claude-cli",
 			AttemptID: fmt.Sprintf("stress-attempt-%d", i), Attempt: i + 1,

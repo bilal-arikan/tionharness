@@ -1,6 +1,6 @@
 package trajectory
 
-import "sort"
+import "slices"
 
 // Session activity bouts (_Docs/78 §16). A session's bar on the Rota canvas is
 // its lifetime — createdAt → updatedAt — so a conversation held in a few short
@@ -44,7 +44,7 @@ func Bouts(times []int64, gapSec int64) []Span {
 	}
 	ts := make([]int64, len(times))
 	copy(ts, times)
-	sort.Slice(ts, func(i, j int) bool { return ts[i] < ts[j] })
+	slices.Sort(ts)
 
 	spans := []Span{{Start: ts[0], End: ts[0]}}
 	for _, t := range ts[1:] {

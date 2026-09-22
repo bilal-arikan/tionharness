@@ -92,7 +92,7 @@ func (s *Server) handleSessionActivity(w http.ResponseWriter, r *http.Request) {
 func splitActivityIDs(raw string) []string {
 	seen := make(map[string]bool)
 	var out []string
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		id := strings.TrimSpace(part)
 		if id == "" || seen[id] {
 			continue

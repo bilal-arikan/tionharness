@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -87,12 +88,7 @@ func resolveArchiveKinds(kinds []string) (map[string]struct{}, error) {
 
 // isArchivableSessionKind reports whether k is one of the known session kinds.
 func isArchivableSessionKind(k string) bool {
-	for _, known := range archivableSessionKinds {
-		if k == known {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(archivableSessionKinds, k)
 }
 
 // sortedKinds renders a kind set as a stable, comma-separated string for the

@@ -205,7 +205,7 @@ func TestScanDoesNotRecordUnansweredGroupedLens(t *testing.T) {
 func TestScanAnalyzerErrorLeavesGroupedLedgerEmpty(t *testing.T) {
 	fa := &erroringAnalyzer{}
 	sc, _ := newMultiLensFixture(t, fa)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		res, err := sc.Scan(context.Background(), ScanScope{})
 		if err != nil {
 			t.Fatal(err)

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -360,9 +361,7 @@ func (d *DB) loadCounters() error {
 		// the previous process may have claimed a block it never fully spent.
 		// Starting from it is what guarantees no number is ever reissued — the
 		// unspent tail of that block is simply skipped.
-		for prefix, n := range c {
-			d.issued[prefix] = n
-		}
+		maps.Copy(d.issued, c)
 	}
 	return nil
 }

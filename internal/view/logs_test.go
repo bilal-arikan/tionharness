@@ -41,7 +41,7 @@ func TestProjectLogsRendersTailOldestFirst(t *testing.T) {
 func TestProjectLogsCapsAndElides(t *testing.T) {
 	now := time.Now()
 	entries := make([]logbuf.Entry, 0, logsRows+25)
-	for i := 0; i < logsRows+25; i++ {
+	for i := range logsRows + 25 {
 		entries = append(entries, logbuf.Entry{
 			Seq: int64(i + 1), Time: now.Add(time.Duration(i) * time.Minute).UnixMilli(),
 			Level: "INFO", Message: "kayıt",

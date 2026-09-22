@@ -20,6 +20,7 @@ import (
 	"io"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -420,13 +421,13 @@ func parseCallResult(raw json.RawMessage) (CallToolResult, error) {
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return CallToolResult{}, fmt.Errorf("mcp tools/call decode: %w", err)
 	}
-	var text string
+	var text strings.Builder
 	for _, b := range out.Content {
 		if b.Type == "text" {
-			text += b.Text
+			text.WriteString(b.Text)
 		}
 	}
-	return CallToolResult{Text: text, IsError: out.IsError}, nil
+	return CallToolResult{Text: text.String(), IsError: out.IsError}, nil
 }
 
 // ListTools returns the tools advertised by the server.

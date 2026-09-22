@@ -64,7 +64,7 @@ func TestRenderAppendsNotesURL(t *testing.T) {
 func TestRenderCapsEntriesPerSection(t *testing.T) {
 	r := sampleRelease()
 	var many []Entry
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		many = append(many, Entry{Hash: "x", Subject: "feature number " + string(rune('a'+i))})
 	}
 	r.Sections = []Section{{Title: "Features", Entries: many}}
@@ -85,7 +85,7 @@ func TestRenderTruncatesButKeepsTheLink(t *testing.T) {
 	r := sampleRelease()
 	long := strings.Repeat("a very long subject line that goes on and on ", 40)
 	var entries []Entry
-	for i := 0; i < maxEntriesPerSection; i++ {
+	for range maxEntriesPerSection {
 		entries = append(entries, Entry{Hash: "x", Subject: long})
 	}
 	r.Sections = []Section{{Title: "Features", Entries: entries}}

@@ -83,7 +83,7 @@ func TestNextIDReservesBlocksButStaysDense(t *testing.T) {
 	}
 	// ...and the rest of the block must not touch the file again.
 	stat, _ := os.Stat(d.dir(countersFile))
-	for i := 0; i < idBlock-2; i++ {
+	for range idBlock - 2 {
 		if _, err := d.CreateTask(ctx, Task{Title: "x"}); err != nil {
 			t.Fatal(err)
 		}

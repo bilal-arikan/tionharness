@@ -2,6 +2,7 @@ package repair
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -179,12 +180,7 @@ func withStringArg(call providers.ToolCall, key, value string) (providers.ToolCa
 
 // containsProject reports an exact membership test on the indexed-project list.
 func containsProject(available []string, id string) bool {
-	for _, a := range available {
-		if a == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(available, id)
 }
 
 // resolveProjectID derives the project id this call SHOULD have carried, or ""

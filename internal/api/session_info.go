@@ -735,7 +735,7 @@ func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Works
 // line prefix is the entry marker; surrounding prose never uses it.
 func countCatalogSkills(block string) int {
 	n := 0
-	for _, line := range strings.Split(block, "\n") {
+	for line := range strings.SplitSeq(block, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "- `") {
 			n++
 		}
@@ -748,7 +748,7 @@ func countCatalogSkills(block string) int {
 // per recapped tool call, and the wrapper/label lines never use that prefix.
 func countToolRecapLines(block string) int {
 	n := 0
-	for _, line := range strings.Split(block, "\n") {
+	for line := range strings.SplitSeq(block, "\n") {
 		if strings.HasPrefix(line, "- ") {
 			n++
 		}

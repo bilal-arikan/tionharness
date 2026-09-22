@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -253,9 +254,7 @@ func (c *logprobsClient) Decide(ctx context.Context, req Request) (*Response, er
 	sem := make(chan struct{}, c.opts.parallel)
 	var wg sync.WaitGroup
 	for i, k := range keys {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():
@@ -267,7 +266,7 @@ func (c *logprobsClient) Decide(ctx context.Context, req Request) (*Response, er
 			if results[i].err != nil {
 				cancel()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -349,9 +348,7 @@ type chatCompletion struct {
 func (c *logprobsClient) ask(ctx context.Context, model, state, key string, q Question) questionResult {
 	labels := labelsFor(q)
 	body := map[string]any{}
-	for k, v := range c.opts.extraBody {
-		body[k] = v
-	}
+	maps.Copy(body, c.opts.extraBody)
 	body["model"] = model
 	body["messages"] = []map[string]string{
 		{"role": "system", "content": classifierSystemPrompt},

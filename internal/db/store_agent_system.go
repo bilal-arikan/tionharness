@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -368,10 +369,8 @@ func (d *DB) agentReferencedBySessionLocked(id string) bool {
 		if s.AgentID == id {
 			return true
 		}
-		for _, p := range s.Participants {
-			if p == id {
-				return true
-			}
+		if slices.Contains(s.Participants, id) {
+			return true
 		}
 	}
 	return false

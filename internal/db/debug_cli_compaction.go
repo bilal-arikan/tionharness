@@ -193,10 +193,7 @@ func trimRawDebugRecords(records []rawDebugRecord, visibleKeep int) ([]rawDebugR
 			visible++
 		}
 	}
-	dropVisible := visible - visibleKeep
-	if dropVisible < 0 {
-		dropVisible = 0
-	}
+	dropVisible := max(visible-visibleKeep, 0)
 	out := make([]rawDebugRecord, 0, len(records)-dropVisible)
 	seenVisible := 0
 	keptVisible := 0

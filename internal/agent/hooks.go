@@ -111,7 +111,7 @@ func hookMatches(matcher, tool string) bool {
 	if matcher == "" {
 		return true
 	}
-	for _, alt := range strings.Split(matcher, ",") {
+	for alt := range strings.SplitSeq(matcher, ",") {
 		alt = strings.TrimSpace(alt)
 		if alt == "" {
 			continue

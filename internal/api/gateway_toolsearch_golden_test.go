@@ -32,7 +32,7 @@ func TestGatewayToolSearchRenderGolden(t *testing.T) {
 		{Name: "alpha_probe", Description: "short probe desc"},
 		{Name: "mcp__srv__probe", Description: "mcp probe desc"},
 	}
-	for i := 0; i < 35; i++ {
+	for i := range 35 {
 		defs = append(defs, providers.ToolDef{Name: fmt.Sprintf("bulk_probe_%02d", i), Description: "bulk probe desc"})
 	}
 	run.setBridge(defs, func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil })

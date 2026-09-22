@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -245,9 +246,9 @@ func (r *Runtime) lastAssistantText(ctx context.Context, sessionID string) strin
 		r.logger.Warn("coordinator node: cannot read reply", "session", sessionID, "error", err)
 		return ""
 	}
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "assistant" {
-			return msgs[i].Text
+	for _, msg := range slices.Backward(msgs) {
+		if msg.Role == "assistant" {
+			return msg.Text
 		}
 	}
 	return ""

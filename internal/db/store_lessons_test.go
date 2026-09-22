@@ -80,7 +80,7 @@ func TestLessons_Delete(t *testing.T) {
 func TestLessons_CapKeepsNewest(t *testing.T) {
 	d := lessonsDB(t)
 	base := time.Now().Unix()
-	for i := 0; i < DefaultLessonsCap+10; i++ {
+	for i := range DefaultLessonsCap + 10 {
 		_, err := d.AddLesson(Lesson{Time: base - int64(DefaultLessonsCap+10) + int64(i), Signature: sigN(i), Text: "t"})
 		if err != nil {
 			t.Fatalf("add %d: %v", i, err)

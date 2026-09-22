@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"slices"
 	"sort"
 	"strings"
 )
@@ -191,12 +192,7 @@ func ValidGroupKey(key string) bool {
 		return false
 	}
 	cat := key[len(GroupPrefix):]
-	for _, c := range orderedCategories {
-		if c == cat {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(orderedCategories, cat)
 }
 
 // MatchesGroup reports whether toolName belongs to the group named by groupKey.

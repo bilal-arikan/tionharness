@@ -80,7 +80,7 @@ func TestDiffSystemPrefixModifiedCountsIgnoreAreaCap(t *testing.T) {
 	var oldB, newB strings.Builder
 	oldB.WriteString("# Big")
 	newB.WriteString("# Big")
-	for i := 0; i < n; i++ {
+	for i := range n {
 		oldB.WriteString("\nold " + itoa(i))
 		newB.WriteString("\nnew " + itoa(i))
 	}
@@ -179,7 +179,7 @@ func TestDiffToolNames(t *testing.T) {
 // the tool-loop double-append guard works) and caps the listed areas.
 func TestSuffixNoteMarkerAndCap(t *testing.T) {
 	c := &ContextChange{}
-	for i := 0; i < maxNoteAreasListed+3; i++ {
+	for i := range maxNoteAreasListed + 3 {
 		c.appendArea(ContextArea{Label: "block " + itoa(i), Kind: ContextAdded})
 		c.Added++
 	}

@@ -40,7 +40,6 @@ func (mcpAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 			continue
 		}
 		for name, spec := range doc.MCPServers {
-			name, spec := name, spec
 			transport := spec.Type
 			if transport == "" {
 				if spec.Command != "" {

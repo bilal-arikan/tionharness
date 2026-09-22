@@ -21,7 +21,7 @@ func BenchmarkWorkspaceRunning(b *testing.B) {
 	s, wsp := newWorkspaceServer(b)
 
 	// A store big enough that a full scan would be obvious in the numbers.
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		run, err := wsp.DB.CreateFlowRun(ctx, db.FlowRun{FlowID: "FLW1"})
 		if err != nil {
 			b.Fatalf("CreateFlowRun: %v", err)

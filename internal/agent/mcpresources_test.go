@@ -292,16 +292,16 @@ func TestReadMCPResourceWritesBinaryToFile(t *testing.T) {
 func savedResourcePath(t *testing.T, content string) string {
 	t.Helper()
 	const marker = "binary content written to: "
-	i := strings.Index(content, marker)
-	if i < 0 {
+	_, after, ok := strings.Cut(content, marker)
+	if !ok {
 		t.Fatalf("no saved-file path in the result:\n%s", content)
 	}
-	rest := content[i+len(marker):]
-	end := strings.Index(rest, " (")
-	if end < 0 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, " (")
+	if !ok0 {
 		t.Fatalf("malformed saved-file line: %s", rest)
 	}
-	return rest[:end]
+	return before0
 }
 
 // Truncation is EXPLICIT: the model is told the content was cut and by how

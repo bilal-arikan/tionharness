@@ -54,7 +54,7 @@ func TestDisableGitSigningEnv(t *testing.T) {
 	}
 	// Both keys must map to false; order-independent scan of key→value pairs.
 	seen := map[string]string{}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		k, _ := lastValue(env, "GIT_CONFIG_KEY_"+string(rune('0'+i)))
 		val, _ := lastValue(env, "GIT_CONFIG_VALUE_"+string(rune('0'+i)))
 		seen[k] = val

@@ -137,7 +137,7 @@ func TestCumulativeStallTierDisabled(t *testing.T) {
 	coord := newTestCoordinator(t, rt, 0)
 	slot := rt.coordSlotFor(coord)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, halted := stallTierOutcome(t, rt, coord, slot); halted {
 			t.Fatalf("tier disabled (0) must never halt; halted after %d stalls", i+1)
 		}
@@ -156,7 +156,7 @@ func TestResumeClearsCumulativeTally(t *testing.T) {
 
 	coord := newTestCoordinator(t, rt, 0)
 	slot := rt.coordSlotFor(coord)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		stallTierOutcome(t, rt, coord, slot)
 	}
 	if !rt.CoordinatorStallHalted(coord) {

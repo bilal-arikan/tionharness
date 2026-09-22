@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -96,8 +97,8 @@ func (r *Runtime) checkPhaseGate(ctx context.Context, t db.Trajectory, phase db.
 			return true, false, ""
 		}
 		msgs, _, _ := r.db.ListMessagesTail(ctx, t.RootSessionID, 60)
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if strings.Contains(strings.ToLower(msgs[i].Text), strings.ToLower(value)) {
+		for _, msg := range slices.Backward(msgs) {
+			if strings.Contains(strings.ToLower(msg.Text), strings.ToLower(value)) {
 				return true, false, ""
 			}
 		}

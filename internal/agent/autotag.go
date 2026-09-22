@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -80,12 +81,9 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	// denials are control flow, not repair signals. A later turn without a material
 	// tool error clears the tag so a recovered session does not stay falsely broken.
 	toolFailed := false
-	for _, st := range steps {
-		if isMaterialToolError(st) {
-			add = append(add, TagToolError)
-			toolFailed = true
-			break
-		}
+	if slices.ContainsFunc(steps, isMaterialToolError) {
+		add = append(add, TagToolError)
+		toolFailed = true
 	}
 
 	// State-derived tags (reconciled on every turn; add-only).

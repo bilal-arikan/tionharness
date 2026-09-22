@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -84,12 +85,7 @@ func TestSessionParticipantRosterSelfHeals(t *testing.T) {
 }
 
 func containsStr(list []string, want string) bool {
-	for _, x := range list {
-		if x == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 func hasAll(list []string, want ...string) bool {

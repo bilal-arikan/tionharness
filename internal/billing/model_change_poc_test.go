@@ -24,7 +24,8 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
 
 // TestModelChangeDoesNotRepricePastUsage, bütçe tarafının doğru davrandığını uçtan
 // uca gösterir: model değişimi ne günlük usage'ı ne de session usage'ı geriye
@@ -69,7 +70,7 @@ func TestModelChangeDoesNotRepricePastUsage(t *testing.T) {
 
 	// Model değişimi — update_agent'ın yaptığı tek şey bu patch'tir.
 	newModel := "claude-sonnet-4-6"
-	if _, err := d.UpdateAgent(ctx, agent.ID, db.AgentProfilePatch{Model: strPtr(newModel)}); err != nil {
+	if _, err := d.UpdateAgent(ctx, agent.ID, db.AgentProfilePatch{Model: new(newModel)}); err != nil {
 		t.Fatalf("update agent: %v", err)
 	}
 

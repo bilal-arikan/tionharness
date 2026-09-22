@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -34,10 +35,10 @@ func (r TodoRollup) AllDone() bool { return len(r.Items) > 0 && r.Done == len(r.
 // newest-first. Only the most recent list matters: todo_write replaces the list
 // wholesale, so an older one is superseded state, not extra state.
 func LatestTodos(msgs []db.Message) TodoRollup {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := DecodeSteps(msgs[i].Steps)
-		for j := len(steps) - 1; j >= 0; j-- {
-			if items := steps[j].TodoItems(); len(items) > 0 {
+	for _, msg := range slices.Backward(msgs) {
+		steps := DecodeSteps(msg.Steps)
+		for _, step := range slices.Backward(steps) {
+			if items := step.TodoItems(); len(items) > 0 {
 				return newTodoRollup(items)
 			}
 		}

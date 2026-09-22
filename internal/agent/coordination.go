@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1267,12 +1268,7 @@ func (r *Runtime) ListWorkers(ctx context.Context, coordSessionID string) ([]Wor
 
 // hasSessionTag reports whether a session's tag list contains the given tag.
 func hasSessionTag(tags []string, want string) bool {
-	for _, t := range tags {
-		if t == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tags, want)
 }
 
 // workerInfoFor snapshots one worker session for a coordinator-facing listing.
@@ -1319,9 +1315,9 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 		}
 		info.Queued = r.hasQueuedMessage(s.ID)
 	} else if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if msgs[i].Role == "assistant" {
-				info.Summary = notifyLine(msgs[i].Text, 120)
+		for _, msg := range slices.Backward(msgs) {
+			if msg.Role == "assistant" {
+				info.Summary = notifyLine(msg.Text, 120)
 				break
 			}
 		}

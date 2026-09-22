@@ -151,14 +151,8 @@ func (d *DB) MessagesAround(ctx context.Context, sid, mid string, before, after 
 	if idx < 0 {
 		return nil
 	}
-	lo := idx - before
-	if lo < 0 {
-		lo = 0
-	}
-	hi := idx + after + 1
-	if hi > len(msgs) {
-		hi = len(msgs)
-	}
+	lo := max(idx-before, 0)
+	hi := min(idx+after+1, len(msgs))
 	out := make([]Message, hi-lo)
 	copy(out, msgs[lo:hi])
 	return out
@@ -201,10 +195,7 @@ func makeSnippet(text, term string) string {
 		return string(runes[:window]) + "…"
 	}
 	// rune offset of the byte index
-	start := len([]rune(collapsed[:idx])) - window/2
-	if start < 0 {
-		start = 0
-	}
+	start := max(len([]rune(collapsed[:idx]))-window/2, 0)
 	end := start + window
 	if end > len(runes) {
 		end = len(runes)

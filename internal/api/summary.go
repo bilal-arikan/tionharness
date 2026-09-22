@@ -365,8 +365,7 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 		// fault: record the reason in-thread (so the chat shows why nothing happened,
 		// right under the "/handoff" the user just ran) and return 409 instead of a
 		// generic 500 toast.
-		var rwErr *agent.RunningWorkersError
-		if errors.As(herr, &rwErr) {
+		if rwErr, ok := errors.AsType[*agent.RunningWorkersError](herr); ok {
 			notice, aerr := wsp.DB.AddMessage(ctx, db.Message{
 				SessionID: session.ID,
 				Role:      providers.RoleAssistant,

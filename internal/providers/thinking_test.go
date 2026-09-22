@@ -44,12 +44,7 @@ func TestEffortForThinkingBudget(t *testing.T) {
 
 func TestThinkingTiersFor(t *testing.T) {
 	has := func(tiers []string, v string) bool {
-		for _, t := range tiers {
-			if t == v {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(tiers, v)
 	}
 	// Always-on class: no "off" (thinking cannot be disabled), full depth ramp.
 	fable := ThinkingTiersFor("claude-fable-5")

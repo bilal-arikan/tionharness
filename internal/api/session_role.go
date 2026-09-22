@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
@@ -234,12 +235,7 @@ func (s *Server) handleSessionCoordinatorTree(w http.ResponseWriter, r *http.Req
 // session is usually also tagged error, and stuck is the one that needs a human.
 func coordinatorNodeHealth(sess db.Session) string {
 	has := func(tag string) bool {
-		for _, t := range sess.Tags {
-			if t == tag {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(sess.Tags, tag)
 	}
 	switch {
 	case has(agent.TagStuck):

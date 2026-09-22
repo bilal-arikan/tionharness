@@ -104,7 +104,7 @@ func TestActivateBundleListLimit(t *testing.T) {
 	const total = BundleListLimit + 7
 	var catalog []providers.ToolDef
 	var members []string
-	for i := 0; i < total; i++ {
+	for i := range total {
 		name := fmt.Sprintf("srv__t%03d", i)
 		catalog = append(catalog, providers.ToolDef{Name: name, Description: "d"})
 		members = append(members, name)

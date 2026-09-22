@@ -101,7 +101,7 @@ type askSuspendState struct {
 	// Call is the pending tool call — needed for a permission resume, which
 	// EXECUTES it on approval to produce the real tool_result (an ask resume just
 	// folds the answer text, so Call is unused there).
-	Call providers.ToolCall `json:"call,omitempty"`
+	Call providers.ToolCall `json:"call"`
 }
 
 // persistAskSuspend parks a suspended ask to disk and returns the created row. The
@@ -290,8 +290,7 @@ func (r *Runtime) driveResumedAsk(ctx context.Context, ask db.SessionAsk, agentR
 	all := append(append([]TurnStep{}, pre...), steps...)
 	// A follow-up clean ask: re-park with the full accumulated trace so the next
 	// resume continues to carry the whole turn.
-	var sus *askSuspend
-	if errors.As(err, &sus) {
+	if sus, ok := errors.AsType[*askSuspend](err); ok {
 		newAsk, perr := r.persistAskSuspend(ctx, agentRow, ask.SessionID, req, all, sus)
 		if perr != nil {
 			return nil, all, nil, perr

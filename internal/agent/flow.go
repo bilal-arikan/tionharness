@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -981,8 +982,8 @@ func finalFlowAgentID(flow db.Flow, run db.FlowRun) string {
 	if json.Unmarshal([]byte(run.State), &st) != nil {
 		return ""
 	}
-	for i := len(st.Trace) - 1; i >= 0; i-- {
-		if n, ok := g.NodeByID(st.Trace[i].NodeID); ok && nodeRunsAgent(n) {
+	for _, v := range slices.Backward(st.Trace) {
+		if n, ok := g.NodeByID(v.NodeID); ok && nodeRunsAgent(n) {
 			return n.AgentID
 		}
 	}

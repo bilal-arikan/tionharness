@@ -113,10 +113,7 @@ func EffectiveBudget(provider, model string, configured int, fraction float64, c
 			fraction = defaultBudgetWindowFraction
 		}
 	}
-	derived := int(float64(window) * fraction)
-	if derived > ceil {
-		derived = ceil
-	}
+	derived := min(int(float64(window)*fraction), ceil)
 	if derived < configured {
 		derived = configured
 	}

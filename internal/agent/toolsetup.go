@@ -69,8 +69,8 @@ func patternPredicate(patterns []string) func(string) bool {
 				if tools.MatchesGroup(name, p) {
 					return true
 				}
-			} else if strings.HasSuffix(p, "*") {
-				if strings.HasPrefix(name, strings.TrimSuffix(p, "*")) {
+			} else if before, ok := strings.CutSuffix(p, "*"); ok {
+				if strings.HasPrefix(name, before) {
 					return true
 				}
 			} else if name == p {

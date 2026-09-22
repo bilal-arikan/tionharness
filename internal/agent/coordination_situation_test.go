@@ -128,7 +128,7 @@ func TestCoordinatorBlocksExcludeArchivedCards(t *testing.T) {
 	}
 	// Push the archived card past the review budget BEFORE archiving it, so the
 	// only reason it must not appear is the archive flag.
-	for i := 0; i < db.ReviewRoundBudget; i++ {
+	for range db.ReviewRoundBudget {
 		if err := rt.db.MoveTask(ctx, archived.ID, db.BoardReview); err != nil {
 			t.Fatalf("move to review: %v", err)
 		}

@@ -16,7 +16,7 @@ func TestOptimizerLog_RoundTrip(t *testing.T) {
 	opt := tools.ShellOptimization{Kind: "sqz", InTokens: 841, OutTokens: 57}
 	l.record("compressed body", opt)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		got := l.lookup("compressed body")
 		if got == nil {
 			t.Fatalf("lookup %d: recorded optimization not found — the chip would silently vanish", i)
@@ -48,7 +48,7 @@ func TestOptimizerLog_TrimsWhitespace(t *testing.T) {
 // runtime, so an unbounded map would grow with every shell call of every session.
 func TestOptimizerLog_Bounded(t *testing.T) {
 	var l optimizerLog
-	for i := 0; i < optimizerLogSize*2; i++ {
+	for i := range optimizerLogSize * 2 {
 		l.record(strings.Repeat("x", i+1), tools.ShellOptimization{Kind: "sqz", InTokens: 10, OutTokens: 1})
 	}
 	if len(l.index) > optimizerLogSize {

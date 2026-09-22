@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"slices"
 	"sync"
 )
 
@@ -65,10 +66,8 @@ func (g *PermissionGrants) GrantRule(r PermRule) {
 		g.allowed[r.Tool] = true
 		return
 	}
-	for _, ex := range g.rules {
-		if ex == r {
-			return
-		}
+	if slices.Contains(g.rules, r) {
+		return
 	}
 	g.rules = append(g.rules, r)
 }

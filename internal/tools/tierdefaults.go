@@ -1,5 +1,7 @@
 package tools
 
+import "maps"
+
 // TierDefaults is the declarative default-visibility layer of the tool
 // visibility chain:
 //
@@ -152,12 +154,8 @@ func DefaultTiers() TierDefaults {
 		Bundle: make(map[string]string, len(defaultBundleTiers)),
 		Tool:   make(map[string]string, len(defaultToolTiers)),
 	}
-	for k, v := range defaultBundleTiers {
-		d.Bundle[k] = v
-	}
-	for k, v := range defaultToolTiers {
-		d.Tool[k] = v
-	}
+	maps.Copy(d.Bundle, defaultBundleTiers)
+	maps.Copy(d.Tool, defaultToolTiers)
 	return d
 }
 

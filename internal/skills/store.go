@@ -995,7 +995,7 @@ const (
 // catalog line: the first non-empty line, hard-capped on a UTF-8 rune boundary.
 func catalogLine(s string, max int) string {
 	line := ""
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if t := strings.TrimSpace(l); t != "" {
 			line = t
 			break

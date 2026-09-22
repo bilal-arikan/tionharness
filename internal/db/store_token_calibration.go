@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"time"
 )
@@ -97,10 +98,7 @@ func (d *DB) ObserveTokenCalibration(ctx context.Context, c TokenCalibration) (T
 	if !ok || cur.Samples <= 0 {
 		c.Samples = 1
 	} else {
-		n := cur.Samples
-		if n > tokenCalibrationWindow-1 {
-			n = tokenCalibrationWindow - 1
-		}
+		n := min(cur.Samples, tokenCalibrationWindow-1)
 		c.Tokens = (cur.Tokens*n + c.Tokens) / (n + 1)
 		c.Samples = cur.Samples + 1
 	}
@@ -114,9 +112,7 @@ func (d *DB) TokenCalibrations(ctx context.Context) map[string]TokenCalibration 
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	out := make(map[string]TokenCalibration, len(d.tokenCalibrations))
-	for k, v := range d.tokenCalibrations {
-		out[k] = v
-	}
+	maps.Copy(out, d.tokenCalibrations)
 	return out
 }
 
@@ -128,8 +124,6 @@ func (d *DB) loadTokenCalibrations() error {
 	if err := readJSONFile(d.dir(tokenCalibrationsFile), &m); err != nil {
 		return nil
 	}
-	for k, v := range m {
-		d.tokenCalibrations[k] = v
-	}
+	maps.Copy(d.tokenCalibrations, m)
 	return nil
 }

@@ -2,6 +2,7 @@ package proc
 
 import (
 	"os"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -72,10 +73,8 @@ var credentialNamesExact = []string{
 // through — so the patterns are broad on purpose.
 func IsCredentialEnvName(name string) bool {
 	upper := strings.ToUpper(name)
-	for _, exact := range credentialNamesExact {
-		if upper == exact {
-			return true
-		}
+	if slices.Contains(credentialNamesExact, upper) {
+		return true
 	}
 	for _, prefix := range credentialNamePrefixes {
 		if strings.HasPrefix(upper, prefix) {

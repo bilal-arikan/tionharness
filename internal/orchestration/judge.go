@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // MatchJudge is the match mode that asks a decision model instead of matching
@@ -137,8 +138,8 @@ func shortError(err error) string {
 // lastAgentID returns the agent of the most recent agent/coordinator node in the
 // trace — the one whose output a judge is about to evaluate.
 func lastAgentID(g Graph, st State) string {
-	for i := len(st.Trace) - 1; i >= 0; i-- {
-		t := st.Trace[i]
+	for _, t := range slices.Backward(st.Trace) {
+
 		if t.Type != NodeAgent && t.Type != NodeCoordinator {
 			continue
 		}

@@ -96,8 +96,7 @@ func TestDurableAsk_DisabledDoesNotSuspend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no-suspend path should complete, got %v", err)
 	}
-	var sus *askSuspend
-	if errors.As(err, &sus) {
+	if _, ok := errors.AsType[*askSuspend](err); ok {
 		t.Fatal("must not suspend without WithDurableAsk")
 	}
 	if resp.Text != "done anyway" {

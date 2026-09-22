@@ -86,7 +86,7 @@ func (s stubScanner) RunInsightScan(context.Context, insight.ScanScope, string) 
 func TestInsightScanDedupsRepeatedErrors(t *testing.T) {
 	const msg = "codex: model deepseek-v4-flash unavailable"
 	errs := make([]string, 0, 54)
-	for i := 0; i < 53; i++ {
+	for range 53 {
 		errs = append(errs, msg)
 	}
 	errs = append(errs, "other: session read failed")

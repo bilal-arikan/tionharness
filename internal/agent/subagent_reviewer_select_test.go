@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,9 +62,9 @@ func (e errorString) Error() string { return string(e) }
 // lastUserText returns the final user message, which is the task (isolated
 // context) or the judging prompt.
 func lastUserText(req providers.Request) string {
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == providers.RoleUser {
-			return req.Messages[i].Text
+	for _, v := range slices.Backward(req.Messages) {
+		if v.Role == providers.RoleUser {
+			return v.Text
 		}
 	}
 	return ""

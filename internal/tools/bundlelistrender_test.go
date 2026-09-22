@@ -39,7 +39,7 @@ func TestNativeBundleListingOverflowGolden(t *testing.T) {
 	total := BundleListLimit + 2
 	var catalog []providers.ToolDef
 	var members []string
-	for i := 0; i < total; i++ {
+	for i := range total {
 		name := fmt.Sprintf("srv__t%03d", i)
 		catalog = append(catalog, providers.ToolDef{Name: name, Description: "d"})
 		members = append(members, name)

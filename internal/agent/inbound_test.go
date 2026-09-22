@@ -120,7 +120,7 @@ func TestCapNotification(t *testing.T) {
 	if !strings.Contains(got, "message_too_large") {
 		t.Fatalf("capped note must state why: %q", got)
 	}
-	head := strings.Split(got, "\n\n[message_too_large")[0]
+	head, _, _ := strings.Cut(got, "\n\n[message_too_large")
 	if !utf8.ValidString(head) {
 		t.Fatalf("cap must not split a multi-byte rune: %q", head)
 	}

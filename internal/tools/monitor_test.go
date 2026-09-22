@@ -193,7 +193,7 @@ func TestMonitorMaxFiresDisarms(t *testing.T) {
 func TestMonitorLiveCap(t *testing.T) {
 	m := NewMonitorManager((&recordingWake{}).fn)
 	defer m.Close()
-	for i := 0; i < monitorMaxLive; i++ {
+	for i := range monitorMaxLive {
 		if _, err := m.Start(&fakeSource{}, "x", time.Second, 0); err != nil {
 			t.Fatalf("Start %d: %v", i, err)
 		}

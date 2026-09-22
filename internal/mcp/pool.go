@@ -320,7 +320,7 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	// Route to the same slot Catalog used: scoped (per-caller) when cfg.ScopeKey is
 	// set, shared (workspace-wide) otherwise.
 	e := p.entry(scopedEntryKey(cfg.ScopeKey, server))
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		e.mu.Lock()
 		client, err := p.ensure(ctx, e, cfg)
 		e.mu.Unlock()
@@ -546,10 +546,7 @@ func (p *Pool) reapLoop() {
 	if p.idleTTL <= 0 {
 		return
 	}
-	interval := p.idleTTL / 2
-	if interval < 30*time.Second {
-		interval = 30 * time.Second
-	}
+	interval := max(p.idleTTL/2, 30*time.Second)
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {

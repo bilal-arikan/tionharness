@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -725,9 +726,9 @@ func (pl *CLISessionPool) Close() {
 
 // lastUserText returns the text of the most recent user message (the new turn).
 func lastUserText(msgs []Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == RoleUser {
-			return msgs[i].Text
+	for _, msg := range slices.Backward(msgs) {
+		if msg.Role == RoleUser {
+			return msg.Text
 		}
 	}
 	return ""

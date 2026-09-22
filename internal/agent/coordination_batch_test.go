@@ -502,12 +502,10 @@ func TestConcurrentWorkerNotesStaySerializedAndBounded(t *testing.T) {
 	rt.enqueueCoordinatorWorkerTurn(coord, false)
 	<-firstStarted
 	var notes sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		notes.Add(1)
-		go func() {
-			defer notes.Done()
+	for range 100 {
+		notes.Go(func() {
 			rt.enqueueCoordinatorWorkerTurn(coord, false)
-		}()
+		})
 	}
 	notes.Wait()
 	time.Sleep(50 * time.Millisecond)
@@ -548,10 +546,8 @@ func TestContinuousWorkerWakesCannotStarvePastDeadlineAdmission(t *testing.T) {
 
 	stop := make(chan struct{})
 	var wakes sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wakes.Add(1)
-		go func() {
-			defer wakes.Done()
+	for range 8 {
+		wakes.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -560,7 +556,7 @@ func TestContinuousWorkerWakesCannotStarvePastDeadlineAdmission(t *testing.T) {
 					rt.enqueueCoordinatorWorkerTurn(coord, false)
 				}
 			}
-		}()
+		})
 	}
 
 	select {

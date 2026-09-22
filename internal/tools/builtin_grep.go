@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -169,13 +170,7 @@ func grepFileFilter(args grepArgs) (func(rel string) bool, error) {
 		}
 		if exts != nil {
 			ext := strings.ToLower(filepath.Ext(rel))
-			ok := false
-			for _, e := range exts {
-				if ext == e {
-					ok = true
-					break
-				}
-			}
+			ok := slices.Contains(exts, ext)
 			if !ok {
 				return false
 			}
@@ -447,7 +442,7 @@ func countMatches(content string, re *regexp.Regexp, multiline bool) int {
 		return len(re.FindAllStringIndex(content, -1))
 	}
 	n := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		n += len(re.FindAllStringIndex(line, -1))
 	}
 	return n

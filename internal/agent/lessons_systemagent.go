@@ -1,5 +1,7 @@
 package agent
 
+import "slices"
+
 import "github.com/bilal-arikan/tionharness/internal/db"
 
 func (r *Runtime) resolveLessonConfig(agent db.Agent) (db.Agent, string, error) {
@@ -30,12 +32,7 @@ func pinsProvider(a db.Agent) bool {
 	if a.Provider == "" {
 		return false
 	}
-	for _, k := range a.Overrides {
-		if k == "provider" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.Overrides, "provider")
 }
 
 // analysisPromptKeys maps an analysis system agent to the prompt-registry key

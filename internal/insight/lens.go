@@ -244,7 +244,7 @@ func parseMinCount(s string) map[string]int {
 		return nil
 	}
 	out := map[string]int{}
-	for _, pair := range strings.Split(s, ",") {
+	for pair := range strings.SplitSeq(s, ",") {
 		colon := strings.LastIndex(pair, ":")
 		if colon < 0 {
 			continue

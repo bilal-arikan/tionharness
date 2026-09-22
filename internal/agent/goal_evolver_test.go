@@ -26,12 +26,13 @@ func evolverFixture(t *testing.T) (*Runtime, db.Goal, db.Agent) {
 		Name: "Ucuz Dev", Status: db.GoalStatusActive,
 		Scope:      db.GoalScope{Agents: []string{dev.ID}},
 		Primary:    db.GoalMetric{Metric: "usage.costUSDPerSession", Direction: "min"},
-		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: fptr(0.2)}},
+		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: new(0.2)}},
 	}, db.GoalByUser, "")
 	return r, g, dev
 }
 
-func fptr(v float64) *float64 { return &v }
+//go:fix inline
+func fptr(v float64) *float64 { return new(v) }
 
 func rawFor(agentID string) goals.RawProposal {
 	return goals.RawProposal{
@@ -139,10 +140,10 @@ func TestEvolverPromptAndSurfaces(t *testing.T) {
 		t.Fatalf("automations: %v", sc.Automations)
 	}
 	fit := goals.GoalFitness{Sessions: 6, Direction: "min",
-		Primary:    goals.MetricValue{Metric: "usage.costUSDPerSession", Value: fptr(1.4), N: 6, Unit: "usd", Available: true},
-		Guardrails: []goals.GuardrailStatus{{MetricValue: goals.MetricValue{Metric: "session.errorTurnsRatio", Value: fptr(0.5), N: 6, Unit: "ratio", Available: true}, Violated: true}},
-		BySnapshot: []goals.SnapshotFitness{{Hash: "c2c8da07aaaa", Sessions: 2, Primary: goals.MetricValue{Metric: "usage.costUSDPerSession", Value: fptr(0.9), N: 2, Unit: "usd", Available: true}},
-			{Hash: "cb72d0f4bbbb", Sessions: 4, Current: true, Primary: goals.MetricValue{Metric: "usage.costUSDPerSession", Value: fptr(1.6), N: 4, Unit: "usd", Available: true},
+		Primary:    goals.MetricValue{Metric: "usage.costUSDPerSession", Value: new(1.4), N: 6, Unit: "usd", Available: true},
+		Guardrails: []goals.GuardrailStatus{{MetricValue: goals.MetricValue{Metric: "session.errorTurnsRatio", Value: new(0.5), N: 6, Unit: "ratio", Available: true}, Violated: true}},
+		BySnapshot: []goals.SnapshotFitness{{Hash: "c2c8da07aaaa", Sessions: 2, Primary: goals.MetricValue{Metric: "usage.costUSDPerSession", Value: new(0.9), N: 2, Unit: "usd", Available: true}},
+			{Hash: "cb72d0f4bbbb", Sessions: 4, Current: true, Primary: goals.MetricValue{Metric: "usage.costUSDPerSession", Value: new(1.6), N: 4, Unit: "usd", Available: true},
 				Changes: []goals.SnapshotChange{{Surface: "agent", Entity: dev.ID, Field: "thinkingLevel", Before: "low", After: "high"}}}},
 	}
 	worst := []db.TrajectoryIndexEntry{{ID: "RTA7", RootSessionID: "SES7", TemplateRef: "code-review@2", Status: db.TrajStatusFailed, Summary: &db.TrajectorySummary{CostUSD: 3.2, Sessions: 4, FailedSess: 2}}}

@@ -454,7 +454,7 @@ func TestWalkGrepFilesCapsHugeTree(t *testing.T) {
 // case — a normal tree still returns every match.
 func TestWalkGrepFilesUnderCapIsUntouched(t *testing.T) {
 	root := t.TempDir()
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%d.txt", i)), []byte("x"), 0o644); err != nil {
 			t.Fatalf("seed: %v", err)
 		}

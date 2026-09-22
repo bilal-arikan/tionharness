@@ -22,7 +22,7 @@ func TestAddMessageAppendsLine(t *testing.T) {
 	sess, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "T"})
 
 	const n = 25
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if _, err := d.AddMessage(ctx, Message{SessionID: sess.ID, Role: "user", Text: "m"}); err != nil {
 			t.Fatalf("add msg %d: %v", i, err)
 		}
@@ -98,7 +98,7 @@ func TestReadSessionFileToleratesTornTrailingLine(t *testing.T) {
 
 func nonEmptyLines(s string) []string {
 	var out []string
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if strings.TrimSpace(l) != "" {
 			out = append(out, l)
 		}

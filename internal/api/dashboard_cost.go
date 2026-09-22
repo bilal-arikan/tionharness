@@ -81,10 +81,7 @@ func dashboardCost(ctx context.Context, database *db.DB, days int, now time.Time
 	firstOfMonth := now.Format("2006-01") + "-01"
 	// Read from whichever start is earlier so a single pass covers both the trend
 	// window and month-to-date.
-	since := windowKeys[0]
-	if firstOfMonth < since {
-		since = firstOfMonth
-	}
+	since := min(firstOfMonth, windowKeys[0])
 
 	rows, err := database.UsageHistory(ctx, since)
 	if err != nil {

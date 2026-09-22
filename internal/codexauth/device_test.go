@@ -30,8 +30,8 @@ func (r *fakeRunner) Start(ctx context.Context, binPath string, env []string, ar
 
 	var homeDir string
 	for _, e := range env {
-		if strings.HasPrefix(e, "CODEX_HOME=") {
-			homeDir = strings.TrimPrefix(e, "CODEX_HOME=")
+		if after, ok := strings.CutPrefix(e, "CODEX_HOME="); ok {
+			homeDir = after
 		}
 	}
 

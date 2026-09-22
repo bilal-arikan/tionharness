@@ -52,7 +52,7 @@ func neighborhoodFixture(sessionCount int) *countingStore {
 		{ID: "A", AgentID: "AG1", UpdatedAt: 100, CoordinatorSessionID: "B"},
 		{ID: "B", AgentID: "AG1", UpdatedAt: 100, CoordinatorSessionID: "A"},
 	}
-	for i := 0; i < sessionCount; i++ {
+	for i := range sessionCount {
 		sessions = append(sessions, db.Session{
 			ID:                   fmt.Sprintf("S%d", i),
 			AgentID:              fmt.Sprintf("AG%d", i%4),

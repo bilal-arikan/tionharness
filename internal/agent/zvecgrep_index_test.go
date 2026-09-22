@@ -158,7 +158,7 @@ func TestEnsureZvecGrepGitExclude(t *testing.T) {
 	if err := os.WriteFile(exclude, []byte("# local\n*.log"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := ensureZvecGrepGitExclude(repo); err != nil {
 			t.Fatalf("run %d: %v", i, err)
 		}

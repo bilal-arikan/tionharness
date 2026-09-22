@@ -53,7 +53,7 @@ func TestSearchMessages(t *testing.T) {
 	}
 
 	// Limit.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		d.AddMessage(ctx, Message{SessionID: s2.ID, Role: "user", Text: "spam spam spam"})
 	}
 	hits, _ = d.SearchMessages(ctx, SearchOpts{Query: "spam", Limit: 3})

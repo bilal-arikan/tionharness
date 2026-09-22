@@ -17,7 +17,7 @@ func TestPrefixLeversDefaultOnAndPatchable(t *testing.T) {
 	if cur := store.Get(); !cur.ClaudeCLIToolAllowlist || !cur.AuxNativeRouting {
 		t.Fatalf("fresh store must carry both levers on, got %+v", cur)
 	}
-	if _, err := store.Apply(Patch{ClaudeCLIToolAllowlist: ptrBool(false), AuxNativeRouting: ptrBool(false)}); err != nil {
+	if _, err := store.Apply(Patch{ClaudeCLIToolAllowlist: new(false), AuxNativeRouting: new(false)}); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	cur := store.Get()

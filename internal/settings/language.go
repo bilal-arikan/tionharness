@@ -15,6 +15,8 @@ package settings
 // A user may legitimately want an English interface while talking to the agent in
 // Turkish (or the reverse), which is exactly why the axes are split.
 
+import "slices"
+
 // SupportedLanguages lists the language codes the app can be configured with, in
 // display order. Adding a locale is a two-step change: append it here (backend
 // validation + normalization follow automatically) and add the matching catalog
@@ -38,12 +40,7 @@ func LanguageDisplayName(code string) string { return languageNames[code] }
 
 // isSupportedLanguage reports whether code is a known language code.
 func isSupportedLanguage(code string) bool {
-	for _, c := range SupportedLanguages {
-		if c == code {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(SupportedLanguages, code)
 }
 
 // EffectiveUILanguage resolves the language the interface should render in: the

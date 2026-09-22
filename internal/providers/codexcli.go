@@ -402,7 +402,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	var failed []error
 	mcpFallbackUsed := false
 	idleRetried := false
-	for attempt := 0; attempt < 3; attempt++ {
+	for range 3 {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, home)
 		if err == nil {
 			if len(mcpNotes) > 0 {

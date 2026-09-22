@@ -419,10 +419,7 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 
 	timeout := shellDefaultTimeout
 	if args.TimeoutSec > 0 {
-		timeout = time.Duration(args.TimeoutSec) * time.Second
-		if timeout > shellMaxTimeout {
-			timeout = shellMaxTimeout
-		}
+		timeout = min(time.Duration(args.TimeoutSec)*time.Second, shellMaxTimeout)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

@@ -20,7 +20,7 @@ func TestResolveInteractionCAS(t *testing.T) {
 	var wins int64
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

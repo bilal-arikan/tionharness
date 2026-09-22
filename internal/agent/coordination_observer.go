@@ -154,14 +154,14 @@ func (r *Runtime) observeStall(ev StallEvent) {
 // without threading it through every notify path.
 func noteTag(note, tag string) string {
 	open, close := "<"+tag+">", "</"+tag+">"
-	i := strings.Index(note, open)
-	if i < 0 {
+	_, after, ok := strings.Cut(note, open)
+	if !ok {
 		return ""
 	}
-	rest := note[i+len(open):]
-	j := strings.Index(rest, close)
-	if j < 0 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, close)
+	if !ok0 {
 		return ""
 	}
-	return strings.TrimSpace(rest[:j])
+	return strings.TrimSpace(before0)
 }

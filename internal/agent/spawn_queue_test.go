@@ -43,7 +43,7 @@ func queueTestAgent(t *testing.T, rt *Runtime) db.Agent {
 
 func fillSpawnSlots(t *testing.T, rt *Runtime, n int) {
 	t.Helper()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if !rt.acquireSpawnSlotAtDepth(0) {
 			t.Fatalf("acquire slot %d", i)
 		}

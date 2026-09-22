@@ -124,7 +124,7 @@ func TestCoordinatorStallGuardNeverHaltsWhileWorkerNoteFresh(t *testing.T) {
 		"TSK103 handed to an independent validator")
 	rt.stallJudgeFn = func(context.Context, db.Agent, string) (bool, error) { return true, nil }
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		rt.guardCoordinatorStall(coord, agent.ID, agent, "TSK103 handed to an independent validator", nil)
 		if rt.CoordinatorStallHalted(coord) {
 			t.Fatalf("halted on stall %d while the worker note was still fresh", i+1)

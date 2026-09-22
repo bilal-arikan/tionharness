@@ -58,10 +58,7 @@ func (p retryPolicy) backoff(attempt int) time.Duration {
 		d = float64(p.maxDelay)
 	}
 	jitter := (rand.Float64()*0.5 - 0.25) * d // ±25%
-	wait := time.Duration(d + jitter)
-	if wait < 0 {
-		wait = 0
-	}
+	wait := max(time.Duration(d+jitter), 0)
 	return wait
 }
 

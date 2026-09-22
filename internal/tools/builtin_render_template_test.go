@@ -162,14 +162,14 @@ func TestRenderTemplate_MissingFieldWithoutSidecarNoWarn(t *testing.T) {
 func extractRenderedPath(t *testing.T, out string) string {
 	t.Helper()
 	const prefix = "Rendered "
-	i := strings.Index(out, prefix)
-	if i < 0 {
+	_, after, ok := strings.Cut(out, prefix)
+	if !ok {
 		t.Fatalf("no rendered-path prefix in output: %s", out)
 	}
-	rest := out[i+len(prefix):]
-	end := strings.Index(rest, " (")
-	if end < 0 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, " (")
+	if !ok0 {
 		t.Fatalf("no size suffix after path in output: %s", out)
 	}
-	return rest[:end]
+	return before0
 }

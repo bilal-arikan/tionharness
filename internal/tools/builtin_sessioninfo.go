@@ -215,9 +215,6 @@ func roundedAge(unixSec int64) string {
 	if unixSec <= 0 {
 		return "unknown"
 	}
-	d := time.Since(time.Unix(unixSec, 0))
-	if d < 0 {
-		d = 0
-	}
+	d := max(time.Since(time.Unix(unixSec, 0)), 0)
 	return d.Round(time.Second).String()
 }

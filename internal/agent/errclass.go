@@ -108,10 +108,9 @@ func classifyProviderError(err error) errClass {
 // exponential from 1s with ±25% jitter, capped at 30s. Jitter avoids thundering
 // re-requests when several sessions hit the same 429/529 window.
 func retryBackoff(attempt int) time.Duration {
-	base := time.Second << uint(min(attempt, 5)) // 1s, 2s, 4s, 8s, 16s, 32s→cap
-	if base > 30*time.Second {
-		base = 30 * time.Second
-	}
+	base := min(
+		// 1s, 2s, 4s, 8s, 16s, 32s→cap
+		time.Second<<uint(min(attempt, 5)), 30*time.Second)
 	jitter := time.Duration(rand.Int63n(int64(base) / 2)) // [0, base/2)
 	return base*3/4 + jitter                              // base ± 25%
 }

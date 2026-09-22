@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -233,9 +234,7 @@ func applyFlowRunStateDelta(state string, deltas []FlowRunStateDelta) (string, e
 		if delta.Sequence != expected {
 			return "", fmt.Errorf("delta sequence %d, want %d", delta.Sequence, expected)
 		}
-		for key, value := range delta.Scalars {
-			document[key] = value
-		}
+		maps.Copy(document, delta.Scalars)
 		var outputs map[string]string
 		if raw := document["outputs"]; len(raw) > 0 {
 			if err := json.Unmarshal(raw, &outputs); err != nil {
@@ -245,9 +244,7 @@ func applyFlowRunStateDelta(state string, deltas []FlowRunStateDelta) (string, e
 		if outputs == nil {
 			outputs = map[string]string{}
 		}
-		for key, value := range delta.OutputsUpsert {
-			outputs[key] = value
-		}
+		maps.Copy(outputs, delta.OutputsUpsert)
 		for _, key := range delta.OutputsDelete {
 			delete(outputs, key)
 		}

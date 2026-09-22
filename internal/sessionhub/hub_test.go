@@ -31,7 +31,7 @@ func TestPublishSeq(t *testing.T) {
 // Replay returns only events after the cursor; a cursor at head returns empty ok.
 func TestReplayFromCursor(t *testing.T) {
 	h := New("e", 16)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		h.Publish("WS1", "S", KindStep, raw("s"), false)
 	}
 	evs, ok := h.Replay("WS1", "S", 2)
@@ -51,11 +51,11 @@ func TestReplayFromCursor(t *testing.T) {
 // dropped), so eviction is driven here by committing first.
 func TestReplayRingEvictionResets(t *testing.T) {
 	h := New("e", 4) // keep ~4 durable events
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		h.Publish("WS1", "S", KindStep, raw("s"), false) // seq 1..4
 	}
 	h.Commit("WS1", "S") // 1..4 committed → now evictable
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		h.Publish("WS1", "S", KindStep, raw("t"), false) // seq 5..8, each trims a committed leader
 	}
 	// Ring now holds ~seq 5..8; a reconnect cursor at seq 2 (evicted) is unrecoverable.
@@ -73,7 +73,7 @@ func TestReplayRingEvictionResets(t *testing.T) {
 // fresh subscriber must be able to replay the whole running turn.
 func TestRingKeepsUncommitted(t *testing.T) {
 	h := New("e", 4)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		h.Publish("WS1", "S", KindStep, raw("s"), false) // 10 uncommitted, cap 4
 	}
 	fresh, ok := h.Replay("WS1", "S", 0)
@@ -86,7 +86,7 @@ func TestRingKeepsUncommitted(t *testing.T) {
 // last Commit); a reconnect (since>0) still gap-fills from the cursor.
 func TestReplayCommitBoundary(t *testing.T) {
 	h := New("e", 32)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		h.Publish("WS1", "S", KindStep, raw("s"), false)
 	}
 	h.Commit("WS1", "S")                             // seq 1..3 are now in the persisted transcript

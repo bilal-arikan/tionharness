@@ -2,6 +2,7 @@ package tools
 
 import (
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,10 +38,5 @@ func TestHardenShellCmdStripsCredentials(t *testing.T) {
 }
 
 func hasEnv(env []string, want string) bool {
-	for _, kv := range env {
-		if kv == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(env, want)
 }

@@ -71,7 +71,7 @@ func TestAgentHandlesArePerSessionAndCapped(t *testing.T) {
 	now := time.Now()
 	in := agentFixture(now)
 	// Push well past the handle cap so elision is exercised.
-	for i := 0; i < agentSessionHandles+5; i++ {
+	for i := range agentSessionHandles + 5 {
 		in.Sessions = append(in.Sessions, db.Session{
 			ID: fmt.Sprintf("F%d", i), AgentID: "AG1", UpdatedAt: now.Unix(),
 		})

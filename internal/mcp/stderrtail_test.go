@@ -40,7 +40,7 @@ func TestDialStdioSurfacesServerStderr(t *testing.T) {
 func TestStderrTailIsBoundedAndNonBlocking(t *testing.T) {
 	s := &stderrTail{}
 	chunk := []byte(strings.Repeat("x", 1024))
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		n, err := s.Write(chunk)
 		if err != nil {
 			t.Fatalf("write %d: %v", i, err)

@@ -94,7 +94,7 @@ func TestAdoptionIsIdempotent(t *testing.T) {
 	custom := "the prompt the user wrote"
 	deriveCustomisation(t, d, titler.ID, custom)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := d.EnsureSystemAgents(ctx, systemTestDefs()...); err != nil {
 			t.Fatalf("re-seed %d: %v", i, err)
 		}

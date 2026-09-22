@@ -119,10 +119,7 @@ func renderNumbered(content string, offset, limit int) string {
 	if max <= 0 {
 		max = fsReadDefaultLine
 	}
-	end := start - 1 + max
-	if end > total {
-		end = total
-	}
+	end := min(start-1+max, total)
 
 	var b strings.Builder
 	byteCap := false
@@ -513,7 +510,7 @@ func fuzzyLineMatch(content, needle string, norm func(string) string) (ranges []
 	k := len(nn)
 	for i := 0; i+k <= len(fLines); i++ {
 		match := true
-		for j := 0; j < k; j++ {
+		for j := range k {
 			if norm(fLines[i+j]) != nn[j] {
 				match = false
 				break
@@ -670,10 +667,7 @@ func globToRegexp(pattern string) (*regexp.Regexp, error) {
 // isBinary reports whether data looks like a binary (non-text) file, by the
 // presence of a NUL byte in the inspected prefix.
 func isBinary(data []byte) bool {
-	n := len(data)
-	if n > 8000 {
-		n = 8000
-	}
+	n := min(len(data), 8000)
 	for i := 0; i < n; i++ {
 		if data[i] == 0 {
 			return true

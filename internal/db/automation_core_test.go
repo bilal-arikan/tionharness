@@ -86,7 +86,7 @@ func TestAutomationFireLedger(t *testing.T) {
 	if recs, err := d.ListAutomationFires(ctx, a.ID, 0); err != nil || len(recs) != 0 {
 		t.Fatalf("empty ledger = %v err=%v", recs, err)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := d.AppendAutomationFire(ctx, a.ID, AutomationFireRecord{Outcome: AutomationFireSkipped, Reason: AutomationSkipCooldown, Iteration: i}); err != nil {
 			t.Fatalf("append: %v", err)
 		}
@@ -99,7 +99,7 @@ func TestAutomationFireLedger(t *testing.T) {
 		t.Fatalf("list newest-first limit 2 = %+v err=%v", recs, err)
 	}
 	// Trim: past automationFireTrimAt lines only the newest automationFireCap stay.
-	for i := 0; i < automationFireTrimAt; i++ {
+	for i := range automationFireTrimAt {
 		_ = d.AppendAutomationFire(ctx, a.ID, AutomationFireRecord{Outcome: AutomationFireSkipped, Iteration: 100 + i})
 	}
 	all, _ := d.ListAutomationFires(ctx, a.ID, 0)

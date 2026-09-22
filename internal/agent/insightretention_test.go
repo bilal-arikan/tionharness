@@ -16,7 +16,7 @@ func TestArchiveOldInsightSessions(t *testing.T) {
 	ctx := context.Background()
 
 	var ids []string
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		s, err := rt.db.CreateSession(ctx, db.Session{AgentID: "AGT1", Kind: db.SessionKindInsight, SourceID: "IRUN"})
 		if err != nil {
 			t.Fatal(err)

@@ -53,7 +53,7 @@ func measExtendedTools(n int) []ToolSpec {
 	verbs := []string{"set", "get", "list", "update", "create", "delete", "search", "toggle", "read", "archive"}
 	nouns := []string{"session_goal", "session_title", "working_dir", "tags", "config", "secret", "server", "skill", "schedule", "hook", "flow", "agent", "workspace", "label", "status"}
 	out := make([]ToolSpec, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		name := fmt.Sprintf("%s_%s_%d", verbs[i%len(verbs)], nouns[i%len(nouns)], i)
 		desc := fmt.Sprintf("Self-management tool %d: %s the %s for this workspace/session. "+
 			"Use when the user asks to %s their %s. Returns a short status string.",
@@ -150,7 +150,7 @@ func TestMeasureGatewaySavings(t *testing.T) {
 // parseFinalUsage extracts the usage block from the stream-json "result" envelope.
 func parseFinalUsage(streamJSON string) measUsage {
 	var last measUsage
-	for _, ln := range strings.Split(streamJSON, "\n") {
+	for ln := range strings.SplitSeq(streamJSON, "\n") {
 		ln = strings.TrimSpace(ln)
 		if !strings.Contains(ln, `"type":"result"`) {
 			continue

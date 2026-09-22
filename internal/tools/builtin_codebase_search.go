@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -185,8 +186,8 @@ func (t CodebaseWorkspaceSearchTool) runCLI(ctx context.Context, tool string, pa
 	// The CLI prints the JSON result on stdout; return the last non-empty line so any
 	// stray leading output is ignored.
 	lines := strings.Split(strings.TrimSpace(string(stdout)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if s := strings.TrimSpace(lines[i]); s != "" {
+	for _, line := range slices.Backward(lines) {
+		if s := strings.TrimSpace(line); s != "" {
 			return s, nil
 		}
 	}

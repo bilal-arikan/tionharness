@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -70,10 +71,7 @@ func SlicePage[T any](all []T, offset, limit int) ([]T, int) {
 	if offset >= total {
 		return []T{}, total
 	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
+	end := min(offset+limit, total)
 	return all[offset:end], total
 }
 
@@ -177,7 +175,7 @@ func SortByField[T any](items []T, field string, asc bool,
 // splitTags parses a comma-separated tags filter argument ("a, b" → ["a","b"]).
 func SplitTags(s string) []string {
 	var out []string
-	for _, t := range strings.Split(s, ",") {
+	for t := range strings.SplitSeq(s, ",") {
 		if t = strings.TrimSpace(t); t != "" {
 			out = append(out, t)
 		}
@@ -189,13 +187,7 @@ func SplitTags(s string) []string {
 // semantics of the tags filter — a card carrying all of them passes).
 func HasAllTags(got, required []string) bool {
 	for _, r := range required {
-		found := false
-		for _, g := range got {
-			if g == r {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(got, r)
 		if !found {
 			return false
 		}

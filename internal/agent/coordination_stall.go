@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -610,9 +611,9 @@ func (r *Runtime) judgeAndNudgeStall(ctx context.Context, coordSessionID string,
 
 // lastAssistantText returns the text of the most recent assistant message, or "".
 func lastAssistantText(msgs []db.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "assistant" {
-			return msgs[i].Text
+	for _, msg := range slices.Backward(msgs) {
+		if msg.Role == "assistant" {
+			return msg.Text
 		}
 	}
 	return ""

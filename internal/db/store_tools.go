@@ -1,5 +1,7 @@
 package db
 
+import "maps"
+
 import "context"
 
 // toolConfigFile is the singleton workspace-level tool activation document at
@@ -43,9 +45,7 @@ func (d *DB) GetWorkspaceToolConfig(ctx context.Context) (WorkspaceToolConfig, e
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	vis := make(map[string]string, len(d.toolConfig.ToolVisibility))
-	for k, v := range d.toolConfig.ToolVisibility {
-		vis[k] = v
-	}
+	maps.Copy(vis, d.toolConfig.ToolVisibility)
 	out := WorkspaceToolConfig{
 		DisabledTools:  append([]string{}, d.toolConfig.DisabledTools...),
 		ToolVisibility: vis,

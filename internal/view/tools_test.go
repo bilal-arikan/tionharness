@@ -56,7 +56,7 @@ func TestToolsBodyListsServersEnabledFirst(t *testing.T) {
 
 func TestToolsCardCapsServersAndCountsElided(t *testing.T) {
 	in := toolsFixture()
-	for i := 0; i < toolsServerRows+4; i++ {
+	for i := range toolsServerRows + 4 {
 		in.MCPServers = append(in.MCPServers, db.MCPServer{
 			ID: fmt.Sprintf("X%d", i), Name: fmt.Sprintf("srv%d", i),
 			Transport: db.MCPTransportStdio, Command: "x", Enabled: true,

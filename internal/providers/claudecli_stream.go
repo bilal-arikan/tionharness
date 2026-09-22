@@ -8,6 +8,7 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,12 +79,7 @@ func salvageCLIEvent(line string) (ev cliEvent, dropped []string, ok bool) {
 
 // containsField reports whether salvageCLIEvent lost the named field.
 func containsField(dropped []string, name string) bool {
-	for _, d := range dropped {
-		if d == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(dropped, name)
 }
 
 // cliStreamParser incrementally consumes the stream-json event log, building a
@@ -915,10 +911,7 @@ func (p *cliStreamParser) terminateNativeCompactionLocked(phase CLICompactionPha
 	if p.nativeCompactionAttemptID == "" {
 		return
 	}
-	dur := time.Since(p.nativeCompactionStartedAt).Milliseconds()
-	if dur < 1 {
-		dur = 1
-	}
+	dur := max(time.Since(p.nativeCompactionStartedAt).Milliseconds(), 1)
 	summary := ""
 	if phase == CLICompactionError {
 		summary = "claude CLI native compaction failed"
@@ -1109,9 +1102,9 @@ func (p *cliStreamParser) salvage() *Response {
 	}
 	if text == "" {
 		// Fall back to the last non-empty assistant text step in the trace.
-		for i := len(p.resp.Trace) - 1; i >= 0; i-- {
-			if p.resp.Trace[i].Kind == "text" && strings.TrimSpace(p.resp.Trace[i].Text) != "" {
-				text = strings.TrimSpace(p.resp.Trace[i].Text)
+		for _, v := range slices.Backward(p.resp.Trace) {
+			if v.Kind == "text" && strings.TrimSpace(v.Text) != "" {
+				text = strings.TrimSpace(v.Text)
 				break
 			}
 		}

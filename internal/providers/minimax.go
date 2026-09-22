@@ -259,10 +259,9 @@ func (u oaiUsage) toUsage() Usage {
 	if u.PromptTokensDetails != nil && u.PromptTokensDetails.CachedTokens > cached {
 		cached = u.PromptTokensDetails.CachedTokens
 	}
-	input := u.PromptTokens - cached // cached is a subset of prompt_tokens
-	if input < 0 {
-		input = 0
-	}
+	input := max(
+		// cached is a subset of prompt_tokens
+		u.PromptTokens-cached, 0)
 	return Usage{
 		InputTokens:      input,
 		OutputTokens:     u.CompletionTokens,

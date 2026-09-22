@@ -274,7 +274,7 @@ func parseTodos(input json.RawMessage) []TodoItem {
 // native tool loop so the CLI path renders the same cards.
 func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 	tool := t.Tool
-	if s := strings.TrimPrefix(tool, interactionToolPrefix); s != tool {
+	if s, ok := strings.CutPrefix(tool, interactionToolPrefix); ok {
 		tool = s
 	} else {
 		tool = strings.TrimPrefix(tool, extendedToolPrefix)

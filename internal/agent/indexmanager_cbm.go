@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,8 +59,8 @@ type codebaseMemoryReply struct {
 func parseCodebaseMemoryReply(out []byte) (codebaseMemoryReply, error) {
 	var rep codebaseMemoryReply
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
+	for _, line := range slices.Backward(lines) {
+		line := strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "{") {
 			continue
 		}

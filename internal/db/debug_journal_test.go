@@ -13,9 +13,9 @@ import (
 )
 
 func TestDebugStringPolicyCoversEveryPersistedStringField(t *testing.T) {
-	typ := reflect.TypeOf(DebugEvent{})
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	typ := reflect.TypeFor[DebugEvent]()
+	for field := range typ.Fields() {
+		field := field
 		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
 			continue
 		}
@@ -39,9 +39,9 @@ func TestDebugJournalRedactsEveryStringField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	typ := reflect.TypeOf(DebugEvent{})
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	typ := reflect.TypeFor[DebugEvent]()
+	for field := range typ.Fields() {
+		field := field
 		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
 			continue
 		}
@@ -271,11 +271,11 @@ func TestDebugSummaryAnomaliesAndSeries(t *testing.T) {
 	emit(DebugEvent{Type: DebugTool, Name: "Bash", DurMs: 5000, OutBytes: 100})
 	emit(DebugEvent{Type: DebugTool, Name: "Read", DurMs: 50, OutBytes: 100})
 	// A failing tool (calls=3, 2 errors → >30%).
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		emit(DebugEvent{Type: DebugTool, Name: "Flaky", DurMs: 10, Err: i < 2})
 	}
 	// Frequent compaction (>=3) + error burst (>=3).
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		emit(DebugEvent{Type: DebugCompaction})
 		emit(DebugEvent{Type: DebugError, Detail: "boom"})
 	}
@@ -406,7 +406,7 @@ func TestDebugSummaryCacheAndThinkingCoach(t *testing.T) {
 	// 3 calls, big prompt spend, almost no cache reads → low hit ratio.
 	// Output carries a majority-thinking share too.
 	s, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "coach"})
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = d.AppendDebugEvent(s.ID, DebugEvent{
 			Type: DebugLLMCall, Model: "m", In: 10000, Out: 1000, Think: 700, CacheRead: 500,
 		}, 0)
@@ -421,7 +421,7 @@ func TestDebugSummaryCacheAndThinkingCoach(t *testing.T) {
 
 	// Warm session: high cache reads → no low_cache_hit.
 	s2, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "warm"})
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = d.AppendDebugEvent(s2.ID, DebugEvent{Type: DebugLLMCall, Model: "m", In: 500, Out: 200, CacheRead: 40000}, 0)
 	}
 	sum2, _ := d.GetDebugSummary(ctx, s2.ID)
@@ -467,7 +467,7 @@ func TestDebugJournalCapPrunes(t *testing.T) {
 
 	cap := 8
 	// Append well past cap + cap/4 so pruning triggers at least once.
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugTool, Name: "T", DurMs: int64(i)}, cap); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
@@ -692,7 +692,7 @@ func TestDebugJournalNameFingerprintIsStable(t *testing.T) {
 	}
 
 	const name = "unlisted compaction trigger"
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := d.AppendDebugEvent(sess.ID, DebugEvent{Type: DebugCompaction, Name: name}, 0); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}

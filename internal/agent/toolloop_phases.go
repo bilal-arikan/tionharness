@@ -618,7 +618,7 @@ func (t *toolLoopTurn) compactAndRetry(reason contReason) bool {
 // from a recoverable failure, execute the tool batch it asked for, answer with
 // tool_results, repeat until the model stops asking or a bound is hit.
 func (t *toolLoopTurn) runNativeLoop() (*providers.Response, []TurnStep, error) {
-	for i := 0; i < maxToolIters; i++ {
+	for i := range maxToolIters {
 		// Live steering: fold any user guidance that arrived since the last
 		// iteration into the conversation before the next model call.
 		if !t.pendingProgrammatic {

@@ -101,10 +101,7 @@ func (s *fileSource) Poll(_ context.Context) ([]MonitorEvent, bool, string, erro
 	}
 	defer f.Close()
 
-	n := size - s.cur
-	if n > fileSourceMaxChunk {
-		n = fileSourceMaxChunk
-	}
+	n := min(size-s.cur, fileSourceMaxChunk)
 	buf := make([]byte, n)
 	read, err := f.ReadAt(buf, s.cur)
 	if err != nil && err != io.EOF {

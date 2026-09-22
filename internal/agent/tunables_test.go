@@ -28,7 +28,7 @@ func TestTunables_SetAndGet(t *testing.T) {
 func TestTunables_ConcurrentAccess(t *testing.T) {
 	tun := NewTunables()
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		wg.Add(2)
 		go func() { defer wg.Done(); tun.SetShellEnabled(true); _ = tun.ShellEnabled() }()
 		go func() { defer wg.Done(); tun.SetMaxOutputTokens(1000); _ = tun.MaxOutputTokens() }()

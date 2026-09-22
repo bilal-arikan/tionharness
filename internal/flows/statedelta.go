@@ -7,6 +7,7 @@ package flows
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -26,9 +27,7 @@ func NewStateDeltaWriter(checkpointID string, sequence uint64, state orchestrati
 func CloneState(state orchestration.State) orchestration.State {
 	cloned := state
 	cloned.Outputs = make(map[string]string, len(state.Outputs))
-	for key, value := range state.Outputs {
-		cloned.Outputs[key] = value
-	}
+	maps.Copy(cloned.Outputs, state.Outputs)
 	cloned.Trace = append([]orchestration.TraceEntry(nil), state.Trace...)
 	cloned.Thread = append([]orchestration.Msg(nil), state.Thread...)
 	if state.Spawned != nil {

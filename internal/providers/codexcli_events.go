@@ -3,6 +3,7 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -523,9 +524,9 @@ func (p *codexStreamParser) salvage() *Response {
 	}
 	text := strings.TrimSpace(p.finalText)
 	if text == "" {
-		for i := len(p.resp.Trace) - 1; i >= 0; i-- {
-			if p.resp.Trace[i].Kind == "text" && strings.TrimSpace(p.resp.Trace[i].Text) != "" {
-				text = strings.TrimSpace(p.resp.Trace[i].Text)
+		for _, v := range slices.Backward(p.resp.Trace) {
+			if v.Kind == "text" && strings.TrimSpace(v.Text) != "" {
+				text = strings.TrimSpace(v.Text)
 				break
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -41,12 +42,7 @@ var CoordinationToolNames = []string{
 
 // IsCoordinationTool reports whether name is part of the coordination surface.
 func IsCoordinationTool(name string) bool {
-	for _, n := range CoordinationToolNames {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(CoordinationToolNames, name)
 }
 
 // WorkerSpawnSpec carries the nesting options of one spawn_worker call from the
@@ -241,10 +237,7 @@ func treeBudgetLine(used, total int) string {
 	if total <= 0 {
 		return ""
 	}
-	remaining := total - used
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(total-used, 0)
 	line := fmt.Sprintf("\nTree budget: %d/%d live worker sessions in use (%d remaining; finished workers are reclaimed automatically).", used, total, remaining)
 	switch frac := float64(used) / float64(total); {
 	case frac >= 0.90:

@@ -81,10 +81,9 @@ func (m *Manager) applyRollingFold(ctx context.Context, in rollingFoldInput) (ro
 	// both sides off the reduced overhead hides exactly the part the fold removed,
 	// understating the "X→Y" ratio by foldedSteps.
 	overheadBefore := in.overhead
-	overhead := in.overhead - foldedSteps
-	if overhead < 0 {
-		overhead = 0 // a step term larger than the whole overhead is nonsense; floor it
-	}
+	overhead := max(in.overhead-foldedSteps,
+		// a step term larger than the whole overhead is nonsense; floor it
+		0)
 	afterTokens := EstimateTokens(summary, pending) + overhead
 	// The on-screen compaction step and the debug journal share one formula:
 	// messages + the non-message overhead as it stands AT THAT MOMENT — the

@@ -9,7 +9,7 @@ func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
 	var s FailStreaks
 
 	crossings := 0
-	for i := 0; i < FailStreakThreshold*3; i++ {
+	for range FailStreakThreshold * 3 {
 		if s.Note("cbm") == FailStreakThreshold {
 			crossings++
 		}
@@ -22,7 +22,7 @@ func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
 	// that flaps all day would escalate only once in the life of the process.
 	s.Clear("cbm")
 	crossings = 0
-	for i := 0; i < FailStreakThreshold; i++ {
+	for range FailStreakThreshold {
 		if s.Note("cbm") == FailStreakThreshold {
 			crossings++
 		}
@@ -36,7 +36,7 @@ func TestMCPFailStreakEscalatesOnceThenResets(t *testing.T) {
 // across the threshold — the incident had two servers failing for unrelated reasons.
 func TestMCPFailStreakIsPerServer(t *testing.T) {
 	var s FailStreaks
-	for i := 0; i < FailStreakThreshold; i++ {
+	for range FailStreakThreshold {
 		s.Note("cbm")
 	}
 	if got := s.Note("playwright"); got != 1 {

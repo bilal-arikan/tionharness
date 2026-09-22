@@ -44,7 +44,7 @@ func TestMajorityBreaksTiesByLowestLeg(t *testing.T) {
 		answered(2, "C", "right"),
 		answered(3, "D", "left"),
 	}
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		winner, _, err := MajorityWinner(outcomes)
 		if err != nil {
 			t.Fatalf("a 2-2 split still has a majority class: %v", err)

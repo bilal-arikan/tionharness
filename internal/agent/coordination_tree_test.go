@@ -480,7 +480,7 @@ func TestDeepSpawnLeavesHeadroomForShallowWork(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if !rt.acquireSpawnSlotAtDepth(3) {
 			t.Fatalf("deep spawn %d should fit under the reservation", i+1)
 		}

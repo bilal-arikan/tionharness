@@ -59,7 +59,7 @@ func TestCapToolOutput(t *testing.T) {
 func misalignedBody(t *testing.T) string {
 	t.Helper()
 	headBudget := int(float64(maxToolOutputBytes) * offloadHeadBudget)
-	for prefix := 0; prefix < 3; prefix++ {
+	for prefix := range 3 {
 		if (maxToolOutputBytes-prefix)%3 != 0 && (headBudget-prefix)%3 != 0 {
 			// 3 bytes per rune * maxToolOutputBytes runes → far above the cap.
 			return strings.Repeat("x", prefix) + strings.Repeat("…", maxToolOutputBytes)
@@ -93,11 +93,11 @@ func TestCapToolOutputRuneBoundary(t *testing.T) {
 	// A multibyte rune straddling the cut point must not produce invalid UTF-8.
 	body := misalignedBody(t)
 	got := capToolOutput(body)
-	marker := strings.Index(got, "\n…[truncated")
-	if marker < 0 {
+	before, _, ok := strings.Cut(got, "\n…[truncated")
+	if !ok {
 		t.Fatalf("expected truncation marker")
 	}
-	cut := got[:marker]
+	cut := before
 	if !strings.HasPrefix(body, cut) {
 		t.Fatalf("truncated prefix is not a valid prefix of the input")
 	}

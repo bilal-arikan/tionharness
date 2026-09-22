@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -191,10 +192,7 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 		if !warm {
 			return cachePreview{Mode: "none", Note: ""}
 		}
-		cached := session.CLISentMsgCount
-		if cached > msgCount {
-			cached = msgCount
-		}
+		cached := min(session.CLISentMsgCount, msgCount)
 		return cachePreview{
 			Mode:           "claude-resume",
 			SystemCached:   true,
@@ -269,10 +267,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// (read-only: no LLM summarize, no persist), so the live tail matches what the
 	// model would get after this turn's compaction too.
 	simulateCompaction, _ := strconv.ParseBool(r.URL.Query().Get("compact"))
-	start := session.SummaryMsgCount
-	if start < 0 {
-		start = 0
-	}
+	start := max(session.SummaryMsgCount, 0)
 	if start > len(history) {
 		start = len(history)
 	}
@@ -530,17 +525,14 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// scan back once and independently select the newest chat and non-chat calls.
 	// Stop as soon as both are found; older events cannot replace either selection.
 	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 0); sessionID != "" && derr == nil {
-		for i := len(evs) - 1; i >= 0; i-- {
-			e := evs[i]
+		for _, e := range slices.Backward(evs) {
+
 			// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
 			// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
 			// Σ per-assistant cacheRead). Divide by the round-trip count to recover ONE
 			// call's single-pass context. Native providers / single-call turns record
 			// e.Calls 0 or 1 → no division.
-			n := e.Calls
-			if n < 1 {
-				n = 1
-			}
+			n := max(e.Calls, 1)
 			measured := (e.In + e.CacheRead + e.CacheWrite) / n
 			if e.Kind == "chat" {
 				if chatCalls == 0 {
@@ -570,10 +562,7 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 		}
 	}
 
-	over := chatMeasured - estimated
-	if over < 0 {
-		over = 0
-	}
+	over := max(chatMeasured-estimated, 0)
 
 	note := name + " kendi sistem promptu + araç şemaları + MCP köprüsünü modele ekler; bu yük yukarıdaki segment tahminine (TotalTokens) DAHİL DEĞİL. 'Gerçek' = bir çağrının tek-geçiş girdisi (input+cacheRead+cacheWrite). Not: claude-cli in/out/cache'i tek tur içindeki iç tool-loop adımları (num_turns) boyunca KÜMÜLATİF raporlar → çağrı başına bağlamı bulmak için num_turns'e bölünür."
 	if chatMeasured == 0 {
@@ -615,12 +604,12 @@ func (s *Server) applyLearnedCLIOverhead(ctx context.Context, wsp *workspace.Wor
 // (result, true) when the block was found, (text, false) otherwise. Used to lift
 // the skills catalog block back out of the composed system prompt for the preview.
 func stripBlock(text, block string) (string, bool) {
-	idx := strings.Index(text, block)
-	if idx < 0 {
+	before0, after0, ok := strings.Cut(text, block)
+	if !ok {
 		return text, false
 	}
-	before := text[:idx]
-	after := text[idx+len(block):]
+	before := before0
+	after := after0
 	joined := strings.TrimRight(before, "\n") + "\n\n" + strings.TrimLeft(after, "\n")
 	return strings.TrimSpace(joined), true
 }

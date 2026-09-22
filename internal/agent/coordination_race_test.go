@@ -37,10 +37,8 @@ func TestReportClaimIsExclusive(t *testing.T) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	for i := 0; i < racers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range racers {
+		wg.Go(func() {
 			<-start
 			won, err := rt.db.ClaimCoordinatorReport(ctx, mid.ID)
 			if err != nil {
@@ -52,7 +50,7 @@ func TestReportClaimIsExclusive(t *testing.T) {
 				wins++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()
@@ -84,9 +82,8 @@ func TestSettleBackstopDoesNotDoubleReport(t *testing.T) {
 
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() { defer wg.Done(); <-start; rt.settleReportBackstop(ctx, mid.ID) }()
+	for range 8 {
+		wg.Go(func() { ; <-start; rt.settleReportBackstop(ctx, mid.ID) })
 	}
 	close(start)
 	wg.Wait()
@@ -126,7 +123,7 @@ func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 	// Fill the tree to capacity with live workers, so the budget is already spent
 	// when the concurrent storm hits.
 	seeded := make([]string, 0, budget)
-	for i := 0; i < budget; i++ {
+	for i := range budget {
 		w := newTreeNode(t, rt, fmt.Sprintf("seed%d", i), root, root, 1, false)
 		rt.trackSession(w.ID, func() {})
 		seeded = append(seeded, w.ID)
@@ -139,13 +136,11 @@ func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	for i := 0; i < budget*4; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range budget * 4 {
+		wg.Go(func() {
 			<-start
 			_, _ = rt.SpawnWorker(ctx, root, "W", "task", "", WorkerSpec{})
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

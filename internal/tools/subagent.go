@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -250,10 +251,5 @@ func oneOfEnum(v string, allowed ...string) bool {
 	if v == "" {
 		return true
 	}
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, v)
 }

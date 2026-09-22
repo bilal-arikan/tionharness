@@ -115,10 +115,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		return fmt.Sprintf("Offset %d is past the last of %d matching sessions.", offset, total), nil
 	}
 
-	end := offset + limit
-	if end > total {
-		end = total
-	}
+	end := min(offset+limit, total)
 	page := matches[offset:end]
 
 	now := time.Now().Unix()
@@ -163,7 +160,7 @@ func sessKindLabel(kind string) string {
 
 // sessSnippet returns the first non-empty line of a summary, capped.
 func sessSnippet(summary string) string {
-	for _, ln := range strings.Split(summary, "\n") {
+	for ln := range strings.SplitSeq(summary, "\n") {
 		if ln = strings.TrimSpace(ln); ln != "" {
 			return sessClip(ln, 140)
 		}

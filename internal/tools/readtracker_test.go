@@ -183,13 +183,13 @@ func TestTrackerIsSafeForConcurrentUse(t *testing.T) {
 	const workers = 16
 
 	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			path := filepath.Join("/p", string(rune('a'+i)))
 			body := []byte(strings.Repeat("x", i+1))
-			for n := 0; n < 100; n++ {
+			for range 100 {
 				tr.Record(path, ReadRecord{Size: int64(len(body)), Sum: contentSum(body)})
 				_, _ = tr.Get(path)
 				_ = checkFreshness(tr, path, body)
@@ -199,7 +199,7 @@ func TestTrackerIsSafeForConcurrentUse(t *testing.T) {
 	}
 	wg.Wait()
 
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		path := filepath.Join("/p", string(rune('a'+i)))
 		if _, ok := tr.Get(path); !ok {
 			t.Errorf("baseline for %s lost under concurrency", path)

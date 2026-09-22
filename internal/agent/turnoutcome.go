@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -95,11 +96,11 @@ func classifyTurnContext(ctx context.Context, hard, idle time.Duration) (turnOut
 // markers use termReason values, which never collide with the contReason values
 // a mid-turn recovery step carries, so scanning backwards is unambiguous.
 func classifyTurnSteps(steps []TurnStep) (turnOutcome, bool) {
-	for i := len(steps) - 1; i >= 0; i-- {
-		if steps[i].Kind != StepRecovery {
+	for _, step := range slices.Backward(steps) {
+		if step.Kind != StepRecovery {
 			continue
 		}
-		switch termReason(steps[i].Reason) {
+		switch termReason(step.Reason) {
 		case termMaxIters:
 			return turnOutcome{
 				Status: turnStatusIncomplete,

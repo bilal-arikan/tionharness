@@ -156,10 +156,7 @@ func age(now time.Time, stamp int64) string {
 	if stamp <= 0 {
 		return ""
 	}
-	d := now.Sub(time.Unix(stamp, 0))
-	if d < 0 {
-		d = 0
-	}
+	d := max(now.Sub(time.Unix(stamp, 0)), 0)
 	switch {
 	case d < time.Minute:
 		return strconv.Itoa(int(d.Seconds())) + "sn"

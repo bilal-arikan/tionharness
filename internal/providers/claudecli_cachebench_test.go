@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -224,7 +224,7 @@ func medianInt64(xs []int64) int64 {
 		return 0
 	}
 	s := append([]int64(nil), xs...)
-	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
+	slices.Sort(s)
 	m := len(s) / 2
 	if len(s)%2 == 1 {
 		return s[m]

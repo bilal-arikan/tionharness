@@ -111,10 +111,7 @@ func (s *Server) learnCLIOverhead(ctx context.Context, wsp *workspace.Workspace,
 	if !ok {
 		return db.TokenCalibration{}, false
 	}
-	over := measured - estimated
-	if over < 0 {
-		over = 0
-	}
+	over := max(measured-estimated, 0)
 	c, err := wsp.DB.ObserveTokenCalibration(ctx, db.TokenCalibration{
 		Key:         key,
 		Kind:        db.TokenCalibrationCLIOverhead,

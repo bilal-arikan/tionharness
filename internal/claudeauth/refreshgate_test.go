@@ -61,9 +61,8 @@ func TestSerializeRefreshIsNoopWhenTokenValid(t *testing.T) {
 
 	start := time.Now()
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() { defer wg.Done(); SerializeRefresh(home) }()
+	for range 8 {
+		wg.Go(func() { ; SerializeRefresh(home) })
 	}
 	wg.Wait()
 	if elapsed := time.Since(start); elapsed > time.Second {

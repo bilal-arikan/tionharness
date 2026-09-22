@@ -36,7 +36,7 @@ func TestLoop_PruneBeforeFold(t *testing.T) {
 		{Role: providers.RoleUser, ToolResults: []providers.ToolResult{{CallID: "c1", Content: big}}},
 	}
 	// Pad past the kept tail so the big result is old enough to prune.
-	for i := 0; i < DefaultReactiveKeepRecent; i++ {
+	for range DefaultReactiveKeepRecent {
 		msgs = append(msgs,
 			providers.Message{Role: providers.RoleAssistant, Text: "a"},
 			providers.Message{Role: providers.RoleUser, Text: "u"},
@@ -78,7 +78,7 @@ func TestLoop_PruneSkippedWithoutOversizedResults(t *testing.T) {
 	agent := db.Agent{ID: "a1", Model: "m", MCPEnabled: true}
 
 	var msgs []providers.Message
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		msgs = append(msgs,
 			providers.Message{Role: providers.RoleUser, Text: "u"},
 			providers.Message{Role: providers.RoleAssistant, Text: "a"},

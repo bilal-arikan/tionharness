@@ -39,7 +39,9 @@ type defaultGoal struct {
 
 // floatPtr returns a pointer to a float literal (guardrail bounds are *float64
 // so "unset" is distinguishable from zero).
-func floatPtr(v float64) *float64 { return &v }
+//
+//go:fix inline
+func floatPtr(v float64) *float64 { return new(v) }
 
 // defaultGoals is the single source of truth for the starter goals every
 // workspace gets. Scope is left empty throughout: a seed cannot know which
@@ -57,7 +59,7 @@ var defaultGoals = []defaultGoal{
 					"değerleridir, workspace'in kendi ölçümleri biriktikçe düzeltilmelidir.",
 				Primary: db.GoalMetric{Metric: "usage.costUSDPerSession", Direction: db.GoalDirectionMin},
 				Guardrails: []db.GoalGuardrail{
-					{Metric: "session.errorTurnsRatio", Max: floatPtr(0.10)},
+					{Metric: "session.errorTurnsRatio", Max: new(0.10)},
 					{Metric: "session.humanAsksPerSession", Max: floatPtr(2)},
 				},
 			}
@@ -92,7 +94,7 @@ var defaultGoals = []defaultGoal{
 					"ölçümleri biriktikçe düzeltilmelidir.",
 				Primary: db.GoalMetric{Metric: "session.humanAsksPerSession", Direction: db.GoalDirectionMin},
 				Guardrails: []db.GoalGuardrail{
-					{Metric: "session.errorTurnsRatio", Max: floatPtr(0.10)},
+					{Metric: "session.errorTurnsRatio", Max: new(0.10)},
 					{Metric: "session.stuckLoops", Max: floatPtr(1)},
 				},
 			}

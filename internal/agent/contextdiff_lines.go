@@ -40,7 +40,7 @@ const (
 // markdown/quote decoration stripped, rune-truncated.
 func paragraphLabel(p string) string {
 	label := ""
-	for _, l := range strings.Split(p, "\n") {
+	for l := range strings.SplitSeq(p, "\n") {
 		if t := strings.TrimSpace(l); t != "" {
 			label = t
 			break
@@ -148,7 +148,7 @@ func pairParagraphs(removed, added []string) []int {
 // lineCounts is the multiset of a paragraph's trimmed, non-empty lines.
 func lineCounts(p string) map[string]int {
 	m := map[string]int{}
-	for _, l := range strings.Split(p, "\n") {
+	for l := range strings.SplitSeq(p, "\n") {
 		if t := strings.TrimSpace(l); t != "" {
 			m[t]++
 		}
@@ -171,10 +171,7 @@ func lineSimilarity(a, b map[string]int) float64 {
 			common += min(m, n)
 		}
 	}
-	den := total
-	if bTotal > den {
-		den = bTotal
-	}
+	den := max(bTotal, total)
 	return float64(common) / float64(den)
 }
 

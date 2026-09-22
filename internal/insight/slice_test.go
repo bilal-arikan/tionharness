@@ -15,7 +15,7 @@ import (
 
 func errStepsMsg(n int, pad string) db.Message {
 	var steps []string
-	for i := 0; i < n; i++ {
+	for i := range n {
 		steps = append(steps, fmt.Sprintf(
 			`{"kind":"error","reason":"r%d","text":"%s%d"}`, i, pad, i))
 	}
@@ -33,7 +33,7 @@ func TestBuildSliceReportsWhatItDropped(t *testing.T) {
 	}
 	// Every rendered record must be whole: a line that starts a record must also
 	// contain the text that record carried.
-	for _, ln := range strings.Split(out, "\n") {
+	for ln := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(ln, "- [error]") && !strings.Contains(ln, "reason=") {
 			t.Errorf("record rendered without its fields (cut mid-line?): %q", ln)
 		}
@@ -97,7 +97,7 @@ func TestBuildSliceStepsOutrankEvents(t *testing.T) {
 	s := &Scanner{sliceCap: 400}
 	msgs := []db.Message{errStepsMsg(20, strings.Repeat("z", 30))}
 	var events []db.DebugEvent
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		events = append(events, db.DebugEvent{
 			Type: db.DebugError, Name: fmt.Sprintf("e%d", i), Detail: strings.Repeat("q", 30),
 		})

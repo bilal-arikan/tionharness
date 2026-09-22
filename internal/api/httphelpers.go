@@ -61,14 +61,14 @@ func bindJSONStrict[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 // encoding/json's DisallowUnknownFields produces: `json: unknown field "x"`.
 func strictUnknownField(msg string) (string, bool) {
 	const marker = `unknown field "`
-	i := strings.Index(msg, marker)
-	if i < 0 {
+	_, after, ok := strings.Cut(msg, marker)
+	if !ok {
 		return "", false
 	}
-	rest := msg[i+len(marker):]
-	end := strings.IndexByte(rest, '"')
-	if end < 0 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, "\"")
+	if !ok0 {
 		return "", false
 	}
-	return rest[:end], true
+	return before0, true
 }

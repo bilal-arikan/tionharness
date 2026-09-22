@@ -36,7 +36,7 @@ func TestToolGuard_ExactFailureWarnsWithoutBlocking(t *testing.T) {
 	}
 	// Warnings never block: check still allows with hard stop off, even far
 	// past the block threshold.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		g.observe(call, failRes(call.ID))
 	}
 	if v, _ := g.check(call); v != guardAllow {
@@ -47,7 +47,7 @@ func TestToolGuard_ExactFailureWarnsWithoutBlocking(t *testing.T) {
 func TestToolGuard_HardStopBlocksExactFailure(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: true, hardStop: true})
 	call := gcall("Read", `{"path":"x"}`)
-	for i := 0; i < DefaultGuardExactBlockAfter; i++ {
+	for range DefaultGuardExactBlockAfter {
 		g.observe(call, failRes(call.ID))
 	}
 	v, reason := g.check(call)
@@ -67,7 +67,7 @@ func TestToolGuard_SameToolHalt(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: true, hardStop: true})
 	// Same tool, different args every time: exact counter never accumulates,
 	// the same-tool counter does.
-	for i := 0; i < DefaultGuardSameToolHaltAfter; i++ {
+	for i := range DefaultGuardSameToolHaltAfter {
 		call := gcall("terminal", `{"cmd":"attempt-`+strings.Repeat("x", i)+`"}`)
 		g.observe(call, failRes(call.ID))
 	}
@@ -80,7 +80,7 @@ func TestToolGuard_SameToolHalt(t *testing.T) {
 func TestToolGuard_SuccessResetsStreaks(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: true, hardStop: true})
 	call := gcall("terminal", `{"cmd":"x"}`)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		g.observe(call, failRes(call.ID))
 	}
 	g.observe(call, okRes(call.ID))
@@ -96,13 +96,13 @@ func TestToolGuard_NoProgressOnIdempotentRepeats(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: true, hardStop: true})
 	call := gcall("Read", `{"path":"same"}`) // Read is RiskRead → idempotent
 	var hint string
-	for i := 0; i < DefaultGuardNoProgressWarn+1; i++ {
+	for range DefaultGuardNoProgressWarn + 1 {
 		hint = g.observe(call, okRes(call.ID))
 	}
 	if hint == "" || !strings.Contains(hint, "not progress") {
 		t.Errorf("identical successful repeats must warn, got %q", hint)
 	}
-	for i := 0; i < DefaultGuardNoProgressBlock; i++ {
+	for range DefaultGuardNoProgressBlock {
 		g.observe(call, okRes(call.ID))
 	}
 	if v, _ := g.check(call); v != guardBlock {
@@ -110,7 +110,7 @@ func TestToolGuard_NoProgressOnIdempotentRepeats(t *testing.T) {
 	}
 	// A mutating tool never triggers no-progress (side effects are progress).
 	m := gcall("Write", `{"path":"same"}`)
-	for i := 0; i < DefaultGuardNoProgressBlock+2; i++ {
+	for range DefaultGuardNoProgressBlock + 2 {
 		if hint := g.observe(m, okRes(m.ID)); hint != "" {
 			t.Errorf("mutating tool repeat hinted: %q", hint)
 		}
@@ -180,7 +180,7 @@ func TestAnalyzeCLIGuardrail_FlagsLoopingTurn(t *testing.T) {
 func TestToolGuard_WarningsDisabledStaysSilent(t *testing.T) {
 	g := newToolGuard(toolGuardConfig{warnings: false, hardStop: false})
 	call := gcall("Read", `{"path":"x"}`)
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		if hint := g.observe(call, failRes(call.ID)); hint != "" {
 			t.Errorf("warnings off must never hint, got %q", hint)
 		}

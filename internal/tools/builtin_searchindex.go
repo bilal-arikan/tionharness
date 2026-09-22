@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -190,10 +191,8 @@ func (t SearchIndexTool) refreshTools(ctx context.Context, want string) ([]strin
 	if want == "" {
 		return enabled, nil
 	}
-	for _, e := range enabled {
-		if e == want {
-			return []string{want}, nil
-		}
+	if slices.Contains(enabled, want) {
+		return []string{want}, nil
 	}
 	return nil, fmt.Errorf("index tool %q is not enabled for this workspace (enabled: %s)", want, strings.Join(enabled, ", "))
 }

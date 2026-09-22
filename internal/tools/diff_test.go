@@ -33,7 +33,7 @@ func TestLineDiffNewFile(t *testing.T) {
 // was showing +10526/−10492 in the UI.
 func TestLineDiffLargeFileSmallEdit(t *testing.T) {
 	var oldB strings.Builder
-	for i := 0; i < 6000; i++ {
+	for i := range 6000 {
 		fmt.Fprintf(&oldB, "line %06d\n", i)
 	}
 	old := oldB.String()
@@ -52,7 +52,7 @@ func TestLineDiffLargeFileSmallEdit(t *testing.T) {
 // counts as one removed + one added, exactly like the small-file case.
 func TestLineDiffLargeFileReplacement(t *testing.T) {
 	var oldB strings.Builder
-	for i := 0; i < 6000; i++ {
+	for i := range 6000 {
 		fmt.Fprintf(&oldB, "line %06d\n", i)
 	}
 	old := oldB.String()

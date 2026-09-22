@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -404,9 +405,7 @@ func (r *Registry) AppendMCP(entries []mcp.CatalogEntry, cfgByServer map[string]
 	if r.mcpCfgByServer == nil {
 		r.mcpCfgByServer = map[string]mcp.ServerConfig{}
 	}
-	for name, cfg := range cfgByServer {
-		r.mcpCfgByServer[name] = cfg
-	}
+	maps.Copy(r.mcpCfgByServer, cfgByServer)
 	index := make(map[string]int, len(r.mcpEntries))
 	for i, e := range r.mcpEntries {
 		index[e.NamespacedName] = i
@@ -607,7 +606,7 @@ const lazyCatalogDescMaxChars = 200
 // non-empty line and hard-caps its length on a UTF-8 boundary.
 func lazyDescription(desc string) string {
 	summary := ""
-	for _, line := range strings.Split(desc, "\n") {
+	for line := range strings.SplitSeq(desc, "\n") {
 		if s := strings.TrimSpace(line); s != "" {
 			summary = s
 			break

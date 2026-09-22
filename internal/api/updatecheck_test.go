@@ -134,14 +134,12 @@ func TestUpdateCheckCachesAndSinglesFlight(t *testing.T) {
 
 	c := newUpdateChecker()
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 32 {
+		wg.Go(func() {
 			if got := c.Status(context.Background(), nil); !got.Available {
 				t.Errorf("concurrent caller got %+v, want an update", got)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if n := hits.Load(); n != 1 {

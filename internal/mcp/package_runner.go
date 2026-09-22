@@ -115,8 +115,8 @@ func packageRunnerIdentity(command string, args []string) (string, bool) {
 			}
 			return "", false
 		}
-		if strings.HasPrefix(a, "--package=") {
-			pkg := normalizePackageIdentity(strings.TrimPrefix(a, "--package="))
+		if after, ok := strings.CutPrefix(a, "--package="); ok {
+			pkg := normalizePackageIdentity(after)
 			return pkg, pkg != ""
 		}
 		if packageRunnerFlagTakesValue(a) {
@@ -151,8 +151,8 @@ func normalizePackageIdentity(spec string) string {
 		}
 		return spec
 	}
-	if version := strings.IndexByte(spec, '@'); version >= 0 {
-		return spec[:version]
+	if before, _, ok := strings.Cut(spec, "@"); ok {
+		return before
 	}
 	return spec
 }

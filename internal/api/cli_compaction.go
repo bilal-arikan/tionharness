@@ -101,10 +101,7 @@ func warmCLIStepBaseline(session db.Session, historyLen int) int {
 	if !hasWarmCLIThread(session) {
 		return -1
 	}
-	base := session.SummaryMsgCount
-	if session.CLICompactMsgCount > base {
-		base = session.CLICompactMsgCount
-	}
+	base := max(session.CLICompactMsgCount, session.SummaryMsgCount)
 	// A boundary past the end of the transcript means the history shrank under it
 	// (message edits/deletes). Fall back to counting the whole pending window, the
 	// same conservative choice the meter made before this baseline existed.

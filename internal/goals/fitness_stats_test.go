@@ -46,7 +46,7 @@ func TestDistributionOf(t *testing.T) {
 func bucketFixture(n, heavy int, heavyCost float64) ([]SessionRow, FitnessInputs) {
 	in := FitnessInputs{Usage: map[string]UsageRow{}}
 	var rows []SessionRow
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := fmt.Sprintf("SES%d", i)
 		cost := 1.0
 		if i < heavy {
@@ -98,7 +98,7 @@ func TestBucketStatsGate(t *testing.T) {
 
 func TestErrorRatioExcludesProviderFailures(t *testing.T) {
 	g := db.Goal{ID: "GOL1", Primary: db.GoalMetric{Metric: "usage.costUSDPerSession", Direction: "min"},
-		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: f(0.10)}}}
+		Guardrails: []db.GoalGuardrail{{Metric: "session.errorTurnsRatio", Max: new(0.10)}}}
 	rows, in := bucketFixture(20, 0, 0)
 	// Three sessions that failed on login before any token was spent, one
 	// real failure (spent tokens) and one failed with tool calls but no

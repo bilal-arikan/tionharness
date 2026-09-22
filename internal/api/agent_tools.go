@@ -18,8 +18,8 @@ import (
 // match, else exact). Mirrors the runtime tool predicate.
 func matchesPattern(name string, patterns []string) bool {
 	for _, p := range patterns {
-		if strings.HasSuffix(p, "*") {
-			if strings.HasPrefix(name, strings.TrimSuffix(p, "*")) {
+		if before, ok := strings.CutSuffix(p, "*"); ok {
+			if strings.HasPrefix(name, before) {
 				return true
 			}
 		} else if name == p {

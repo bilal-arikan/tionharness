@@ -208,10 +208,9 @@ func (s *Scheduler) retireStaleWake(ctx context.Context, sc db.Schedule) {
 // armWakeLocked schedules a one-shot wake to fire at sc.FireAt (clamped to a
 // sane window). Caller holds s.mu. An overdue wake fires almost immediately.
 func (s *Scheduler) armWakeLocked(sc db.Schedule) {
-	delay := time.Until(time.Unix(sc.FireAt, 0))
-	if delay < time.Second {
-		delay = time.Second // overdue (e.g. recovered after a restart) → fire now-ish
-	}
+	delay := max(time.Until(time.Unix(sc.FireAt, 0)),
+		// overdue (e.g. recovered after a restart) → fire now-ish
+		time.Second)
 	if delay > maxWakeDelay {
 		delay = maxWakeDelay
 	}

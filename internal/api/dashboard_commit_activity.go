@@ -83,7 +83,7 @@ func commitActivity(ctx context.Context, dir string, weeks int, now time.Time, r
 	}
 
 	stamps := make([]int64, 0, strings.Count(out, "\n")+1)
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		stamp, err := strconv.ParseInt(strings.TrimSpace(line), 10, 64)
 		if err != nil {
 			return nil, true, err

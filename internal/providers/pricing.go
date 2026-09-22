@@ -1,5 +1,7 @@
 package providers
 
+import "maps"
+
 // Price is a model's API token price in USD per 1,000,000 tokens.
 type Price struct {
 	InputPerMTok  float64 `json:"inputPerMTok"`
@@ -324,9 +326,7 @@ func AllPrices() map[string]map[string]Price {
 	out := make(map[string]map[string]Price, len(priceTable))
 	for prov, models := range priceTable {
 		m := make(map[string]Price, len(models))
-		for id, p := range models {
-			m[id] = p
-		}
+		maps.Copy(m, models)
 		out[prov] = m
 	}
 	return out

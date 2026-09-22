@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -80,12 +81,7 @@ func ids(runs []db.FlowRun) []string {
 }
 
 func containsRunID(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 // TestListFlowRunsRootOnly locks the opt-in nature of the filter: without it the

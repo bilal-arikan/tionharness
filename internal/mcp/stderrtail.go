@@ -98,7 +98,7 @@ func (s *stderrTail) lastLines(n int) string {
 	raw := string(s.buf)
 	s.mu.Unlock()
 	lines := []string{}
-	for _, ln := range strings.Split(raw, "\n") {
+	for ln := range strings.SplitSeq(raw, "\n") {
 		if ln = strings.TrimSpace(ln); ln != "" {
 			lines = append(lines, ln)
 		}

@@ -285,7 +285,7 @@ var ephemeralIndexDirs = []string{".tionharness-worktrees", "scratchpad"}
 // Matching is per PATH SEGMENT (not a substring) so a legitimate repo whose name
 // merely contains one of these words is still indexed.
 func isEphemeralWorkdir(cwd string) bool {
-	for _, seg := range strings.Split(filepath.ToSlash(cwd), "/") {
+	for seg := range strings.SplitSeq(filepath.ToSlash(cwd), "/") {
 		for _, bad := range ephemeralIndexDirs {
 			if strings.EqualFold(seg, bad) {
 				return true

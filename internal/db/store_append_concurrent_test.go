@@ -78,7 +78,7 @@ func TestAddMessageConcurrentAppendsStayIntactAndOrdered(t *testing.T) {
 
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -165,7 +165,7 @@ func TestAddMessageConcurrentFailuresLeaveNothingBehind(t *testing.T) {
 	const n = 32
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -234,7 +234,7 @@ func TestAddMessageConcurrentAcrossSessionsIsIsolated(t *testing.T) {
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for _, id := range ids {
-		for j := 0; j < perSession; j++ {
+		for j := range perSession {
 			wg.Add(1)
 			go func(id string, j int) {
 				defer wg.Done()

@@ -106,11 +106,11 @@ func NamespaceTool(server, tool string) string {
 
 // SplitNamespaced recovers (server, tool) from a namespaced name.
 func SplitNamespaced(name string) (server, tool string, ok bool) {
-	i := strings.Index(name, nsSep)
-	if i < 0 {
+	before, after, ok := strings.Cut(name, nsSep)
+	if !ok {
 		return "", "", false
 	}
-	return name[:i], name[i+len(nsSep):], true
+	return before, after, true
 }
 
 // sanitize keeps tool names safe for provider tool schemas (letters/digits/_/-).

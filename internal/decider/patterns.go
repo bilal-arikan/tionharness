@@ -249,9 +249,7 @@ func (h *Hub) decideAll(ctx context.Context, authority string, reqs []Request, o
 	sem := make(chan struct{}, maxParallelRequests)
 	var wg sync.WaitGroup
 	for i, req := range reqs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():
@@ -263,7 +261,7 @@ func (h *Hub) decideAll(ctx context.Context, authority string, reqs []Request, o
 			if errs[i] != nil {
 				cancel()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	for _, err := range errs {

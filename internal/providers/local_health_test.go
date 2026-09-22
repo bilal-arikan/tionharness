@@ -77,7 +77,7 @@ func TestProbeCachesVerdict(t *testing.T) {
 
 	now := time.Now()
 	h := newTestHealthCache(func() time.Time { return now })
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !h.probe(context.Background(), srv.URL) {
 			t.Fatalf("probe %d = false", i)
 		}

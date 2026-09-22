@@ -10,8 +10,11 @@ type noopCipher struct{}
 func (noopCipher) Encrypt(s string) (string, error) { return s, nil }
 func (noopCipher) Decrypt(s string) (string, error) { return s, nil }
 
-func ptrBool(b bool) *bool { return &b }
-func ptrInt(i int) *int    { return &i }
+//go:fix inline
+func ptrBool(b bool) *bool { return new(b) }
+
+//go:fix inline
+func ptrInt(i int) *int { return new(i) }
 
 // TestGatedToolFlagsRoundTrip verifies the new gated-capability settings persist
 // through Apply and survive a reload, and that the delegation guards are clamped.
@@ -34,9 +37,9 @@ func TestGatedToolFlagsRoundTrip(t *testing.T) {
 
 	// Enable shell + set out-of-range delegation guards → clamped to [1,10] / [1,100].
 	next, err := store.Apply(Patch{
-		EnableShell:        ptrBool(true),
-		DelegationMaxDepth: ptrInt(99),
-		DelegationMaxCalls: ptrInt(0),
+		EnableShell:        new(true),
+		DelegationMaxDepth: new(99),
+		DelegationMaxCalls: new(0),
 	})
 	if err != nil {
 		t.Fatalf("apply: %v", err)

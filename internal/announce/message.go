@@ -123,10 +123,7 @@ func truncate(body, notesURL string) string {
 	} else {
 		tail = "\n…"
 	}
-	budget := maxBodyRunes - len([]rune(tail))
-	if budget < 0 {
-		budget = 0
-	}
+	budget := max(maxBodyRunes-len([]rune(tail)), 0)
 	cut := string([]rune(body)[:budget])
 	if i := strings.LastIndex(cut, "\n"); i > 0 {
 		cut = cut[:i]

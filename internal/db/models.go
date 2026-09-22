@@ -1,5 +1,7 @@
 package db
 
+import "slices"
+
 import "github.com/bilal-arikan/tionharness/internal/archive"
 
 // backfillProviderInstance fills a zero-value ProviderInstanceID at READ time
@@ -322,12 +324,7 @@ var machineTranscriptKindList = []string{SessionKindInsight}
 // IsMachineTranscriptKind reports whether a Session.Kind is a system-written
 // record of an automated run (see machineTranscriptKindList).
 func IsMachineTranscriptKind(kind string) bool {
-	for _, k := range machineTranscriptKindList {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(machineTranscriptKindList, kind)
 }
 
 // MachineTranscriptKinds returns the machine-written session kinds, for callers
@@ -386,12 +383,7 @@ var writableSessionKindList = []string{"", "chat", "spawned", "schedule", "autom
 // IsWritableSessionKind reports whether a new user turn may be started in a
 // session of this kind (see writableSessionKindList).
 func IsWritableSessionKind(kind string) bool {
-	for _, k := range writableSessionKindList {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(writableSessionKindList, kind)
 }
 
 // WritableSessionKinds returns the kinds that accept a new user turn.

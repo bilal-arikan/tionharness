@@ -111,7 +111,7 @@ func TestPrepareNativeModeSkipsRollingFold(t *testing.T) {
 func TestPrepareNativeSuccessUsesInvocationDebugResultAfterJournalPrune(t *testing.T) {
 	d, m, agent, sess, history := nativeCompactFixture(t)
 	m.SetAutoCompactMode(AutoCompactNative)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if err := d.AppendDebugEvent(sess.ID, db.DebugEvent{Type: db.DebugTurn, DurMs: int64(i)}, 4); err != nil {
 			t.Fatal(err)
 		}

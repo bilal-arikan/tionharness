@@ -21,20 +21,20 @@ func parseSimpleTOML(raw string) map[string]string {
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
 			continue
 		}
-		eq := strings.IndexByte(line, '=')
-		if eq < 0 {
+		before, after, ok := strings.Cut(line, "=")
+		if !ok {
 			continue
 		}
-		key := strings.ToLower(strings.TrimSpace(line[:eq]))
-		val := strings.TrimSpace(line[eq+1:])
+		key := strings.ToLower(strings.TrimSpace(before))
+		val := strings.TrimSpace(after)
 		if key == "" {
 			continue
 		}
 		if open := tripleQuote(val); open != "" {
 			// Multi-line value: accumulate until the closing triple-quote.
 			rest := strings.TrimPrefix(val, open)
-			if end := strings.Index(rest, open); end >= 0 {
-				out[key] = rest[:end] // closes on the same line
+			if before, _, ok := strings.Cut(rest, open); ok {
+				out[key] = before // closes on the same line
 				continue
 			}
 			var b strings.Builder

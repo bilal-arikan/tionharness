@@ -252,16 +252,16 @@ func downloadTarball(u string) (Tree, []string, error) {
 // stripTopDir removes the single leading "repo-ref/" component GitHub archives wrap
 // everything in. A path with no slash (the bare top dir) yields "".
 func stripTopDir(p string) string {
-	if i := strings.IndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
+	if _, after, ok := strings.Cut(p, "/"); ok {
+		return after
 	}
 	return ""
 }
 
 // FirstSegment returns the first path segment of a forward-slashed path.
 func FirstSegment(p string) string {
-	if i := strings.IndexByte(p, '/'); i >= 0 {
-		return p[:i]
+	if before, _, ok := strings.Cut(p, "/"); ok {
+		return before
 	}
 	return p
 }

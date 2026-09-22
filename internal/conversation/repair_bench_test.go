@@ -11,7 +11,7 @@ import (
 // user tool_result — the shape a healthy in-flight history actually has.
 func wellFormedHistory(pairs int) []providers.Message {
 	msgs := make([]providers.Message, 0, pairs*2)
-	for i := 0; i < pairs; i++ {
+	for i := range pairs {
 		id := fmt.Sprintf("call-%d", i)
 		msgs = append(msgs, providers.Message{
 			Role:      providers.RoleAssistant,

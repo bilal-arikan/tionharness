@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -53,10 +54,8 @@ func isRankAndPick(strategy string) bool {
 // misspelled "first_success" that silently ran as "all" would spend every leg the
 // caller expected to be cancelled.
 func validateStrategy(strategy string) error {
-	for _, s := range knownStrategies {
-		if s == strategy {
-			return nil
-		}
+	if slices.Contains(knownStrategies, strategy) {
+		return nil
 	}
 	return fmt.Errorf("\"strategy\" must be one of %s; got %q", strings.Join(knownStrategies, ", "), strategy)
 }

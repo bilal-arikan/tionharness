@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,9 +18,9 @@ func lastCoordNote(t *testing.T, rt *Runtime, coord string) string {
 	if err != nil {
 		t.Fatalf("list messages: %v", err)
 	}
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "user" {
-			return msgs[i].Text
+	for _, msg := range slices.Backward(msgs) {
+		if msg.Role == "user" {
+			return msg.Text
 		}
 	}
 	t.Fatal("no user note recorded in the coordinator session")
@@ -142,13 +143,11 @@ func TestIdleStatusFoldedOnceAcrossConcurrentFinishes(t *testing.T) {
 
 	var wg sync.WaitGroup
 	start := make(chan struct{})
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			<-start // release all finishers at once to maximise the overlap
 			rt.notifyCoordinator(coord, "<task-notification>done</task-notification>", releaseOnce(slot)(), nil, "")
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

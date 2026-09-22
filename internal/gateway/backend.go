@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -271,9 +272,7 @@ func (b *mcpBackend) callActivate(ctx context.Context, sid string, args json.Raw
 		}
 		b.mu.Lock()
 		s.activated[san] = specs
-		for k, v := range cfgByServer {
-			s.cfgByServer[k] = v
-		}
+		maps.Copy(s.cfgByServer, cfgByServer)
 		b.mu.Unlock()
 		okd = append(okd, fmt.Sprintf("%s (%d tools)", cfg.Name, len(specs)))
 		changed = true

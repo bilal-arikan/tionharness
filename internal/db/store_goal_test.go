@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-func fp(v float64) *float64 { return &v }
+//go:fix inline
+func fp(v float64) *float64 { return new(v) }
 
 // TestGoalStoreLifecycle: create → edit (revision appended, raw text kept) →
 // status change → reload from disk → delete.
@@ -19,7 +20,7 @@ func TestGoalStoreLifecycle(t *testing.T) {
 	g, err := d.CreateGoal(ctx, Goal{
 		Name: "Ucuz inceleme", RawText: "incelemeler pahalı",
 		Primary:    GoalMetric{Metric: "recipe.avgCostUSD", Direction: "min"},
-		Guardrails: []GoalGuardrail{{Metric: "recipe.successRate", Min: fp(0.9)}},
+		Guardrails: []GoalGuardrail{{Metric: "recipe.successRate", Min: new(0.9)}},
 	}, GoalByWriter, "written")
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -35,7 +36,7 @@ func TestGoalStoreLifecycle(t *testing.T) {
 	// RawText and CreatedBy survive whatever the caller sends.
 	edit := g
 	edit.Name = "Kod incelemesi ucuzlasın"
-	edit.Guardrails = []GoalGuardrail{{Metric: "recipe.successRate", Min: fp(0.95)}}
+	edit.Guardrails = []GoalGuardrail{{Metric: "recipe.successRate", Min: new(0.95)}}
 	edit.RawText = "tampered"
 	edit.CreatedBy = "someone"
 	edit.History = nil

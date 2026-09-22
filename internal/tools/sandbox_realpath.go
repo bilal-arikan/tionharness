@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // realPathOf resolves abs to the path the OS actually reaches when it opens abs,
@@ -23,8 +24,8 @@ func realPathOf(abs string) (string, error) {
 	for {
 		real, err := finalPath(cur)
 		if err == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				real = filepath.Join(real, tail[i])
+			for _, t := range slices.Backward(tail) {
+				real = filepath.Join(real, t)
 			}
 			return filepath.Clean(real), nil
 		}

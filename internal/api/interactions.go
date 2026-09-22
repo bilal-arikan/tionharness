@@ -27,7 +27,7 @@ type pendingInteraction struct {
 	sessionID string
 	kind      string // ask | permission | plan
 	// state is 0 while open, 1 once resolved (CAS target — first writer wins).
-	state int32
+	state atomic.Int32
 	// answer carries the winning reply to the blocked tool call. Buffered (1) so
 	// the resolver never blocks; only one resolve can ever succeed (CAS gate).
 	answer chan string
@@ -108,7 +108,7 @@ func (s *Server) resolveInteraction(wsID, sessionID, id, answer, by string) bool
 	if pi == nil {
 		return false
 	}
-	if !atomic.CompareAndSwapInt32(&pi.state, 0, 1) {
+	if !pi.state.CompareAndSwap(0, 1) {
 		return false // already resolved — the loser of a concurrent answer race
 	}
 	select {
@@ -204,7 +204,7 @@ func (s *Server) waitInteractionCLI(ctx context.Context, run *chatRun, pi *pendi
 // cancelInteraction closes an interaction that no one answered (turn stopped /
 // client gone) and tells every window to drop its card. Idempotent via the CAS.
 func (s *Server) cancelInteraction(pi *pendingInteraction, reason string) {
-	if !atomic.CompareAndSwapInt32(&pi.state, 0, 1) {
+	if !pi.state.CompareAndSwap(0, 1) {
 		return
 	}
 	s.interactions.remove(pi.wsID, pi.sessionID, pi.id)

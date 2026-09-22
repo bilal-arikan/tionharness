@@ -61,7 +61,7 @@ func seedRemovalWindowDir(t *testing.T, files int) string {
 	if err := os.MkdirAll(bulk, 0o755); err != nil {
 		t.Fatalf("seed bulk dir: %v", err)
 	}
-	for i := 0; i < files; i++ {
+	for i := range files {
 		p := filepath.Join(bulk, fmt.Sprintf("f%04d.bin", i))
 		if err := os.WriteFile(p, []byte("payload"), 0o644); err != nil {
 			t.Fatalf("seed bulk file: %v", err)
@@ -95,10 +95,8 @@ func TestDeleteMarksAndClearsRemovalOnTheProductionPath(t *testing.T) {
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	var adopted atomic.Int64
-	for i := 0; i < 4; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 4 {
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -110,7 +108,7 @@ func TestDeleteMarksAndClearsRemovalOnTheProductionPath(t *testing.T) {
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	// The production entry point: Delete falls through to deleteDegraded for a

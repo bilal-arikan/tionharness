@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -42,11 +43,11 @@ func (s *Store) ValidateSkill(slug string) SkillValidation {
 	// Locate SKILL.md, preferring the workspace tier (highest priority). Scan in
 	// reverse so workspace (appended last) wins over global.
 	var path, tier string
-	for i := len(s.tiers) - 1; i >= 0; i-- {
-		candidate := filepath.Join(s.tiers[i].dir, slug, "SKILL.md")
+	for _, v := range slices.Backward(s.tiers) {
+		candidate := filepath.Join(v.dir, slug, "SKILL.md")
 		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
 			path = candidate
-			tier = string(s.tiers[i].source)
+			tier = string(v.source)
 			break
 		}
 	}

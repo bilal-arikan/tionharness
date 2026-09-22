@@ -264,7 +264,7 @@ func TestClaudeParserCancellationClosesOpenAttemptImmediately(t *testing.T) {
 		t.Fatal("attempt not emitted")
 	}
 	var terminal CLICompactionEvent
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case terminal = <-events:
 		case <-time.After(100 * time.Millisecond):

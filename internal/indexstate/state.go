@@ -85,8 +85,8 @@ type Entry struct {
 	// Error explains PhaseFailed. Never cleared by anything except a later run.
 	Error string `json:"error,omitempty"`
 	// StartedAt / UpdatedAt bound the last run.
-	StartedAt time.Time `json:"startedAt,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	StartedAt time.Time `json:"startedAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 	// Run is the claim token of the last run Begin granted on this entry (0 before
 	// the first one). It is unique across the ledger, so a Succeed or Fail
 	// carrying an older token — a superseded run, or a run whose entry was

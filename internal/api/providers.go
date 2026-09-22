@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,9 +22,7 @@ func (s *Server) registryInstances() []providers.Instance {
 	out := make([]providers.Instance, 0, len(list))
 	for _, inst := range list {
 		values := make(map[string]string, len(inst.Config)+len(inst.SecretsEnc))
-		for k, v := range inst.Config {
-			values[k] = v
-		}
+		maps.Copy(values, inst.Config)
 		for k := range inst.SecretsEnc {
 			values[k] = s.providerStore.Secret(inst.ID, k)
 		}
@@ -255,12 +254,8 @@ func (s *Server) upsertProviderInstance(req upsertProviderInstanceReq, opts upse
 	cfg := req.Config
 	if len(opts.ExtraConfig) > 0 {
 		cfg = make(map[string]string, len(req.Config)+len(opts.ExtraConfig))
-		for k, v := range req.Config {
-			cfg[k] = v
-		}
-		for k, v := range opts.ExtraConfig {
-			cfg[k] = v
-		}
+		maps.Copy(cfg, req.Config)
+		maps.Copy(cfg, opts.ExtraConfig)
 	}
 
 	inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{

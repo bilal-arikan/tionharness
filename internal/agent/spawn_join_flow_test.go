@@ -158,7 +158,7 @@ func TestSubflowAwaitPropagation_Integration(t *testing.T) {
 // waitFlowTerminal polls a run until it leaves running/waiting or a short timeout.
 func waitFlowTerminal(t *testing.T, rt *Runtime, runID string) db.FlowRun {
 	t.Helper()
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		r, err := rt.db.GetFlowRun(context.Background(), runID)
 		if err != nil {
 			t.Fatalf("get run: %v", err)

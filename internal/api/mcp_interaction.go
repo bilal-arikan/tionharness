@@ -792,11 +792,11 @@ const activateRelistTimeout = 1 * time.Second
 // can match.
 func bareToolName(name string) string {
 	for {
-		if s := strings.TrimPrefix(name, interactionNSPrefix); s != name {
+		if s, ok := strings.CutPrefix(name, interactionNSPrefix); ok {
 			name = s
 			continue
 		}
-		if s := strings.TrimPrefix(name, extendedNSPrefix); s != name {
+		if s, ok := strings.CutPrefix(name, extendedNSPrefix); ok {
 			name = s
 			continue
 		}
