@@ -164,6 +164,66 @@ func TestTimestampsAreRecorded(t *testing.T) {
 	}
 }
 
+// Succeed's doc comment claims "only a run that Begin claimed may close an
+// entry, so a late goroutine from a superseded run cannot mark a newer one
+// ready". The code does NOT enforce that: Succeed goes through entryLocked,
+// which mints a fresh entry on first touch and overwrites the phase
+// unconditionally. These two tests pin the behaviour that actually ships, so
+// the divergence is recorded rather than assumed away. Both are the mechanism
+// behind a silently-ready index, which is exactly what this package exists to
+// prevent — see TSK981.
+func TestSucceedOnAnUnclaimedEntryStillMarksItReady(t *testing.T) {
+	m := New()
+	// No Observe, no Begin: nothing ever claimed this (tool, root).
+	e := m.Succeed(testTool, "/never-claimed", "local/m", "1.0.0")
+
+	if e.Phase != PhaseReady || !e.Usable() {
+		t.Fatalf("phase=%q usable=%v, want the documented-but-unenforced gate to be absent (ready/true)", e.Phase, e.Usable())
+	}
+	// The giveaway that no run produced this entry: Begin is what stamps
+	// StartedAt, so an unclaimed success reports a ready index that never started.
+	if !e.StartedAt.IsZero() {
+		t.Errorf("StartedAt=%v, want zero — Begin is the only writer of StartedAt", e.StartedAt)
+	}
+	if _, seen := m.Get(testTool, "/never-claimed"); !seen {
+		t.Error("Succeed did not create the entry it reported on")
+	}
+}
+
+func TestLateSucceedOverwritesARecordedFailure(t *testing.T) {
+	m := New()
+	m.Begin(testTool, "/repo", ActionCreate)
+	m.Fail(testTool, "/repo", "zg exited 1")
+
+	// A goroutine from the run that already failed (or from a superseded run)
+	// reporting success: the failure and its reason are both lost.
+	e := m.Succeed(testTool, "/repo", "local/m", "1.0.0")
+	if e.Phase != PhaseReady {
+		t.Fatalf("phase=%q, want ready (no claim check today)", e.Phase)
+	}
+	if e.Error != "" {
+		t.Fatalf("error=%q, want it cleared by Succeed", e.Error)
+	}
+	got, _ := m.Get(testTool, "/repo")
+	if got.Phase != PhaseReady || got.Error != "" {
+		t.Errorf("ledger kept phase=%q error=%q", got.Phase, got.Error)
+	}
+}
+
+func TestFailOnAnUnclaimedEntryRecordsAReason(t *testing.T) {
+	m := New()
+	// Fail is unguarded the same way Succeed is; the reason must still be
+	// present, since a failed entry with no explanation is the silent failure
+	// this package prevents.
+	e := m.Fail(testTool, "/never-claimed", "zg not found")
+	if e.Phase != PhaseFailed || e.Usable() {
+		t.Fatalf("phase=%q usable=%v, want failed/false", e.Phase, e.Usable())
+	}
+	if e.Error != "zg not found" {
+		t.Errorf("reason=%q, want the failure text", e.Error)
+	}
+}
+
 func TestForgetIsBookkeepingOnly(t *testing.T) {
 	m := New()
 	m.Observe(testTool, "/repo", PhaseReady, "local/m", "1.0.0")

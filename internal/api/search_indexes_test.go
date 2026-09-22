@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -99,6 +100,73 @@ func TestSearchIndexDropRejectsMalformedJSON(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (%s)", w.Code, w.Body.String())
 	}
+}
+
+// Without a workspace runtime there is nothing to delete through, and the
+// handler must answer rather than dereference a nil runtime. Mirrors the same
+// guard on the refresh endpoint.
+func TestSearchIndexDropWithoutAWorkspaceIsAConflict(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/search-indexes/drop",
+		strings.NewReader(`{"tool":"zg","root":"C:/repo","confirmRoot":"C:/repo"}`))
+	quietServer().handleSearchIndexDrop(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (%s)", w.Code, w.Body.String())
+	}
+	if msg := decodeAPIError(t, w.Body.Bytes()); msg == "" {
+		t.Error("a refused drop answered 409 with no explanation in the body")
+	}
+}
+
+// A confirmation gate that fails must come back as 409 WITH the reason: the
+// Settings panel prints the body verbatim, so "confirm does not match the root"
+// is the text the user acts on. A bare status would leave the panel with a
+// failure it cannot explain.
+func TestDropConfirmationFailuresMapTo409WithTheReason(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"not confirmed", indexstate.ErrDropNotConfirmed},
+		{"root mismatch", indexstate.ErrDropRootMismatch},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			// The same mapping handleSearchIndexDrop applies to a runtime error.
+			writeDropError(w, tc.err)
+
+			if w.Code != http.StatusConflict {
+				t.Fatalf("status = %d, want 409", w.Code)
+			}
+			if got := decodeAPIError(t, w.Body.Bytes()); got != tc.err.Error() {
+				t.Errorf("body error = %q, want the sentinel text %q", got, tc.err.Error())
+			}
+		})
+	}
+}
+
+// An unknown tool is a 404, not a 409: the request is well-formed and confirmed,
+// there is simply no index layout to delete. Keeping it distinct stops the panel
+// from telling the user to "confirm again" for something confirmation cannot fix.
+func TestDropUnknownToolIsNotFound(t *testing.T) {
+	w := httptest.NewRecorder()
+	writeDropError(w, fmt.Errorf("%w: nope", agent.ErrUnknownIndexTool))
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (%s)", w.Code, w.Body.String())
+	}
+}
+
+func decodeAPIError(t *testing.T, body []byte) string {
+	t.Helper()
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode error body: %v (%s)", err, body)
+	}
+	return payload.Error
 }
 
 // The listing endpoint is workspace-optional (the ledger is process-wide), while

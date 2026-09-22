@@ -1,9 +1,178 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: kuyruktaki canlı yönlendirme (steer) butonunun gerçek steerability'ye bağlanması (`steerable` bayrağı `queue_update` olayında, tur sınırında tazeleniyor — `_Docs/59`, `_Docs/07`), steer ve `reviewer-selects` yollarının gerçek test kapsamına alınması (tautolojik `steerableForTurn` testi sabit tabloya çevrildi, `foldSteer()` ve hakem seçimi doğrudan test edildi — `_Docs/59`, `_Docs/25`), arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
+> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: güvenlik/izolasyon kümesi — confined sandbox'ta kök içindeki junction/symlink kaçışının handle tabanlı gerçek-yol kontrolüyle kapanması (TSK393), confined shell komutunun Windows Job Object içinde koşması (kopmuş süreçler çağrı bitince ölür, süreç sınırı; yol sınırı değil — TSK392, `_Docs/26`) ve validator ağaç sabitlemesinin kartın kapsamına daraltılması (`treepin`, `VERDICT: STALE` — TSK772, `_Docs/47`), kuyruktaki canlı yönlendirme (steer) butonunun gerçek steerability'ye bağlanması (`steerable` bayrağı `queue_update` olayında, tur sınırında tazeleniyor — `_Docs/59`, `_Docs/07`), steer ve `reviewer-selects` yollarının gerçek test kapsamına alınması (tautolojik `steerableForTurn` testi sabit tabloya çevrildi, `foldSteer()` ve hakem seçimi doğrudan test edildi — `_Docs/59`, `_Docs/25`), arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
 turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+
+## Monitor v2: dosya, URL ve WebSocket kaynakları (TSK941)
+
+- **Neydi:** `monitor` aracı (TSK911, v1) yalnız bir **arka plan kabuğunun**
+  çıktısını izleyebiliyordu. `MonitorSource` arayüzü diğer kaynakları yöneticiye
+  dokunmadan alacak şekilde tasarlanmıştı; bu iş o üç kaynağı ekliyor.
+- **Ne eklendi:** Kaynak başına bir dosya — `monitor_source_file.go` (dosya
+  kuyruğu), `monitor_source_url.go` (periyodik `http(s)` çekimi, gövde
+  **değiştiğinde** ateşler) ve `monitor_source_ws.go` (`ws(s)` aboneliği, mesaj
+  başına olay). Seçim `monitor_source_select.go`'da: `shell_id`/`path`/`url`
+  alanlarından **tam biri** verilmeli — hiçbiri izlenecek bir şey bırakmaz,
+  birden fazlası belirsizdir ve yanlış şeyi sessizce izlemektense ikisi de hata.
+  `url` şemadan yönlendirilir, böylece ajan arka uç seçmez.
+- **Dosya kaynağı — `fsnotify` değil `os.Stat` yoklaması:** Yönetici zaten her
+  kaynağı süren 1 sn'lik tek bir tik sahibi ve uyandırma `monitorMinCooldown`
+  (5 sn) ile kapılı, yani izleyicinin kazandıracağı gecikme ajana görünmez;
+  eklenen baytlar yine boyut imleciyle okunup satırlara bölünecekti, yani
+  izleyici bu kodun hiçbirini ortadan kaldırmıyor; ve Windows'ta
+  `ReadDirectoryChangesW` başka bir sürecin yazdığı dosyalarda olay düşürüyor.
+  Bedeli monitör başına saniyede bir `Stat`. Yol **sandbox**'tan geçer: confined
+  bir sandbox'ta kök dışı reddedilir, monitör fs sınırını dolaşmanın yolu olamaz.
+- **Dışarı çıkış sınırı tek yere alındı:** URL ve WebSocket kaynakları
+  WebFetch'in SSRF korumalı dialer'ının **aynısını** kullanır. Koruma
+  `builtin_http.go` içinden yeni `egress_guard.go`'ya çıkarıldı — ikinci ve ince
+  farklı bir dialer, bir SSRF açığının sonradan içeri girme biçimidir. Monitör
+  gözetimsiz ve uzun ömürlü bir çekim döngüsü olduğu için bu sınır burada tek
+  seferlik bir çekimdekinden daha önemli.
+- **Bağımlılık:** `github.com/coder/websocket` v1.8.15. Geçişli bağımlılığı
+  **sıfır** (üç doğrudan bağımlılığı olan ağaca tam bir modül) ve **çağıranın
+  verdiği `*http.Client` ile** el sıkışıyor — belirleyici olan bu oldu, korumalı
+  taşıyıcı olduğu gibi uygulanabiliyor. `gorilla/websocket` kendi dialer'ını
+  kullanır, koruma yeniden yazılmak zorunda kalırdı.
+- **Terminal durum her kaynakta bir kez:** dosya silinmesi, üst üste 5 başarısız
+  çekim, soketin kapanması. Son olaylar terminal durumla **birlikte** teslim
+  edilir, böylece son satıra/mesaja gelen eşleşme kaybolmaz.
+- **İmza değişikliği:** `SessionMonitorManagers` üçüncü değer olarak sandbox
+  döndürüyor, `NewMonitorTool` üçüncü parametre olarak alıyor; CLI köprüsü bunu
+  `chatRun.monitorSb`'de taşıyor.
+- **Bilinçli olarak değiştirilmedi:** Köprünün `ShellEnabled` kapısı. URL izleme
+  kabuk gerektirmez ama bugün kabuk kapalıyken monitör yöneticisi hiç kurulmuyor;
+  ayrıştırmak yöneticinin ömrünü kabuk yöneticisinden ayırmayı ister. `_Docs/85`
+  §7'de açık uç olarak yazıldı.
+- **Doğrulama:** Kaynak başına test dosyası — taban çizgisi/değişim ayrımı,
+  aralık kısıtı, iki yoklamaya bölünen satırın birleştirilmesi, `truncate`
+  sonrası sıfırdan okuma, terminal durumun tam bir kez raporlanması, soket
+  kapanışında son mesajın teslimi ve **her iki dışarı çıkan kaynakta egress
+  guard'ın loopback'i reddettiği**. `scripts/test.sh full` yeşil.
+
+## Oturum başında servis sistem ajanları artık seçilemiyor, worker'lar seçilebilir (TSK979, 2026-09-22) ✅
+
+- **Belirti:** Yeni sohbet başlatma ekranı (`ChatEmptyState`) ve `newSession`
+  yedeği tüm canlı roster'ı sunuyordu. Roster'da `titler`, `compaction`,
+  `insight`, `overview-summarizer` gibi **servis** sistem ajanları da olduğu için
+  bunlar da seçilebiliyordu — oysa backend bir sistem ajanını varsayılan ajan
+  olarak zaten reddediyor (`workspace.ErrDefaultAgentSystem`, `settings.go:214`:
+  "not conversation partners … must never be pre-selected for a fresh chat").
+  Yani kullanıcı sunucunun kabul etmeyeceği bir seçim yapabiliyordu.
+- **Kök neden:** `useSessionsController.ts` roster'ı yalnız `deleted` alanına
+  göre süzüyordu (`agents = allAgents.filter((a) => !a.deleted)`); `system`
+  ayrımı hiç yoktu ve bu tek liste hem oturum-başlatma hem de mevcut-oturum
+  yüzeylerini besliyordu.
+- **Çözüm:** Ayrım `systemKey` üzerinden yapılır — `subagent-*` önekli sistem
+  ajanları **worker profilidir** ve doğrudan adreslenmek üzere vardır, bu yüzden
+  seçilebilir kalır; öneki olmayan sistem ajanları servis ajanıdır ve oturum
+  başlatma yüzeylerinden çıkarılır. Yeni `app/startableAgents.ts`
+  (`isStartableAgent` / `startableAgents`) mevcut `isWorkerSystemAgent`
+  yardımcısını (`features/agents/agentRoster.ts`) yeniden kullanır, kuralı
+  ikinci kez tanımlamaz. Controller `sessionStartAgents` türetip dışa verir;
+  `ChatView` bunu `ChatEmptyState`'e ayrı bir prop olarak geçirir (composer
+  mevcut oturumda tüm roster'ı kullanmaya devam eder), `newSession` yedeği
+  `agents[0]` yerine `sessionStartAgents[0]`'ı kullanır ve kenar çubuğundaki
+  "yeni sohbet" düğmesi `sessionStartAgents.length === 0` ile geçitlenir.
+- **Bilinçli olarak değiştirilmedi:** Varsayılan-ajan onarım efekti
+  (`useSessionsController.ts:369`) `!a.system` filtresini korur. `checkDefaultAgent`
+  **her** sistem ajanını (worker dahil) varsayılan olarak reddettiği için burası
+  `isStartableAgent`'tan daha katıdır; gevşetilirse yorumunun uyardığı sonsuz
+  yazma döngüsü oluşur. Bu ayrım koda yorum olarak yazıldı.
+- **Doğrulama:** `startableAgents.test.ts` servis/worker/özelleştirme ayrımını ve
+  sıra korumasını kapsar. `sessionStartAgentWiring.test.ts` kablolamayı sabitler:
+  filtre var olsa bile yüzeyler ham roster'a dönerse hata verir — bu test
+  `agents={sessionStartAgents}` geri alınarak gerçekten kırmızıya düştüğü
+  görülerek doğrulandı. Frontend tamamı yeşil (133 dosya / 962 test),
+  `npx tsc --noEmit` temiz, prettier temiz.
+
+## Validator ağaç sabitlemesi kartın kapsamına daraltıldı — kapsam dışı churn artık STALE değil (TSK772, 2026-09-22) ✅
+
+- **Belirti:** Validator brief'i tüm ağacı (`git HEAD` + kirli dosya listesi)
+  sabitliyordu. Paylaşılan çalışma ağacında paralel oturumlar ilgisiz dosyaları
+  sürekli değiştirdiği için TSK692 doğrulamaları, hedef dosyalar ve commit'ler
+  sabitken bile tüm-ağaç STALE'e düştü.
+- **Çözüm:** Sabitleme yalnız kartın dosyalarını kapsar. Yeni `internal/treepin`
+  paketi + `cmd/treepin` CLI: `capture <yollar>` HEAD + kapsam dosyalarının içerik
+  özetini tek satırlık jetona yazar, `verify '<jeton>'` yalnız kapsam içi içerik
+  değiştiyse `STALE` der; HEAD'in kayması ve kapsam dışı kirli dosyalar
+  "ignored churn" olarak raporlanır. Validated içeriğin aynen commit'lenmesi
+  değişiklik sayılmaz. `coordinator.md` ve `subagent-validator.md` kapsamlı kurala
+  güncellendi (treepin olmayan depolar için `git hash-object` yolu), validator
+  sözleşmesine `VERDICT: STALE` eklendi; worker durum bloğu bunu `⏸ STALE`
+  rozeti + özet satırı notuyla gösterir.
+- **Doğrulama:** `internal/treepin` testleri gerçek git deposunda kapsam dışı
+  edit/yeni dosya/commit'in FRESH, kapsam içi edit/yeni dosya/silmenin STALE
+  kaldığını; alt dizinden capture'ın aynı özeti verdiğini doğrular. CLI bu depoda
+  canlı denendi (50 kapsam dışı kirli dosya varken FRESH, kapsam içi tek satır
+  eklenince STALE). Ayrıntı: `_Docs/47` §19.5.
+
+## Confined shell komutu Windows Job Object içinde — kopmuş süreçler çağrı bitince ölüyor (TSK392, 2026-09-22) ✅
+
+- **Önceki durum:** Confined (otonom) turda shell için tek OS mekanizması bağlam
+  iptalinde `taskkill /T` idi; ebeveyni ölmüş kopmuş süreçler (`start`,
+  `Start-Process`, `nohup … &`) ağaçta olmadığı için tur bittikten sonra da
+  yaşıyordu. Süreç sayısına sınır yoktu.
+- **Çözüm (en küçük gerçek OS sınırı):** `proc.Job` (`internal/proc/job*.go`) —
+  süreç askıda yaratılır, job'a atanır, sonra `NtResumeProcess` ile sürdürülür;
+  `KILL_ON_JOB_CLOSE` + `ACTIVE_PROCESS=128`. `runShellCmd`
+  (`internal/tools/builtin_shell_contain.go`) confined ön plan komutlarını bunun
+  içinde koşar; job kurulamazsa komut çalıştırılmaz (sessiz kapsamsız koşu yok).
+  İnteraktif shell etkilenmez.
+- **Sınır:** Bu süreç/kaynak sınırıdır, **yol sınırı değildir**. Ayrı kullanıcı +
+  ACL, AppContainer ve container seçeneklerinin analizi `_Docs/26`'da; yol
+  sınırı işi yeni bir pbi kartına ayrıldı.
+- **Doğrulama:** `job_windows_test.go` (kopmuş torun job kapanınca ölür; job'suz
+  kontrol vakasında yaşar; süreç sınırı çocuğu engeller) ve
+  `builtin_shell_contain_windows_test.go` (confined PowerShell çağrısının kopmuş
+  süreci öldürülür, kilitsiz çağrınınki yaşar).
+
+## Sandbox: kök içindeki junction/symlink kaçışı handle tabanlı doğrulamayla kapandı (TSK393, 2026-09-22) ✅
+
+- **Belirti:** Confined sandbox'ın kök kontrolü leksikaldi; kök içinde dışarıyı
+  gösteren bir junction/symlink (`link -> C:\Users`) üzerinden
+  `link\Bilal\.ssh\id_rsa` kontrolü geçiyordu. `filepath.EvalSymlinks` Windows'ta
+  junction'ı takip etmediği için çözüm olamıyordu.
+- **Çözüm:** `checkRealPathUnderRoot` (`internal/tools/sandbox_realpath*.go`)
+  leksikal kontrolden sonra kökü ve hedefi gerçek yerine çözer: Windows'ta
+  `CreateFile(FILE_FLAG_BACKUP_SEMANTICS)` + `GetFinalPathNameByHandle`, diğer
+  platformlarda `EvalSymlinks`. Var olan en derin ata handle ile çözülür, var
+  olmayan kuyruk leksikal eklenir; dangling link reddedilir.
+- **Kalan boşluk:** kontrol ile aracın `open`'ı arasındaki TOCTOU penceresi
+  (tam kapatma her fs aracına handle-ile-aç tesisatı ister).
+- **Doğrulama:** `sandbox_realpath_test.go` — junction ve symlink ayrı vakalar
+  (link'in kendisi, altındaki var olan dosya, altındaki yeni dosya), dangling
+  symlink, kök içinde kalan link (izinli), junction kök. Ayrıntı: `_Docs/26`.
+
+## indexstate: 409 gövde testi + Succeed/Fail claim doğrulamasının gerçek davranışı (TSK981, 2026-09-22) ✅
+
+- **Boşluk 1 — 409'un gövdesi test edilmiyordu:** `POST /api/search-indexes/drop`
+  için var olan testler yalnız 400 yollarını (boş gövde, bozuk JSON) tutuyordu.
+  Onay kapısının başarısız olduğu durumda **status + gövde** hiç doğrulanmamıştı.
+  Panel backend mesajını birebir bastığı için gövdedeki sebep metni işlevsel bir
+  gereksinim: "onay köke uymuyor" kullanıcının okuyup düzeltmesi gereken bilgi.
+  Handler'ın `switch`'i `writeDropError()` yardımcısına çıkarıldı (davranış aynı,
+  artık test edilebilir) ve üç test eklendi: onaysız + kök uyuşmazlığı → 409 ve
+  gövdede sentinel metni, bilinmeyen araç → 404 (onayı tekrarlamak bunu
+  düzeltmez, o yüzden 409'dan ayrı tutuluyor), workspace yoksa → 409.
+- **Boşluk 2 — doc yorumu kodun vermediği bir garantiyi iddia ediyor:**
+  `Succeed`'in yorumu "yalnız Begin'in claim ettiği bir koşu bir girdiyi
+  kapatabilir, böylece geçersiz kılınmış bir koşudan gecikmeli gelen goroutine
+  daha yenisini ready işaretleyemez" diyor. Kod bunu **uygulamıyor**:
+  `Succeed`/`Fail` `entryLocked()` üzerinden gidiyor, o da ilk dokunuşta girdiyi
+  yeni yaratıyor ve fazı koşulsuz eziyor. Ölçülen gerçek davranış:
+  (a) hiç claim edilmemiş bir anahtarda `Succeed` girdiyi **yaratıp** `ready` +
+  `usable` yapıyor, `StartedAt` sıfır kalıyor (çünkü onu yalnız `Begin` yazıyor);
+  (b) `Fail`'den sonra gelen `Succeed` kaydedilmiş hatayı ve sebebini **sessizce
+  siliyor**. Üç test bu davranışı olduğu gibi sabitliyor — yorumdaki iddia
+  doğruymuş gibi varsayılmıyor, sapma kayda geçiyor. Bu, tam olarak bu paketin
+  önlemek için var olduğu "sessizce ready görünen indeks" mekanizması; davranışı
+  düzeltmek (claim jetonu / epoch) bu kartın kapsamı dışı, ayrı bir iş.
+- **Testlerin gerçekten ısırdığı doğrulandı:** 409 → 418 mutasyonuyla
+  `TestDropConfirmationFailuresMapTo409WithTheReason` beklendiği gibi FAIL verdi,
+  geri alınınca PASS.
 
 ## zvec-grep UI yarısı commit'lendi — SearchIndexPanel artık gerçekten görünüyor (TSK982, 2026-09-22) ✅
 

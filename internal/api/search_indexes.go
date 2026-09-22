@@ -100,17 +100,32 @@ func (s *Server) handleSearchIndexDrop(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info("search index drop requested", "tool", req.Tool, "root", req.Root)
 	if err := wsp.Runtime.DropSearchIndex(req.Tool, req.Root, req.ConfirmRoot); err != nil {
-		switch {
-		case errors.Is(err, indexstate.ErrDropNotConfirmed), errors.Is(err, indexstate.ErrDropRootMismatch):
-			writeError(w, http.StatusConflict, err.Error())
-		case errors.Is(err, agent.ErrUnknownIndexTool):
-			writeError(w, http.StatusNotFound, err.Error())
-		default:
+		if code := writeDropError(w, err); code == http.StatusInternalServerError {
 			s.logger.Warn("search index drop failed", "tool", req.Tool, "root", req.Root, "error", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
 		}
 		return
 	}
 	s.logger.Info("search index dropped", "tool", req.Tool, "root", req.Root)
 	writeJSON(w, http.StatusOK, map[string]any{"tool": req.Tool, "root": req.Root, "dropped": true})
+}
+
+// writeDropError maps a drop failure to its HTTP answer and returns the status
+// written, so the caller can log only the unexpected ones.
+//
+// The reason text always travels in the body: the Settings panel prints it
+// verbatim, and a confirmation mismatch is something the user has to read to
+// act on. A failed confirmation is 409 (retryable by confirming correctly),
+// while an unknown tool is 404 — confirming harder cannot fix it.
+func writeDropError(w http.ResponseWriter, err error) int {
+	var status int
+	switch {
+	case errors.Is(err, indexstate.ErrDropNotConfirmed), errors.Is(err, indexstate.ErrDropRootMismatch):
+		status = http.StatusConflict
+	case errors.Is(err, agent.ErrUnknownIndexTool):
+		status = http.StatusNotFound
+	default:
+		status = http.StatusInternalServerError
+	}
+	writeError(w, status, err.Error())
+	return status
 }
