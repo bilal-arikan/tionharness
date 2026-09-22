@@ -93,6 +93,8 @@ context. This has really happened.
 ## Where this fits
 
 - **`read_logs`** = the process-wide log stream (cross-session, slog). Coarse.
+  Error/warning toasts the user saw in the web UI are there too:
+  `read_logs {"component":"ui-toast"}` (other frontend crashes: `component:"ui"`).
 - **`read_session_debug`** (this skill) = *your* session's structured metrics. Precise.
 - **Per-session budget** (UI / usage-detail) = lifetime cost rollup. Money, not mechanics.
 

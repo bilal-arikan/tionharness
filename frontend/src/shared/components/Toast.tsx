@@ -12,6 +12,12 @@ const TONE: Record<
     box: 'border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_15%,var(--color-surface))] text-[var(--color-danger)]',
     btn: 'text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_20%,transparent)]',
   },
+  warning: {
+    icon: AlertTriangle,
+    role: 'alert',
+    box: 'border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_15%,var(--color-surface))] text-[var(--color-warning)]',
+    btn: 'text-[var(--color-warning)] hover:bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)]',
+  },
   success: {
     icon: CheckCircle2,
     role: 'status',

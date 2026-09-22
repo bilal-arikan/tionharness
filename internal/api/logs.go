@@ -71,11 +71,21 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 // console where nobody is watching.
 type clientLogReport struct {
 	Level   string `json:"level"`   // "error" (default) | "warn" | "info"
-	Source  string `json:"source"`  // e.g. "error-boundary" | "window.onerror" | "unhandledrejection"
+	Source  string `json:"source"`  // e.g. "error-boundary" | "window.onerror" | "unhandledrejection" | "toast"
 	Message string `json:"message"` // error message / description
+	Detail  string `json:"detail"`  // optional extra detail (e.g. the toast's originating error)
 	Stack   string `json:"stack"`   // optional stack trace / component stack
 	URL     string `json:"url"`     // page URL where it happened
+	Time    int64  `json:"time"`    // optional client-side unix milliseconds when it was shown
 }
+
+// Components stamped on frontend reports so the Logs screen, GET /api/logs
+// ?component= and the read_logs tool can isolate them from backend records.
+const (
+	clientLogComponent = "ui"       // crashes / uncaught errors / other client reports
+	toastLogComponent  = "ui-toast" // error/warning toasts shown to the user
+	toastLogSource     = "toast"
+)
 
 // handleClientLog records a frontend-reported error into the app log stream. It
 // is intentionally lenient: a malformed body is dropped (HTTP 204) rather than
@@ -99,16 +109,32 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 	case "info":
 		level = slog.LevelInfo
 	}
-	source := rep.Source
+	source := strings.TrimSpace(rep.Source)
 	if source == "" {
 		source = "client"
 	}
-	s.logger.LogAttrs(r.Context(), level, "client error",
+	// Toasts get their own component and a message that names the toast text,
+	// so the Logs row is readable without expanding its attributes.
+	component, title := clientLogComponent, "client error"
+	if source == toastLogSource {
+		component, title = toastLogComponent, "ui toast: "+capRune(msg, 200)
+	}
+	attrs := []slog.Attr{
+		slog.String("component", component),
 		slog.String("source", capRune(source, 64)),
 		slog.String("message", capRune(msg, 1000)),
 		slog.String("url", capRune(rep.URL, 300)),
-		slog.String("stack", capRune(rep.Stack, 4000)),
-	)
+	}
+	if d := strings.TrimSpace(rep.Detail); d != "" {
+		attrs = append(attrs, slog.String("detail", capRune(d, 2000)))
+	}
+	if rep.Stack != "" {
+		attrs = append(attrs, slog.String("stack", capRune(rep.Stack, 4000)))
+	}
+	if rep.Time > 0 {
+		attrs = append(attrs, slog.Int64("client_time", rep.Time))
+	}
+	s.logger.LogAttrs(r.Context(), level, title, attrs...)
 	w.WriteHeader(http.StatusNoContent)
 }
 

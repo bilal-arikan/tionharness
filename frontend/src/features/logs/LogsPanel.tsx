@@ -30,6 +30,10 @@ const LEVEL_COLOR: Record<string, string> = {
 // active minimum-level filter without a round trip.
 const LEVEL_RANK: Record<string, number> = { DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 }
 
+// Component the backend stamps on persisted error/warning toasts (POST /api/logs
+// with source "toast").
+const UI_TOAST_COMPONENT = 'ui-toast'
+
 // Time-window presets for the since filter (minutes; '' = all retained).
 const RANGES = [
   { key: '', label: 'Tümü' },
@@ -213,9 +217,10 @@ export function LogsPanel({ onError }: Props) {
   )
 
   // Distinct components present in the current result set (plus the active
-  // selection, so a filter that empties the list stays visible/undoable).
+  // selection, so a filter that empties the list stays visible/undoable). The
+  // UI toast component is always offered, since its records are sparse.
   const components = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>([UI_TOAST_COMPONENT])
     for (const e of logs) if (e.component) set.add(e.component)
     if (component) set.add(component)
     return [...set].sort()
@@ -319,7 +324,7 @@ export function LogsPanel({ onError }: Props) {
           <option value="">Bileşen: hepsi</option>
           {components.map((c) => (
             <option key={c} value={c}>
-              {c}
+              {c === UI_TOAST_COMPONENT ? `${c} (UI bildirimleri)` : c}
             </option>
           ))}
         </select>
