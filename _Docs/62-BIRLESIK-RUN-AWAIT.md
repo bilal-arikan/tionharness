@@ -290,7 +290,7 @@ Katman 1 veriyi, Katman 2 canlı nabzı üretmişti; ikisi de UI'ın erişemedi�
 Bu katman store fonksiyonlarını HTTP'ye açar — yeni sorgu mantığı yazılmadı.
 
 - **`GET /api/flow-runs?rootOnly=true`** → `ListRootFlowRuns`. **Opt-in**: parametresiz
-  çağrı eskisi gibi her koşuyu döndürür, yani mevcut çağıranlar (ör. `SessionFlowInline`)
+  çağrı eskisi gibi her koşuyu döndürür, yani mevcut çağıranlar
   sessizce davranış değiştirmez. Yalnız `"true"` filtreler; `rootOnly=1` filtrelemez.
   `flowId` filtresi bunun üstüne biner.
 - **`GET /api/flow-runs/{id}/tree`** → `ListFlowRunTree`. Id **ağacın herhangi bir üyesi**

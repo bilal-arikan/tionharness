@@ -34,9 +34,8 @@ const TREE_POLL_MS = 3000
 // RunTreeView wraps RunView with the composed-run dimension: the tree of runs the
 // selected one belongs to, a breadcrumb, and the ability to descend into a child.
 //
-// It exists as a wrapper rather than as changes inside RunView because RunView has
-// three call sites (the Koşular tab and two chat-inline ones) and only one of them
-// wants this. RunView keeps rendering exactly one run; this decides WHICH.
+// It exists as a wrapper rather than as changes inside RunView so RunView keeps
+// rendering exactly one run; this decides WHICH.
 export function RunTreeView({ run, flows, agents, onRerun, rerunning, onResumed }: Props) {
   const rootRunId = flowRunRootOf(run)
   const [treeRuns, setTreeRuns] = useState<FlowRun[]>([])

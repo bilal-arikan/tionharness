@@ -59,8 +59,7 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 	pageJSONResponse(w, page, total, offset, limit)
 }
 
-// handleGetFlow returns a single flow by id (used by the chat "Akış olarak gör"
-// to resolve a flow session back to its real graph). 404 if the flow is gone.
+// handleGetFlow returns a single flow by id. 404 if the flow is gone.
 func (s *Server) handleGetFlow(w http.ResponseWriter, r *http.Request) {
 	flow, err := ws(r).DB.GetFlow(r.Context(), r.PathValue("id"))
 	if err != nil {

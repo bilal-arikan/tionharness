@@ -10,8 +10,8 @@ import (
 
 // TestFlowRecordsDistinctSessionPerRun verifies the per-run session model: each
 // recorded flow run lands in its OWN session (keyed for attribution by
-// SourceID = flow.ID but never reused), so a run's transcript — and its
-// "Akış olarak gör" reification — shows exactly one run.
+// SourceID = flow.ID but never reused), so a run's transcript shows exactly
+// one run.
 func TestFlowRecordsDistinctSessionPerRun(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()
