@@ -105,6 +105,9 @@ var builtinCategory = map[string]string{
 	"list_workspaces": CategoryConfig, "create_workspace": CategoryConfig,
 	"rename_workspace": CategoryConfig, "delete_workspace": CategoryConfig,
 	"secret": CategoryConfig, "list_providers": CategoryConfig,
+	// announce_release posts the shipped release to the project's chat channels;
+	// its endpoints are vault secrets, so it sits with the config surface.
+	"announce_release": CategoryConfig,
 
 	// Diagnostics, validators, tool loading
 	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics,

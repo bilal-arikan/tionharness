@@ -21,7 +21,7 @@ var wantNameOnlyDefaults = []string{
 	"update_session", "update_user_preferences", "wait_for_mcp_servers",
 }
 
-var wantHiddenDefaults = []string{"list_config", "read_config", "secret", "write_config"}
+var wantHiddenDefaults = []string{"announce_release", "list_config", "read_config", "secret", "write_config"}
 
 func namesWithTier(m map[string]string, tier string) []string {
 	var out []string

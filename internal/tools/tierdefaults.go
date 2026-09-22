@@ -138,6 +138,10 @@ var defaultToolTiers = map[string]string{
 	"write_config": VisibilityHidden,
 	"list_config":  VisibilityHidden,
 	"secret":       VisibilityHidden,
+	// announce_release matters on exactly one task (shipping a release) and is
+	// driven by a schedule that names it explicitly, so it costs nothing to keep
+	// out of every other agent's catalog.
+	"announce_release": VisibilityHidden,
 }
 
 // DefaultTiers returns the shipped default tiers as a fresh copy, so a caller

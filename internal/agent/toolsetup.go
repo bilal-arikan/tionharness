@@ -421,6 +421,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	if r.tun != nil {
 		readTracker = r.readTrackerFor(SessionIDFrom(ctx))
 	}
+	// announce_release: the agent half of the release announcement fan-out
+	// (_Docs/86). It reads _Docs/release.json from the working dir and posts to
+	// the chat webhooks stored in the vault, so TionHarness announces its own
+	// release instead of a CI bot. Needs both a sandbox (to find the file) and a
+	// vault (to find the endpoints).
+	if sb.Ready() && r.vault != nil {
+		builtins = append(builtins, tools.NewAnnounceReleaseTool(sb, r.vault))
+	}
 	if sb.Ready() {
 		builtins = append(builtins,
 			tools.NewFSReadFileTool(sb, readTracker),
