@@ -1,6 +1,6 @@
 # 83 — Evrim Mekanizması: Hedef-Güdümlü Workspace Optimizasyonu
 
-> **Özet (2026-09-14):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı** (Goal varlığı — 2026-09-14'te sadeleştirildi, §4.1 notu: doğrudan oluşturma + yalnız okunan alanlar; `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
+> **Özet (2026-09-22):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı**, sürüm kırılımı 2026-09-22'de sağlamlaştırıldı (§8.1d: yetersiz-veri kapısı, medyan/kırpılmış ortalama, ajan filtresi, araç çağrısı başına maliyet, sağlayıcı/auth hatalarının hata oranından ayrılması) (Goal varlığı — 2026-09-14'te sadeleştirildi, §4.1 notu: doğrudan oluşturma + yalnız okunan alanlar; `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
 > workspace için kaydedilip düzenlenebilen **Hedefler (Goals)** tanımlamak ve ajan
 > hiyerarşisi, araç atamaları, ajan/skill promptları, otomasyon ve zamanlamalar, model
 > ve düşünme seviyesi seçimleri gibi ayarların zamanla bu hedeflere göre optimize
@@ -331,6 +331,39 @@ lensinin hedef-bilinçli hali; E3 `AutoPrune`'un genellemesi.
 - API `POST /api/goals/{id}/evolve`, `GET /api/goals/{id}/evolution`; ekranda **Öneriler**
   bloğu ve İçgörü'de `evolution` kanalı. §4.4'teki değişmezlerin hepsi kodda ve testli;
   §4.5 (uygulama/geri alma) E3'te.
+
+### 8.1d Sürüm kırılımının sağlamlaştırılması — uygulanan (2026-09-22, TSK1043)
+
+Tetikleyen olay (TSK1042): "Konfigürasyon sürümlerine göre" kırılımı bir sürüm için
+"+%75 / guardrail ihlali" gösterdi; oysa artış birkaç ağır oturumdan geliyordu (n=27,
+en pahalı 3 oturum maliyetin %48'i) ve guardrail ihlali 0 token harcayan 3 codex login
+hatasından doğuyordu. Düzeltmeler (`internal/goals/fitness_stats.go`, `fitness.go`):
+
+- **Yetersiz-veri kapısı:** her sürüm kovası `stats` (`BucketStats`) taşır. Maliyetli
+  oturum sayısı `MinBucketSessions` (50) altındaysa **ya da** en pahalı 3 oturum kova
+  maliyetinin `MaxTop3CostShare` (%40) fazlasını tutuyorsa `insufficient=true` +
+  `reasons`. UI iki kovadan biri kapıya takılırsa "+%X" rozeti yerine **"yetersiz veri"**
+  gösterir (gerekçe tooltip'te); ham değerler görünür kalır. Eşikler API'de de döner
+  (`minBucketSessions`, `maxTop3CostShare`).
+- **Sağlam istatistik:** oturum başına metrikler (`usage.costUSDPerSession`,
+  `usage.tokensPerSession`) `dist` alanında ortalama, medyan, %10 kırpılmış ortalama ve
+  ilk-3 payını taşır; kovanın `stats.cost`'u aynı dağılımı maliyet için verir. UI'da
+  Medyan / Kırpılmış ort. / Ortalama seçici; **varsayılan medyan**, fark (delta) seçili
+  istatistik üzerinden hesaplanır. Ana metrik değerinin kendisi (`value`) hâlâ
+  ortalamadır — evolver ve hedef eşiği değişmedi.
+- **Aynı-ajan karşılaştırması:** `GET /api/goals/{id}/fitness?agent=<id>` değerlendirmeyi
+  o ajanın oturumlarına daraltır; yanıttaki `agents` (filtre öncesi kapsamdaki ajanlar +
+  oturum sayıları) UI'daki ajan seçicisini besler.
+- **İkincil metrik:** kova başına `stats.costPerToolCall` (maliyet / ömür boyu araç
+  çağrısı; `Session.ToolCallCount`) — iş miktarından bağımsız birim maliyet.
+- **Guardrail düzeltmesi:** koşu durumu başarısız (`failed/error/killed/stuck`) olup **0
+  token ve 0 araç çağrısı** olan oturum "sağlayıcı/auth hatası" sayılır
+  (`isProviderFailure`): `session.errorTurnsRatio`'nun pay **ve** paydasından çıkarılır,
+  sessizce kaybolmaz — metrikte `excluded` + `note`, kovada ve hedefte
+  `providerFailures` olarak döner, UI'da bilgi satırı olarak görünür.
+- **Öneriler metni:** taslak/duraklatılmış hedefte ya da politika `off` iken "Evolver …
+  kendisi koşar" yerine "önce hedefi etkinleştir" türü metin (`evolverIdleText`); evolver
+  yalnız etkin hedeflerde koşar (`internal/agent/goal_evolver.go`).
 
 ### 8.2 Karar: workspace'in tamamı değil, kısım kısım evrim
 

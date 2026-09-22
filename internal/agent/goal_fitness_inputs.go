@@ -22,6 +22,7 @@ func (r *Runtime) FitnessInputs(ctx context.Context, now, since int64) goals.Fit
 		in.Sessions = append(in.Sessions, goals.SessionRow{
 			ID: s.ID, RootID: s.RootCoordinator(), AgentID: s.AgentID, SnapshotHash: s.SnapshotHash,
 			RunState: s.RunState, Kind: s.Kind, Tags: s.Tags, CreatedAt: s.CreatedAt, StuckTurns: s.StuckTurns,
+			ToolCalls: s.ToolCallCount,
 		})
 		if s.SnapshotHash != "" {
 			hashes[s.SnapshotHash] = true

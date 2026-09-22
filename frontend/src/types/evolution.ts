@@ -10,6 +10,27 @@ export interface MetricValue {
   unit: string
   available: boolean
   note?: string
+  // Per-session distribution behind a per-session average (cost/tokens).
+  dist?: Distribution | null
+  // Sessions left out on purpose (e.g. provider/auth failures); see note.
+  excluded?: number
+}
+
+export interface Distribution {
+  n: number
+  mean: number
+  median: number
+  trimmedMean: number
+  top3Share: number
+}
+
+// Cost picture of one configuration-version bucket (internal/goals/fitness_stats.go).
+export interface BucketStats {
+  cost: Distribution
+  toolCalls: number
+  costPerToolCall?: number | null
+  insufficient: boolean
+  reasons?: string[]
 }
 
 export interface GuardrailStatus extends MetricValue {
@@ -45,6 +66,8 @@ export interface SnapshotFitness {
   primary: MetricValue
   guardrails: GuardrailStatus[]
   changes?: SnapshotChange[]
+  stats: BucketStats
+  providerFailures: number
 }
 
 export interface GoalFitness {
@@ -58,6 +81,11 @@ export interface GoalFitness {
   target?: number | null
   onTarget?: boolean | null
   bySnapshot: SnapshotFitness[]
+  agent?: string
+  agents: { agentId: string; sessions: number }[]
+  providerFailures: number
+  minBucketSessions: number
+  maxTop3CostShare: number
 }
 
 interface SnapshotRow {

@@ -1,6 +1,7 @@
 package goals
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -24,6 +25,7 @@ type SessionRow struct {
 	Tags         []string
 	CreatedAt    int64
 	StuckTurns   int
+	ToolCalls    int // lifetime executed tool calls
 }
 
 // UsageRow is a session's priced lifetime usage.
@@ -70,6 +72,9 @@ type FitnessInputs struct {
 	Asks         []AskRow
 	Snapshots    map[string]ConfigSnapshot // by hash, for config.* metrics and diffs
 	CurrentHash  string
+	// Agent optionally restricts the evaluation to one agent's sessions so
+	// configuration versions are compared over the same kind of work.
+	Agent string
 }
 
 // MetricValue is one computed metric.
@@ -80,6 +85,11 @@ type MetricValue struct {
 	Unit      string   `json:"unit"`
 	Available bool     `json:"available"` // false = the catalog cannot measure this yet
 	Note      string   `json:"note,omitempty"`
+	// Dist is the per-session distribution behind a per-session average
+	// (mean/median/trimmed mean); nil for metrics that are not one.
+	Dist *Distribution `json:"dist,omitempty"`
+	// Excluded counts sessions left out of the value on purpose (see Note).
+	Excluded int `json:"excluded,omitempty"`
 }
 
 // GuardrailStatus is a guardrail evaluated over one group.
@@ -102,6 +112,16 @@ type SnapshotFitness struct {
 	Primary    MetricValue       `json:"primary"`
 	Guardrails []GuardrailStatus `json:"guardrails"`
 	Changes    []SnapshotChange  `json:"changes,omitempty"` // vs the previous snapshot in the series
+	Stats      BucketStats       `json:"stats"`
+	// ProviderFailures: sessions that failed before the model did any work
+	// (provider/auth errors, 0 tokens) — info, excluded from the error ratio.
+	ProviderFailures int `json:"providerFailures"`
+}
+
+// AgentCount is one agent present in the goal's scope over the window.
+type AgentCount struct {
+	AgentID  string `json:"agentId"`
+	Sessions int    `json:"sessions"`
 }
 
 // GoalFitness is the whole answer for one goal.
@@ -117,15 +137,30 @@ type GoalFitness struct {
 	Target     *float64          `json:"target,omitempty"`
 	OnTarget   *bool             `json:"onTarget,omitempty"`
 	BySnapshot []SnapshotFitness `json:"bySnapshot"`
+	// Agent echoes the agent filter ("" = all); Agents lists the agents in
+	// scope (before that filter) for the same-agent comparison selector.
+	Agent            string       `json:"agent,omitempty"`
+	Agents           []AgentCount `json:"agents"`
+	ProviderFailures int          `json:"providerFailures"`
+	// Gate thresholds, echoed so the UI can explain "insufficient data".
+	MinBucketSessions int     `json:"minBucketSessions"`
+	MaxTop3CostShare  float64 `json:"maxTop3CostShare"`
 }
 
 // Evaluate computes the goal's fitness over in.
 func Evaluate(g db.Goal, in FitnessInputs) GoalFitness {
 	scoped := scopeSessions(g, in)
 	out := GoalFitness{
-		GoalID: g.ID, Since: in.Since, Now: in.Now, Sessions: len(scoped),
+		GoalID: g.ID, Since: in.Since, Now: in.Now,
 		Direction: g.Primary.Direction, Target: g.Primary.Target,
+		Agent: in.Agent, Agents: agentCounts(scoped),
+		MinBucketSessions: MinBucketSessions, MaxTop3CostShare: MaxTop3CostShare,
 	}
+	if in.Agent != "" {
+		scoped = filterAgent(scoped, in.Agent)
+	}
+	out.Sessions = len(scoped)
+	out.ProviderFailures = countProviderFailures(scoped, in)
 	out.Primary = computeMetric(g.Primary.Metric, g, scoped, in, in.CurrentHash)
 	out.Guardrails = guardrails(g, scoped, in, in.CurrentHash)
 	if out.Primary.Value != nil && g.Primary.Target != nil {
@@ -176,6 +211,7 @@ func Evaluate(g db.Goal, in FitnessInputs) GoalFitness {
 			Hash: h, From: first[h], To: last[h], Sessions: len(rows), Current: h == in.CurrentHash,
 			Primary:    computeMetric(g.Primary.Metric, g, rows, in, h),
 			Guardrails: guardrails(g, rows, in, h),
+			Stats:      bucketStats(rows, in), ProviderFailures: countProviderFailures(rows, in),
 		}
 		if prev != "" && h != "" {
 			if a, okA := in.Snapshots[prev]; okA {
@@ -294,6 +330,7 @@ func computeMetric(key string, g db.Goal, rows []SessionRow, in FitnessInputs, h
 		return recipeMetric(key, g, ids, in, mv)
 	case key == "usage.costUSDPerSession", key == "usage.tokensPerSession", key == "usage.cacheHitRatio", key == "usage.costUSDPerDay":
 		var cost, tokens, read, denom float64
+		var costs, toks []float64
 		n := 0
 		for id := range ids {
 			u, ok := in.Usage[id]
@@ -305,11 +342,20 @@ func computeMetric(key string, g db.Goal, rows []SessionRow, in FitnessInputs, h
 			tokens += float64(u.Tokens)
 			read += float64(u.CacheRead)
 			denom += float64(u.InputTokens + u.CacheRead + u.CacheWrite)
+			costs = append(costs, u.CostUSD)
+			toks = append(toks, float64(u.Tokens))
+		}
+		withDist := func(samples []float64) {
+			if d, ok := distributionOf(samples); ok {
+				mv.Dist = &d
+			}
 		}
 		switch key {
 		case "usage.costUSDPerSession":
+			withDist(costs)
 			return set(cost/float64(max(n, 1)), n)
 		case "usage.tokensPerSession":
+			withDist(toks)
 			return set(tokens/float64(max(n, 1)), n)
 		case "usage.costUSDPerDay":
 			return set(cost/days, n)
@@ -367,13 +413,25 @@ func computeMetric(key string, g db.Goal, rows []SessionRow, in FitnessInputs, h
 		}
 		return set(float64(n)/days, n)
 	case key == "session.errorTurnsRatio":
-		failed := 0
+		// Provider/auth failures (0 tokens, 0 tool calls) are not a turn the
+		// configuration produced: they are left out of both numerator and
+		// denominator and reported through Excluded/Note instead.
+		failed, excluded := 0, 0
 		for _, s := range rows {
+			if isProviderFailure(s, in) {
+				excluded++
+				continue
+			}
 			if isFailedRunState(s.RunState) {
 				failed++
 			}
 		}
-		return set(float64(failed)/float64(max(len(rows), 1)), len(rows))
+		if excluded > 0 {
+			mv.Excluded = excluded
+			mv.Note = fmt.Sprintf("%d provider/auth failures (0 tokens) excluded", excluded)
+		}
+		n := len(rows) - excluded
+		return set(float64(failed)/float64(max(n, 1)), n)
 	case key == "session.humanAsksPerSession":
 		asks := 0
 		for _, a := range in.Asks {
@@ -552,4 +610,33 @@ func anyIn(l []string, set map[string]bool) bool {
 		}
 	}
 	return false
+}
+
+func filterAgent(rows []SessionRow, agent string) []SessionRow {
+	out := make([]SessionRow, 0, len(rows))
+	for _, s := range rows {
+		if s.AgentID == agent {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// agentCounts lists the agents behind rows, most sessions first.
+func agentCounts(rows []SessionRow) []AgentCount {
+	counts := map[string]int{}
+	for _, s := range rows {
+		counts[s.AgentID]++
+	}
+	out := make([]AgentCount, 0, len(counts))
+	for id, n := range counts {
+		out = append(out, AgentCount{AgentID: id, Sessions: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Sessions != out[j].Sessions {
+			return out[i].Sessions > out[j].Sessions
+		}
+		return out[i].AgentID < out[j].AgentID
+	})
+	return out
 }
