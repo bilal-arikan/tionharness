@@ -14,7 +14,7 @@ import (
 // for it). The stores already exposed every getter used here; only the HTTP
 // handlers were missing.
 //
-// Shape follows handleGetProvider (providers.go) and handleGetFlow (flows.go):
+// Shape follows handleGetProvider (providers.go):
 // the bare entity as JSON, 404 via writeDBError when absent. Deliberately NOT
 // wrapped in the {items,total,...} listing envelope — that is the list contract
 // (listparams.go), and a single read has no page to describe.

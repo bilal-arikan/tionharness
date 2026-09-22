@@ -574,9 +574,10 @@ tasarlanacak. Kullanılmayan `api.getFlow` istemci çağrısı da söküldü.
 
 Kalanlar (başka tüketicileri olduğu için): `db.FlowRun.SessionID` + `db.SetFlowRunSession`
 (koşu ↔ transkript oturumu bağı; Rota düzeni, Insight Koşular sekmesi ve trajectory
-projeksiyonu kullanır), REST CRUD yüzeyinin parçası olan `GET /api/flows/{id}`
-(`handleGetFlow`), `RunView`'in `hideSummary`/`inputInTrace` prop'ları (artık yalnız
-`RunTreeView` üzerinden Koşular sekmesi) ve node inline çıktı önizlemesi.
+projeksiyonu kullanır), `RunView`'in `hideSummary`/`inputInTrace` prop'ları (artık yalnız
+`RunTreeView` üzerinden Koşular sekmesi) ve node inline çıktı önizlemesi. Tüketicisi
+kalmayan `GET /api/flows/{id}` (`handleGetFlow`) da sonradan kaldırıldı (TSK1041);
+tek akış okuması `get_flow` self-management aracı ile store üzerinden yapılır.
 
 **Node inline çıktı önizlemesi:** `FlowRFNode.data.output` (koşu görünümlerinde `RunView` node data'sına
 canlı/trace'ten geçirilir); `AgentNode` node `done` olduğunda cevabı yeşil kenarlı `line-clamp-3`

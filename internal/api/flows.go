@@ -59,16 +59,6 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 	pageJSONResponse(w, page, total, offset, limit)
 }
 
-// handleGetFlow returns a single flow by id. 404 if the flow is gone.
-func (s *Server) handleGetFlow(w http.ResponseWriter, r *http.Request) {
-	flow, err := ws(r).DB.GetFlow(r.Context(), r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, flow)
-}
-
 type flowReq struct {
 	Name  string               `json:"name"`
 	Graph *orchestration.Graph `json:"graph"`
