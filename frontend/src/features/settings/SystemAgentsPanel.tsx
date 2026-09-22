@@ -9,7 +9,10 @@ import { groupSystemAgents } from '@/features/agents/agentRoster'
 import { indexAgents, eligibleParents, lineageOf } from '@/shared/lib/agentLineage'
 import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 import { LoadingState } from '@/shared/components'
+import { SELECTED_ITEM_RING } from '@/shared/components/SidebarChrome'
 import { useAsync } from '@/shared/hooks/useAsync'
+import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
+import { SystemAgentsBulkBar } from './SystemAgentsBulkBar'
 
 interface Props {
   /** Surface load/save failures on the app banner. */
@@ -34,6 +37,9 @@ const sectionHeading = (label: string, hint: string) => (
 // A LOCKED built-in renders read-only; "Özelleştir" derives a customisation
 // bound to the same system role, and THAT row is what serves the role while it
 // stays enabled (see SystemAgentStatusBadge).
+//
+// Ctrl/Cmd+Click and Shift+Click multi-select roster rows for a bulk provider +
+// model edit (SystemAgentsBulkBar); a plain click still opens the row's form.
 export function SystemAgentsPanel({ onError }: Props) {
   const { data, loading, error, refresh } = useAsync(() => api.listAgents(), [])
   const agents = useMemo(() => data ?? [], [data])
@@ -48,6 +54,10 @@ export function SystemAgentsPanel({ onError }: Props) {
   const groups = useMemo(() => groupSystemAgents(agents), [agents])
   const systemAgents = useMemo(() => [...groups.services, ...groups.workers], [groups])
   const byId = useMemo(() => indexAgents(agents), [agents])
+  // Services render before workers, so this is also the on-screen row order a
+  // Shift+Click range walks.
+  const orderedIds = useMemo(() => systemAgents.map((a) => a.id), [systemAgents])
+  const sel = useMultiSelect()
 
   // Keep a valid selection: the current one if it survived a refresh, else the
   // first system agent in roster order.
@@ -134,16 +144,19 @@ export function SystemAgentsPanel({ onError }: Props) {
   const rosterItem = (a: Agent) => (
     <button
       key={a.id}
-      onClick={() => setSelectedId(a.id)}
+      onClick={(e) => {
+        if (sel.handleClick(e, a.id, orderedIds, selectedId)) return
+        setSelectedId(a.id)
+      }}
       data-testid="system-agent-roster-item"
       data-agent-id={a.id}
       className={`mb-1 flex w-full items-stretch gap-2 rounded-lg py-1 pl-2 pr-1 text-left text-sm transition ${
         a.disabled ? 'opacity-50' : ''
       } ${
-        selectedId === a.id
+        selectedId === a.id || sel.isSelected(a.id)
           ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
           : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-      }`}
+      } ${sel.isSelected(a.id) ? SELECTED_ITEM_RING : ''}`}
     >
       <span className="flex min-w-0 flex-1 items-center py-1">
         <AgentIdentity
@@ -213,6 +226,13 @@ export function SystemAgentsPanel({ onError }: Props) {
               </p>
             )}
           </div>
+          <SystemAgentsBulkBar
+            sel={sel}
+            agents={systemAgents}
+            orderedIds={orderedIds}
+            onSettled={refresh}
+            onError={onError}
+          />
         </aside>
 
         <div className="min-w-0 flex-1 overflow-y-auto">

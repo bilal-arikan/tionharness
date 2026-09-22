@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Agent, AgentPatch } from '@/types'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { Button } from '@/shared/components'
-import { updateAgentProviderModels } from './agentBulkEdit'
+import { isInBulkScope, updateAgentProviderModels, type AgentBulkScope } from './agentBulkEdit'
 
 interface Props {
   agents: Agent[]
@@ -11,11 +11,21 @@ interface Props {
   onApplied: () => void
   onCancel: () => void
   onError?: (message: string) => void
+  /** Roster the selection comes from; only agents of this scope are patched. */
+  scope?: AgentBulkScope
 }
 
-export function AgentBulkEditPanel({ agents, onUpdateAgent, onApplied, onCancel, onError }: Props) {
+export function AgentBulkEditPanel({
+  agents,
+  onUpdateAgent,
+  onApplied,
+  onCancel,
+  onError,
+  scope = 'agents',
+}: Props) {
   const { t } = useTranslation('common')
-  const first = agents.find((agent) => !agent.system)
+  const editable = agents.filter((agent) => isInBulkScope(agent, scope))
+  const first = editable[0]
   const [providerInstanceId, setProviderInstanceId] = useState(
     first?.providerInstanceId ?? first?.provider ?? '',
   )
@@ -25,7 +35,7 @@ export function AgentBulkEditPanel({ agents, onUpdateAgent, onApplied, onCancel,
   const apply = async () => {
     setSaving(true)
     try {
-      await updateAgentProviderModels(agents, providerInstanceId, model, onUpdateAgent)
+      await updateAgentProviderModels(agents, providerInstanceId, model, onUpdateAgent, scope)
       onApplied()
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(t('agents.bulkEdit.error'))
@@ -39,6 +49,7 @@ export function AgentBulkEditPanel({ agents, onUpdateAgent, onApplied, onCancel,
   return (
     <div
       data-testid="agent-bulk-edit-panel"
+      data-scope={scope}
       className="mx-2 mb-2 space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3"
     >
       <div>
@@ -46,9 +57,12 @@ export function AgentBulkEditPanel({ agents, onUpdateAgent, onApplied, onCancel,
           {t('agents.bulkEdit.title')}
         </h3>
         <p className="text-xs text-[var(--color-text-dim)]">
-          {t('agents.bulkEdit.description', {
-            count: agents.filter((agent) => !agent.system).length,
-          })}
+          {t(
+            scope === 'system'
+              ? 'agents.bulkEdit.systemDescription'
+              : 'agents.bulkEdit.description',
+            { count: editable.length },
+          )}
         </p>
       </div>
       <ProviderInstanceModelSelect

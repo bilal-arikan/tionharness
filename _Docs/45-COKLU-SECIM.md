@@ -1,10 +1,10 @@
 # 45 — Çoklu Seçim (Ctrl/Cmd+Click) ve Toplu Eylemler
 
-> **Özet (2026-09-03):** Uygulanmış, tamamen **frontend-only** bir özelliktir (2026-06-29,
+> **Özet (2026-09-16):** Uygulanmış, tamamen **frontend-only** bir özelliktir (2026-06-29,
 > yeni backend yok) — listelerde Ctrl/Cmd+Click ve Shift+Click ile çoklu seçim yapıp toplu
 > eylem (sil, taşı, ata, gruplama vb.) uygulama. Çekirdek: liste-agnostik `useMultiSelect`
 > hook'u + sticky `SelectionBar` bileşeni; her liste kendi `handleClick`/`isSelected`
-> entegrasyonunu yapar. On bir liste bağlanmış (Sohbet/Ajanlar/Board/Hafıza/Artifact/
+> entegrasyonunu yapar. On iki liste bağlanmış (Sohbet/Ajanlar/Ayarlar ▸ Sistem Ajanları/Board/Hafıza/Artifact/
 > Skills/Flows/Araçlar/Aktivite); toplu eylemler mevcut tekil API'leri `Promise.all` ile
 > çağırır, yeni endpoint yoktur. Dayandığı dosyalar: `frontend/src/hooks/useMultiSelect.ts`,
 > `frontend/src/components/common/SelectionBar.tsx`.
@@ -80,6 +80,7 @@ onClick={(e) => {
 |-------|---------|-----------|----------------|
 | Sohbet | `SessionsSidebar` | Oturumu aç | AI başlık · Sabitle · Arşivle/çıkar · Sil |
 | Ajanlar | `AgentsView` | Ajanı seç | Sağlayıcı örneği + model düzenle · Sil |
+| Sistem ajanları (Ayarlar) | `SystemAgentsPanel` + `SystemAgentsBulkBar` | Ajanın formunu aç | Sağlayıcı örneği + model düzenle (yalnız sistem ajanları; "Tümü" Servisler + Worker'lar) |
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
 | Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
 | Artifact | `ArtifactsPanel` | Artifact aç | **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil |
@@ -94,11 +95,19 @@ onClick={(e) => {
 - **Toplu eylemler mevcut tekil API'leri kullanır** — `Promise.all` / döngü ile;
   yeni endpoint yok. Optimistic state güncellenir, hata halinde `reload()`.
 - **Ajan sağlayıcı/model düzenleme:** SelectionBar'daki "Düzenle" paneli tekil
-  create/edit formuyla aynı `ProviderInstanceModelSelect` bileşenini kullanır. Sistem ajanları
-  seçime ve güncellemeye alınmaz. Seçilen her düzenlenebilir ajan için mevcut
-  `updateAgent` yolu yalnız `{ provider: instanceId, model }` patch'ini yollar; backend handler
-  `ProviderInstanceID` tek gerçek kaynak kuralıyla `Provider` kind aynasını senkronlar. Yeni bulk
-  endpoint yoktur. Hata seçimi ve paneli korur; tam başarı seçimi temizler.
+  create/edit formuyla aynı `ProviderInstanceModelSelect` bileşenini kullanır. Ajanlar ekranında
+  sistem ajanları seçime ve güncellemeye alınmaz; onların toplu düzenlemesi **Ayarlar ▸ Sistem
+  Ajanları** ekranındadır (2026-09-16). Ortak `updateAgentProviderModels` / `AgentBulkEditPanel`
+  bir `scope` alır (`'agents'` varsayılan: yalnız sıradan ajanlar; `'system'`: yalnız sistem
+  ajanları), yani iki ekran birbirinin ajanını asla yamamaz. Seçilen her düzenlenebilir ajan için
+  mevcut `updateAgent` yolu yalnız `{ provider: instanceId, model }` patch'ini yollar; backend
+  handler `ProviderInstanceID` tek gerçek kaynak kuralıyla `Provider` kind aynasını senkronlar.
+  Kilitli yerleşik sistem ajanında bu yazma app-global override katmanına gider (tüm
+  workspace'ler), özelleştirmede yalnız o workspace'in override'ını pinler. Yeni bulk endpoint
+  yoktur. Yazmalar `Promise.allSettled` ile **hepsi bitince** ilk hatayı fırlatır (hata sonrası
+  yenileme uçuştaki yazmalarla yarışmaz). Hata seçimi ve paneli korur; tam başarı seçimi temizler.
+  Sistem panelinde düzenleme paneli seçim varken bağlanan bir alt bileşendedir: seçim hangi
+  yoldan temizlenirse (Esc, sade tık, X) panel de kapanır.
 - **Filtre/arama:** Görünmeyen seçili öğeler korunur; SelectionBar "(+N filtre
   dışı)" gösterir (sessions). `orderedIds` yalnız görünürleri içerdiğinden
   shift-aralık tutarlıdır.

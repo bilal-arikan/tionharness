@@ -252,6 +252,16 @@ Kaydetme app-settings taslağından bağımsızdır: her düzenleme kendi `/api/
 `SELF_MANAGED_CATS` kümesindedir — başlıktaki "Kaydedilmemiş değişiklik" yazısı ve
 **Kaydet** düğmesi bu ekranda gösterilmez (`secrets` ve `exttools` ile aynı davranış).
 
+**Toplu seçim ve düzenleme (2026-09-16).** Roster satırlarında Ctrl/Cmd+Tık ve Shift+Tık
+çoklu seçer (açık formdaki satır seçime katılır); sade tık yine formu açar ve seçimi temizler.
+Alttaki `SelectionBar` "Tümü" (Servisler + Worker'lar) ve **Düzenle** sunar; Düzenle, Ajanlar
+ekranındaki `AgentBulkEditPanel`'i `scope="system"` ile açar ve seçili her sistem ajanına
+yalnız `{ provider, model }` yazar (`frontend/src/features/settings/SystemAgentsBulkBar.tsx`).
+Yazma tekil düzenlemeyle aynı `PUT /api/agents/{id}` yoludur: kilitli yerleşikte değişiklik
+app-global override katmanına pinlenir ve tüm workspace'lere yayılır, özelleştirmede yalnız bu
+workspace'in override'ı olur — panel açıklaması bunu söyler. Sıradan ajanlar bu seçime hiç
+girmez; Ajanlar ekranındaki toplu düzenleme de sistem ajanlarını yamamaz (`_Docs/45`).
+
 ### Özelleştirme workspace'e özgüdür (2026-09-04)
 
 Kilitli yerleşik tanımlar **koddan** gelir ve her workspace'te aynıdır; ondan kalıtım
