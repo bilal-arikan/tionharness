@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
 import type { SessionContextPreview } from '@/types'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import {
@@ -48,7 +49,7 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   const [data, setData] = useState<SessionContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   // When on, the preview simulates this turn's budgeted compaction (fewer
   // messages) so the array matches what the model actually receives.
   const [simulate, setSimulate] = useState(false)
@@ -60,21 +61,32 @@ export function SessionContextModal({ sessionId, title, onClose }: Props) {
   const [statsOpen, setStatsOpen] = useState(false)
   const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
-  const load = useCallback(
-    (msg: string, compact: boolean, exact = false) => {
-      setLoading(true)
+  // run lands the preview through callbacks only (so the effect may call it);
+  // load is the submit/button entry point that also re-arms the spinner.
+  const run = useCallback(
+    (msg: string, compact: boolean, exact = false) =>
       api
         .sessionContextPreview(sessionId, msg.trim() || undefined, compact, exact)
         .then(setData)
         .catch((e) => setErr((e as Error).message))
-        .finally(() => setLoading(false))
-    },
+        .finally(() => setLoading(false)),
     [sessionId],
+  )
+  const load = useCallback(
+    (msg: string, compact: boolean, exact = false) => {
+      setLoading(true)
+      void run(msg, compact, exact)
+    },
+    [run],
   )
 
   // Reload whenever the sample message is (re)submitted or a toggle flips.
-  // simulate/accurate are dependencies so toggling them refetches immediately.
-  useEffect(() => load(message, simulate, accurate), [load, simulate, accurate]) // eslint-disable-line react-hooks/exhaustive-deps
+  // simulate/accurate are dependencies so toggling them refetches immediately;
+  // the message only refetches on submit.
+  useKeyedReset(`${sessionId}|${simulate}|${accurate}`, () => setLoading(true))
+  useEffect(() => {
+    void run(message, simulate, accurate)
+  }, [run, simulate, accurate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = () => {
     if (!data) return

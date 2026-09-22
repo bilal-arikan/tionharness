@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bug, ChevronDown, ChevronRight, Loader2, AlertTriangle, Info } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { SessionDebugSummary, SessionDebugEvent } from '@/types'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { SessionFlowViz } from './viz/SessionFlowViz'
@@ -56,11 +57,14 @@ export function SessionDebugCard({
     }
   }, [sessionId, refreshKey])
 
-  // Raw events are fetched lazily on first expand and when the filter changes.
+  // Raw events are fetched lazily on first expand and when the filter changes;
+  // each trigger re-arms the spinner before the fetch lands via callbacks.
+  useKeyedReset(`${expanded}|${sessionId}|${typeFilter}|${refreshKey}`, () => {
+    if (expanded) setLoadingEvents(true)
+  })
   useEffect(() => {
     if (!expanded) return
     let alive = true
-    setLoadingEvents(true)
     api
       .sessionDebugEvents(sessionId, typeFilter, 200)
       .then((e) => alive && setEvents(e))

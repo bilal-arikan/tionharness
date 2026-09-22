@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Workflow } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { Hook, SessionDebugEvent } from '@/types'
 import { ToolSankey } from './ToolSankey'
 import { ConcurrencyTimeline } from './ConcurrencyTimeline'
@@ -29,7 +30,8 @@ export function SessionFlowViz({
   const [open, setOpen] = useState(() => localStorage.getItem('tionharness.flowVizOpen') === '1')
   const [events, setEvents] = useState<SessionDebugEvent[] | null>(null)
   const [hooks, setHooks] = useState<Hook[]>([])
-  const [loading, setLoading] = useState(false)
+  // An open section fetches on mount, so it starts in the loading state.
+  const [loading, setLoading] = useState(open)
 
   const toggle = () =>
     setOpen((v) => {
@@ -38,11 +40,14 @@ export function SessionFlowViz({
       return next
     })
 
-  // Lazy-fetch (and refresh) the raw events only while the section is open.
+  // Lazy-fetch (and refresh) the raw events only while the section is open;
+  // each trigger re-arms the spinner before the fetch lands via callbacks.
+  useKeyedReset(`${open}|${sessionId}|${refreshKey}`, () => {
+    if (open) setLoading(true)
+  })
   useEffect(() => {
     if (!open) return
     let alive = true
-    setLoading(true)
     api
       .sessionDebugEvents(sessionId, '', EVENT_LIMIT)
       .then((e) => alive && setEvents(e))

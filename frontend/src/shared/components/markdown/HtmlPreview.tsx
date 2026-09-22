@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { fileTextURL } from '@/shared/lib/attachments'
 
 interface Props {
@@ -107,18 +108,18 @@ export function HtmlPreview({ code }: Props) {
 
 // HtmlFrame fetches one file's text and renders it inside a sandboxed iframe.
 function HtmlFrame({ src }: { src: string }) {
+  const url = fileTextURL(src)
   const [html, setHtml] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => (url ? null : 'geçersiz kaynak yolu'))
 
-  useEffect(() => {
-    let cancelled = false
+  // A new source drops the previous document before the fetch below lands.
+  useKeyedReset(src, () => {
     setHtml(null)
-    setError(null)
-    const url = fileTextURL(src)
-    if (!url) {
-      setError('geçersiz kaynak yolu')
-      return
-    }
+    setError(url ? null : 'geçersiz kaynak yolu')
+  })
+  useEffect(() => {
+    if (!url) return
+    let cancelled = false
     fetch(url)
       .then(async (res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -133,7 +134,7 @@ function HtmlFrame({ src }: { src: string }) {
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [url])
 
   if (error) {
     return (

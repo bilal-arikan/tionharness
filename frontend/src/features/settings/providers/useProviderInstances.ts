@@ -12,21 +12,22 @@ export function useProviderInstances() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const reload = useCallback(async () => {
-    try {
-      const [k, i] = await Promise.all([api.listProviderKinds(), api.listProviders()])
-      setKinds(k)
-      setInstances(i)
-      setError('')
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // Results land through callbacks, so the mount effect can call reload directly.
+  const reload = useCallback(
+    () =>
+      Promise.all([api.listProviderKinds(), api.listProviders()])
+        .then(([k, i]) => {
+          setKinds(k)
+          setInstances(i)
+          setError('')
+        })
+        .catch((e) => setError((e as Error).message))
+        .finally(() => setLoading(false)),
+    [],
+  )
 
   useEffect(() => {
-    reload()
+    void reload()
   }, [reload])
 
   const upsert = useCallback(async (input: UpsertProviderInput) => {

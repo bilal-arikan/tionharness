@@ -43,21 +43,26 @@ export function CommitHeatmap() {
   const [tooltip, dispatchTooltip] = useReducer(heatmapTooltipReducer, initialHeatmapTooltipState)
   const cells = useRef<Array<HTMLButtonElement | null>>([])
 
-  const load = useCallback(async () => {
+  // run lands results through callbacks only (so the mount effect may call it;
+  // loading starts true); load is the retry entry point that re-arms the spinner.
+  const run = useCallback(
+    () =>
+      api
+        .getCommitActivity(WEEKS)
+        .then(setData)
+        .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
+        .finally(() => setLoading(false)),
+    [],
+  )
+  const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    try {
-      setData(await api.getCommitActivity(WEEKS))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    return run()
+  }, [run])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void run()
+  }, [run])
 
   const points = data?.commitsByDay.slice(-CELL_COUNT) ?? []
   const peak = Math.max(0, ...points.map((point) => point.value))

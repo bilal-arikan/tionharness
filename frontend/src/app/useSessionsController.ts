@@ -3,6 +3,7 @@
 // them (select/create/rename/archive/pin/delete, per-message actions, agent
 // CRUD). App.tsx composes this with the chat-stream hook and the layout.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { Agent, AgentPatch, Artifact, Message, Session } from '@/types'
 import type { useChatStream } from '@/features/chat/useChatStream'
@@ -243,9 +244,13 @@ export function useSessionsController({
   // Load or replace the filtered first page. Deep-link and draft candidates are
   // resolved by one bounded exact-ID query so selection is not limited to page
   // one and does not require loading the whole workspace.
+  // A new list identity (workspace or chip set) is bootstrapping again from the
+  // first paint; the fetch below lands its page through callbacks.
+  useKeyedReset(sessionListQueryIdentity(activeWorkspaceId, chipsParam), () => {
+    if (activeWorkspaceId) setBootstrapping(true)
+  })
   useEffect(() => {
     if (!activeWorkspaceId) return
-    setBootstrapping(true)
     listReplacePendingRef.current = true
     const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
     const token = listRequestGuardRef.current.begin(identity)
@@ -435,11 +440,11 @@ export function useSessionsController({
   // Also used to resolve attachment chips in the transcript (by sourcePath).
   // Refreshed after each turn (meterRefresh) since a turn may create new artifacts.
   const [sessionArtifacts, setSessionArtifacts] = useState<Artifact[]>([])
+  useKeyedReset(activeWorkspaceId, () => {
+    if (!activeWorkspaceId) setSessionArtifacts([])
+  })
   useEffect(() => {
-    if (!activeWorkspaceId) {
-      setSessionArtifacts([])
-      return
-    }
+    if (!activeWorkspaceId) return
     api
       .listArtifacts()
       .then((r) => setSessionArtifacts(r.items))

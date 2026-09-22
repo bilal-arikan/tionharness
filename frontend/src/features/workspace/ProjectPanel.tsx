@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { GitBranch, FolderGit2, Check, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { GitInfo } from '@/types'
 import { FolderPickerButton } from '@/shared/components/FolderPickerButton'
 import { Button } from '@/shared/components'
@@ -20,20 +21,19 @@ interface Props {
 // commit identity) when it is.
 export function ProjectPanel({ path, onSelectPath, onError }: Props) {
   const [info, setInfo] = useState<GitInfo | null>(null)
-  const [loading, setLoading] = useState(false)
+  // A chosen path is probed from the first paint, so it starts loading.
+  const [loading, setLoading] = useState(() => path.trim() !== '')
   // Editable git settings (seeded from info when it loads).
   const [remote, setRemote] = useState('')
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(
-    (p: string) => {
-      if (!p.trim()) {
-        setInfo(null)
-        return
-      }
-      setLoading(true)
+  // run probes a path and lands the result through callbacks only (so the
+  // effect may call it); load is the button entry point that also re-arms the
+  // spinner. A blank path clears the git state instead of probing.
+  const run = useCallback(
+    (p: string) =>
       api
         .gitInfo(p)
         .then((g) => {
@@ -43,14 +43,29 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
           setUserEmail(g.userEmail)
         })
         .catch((e) => onError((e as Error).message))
-        .finally(() => setLoading(false))
-    },
+        .finally(() => setLoading(false)),
     [onError],
   )
+  const load = useCallback(
+    (p: string) => {
+      if (!p.trim()) {
+        setInfo(null)
+        return
+      }
+      setLoading(true)
+      void run(p)
+    },
+    [run],
+  )
 
+  useKeyedReset(path, () => {
+    if (path.trim()) setLoading(true)
+    else setInfo(null)
+  })
   useEffect(() => {
-    load(path)
-  }, [path, load])
+    if (!path.trim()) return
+    void run(path)
+  }, [path, run])
 
   // createDir: only set from the "folder does not exist" branch, so a typo in an
   // otherwise valid path cannot silently create a stray directory.

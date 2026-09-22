@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, GitCommitHorizontal, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Badge, SectionHead } from '@/shared/components'
 import { fullDateTime } from '@/shared/lib/time'
 import type { Goal, GoalMetricDef } from '@/types/goal'
@@ -35,11 +36,12 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
   const [agent, setAgent] = useState('')
   const [stat, setStat] = useState<StatKind>('median')
   const [fit, setFit] = useState<GoalFitness | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
+  // Every refetch trigger re-arms the spinner; the fetch lands via callbacks.
+  useKeyedReset(`${goal.id}|${goal.updatedAt}|${win}|${agent}`, () => setLoading(true))
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     api
       .goalFitness(goal.id, sinceFor(win), agent || undefined)
       .then((f) => {

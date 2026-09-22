@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { ChevronRight } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Flow, FlowRun } from '@/types'
@@ -49,11 +50,11 @@ export function RunTreeView({ run, flows, agents, onRerun, rerunning, onResumed 
   // Selecting a different run in the surrounding list resets the whole view: a
   // tree from the previous selection must not linger, and the newly selected run
   // is by definition the one to display.
-  useEffect(() => {
-    setViewRunId(run.id)
+  useKeyedReset(run.id, (id) => {
+    setViewRunId(id)
     setLiveProgress({})
     setTreeRuns([])
-  }, [run.id])
+  })
 
   const loadTree = useCallback(() => {
     let alive = true

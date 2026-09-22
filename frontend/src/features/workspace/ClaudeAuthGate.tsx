@@ -13,6 +13,7 @@
 // It is driven by a `trigger` counter that the parent bumps once per successful
 // create, so the same mount handles every workspace the user spins up.
 import { useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { KeyRound, X } from 'lucide-react'
 import { api } from '@/api'
 import { ClaudeAuthDialog } from '@/features/settings/ClaudeAuthDialog'
@@ -59,12 +60,16 @@ export function ClaudeAuthGate({
   // needs (config dir + current credential kind/state). Fetched lazily on open.
   const [dialogOpen, setDialogOpen] = useState(false)
 
+  // Clear any leftover UI from a previous workspace's gate before re-probing.
+  useKeyedReset(trigger, () => {
+    if (trigger > 0) {
+      setNotice(null)
+      setDialogOpen(false)
+    }
+  })
   useEffect(() => {
     if (trigger <= 0) return
     let alive = true
-    // Clear any leftover UI from a previous workspace's gate before re-probing.
-    setNotice(null)
-    setDialogOpen(false)
     ;(async () => {
       try {
         // Chat-open reason: skip the expensive login probe entirely when the

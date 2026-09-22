@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CodeBlock } from '@/shared/components/markdown/CodeBlock'
 
@@ -10,10 +11,13 @@ export function TextFileArtifact({ url, lang }: { url: string; lang: string }) {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
+  // A new file drops the previous preview before the fetch below lands.
+  useKeyedReset(url, () => {
     setText(null)
     setError(null)
+  })
+  useEffect(() => {
+    let alive = true
     fetch(url)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)

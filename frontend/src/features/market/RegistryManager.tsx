@@ -22,18 +22,24 @@ export function RegistryManager({ onClose, onChanged }: Props) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setRegistries(await api.listRegistries())
-    } catch (e) {
-      setErr((e as Error).message)
-    }
-    try {
-      setConnectors(await api.listConnectors())
-    } catch {
-      // connectors are optional
-    }
-  }, [])
+  // Registries first, then connectors (optional); both land through callbacks
+  // so the mount effect can call this directly.
+  const load = useCallback(
+    () =>
+      api
+        .listRegistries()
+        .then(setRegistries)
+        .catch((e) => setErr((e as Error).message))
+        .then(() =>
+          api
+            .listConnectors()
+            .then(setConnectors)
+            .catch(() => {
+              // connectors are optional
+            }),
+        ),
+    [],
+  )
 
   useEffect(() => {
     void load()

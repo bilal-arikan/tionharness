@@ -25,22 +25,25 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
   const [ignored, setIgnored] = useState<string[]>([])
   const [busy, setBusy] = useState<string | null>(null)
 
-  const load = async () => {
+  // run lands the probe through callbacks only (so the mount effect may call
+  // it; loading starts true); load is the button entry point that re-arms the
+  // spinner.
+  const run = () =>
+    fetchRecommendationData()
+      .then((data) => {
+        setIgnored(data.ws.ignoredRecommendations ?? [])
+        // NOOP_NAV: we only need which rules apply, never invoke their actions here.
+        setApplicable(new Set(runRules({ ...data, nav: NOOP_NAV }).map((r) => r.key)))
+      })
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoading(false))
+  const load = () => {
     setLoading(true)
-    try {
-      const data = await fetchRecommendationData()
-      setIgnored(data.ws.ignoredRecommendations ?? [])
-      // NOOP_NAV: we only need which rules apply, never invoke their actions here.
-      setApplicable(new Set(runRules({ ...data, nav: NOOP_NAV }).map((r) => r.key)))
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
+    return run()
   }
 
   useEffect(() => {
-    load()
+    void run()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Download, RefreshCw, Store, Menu, Server } from 'lucide-react'
 import type { Pack, PackKind, Secret } from '@/types'
 import { api } from '@/api'
@@ -55,29 +56,34 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   // state instead of an empty catalog.
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    try {
-      setPacks(await api.listMarket())
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Market yüklenemedi')
-    } finally {
-      setLoading(false)
-    }
-  }, [onError])
+  // The loaders land their results through callbacks, so the mount effect can
+  // call them directly; loading starts true and clears with the catalog.
+  const load = useCallback(
+    () =>
+      api
+        .listMarket()
+        .then(setPacks)
+        .catch((e) => onError(e instanceof Error ? e.message : 'Market yüklenemedi'))
+        .finally(() => setLoading(false)),
+    [onError],
+  )
 
-  const loadSecrets = useCallback(async () => {
-    try {
-      setSecrets(await api.listSecrets())
-    } catch {
-      // Secrets are optional; a load failure just means the picker is empty.
-    }
-  }, [])
+  const loadSecrets = useCallback(
+    () =>
+      api
+        .listSecrets()
+        .then(setSecrets)
+        .catch(() => {
+          // Secrets are optional; a load failure just means the picker is empty.
+        }),
+    [],
+  )
 
   // loadExisting snapshots the workspace's current entities so the catalog can
   // flag packs that are already installed.
-  const loadExisting = useCallback(async () => {
-    try {
-      const [skills, agents, flows, providers, workspaces, mcp] = await Promise.all([
+  const loadExisting = useCallback(
+    () =>
+      Promise.all([
         api.listSkills(),
         api.listAgents(),
         api.listFlows(),
@@ -85,18 +91,21 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         api.listWorkspaces(),
         api.listMCPServers(),
       ])
-      setExisting({
-        skills: new Set(skills.map((s) => s.slug)),
-        agents: new Set(agents.map((a) => a.name.trim().toLowerCase())),
-        flows: new Set(flows.map((f) => f.name.trim().toLowerCase())),
-        providers: new Set(providers.map((p) => p.id)),
-        workspaces: new Set(workspaces.map((wsp) => wsp.name.trim().toLowerCase())),
-        mcp: new Set(mcp.map((m) => m.name.trim().toLowerCase())),
-      })
-    } catch {
-      // Non-fatal: without this snapshot, packs simply aren't pre-marked.
-    }
-  }, [])
+        .then(([skills, agents, flows, providers, workspaces, mcp]) =>
+          setExisting({
+            skills: new Set(skills.map((s) => s.slug)),
+            agents: new Set(agents.map((a) => a.name.trim().toLowerCase())),
+            flows: new Set(flows.map((f) => f.name.trim().toLowerCase())),
+            providers: new Set(providers.map((p) => p.id)),
+            workspaces: new Set(workspaces.map((wsp) => wsp.name.trim().toLowerCase())),
+            mcp: new Set(mcp.map((m) => m.name.trim().toLowerCase())),
+          }),
+        )
+        .catch(() => {
+          // Non-fatal: without this snapshot, packs simply aren't pre-marked.
+        }),
+    [],
+  )
 
   useEffect(() => {
     void load()
@@ -110,15 +119,19 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
   // Live directory-site (connector) search — skill tab only, debounced. The sites
   // hold thousands of skills, so results come from a search query, not a bulk list.
-  useEffect(() => {
-    const q = query.trim()
-    if (tab !== 'skill' || q.length < 2) {
+  const trimmedQuery = query.trim()
+  useKeyedReset(`${tab}|${trimmedQuery}`, () => {
+    if (tab !== 'skill' || trimmedQuery.length < 2) {
       setRemoteResults([])
       setRemoteWarnings([])
       setSearching(false)
-      return
+    } else {
+      setSearching(true)
     }
-    setSearching(true)
+  })
+  useEffect(() => {
+    const q = trimmedQuery
+    if (tab !== 'skill' || q.length < 2) return
     const handle = setTimeout(async () => {
       try {
         const res = await api.searchConnectors(q)
@@ -131,7 +144,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       }
     }, 400)
     return () => clearTimeout(handle)
-  }, [query, tab])
+  }, [trimmedQuery, tab])
 
   // isInstalled reports whether the entity a pack would create already exists.
   const isInstalled = useCallback(

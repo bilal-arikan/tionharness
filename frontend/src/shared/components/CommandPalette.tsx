@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { LucideIcon } from 'lucide-react'
 import { Search } from 'lucide-react'
 import { ModalOverlay } from './ModalOverlay'
@@ -33,11 +34,16 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Reset + focus the input each time the palette opens.
+  // Reset the query + highlight each time the palette opens (before paint), then
+  // focus the input.
+  useKeyedReset(open, () => {
+    if (open) {
+      setQ('')
+      setActive(0)
+    }
+  })
   useEffect(() => {
     if (!open) return
-    setQ('')
-    setActive(0)
     const id = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(id)
   }, [open])
@@ -50,15 +56,14 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
     )
   }, [q, commands])
 
-  // Keep the highlighted row valid + visible as the filtered set shrinks.
-  useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(0, filtered.length - 1)))
-  }, [filtered.length])
+  // The highlighted row is clamped to the filtered set as it shrinks (derived, so
+  // nothing has to write it back) and kept visible.
+  const activeIndex = Math.min(active, Math.max(0, filtered.length - 1))
   useEffect(() => {
     listRef.current
       ?.querySelector<HTMLElement>('[data-active="true"]')
       ?.scrollIntoView({ block: 'nearest' })
-  }, [active])
+  }, [activeIndex])
 
   if (!open) return null
 
@@ -71,13 +76,13 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActive((a) => Math.min(a + 1, filtered.length - 1))
+      setActive(Math.min(activeIndex + 1, filtered.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActive((a) => Math.max(a - 1, 0))
+      setActive(Math.max(activeIndex - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      run(filtered[active])
+      run(filtered[activeIndex])
     }
   }
 
@@ -108,7 +113,7 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Komut a
           ) : (
             filtered.map((c, i) => {
               const Icon = c.icon
-              const isActive = i === active
+              const isActive = i === activeIndex
               return (
                 <button
                   key={c.id}

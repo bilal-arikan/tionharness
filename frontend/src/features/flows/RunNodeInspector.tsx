@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import {
   X,
   Loader2,
@@ -285,18 +286,27 @@ export function RunNodeInspector({
   // `liveSteps` = frames streamed while the node is still running (before its
   // sidecar exists). Reset whenever the node stops running / selection changes.
   const [liveSteps, setLiveSteps] = useState<TurnStep[]>([])
-  const [loading, setLoading] = useState(false)
+  // An agent node fetches its sidecar from the first paint.
+  const [loading, setLoading] = useState(isAgent)
 
   // Fetch the node's captured steps per (run, node) and again when it finishes
   // (a mid-run open sees []; the completion refetch backfills the full trace).
   // Only agent nodes have a steps sidecar; other node types skip the request.
-  useEffect(() => {
+  // A (run, node, running) change resets the trace views before the fetch below
+  // lands: non-agent nodes carry no sidecar, a node that stopped running drops
+  // its live frames (the sidecar refetch then owns the trace).
+  useKeyedReset(`${run.id}|${node.id}|${isAgent}|${running}`, () => {
     if (!isAgent) {
       setSteps(null)
+      setLiveSteps([])
       return
     }
-    let alive = true
     setLoading(true)
+    if (!running) setLiveSteps([])
+  })
+  useEffect(() => {
+    if (!isAgent) return
+    let alive = true
     api
       .flowRunNodeSteps(run.id, node.id)
       .then((s) => {
@@ -319,10 +329,7 @@ export function RunNodeInspector({
   // Live steps: while the node runs, append each streamed frame. Cleared when the
   // node is no longer running (the sidecar refetch above then owns the trace).
   useEffect(() => {
-    if (!isAgent || !running) {
-      setLiveSteps([])
-      return
-    }
+    if (!isAgent || !running) return
     return subscribeFlowNodeStep(run.id, (frame) => {
       if (frame.nodeId === node.id) setLiveSteps((prev) => [...prev, frame.step])
     })

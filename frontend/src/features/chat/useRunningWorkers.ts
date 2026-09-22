@@ -9,6 +9,7 @@
 // a worker spawns and clears the moment the last one reports, with zero traffic
 // while nothing is happening.
 import { useCallback, useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import type { WorkerInfo } from '@/types'
@@ -33,9 +34,7 @@ export function useRunningWorkers(
 
   // Drop the previous session's roster immediately on switch — a stale banner
   // from another coordinator would be actively misleading.
-  useEffect(() => {
-    setWorkers([])
-  }, [sessionId])
+  useKeyedReset(sessionId, () => setWorkers([]))
 
   // Refetch on mount/session change and on every streaming edge. The streaming
   // edge also covers the case where this window missed a worker event (e.g. it

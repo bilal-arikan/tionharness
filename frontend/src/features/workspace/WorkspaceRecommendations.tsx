@@ -7,6 +7,7 @@
 // dismissing a card (X) records its key in the workspace's ignoredRecommendations so
 // it is never re-offered; the workspace tab can review and un-ignore later.
 import { useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Lightbulb, X } from 'lucide-react'
 import { api } from '@/api'
 import { fetchRecommendationData, runRules, type Rec } from './recommendations'
@@ -32,10 +33,13 @@ export function WorkspaceRecommendations({
   // The workspace's persisted ignore list, kept in sync so dismiss can append to it.
   const [ignored, setIgnored] = useState<string[]>([])
 
+  // Clear a previous workspace's cards before re-probing.
+  useKeyedReset(trigger, () => {
+    if (trigger > 0) setRecs([])
+  })
   useEffect(() => {
     if (trigger <= 0) return
     let alive = true
-    setRecs([]) // clear a previous workspace's cards before re-probing
     ;(async () => {
       try {
         const data = await fetchRecommendationData()

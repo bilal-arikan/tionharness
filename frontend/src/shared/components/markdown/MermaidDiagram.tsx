@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Lightbox } from '@/shared/components'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { toast } from '../toastStore'
@@ -73,13 +74,17 @@ export function MermaidDiagram({ code }: Props) {
     return () => obs.disconnect()
   }, [])
 
-  useEffect(() => {
-    const trimmed = code.trim()
+  // Empty source shows nothing (never a stale diagram), applied before paint.
+  const trimmedCode = code.trim()
+  useKeyedReset(trimmedCode, (trimmed) => {
     if (!trimmed) {
       setSvg('')
       setError(false)
-      return
     }
+  })
+  useEffect(() => {
+    const trimmed = code.trim()
+    if (!trimmed) return
     // Debounce so streaming tokens don't trigger a render per character.
     const handle = setTimeout(async () => {
       const id = `mermaid-${baseId}-${renderSeq++}`

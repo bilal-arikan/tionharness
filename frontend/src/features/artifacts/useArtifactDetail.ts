@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api'
@@ -54,13 +55,20 @@ export function useArtifactDetail({
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Load the full artifact whenever the selection changes.
-  useEffect(() => {
+  // A selection change resets the viewer before the fetches below land: no
+  // artifact → nothing shown; a new artifact → any open draft is discarded.
+  useKeyedReset(activeId, () => {
     if (!activeId) {
       setActive(null)
+      setActivePath('')
       return
     }
     setDraft(null)
+  })
+
+  // Load the full artifact whenever the selection changes.
+  useEffect(() => {
+    if (!activeId) return
     // Same cancellation guard as the path effect below: a slow response for a
     // previous selection must not overwrite the artifact now on screen.
     let cancelled = false
@@ -79,10 +87,7 @@ export function useArtifactDetail({
 
   // Resolve the active artifact's on-disk path for the copy/open-folder actions.
   useEffect(() => {
-    if (!activeId) {
-      setActivePath('')
-      return
-    }
+    if (!activeId) return
     let cancelled = false
     api
       .artifactPath(activeId)

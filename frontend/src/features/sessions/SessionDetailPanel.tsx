@@ -11,6 +11,7 @@ import {
   PinOff,
 } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { SessionInfo, SessionUsageDetail } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { Badge, KeyValueRow as Row, TagEditor } from '@/shared/components'
@@ -93,7 +94,7 @@ export function SessionDetailPanel({
   // Ticks once a second while a turn is running, so the elapsed timer is live.
   const [nowTick, setNowTick] = useState(() => serverNow())
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [titling, setTitling] = useState(false)
   // In-flight guard for the archive / unarchive toggle.
   const [archiving, setArchiving] = useState(false)
@@ -118,9 +119,10 @@ export function SessionDetailPanel({
       return next
     })
 
+  // Every refetch trigger re-arms the spinner; the fetch lands via callbacks.
+  useKeyedReset(`${sessionId}|${refreshKey}|${localRefresh}`, () => setLoading(true))
   useEffect(() => {
     let alive = true
-    setLoading(true)
     api
       .sessionInfo(sessionId)
       .then((d) => alive && setInfo(d))

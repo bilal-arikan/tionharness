@@ -6,6 +6,7 @@
 // modules (chatStreamSend/History/Interventions/AutoLive/Commands); this hook
 // holds the React state and wires the callbacks to them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { Attachment, Message, SlashCommand, TurnStep } from '@/types'
 import type { PendingAsk } from './AskPrompt'
@@ -65,9 +66,9 @@ export function useChatStream(deps: ChatStreamDeps) {
   const [thinkingLevel, setThinkingLevel] = useState(() =>
     readSessionOverride(THINKING_LEVEL_KEY, activeSessionId),
   )
-  useEffect(() => {
-    setThinkingLevel(readSessionOverride(THINKING_LEVEL_KEY, activeSessionId))
-  }, [activeSessionId])
+  useKeyedReset(activeSessionId, (sid) =>
+    setThinkingLevel(readSessionOverride(THINKING_LEVEL_KEY, sid)),
+  )
   const setThinkingLevelPersist = useCallback(
     (v: string) => {
       setThinkingLevel(v)
@@ -83,9 +84,9 @@ export function useChatStream(deps: ChatStreamDeps) {
   const [permissionMode, setPermissionMode] = useState(() =>
     readSessionOverride(PERMISSION_MODE_KEY, activeSessionId),
   )
-  useEffect(() => {
-    setPermissionMode(readSessionOverride(PERMISSION_MODE_KEY, activeSessionId))
-  }, [activeSessionId])
+  useKeyedReset(activeSessionId, (sid) =>
+    setPermissionMode(readSessionOverride(PERMISSION_MODE_KEY, sid)),
+  )
   const setPermissionModePersist = useCallback(
     (v: string) => {
       setPermissionMode(v)
@@ -395,20 +396,23 @@ export function useChatStream(deps: ChatStreamDeps) {
   // request's own SSE. Cursor-based: a reconnect gap-fills from the server ring,
   // and a reset (server restart / eviction) triggers a full listMessages resync.
   // Replaces the old bus-ghost + inflight-text-polling machinery.
+  // Fresh session view: clear the previous session's queue/presence until this
+  // one's first queue_update / presence frame arrives. The steerable flag
+  // describes the PREVIOUS session's turn; carrying it over would gate this
+  // session's tray on an unrelated turn's provider — the new session's first
+  // queue_update supplies the real value.
+  useKeyedReset(`${activeWorkspaceId}|${activeSessionId}`, () => {
+    if (!activeSessionId || !activeWorkspaceId) return
+    setQueued([])
+    setSteerable(false)
+    setPresence(1)
+    setTypingActive(false)
+  })
   useEffect(() => {
     const sid = activeSessionId
     // No workspace → no identifiable session (ids repeat across stores), so there
     // is nothing to subscribe to yet.
     if (!sid || !activeWorkspaceId) return
-    // Fresh session view: clear the previous session's queue/presence until this
-    // one's first queue_update / presence frame arrives.
-    setQueued([])
-    // The flag describes the PREVIOUS session's turn; carrying it over would gate
-    // this session's tray on an unrelated turn's provider. The new session's first
-    // queue_update supplies the real value.
-    setSteerable(false)
-    setPresence(1)
-    setTypingActive(false)
     const reload = () => {
       api
         .listMessages(sid)

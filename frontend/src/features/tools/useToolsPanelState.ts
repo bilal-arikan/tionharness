@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import { api } from '@/api'
 import type {
@@ -109,11 +110,9 @@ export function useToolsPanelState(
       return null
     }
   })
-  useEffect(() => {
-    if (options.group === undefined) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveGroupState(options.group)
-  }, [options.group])
+  useKeyedReset(options.group, (group) => {
+    if (group !== undefined) setActiveGroupState(group)
+  })
   const setActiveGroup = (key: string | null) => {
     setActiveGroupState(key)
     try {

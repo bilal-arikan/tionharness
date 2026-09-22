@@ -22,18 +22,28 @@ function openRunSession(sessionId: string) {
 // how long it took, and what it covered/produced.
 export function RunsTab({ onError }: { onError: (msg: string) => void }) {
   const [runs, setRuns] = useState<InsightRun[]>([])
-  const [loading, setLoading] = useState(false)
+  // Loading starts true: the mount fetch below is already in flight on the first
+  // paint. run lands results through callbacks only, so the effect can call it;
+  // load is the manual-refresh entry point that also re-arms the spinner.
+  const [loading, setLoading] = useState(true)
 
+  const run = useCallback(
+    () =>
+      api
+        .getInsightRuns()
+        .then(setRuns)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoading(false)),
+    [onError],
+  )
   const load = useCallback(() => {
     setLoading(true)
-    api
-      .getInsightRuns()
-      .then(setRuns)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }, [onError])
+    void run()
+  }, [run])
 
-  useEffect(load, [load])
+  useEffect(() => {
+    void run()
+  }, [run])
 
   return (
     <div className="space-y-3">

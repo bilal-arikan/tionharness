@@ -44,7 +44,7 @@ export function SystemAgentsPanel({ onError }: Props) {
   const { data, loading, error, refresh } = useAsync(() => api.listAgents(), [])
   const agents = useMemo(() => data ?? [], [data])
   const catalog = useCatalog()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [rawSelectedId, setSelectedId] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState(false)
 
   useEffect(() => {
@@ -60,11 +60,12 @@ export function SystemAgentsPanel({ onError }: Props) {
   const sel = useMultiSelect()
 
   // Keep a valid selection: the current one if it survived a refresh, else the
-  // first system agent in roster order.
-  useEffect(() => {
-    if (selectedId && systemAgents.some((a) => a.id === selectedId)) return
-    setSelectedId(systemAgents[0]?.id ?? null)
-  }, [systemAgents, selectedId])
+  // first system agent in roster order. Derived, so a refresh never paints an
+  // empty detail pane before the fallback lands.
+  const selectedId =
+    rawSelectedId && systemAgents.some((a) => a.id === rawSelectedId)
+      ? rawSelectedId
+      : (systemAgents[0]?.id ?? null)
 
   const selected = systemAgents.find((a) => a.id === selectedId) ?? null
 

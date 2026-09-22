@@ -8,18 +8,28 @@ import { SeverityBadge, RegressedBadge } from './insightBadges'
 // across workspaces, deduped into one row with combined weight + origins.
 export function FleetTab({ onError }: { onError: (msg: string) => void }) {
   const [rows, setRows] = useState<FleetFinding[]>([])
-  const [loading, setLoading] = useState(false)
+  // Loading starts true: the mount fetch below is already in flight on the first
+  // paint. run lands results through callbacks only, so the effect can call it;
+  // load is the manual-refresh entry point that also re-arms the spinner.
+  const [loading, setLoading] = useState(true)
 
+  const run = useCallback(
+    () =>
+      api
+        .getFleetFindings()
+        .then(setRows)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoading(false)),
+    [onError],
+  )
   const load = useCallback(() => {
     setLoading(true)
-    api
-      .getFleetFindings()
-      .then(setRows)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }, [onError])
+    void run()
+  }, [run])
 
-  useEffect(load, [load])
+  useEffect(() => {
+    void run()
+  }, [run])
 
   return (
     <div className="space-y-3">

@@ -7,6 +7,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
+import { useStableCallback } from '@/shared/lib/useStableCallback'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { api } from '@/api'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
@@ -200,9 +201,12 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   // its latest run (runs are newest-first). Consumed once per target so polling
   // doesn't keep re-selecting.
   const consumedFlowTarget = useRef<string | null>(null)
+  // Stable so the effect keys on the target alone: setTab itself changes with
+  // the current tab, and re-running on that would snap the user back to runs.
+  const openRunsTab = useStableCallback(() => setTab('runs'))
   useEffect(() => {
-    if (openFlowId) setTab('runs')
-  }, [openFlowId])
+    if (openFlowId) openRunsTab?.()
+  }, [openFlowId, openRunsTab])
   useEffect(() => {
     if (!openFlowId || tab !== 'runs' || consumedFlowTarget.current === openFlowId) return
     const latest = runs.find((r) => r.flowId === openFlowId)
@@ -210,7 +214,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
       setSelectedRunId(latest.id)
       consumedFlowTarget.current = openFlowId
     }
-  }, [openFlowId, tab, runs])
+  }, [openFlowId, tab, runs, setSelectedRunId])
 
   const selectFlow = useCallback(
     (f: Flow) => {
@@ -387,7 +391,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
         refresh()
       }
     },
-    [onError, showSubRuns],
+    [onError, showSubRuns, setSelectedRunId],
   )
 
   // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:

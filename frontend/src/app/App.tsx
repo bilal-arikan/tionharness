@@ -498,16 +498,17 @@ export default function App() {
     },
     [view, dirtyViews],
   )
+  const { setOpen: setSessionsListOpen } = sessionsList
   const selectView = useCallback(
     (next: View) => {
       if (confirmLeaveIfDirty(next)) {
         setView(next)
         // Leaving a list-bearing view closes the mobile sessions drawer so it
         // never lingers over another screen (the docked column is untouched).
-        if (isMobile) sessionsList.setOpen(false)
+        if (isMobile) setSessionsListOpen(false)
       }
     },
-    [confirmLeaveIfDirty, isMobile, sessionsList.setOpen],
+    [confirmLeaveIfDirty, isMobile, setSessionsListOpen],
   )
 
   // Open the Skills screen focused on one skill. SkillsPanel is mounted by the

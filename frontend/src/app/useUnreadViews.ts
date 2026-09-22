@@ -3,6 +3,7 @@
 // keeps its own set, persisted to localStorage and synced across windows via the
 // 'storage' event — matching the cross-window workspace-unread badge behaviour.
 import { useCallback, useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { View } from './NavRail'
 
 const keyFor = (wsId: string) => `tionharness.unreadViews.${wsId}`
@@ -30,9 +31,7 @@ export function useUnreadViews(activeWorkspaceId: string | null) {
   const [unreadViews, setUnreadViews] = useState<Set<View>>(() => read(activeWorkspaceId))
 
   // Each workspace owns its set: reload when the active workspace changes.
-  useEffect(() => {
-    setUnreadViews(read(activeWorkspaceId))
-  }, [activeWorkspaceId])
+  useKeyedReset(activeWorkspaceId, (id) => setUnreadViews(read(id)))
 
   // Cross-window sync: another window marking/clearing a view fires a storage
   // event everywhere except the writer; re-read the active workspace's key.

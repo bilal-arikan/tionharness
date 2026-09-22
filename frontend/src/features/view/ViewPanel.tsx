@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Loader2, Copy, RefreshCw, X, ChevronLeft } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
@@ -47,33 +48,43 @@ export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fill
   const [level, setLevel] = useState<ViewLevel>('card')
   const [result, setResult] = useState<ViewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  const ref = trail[trail.length - 1]
+  const [loading, setLoading] = useState(true)
 
   // A new target is a new subject: drop the drill-down trail rather than leaving
   // the user inside a breadcrumb belonging to the previous entity.
-  useEffect(() => {
-    setTrail([target])
-  }, [target])
+  useKeyedReset(target, (next) => setTrail([next]))
 
-  const load = useCallback(async () => {
+  const ref = trail[trail.length - 1]
+
+  // run lands the projection through callbacks only (so the effect may call it);
+  // load is the refresh entry point that re-arms the spinner. Drilling down or
+  // changing the level re-arms it too, before the refetch lands.
+  const run = useCallback(
+    () =>
+      api
+        .getView(ref, level)
+        .then((r) => {
+          setResult(r)
+          setError(null)
+        })
+        .catch((e) => {
+          // Surface the failure instead of showing a stale projection as if current.
+          setResult(null)
+          setError(e instanceof Error ? e.message : String(e))
+        })
+        .finally(() => setLoading(false)),
+    [ref, level],
+  )
+  const load = useCallback(() => {
     setLoading(true)
-    try {
-      setResult(await api.getView(ref, level))
-      setError(null)
-    } catch (e) {
-      // Surface the failure instead of showing a stale projection as if current.
-      setResult(null)
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [ref, level])
+    return run()
+  }, [run])
 
+  useKeyedReset(ref, () => setLoading(true))
+  useKeyedReset(level, () => setLoading(true))
   useEffect(() => {
-    void load()
-  }, [load])
+    void run()
+  }, [run])
 
   const copy = async () => {
     if (!result) return

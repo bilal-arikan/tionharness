@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { RotateCcw, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react'
 import { api } from '@/api'
@@ -113,15 +114,15 @@ export function RunView({
   // (input bubble + steps + output) instead of the flat all-nodes list. Cleared
   // on run switch and when the flow/node no longer exists.
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  useEffect(() => setSelectedNodeId(null), [run.id])
+  useKeyedReset(run.id, () => setSelectedNodeId(null))
 
   // Live per-node frames off the flow-node bus (keyed by run id). They render
   // node start/done/error + output the instant the engine emits it — ahead of
   // the parent's ~3s run-state poll, and for autonomous/scheduled runs that have
   // no per-request SSE at all. Latest frame per node; cleared on run switch.
   const [live, setLive] = useState<Record<string, FlowNodeEvent>>({})
+  useKeyedReset(run.id, () => setLive({}))
   useEffect(() => {
-    setLive({})
     return subscribeFlowNode(run.id, (ev) => {
       setLive((prev) => ({ ...prev, [ev.nodeId]: ev }))
     })

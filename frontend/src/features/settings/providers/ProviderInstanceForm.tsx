@@ -2,7 +2,8 @@
 // picker (locked while editing), label, enabled toggle, default model, and
 // every field the selected kind declares (config + secret), all rendered from
 // the kind's manifest — no per-kind branch here.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Plus } from 'lucide-react'
 import type { ProviderKind, ProviderInstance, UpsertProviderInput } from '@/api/providers'
 import { ProviderFieldInput } from './ProviderFieldInput'
@@ -41,43 +42,32 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
     [kinds, instances, editing],
   )
 
-  const [draft, setDraft] = useState<UpsertProviderInput>(() =>
-    editing
+  // draftFor seeds the form from the instance being edited, or from an empty
+  // draft of the first selectable kind for a new one.
+  const draftFor = (target: typeof editing): UpsertProviderInput =>
+    target
       ? {
-          id: editing.id,
-          kindId: editing.kindId,
-          label: editing.label,
-          icon: editing.icon,
-          enabled: editing.enabled,
-          defaultModel: editing.defaultModel,
-          models: editing.models,
-          config: { ...editing.config },
+          id: target.id,
+          kindId: target.kindId,
+          label: target.label,
+          icon: target.icon,
+          enabled: target.enabled,
+          defaultModel: target.defaultModel,
+          models: target.models,
+          config: { ...target.config },
           secrets: {},
         }
-      : emptyDraft(selectableKinds[0]?.id ?? ''),
-  )
+      : emptyDraft(selectableKinds[0]?.id ?? '')
+  const [draft, setDraft] = useState<UpsertProviderInput>(() => draftFor(editing))
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
-  useEffect(() => {
-    setDraft(
-      editing
-        ? {
-            id: editing.id,
-            kindId: editing.kindId,
-            label: editing.label,
-            icon: editing.icon,
-            enabled: editing.enabled,
-            defaultModel: editing.defaultModel,
-            models: editing.models,
-            config: { ...editing.config },
-            secrets: {},
-          }
-        : emptyDraft(selectableKinds[0]?.id ?? ''),
-    )
+  // Switching the edited instance reseeds the form (only the instance counts —
+  // a kinds refresh must not wipe what the user typed).
+  useKeyedReset(editing, (target) => {
+    setDraft(draftFor(target))
     setErr('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing])
+  })
 
   const kind = kinds.find((k) => k.id === draft.kindId)
 

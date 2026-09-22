@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Brush, Clock, Flag, LayoutGrid, Repeat, Waypoints, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
@@ -143,14 +144,18 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   useVisiblePoll(loadLiveStats, LIVE_STATS_POLL_MS, [loadLiveStats])
 
   // When a deep-link target is present and loaded, scroll it into view and flash
-  // a highlight ring that fades after a moment.
+  // a highlight ring that fades after a moment. Keyed on the target's presence,
+  // not on every schedules refresh, so a poll does not re-scroll the board.
+  const focusPresent = !!focusId && schedules.some((s) => s.id === focusId)
+  useKeyedReset(`${focusId}|${focusPresent}`, () => {
+    if (focusPresent) setHighlightId(focusId)
+  })
   useEffect(() => {
-    if (!focusId || !schedules.some((s) => s.id === focusId)) return
-    setHighlightId(focusId)
+    if (!focusPresent) return
     focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     const t = setTimeout(() => setHighlightId(null), 2500)
     return () => clearTimeout(t)
-  }, [focusId, schedules])
+  }, [focusId, focusPresent])
 
   const togglePauseAutonomy = async () => {
     if (pauseAutonomy === null) return

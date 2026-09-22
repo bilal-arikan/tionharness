@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { GitInfo, WorkspaceTemplate } from '@/types'
 import { EmojiField } from '@/shared/components/EmojiField'
@@ -47,12 +48,13 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   // Probe the typed/picked project dir: is git installed on this machine, does the
   // folder exist, is it already a repo? Debounced because it runs on every
   // keystroke of a manually typed path.
+  const projectDirTrimmed = projectDir.trim()
+  useKeyedReset(projectDirTrimmed, (dir) => {
+    if (!dir) setGit(null)
+  })
   useEffect(() => {
-    const dir = projectDir.trim()
-    if (!dir) {
-      setGit(null)
-      return
-    }
+    const dir = projectDirTrimmed
+    if (!dir) return
     let alive = true
     const t = setTimeout(() => {
       api
@@ -64,7 +66,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       alive = false
       clearTimeout(t)
     }
-  }, [projectDir])
+  }, [projectDirTrimmed])
 
   // git init is only meaningful with a path, with git installed, and when the
   // folder is not already versioned.

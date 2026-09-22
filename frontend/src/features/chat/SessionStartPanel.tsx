@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Users, X } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { InfoPopover } from '@/shared/components/InfoPopover'
 import {
   CoordinatorWorkflowPicker,
@@ -45,9 +46,10 @@ export function SessionStartPanel({
   const [toggling, setToggling] = useState(false)
   const [savingWf, setSavingWf] = useState(false)
 
+  // A session switch re-arms the spinner; the fetch lands via callbacks.
+  useKeyedReset(sessionId, () => setLoading(true))
   useEffect(() => {
     let alive = true
-    setLoading(true)
     api
       .sessionInfo(sessionId)
       .then((info) => {

@@ -171,7 +171,7 @@ export function ChatView({
     () => dropGuardNotes(messages, guardNotesVisible),
     [messages, guardNotesVisible],
   )
-  const currentTodos = currentTodo?.todos ?? []
+  const currentTodos = useMemo(() => currentTodo?.todos ?? [], [currentTodo])
   const [locallyDismissedTodo, setLocallyDismissedTodo] = useState<string | null>(null)
   const todoDismissed = useMemo(() => {
     if (!activeSessionId) return false

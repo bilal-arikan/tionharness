@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { PaneHeader } from '@/shared/components'
 import type { ActionItem, Dashboard } from '@/types'
 import { StatTiles } from './StatTiles'
@@ -40,28 +41,39 @@ export function DashboardPanel({
 }) {
   const [days, setDays] = useState(14)
   const [data, setData] = useState<Dashboard | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  // run lands results through callbacks only (so the effect may call it); load
+  // is the retry entry point that re-arms the spinner. A window change re-arms
+  // it too, before the refetch lands.
+  const run = useCallback(
+    () =>
+      api
+        .getDashboard(days)
+        .then((d) => {
+          setData(d)
+          setError(null)
+        })
+        .catch((e) => {
+          // Keep the previous data on screen but say it failed: silently showing a
+          // stale workspace as if current is worse than showing nothing.
+          const msg = e instanceof Error ? e.message : String(e)
+          setError(msg)
+          onError?.(msg)
+        })
+        .finally(() => setLoading(false)),
+    [days, onError],
+  )
+  const load = useCallback(() => {
     setLoading(true)
-    try {
-      setData(await api.getDashboard(days))
-      setError(null)
-    } catch (e) {
-      // Keep the previous data on screen but say it failed: silently showing a
-      // stale workspace as if current is worse than showing nothing.
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      onError?.(msg)
-    } finally {
-      setLoading(false)
-    }
-  }, [days, onError])
+    return run()
+  }, [run])
 
+  useKeyedReset(days, () => setLoading(true))
   useEffect(() => {
-    void load()
-  }, [load])
+    void run()
+  }, [run])
 
   // Route an action-queue click to the screen that owns the entity.
   const onNavigate = (kind: ActionItem['kind'], id: string) => {

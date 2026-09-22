@@ -12,23 +12,28 @@ import { formatDateTime } from '@/shared/lib/intl'
 export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
   const [lessons, setLessons] = useState<Lesson[] | null>(null)
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+  // Busy from the first paint: the mount fetch is already in flight. run lands
+  // results through callbacks only; load is the manual-refresh entry point.
+  const [busy, setBusy] = useState(true)
 
-  const load = useCallback(async () => {
+  const run = useCallback(
+    () =>
+      api
+        .listLessons()
+        .then(setLessons)
+        .catch((e) => setError((e as Error).message))
+        .finally(() => setBusy(false)),
+    [],
+  )
+  const load = useCallback(() => {
     setBusy(true)
     setError('')
-    try {
-      setLessons(await api.listLessons())
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }, [])
+    return run()
+  }, [run])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void run()
+  }, [run])
 
   const remove = async (id: string) => {
     try {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, ExternalLink, Loader2, Pencil } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { Artifact } from '@/types'
 import { ModalOverlay } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
@@ -53,10 +54,14 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
+  // A new artifact id drops the previous preview and re-arms the spinner before
+  // the fetch below lands via callbacks.
+  useKeyedReset(artifactId, () => {
     setLoading(true)
     setArtifact(null)
+  })
+  useEffect(() => {
+    let cancelled = false
     api
       .getArtifact(artifactId)
       .then((a) => {

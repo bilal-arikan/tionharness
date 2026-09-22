@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import type { Dispatch, SetStateAction } from 'react'
 import { api } from '@/api'
 import type { Artifact } from '@/types'
@@ -93,28 +94,33 @@ export function useArtifactList(
   const listReq = useRef(0)
 
   const fetchPage = useCallback(
-    async (offset: number, append: boolean) => {
+    (offset: number, append: boolean) => {
       const seq = ++listReq.current
       const origin = originFilter === 'all' ? undefined : originFilter
-      const r = await api.listArtifacts({
-        limit: ARTIFACTS_PAGE_SIZE,
-        offset,
-        q: debouncedQuery.trim() || undefined,
-        origin,
-        archived: showArchived,
-      })
-      // Superseded while in flight — drop the stale page.
-      if (seq !== listReq.current) return
-      setList((prev) => (append ? [...prev, ...r.items] : r.items))
-      setTotal(r.total)
-      setHasMore(r.hasMore)
-      if (!append) setActiveId((cur) => cur ?? r.items[0]?.id ?? null)
+      return api
+        .listArtifacts({
+          limit: ARTIFACTS_PAGE_SIZE,
+          offset,
+          q: debouncedQuery.trim() || undefined,
+          origin,
+          archived: showArchived,
+        })
+        .then((r) => {
+          // Superseded while in flight — drop the stale page.
+          if (seq !== listReq.current) return
+          setList((prev) => (append ? [...prev, ...r.items] : r.items))
+          setTotal(r.total)
+          setHasMore(r.hasMore)
+          if (!append) setActiveId((cur) => cur ?? r.items[0]?.id ?? null)
+        })
     },
-    [originFilter, debouncedQuery, showArchived],
+    [originFilter, debouncedQuery, showArchived, setActiveId],
   )
 
-  const reload = useCallback(() => {
-    setLoading(true)
+  // run replaces the first page and refreshes the archive badge, landing both
+  // through callbacks (so the filter effect may call it); reload is the manual
+  // entry point that also re-arms the loading state.
+  const run = useCallback(() => {
     fetchPage(0, false)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
@@ -127,6 +133,10 @@ export function useArtifactList(
         .catch(() => {})
     }
   }, [fetchPage, showArchived, onError])
+  const reload = useCallback(() => {
+    setLoading(true)
+    run()
+  }, [run])
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return
@@ -136,14 +146,19 @@ export function useArtifactList(
       .finally(() => setLoadingMore(false))
   }, [fetchPage, loadingMore, hasMore, list.length, onError])
 
+  // A filter change (or an external refresh tick) is loading again from the
+  // first paint of the new list identity.
+  useKeyedReset(`${originFilter}|${debouncedQuery}|${showArchived}|${artifactsTick}`, () =>
+    setLoading(true),
+  )
   useEffect(() => {
-    reload()
+    run()
     // Invalidate whatever is still in flight when the filters change or the
     // panel unmounts, so a late page can't land on the next filter's list.
     return () => {
       listReq.current += 1
     }
-  }, [reload, artifactsTick])
+  }, [run, artifactsTick])
 
   // Once nothing is archived any more (e.g. the last archived artifact was
   // restored), fall back to the active view so the archived view can't strand
@@ -155,7 +170,7 @@ export function useArtifactList(
   // Honour an incoming deep-link selection (e.g. clicking an artifact card).
   useEffect(() => {
     if (selectedId) setActiveId(selectedId)
-  }, [selectedId])
+  }, [selectedId, setActiveId])
 
   // Filtered artifacts bucketed by group (ungrouped first, then named groups),
   // with persisted per-group collapse state. Mirrors the Skills screen so both

@@ -4,7 +4,7 @@
 // non-default runtime prompts + README, board columns) and pack metadata
 // (name/description/version). Secrets and session history are never included
 // (server-enforced). A live preview + dependency warnings reflect the selection.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Boxes,
   GitBranch,
@@ -143,7 +143,10 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
   const setCat = (k: CatKey, v: boolean) => setCats((c) => ({ ...c, [k]: v }))
   const canExport = pickedAgents.size > 0
 
-  const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
+  const agentName = useCallback(
+    (id: string) => agents.find((a) => a.id === id)?.name ?? id,
+    [agents],
+  )
 
   // Section entries for the reusable pick lists.
   const agentEntries: PickEntry[] = useMemo(
@@ -167,9 +170,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
           ? `akış · ${flows.find((f) => f.id === a.flowId)?.name ?? a.flowId}`
           : agentName(a.targetAgentId),
       })),
-    // agentName depends on agents; recompute when either changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [automations, agents, flows],
+    [automations, agentName, flows],
   )
   const scheduleEntries: PickEntry[] = useMemo(
     () =>
@@ -178,8 +179,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
         label: s.prompt?.trim() || '(prompt yok)',
         sub: `${agentName(s.agentId)} · ${s.cronExpr}`,
       })),
-    // agentName depends on agents; recompute when either changes
-    [schedules, agents],
+    [schedules, agentName],
   )
 
   // Agent ids each flow's graph references (agent-type nodes only).

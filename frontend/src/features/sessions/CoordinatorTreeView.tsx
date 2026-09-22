@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import type { CoordinatorTree, CoordinatorTreeNode } from '@/types'
 
@@ -42,8 +43,9 @@ function formatUSD(v: number): string {
 // is simply invisible. This is the view that shows the actual shape.
 export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: Props) {
   const [tree, setTree] = useState<CoordinatorTree | null>(null)
-  const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(() => localStorage.getItem('tionharness.coordTreeOpen') === '1')
+  // An open section fetches on mount, so it starts in the loading state.
+  const [loading, setLoading] = useState(open)
 
   const toggle = () =>
     setOpen((v) => {
@@ -52,22 +54,30 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
       return next
     })
 
-  const load = useCallback(() => {
-    // Only fetched while the section is expanded: it walks every session in the
-    // tree and prices each one, which is not worth doing for a panel nobody is
-    // looking at.
+  // Only fetched while the section is expanded: it walks every session in the
+  // tree and prices each one, which is not worth doing for a panel nobody is
+  // looking at. run lands its result through callbacks (so the effect may call
+  // it); load is the event-driven entry point that also re-arms the spinner.
+  const run = useCallback(() => {
     if (!open) return
-    setLoading(true)
     api
       .getCoordinatorTree(sessionId)
       .then(setTree)
       .catch(() => setTree(null))
       .finally(() => setLoading(false))
   }, [open, sessionId])
+  const load = useCallback(() => {
+    if (!open) return
+    setLoading(true)
+    run()
+  }, [open, run])
 
+  useKeyedReset(`${open}|${sessionId}|${refreshKey}`, () => {
+    if (open) setLoading(true)
+  })
   useEffect(() => {
-    load()
-  }, [load, refreshKey])
+    run()
+  }, [run, refreshKey])
 
   // Same live signal the roster uses: a worker starting or finishing anywhere
   // under this coordinator changes the tree.

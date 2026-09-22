@@ -1,4 +1,5 @@
 import { resolveSessionOwner, sessionRowLabel } from './sessionOwner'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import {
   useCallback,
   useEffect,
@@ -284,14 +285,18 @@ export function SessionsSidebar({
 
   // Debounced full-text message search. Runs only for queries of 2+ chars so a
   // single keystroke doesn't hit the backend; cleared when the box empties.
-  useEffect(() => {
-    const q = query.trim()
+  const trimmedQuery = query.trim()
+  useKeyedReset(trimmedQuery, (q) => {
     if (q.length < 2) {
       setHits([])
       setSearching(false)
-      return
+    } else {
+      setSearching(true)
     }
-    setSearching(true)
+  })
+  useEffect(() => {
+    const q = trimmedQuery
+    if (q.length < 2) return
     let cancelled = false
     const handle = setTimeout(() => {
       api
@@ -310,7 +315,7 @@ export function SessionsSidebar({
       cancelled = true
       clearTimeout(handle)
     }
-  }, [query])
+  }, [trimmedQuery])
 
   // Delayed so a sub-100ms local load never flashes placeholder rows. While
   // `loading` holds but the delay has not elapsed, the list body renders nothing

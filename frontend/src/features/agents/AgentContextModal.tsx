@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '@/types'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import {
@@ -39,24 +40,34 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [err, setErr] = useState<string | null>(null)
   const [raw, setRaw] = useState(false)
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   // Token summary + CLI-overhead strip: collapsible, default collapsed.
   const [statsOpen, setStatsOpen] = useState(false)
   const { bulk, expandAll, collapseAll } = useBulkToggle(true)
 
-  const load = useCallback(
-    (msg: string) => {
-      setLoading(true)
+  // run lands the preview through callbacks only (so the effect may call it);
+  // load is the submit/button entry point that also re-arms the spinner.
+  const run = useCallback(
+    (msg: string) =>
       api
         .agentContext(agentId, msg.trim() || undefined)
         .then(setData)
         .catch((e) => setErr((e as Error).message))
-        .finally(() => setLoading(false))
-    },
+        .finally(() => setLoading(false)),
     [agentId],
   )
+  const load = useCallback(
+    (msg: string) => {
+      setLoading(true)
+      void run(msg)
+    },
+    [run],
+  )
 
-  useEffect(() => load(''), [load])
+  useKeyedReset(agentId, () => setLoading(true))
+  useEffect(() => {
+    void run('')
+  }, [run])
 
   const copy = () => {
     if (!data) return

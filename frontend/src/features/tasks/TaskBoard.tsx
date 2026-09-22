@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api, getActiveWorkspace } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
@@ -202,9 +203,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
     )
   }, [loadedSuccessfully, tasks])
 
-  // Reload when switching between the active board and the archived view.
+  // Reload when switching between the active board and the archived view; the
+  // switch re-arms the spinner before the refetch lands.
+  useKeyedReset(showArchived, () => setLoading(true))
   useEffect(() => {
-    setLoading(true)
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchived])

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { FolderOpen, GitBranch, CornerLeftUp, RotateCcw, Check, Folder } from 'lucide-react'
 import { api } from '@/api'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
@@ -27,11 +28,11 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
 
   // Load the current working-dir state whenever the active session changes.
+  useKeyedReset(sessionId, () => {
+    if (!sessionId) setInfo(null)
+  })
   useEffect(() => {
-    if (!sessionId) {
-      setInfo(null)
-      return
-    }
+    if (!sessionId) return
     let alive = true
     api
       .getWorkdir(sessionId)

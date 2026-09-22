@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Network, X } from 'lucide-react'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { ModalOverlay } from '@/shared/components/ModalOverlay'
 import type { SessionInfo } from '@/types'
 import { CoordinatorSection } from './CoordinatorSection'
@@ -33,14 +34,16 @@ export function CoordinatorPanel({
   refreshKey,
 }: Props) {
   const [info, setInfo] = useState<SessionInfo | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   // Local refetch nonce: bumped after a role/workflow toggle so the panel reflects
   // the new coordination state without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
 
-  const load = useCallback(() => {
+  // Every refetch trigger (session switch, parent or local refresh nonce) re-arms
+  // the spinner before the fetch below lands its result through callbacks.
+  useKeyedReset(`${sessionId}|${refreshKey}|${localRefresh}`, () => setLoading(true))
+  useEffect(() => {
     let alive = true
-    setLoading(true)
     api
       .sessionInfo(sessionId)
       .then((d) => alive && setInfo(d))
@@ -49,9 +52,7 @@ export function CoordinatorPanel({
     return () => {
       alive = false
     }
-  }, [sessionId, onError])
-
-  useEffect(() => load(), [load, refreshKey, localRefresh])
+  }, [sessionId, refreshKey, localRefresh, onError])
 
   return (
     <ModalOverlay onClose={onClose} padding="p-0" className="!justify-end">

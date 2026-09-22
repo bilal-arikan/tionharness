@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { Execution } from '@/types'
 import { api } from '@/api'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { relativeTime } from '@/shared/lib/time'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 
@@ -55,7 +56,8 @@ function kindMeta(kind: string) {
 // Activity screen.
 export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose }: Props) {
   const [items, setItems] = useState<Execution[]>([])
-  const [loading, setLoading] = useState(false)
+  // With an agent selected the initial fetch is in flight from the first paint.
+  const [loading, setLoading] = useState(Boolean(agentId))
 
   // Resizable width (persisted, clamped). 320px == the old w-80. Drag the handle
   // on the panel's LEFT edge: moving it left widens the panel.
@@ -98,14 +100,15 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
       .catch((e) => onError((e as Error).message))
   }, [agentId, onError])
 
-  // Initial load on agent change.
+  // Initial load on agent change: the switch clears the previous agent's rows
+  // (or re-arms the spinner) before the fetch lands via callbacks.
+  useKeyedReset(agentId, () => {
+    if (agentId) setLoading(true)
+    else setItems([])
+  })
   useEffect(() => {
-    if (!agentId) {
-      setItems([])
-      return
-    }
+    if (!agentId) return
     let alive = true
-    setLoading(true)
     refresh().finally(() => {
       if (alive) setLoading(false)
     })

@@ -38,7 +38,7 @@ type Filter = 'open' | 'all' | 'archived'
 export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Props) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [catalog, setCatalog] = useState<GoalCatalog | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('open')
   const [localId, setLocalId] = useState<string | null>(null)
   const [intake, setIntake] = useState<{ goal?: Goal | null } | null>(null)
@@ -61,16 +61,25 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
     [onSelectGoal],
   )
 
+  // run fetches through callbacks only (so the mount effect may call it; loading
+  // starts true); load is the manual entry point that re-arms the spinner.
+  const run = useCallback(
+    () =>
+      api
+        .listGoals()
+        .then(setGoals)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoading(false)),
+    [onError],
+  )
   const load = useCallback(() => {
     setLoading(true)
-    api
-      .listGoals()
-      .then(setGoals)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }, [onError])
+    void run()
+  }, [run])
 
-  useEffect(load, [load])
+  useEffect(() => {
+    void run()
+  }, [run])
   useEffect(() => {
     api
       .goalCatalog()

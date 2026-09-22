@@ -34,7 +34,7 @@ interface Props {
 
 export function SearchIndexPanel({ onError }: Props) {
   const [rows, setRows] = useState<SearchIndexStatus[] | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   // Key of the row with a request in flight, so only its buttons go busy.
   const [busy, setBusy] = useState<string | null>(null)
   // Root of the row whose drop confirmation is open, plus what the user typed.
@@ -47,20 +47,25 @@ export function SearchIndexPanel({ onError }: Props) {
 
   const rowKey = (r: SearchIndexStatus) => `${r.tool}:${r.root}`
 
-  const load = useCallback(async () => {
+  // run lands the list through callbacks only (so the mount effect and the
+  // poll may call it); load is the manual entry point that re-arms the spinner.
+  const run = useCallback(
+    () =>
+      api
+        .listSearchIndexes()
+        .then(setRows)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoading(false)),
+    [onError],
+  )
+  const load = useCallback(() => {
     setLoading(true)
-    try {
-      setRows(await api.listSearchIndexes())
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }, [onError])
+    return run()
+  }, [run])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void run()
+  }, [run])
 
   // Poll only while something is actually building, and stop the moment nothing
   // is: indexing is the only phase that changes on its own, so polling a settled

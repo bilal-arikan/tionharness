@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import {
   Archive,
@@ -269,7 +270,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         setCatalogRevision((revision) => revision + 1)
       })
       .catch((e) => onError((e as Error).message))
-  }, [onError])
+  }, [onError, setActiveSlug])
 
   useEffect(() => reload(), [reload, skillsTick])
 
@@ -280,14 +281,16 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
     setActiveSlug(sideList[0]?.slug ?? null)
   }, [sideList, activeSlug, setActiveSlug])
 
-  // Load the selected skill's full body lazily when the selection changes.
-  useEffect(() => {
+  // Load the selected skill's full body lazily when the selection changes. The
+  // switch clears the previous body (or re-arms the spinner) before the fetch
+  // lands through callbacks.
+  useKeyedReset(`${activeSlug}|${catalogRevision}`, () => {
     if (catalogRevision === 0) return
-    if (!activeSlug) {
-      setActive(null)
-      return
-    }
-    setLoadingBody(true)
+    if (!activeSlug) setActive(null)
+    else setLoadingBody(true)
+  })
+  useEffect(() => {
+    if (catalogRevision === 0 || !activeSlug) return
     api
       .getSkill(activeSlug)
       .then(setActive)
@@ -350,7 +353,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       if (saved.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
       reload()
     },
-    [reload],
+    [reload, setActiveSlug],
   )
 
   // Delete the selected skill (confirm first), then refresh + clear selection.
@@ -380,7 +383,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       })
       .catch((e) => onError((e as Error).message))
       .finally(() => setDeleteBusy(false))
-  }, [active, reload, onError])
+  }, [active, reload, onError, setActiveSlug])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk skill deletion. The
   // ordered id list is the flattened visible (non-collapsed) skill order so a
@@ -405,7 +408,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         reload()
       })
       .catch((e) => onError((e as Error).message))
-  }, [sel, activeSlug, reload, onError])
+  }, [sel, activeSlug, reload, onError, setActiveSlug])
 
   // Archive or restore skills. Either way they leave the current view; the
   // catalog is re-read so the list and the selection follow.

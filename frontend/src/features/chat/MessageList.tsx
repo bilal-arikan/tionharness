@@ -328,6 +328,7 @@ export function MessageList({
 
   // Deep-link: when a search result is opened, scroll to the target message once
   // it is present in the loaded transcript, flash it, then clear the request.
+  const consumeHighlight = useStableCallback(onHighlightConsumed)
   useEffect(() => {
     if (!highlightMessageId) return
     const el = scrollRef.current?.querySelector<HTMLElement>(
@@ -345,8 +346,8 @@ export function MessageList({
         ?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(highlightMessageId)}"]`)
         ?.scrollIntoView({ block: 'center' })
     })
-    onHighlightConsumed?.()
-  }, [highlightMessageId, messages])
+    consumeHighlight?.()
+  }, [highlightMessageId, messages, consumeHighlight])
 
   // Fade the transient highlight out, whichever jump set it (search deep-link or
   // a click on the sticky pinned question).

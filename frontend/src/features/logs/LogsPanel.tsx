@@ -141,21 +141,24 @@ export function LogsPanel({ onError }: Props) {
     return mins > 0 ? Date.now() - mins * 60_000 : undefined
   }, [range])
 
-  const load = useCallback(async () => {
-    try {
-      const data = await api.getLogs({
-        limit: 1000,
-        level: level || undefined,
-        q: qDebounced || undefined,
-        component: component || undefined,
-        since: sinceMs(),
-      })
-      setLogs(data)
-      setPending(0)
-    } catch (e) {
-      onError((e as Error).message)
-    }
-  }, [level, qDebounced, component, sinceMs, onError])
+  // Results land through callbacks, so the filter effect can call this directly.
+  const load = useCallback(
+    () =>
+      api
+        .getLogs({
+          limit: 1000,
+          level: level || undefined,
+          q: qDebounced || undefined,
+          component: component || undefined,
+          since: sinceMs(),
+        })
+        .then((data) => {
+          setLogs(data)
+          setPending(0)
+        })
+        .catch((e) => onError((e as Error).message)),
+    [level, qDebounced, component, sinceMs, onError],
+  )
 
   // Initial + reactive load when filters change.
   useEffect(() => {
