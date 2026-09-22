@@ -52,7 +52,7 @@ export function PhaseActions({ trajectory: t, phase }: Props) {
           return
         }
       } else if (err.status === 409) {
-        toast.info('Rota bu arada değişti; ekran yenilendi, tekrar dene')
+        toast.warning('Rota bu arada değişti; ekran yenilendi, tekrar dene')
       } else {
         toast.error(err.message)
       }

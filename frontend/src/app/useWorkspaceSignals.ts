@@ -29,6 +29,7 @@ export function useWorkspaceSignals(activeWorkspaceId: string | null): void {
       }
       for (const s of diffSignals(prev, next, isTypeEnabled)) {
         if (s.level === 'error') toast.error(s.text)
+        else if (s.level === 'warning') toast.warning(s.text)
         else if (s.level === 'success') toast.success(s.text)
         else toast.info(s.text)
       }

@@ -68,7 +68,7 @@ function ProviderInstances() {
     try {
       const result = await remove(instance.id)
       if (result.affectedAgents.length > 0) {
-        toast.error(
+        toast.warning(
           `Sağlayıcı silindi, ancak ${result.affectedAgents.length} ajan hâlâ bu örneğe bağlıydı. Bu ajanları yeniden yapılandır.`,
         )
       } else {

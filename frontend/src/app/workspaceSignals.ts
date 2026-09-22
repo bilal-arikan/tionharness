@@ -11,14 +11,17 @@ const TRAJ_STATUS_TEXT: Record<string, string> = {
   waiting: 'bir insan yanıtı bekliyor',
 }
 
+// SignalLevel maps 1:1 onto a toast tone (see useWorkspaceSignals).
+export type SignalLevel = 'info' | 'success' | 'warning' | 'error'
+
 // diffSignals compares two lane snapshots and returns the toasts to show —
 // pure, so it is unit-testable without the store.
 export function diffSignals(
   prev: LaneState,
   next: LaneState,
   enabled: (type: string) => boolean = () => true,
-): { level: 'info' | 'success' | 'error'; text: string }[] {
-  const out: { level: 'info' | 'success' | 'error'; text: string }[] = []
+): { level: SignalLevel; text: string }[] {
+  const out: { level: SignalLevel; text: string }[] = []
   if (enabled('automation')) {
     const lastSeq = prev.fires.length ? prev.fires[prev.fires.length - 1].seq : 0
     for (const f of next.fires) {
@@ -32,7 +35,7 @@ export function diffSignals(
       } else if (f.reason && f.reason !== 'cooldown') {
         // Cooldown skips are routine noise; the others say a rule is stuck.
         out.push({
-          level: 'info',
+          level: 'warning',
           text: `↷ Otomasyon ${name} atlandı: ${SKIP_REASON_LABEL[f.reason] ?? f.reason}`,
         })
       }
@@ -61,7 +64,9 @@ export function diffSignals(
         continue
       }
       if (before && before.status !== t.status && t.status && TRAJ_STATUS_TEXT[t.status]) {
-        const level = t.status === 'done' ? 'success' : t.status === 'failed' ? 'error' : 'info'
+        // abandoned/waiting are not failures but need the user's attention.
+        const level: SignalLevel =
+          t.status === 'done' ? 'success' : t.status === 'failed' ? 'error' : 'warning'
         out.push({ level, text: `◈ Rota ${id} ${TRAJ_STATUS_TEXT[t.status]}` })
       }
     }

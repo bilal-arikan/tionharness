@@ -41,6 +41,8 @@ describe('diffSignals', () => {
       '⚡ Otomasyon Docs ateşlendi → SES5',
       '↷ Otomasyon AUT3 atlandı: iterasyon tavanı',
     ])
+    // A stuck rule is a warning, not routine news.
+    expect(out.map((o) => o.level)).toEqual(['info', 'warning'])
     // Nothing new → nothing said.
     expect(diffSignals(b, b)).toEqual([])
   })

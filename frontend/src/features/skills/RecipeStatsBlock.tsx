@@ -68,7 +68,7 @@ export function RecipeStatsBlock({ slug, onOpenTrajectory, onOpenSession }: Prop
         toast.info(
           `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi${r.applied ? `, ${r.applied} oto-uygulandı` : ''})`,
         )
-      else toast.info(`Optimizer çalışmadı: ${r.skipped ?? '—'}`)
+      else toast.warning(`Optimizer çalışmadı: ${r.skipped ?? '—'}`)
       setNonce((n) => n + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
