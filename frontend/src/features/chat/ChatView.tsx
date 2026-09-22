@@ -83,6 +83,10 @@ export interface ChatViewProps {
   // Roster INCLUDING deleted agents. The transcript renders HISTORY, so it must
   // resolve an author that no longer exists; pickers keep using `agents`.
   allAgents: Agent[]
+  // The subset a NEW chat may be started with: service system agents (titler,
+  // compaction, …) are not conversation partners, so the empty state must not
+  // offer them. Worker profiles stay selectable.
+  sessionStartAgents: Agent[]
   onNewSession: () => void
   onSelectDefaultAgent: (id: string) => void
   onGoToAgents: () => void
@@ -104,6 +108,7 @@ export function ChatView({
   chat,
   messages,
   agents,
+  sessionStartAgents,
   artifacts,
   activeSessionId,
   activeAgentId,
@@ -267,7 +272,7 @@ export function ChatView({
   if (!activeSessionId) {
     return (
       <ChatEmptyState
-        agents={agents}
+        agents={sessionStartAgents}
         defaultAgentId={defaultAgentId}
         defaultAgentDeleted={defaultAgentDeleted}
         onNewSession={onNewSession}

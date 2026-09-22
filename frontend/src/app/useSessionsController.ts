@@ -17,6 +17,7 @@ import { draftSessionIds, readSessionDraftState } from '@/shared/lib/sessionDraf
 import { shouldDiscardFreshSession } from './freshSessionCleanup'
 import { pickInitialSession } from './pickInitialSession'
 import { saveDefaultAgent } from './defaultAgentSave'
+import { startableAgents } from './startableAgents'
 import { deleteSessionAndRefresh } from './sessionDelete'
 import {
   appendSessionPage,
@@ -63,6 +64,10 @@ export function useSessionsController({
   // so no picker, roster or default-agent path can ever offer a deleted agent.
   const [allAgents, setAllAgents] = useState<Agent[]>([])
   const agents = useMemo(() => allAgents.filter((a) => !a.deleted), [allAgents])
+  // The subset a NEW session may be opened with: service system agents (titler,
+  // compaction, …) serve the runtime and the backend refuses them as the default
+  // agent, so a session-start surface must not offer them. Worker profiles stay.
+  const sessionStartAgents = useMemo(() => startableAgents(agents), [agents])
   const [sessions, setSessions] = useState<Session[]>([])
   // Paging state for the session list (TSK68 load-more): the sidebar renders
   // the first page and appends with loadMoreSessions. total/hasMore come from
@@ -358,6 +363,9 @@ export function useSessionsController({
   // System agents are never valid fallbacks — the backend rejects them as the
   // default (see workspace.ErrDefaultAgentSystem) — so skip them here too, or a
   // roster whose first live agent is a system agent retries this write forever.
+  // Note this is stricter than isStartableAgent: a worker profile may be PICKED
+  // for a session, but checkDefaultAgent refuses any System agent as the stored
+  // default, so the auto-repair fallback must stay on non-system agents only.
   useEffect(() => {
     if (!wsSettingsLoaded || agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
@@ -911,7 +919,9 @@ export function useSessionsController({
   const newSession = useCallback(async () => {
     const workspaceID = activeWorkspaceIdRef.current
     if (!workspaceID) return
-    const aid = defaultAgentId ?? agents[0]?.id
+    // Fall back within the startable subset: agents[0] may be a service system
+    // agent, which the backend will not accept as a session's agent.
+    const aid = defaultAgentId ?? sessionStartAgents[0]?.id
     if (!aid) {
       setError('Create an agent before starting a new session.')
       return
@@ -937,7 +947,7 @@ export function useSessionsController({
     } catch (e) {
       if (activeWorkspaceIdRef.current === workspaceID) setError((e as Error).message)
     }
-  }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef, setError])
+  }, [defaultAgentId, sessionStartAgents, discardEmptyFresh, activeSessionIdRef, setError])
 
   // Regenerate a session's title from its conversation on demand.
   const regenerateSessionTitle = useCallback(
@@ -966,8 +976,11 @@ export function useSessionsController({
     // state
     // agents = live only (pickers, rosters, defaults).
     // allAgents = live + deleted, for resolving the author of past history.
+    // sessionStartAgents = the subset a NEW chat may be opened with (no service
+    // system agents); use it for every session-start surface.
     agents,
     allAgents,
+    sessionStartAgents,
     setAgents: setAllAgents,
     sessions,
     setSessions,

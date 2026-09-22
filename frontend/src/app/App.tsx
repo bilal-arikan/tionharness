@@ -635,7 +635,7 @@ export default function App() {
               streamingSessionIds={chat.streamingSessions}
               runtimeById={runtimeById}
               loading={ctl.bootstrapping}
-              newDisabled={ctl.agents.length === 0}
+              newDisabled={ctl.sessionStartAgents.length === 0}
               totalSessions={ctl.sessionsTotal}
               hasMoreSessions={ctl.sessionsHasMore}
               onLoadMore={ctl.loadMoreSessions}
@@ -720,6 +720,7 @@ export default function App() {
             chat={chat}
             messages={ctl.messages}
             agents={ctl.agents}
+            sessionStartAgents={ctl.sessionStartAgents}
             artifacts={ctl.sessionArtifacts}
             activeSessionId={ctl.activeSessionId}
             activeAgentId={ctl.activeAgentId}
