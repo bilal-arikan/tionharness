@@ -76,4 +76,13 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Test harnesses publish the latest hook result through module-scope
+    // bindings (this repo has no renderHook library). The compiler-backed
+    // globals rule targets app code, not that scaffolding.
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'react-hooks/globals': 'off',
+    },
+  },
 ])

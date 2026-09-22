@@ -16,7 +16,7 @@ export interface MetricValue {
   excluded?: number
 }
 
-export interface Distribution {
+interface Distribution {
   n: number
   mean: number
   median: number

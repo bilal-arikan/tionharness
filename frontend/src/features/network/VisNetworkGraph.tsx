@@ -18,7 +18,7 @@ import {
 // 'tree' = a hierarchy: attraction only along edges (parent <-> child springs)
 // plus SHORT-RANGE repulsion between neighbours, so a subtree feels only its
 // own parent and its siblings instead of every node on the canvas.
-export type VisMode = 'relation' | 'live' | 'tree'
+type VisMode = 'relation' | 'live' | 'tree'
 
 // Cap the framing zoom: vis-network's fit() zooms right up to the content, so a
 // graph with only a handful of nodes ends up uncomfortably close. After every
@@ -234,9 +234,10 @@ export function VisNetworkGraph({
   const liteRef = useRef(lite)
   const settleRef = useRef(settle)
   const populatedRef = useRef(false)
-  const initialLayoutRef = useRef(readNetworkLayout(layoutKey))
-  const persistedPositionsRef = useRef<NetworkPositions>(initialLayoutRef.current.positions)
-  const preserveViewportRef = useRef(initialLayoutRef.current.viewport !== undefined)
+  // Seeded by the setup effect below from the persisted layout; nothing reads
+  // them before it runs.
+  const persistedPositionsRef = useRef<NetworkPositions>({})
+  const preserveViewportRef = useRef(false)
   const physicsActiveRef = useRef(false)
   const runtimePositionsRef = useRef<NetworkPositions>({})
   const nodesRef = useRef(nodes)

@@ -1,19 +1,12 @@
 // Shared building blocks for the settings screen: field primitives, the category
 // rail button, the read-only prompt viewer and the category taxonomy.
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useContext, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
+import { NumberValidityCtx } from './numberValidity'
+import type { NumberValidity } from './numberValidity'
 
 // Category keys: the app-global sections plus the per-workspace section.
 export type Cat =
@@ -66,35 +59,8 @@ export function Field({
   )
 }
 
-// Numeric-field validity tracking. A NumberField whose text is empty, not a
-// number, or outside [min, max] never writes to the settings draft — the last
-// valid value stays there. It registers itself here instead, so the screen
-// hosting the fields can block Save while any of them is invalid (a silent 0 /
-// null reaching the backend is exactly the data loss this prevents).
-export interface NumberValidity {
-  hasInvalid: boolean
-  report: (id: string, invalid: boolean) => void
-}
-
-const NumberValidityCtx = createContext<NumberValidity | null>(null)
-
-// Owns the invalid-field set. Call in the screen that renders the fields AND the
-// Save button, pass the result to NumberValidityProvider, and gate Save on
-// `hasInvalid`.
-export function useNumberValidity(): NumberValidity {
-  const [invalid, setInvalid] = useState<ReadonlySet<string>>(() => new Set())
-  const report = useCallback((id: string, bad: boolean) => {
-    setInvalid((prev) => {
-      if (prev.has(id) === bad) return prev
-      const next = new Set(prev)
-      if (bad) next.add(id)
-      else next.delete(id)
-      return next
-    })
-  }, [])
-  return useMemo(() => ({ hasInvalid: invalid.size > 0, report }), [invalid, report])
-}
-
+// Provides the validity set from useNumberValidity (numberValidity.ts) to the
+// NumberFields rendered below it.
 export function NumberValidityProvider({
   value,
   children,

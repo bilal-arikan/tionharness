@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react'
 import { ShieldCheck, Save } from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings } from '@/types'
-import {
-  NumberField,
-  NumberValidityProvider,
-  Toggle,
-  useNumberValidity,
-} from '@/features/settings/primitives'
+import { NumberField, NumberValidityProvider, Toggle } from '@/features/settings/primitives'
+import { useNumberValidity } from '@/features/settings/numberValidity'
 import { LoadingState } from '@/shared/components'
 
 interface Props {

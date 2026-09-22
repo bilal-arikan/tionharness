@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from 'react'
 // Physics density slider value, persisted per browser under `key` so leaving a
 // graph screen and coming back keeps the packing the user dialled in. Out-of-
 // range or unreadable values fall back to 1.
-export const DENSITY_MIN = 0.4
-export const DENSITY_MAX = 2
-export const DENSITY_DEFAULT = 1
+const DENSITY_MIN = 0.4
+const DENSITY_MAX = 2
+const DENSITY_DEFAULT = 1
 
 export function parseDensity(raw: string | null | undefined): number {
   if (!raw) return DENSITY_DEFAULT

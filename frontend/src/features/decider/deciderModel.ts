@@ -16,11 +16,9 @@ import type {
 export const MIN_COMPARISONS = 50
 // Agreement at or above this suggests switching on (or letting a challenger
 // take over) …
-export const SWITCH_ON_AGREEMENT = 0.9
+const SWITCH_ON_AGREEMENT = 0.9
 // … and below this that it should stay where it is.
-export const KEEP_SHADOW_AGREEMENT = 0.8
-
-export const MODES: DeciderMode[] = ['off', 'shadow', 'on']
+const KEEP_SHADOW_AGREEMENT = 0.8
 
 // authorityConfig returns an authority's settings, falling back to its defaults.
 export function authorityConfig(

@@ -3,8 +3,8 @@
 // GET /api/decider/stats.
 
 export type DeciderMode = 'off' | 'shadow' | 'on'
-export type DeciderPattern = 'gate' | 'pick' | 'rate' | 'select' | 'triage'
-export type DeciderCredentials = 'own' | 'provider'
+type DeciderPattern = 'gate' | 'pick' | 'rate' | 'select' | 'triage'
+type DeciderCredentials = 'own' | 'provider'
 
 export interface DeciderAuthorityConfig {
   mode: DeciderMode
@@ -20,7 +20,7 @@ export interface DeciderConfig {
   authorities: Record<string, DeciderAuthorityConfig>
 }
 
-export interface DeciderModelSuggestion {
+interface DeciderModelSuggestion {
   id: string
   label: string
   description?: string
@@ -93,7 +93,7 @@ export interface DeciderProviderInstance {
   available: boolean
 }
 
-export interface DeciderModelStatus {
+interface DeciderModelStatus {
   ready: boolean
   problem?: string
   problemAt?: number
@@ -102,7 +102,7 @@ export interface DeciderModelStatus {
   endpoint?: string
 }
 
-export interface DeciderModelStats {
+interface DeciderModelStats {
   instance: string
   calls: number
   errors: number
@@ -212,7 +212,7 @@ export interface DeciderView {
   statsDays: number
 }
 
-export interface DeciderAnswer {
+interface DeciderAnswer {
   type: 'noul' | 'choice' | 'score'
   probability?: number
   choice?: string
@@ -221,7 +221,7 @@ export interface DeciderAnswer {
   confidence?: number
 }
 
-export interface DeciderResponse {
+interface DeciderResponse {
   id?: string
   backend: string
   instance?: string

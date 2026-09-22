@@ -2,11 +2,8 @@ import { useState } from 'react'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
-import {
-  NumberField,
-  NumberValidityProvider,
-  useNumberValidity,
-} from '@/features/settings/primitives'
+import { NumberField, NumberValidityProvider } from '@/features/settings/primitives'
+import { useNumberValidity } from '@/features/settings/numberValidity'
 import type { InsightSettings } from '@/types'
 
 interface Props {

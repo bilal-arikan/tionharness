@@ -12,7 +12,7 @@
 
 import { reportClientError } from './reportError'
 
-export type LoggedToastTone = 'error' | 'warning'
+type LoggedToastTone = 'error' | 'warning'
 
 export interface ToastLogInput {
   tone: LoggedToastTone
@@ -20,7 +20,7 @@ export interface ToastLogInput {
   detail?: string
 }
 
-export const TOAST_DEDUPE_MS = 10_000
+const TOAST_DEDUPE_MS = 10_000
 export const TOAST_BURST_WINDOW_MS = 10_000
 export const TOAST_BURST_MAX = 20
 

@@ -9,7 +9,8 @@ import type {
   SlashCommand,
 } from '@/types'
 import { LoadingState, toast } from '@/shared/components'
-import { CatButton, NumberValidityProvider, useNumberValidity, type Cat } from './primitives'
+import { CatButton, NumberValidityProvider, type Cat } from './primitives'
+import { useNumberValidity } from './numberValidity'
 import { APP_CATS } from './settingsCats'
 import {
   ProfilePanel,

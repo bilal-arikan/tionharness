@@ -13,7 +13,7 @@
 export type SearchIndexPhase = 'missing' | 'indexing' | 'ready' | 'stale' | 'failed'
 
 /** The run that produced (or is producing) a phase. */
-export type SearchIndexAction = 'create' | 'refresh' | 'rebuild' | 'drop'
+type SearchIndexAction = 'create' | 'refresh' | 'rebuild' | 'drop'
 
 /** One index's recorded state, as served by GET /api/search-indexes. */
 export interface SearchIndexStatus {

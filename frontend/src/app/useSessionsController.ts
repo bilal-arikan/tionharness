@@ -2,7 +2,7 @@
 // roster, the session list, the open transcript, and every action that mutates
 // them (select/create/rename/archive/pin/delete, per-message actions, agent
 // CRUD). App.tsx composes this with the chat-stream hook and the layout.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
 import type { Agent, AgentPatch, Artifact, Message, Session } from '@/types'
 import type { useChatStream } from '@/features/chat/useChatStream'
@@ -82,7 +82,6 @@ export function useSessionsController({
   // The chip selection the in-flight/last request used, kept in a ref so the
   // refresh and load-more callbacks stay stable across chip changes.
   const chipsParamRef = useRef(chipsParam)
-  chipsParamRef.current = chipsParam
   // The search the in-flight/last request used; undefined when blank so the
   // request line stays identical to the pre-search one. Synced in an effect
   // (declared before the effect that re-queries on it, so it runs first).
@@ -91,9 +90,16 @@ export function useSessionsController({
     searchQueryRef.current = searchQuery.trim() || undefined
   }, [searchQuery])
   const activeWorkspaceIdRef = useRef(activeWorkspaceId)
-  activeWorkspaceIdRef.current = activeWorkspaceId
-  const listQueryIdentityRef = useRef('')
-  listQueryIdentityRef.current = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
+  const listQueryIdentityRef = useRef(sessionListQueryIdentity(activeWorkspaceId, chipsParam))
+  // Latest-value mirrors for the stable callbacks below. Synced in a layout
+  // effect rather than during render (which the compiler lint rejects): it runs
+  // synchronously inside the commit, before any passive effect or promise
+  // continuation can observe a stale identity.
+  useLayoutEffect(() => {
+    chipsParamRef.current = chipsParam
+    activeWorkspaceIdRef.current = activeWorkspaceId
+    listQueryIdentityRef.current = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
+  }, [activeWorkspaceId, chipsParam])
   const listRequestGuardRef = useRef(createSessionListRequestGuard())
   const listReplacePendingRef = useRef(false)
   const listRefreshQueuedRef = useRef(false)
@@ -277,7 +283,6 @@ export function useSessionsController({
           (a, b) => b.updatedAt - a.updatedAt,
         )
         let sid = activeSessionIdRef.current
-        let aid: string | null = null
         if (effectiveWant || !sid) {
           const picked = pickInitialSession({
             sessions: candidates,
@@ -286,7 +291,7 @@ export function useSessionsController({
             agentExists: (id) => routeAgents.items.some((agent) => agent.id === id),
           })
           sid = picked.sessionId
-          aid = picked.agentId
+          const aid = picked.agentId
           activeSessionIdRef.current = sid
           setActiveSessionId(sid)
           setActiveAgentId(aid)
@@ -478,7 +483,9 @@ export function useSessionsController({
       }
     }
   }, [runQueuedSessionRefresh, withActiveSession])
-  refreshSessionsRef.current = refreshSessions
+  useLayoutEffect(() => {
+    refreshSessionsRef.current = refreshSessions
+  }, [refreshSessions])
 
   // Coalesced refresh for the live event stream. Every chat/session/board event
   // in the active workspace asks for the list again; during a multi-agent run
