@@ -10,7 +10,7 @@ import { fullDateTime } from '@/shared/lib/time'
 import type { Goal } from '@/types/goal'
 import type { GoalEvolution } from '@/types/evolution'
 import type { InsightFinding } from '@/types/insight'
-import { metricLabel } from './goalMeta'
+import { evolverIdleText, metricLabel } from './goalMeta'
 import type { GoalMetricDef } from '@/types/goal'
 
 interface Props {
@@ -131,9 +131,7 @@ export function GoalProposals({ goal, metrics, onError, onOpenSession }: Props) 
       )}
       {open.length === 0 ? (
         <p className="text-xs text-[var(--color-text-dim)]">
-          Açık öneri yok. Evolver, kapsamda en az {goal.policy.minRuns || data?.minRuns || 5} oturum
-          birikince ya da bir guardrail ihlal edilince kendisi koşar; hemen görmek için "Şimdi
-          evrimleştir".
+          {evolverIdleText(goal, goal.policy.minRuns || data?.minRuns || 5)}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">

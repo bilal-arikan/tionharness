@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Goal } from '@/types/goal'
-import { authorLabel, formatMetricValue, metricLabel, nextStatuses, scopeSummary } from './goalMeta'
+import {
+  authorLabel,
+  evolverIdleText,
+  formatMetricValue,
+  metricLabel,
+  nextStatuses,
+  scopeSummary,
+} from './goalMeta'
 
 const goal = (over: Partial<Goal> = {}): Goal => ({
   id: 'GOL1',
@@ -51,5 +58,15 @@ describe('goalMeta', () => {
       ]),
     ).toBe('L')
     expect(metricLabel('missing', [])).toBe('missing')
+  })
+
+  it('does not promise an evolver run for a goal that is not active', () => {
+    expect(evolverIdleText(goal({ status: 'draft' }), 5)).toContain('önce hedefi etkinleştir')
+    expect(evolverIdleText(goal({ status: 'draft' }), 5)).not.toContain('kendisi koşar')
+    expect(evolverIdleText(goal({ status: 'paused' }), 5)).toContain('yeniden etkinleştir')
+    expect(evolverIdleText(goal({ status: 'active', policy: { mode: 'off' } }), 5)).toContain(
+      'politikası kapalı',
+    )
+    expect(evolverIdleText(goal({ status: 'active' }), 7)).toContain('en az 7 oturum')
   })
 })

@@ -1,7 +1,10 @@
 // GoalFitnessBlock — the goal's numbers (E1): the primary metric and every
 // guardrail over the window, then the same per configuration snapshot the
 // sessions ran under, with what changed between snapshots. LLM-free; the
-// later phases (proposals, ledger) attach under this block.
+// later phases (proposals, ledger) attach under this block. The version
+// breakdown shows a robust statistic (median by default), can be narrowed to
+// one agent, and refuses to draw a delta for a bucket that fails the
+// insufficient-data gate.
 import { useEffect, useState } from 'react'
 import { Activity, GitCommitHorizontal, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
@@ -10,7 +13,16 @@ import { fullDateTime } from '@/shared/lib/time'
 import type { Goal, GoalMetricDef } from '@/types/goal'
 import type { GoalFitness, GuardrailStatus, MetricValue, SnapshotFitness } from '@/types/evolution'
 import { formatMetricValue, metricLabel } from './goalMeta'
-import { WINDOWS, changeLabel, deltaLabel, primaryVerdict, sinceFor } from './fitnessMeta'
+import {
+  STATS,
+  WINDOWS,
+  changeLabel,
+  primaryVerdict,
+  sinceFor,
+  snapshotDelta,
+  statValue,
+  type StatKind,
+} from './fitnessMeta'
 
 interface Props {
   goal: Goal
@@ -20,6 +32,8 @@ interface Props {
 
 export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
   const [win, setWin] = useState('30d')
+  const [agent, setAgent] = useState('')
+  const [stat, setStat] = useState<StatKind>('median')
   const [fit, setFit] = useState<GoalFitness | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -27,7 +41,7 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
     let cancelled = false
     setLoading(true)
     api
-      .goalFitness(goal.id, sinceFor(win))
+      .goalFitness(goal.id, sinceFor(win), agent || undefined)
       .then((f) => {
         if (!cancelled) setFit(f)
       })
@@ -39,10 +53,10 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
       cancelled = true
     }
     // Refetch when the goal's measurement definition changes.
-  }, [goal.id, goal.updatedAt, win, onError])
+  }, [goal.id, goal.updatedAt, win, agent, onError])
 
   const label = (m: MetricValue) => metricLabel(m.metric, metrics)
-  const fmt = (m: MetricValue) => formatMetricValue(m.value, m.unit)
+  const fmt = (m: MetricValue) => formatMetricValue(statValue(m, stat), m.unit)
   const verdict = fit ? primaryVerdict(fit) : 'none'
 
   return (
@@ -93,6 +107,15 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
               {fit.sessions} oturum · pencere {fit.since ? fullDateTime(fit.since) : 'tümü'}
             </span>
           </div>
+          {fit.providerFailures > 0 && (
+            <p
+              className="text-xs text-[var(--color-text-dim)]"
+              data-testid="goal-provider-failures"
+            >
+              ℹ {fit.providerFailures} oturum sağlayıcı/kimlik doğrulama hatasıyla hiç token
+              harcamadan başarısız oldu — hata oranı guardrail'ine sayılmadı.
+            </p>
+          )}
           {fit.guardrails.map((g, i) => (
             <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
               <span className="w-28 text-xs text-[var(--color-text-dim)]">Guardrail</span>
@@ -107,6 +130,42 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
               <GitCommitHorizontal size={12} /> Konfigürasyon sürümlerine göre
             </span>
           </SectionHead>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1 text-[var(--color-text-dim)]">
+              Ajan
+              <select
+                value={agent}
+                onChange={(e) => setAgent(e.target.value)}
+                className="rounded border border-[var(--color-border)] bg-transparent px-1 py-0.5 text-[var(--color-text)]"
+                data-testid="goal-fitness-agent"
+              >
+                <option value="">Tüm ajanlar</option>
+                {fit.agents.map((a) => (
+                  <option key={a.agentId} value={a.agentId}>
+                    {a.agentId || '—'} ({a.sessions})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {fit.primary.dist && (
+              <div className="ml-auto flex gap-1" data-testid="goal-fitness-stat">
+                {STATS.map((o) => (
+                  <button
+                    key={o.key}
+                    onClick={() => setStat(o.key)}
+                    aria-pressed={stat === o.key}
+                    className={`rounded-full border px-2 py-0.5 ${
+                      stat === o.key
+                        ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                        : 'border-[var(--color-border)] text-[var(--color-text-dim)]'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {fit.bySnapshot.length === 0 ? (
             <p className="text-xs text-[var(--color-text-dim)]">
               Bu pencerede kapsamda oturum yok.
@@ -119,6 +178,7 @@ export function GoalFitnessBlock({ goal, metrics, onError }: Props) {
                   s={s}
                   prev={i > 0 ? fit.bySnapshot[i - 1] : undefined}
                   direction={fit.direction}
+                  stat={stat}
                   fmt={fmt}
                 />
               ))}
@@ -141,6 +201,11 @@ function MetricCell({ m }: { m: MetricValue }) {
     <span className="font-medium tabular-nums">
       {formatMetricValue(m.value, m.unit)}
       <span className="ml-1 text-xs font-normal text-[var(--color-text-dim)]">n={m.n}</span>
+      {m.excluded ? (
+        <span className="ml-1 text-xs font-normal text-[var(--color-text-dim)]" title={m.note}>
+          · {m.excluded} sağlayıcı/auth hatası hariç
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -164,14 +229,17 @@ function SnapshotRow({
   s,
   prev,
   direction,
+  stat,
   fmt,
 }: {
   s: SnapshotFitness
   prev: SnapshotFitness | undefined
   direction: 'min' | 'max'
+  stat: StatKind
   fmt: (m: MetricValue) => string
 }) {
-  const delta = deltaLabel(s.primary, prev?.primary, direction)
+  const delta = snapshotDelta(s, prev, direction, stat)
+  const cost = s.stats.cost
   return (
     <li className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -187,7 +255,15 @@ function SnapshotRow({
           ) : (
             <>
               <strong>{fmt(s.primary)}</strong>
-              {delta.text && (
+              {delta.gated ? (
+                <span
+                  className="ml-1 text-[var(--color-text-dim)]"
+                  title={delta.reasons.join('; ')}
+                  data-testid="goal-fitness-insufficient"
+                >
+                  <Badge tone="muted">{delta.text}</Badge>
+                </span>
+              ) : delta.text ? (
                 <span
                   className={`ml-1 ${
                     delta.good === true
@@ -199,12 +275,34 @@ function SnapshotRow({
                 >
                   {delta.text}
                 </span>
-              )}
+              ) : null}
             </>
           )}
         </span>
         {s.guardrails.some((g) => g.violated) && <Badge tone="danger">guardrail ihlali</Badge>}
       </div>
+      {cost.n > 0 && (
+        <div className="mt-1 flex flex-wrap gap-x-3 text-[var(--color-text-dim)] tabular-nums">
+          <span>
+            maliyet/oturum ort {formatMetricValue(cost.mean, 'usd')} · medyan{' '}
+            {formatMetricValue(cost.median, 'usd')} · kırpılmış{' '}
+            {formatMetricValue(cost.trimmedMean, 'usd')} (n={cost.n})
+          </span>
+          <span>ilk-3 payı %{Math.round(cost.top3Share * 100)}</span>
+          {s.stats.costPerToolCall !== null && s.stats.costPerToolCall !== undefined && (
+            <span>
+              araç çağrısı başına {formatMetricValue(s.stats.costPerToolCall, 'usd')} (
+              {s.stats.toolCalls} çağrı)
+            </span>
+          )}
+        </div>
+      )}
+      {s.providerFailures > 0 && (
+        <p className="mt-1 text-[var(--color-text-dim)]">
+          ℹ {s.providerFailures} sağlayıcı/kimlik doğrulama hatası (0 token) — hata oranına
+          sayılmadı
+        </p>
+      )}
       {s.changes && s.changes.length > 0 && (
         <ul className="mt-1 list-disc pl-5 text-[var(--color-text-dim)]">
           {s.changes.slice(0, 8).map((c, i) => (

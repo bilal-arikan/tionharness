@@ -13,7 +13,8 @@ import (
 
 // Evolution fitness + configuration history (_Docs/83 §4.2, E1).
 //
-//	GET /api/goals/{id}/fitness?since=<unix>   → the goal's metrics, current + per snapshot
+//	GET /api/goals/{id}/fitness?since=<unix>&agent=<id> → the goal's metrics, current + per snapshot
+//	                                            (agent: compare versions over one agent's sessions)
 //	POST /api/goals/{id}/evolve                → run the evolver now (manual trigger)
 //	GET /api/goals/{id}/evolution              → last pass bookkeeping + this goal's open proposals
 //	GET /api/evolution/snapshots               → configuration versions, oldest first, with diffs
@@ -39,6 +40,7 @@ func (s *Server) handleGoalFitness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := wsp.Runtime.FitnessInputs(r.Context(), now, since)
+	in.Agent = r.URL.Query().Get("agent")
 	writeJSON(w, http.StatusOK, goals.Evaluate(g, in))
 }
 

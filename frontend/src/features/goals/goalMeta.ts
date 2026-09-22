@@ -112,3 +112,20 @@ export function scopeSummary(g: Goal): string {
   if (n(g.scope.tags)) parts.push(`${n(g.scope.tags)} etiket`)
   return parts.length ? parts.join(' · ') : 'tüm workspace'
 }
+
+// evolverIdleText explains, under an empty proposal list, when the evolver
+// will produce proposals. It only runs (automatically or via "Şimdi
+// evrimleştir") for an ACTIVE goal whose policy is not off
+// (internal/agent/goal_evolver.go), so a draft/paused goal must not promise it.
+export function evolverIdleText(goal: Goal, minRuns: number): string {
+  if (goal.status === 'draft') {
+    return 'Hedef taslak: evolver yalnız etkin hedefler için koşar. Öneri görmek için önce hedefi etkinleştir.'
+  }
+  if (goal.status !== 'active') {
+    return `Hedef ${STATUS_LABEL[goal.status].toLowerCase()}: evolver yalnız etkin hedefler için koşar. Öneri görmek için hedefi yeniden etkinleştir.`
+  }
+  if (goal.policy.mode === 'off') {
+    return 'Evrim politikası kapalı: evolver bu hedef için koşmaz. Politikayı açarak önerileri etkinleştir.'
+  }
+  return `Açık öneri yok. Evolver, kapsamda en az ${minRuns} oturum birikince ya da bir guardrail ihlal edilince kendisi koşar; hemen görmek için "Şimdi evrimleştir".`
+}
