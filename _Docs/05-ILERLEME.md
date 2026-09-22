@@ -5,6 +5,100 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Arama indeksi durumu ve yenile/yeniden kur/sil düğmeleri Ayarlar'da (TSK977, 2026-09-22) ✅
+
+- **Belirti:** TSK975 defteri (`internal/indexstate`) ve `GET /api/search-indexes`
+  uç noktasını getirdi, ama kullanıcı tarafında **hiçbir yüzey yoktu**. Yetenek
+  prompt'u ajana "indeksi kendin kurma, TionHarness yönetir" diyor; yönetildiği
+  iddia edilen şeyin hangi indeksler olduğu, hangisinin kurulduğu, hangisinin
+  **neden** başarısız olduğu ise hiçbir ekranda görünmüyordu. Başarısız bir
+  indeks pratikte sessiz kalıyordu.
+- **Çözüm — durum listesi:** Ayarlar ▸ Harici Araçlar, zvec-grep callout'unun
+  hemen altında yeni `SearchIndexPanel`. `(araç, kök)` başına bir satır: faz
+  rozeti (`hazır | indeksleniyor… | bayat | başarısız | yok`), son güncelleme,
+  gömme modeli + araç sürümü, ve `failed` fazında **sebep metni**. Liste süreç
+  geneli, çünkü aynı depoyu açan iki workspace diskte tek store paylaşır.
+- **Yoklama (polling) yalnız gerektiğinde:** Liste sadece bir satır
+  `indexing` iken 2 sn'de bir tazelenir, iş bitince yoklama **tamamen durur** —
+  kendiliğinden değişen tek faz indexing olduğu için yerleşmiş bir listeyi
+  yoklamak uç noktayı sonsuza dek meşgul etmekten başka bir şey yapmazdı.
+- **Yenile / Yeniden kur:** Yeni `POST /api/search-indexes/refresh`
+  (`{tool, root, rebuild}`), TSK976'nın `Runtime.RequestIndexRun` giriş noktasına
+  bağlanır. Bu uç nokta bilerek `EnsureZvecGrepIndex`'ten **geçmez**: o yol
+  `Decide()`'a "ne gerekiyor" diye sorar ve hazır bir indekste hiçbir şey yapmaz.
+  "Yeniden kur" düğmesine basan kullanıcı ise başka bir şey iddia ediyor —
+  manifest sağlam görünse de deponun içeriği bozuk. Koşu **talep edildiği anda**
+  (claim) yanıtlanır (202), sonucu defter üzerinden okunur; indeksleme dakikalar
+  sürer, bir HTTP isteği o kadar bekleyemez. Uçuştaki koşu 409 döner ve düğmeler
+  zaten pasiftir.
+- **Sil yalnız elle onayla:** Mevcut `POST /api/search-indexes/drop` uç noktası
+  kullanıldı. Panel kök yolunun **birebir yazılmasını** ister (`confirmRoot`);
+  eşleşmeden onay düğmesi açılmaz, eşleşmezse backend 409 döner ve hiçbir şey
+  silinmez. Otomatik drop yolu yok.
+- **Hata mesajları yutulmaz:** 409 ve diğer backend mesajları listenin altında
+  **birebir** gösterilir (toast değil) — "zaten bir koşu sürüyor" ya da "onay
+  köke uymuyor" kullanıcının okuyup üzerine işlem yapması gereken bilgilerdir.
+- **Dosyalar:** `frontend/src/features/settings/SearchIndexPanel.tsx` (+test),
+  `frontend/src/shared/lib/searchIndexState.ts` (+test — faz görünümü, yoklama
+  koşulu, eylem geçitleri DOM'suz test edilebilsin diye ayrıldı),
+  `frontend/src/api/searchIndexes.ts`, `frontend/src/types/searchIndex.ts`,
+  `internal/api/search_indexes_refresh.go` (+test).
+
+## Ajanlar indeksi artık TionHarness'ten istiyor: `search_index` aracı (TSK976, 2026-09-22) ✅
+
+- **Belirti:** TSK975 defteri kurdu, ama defter yalnızca **içeriden** sürülüyordu.
+  Ajanın elinde hiçbir kol yoktu: yetenek bloğu "indeksi kendin kurma" diyor,
+  arama `[INDEX_MISSING]` dönüyor ve ajanın yapabileceği tek şey ya prompt'u
+  çiğneyip `zg index` koşmak ya da sonsuza kadar grep'e düşmekti. Yasak,
+  alternatifi olmayan bir yasaktı.
+- **Çözüm — `search_index` aracı:** `status | refresh | rebuild`. Kendi
+  yönetim araçları (`list_tasks`, `read_logs`) ile aynı yoldan kayıtlı:
+  `selfManageBuiltins` içinde, `hidden` görünürlük kademesinde, CLI
+  sağlayıcılarda `mcp__tionharness_extended__search_index` adıyla, native
+  sağlayıcılarda çıplak adla.
+- **Zorlanan kök kısıtı:** Ajan yalnız **kendi oturumunun çalışma kökünü**
+  hedefleyebilir. Serbest bir `root` alanı, ajanın makinedeki herhangi bir
+  dizine (kullanıcının ev dizini, başka bir proje, ağ paylaşımı) depo-geneli bir
+  yeniden gömme nişanlamasına izin verirdi. Farklı yazımlar (`C:\repo`,
+  `c:/repo`, sondaki ayraç) aynı kök sayılır; başka her şey reddedilir ve
+  yöneticiye hiç ulaşmaz.
+- **Bütün kalkanlar yerinde:** `refresh`/`rebuild` yeni
+  `RequestIndexRun` üzerinden geçer ve TSK975'in her korumasını yeniden uygular
+  — yalnız yerel embedding, `.git/info/exclude`, home/disk kökü ve ephemeral
+  worktree/scratchpad reddi (`ErrIndexRootNotAllowed`), süreç-geneli tek-koşu
+  kilidi. Uçuşta bir koşu varsa bu **hata değildir**: istenen iş zaten oluyor,
+  araç `started:false` ile bunu söyler (`ErrIndexRunInFlight`).
+- **`rebuild` neden zorlamalı bir yol:** Otomatik yol `Decide()`'a sorar ve
+  sağlıklı bir indeks için hiçbir şey yapmaz. İndeksin bozuk olduğunu görmüş bir
+  ajanın "yine de kur" diyebilmesi gerekiyor — `RequestIndexRun` istenen koşuyu
+  koşar. Eksik bir indeksin `refresh`'i sessizce `create`'e çevrilir; defterin
+  `Action` alanı gerçekte ne koştuğunu söylemeli.
+- **`drop` bilerek yok:** İndeks silmek geri alınamaz pahalılıkta (koca bir
+  depoyu yeniden gömmek). Kullanıcı eylemi olarak Ayarlar panelindeki onay
+  kapısında kaldı; şema `drop`'u hiç reklam etmez ki model denemesin.
+- **codebase-memory kararı — yalnız `status`, "yönetilmiyor" etiketiyle:**
+  Kod grafiği deftere **alınmadı** (ayrı kart). Ucuza bilinebilen tek şey bu
+  süreçteki otomatik indeksleme durumudur (`cbmIndexed`,
+  `codebaseIndexRunning`), o da `managed:false` + açıklayıcı `note` ile
+  raporlanır. Daha fazlası (depo bu projeyi gerçekten tutuyor mu, ne kadar taze)
+  her `status` çağrısına bir alt-süreç maliyeti bindirirdi; tahmin etmek yerine
+  "bilinmiyor" denir. `refresh` codebase-memory için **reddedilir** —
+  `EnsureCodebaseIndexed` zaten normal tur akışında koşuyor, buradan çağırmak
+  ajanın gerçek koşudan ayırt edemeyeceği bir no-op olurdu.
+- **Yetenek metinleri düzeltildi:** Her iki blok da artık yasağın yanına
+  **çıkışı** koyuyor: "indeks eksik/bayatsa `search_index` çağır; TionHarness
+  senin için yapar; `zg index` / `index_repository` koşma, indeks silme."
+  Sağlayıcıya göre doğru çağrılabilir ad yazılır (`searchIndexToolFor`) —
+  `codebaseMemoryGuidance`'ın zaten `provider` threading yapan tekniğinin aynısı;
+  çıplak ad CLI yolunda modeli var olmayan bir araca yollardı. Ortak cümle tek
+  yerde (`searchIndexDirective`), çünkü iki blok bir kez zaten birbirinden
+  uzaklaşmıştı.
+- **Dosyalar:** `internal/tools/builtin_searchindex.go`,
+  `internal/agent/searchindex_bridge.go`,
+  `internal/agent/indexmanager_request.go`,
+  `internal/agent/indexmanager_status.go`,
+  `internal/agent/capabilities_indextool.go` (+ testleri).
+
 ## Arama indeksleri için (araç, kök) başına yaşam döngüsü yöneticisi (TSK975, 2026-09-22) ✅
 
 - **Belirti:** Yetenek prompt'u ajana "indeksi asla kendin oluşturma/yeniden

@@ -20,7 +20,14 @@
 > embedding modeli **veya** araç sürümü değişince `rebuild` (eski vektörler farklı
 > bir uzaydan geldiği için `refresh` sessizce anlamsız sonuç verirdi), drop ise
 > yalnız kök yolunu tekrar eden kullanıcı onayıyla. Durum
-> `GET /api/search-indexes`'ten okunur. Create yolu (ve `.git/info/exclude`
+> `GET /api/search-indexes`'ten okunur. **2026-09-22 (TSK977):** bu defterin
+> kullanıcı yüzeyi de var — Ayarlar ▸ Harici Araçlar'da zvec-grep callout'unun
+> altındaki `SearchIndexPanel` her `(araç, kök)` satırını fazı, son güncellemesi
+> ve `failed` ise **sebebiyle** listeler, yalnız bir satır `indexing` iken yoklar,
+> ve yenile/yeniden kur (`POST /api/search-indexes/refresh`, `{tool, root, rebuild}`
+> → TSK976'nın `Runtime.RequestIndexRun`'ı) + onay yazdıran sil düğmelerini sunar.
+> Refresh bilerek `Decide()`'ı atlar: hazır görünen ama içeriği bozuk bir depoyu
+> ancak kullanıcının açık talebi kurtarır. Create yolu (ve `.git/info/exclude`
 > yazımı) kurulu `zg` ile gerçek bir `git init` deposunda da test edilir
 > (`TestManagedIndexRealCreateFromMissing`; `zg` yoksa skip). Ayrıntı: `_Docs/05`. Yetenek yalnız
 > **enabled bir MCP sunucu satırı** varken tetiklenir: WS5 workspace'ine
@@ -31,7 +38,16 @@
 > önce şema yüklenmeden çağrılamıyor; bu yüzden blok artık şema yükleme adımını
 > birebir komutuyla yazar ve loader adını transport'a göre seçer (CLI'da
 > `ToolSearch`, native'de `tool_search`) — `Capability.Context` bu yüzden
-> `provider` parametresi alır.
+> `provider` parametresi alır. **2026-09-22 (TSK976):** yasağın artık bir
+> **alternatifi** var — `search_index` aracı (`status | refresh | rebuild`,
+> `internal/tools/builtin_searchindex.go`) ajanın indeksi TionHarness'ten
+> istemesini sağlar; her iki yetenek bloğu da ajanı `zg index` /
+> `index_repository` yerine bu araca yollar ve sağlayıcıya göre doğru
+> çağrılabilir adı yazar (`searchIndexToolFor`; ortak cümle
+> `searchIndexDirective` içinde tek yerde). Kök kısıtı zorlanır: yalnız
+> oturumun kendi çalışma kökü. `drop` araçta **yok** (kullanıcı eylemi olarak
+> Ayarlar'daki onay kapısında kalır). codebase-memory henüz deftere alınmadı:
+> yalnız gözlemsel `status` (`managed:false`), `refresh` reddedilir.
 
 > Generic bir katman: cihazda/işlemde bir **opsiyonel harici yetenek** mevcutsa,
 > ajanın **cachelenebilir statik** sistem-prompt prefix'ine kısa bir bilgi bloğu
