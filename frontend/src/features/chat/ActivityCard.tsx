@@ -1,4 +1,6 @@
 import { memo, useState } from 'react'
+import { formatDurationMs as fmtDuration } from '@/shared/lib/time'
+import { formatBytes as fmtBytes } from '@/shared/lib/format'
 import type { ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
@@ -91,22 +93,6 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
     return <span className="shrink-0 text-[var(--color-text-dim)]">{count} satır</span>
   }
   return null
-}
-
-// ActivityCard renders a single tool invocation as a compact, collapsible card:
-// icon + label + one-line intent in the header, full input/output on expand.
-// Edit/Write tools render their output as a diff. Mirrors the tool activity
-// cards in External Agent chat.
-// fmtBytes renders a byte count compactly (10240 → "10 KB").
-function fmtBytes(n: number): string {
-  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
-  if (n >= 1024) return `${Math.round(n / 1024)} KB`
-  return `${n} B`
-}
-
-function fmtDuration(ms: number): string {
-  if (ms < 1000) return `${ms} ms`
-  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} sn`
 }
 
 export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Props) {

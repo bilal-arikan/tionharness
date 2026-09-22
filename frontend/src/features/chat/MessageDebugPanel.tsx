@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatBytes as fmtBytes, tokens as fmtTok, usd as fmtUSD } from '@/shared/lib/format'
 import { Activity, X } from 'lucide-react'
 import { api } from '@/api'
 import type { TurnDebug } from '@/types'
@@ -227,23 +228,6 @@ function Tag({ tone, children }: { tone: 'danger' | 'warn'; children: React.Reac
       ? 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]'
       : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{children}</span>
-}
-
-function fmtTok(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
-}
-
-function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}MB`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}KB`
-  return `${n}B`
-}
-
-function fmtUSD(n: number): string {
-  if (n === 0) return '$0'
-  return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`
 }
 
 function fmtMs(ms: number): string {

@@ -1,24 +1,13 @@
 import { roleColor } from '@/shared/lib/palette'
 import { formatDateTime } from '@/shared/lib/intl'
+import { tokens } from '@/shared/lib/format'
 
 // ---- formatting ----
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB']
-  let v = bytes / 1024
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`
-}
-
-export function formatTokens(t: number): string {
-  if (t < 1000) return String(t)
-  return `${(t / 1000).toFixed(1)}k`
-}
+// Sizes and token counts render through the shared formatters so the session
+// panels agree with every other screen.
+export { formatBytes } from '@/shared/lib/format'
+export const formatTokens = tokens
 
 // formatElapsed renders a running duration in seconds as "42sn" / "3d 5sn".
 export function formatElapsed(sec: number): string {

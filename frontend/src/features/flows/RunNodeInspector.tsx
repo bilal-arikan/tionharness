@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatDurationMs as fmtDur } from '@/shared/lib/time'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import {
   X,
@@ -157,12 +158,6 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
       </div>
     </div>
   )
-}
-
-// fmtDur renders a millisecond duration compactly (e.g. "820ms", "3.4s").
-function fmtDur(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`
 }
 
 // ParallelFanout shows a parallel node's children as a concurrency timeline: each

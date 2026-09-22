@@ -53,3 +53,18 @@ export function percent(ratio: number, digits = 0): string {
     maximumFractionDigits: digits,
   }).format(ratio)
 }
+
+// formatBytes renders a byte count as a compact human size ("12 B", "2.0 KB",
+// "1.4 MB", "3 GB"): one decimal below 10 units, whole units above. Used for
+// attachment sizes, session folders, backups and debug payloads alike.
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let v = bytes / 1024
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`
+}

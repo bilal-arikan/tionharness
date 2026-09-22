@@ -6,13 +6,7 @@ import { Field, NumberField, Toggle, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 import { formatDateTime } from '@/shared/lib/intl'
-
-// formatBytes renders a byte count as a compact human-readable size.
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
+import { formatBytes } from '@/shared/lib/format'
 
 export function BackupPanel({ draft, set }: PanelProps) {
   const [status, setStatus] = useState<BackupStatus | null>(null)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tokens as fmtTok } from '@/shared/lib/format'
 import { ArrowRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { STEP_KIND_MAP } from '@/shared/stepKinds'
@@ -105,9 +106,4 @@ export function CompactionCard({ step }: Props) {
       )}
     </div>
   )
-}
-
-function fmtTok(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
 }

@@ -36,12 +36,8 @@ export function attachmentMeta(kind: AttachmentKind): IconMeta {
   return KIND_META[kind] ?? KIND_META.file
 }
 
-// formatBytes renders a compact human size (e.g. "12 KB", "1.4 MB").
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
+// formatBytes lives in format.ts; re-exported here for the attachment callers.
+export { formatBytes } from './format'
 
 // imageURL builds the inline-serving URL for a persisted image attachment. The
 // /api/files endpoint resolves the workspace-relative `rel` path against the

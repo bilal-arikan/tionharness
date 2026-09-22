@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDurationMs } from '@/shared/lib/time'
 import { Bot, CheckCircle2, ChevronRight, Clock, OctagonX, Wrench, XCircle } from 'lucide-react'
 import type { Message } from '@/types'
 import { MessageTime } from './MessageMeta'
@@ -20,10 +21,12 @@ const STATUS_META: Record<string, { label: string; cls: string; Icon: typeof Che
   killed: { label: 'durduruldu', cls: 'text-[var(--color-warning)]', Icon: OctagonX },
 }
 
+// fmtDuration parses the notification's millisecond field (a string in the
+// payload) and renders it with the shared duration formatter.
 function fmtDuration(ms: string): string {
   const n = Number(ms)
   if (!Number.isFinite(n) || n <= 0) return ''
-  return n >= 1000 ? `${Math.round(n / 1000)} sn` : `${n} ms`
+  return formatDurationMs(n)
 }
 
 export function TaskNotificationNote({

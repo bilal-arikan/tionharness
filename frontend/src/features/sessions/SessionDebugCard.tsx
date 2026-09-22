@@ -7,6 +7,8 @@ import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { SessionFlowViz } from './viz/SessionFlowViz'
 import { toolDisplayName } from './viz/flowVizData'
 import { formatTime } from '@/shared/lib/intl'
+import { formatBytes as fmtBytes, tokens as fmtTok, usd as fmtUsd } from '@/shared/lib/format'
+import { formatDurationMs as fmtDur } from '@/shared/lib/time'
 
 // SessionDebugCard renders the per-session DEBUG journal (parallel observability
 // stream): turn timings, token spend by model, per-tool latency/size/errors,
@@ -483,31 +485,6 @@ function eventLabel(e: SessionDebugEvent): string {
     default:
       return e.detail ?? ''
   }
-}
-
-function fmtTok(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
-}
-
-function fmtDur(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
-  return `${ms}ms`
-}
-
-// fmtUsd renders a small USD figure with enough precision for sub-cent cooling
-// costs (e.g. $0.0042) while staying compact for larger sums.
-function fmtUsd(v: number): string {
-  if (v >= 1) return `$${v.toFixed(2)}`
-  if (v >= 0.01) return `$${v.toFixed(3)}`
-  return `$${v.toFixed(4)}`
-}
-
-function fmtBytes(b: number): string {
-  if (b >= 1_000_000) return `${(b / 1_000_000).toFixed(1)}MB`
-  if (b >= 1000) return `${(b / 1000).toFixed(1)}KB`
-  return `${b}B`
 }
 
 function fmtTime(ms: number): string {

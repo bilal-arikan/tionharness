@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
+import { tokens as fmtTok } from '@/shared/lib/format'
 import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
 import type { Message } from '@/types'
 import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
@@ -59,13 +60,6 @@ interface Props {
   // "→ <name>" direction cue when this reply is addressed to a specific participant
   // in a multi-participant thread (generic participant model). Undefined = no cue.
   recipientLabel?: string
-}
-
-// fmtTok renders a token count compactly (1234 → "1.2k").
-function fmtTok(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
 }
 
 // stopReasonLabel maps a provider stop reason to a short Turkish note, or "" when

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tokens as fmtTok } from '@/shared/lib/format'
 import { RefreshCw } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { api } from '@/api'
@@ -102,9 +103,4 @@ export function CacheBreakCard({ step, sessionId }: Props) {
       )}
     </div>
   )
-}
-
-function fmtTok(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
 }
