@@ -8,11 +8,11 @@
 > `memory_add` gibi araçlar **mevcut değildir**.
 >
 > **Bugün yerine ne var?** Kalıcılık artık yalnız *retrieval* katmanıdır:
-> - `conversation_search` — oturumlar-arası tam-metin arama ([27](27-CROSS-SESSION-SEARCH.md))
+> - `conversation_search` — oturumlar-arası tam-metin arama ([27](../27-CROSS-SESSION-SEARCH.md))
 > - Artifact sistemi — oturum-başına birinci sınıf çıktılar
-> - Kalıcı ilerleme (`todo_write`) — [36](36-KALICI-ILERLEME.md)
-> - Context reset + handoff — [35](35-CONTEXT-RESET-HANDOFF.md)
-> - Dersler (lessons) — hata→ders döngüsü, [56](56-SELF-HEALING.md)
+> - Kalıcı ilerleme (`todo_write`) — [36](../36-KALICI-ILERLEME.md)
+> - Context reset + handoff — [35](../35-CONTEXT-RESET-HANDOFF.md)
+> - Dersler (lessons) — hata→ders döngüsü, [56](../56-SELF-HEALING.md)
 >
 > **Bu dokümanın altındaki her şey tarihsel kayıttır.** İçindeki "UYGULANDI",
 > "Durum: TAMAMLANDI", tarihler ve API tanımları **o günkü** durumu yansıtır ve
@@ -465,7 +465,7 @@ seçildi. Öncelik: yakın = düşük efor/yüksek değer, sonraki için zemin h
   İlişkili: **C3** (memory_write).
 - [ ] **N5 — `conversation_search` aracı.** Letta'nın geçmiş-konuşma arama tool'u.
   Altyapısı **CG-16** (oturumlar-arası tam-metin arama) — planı çıkarıldı:
-  [`27-CROSS-SESSION-SEARCH.md`](27-CROSS-SESSION-SEARCH.md), `conversation_search`
+  [`27-CROSS-SESSION-SEARCH.md`](../27-CROSS-SESSION-SEARCH.md), `conversation_search`
   aracı orada **Parça 2** olarak N5'i doğrudan karşılıyor. İlişkili: **CG-16**, **HA-1**.
 - [ ] **N6 — Pressure-tetikli otomatik özet-to-core.** Uyarı pasif; ajan görmezden
   gelirse bağlam yine sessizce katlanır. `pressure ≥ ~0.9`'da, compaction'dan

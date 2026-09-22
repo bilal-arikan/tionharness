@@ -39,22 +39,12 @@ credential-secret
 *.log
 *.log.err
 *.err
-/_be.log
-/_be.err.log
-/.backend.log
-/.frontend.log
-/_agentid.txt
 /.flowids.json
 /.testids.json
-/.mcptest/
-/frontend/tionharness_title_test.mjs
 # Playwright MCP page snapshots — regenerated on every UI test run.
 /.playwright-mcp/
 # Vite's pre-bundled dependency cache.
 /.vite/
-# Scratch screenshots dropped at the repo root by design/UI runs.
-/openpencil-live.png
-/tsk400-step-cards.png
 
 # Dependencies
 /frontend/node_modules/
