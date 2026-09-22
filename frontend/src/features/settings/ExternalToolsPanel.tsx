@@ -22,6 +22,9 @@ import type {
 } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { displayPath } from '@/shared/lib/paths'
+import { ZVEC_GREP_TOOL } from '@/shared/lib/zvecGrep'
+import { ZvecGrepCallout } from './ZvecGrepCallout'
+import { SearchIndexPanel } from './SearchIndexPanel'
 
 // The external-tool name whose MCP integration is wired one-click from this panel.
 // Its detected PATH entry doubles as the stdio command; the backend auto-routes it
@@ -689,6 +692,23 @@ export function ExternalToolsPanel({ onError }: Props) {
                             </span>
                           </div>
                         </div>
+                      )}
+                      {/* zvec-grep integration: same shape as the codebase-memory
+                        callout above, in its own component. */}
+                      {t.name === ZVEC_GREP_TOOL && (
+                        <>
+                          <ZvecGrepCallout
+                            tool={t}
+                            servers={servers}
+                            onServersChanged={loadServers}
+                            onError={onError}
+                          />
+                          {/* The lifecycle of the indexes that callout describes:
+                            which ones exist, which is building, which failed —
+                            plus the refresh/rebuild/drop actions. Anchored here
+                            because this is where the index story is told. */}
+                          <SearchIndexPanel onError={onError} />
+                        </>
                       )}
                     </div>
                   ))}
