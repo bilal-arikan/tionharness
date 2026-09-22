@@ -1459,6 +1459,16 @@ Kalıcı süreçte 2. tur takılıyordu: tur başına okuyucu goroutine paylaş�
 giderildi (`killProcessLocked`). Canlı doğrulama ve rakamlar: `05-ILERLEME.md` aynı tarihli
 giriş; canlı test `TestLivePersistentPoolLifecycle` (`TIONHARNESS_LIVE_CLI_POOL=1`).
 
+### Havuz kilidi düzeltmesi (2026-09-21)
+
+Aynı workspace'teki claude-cli turları birbirini bekliyordu: `CLISessionPool.Turn`'ün her
+turda çağırdığı `EvictIdle`, `pl.mu`'yu tutarken tur boyunca kilitli kalan `s.mu`'yu
+`Lock()` ile bekliyordu; 5 paralel subagent'ın 4'ü ilki bitene kadar (~2 dk) başlayamadı.
+`EvictIdle` artık `s.mu.TryLock()` ile tur ortasındaki oturumu boşta saymayıp atlıyor.
+Soğuk başlatma (`startPersistent`) hâlâ `pl.mu` altında (spawn başına ~200 ms sıralanma).
+Ayrıntı, rakamlar ve açık bulgu (kalıcı sürecin ilk turun context'iyle ölmesi):
+`05-ILERLEME.md` aynı tarihli giriş; testler `claudecli_session_evict_test.go`.
+
 ### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
 
 AGT1/opus-4-8, aynı 3-turluk sohbet, per-session `usage-detail`:

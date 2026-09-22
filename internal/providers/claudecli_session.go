@@ -575,14 +575,22 @@ func (pl *CLISessionPool) Turn(ctx context.Context, key string, c *ClaudeCLI, re
 	return resp, nil
 }
 
-// EvictIdle closes and drops every session unused for longer than ttl. Called
-// periodically by the Runtime so abandoned conversations don't hold processes.
+// EvictIdle closes and drops every session unused for longer than ttl. Turn calls
+// it opportunistically so abandoned conversations don't hold processes.
+//
+// It never WAITS on a session's mutex: CLISession.Turn holds s.mu for the whole
+// turn, and blocking on it here — while holding pl.mu — parked every other
+// conversation's turn in the workspace behind the busy one until it finished
+// (live, 2026-09-21: four of five parallel explore subagents queued ~2 min behind
+// the first). A session whose mutex is taken is mid-turn, hence not idle: skip it.
 func (pl *CLISessionPool) EvictIdle(ttl time.Duration) {
 	cutoff := time.Now().Add(-ttl)
 	pl.mu.Lock()
 	var dead []*CLISession
 	for k, s := range pl.sessions {
-		s.mu.Lock()
+		if !s.mu.TryLock() {
+			continue // mid-turn: busy, so not idle
+		}
 		idle := s.lastUsed.Before(cutoff) && s.turns > 0
 		s.mu.Unlock()
 		if idle {
