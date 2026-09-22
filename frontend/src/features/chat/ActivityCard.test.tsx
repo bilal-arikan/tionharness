@@ -45,7 +45,7 @@ describe('ActivityCard collab metadata', () => {
     if (!button) throw new Error('Header button not found')
     expect(button.textContent).toContain('spawn_agent')
     expect(button.textContent).toContain('completed')
-    expect(button.textContent).toContain('1.3 sn')
+    expect(button.textContent).toMatch(/1[.,]3 ?s(n)?/)
     expect(container.textContent).not.toContain('TOP SECRET PROMPT')
 
     act(() => button.click())

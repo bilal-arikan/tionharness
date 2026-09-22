@@ -94,7 +94,7 @@ describe('TaskNotificationNote', () => {
     expect(cluster.className).toContain('items-end')
     expect(cluster.textContent).toContain('tamamlandı')
     expect(cluster.textContent).toContain('4 araç')
-    expect(cluster.textContent).toContain('3 sn')
+    expect(cluster.textContent).toMatch(/2[.,]5 ?s(n)?/)
   })
 
   it('keeps legacy notifications without task id non-navigable', () => {

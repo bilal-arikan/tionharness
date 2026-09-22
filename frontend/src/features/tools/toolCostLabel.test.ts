@@ -9,7 +9,9 @@ describe('costLabel', () => {
 
   it('renders the per-turn badge from the CURRENT cost', () => {
     expect(costLabel({ currentTokens: 420, fullTokens: 3100 })).toBe('~420 tok/tur')
-    expect(costLabel({ currentTokens: 3100, fullTokens: 3100 })).toBe('~3.1k tok/tur')
+    // Token counts render through the locale-aware formatter: "3.1k" in en,
+    // "3,1k" in tr.
+    expect(costLabel({ currentTokens: 3100, fullTokens: 3100 })).toMatch(/^~3[.,]1k tok\/tur$/)
   })
 
   it('renders a free group as zero rather than hiding it', () => {
@@ -25,8 +27,8 @@ describe('costHint', () => {
   it('spells out the delta of promoting the group to full', () => {
     const hint = costHint({ currentTokens: 400, fullTokens: 3400 })
     expect(hint).toContain('≈400')
-    expect(hint).toContain('≈3.4k')
-    expect(hint).toContain('+3.0k')
+    expect(hint).toMatch(/≈3[.,]4k/)
+    expect(hint).toMatch(/\+3[.,]0k/)
   })
 
   it('says there is nothing to promote when already all-full', () => {
