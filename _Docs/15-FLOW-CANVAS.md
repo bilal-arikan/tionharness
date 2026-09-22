@@ -303,6 +303,12 @@ Motora iki yeni node tipi eklendi (delay + transform) ve **branch genişletildi*
   bağımsız, en son değerlendirilir). Motor `evalBranch` + `branchArmMatches`. _(Not: önce ayrı
   bir `switch` node'u eklenmişti; "equals branch ile aynı" geri bildirimi üzerine **branch'e
   matchMode olarak birleştirildi**; switch tipi kaldırıldı.)_ Inspector'da "Eşleşme" dropdown'u.
+  **2026-09-22:** dördüncü mod **judge** — her arm'ın `contains` metni bir seçeneği düz
+  cümleyle tarif eder, karar modeli (`internal/decider`, site `flow-judge`) son çıktının
+  hangisine uyduğunu seçer; emin değilse ya da cevap veremezse varsayılan arm. Loop'ta
+  `untilMode: judge` ile `until` düz cümleli çıkış koşuludur. İsteğe bağlı
+  `judgeQuestion`. Motor: `internal/orchestration/judge.go` (`JudgeRunner`); bkz.
+  `87-KARAR-KATMANI.md` §5.
 - **delay** (`⏱️`, LLM'siz): `DelayMs` kadar bekler, sonra `next`. `sleepCtx` ctx-iptaline saygı
   duyar, en çok 5 dk (`maxDelayMs`). Çıktıyı (`Last`) değiştirmez, trace'e "waited Nms" yazar.
 - **transform** (UI'da **Birleştir** `🧩`, LLM'siz; tip kimliği `transform` kalır): `Template`'i (`{{input}}/{{last}}/{{node.<id>}}`) render edip

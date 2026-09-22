@@ -82,6 +82,10 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 - Her kind `init()` içinde `RegisterKind` ile kaydolur; yeni transport = yeni `kind_*.go` dosyası, başka hiçbir yere dokunulmaz.
 - **Streaming birinci sınıf:** opsiyonel `Streamer` arayüzü (`Stream(ctx, req, onDelta)`); `anthropic` + `minimax` native token akışı yapar, claude-cli kendi stream-json izini yayınlar. UI'a SSE ile akar (bkz. `07-CHAT-UX.md`).
 
+### 6b. Karar katmanı (`internal/decider`)
+- Chat provider'ı olmayan **karar modelleri** (tipli evet/hayır, birini seç, puanla — ilk backend: OpenRouter Decisions API üzerinden TypeSafe Jev) için ayrı katman. Backend'ler `decider.Register` ile kaydolur; anahtar bir provider örneğinden `Registry.HTTPAccess` ile (string olarak değil, `Authorize` kapanışı olarak) ödünç alınır.
+- Uygulama çapında tek `decider.Hub` (API sunucusunda kurulur, `Tunables.Decider()` ile her workspace runtime'ına ulaşır). Karar noktaları: stall judge, shell komutu risk kontrolü, flow `judge` eşleşme modu, Rota `judge` kapısı; her biri `off/shadow/on`. `internal/agent`'ı import etmez (`scripts/depcheck.sh`). Ayrıntı: `87-KARAR-KATMANI.md`.
+
 ### 7. Diğer Modüller
 - **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; **stdio + Streamable HTTP** taşıma. Kalıcı bağlantı havuzu (`pool.go`) turlar arası paylaşılır; hibrit kapsam (`scope: shared|scoped`) ile per-`(session,agent)` izole bağlantı mümkün (bkz. `52-MCP-GATEWAY.md`).
 - **`internal/agent`'tan ayrılan saf paketler (2026-09-03, `_Docs/81`):** `internal/climcp`

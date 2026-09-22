@@ -524,6 +524,7 @@ kapısı çalışır; `force` atlar:
 | `verdict` | kök transkriptin son 60 mesajında değer geçiyor ("VERDICT: PASS") | aynı |
 | `human` | kök oturuma **Durable Ask** parklanır ("Rota RTA · plan fazı bitti sayılsın mı?" Onayla / Reddet); faz aktif kalır, rota **waiting**, grafta `g:<ask>` düğümü fazın altında (`kapı: plan`) | `ErrGatePending` — araç "kart açıldı, turunu bitir" der, kanvas 202 |
 | `schema` | v1'de doğrulanmaz, notla geçer | — |
+| `judge` (2026-09-22) | değer, fazın çıkış koşulunun düz cümlesidir; karar modeli (`internal/decider`, site `phase-gate`) kök transkriptin son 40 mesajına bakıp koşulun sağlanma olasılığını verir, eşik (varsayılan 0,80) aşılırsa geçer — bkz. `87-KARAR-KATMANI.md` | `ErrGateBlocked` ("judge: condition not met (p=…)"); karar modeli kapalı/erişilemezse de kapalı kalır (fail-closed) |
 
 İnsan kapısı: `openPhaseGateAsk` `SessionAsk{Kind: ask, Payload: {question,
 options, gate:{trajectoryId, phase, kind, value}}}` yaratır (faz başına tek
