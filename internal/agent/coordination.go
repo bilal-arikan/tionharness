@@ -1635,7 +1635,9 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		// runner, which resumes the owning run and re-executes the node against a
 		// FRESH coordinator session — so the orphan is left alone here.
 		isCoordinator := sess.IsCoordinator() && sess.Kind != SessionKindFlowCoordinator
-		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker"
+		// A spawn_session child is a "chat" by kind (TSK1005), so the spawn test also
+		// reads the lineage: a spawn-origin chat still ran a detached background turn.
+		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker" || sess.Lineage().Kind == db.OriginSpawn
 		if !isWorker && !isCoordinator && !isSpawn {
 			continue // ordinary interactive/inbox session — not an autonomous turn
 		}

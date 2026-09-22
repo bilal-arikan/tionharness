@@ -12,6 +12,22 @@
 > flow/otomasyon oturumlarının iç motoru olarak aktif. Bu doküman orijinal
 > tasarımı ve CLI köprü wiring'ini tarihsel kayıt olarak tutar.
 
+> **2026-09-22 (TSK1005) — `spawn_session` çocuğu artık "Sohbet":** Bir ajanın
+> `spawn_session` (Interaction MCP köprüsü) ile açtığı oturum bir delegasyon
+> değil, bağımsız bir konuşmadır; bu yüzden `kind:"spawned"` yerine
+> **`kind:"chat"`** ile açılır ve kenar çubuğunda "Sohbet" etiketini alır ("✦ spawn"
+> rozeti, başlıkta `spawned` pill'i ve Explorer'daki "Spawn" grubu artık çıkmaz).
+> Seçenekler tek yerde üretilir: `agent.SpawnToolOptions` (`internal/agent/spawn_tool_options.go`).
+> Kind tek başına kullanıcı sohbeti gibi okunacağından köken **açıkça** damgalanır:
+> `origin{kind:"spawn", triggerSessionId: <çağıran oturum>}` — oturum müfettişindeki
+> "Oturum SESx başlattı" çipi, Rota grafı ve trajectory binder (`bindForkedSession`)
+> spawn'ı başlatan oturuma bağlamaya devam eder. Boot kurtarma (`RecoverOrphanedTurns`)
+> spawn testini `kind == "spawned"` yanında `Lineage().Kind == "spawn"` ile de yapar;
+> yarıda kalan bir spawn sohbeti yine kapatılır. Gerçek delegasyonlar değişmedi:
+> `run_subagent` çocukları `subagent` kategorisinde, `spawn_worker` çocukları
+> `worker` olarak kalır. UI "Başlat" / `POST /api/sessions/spawn` ve otomasyon/handoff
+> yolları kendi kind'larını korur.
+
 ## Amaç ve Konum (tarihsel tasarım bağlamı)
 
 Tasarım sırasında elimizde üç tetikleme yolu vardı:
@@ -72,7 +88,8 @@ Akış:
    `SpawnQueueMax` (vars. 16) sınırına da ulaşırsa hata döner. Slot bırakıldığında
    tek tüketici kuyruğu otomatik ilerletir. Workspace shutdown sırasında bekleyen
    işler başlatılmaz; düşürülür ve koordinatör işi ise başarısızlık bildirimi yazılır.
-4. **Bağımsız oturum:** `db.CreateSession{Kind:"spawned", SourceID:uuid, …}` —
+4. **Bağımsız oturum:** `db.CreateSession{Kind:"spawned", SourceID:uuid, …}`
+   (`opts.Kind` boşsa; `spawn_session` aracı `"chat"` geçer — yukarıdaki TSK1005 notu) —
    her spawn taze bir `sourceID` ile **ayrı** bir session (GetOrCreate **değil**;
    dedup istemiyoruz). Başlık `✨ <kısa prompt>`
    — koordinatör fan-out'uyla açılan worker oturumları (`Role == worker`) aynı

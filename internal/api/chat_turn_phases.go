@@ -669,12 +669,10 @@ func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 		func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
 			// Inherit this chat session's working directory, so a spawn from a
 			// session pinned to repo A does not silently open in the workspace
-			// default directory.
-			res, err := t.wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{
-				ModelOverride: modelOverride,
-				CreatedBy:     respondingID,
-				WorkingDir:    t.wsp.Runtime.SessionWorkdir(session.ID),
-			})
+			// default directory. The new session is a plain chat attributed to
+			// this one (TSK1005).
+			res, err := t.wsp.Runtime.SpawnSession(sctx, target, prompt,
+				agent.SpawnToolOptions(respondingID, session.ID, modelOverride, t.wsp.Runtime.SessionWorkdir(session.ID)))
 			return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName, Queued: res.Queued, QueuePosition: res.QueuePosition}, err
 		}))
 
