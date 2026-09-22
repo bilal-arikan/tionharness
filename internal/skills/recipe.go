@@ -68,12 +68,12 @@ type PhaseSpec struct {
 
 // GateSpec is a phase's exit condition.
 type GateSpec struct {
-	Kind  string `json:"kind"` // artifact | verdict | human | schema
+	Kind  string `json:"kind"` // artifact | verdict | human | schema | judge
 	Value string `json:"value,omitempty"`
 }
 
 // GateKinds are the accepted gate kinds.
-var GateKinds = []string{"artifact", "verdict", "human", "schema"}
+var GateKinds = []string{"artifact", "verdict", "human", "schema", "judge"}
 
 var phaseIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 

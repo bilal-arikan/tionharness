@@ -166,6 +166,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// The turn state and its phases live in toolloop_phases.go. ctx and req are
 	// FIELDS there, not parameters: the setup phase rebinds ctx and mutates req,
 	// and every later phase must see those changes.
+	//
+	// The decider's tool-risk check (decide_toolrisk.go) rides the turn context
+	// so permGate finds it for every call of the turn; an off site adds nothing.
+	ctx = r.withToolRiskCheck(ctx, agent)
 	t := &toolLoopTurn{r: r, ctx: ctx, agent: agent, provider: provider, req: req, autonomous: autonomous, onStep: onStep}
 	prepCleanup, err := t.prepare()
 	if err != nil {

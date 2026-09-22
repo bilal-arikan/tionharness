@@ -32,6 +32,10 @@ const (
 	// an AUXILIARY kind (like title/summary), so isConversationKind excludes it and
 	// its throwaway prompt cannot be mistaken for a prompt-cache break.
 	KindBtw CallKind = db.UsageKindBtw
+	// KindDecide is a decision-model call (internal/decider). It never reaches a
+	// chat provider, so it is not an auxiliary provider kind; it only labels the
+	// usage those calls record.
+	KindDecide CallKind = db.UsageKindDecide
 )
 
 type callKindKey struct{}

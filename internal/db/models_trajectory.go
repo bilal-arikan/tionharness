@@ -123,7 +123,7 @@ const (
 // TrajectoryGate is the exit condition a phase must satisfy: an artifact with
 // the given title, a validator verdict line, a human approval, or a schema check.
 type TrajectoryGate struct {
-	Kind  string `json:"kind"` // artifact | verdict | human | schema
+	Kind  string `json:"kind"` // artifact | verdict | human | schema | judge
 	Value string `json:"value,omitempty"`
 }
 

@@ -419,7 +419,16 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			st.Current = node.Next
 
 		case NodeBranch:
-			next, label := evalBranch(node, st.Last)
+			var next, label string
+			if node.MatchMode == MatchJudge {
+				var err error
+				if next, label, err = e.evalBranchJudge(ctx, g, node, st); err != nil {
+					e.notifyError(node, st.Steps, err)
+					return st, fmt.Errorf("node %q (branch): %w", node.ID, err)
+				}
+			} else {
+				next, label = evalBranch(node, st.Last)
+			}
 			// Record the evaluated value as Input so the inspector can render a
 			// decision card (value → which arm matched); Output carries the label.
 			st.appendTraceIn(node, "→ "+label, st.Last)
@@ -802,8 +811,14 @@ func (e *Engine) runLoop(ctx context.Context, g Graph, node Node, input string, 
 		if st.WaitingAt != "" {
 			return "", st, nil
 		}
-		if node.Until != "" && loopMatches(node, st.Last) {
-			break
+		if node.Until != "" {
+			done, err := e.loopUntilHolds(ctx, g, node, st)
+			if err != nil {
+				return node.LoopNext, st, err
+			}
+			if done {
+				break
+			}
 		}
 	}
 	return node.LoopNext, st, nil

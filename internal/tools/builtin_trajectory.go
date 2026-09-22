@@ -27,7 +27,7 @@ type TrajectoryPhaseInput struct {
 	Label    string `json:"label,omitempty"`
 	Profile  string `json:"profile,omitempty"`
 	Optional bool   `json:"optional,omitempty"`
-	// Gate is the exit condition: {kind: artifact|verdict|human|schema, value}.
+	// Gate is the exit condition: {kind: artifact|verdict|human|schema|judge, value}.
 	Gate *TrajectoryGateInput `json:"gate,omitempty"`
 }
 
@@ -80,7 +80,8 @@ func (TrajectoryTool) Def() providers.ToolDef {
 			"re-planning may add phases but never drops one that is active or done). `phase` moves a " +
 			"phase to `active` (closing the previously active one as done), `done`, `skipped` or `failed`; " +
 			"moving to `done` runs the phase's GATE (artifact must exist / verdict line must be in the transcript / " +
-			"a human must approve a card) and is refused when it does not hold — fix the cause or pass `force`. " +
+			"a human must approve a card / a `judge` gate's plain-words condition must hold for the decision " +
+			"model reading the transcript) and is refused when it does not hold — fix the cause or pass `force`. " +
 			"`finish` closes the whole trajectory as `done` or `failed`. A recipe-driven coordinator " +
 			"already has its phases: call `phase` when you move on, and `finish` at the end.",
 		InputSchema: json.RawMessage(`{
@@ -100,7 +101,7 @@ func (TrajectoryTool) Def() providers.ToolDef {
           "gate": {
             "type": "object",
             "properties": {
-              "kind": { "type": "string", "enum": ["artifact", "verdict", "human", "schema"] },
+              "kind": { "type": "string", "enum": ["artifact", "verdict", "human", "schema", "judge"] },
               "value": { "type": "string" }
             },
             "required": ["kind"],

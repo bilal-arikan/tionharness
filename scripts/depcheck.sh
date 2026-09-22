@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 status=0
-for pkg in climcp trajectory mcp/repair flows; do
+for pkg in climcp trajectory mcp/repair flows decider; do
   if go list -deps "./internal/$pkg" | grep -qx 'github.com/bilal-arikan/tionharness/internal/agent'; then
     echo "depcheck: internal/$pkg imports internal/agent (forbidden)" >&2
     status=1

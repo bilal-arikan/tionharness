@@ -107,6 +107,10 @@ func (r *Runtime) checkPhaseGate(ctx context.Context, t db.Trajectory, phase db.
 			return false, false, "could not open the human gate: " + err.Error()
 		}
 		return false, true, ""
+	case "judge":
+		// Decider site "phase-gate" (trajectory_gate_judge.go).
+		pass, reason := r.judgePhaseGate(ctx, t, phase, value)
+		return pass, false, reason
 	default:
 		return true, false, "schema gates are not verified (v1)"
 	}

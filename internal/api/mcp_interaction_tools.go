@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -112,13 +113,23 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 	// Argument-aware grants (B2): honour a standing rule (e.g. Bash(git *)) that
 	// already covers this command without re-prompting.
 	arg := tools.RepresentativeArg(toolName, in.Input)
+	riskLabel, flagged := string(risk), false
 	if risk == tools.RiskRead || run.grantStore().Matches(toolName, arg) {
-		// Auto-allow path — still a tool BOUNDARY, so deliver any pending mid-turn
-		// steer here as additionalContext (claude-cli has no steer channel).
-		return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
+		// A family grant also covers the family's destructive variants
+		// (Bash(git *) covers `git push --force`): the decider's tool-risk check
+		// takes a second look and may turn this auto-allow into a prompt.
+		if risk != tools.RiskRead {
+			flagged, _ = b.cliToolRiskFlagged(ctx, run, toolName, in.Input)
+		}
+		if !flagged {
+			// Auto-allow path — still a tool BOUNDARY, so deliver any pending mid-turn
+			// steer here as additionalContext (claude-cli has no steer channel).
+			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
+		}
+		riskLabel = agent.RiskFlagged
 	}
 	pi := b.apiSrv.openInteraction(run.workspaceID, run.sessionID, "permission", map[string]any{
-		"tool": toolName, "reason": string(risk), "text": arg, "options": tools.PermissionOptions,
+		"tool": toolName, "reason": riskLabel, "text": arg, "options": tools.PermissionOptions,
 	})
 	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
 	switch reason {
@@ -126,8 +137,13 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		switch tools.NormalizePermission(ans) {
 		case "always":
 			// Derive the standing rule from the bare name so it matches future calls (we
-			// now match grants by the stripped name above).
-			run.grantStore().GrantRule(tools.DeriveGrantRule(toolName, arg))
+			// now match grants by the stripped name above). A decider-flagged call is
+			// approved for its exact command only, never for its whole family.
+			rule := tools.DeriveGrantRule(toolName, arg)
+			if flagged {
+				rule = tools.ExactGrantRule(toolName, arg)
+			}
+			run.grantStore().GrantRule(rule)
 			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 		case "allow":
 			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil

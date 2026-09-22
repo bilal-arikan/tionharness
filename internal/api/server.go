@@ -249,6 +249,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 	// crash/restart: mark them interrupted + notify the coordinator so it resumes
 	// instead of waiting forever on a worker that will never report.
 	go s.recoverAutonomousTurns()
+	// Decision-model layer (internal/decider): one hub per process, reached by
+	// every workspace runtime through the shared tunables.
+	s.initDecider()
 	s.applySettings()
 	return s
 }
@@ -406,6 +409,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerTTSRoutes(mux)
 	s.registerSTTRoutes(mux)
 	s.registerSettingsRoutes(mux)
+	s.registerDeciderRoutes(mux)
 	// Compiled-in prompt of the agent's system role, for "revert to the code
 	// prompt" on a system agent's soul editor.
 	mux.HandleFunc("GET /api/agents/{id}/builtin-prompt", s.handleAgentBuiltinPrompt)

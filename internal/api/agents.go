@@ -159,6 +159,10 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := rejectDecisionModel(req.Model); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Model is NOT filled in from another agent. The UI now always sends an
 	// explicit choice, and a blank model is one of those choices: the catalog
 	// carries an ID:"" entry ("claude/codex oturum modeli") which makes the CLI
@@ -433,6 +437,12 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// in place is still the tier the agent runs with, and ThinkingTiersFor differs per model,
 	// so a swap can strand the stored level outside the new model's set. Without
 	// this the level would survive the write and be silently dropped at turn time.
+	if req.Model != nil {
+		if err := rejectDecisionModel(*req.Model); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	if req.Provider != nil || req.ThinkingLevel != nil || req.Model != nil {
 		model := prev.Model
 		if req.Model != nil {

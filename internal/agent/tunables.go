@@ -3,6 +3,8 @@ package agent
 import (
 	"sync"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/decider"
 )
 
 // Default turn-recovery (A1) bounds, applied to a freshly constructed Tunables so
@@ -329,6 +331,11 @@ type Tunables struct {
 	// loop knows to echo assistant content verbatim (compaction blocks must ride
 	// back exactly). The beta itself is applied provider-side (WithBetas).
 	serverCompaction bool
+
+	// decider is the app-wide decision-model hub (internal/decider), shared by
+	// every workspace runtime. nil until the API server wires it (tests: never),
+	// in which case every decider site behaves as off. See tunables_decider.go.
+	decider *decider.Hub
 }
 
 // DefaultDebugJournalCap mirrors db.DefaultDebugJournalCap as the resolved

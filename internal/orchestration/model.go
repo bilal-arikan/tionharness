@@ -77,9 +77,14 @@ type Node struct {
 	// branch — Branches are the routing arms; an empty Contains is the default
 	// arm. MatchMode decides how Contains is compared to the last output:
 	// "" / "contains" (case-insensitive substring), "equals" (case-insensitive,
-	// trimmed exact), or "regex" (Go regexp on the raw output).
+	// trimmed exact), "regex" (Go regexp on the raw output), or "judge" (a
+	// decision model picks the arm whose Contains DESCRIBES the output; see
+	// judge.go).
 	Branches  []Branch `json:"branches,omitempty"`
 	MatchMode string   `json:"matchMode,omitempty"`
+	// JudgeQuestion (optional, judge mode on a branch or loop) tells the decision
+	// model what to look at, e.g. "Which kind of request is this?".
+	JudgeQuestion string `json:"judgeQuestion,omitempty"`
 	// JSONField (optional, branch): when set, the matched value is the named
 	// top-level field of the last output parsed as JSON (e.g. "verdict" over
 	// {"verdict":"SHIP"}) instead of the raw text — the structured-outputs
@@ -105,8 +110,8 @@ type Node struct {
 	Body      string `json:"body,omitempty"`      // entry node id of the loop body
 	LoopNext  string `json:"loopNext,omitempty"`  // node after the loop exits ("" = end)
 	MaxIters  int    `json:"maxIters,omitempty"`  // hard iteration cap (0 = rely on Until)
-	Until     string `json:"until,omitempty"`     // exit when {{last}} matches this
-	UntilMode string `json:"untilMode,omitempty"` // contains|equals|regex ("" = contains)
+	Until     string `json:"until,omitempty"`     // exit when {{last}} matches this (judge: a condition in plain words)
+	UntilMode string `json:"untilMode,omitempty"` // contains|equals|regex|judge ("" = contains)
 
 	// start — the required entry node; carries only Next (a pass-through). end — an
 	// optional terminal that may render Template as the final output and/or validate
@@ -345,10 +350,17 @@ func (g Graph) Validate() error {
 			if len(n.Branches) == 0 {
 				return fmt.Errorf("branch node %q has no branches", n.ID)
 			}
+			options := 0
 			for _, b := range n.Branches {
 				if err := ref(b.Next, "branch in "+n.ID); err != nil {
 					return err
 				}
+				if b.Contains != "" {
+					options++
+				}
+			}
+			if n.MatchMode == MatchJudge && options == 0 {
+				return fmt.Errorf("branch node %q uses the judge match mode but no arm describes an option", n.ID)
 			}
 		case NodeStart, NodeDelay, NodeTransform, NodeAwaitInput:
 			if err := ref(n.Next, "node "+n.ID); err != nil {

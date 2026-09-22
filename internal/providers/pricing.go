@@ -253,6 +253,12 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5.1":  {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.025, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5":    {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
+		// TypeSafe Jev decision models (internal/decider): billed on input only.
+		// The Decisions API reports output tokens, but OpenRouter charges nothing
+		// for them. Recorded under the REQUESTED id, not the served snapshot
+		// ("typesafe/jev-1.13-20260917"), which no table lists.
+		"typesafe/jev-1.13":    {InputPerMTok: 0.042, OutputPerMTok: 0},
+		"~typesafe/jev-latest": {InputPerMTok: 0.042, OutputPerMTok: 0},
 	},
 	// Z.ai GLM family (Anthropic-mode transport). Official Z.ai list prices per 1M
 	// tokens (2026-08; GLM-5.2 = $1.40/$4.40, cached input $0.26 → read mult ~0.19).
