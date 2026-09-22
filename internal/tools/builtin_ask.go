@@ -87,23 +87,6 @@ type askInput struct {
 	} `json:"questions"`
 }
 
-// ParseAskInput tolerantly decodes an ask_user payload, normalising every shape
-// the model might send (TionHarness's {question, options} and claude-cli's native
-// AskUserQuestion: option objects and/or a questions[] wrapper) into a single
-// question string + clean []string options. Shared by the native tool path and
-// the claude-cli Interaction MCP bridge so both decode identically. When several
-// questions are present only the first is returned (single-question callers).
-func ParseAskInput(raw json.RawMessage) (string, []string, error) {
-	qs, err := ParseAskInputMulti(raw)
-	if err != nil {
-		return "", nil, err
-	}
-	if len(qs) == 0 {
-		return "", nil, nil
-	}
-	return qs[0].Question, qs[0].Options, nil
-}
-
 // ParseAskInputMulti decodes an ask_user payload into ALL of its questions,
 // tolerating every shape the model might send: TionHarness's single {question,
 // options}, and claude-cli's AskUserQuestion {questions:[{question, options}...]}

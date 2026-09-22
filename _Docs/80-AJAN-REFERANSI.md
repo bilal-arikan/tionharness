@@ -60,6 +60,15 @@ powershell.exe -NoProfile -Command '& (Get-Command go).Source version'
 yapılmış gibi raporlama. Windows'a özel kod için
 `GOOS=windows go test ./...` (Git Bash'te ortam atamasını komutun önüne koy).
 
+`frontend/go.mod` boş bir **işaret modülüdür**: `frontend/node_modules` içindeki Go
+kaynaklarını (örn. `flatted/golang`) kök modülün `./...` taramasından çıkarır; silme,
+içine kod koyma. Statik analiz araçları `go install` ile gelir: `staticcheck`,
+`golang.org/x/tools/cmd/deadcode` ve
+`golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize`. `deadcode -test`
+prod+test kökleriyle gerçek ölü kodu, `deadcode` (test'siz) yalnız testten erişilen
+sembolleri listeler; ikinci listedeki test seam'leri (saat/timeout setter'ları, ince
+sarmalayıcılar) bilinçli olarak tutulur.
+
 ## 5. Kısmi commit (`git add -p`) ve pre-commit
 
 `.githooks/pre-commit` stage'lenmiş her `.go` dosyasını `gofmt` ile biçimlendirip

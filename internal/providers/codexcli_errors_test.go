@@ -63,18 +63,6 @@ func TestClassifyCodexError(t *testing.T) {
 	}
 }
 
-func TestCodexFailureClassRetryable(t *testing.T) {
-	// Every classified failure is terminal — that is the point of classifying.
-	for _, c := range []codexFailureClass{codexFailureAuth, codexFailureQuota, codexFailureModel} {
-		if c.retryable() {
-			t.Fatalf("class %v must not be retryable", c)
-		}
-	}
-	if !codexFailureNone.retryable() {
-		t.Fatal("codexFailureNone must leave the retry decision to the caller")
-	}
-}
-
 func TestDescribeCodexFailureNamesConfigDir(t *testing.T) {
 	got := describeCodexFailure(codexFailureAuth, "401 Unauthorized", `C:\ws\codex-home`)
 	if !strings.Contains(got, "codex login") {

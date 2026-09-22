@@ -130,12 +130,10 @@ type runningTurnDTO struct {
 	// duration at its last value — understating idleness exactly when it matters.
 	// The client ticks it against the server clock instead. Limits are the two
 	// bounds that will cut the turn, so the panel can show how close either is.
-	LastActivityAt   int64  `json:"lastActivityAt"` // deprecated alias; unix seconds
 	LastProgressAt   int64  `json:"lastProgressAt"`
 	LastProgressKind string `json:"lastProgressKind"`
 	ProgressSequence uint64 `json:"progressSequence"`
 	IdleLimitSec     int64  `json:"idleLimitSec"`
-	HardLimitSec     int64  `json:"hardLimitSec,omitempty"` // deprecated; always 0
 }
 
 type contextFiller struct {
@@ -383,14 +381,12 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 
 			// Fall back to the turn's start: before the first event lands, the turn has
 			// been silent since it began — which is precisely the setup-wedge case.
-			LastActivityAt:   info.LastProgressAt.Unix(),
 			LastProgressAt:   info.LastProgressAt.Unix(),
 			LastProgressKind: info.LastProgressKind,
 			ProgressSequence: info.ProgressSequence,
 			IdleLimitSec:     int64(info.IdleLimit.Seconds()),
 		}
 		if resp.Running.LastProgressAt == 0 {
-			resp.Running.LastActivityAt = info.StartedAt.Unix()
 			resp.Running.LastProgressAt = info.StartedAt.Unix()
 		}
 	}

@@ -79,27 +79,6 @@ func ValidBundleKey(key string) bool {
 	return ValidGroupKey(key)
 }
 
-// MatchesBundle reports whether toolName belongs to the bundle named by
-// bundleKey. It generalizes MatchesGroup to MCP bundles: a built-in matches a
-// "group:" key by category, an MCP tool matches an "mcp:" key by server. The
-// wildcard key "mcp:*" matches every namespaced MCP tool.
-func MatchesBundle(toolName, bundleKey string) bool {
-	kind, value, ok := SplitBundleKey(bundleKey)
-	if !ok {
-		return false
-	}
-	if kind == "group" {
-		return MatchesGroup(toolName, bundleKey)
-	}
-	if !strings.Contains(toolName, nsSep) {
-		return false
-	}
-	if value == bundleWildcard {
-		return true
-	}
-	return BundleOf(toolName) == bundleKey
-}
-
 // BundleIndex returns bundle key -> sorted member names over everything the
 // registry knows about (built-ins + attached MCP entries), filtered by allow
 // (nil = allow all). It is a pure in-memory group-by: it never builds an MCP

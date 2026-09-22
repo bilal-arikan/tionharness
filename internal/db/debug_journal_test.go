@@ -15,7 +15,6 @@ import (
 func TestDebugStringPolicyCoversEveryPersistedStringField(t *testing.T) {
 	typ := reflect.TypeFor[DebugEvent]()
 	for field := range typ.Fields() {
-		field := field
 		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
 			continue
 		}
@@ -41,7 +40,6 @@ func TestDebugJournalRedactsEveryStringField(t *testing.T) {
 	}
 	typ := reflect.TypeFor[DebugEvent]()
 	for field := range typ.Fields() {
-		field := field
 		if field.Type.Kind() != reflect.String || field.Tag.Get("json") == "-" {
 			continue
 		}

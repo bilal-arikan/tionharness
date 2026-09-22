@@ -577,7 +577,7 @@ func toInputTransformations(in []inputTransformation) []InputTransformation {
 	}
 	out := make([]InputTransformation, 0, len(in))
 	for _, t := range in {
-		out = append(out, InputTransformation{Type: t.Type, Path: t.Path, Reason: t.Reason})
+		out = append(out, InputTransformation(t))
 	}
 	return out
 }

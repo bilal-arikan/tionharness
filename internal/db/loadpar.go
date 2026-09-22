@@ -31,14 +31,7 @@ func loadWorkers(n int) int {
 	if n <= 1 {
 		return 1
 	}
-	w := min(runtime.NumCPU()*2, maxLoadWorkers)
-	if w > n {
-		w = n
-	}
-	if w < 1 {
-		w = 1
-	}
-	return w
+	return max(min(runtime.NumCPU()*2, maxLoadWorkers, n), 1)
 }
 
 // parallelLoad applies fn to every item with a bounded worker pool and returns

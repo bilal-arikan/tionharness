@@ -188,8 +188,8 @@ type PendingInteraction struct {
   yanıtlamayan tur kayda geçiyordu → hızlı çözülen kesinti transkriptte **izsiz**
   kalıyordu). Sebepler: `watchdog` · `watchdog-idle` · `-detached` soneki.
   Aynı sinyal Oturum Bilgisi süreç kartında da görünür: `running` DTO'su
-  `lastActivityAt` (mutlak damga — panel yalnız konuşma değişince çektiği için
-  hazır süre sessizlikte donardı) + `idleLimitSec`/`hardLimitSec` taşır, kart
+  `lastProgressAt` (mutlak damga — panel yalnız konuşma değişince çektiği için
+  hazır süre sessizlikte donardı) + `idleLimitSec` taşır, kart
   "N sessiz — sınır M" satırını pencerenin %25'inden sonra gösterir.
 - **Run-scope semantic watchdog (TSK760, 2026-09-01):** yukarıdaki
   Hub.LastActivity() canlılık kaynağı ve 120 dk outer hard cap kaldırıldı. Queue
@@ -202,7 +202,8 @@ type PendingInteraction struct {
   chatTurnTimeoutMin/turnWatchdogMin alanları wire/storage uyumluluğu için kalır
   fakat normal akışta aktif karar kaynağı değildir; varsayılanları 0 (disabled).
   Session info artık lastProgressAt, lastProgressKind, progressSequence ve
-  idleLimitSec taşır; lastActivityAt deprecated alias, hardLimitSec deprecated/0'dır.
+  idleLimitSec taşır; `lastActivityAt` ve `hardLimitSec` alanları tüketicisi kalmadığı
+  için kaldırıldı (2026-09-22).
   `SpawnTimeout` ve `ScheduleTimeout` da aynı biçimde deprecated/0'dır; spawn,
   worker, coordinator drain, peer, automation, schedule ve wake yürütme yolları
   yalnız semantic idle tracker ile kesilir.

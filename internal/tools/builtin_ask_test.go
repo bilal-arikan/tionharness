@@ -61,10 +61,14 @@ func TestParseAskInput(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			q, opts, err := ParseAskInput(json.RawMessage(tc.raw))
+			qs, err := ParseAskInputMulti(json.RawMessage(tc.raw))
 			if err != nil {
-				t.Fatalf("ParseAskInput error: %v", err)
+				t.Fatalf("ParseAskInputMulti error: %v", err)
 			}
+			if len(qs) == 0 {
+				t.Fatal("no question parsed")
+			}
+			q, opts := qs[0].Question, qs[0].Options
 			if q != tc.wantQ {
 				t.Errorf("question = %q, want %q", q, tc.wantQ)
 			}

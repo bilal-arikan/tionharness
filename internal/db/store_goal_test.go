@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-//go:fix inline
-func fp(v float64) *float64 { return new(v) }
-
 // TestGoalStoreLifecycle: create → edit (revision appended, raw text kept) →
 // status change → reload from disk → delete.
 func TestGoalStoreLifecycle(t *testing.T) {

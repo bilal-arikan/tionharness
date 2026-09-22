@@ -227,7 +227,7 @@ Ampirik warm-reuse oranı ölçümü Faz 4'e bırakıldı (çalışan TionHarnes
   hâlâ POST'ta inline; SSE yalnız bildirim (`notifications/tools/list_changed`) taşır.
 - `Server.PushToolsChanged(token)` + `HasStream(token)` — push kanalı (non-blocking,
   stream yoksa güvenli no-op). `api.Server.interactionSrv` concrete alanı push'u erişilebilir kılar.
-- `interaction.Handler` compat shim korundu. Test: `TestInteraction_GetStreamReceivesPush`,
+- `interaction.Handler` compat shim'i sonradan kaldırıldı (2026-09-22, tek giriş `NewServer`). Test: `TestInteraction_GetStreamReceivesPush`,
   `TestInteraction_PushNoStreamIsNoop`. Doc 11 güncellendi.
 - **Davranış:** araç yüzeyi DEĞİŞMEDİ (extended hâlâ tam set); yalnız push altyapısı kuruldu
   → güvenli/inert increment. Dinamik büyütme Faz 1-b'de.

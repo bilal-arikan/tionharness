@@ -31,9 +31,6 @@ func evolverFixture(t *testing.T) (*Runtime, db.Goal, db.Agent) {
 	return r, g, dev
 }
 
-//go:fix inline
-func fptr(v float64) *float64 { return new(v) }
-
 func rawFor(agentID string) goals.RawProposal {
 	return goals.RawProposal{
 		Surface: "agent", EntityID: agentID, Field: "thinkingLevel", Action: "set", Value: "low",

@@ -10,12 +10,6 @@ type noopCipher struct{}
 func (noopCipher) Encrypt(s string) (string, error) { return s, nil }
 func (noopCipher) Decrypt(s string) (string, error) { return s, nil }
 
-//go:fix inline
-func ptrBool(b bool) *bool { return new(b) }
-
-//go:fix inline
-func ptrInt(i int) *int { return new(i) }
-
 // TestGatedToolFlagsRoundTrip verifies the new gated-capability settings persist
 // through Apply and survive a reload, and that the delegation guards are clamped.
 func TestGatedToolFlagsRoundTrip(t *testing.T) {

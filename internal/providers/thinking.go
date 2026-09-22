@@ -31,20 +31,6 @@ func IsValidThinkingLevel(level string) bool {
 	return slices.Contains(validThinkingLevels, level)
 }
 
-// StorableThinkingLevels returns the tiers that may legally be STORED for a
-// model, which is not the same question as ThinkingTiersFor (what the picker
-// offers as an effective choice). The two differ on the always-on class: there
-// "off" does not disable anything — it means "omit the thinking field", which is
-// exactly what the always-on wire format requires — so it is a harmless, fully
-// representable stored state even though the picker keeps it greyed out to avoid
-// promising the user that reasoning can be turned off. Legacy rows migrated from
-// a native provider carry "off" (db.LegacyThinkingLevelFor is provider-based, not
-// model-based), and rejecting it would make those agents unsaveable. The effort
-// class widens the stored set the same way (see coarseEffortStorable).
-func StorableThinkingLevels(model string) []string {
-	return StorableThinkingLevelsFor("", model)
-}
-
 // StorableThinkingLevelsFor applies provider-aware model classification before
 // deciding which tiers may be stored. Codex's GPT-5 family supports the full
 // CLI effort ramp even though its versioned model ids would otherwise look like
@@ -73,16 +59,6 @@ func StorableThinkingLevelsFor(providerKind, model string) []string {
 // containsTier reports whether a tier ramp carries one token.
 func containsTier(tiers []string, want string) bool {
 	return slices.Contains(tiers, want)
-}
-
-// ValidateThinkingLevel checks a requested reasoning level twice: that the token
-// itself is known, and that it is a legal stored value on the given model per
-// StorableThinkingLevels. A tier outside that set would be a silent no-op, so it
-// is reported as an error rather than accepted and ignored. Bare family aliases
-// and an empty model id land in the "alias" class, which offers the full ramp —
-// nothing is rejected there.
-func ValidateThinkingLevel(model, level string) error {
-	return ValidateThinkingLevelForProvider("", model, level)
 }
 
 // ValidateThinkingLevelForProvider validates a reasoning tier with transport
@@ -295,15 +271,6 @@ func ThinkingClassForProvider(providerKind, model string) string {
 func codexEffortModel(model string) bool {
 	m := strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(m, "gpt-5") || strings.HasPrefix(m, "gpt-6")
-}
-
-// ThinkingTiersFor returns the reasoning tiers a model meaningfully supports, as
-// the stable tokens the UI pickers use: "off","low","medium","high","xhigh",
-// "max","ultra". The set is derived from ThinkingClass so the composer / agent
-// pickers can grey out tiers that would be a silent no-op on the selected model
-// (they are shown disabled with a reason, not hidden).
-func ThinkingTiersFor(model string) []string {
-	return thinkingTiersForClass(ThinkingClass(model), model)
 }
 
 // ThinkingTiersForProvider returns the effective tier ramp for one provider

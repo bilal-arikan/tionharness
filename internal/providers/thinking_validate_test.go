@@ -54,7 +54,7 @@ func TestValidateThinkingLevel(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := ValidateThinkingLevel(c.model, c.level)
+			err := ValidateThinkingLevelForProvider("", c.model, c.level)
 			if c.wantErr && err == nil {
 				t.Fatalf("model %q level %q: expected an error", c.model, c.level)
 			}
@@ -82,7 +82,7 @@ func TestValidateThinkingLevelForCodexGPT5(t *testing.T) {
 // TestValidateThinkingLevelErrorNamesTheAlternatives: the message has to tell the
 // caller what it could have sent instead, otherwise a 400 is a dead end.
 func TestValidateThinkingLevelErrorNamesTheAlternatives(t *testing.T) {
-	err := ValidateThinkingLevel("claude-opus-4-6", "xhigh")
+	err := ValidateThinkingLevelForProvider("", "claude-opus-4-6", "xhigh")
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -95,24 +95,24 @@ func TestValidateThinkingLevelErrorNamesTheAlternatives(t *testing.T) {
 // must not widen what the picker offers — the always-on class still must not
 // advertise "off" as a way to stop the model reasoning.
 func TestStorableThinkingLevelsKeepsPickerSetIntact(t *testing.T) {
-	for _, tier := range ThinkingTiersFor("claude-fable-5") {
+	for _, tier := range ThinkingTiersForProvider("", "claude-fable-5") {
 		if tier == "off" {
-			t.Fatal(`ThinkingTiersFor("claude-fable-5") must not offer "off"`)
+			t.Fatal(`ThinkingTiersForProvider("", "claude-fable-5") must not offer "off"`)
 		}
 	}
-	if got := StorableThinkingLevels("claude-fable-5"); got[0] != "off" {
-		t.Fatalf(`StorableThinkingLevels("claude-fable-5") should start with "off", got %v`, got)
+	if got := StorableThinkingLevelsFor("", "claude-fable-5"); got[0] != "off" {
+		t.Fatalf(`StorableThinkingLevelsFor("", "claude-fable-5") should start with "off", got %v`, got)
 	}
 	// The effort class stores more than it offers (medium/xhigh fold onto a
 	// real level), but must still keep "off" out of the forced family's picker.
-	for _, tier := range ThinkingTiersFor("glm-5.3") {
+	for _, tier := range ThinkingTiersForProvider("", "glm-5.3") {
 		if tier == "off" {
-			t.Fatal(`ThinkingTiersFor("glm-5.3") must not offer "off"`)
+			t.Fatal(`ThinkingTiersForProvider("", "glm-5.3") must not offer "off"`)
 		}
 	}
 	for _, model := range []string{"deepseek-flash", "glm-5.3"} {
-		storable := StorableThinkingLevels(model)
-		for _, tier := range ThinkingTiersFor(model) {
+		storable := StorableThinkingLevelsFor("", model)
+		for _, tier := range ThinkingTiersForProvider("", model) {
 			if !slices.Contains(storable, tier) {
 				t.Fatalf("model %q: offered tier %q is not storable (%v)", model, tier, storable)
 			}
@@ -120,7 +120,7 @@ func TestStorableThinkingLevelsKeepsPickerSetIntact(t *testing.T) {
 	}
 	// Every other class stores exactly what it offers.
 	for _, model := range []string{"claude-opus-4-8", "claude-opus-4-6", "glm-5.2", "opus", ""} {
-		offered, storable := ThinkingTiersFor(model), StorableThinkingLevels(model)
+		offered, storable := ThinkingTiersForProvider("", model), StorableThinkingLevelsFor("", model)
 		if strings.Join(offered, ",") != strings.Join(storable, ",") {
 			t.Fatalf("model %q: offered %v != storable %v", model, offered, storable)
 		}

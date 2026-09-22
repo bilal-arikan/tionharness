@@ -155,7 +155,6 @@ func patchJSONTags(t *testing.T) []string {
 	typ := reflect.TypeFor[settings.Patch]()
 	tags := make([]string, 0, typ.NumField())
 	for f := range typ.Fields() {
-		f := f
 		tag := f.Tag.Get("json")
 		name, _, _ := strings.Cut(tag, ",")
 		if name == "" || name == "-" {

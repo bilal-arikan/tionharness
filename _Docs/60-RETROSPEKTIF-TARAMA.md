@@ -385,7 +385,7 @@ stateDiagram-v2
 | `internal/insight/lens_version.go` | `Lens.Version()` — lens gövdesi hash'i (yeniden tarama tetiği) | ✅ TSK445 |
 | `internal/insight/defaults.go` + `defaults/*.md` | Gömülü default lensler (`//go:embed`) + seed | ✅ Faz 1 |
 | `internal/insight/scanner.go` | Pipeline + `SessionSignals` extraction + prefilter + inkremental + dedupe (`Analyzer` seam) | ✅ Faz 1 (LLM impl hariç) |
-| `internal/insight/router.go` | Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, insight-sig marker) | ✅ Faz 1 |
+| `internal/insight/router.go` | Kanal A: `AppendBacklog` (idempotent, insight-sig marker); `RenderAppFixReport` çağrısız kaldığı için kaldırıldı (2026-09-22) | ✅ Faz 1 |
 | `internal/insight/settings.go` | `Settings{AppFixRepoPath,MaxSessions}` load/save | ✅ Faz 1 |
 | `internal/agent/insightanalyzer.go` | Gerçek `Analyzer`: `guardedComplete` + structured output + parse-with-fallback. Prompt, kullanıcı dilinde (`Settings.Language` → `Tunables.Language()`) title/rootCause/proposedFix üretir; signature/kod/dosya-yolları verbatim kalır. | ✅ Faz 1 |
 | `internal/agent/insightscan.go` | `Runtime.RunInsightScan` orchestration (seed→scan→backlog route) | ✅ Faz 1 |
@@ -556,8 +556,8 @@ untriaged bulgular üzerinden 30 kümelik iş üretti. Artık:
 
 Tüm fazlar uygulandı; aşağıdaki kayıtlar hâlâ geçerli mekanikleri (seed ledger, lens
 merge politikası, cache lensleri) anlatır. **Tek açık madde:** tarama sonrası in-app rapor
-artifact'i — `RenderAppFixReport` hazır ama artifact session-scoped, workspace-seviyesi
-taramanın session'ı yok.
+artifact'i — eski `RenderAppFixReport` render'ı çağrısız kaldığı için kaldırıldı
+(2026-09-22); artifact session-scoped, workspace-seviyesi taramanın session'ı yok.
 
 ### Faz 1 — İskelet (onaylı)
 
@@ -583,7 +583,8 @@ taramanın session'ı yok.
       eski `TitleModel` override'ı 2026-08-28'de kaldırıldı).
 - [x] `internal/agent/insightscan.go`: `Runtime.RunInsightScan(scope, agentID)` — seed→registry→
       ledger/findings/settings→scan→app-fix backlog append. Ajan seçimi: verilen id veya default.
-- [x] `router.go` Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, `insight-sig` marker).
+- [x] `router.go` Kanal A: `AppendBacklog` (idempotent, `insight-sig` marker); `RenderAppFixReport`
+      sonradan kaldırıldı (2026-09-22, çağrısız).
 - [x] `settings.go`: `Settings{AppFixRepoPath,MaxSessions}` load/save (atomic).
 - [x] `internal/api/insight.go` + `server.go`: `GET /lenses`, `POST /scan` (senkron), `GET /findings`,
       `GET|PUT /settings`.
@@ -596,7 +597,7 @@ taramanın session'ı yok.
 - [x] Lens seed: **lazy** — `GET /lenses` ve `RunInsightScan` `EnsureDefaults` çağırır (boot bağı gereksiz).
 
 **Faz 1 — TAMAM.** Tek ertelenen (opsiyonel, düşük değer):
-- [ ] Scan sonrası in-app rapor **artifact**'i — `RenderAppFixReport` hazır ama artifact session-scoped;
+- [ ] Scan sonrası in-app rapor **artifact**'i — eski `RenderAppFixReport` render'ı kaldırıldı (2026-09-22), artifact session-scoped;
       workspace-seviyesi scan'in session'ı yok. Findings store zaten kalıcı + panel gösteriyor →
       Faz 2'ye ertelendi (accept/dismiss UI ile birlikte).
 

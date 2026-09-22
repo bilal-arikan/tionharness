@@ -65,7 +65,8 @@ func TestPermGrantsScopedByWorkspace(t *testing.T) {
 	if p.forSession("WS1", "SES1") == p.forSession("WS2", "SES1") {
 		t.Fatal("same-numbered sessions in different workspaces must not share grants")
 	}
-	if p.forSession("WS1", "SES1") != p.forSession("WS1", "SES1") {
+	first, again := p.forSession("WS1", "SES1"), p.forSession("WS1", "SES1")
+	if first != again {
 		t.Fatal("the same session must keep one grant set across turns")
 	}
 }

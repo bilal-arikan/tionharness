@@ -98,9 +98,7 @@ func splitFrontmatter(content string) (fmText, body string) {
 	after := after0
 	after = strings.TrimPrefix(after, "\n")
 	// Tolerate a trailing newline right after the closing fence marker.
-	if strings.HasPrefix(after, "\n") {
-		after = after[1:]
-	}
+	after = strings.TrimPrefix(after, "\n")
 	return fmText, after
 }
 

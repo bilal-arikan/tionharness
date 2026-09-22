@@ -206,7 +206,7 @@ func TestCodexIdleWatchdogWaitsOutNativeCompaction(t *testing.T) {
 		return
 	}
 	const window = 150 * time.Millisecond
-	err, elapsed, retryable := runCodexStallHelper(t, window,
+	elapsed, retryable, err := runCodexStallHelper(t, window,
 		`{"type":"item.started","item":{"id":"c1","type":"context_compaction"}}`)
 	if err == nil {
 		t.Fatal("runAttempt returned no idle timeout error")
@@ -230,7 +230,7 @@ func TestCodexIdleHangAfterToolIsNotRetryable(t *testing.T) {
 	if os.Getenv("CODEX_TEST_HELPER") != "" {
 		return
 	}
-	err, _, retryable := runCodexStallHelper(t, 150*time.Millisecond,
+	_, retryable, err := runCodexStallHelper(t, 150*time.Millisecond,
 		`{"type":"item.completed","item":{"id":"t1","type":"command_execution","command":"touch x","exit_code":0,"status":"completed"}}`)
 	if err == nil {
 		t.Fatal("runAttempt returned no idle timeout error")
@@ -241,9 +241,9 @@ func TestCodexIdleHangAfterToolIsNotRetryable(t *testing.T) {
 }
 
 // runCodexStallHelper runs a fake codex that prints line, then stalls until it is
-// killed. It returns the attempt's error, how long the attempt took, and whether
-// the error was reported as retryable.
-func runCodexStallHelper(t *testing.T, window time.Duration, line string) (error, time.Duration, bool) {
+// killed. It returns how long the attempt took, whether the error was reported
+// as retryable, and the attempt's error.
+func runCodexStallHelper(t *testing.T, window time.Duration, line string) (time.Duration, bool, error) {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
@@ -259,7 +259,7 @@ func runCodexStallHelper(t *testing.T, window time.Duration, line string) (error
 	args := []string{"-test.run=TestCodexHelperEmitsThenStalls", "-test.v=false"}
 	start := time.Now()
 	_, retryable, runErr := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{}, "")
-	return runErr, time.Since(start), retryable
+	return time.Since(start), retryable, runErr
 }
 
 // TestCodexHelperEmitsThenStalls is the fake codex binary for the stall tests: it

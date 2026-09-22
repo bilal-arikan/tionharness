@@ -1,10 +1,61 @@
 # TionHarness — İlerleme Takibi
 
 > **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
-> kayıtlar `05-ARSIV.md`'dedir. Son girişler: doküman temizliği (bayat referanslar, arşive
+> kayıtlar `05-ARSIV.md`'dedir. Son girişler: depo temizliği (modernize, staticcheck, ölü kod, frontend lint,
+> deprecated oturum-bilgisi alanları), doküman temizliği (bayat referanslar, arşive
 > taşınan plan gövdeleri), karar modelleri + karar mercileri (`_Docs/87`), DeepSeek V4.1 Flash
 > ve Z.ai GLM-5.3 ailesi + kaba-effort düşünme sınıfı, ortak arşiv aracı `set_archived`
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
+
+## Depo temizliği: ölü kod, statik analiz, modernize, frontend lint (2026-09-22) ✅
+
+- **Ne:** Depo geneli "gereksiz / bayat / iyileştirilebilir" taraması ve uygulaması.
+  Araçlar: `staticcheck`, `deadcode` (prod ve `-test` kökleri), gopls `modernize`,
+  frontend `eslint` + `knip`. Beş commit: hijyen, modernize, frontend, Go ölü kod + API,
+  dokümanlar.
+- **Go — modernize:** `modernize -fix` ile ~300 dosyada mekanik yeniden yazım
+  (range-over-int, `slices.Contains/Backward`, `maps.Copy`, `strings.Cut/SplitSeq`,
+  yerleşik `min`/`max`, `WaitGroup.Go`, `errors.AsType`, işaretçi yardımcıları yerine
+  `new(x)`, döngüde `strings.Builder`, struct alanında etkisiz `omitempty`). Davranış
+  değişikliği yok; kalan 504 → 0.
+- **Go — staticcheck 21 → 0:** aynı alan kümeli struct'larda literal yerine tip dönüşümü
+  (`providerInstanceFile(p)`, `CreateArtifactSpec(in)`, `todoItem(t)`), büyük harfli hata
+  dizgileri, hiç doğru olmayan nil kontrolü, tautolojik test ifadeleri (`f() || f()`),
+  `runCodexStallHelper` dönüş sırası (`error` sona), kullanılmayan `todoFamily`,
+  `schemaEmpty`, `funcTool` ve modernize'ın boşa çıkardığı test işaretçi yardımcıları.
+- **Go — ölü kod:** yalnız testten erişilen ya da hiç erişilmeyen semboller silindi:
+  `Runtime.deliverToWorker` (held-teslimat kaldırılınca kalmıştı), `api.inflightRecorder`
+  (+ testi), `insight.RenderAppFixReport`, `interaction.Handler`, `mcp.BuildCatalog`,
+  `stderrTail.lastLines`, `providers.CanStream`, model-only düşünme sarmalayıcıları
+  (`ValidateThinkingLevel` / `ThinkingTiersFor` / `StorableThinkingLevels` — tek giriş
+  `...ForProvider`), `codexFailureClass.retryable`, `settings.EffectiveUILanguage`,
+  `tools.ParseAskInput` (tek giriş `ParseAskInputMulti`), `tools.MatchesBundle`,
+  `goals.Keys` / `ProposalRules`, `db.SystemUsageKind`. Testler kalan giriş noktalarına
+  geçirildi. Test seam'leri (saat/timeout setter'ları, ince sarmalayıcılar) bilinçli
+  tutuldu; kural `_Docs/80` §4'te.
+- **API:** oturum bilgisi `running` DTO'sundaki deprecated `lastActivityAt` ve
+  `hardLimitSec` alanları kaldırıldı — frontend okumuyordu (`_Docs/58`).
+- **Frontend — eslint 13 hata → 0:** render sırasında ref yazımları `useLayoutEffect`'e
+  taşındı (`useSessionsController`), `VisNetworkGraph` her render'da `localStorage`
+  okuyan `initialLayoutRef`'ten kurtuldu (kurulum etkisi zaten iki ref'i tohumluyordu),
+  `NumberValidity` context + hook'u `numberValidity.ts`'e ayrıldı (fast-refresh kuralı),
+  test harness'leri için `react-hooks/globals` kapatıldı, `aid`'in okunmayan ilk değeri
+  gitti. knip: 18 kullanılmayan export/tip export'tan çıkarıldı, `MODES` silindi.
+  80 uyarı (`set-state-in-effect` 64, `exhaustive-deps` 14) 2026-08-24 kararıyla warn'da.
+- **Araç zinciri / hijyen:** `frontend/go.mod` işaret modülü `node_modules` içindeki Go
+  kaynaklarını (`flatted/golang`) `./...` taramasından çıkarır; `go mod tidy`
+  (`coder/websocket` doğrudan bağımlılık); kökteki kaza kalıntıları (`C:/` boş dizin
+  ağacı, validator logları, ekran görüntüsü) ve `.gitignore`'daki üreticisi kalmamış tek
+  seferlik girişler temizlendi; `_Docs/arsiv/31` kardeş bağlantıları `../` ile düzeltildi.
+- **Dokümanlar:** `_Docs/03`, `07`, `11`, `52`, `58`, `60`, `73` kaldırılan sembollere göre
+  güncellendi; `_Docs/80` §4'e işaret modülü + statik analiz notu.
+- **Doğrulama:** `scripts/test.sh full` (go test ./... + vitest 1017 + depcheck +
+  `git diff --check`) yeşil; staticcheck / `deadcode -test` / modernize / eslint hata: 0.
+- **Aday (yapılmadı):** `sort.Slice` → `slices.SortFunc` (72 nokta, yansımasız sıralama);
+  `internal/skills/frontmatter.go`'daki dört `setFrontmatter*` fonksiyonunun tek jenerik
+  yardımcıya indirgenmesi; `internal/agent/coordination.go` (2.7k satır) ve
+  `internal/db/store.go` (2k satır) bölme; `scripts/repair-encoding.ps1` tek seferlik
+  onarım aracı olarak duruyor.
 
 ## Doküman temizliği: bayat referanslar ve arşive taşınan planlar (2026-09-22) ✅
 

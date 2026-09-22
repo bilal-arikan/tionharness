@@ -48,31 +48,6 @@ func TestSplitAndValidBundleKey(t *testing.T) {
 	}
 }
 
-func TestMatchesBundle(t *testing.T) {
-	if !MatchesBundle("create_flow", "group:automation") {
-		t.Error("built-in must match its category bundle")
-	}
-	if MatchesBundle("srv__tool", "group:automation") {
-		t.Error("an MCP tool must never match a group bundle")
-	}
-	if !MatchesBundle("srv__tool", "mcp:srv") {
-		t.Error("MCP tool must match its server bundle")
-	}
-	if MatchesBundle("srv__tool", "mcp:other") {
-		t.Error("MCP tool must not match another server's bundle")
-	}
-	if !MatchesBundle("srv__tool", MCPBundleWildcard) {
-		t.Error("the mcp wildcard must match every namespaced tool")
-	}
-	if MatchesBundle("create_flow", MCPBundleWildcard) {
-		t.Error("the mcp wildcard must not match a built-in")
-	}
-	// MatchesGroup keeps its own (built-in only) semantics.
-	if MatchesGroup("srv__tool", "mcp:srv") {
-		t.Error("MatchesGroup must stay group-only")
-	}
-}
-
 func TestBundleIndexGroupsBuiltinsAndMCP(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(NewTodoWriteTool())

@@ -67,20 +67,4 @@ func TestStderrTailIsBoundedAndNonBlocking(t *testing.T) {
 	}
 }
 
-// TestStderrTailLastLinesKeepsActionableEnd confirms the banner/allocator noise a
-// server prints before failing is dropped in favour of its final lines.
-func TestStderrTailLastLinesKeepsActionableEnd(t *testing.T) {
-	s := &stderrTail{}
-	if _, err := s.Write([]byte("banner\n\nlevel=info msg=noise\nreal error here\n")); err != nil {
-		t.Fatal(err)
-	}
-	got := s.lastLines(2)
-	if got != "level=info msg=noise | real error here" {
-		t.Fatalf("lastLines = %q", got)
-	}
-	if s.lastLines(1) != "real error here" {
-		t.Fatalf("lastLines(1) = %q", s.lastLines(1))
-	}
-}
-
 var _ = exec.Command // keep os/exec referenced if DialStdio's wrapper changes

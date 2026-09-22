@@ -1,10 +1,7 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
-
-	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // parseInput unmarshals a tool's raw JSON arguments into a fresh T, wrapping any
@@ -28,18 +25,4 @@ func parseInput[T any](tool string, input json.RawMessage) (T, error) {
 		return in, argErrFor(tool, err)
 	}
 	return in, nil
-}
-
-// schemaEmpty is the input schema for a tool that takes no arguments. Shared so
-// the dozens of parameterless list/status tools stop hand-writing the same
-// object-with-no-properties literal (and can never drift apart).
-var schemaEmpty = json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
-
-// funcTool is a Tool assembled from a static definition plus a call function,
-// for tools whose whole behaviour is "parse args, do the thing" with no state.
-// It removes the need to declare an empty struct type + two method receivers for
-// such tools: NewFuncTool(def, fn) yields a ready Tool.
-type funcTool struct {
-	def providers.ToolDef
-	fn  func(ctx context.Context, input json.RawMessage) (string, error)
 }

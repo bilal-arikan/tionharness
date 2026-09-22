@@ -358,10 +358,8 @@ func WriteConfig(ctx context.Context, h Host, mcpEnabled bool, ag db.Agent, inte
 // and NativeToolAllowlist (the positive mirror) so the two can never disagree.
 var (
 	// taskChecklistFamily is the newer CLI checklist family that has NO mirror
-	// into TionHarness's progress sink; todoFamily adds the mirrored TodoWrite
-	// and is the full native fallback kept when todo_write is not advertised.
+	// into TionHarness's progress sink (the mirrored TodoWrite is handled apart).
 	taskChecklistFamily = []string{"TaskCreate", "TaskUpdate", "TaskList", "TaskGet"}
-	todoFamily          = append([]string{"TodoWrite"}, taskChecklistFamily...)
 	shellFamily         = []string{"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop"}
 	planFamily          = []string{"EnterPlanMode", "ExitPlanMode"}
 	// deniedNativeSubagentTypes are the scoped Agent(<type>) deny rules applied

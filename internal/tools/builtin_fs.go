@@ -668,7 +668,7 @@ func globToRegexp(pattern string) (*regexp.Regexp, error) {
 // presence of a NUL byte in the inspected prefix.
 func isBinary(data []byte) bool {
 	n := min(len(data), 8000)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if data[i] == 0 {
 			return true
 		}

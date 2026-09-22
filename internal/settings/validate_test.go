@@ -2,9 +2,6 @@ package settings
 
 import "testing"
 
-//go:fix inline
-func strptr(s string) *string { return new(s) }
-
 func TestValidateRejectsBadEnums(t *testing.T) {
 	cases := []struct {
 		name  string

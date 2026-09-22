@@ -5,8 +5,6 @@
 // what a well-formed goal is.
 package goals
 
-import "sort"
-
 // Metric is one entry of the closed catalog. Keys are stable identifiers the
 // fitness computation (later phase) resolves against existing telemetry; a
 // goal may only reference keys from this list.
@@ -41,16 +39,6 @@ func Catalog() []Metric {
 func Lookup(key string) (Metric, bool) {
 	m, ok := byKey[key]
 	return m, ok
-}
-
-// Keys returns the sorted metric keys (for prompts and error messages).
-func Keys() []string {
-	out := make([]string, 0, len(byKey))
-	for k := range byKey {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 const (

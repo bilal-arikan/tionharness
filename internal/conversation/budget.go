@@ -113,10 +113,7 @@ func EffectiveBudget(provider, model string, configured int, fraction float64, c
 			fraction = defaultBudgetWindowFraction
 		}
 	}
-	derived := min(int(float64(window)*fraction), ceil)
-	if derived < configured {
-		derived = configured
-	}
+	derived := max(min(int(float64(window)*fraction), ceil), configured)
 	// The floor lifts, but never past what the model can actually hold.
 	return capToWindow(derived, window)
 }

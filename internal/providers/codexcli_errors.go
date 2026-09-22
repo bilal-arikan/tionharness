@@ -53,11 +53,6 @@ const (
 	codexFailureModel
 )
 
-// retryable reports whether re-running the turn could plausibly succeed. Every
-// classified failure is terminal — the class exists precisely to stop a futile
-// retry — so only codexFailureNone leaves the decision to the caller.
-func (c codexFailureClass) retryable() bool { return c == codexFailureNone }
-
 // classifyCodexError maps a codex error message onto a failure class. Matching
 // is case-insensitive substring matching against the signatures observed live;
 // an unrecognised message yields codexFailureNone so the caller falls back to

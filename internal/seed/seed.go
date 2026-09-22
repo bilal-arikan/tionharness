@@ -150,9 +150,7 @@ func Ensure(cfg Config) error {
 			// The merged file is NOT the embedded bytes, so its whole-file hash is
 			// unknown-by-construction: drop any stale Files entry rather than record
 			// a hash that would later mis-classify the merge result as a prior ship.
-			if _, ok := manifest.Files[key]; ok {
-				delete(manifest.Files, key)
-			}
+			delete(manifest.Files, key)
 			changed = true
 			return nil
 		}

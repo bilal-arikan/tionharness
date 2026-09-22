@@ -1390,7 +1390,7 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   `ThinkingLevel`'ini değiştirir (kalıcı değil); boş = ajan ayarı. claude-cli/minimax bütçeyi
   yok sayar.
   **Model-farkında tiyer butonları (2026-08-11):** hangi seviyelerin **aktif** olacağı seçili
-  modele göre değişir. Tek doğruluk kaynağı `providers.ThinkingClass(model)` (→ `ThinkingTiersFor`);
+  modele göre değişir. Tek doğruluk kaynağı `providers.ThinkingClass(model)` (→ `ThinkingTiersForProvider`);
   `Catalog()` build'inde her `ModelInfo.ThinkingTiers` (`off/low/medium/high/xhigh/max`) + `ThinkingClass`
   doldurulup `/api/catalog` ile taşınır. **Beş sınıf:** `always-on` (Fable/Mythos → `off` yok, daima
   düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `effort` (**DeepSeek V4.x / V4.1 Flash,
@@ -1437,8 +1437,8 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   **Boş seviye kalktı — `thinkingLevel` zorunlu (2026-08-31):** `ThinkingLevel == ""` artık
   geçersiz. Sebep: boş değer iki farklı şey demekti — native yolda `thinkingBudgetForLevel("")`
   → `0` (düşünme **kapalı**), claude-cli yolunda `cliEffortLevel("")` → `"high"`. Aynı kayıt,
-  sağlayıcıya göre zıt davranış. Tek doğruluk kaynağı `providers.ValidateThinkingLevel(model, level)`:
-  seviye token setinde yoksa **ve** `ThinkingTiersFor(model)` içinde yoksa hata döner
+  sağlayıcıya göre zıt davranış. Tek doğruluk kaynağı `providers.ValidateThinkingLevelForProvider(providerKind, model, level)`:
+  seviye token setinde yoksa **ve** `ThinkingTiersForProvider(providerKind, model)` içinde yoksa hata döner
   (`internal/providers/thinking.go`). Kapı üç yerde: `agents.go` create/update → 400,
   `chat_stream.go` tur-bazlı override (boş = "override yok" olarak kalır, dolu değer doğrulanır),
   ve `db.CreateAgent` — API dışı yollar (pack install, template, `create_agent` aracı) için.
@@ -1451,7 +1451,7 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   `db.LegacyThinkingLevelFor`'un aynısıdır (yeniden yazılmaz, çağrılır); iki katmanın
   ayrışmadığını `TestExplicitThinkingLevelMatchesStoreFallback` doğrular.
   `create_agent` self-management aracı ise opsiyonel bir `thinkingLevel` parametresi
-  kabul eder: verilirse `providers.ValidateThinkingLevel(model, level)` ile doğrulanır
+  kabul eder: verilirse `providers.ValidateThinkingLevelForProvider(providerKind, model, level)` ile doğrulanır
   (geçersiz değer hata döner, sessizce yutulmaz), verilmezse aynı legacy kuralla açıkça
   çözülür (`internal/tools/builtin_agentmgmt.go`). Test:
   `TestExplicitThinkingLevel`, `TestCreateAgentToolCarriesThinkingLevel`,
@@ -1461,7 +1461,7 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   patch alanı **vermezse** saklı seviyeye dokunulmaz (legacy çözümüne düşülmez, o yalnız
   oluşturma kuralıdır), boş string ise reddedilir. Doğrulama HTTP update yolunun aynısıdır
   (`internal/api/agents.go`): `thinkingLevel` **veya** `model` patch'te varsa
-  `providers.ValidateThinkingLevel(patch'in indiği model, patch'in bıraktığı seviye)`
+  `providers.ValidateThinkingLevelForProvider(sağlayıcı, patch'in indiği model, patch'in bıraktığı seviye)`
   çalışır — böylece model+seviye birlikte değişince tek sonuç olarak yargılanır ve
   model-only patch saklı seviyeyi yeni modelin seti dışında bırakamaz. Test:
   `TestUpdateAgentToolThinkingLevel`, `TestUpdateAgentToolRejectsBadThinkingLevel`
@@ -1469,7 +1469,7 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   **Model-only patch de doğrulanır (2026-08-31):** `handleUpdateAgent` kapısı artık
   `req.ThinkingLevel != nil || req.Model != nil` ile açılır ve etkin çifti (patch'te
   olanı, yoksa depodaki değeri) doğrular. Yalnız model değiştiren bir patch de ajanın
-  koştuğu tiyeri değiştirir çünkü `ThinkingTiersFor` modele göre farklıdır: eskiden
+  koştuğu tiyeri değiştirir çünkü `ThinkingTiersForProvider` modele göre farklıdır: eskiden
   `max` seviyeli bir ajan `claude-opus-4-6`'ya taşındığında kayıt geçiyor, seviye tur
   anında sessizce düşüyordu. Artık 400 döner. Test:
   `TestUpdateAgentValidatesStoredLevelOnModelOnlyPatch`.
@@ -1479,14 +1479,16 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   diğerleri → `off`. Idempotent (ikinci koşu 0 satır). Frontend "Kapalı" pill'inin değeri
   `''` → `'off'` oldu; `createAgent` alanı zorunlu gönderir.
   **Sunulan tiyer ≠ saklanabilir tiyer (TSK604, 2026-08-31):** always-on sınıfı
-  (fable/mythos) `ThinkingTiersFor`'da `off` içermez, migration ise native sağlayıcıyı
+  (fable/mythos) `ThinkingTiersForProvider`'da `off` içermez, migration ise native sağlayıcıyı
   `off` yapar (`LegacyThinkingLevelFor` provider'a bakar, modele değil) — böyle bir
   legacy ajan ayar formundan yeniden kaydedilirken 400 alıyordu. Çözüm iki kaygıyı
-  ayırır: `ThinkingTiersFor(model)` = **UI'ın sunduğu** set (always-on'da `off` hâlâ
-  pasif — kullanıcıya "düşünmeyi kapatabilirsin" denmez), `StorableThinkingLevels(model)`
+  ayırır: `ThinkingTiersForProvider(providerKind, model)` = **UI'ın sunduğu** set (always-on'da `off` hâlâ
+  pasif — kullanıcıya "düşünmeyi kapatabilirsin" denmez), `StorableThinkingLevelsFor(providerKind, model)`
   = **yasal saklı** set ve always-on'da `off`'u içerir. Sebep: o sınıfta `off` zaten
   "thinking alanını atla" demektir (istenen wire biçimi), yani zararsız ve temsil
-  edilebilir bir durum. `ValidateThinkingLevel` artık saklanabilir sete bakar.
+  edilebilir bir durum. `ValidateThinkingLevelForProvider` artık saklanabilir sete bakar. (Model-only
+  sarmalayıcılar `ValidateThinkingLevel`/`ThinkingTiersFor`/`StorableThinkingLevels`
+  çağrısız kaldıkları için 2026-09-22'de kaldırıldı; tek giriş provider-aware sürümlerdir.)
   Migration bilinçli olarak model-aware yapılmadı: her açık tiyer `output_config.effort`
   gönderir, bu çalışma zamanı davranışını değiştirirdi. Form saklı seviyeyi zaten
   seçili+aktif render eder (`o.value === thinkingLevel || tiers.includes(o.value)`),

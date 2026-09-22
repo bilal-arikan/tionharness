@@ -128,11 +128,6 @@ func NewServer(b Backend, logger *slog.Logger) *Server {
 	return &Server{backend: b, logger: logger, streams: map[string]chan []byte{}, relistWaiters: map[string][]chan struct{}{}}
 }
 
-// Handler returns the server as an http.Handler (compat shim for existing callers).
-func Handler(b Backend, logger *slog.Logger) http.Handler {
-	return NewServer(b, logger)
-}
-
 func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := bearer(r.Header.Get("Authorization"))
 	if token == "" || !h.backend.Valid(token) {

@@ -93,13 +93,6 @@ var proposalRules = []ProposalRule{
 	{Surface: SurfaceSettings, Field: "instructions", Actions: []string{ActionSet}, MaxValueLen: MaxPromptChars, Hint: "workspace-wide agent instructions text"},
 }
 
-// ProposalRules returns the rule list (a copy) in display order.
-func ProposalRules() []ProposalRule {
-	out := make([]ProposalRule, len(proposalRules))
-	copy(out, proposalRules)
-	return out
-}
-
 // LookupRule finds the rule for a surface/field pair.
 func LookupRule(surface, field string) (ProposalRule, bool) {
 	for _, r := range proposalRules {

@@ -157,9 +157,5 @@ func delegationCeiling(ctx context.Context, def int) int {
 // never below the ordinary per-turn cap (widening must not shrink a workspace
 // that already allows more than the hard cap).
 func adhocDelegationCeiling(maxCalls, maxRounds int) int {
-	c := min(maxCalls*maxRounds, AdhocFlowMaxDelegationCalls)
-	if c < maxCalls {
-		c = maxCalls
-	}
-	return c
+	return max(min(maxCalls*maxRounds, AdhocFlowMaxDelegationCalls), maxCalls)
 }

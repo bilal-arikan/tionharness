@@ -7,22 +7,6 @@ import (
 	"testing"
 )
 
-func TestRenderAppFixReport(t *testing.T) {
-	out := RenderAppFixReport([]Finding{
-		{Title: "Hung subprocess", Severity: "high", Occurrences: 3,
-			EvidenceSessionIDs: []string{"SES1", "SES2"}, FilePointer: "internal/providers/claudecli.go",
-			RootCause: "MCP initialize deadlock", ProposedFix: "startup watchdog", Signature: "cli:hung"},
-	}, "2026-07-13")
-	for _, want := range []string{"Hung subprocess", "high", "SES1, SES2", "claudecli.go", "insight-sig:cli:hung"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("report missing %q:\n%s", want, out)
-		}
-	}
-	if empty := RenderAppFixReport(nil, "x"); !strings.Contains(empty, "No app-fix findings") {
-		t.Fatalf("empty report should say so: %s", empty)
-	}
-}
-
 func TestAppendBacklogIsIdempotent(t *testing.T) {
 	repo := t.TempDir()
 	f := Finding{Title: "Bug A", Signature: "sigA", Occurrences: 1}

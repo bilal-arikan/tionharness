@@ -56,19 +56,20 @@ func TestBuildCatalogKeepsCLINamespaceIdempotent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	entries, errs := BuildCatalog(context.Background(), []ServerConfig{{
+	cfg := ServerConfig{
 		Name:      "tionharness_interaction",
 		Transport: MCPTransportHTTP,
 		URL:       srv.URL,
-	}})
-	if len(errs) != 0 {
-		t.Fatalf("BuildCatalog errors = %v", errs)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("BuildCatalog entries = %d, want 1", len(entries))
+	tools, err := ListServerTools(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("ListServerTools: %v", err)
+	}
+	if len(tools) != 1 {
+		t.Fatalf("ListServerTools tools = %d, want 1", len(tools))
 	}
 	const want = "mcp__tionharness_interaction__activate_tools"
-	if got := entries[0].NamespacedName; got != want {
+	if got := NamespaceTool(cfg.Name, tools[0].Name); got != want {
 		t.Fatalf("NamespacedName = %q, want %q", got, want)
 	}
 }

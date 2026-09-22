@@ -69,7 +69,7 @@ func do(h http.Handler, method, auth, body string) *httptest.ResponseRecorder {
 }
 
 func TestInteraction_RejectsBadToken(t *testing.T) {
-	h := Handler(&fakeBackend{validToken: "good"}, nil)
+	h := NewServer(&fakeBackend{validToken: "good"}, nil)
 	rec := do(h, http.MethodPost, "Bearer bad", `{"jsonrpc":"2.0","id":1,"method":"initialize"}`)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", rec.Code)
@@ -81,7 +81,7 @@ func TestInteraction_RejectsBadToken(t *testing.T) {
 }
 
 func TestInteraction_Initialize(t *testing.T) {
-	h := Handler(&fakeBackend{validToken: "good"}, nil)
+	h := NewServer(&fakeBackend{validToken: "good"}, nil)
 	rec := do(h, http.MethodPost, "Bearer good", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", rec.Code)
@@ -103,7 +103,7 @@ func TestInteraction_Initialize(t *testing.T) {
 }
 
 func TestInteraction_ToolsList(t *testing.T) {
-	h := Handler(&fakeBackend{validToken: "good"}, nil)
+	h := NewServer(&fakeBackend{validToken: "good"}, nil)
 	rec := do(h, http.MethodPost, "Bearer good", `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", rec.Code)
@@ -162,7 +162,7 @@ func TestRequestTier(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			b := &tierRecordingBackend{validToken: "good"}
-			h := Handler(b, nil)
+			h := NewServer(b, nil)
 			req := httptest.NewRequest(http.MethodPost, tc.path,
 				strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 			req.Header.Set("Authorization", "Bearer good")
@@ -176,7 +176,7 @@ func TestRequestTier(t *testing.T) {
 
 func TestInteraction_ToolsCall(t *testing.T) {
 	b := &fakeBackend{validToken: "good"}
-	h := Handler(b, nil)
+	h := NewServer(b, nil)
 	rec := do(h, http.MethodPost, "Bearer good",
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_user","arguments":{"question":"q"}}}`)
 	if rec.Code != http.StatusOK {

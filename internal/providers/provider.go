@@ -480,13 +480,6 @@ type Streamer interface {
 	Stream(ctx context.Context, req Request, onDelta func(StreamDelta)) (*Response, error)
 }
 
-// CanStream reports whether p supports incremental streaming (implements
-// Streamer). Lets callers branch without a type assertion at each call site.
-func CanStream(p Provider) bool {
-	_, ok := p.(Streamer)
-	return ok
-}
-
 // CLIMCPServer describes one MCP server for a CLI transport, in a shape both
 // CLI dialects can render from: claude-cli writes an --mcp-config JSON file,
 // codex-cli writes an [mcp_servers.<key>] block into its config.toml. Only the

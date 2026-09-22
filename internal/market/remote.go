@@ -180,7 +180,7 @@ func compareVersions(a, b string) int {
 	pa := versionParts(a)
 	pb := versionParts(b)
 	n := max(len(pb), len(pa))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		var x, y int
 		if i < len(pa) {
 			x = pa[i]

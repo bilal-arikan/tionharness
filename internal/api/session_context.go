@@ -267,10 +267,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// (read-only: no LLM summarize, no persist), so the live tail matches what the
 	// model would get after this turn's compaction too.
 	simulateCompaction, _ := strconv.ParseBool(r.URL.Query().Get("compact"))
-	start := max(session.SummaryMsgCount, 0)
-	if start > len(history) {
-		start = len(history)
-	}
+	start := min(max(session.SummaryMsgCount, 0), len(history))
 	liveHistory := history[start:]
 	droppedHistory := history[:start]
 	foldedCount := 0

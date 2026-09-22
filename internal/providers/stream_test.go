@@ -146,15 +146,6 @@ func TestMinimax_StreamAccumulatesDeltas(t *testing.T) {
 	}
 }
 
-func TestCanStream(t *testing.T) {
-	if !CanStream(NewAnthropic("k")) {
-		t.Error("Anthropic should implement Streamer")
-	}
-	if !CanStream(NewMinimax("k", "")) {
-		t.Error("Minimax should implement Streamer")
-	}
-}
-
 // rewriteHost is an http.RoundTripper that redirects every request to the given
 // base URL's host/scheme, so a provider with a hard-coded endpoint can be aimed
 // at a test server.

@@ -140,7 +140,7 @@ func applyTodoSet(ctx context.Context, set map[string]string) (string, error) {
 	}
 	merged := make([]todoItem, len(prev))
 	for i, t := range prev {
-		merged[i] = todoItem{Content: t.Content, Status: t.Status, Category: t.Category, Steps: t.Steps}
+		merged[i] = todoItem(t)
 	}
 	// JSON result (not plain text): carries the merged full list so the trace
 	// layer can promote this call to a checklist card — the input alone no
@@ -180,7 +180,7 @@ func validTodoStatus(s string) bool {
 func todoSinkItems(todos []todoItem) []TodoSinkItem {
 	items := make([]TodoSinkItem, len(todos))
 	for i, t := range todos {
-		items[i] = TodoSinkItem{Content: t.Content, Status: t.Status, Category: t.Category, Steps: t.Steps}
+		items[i] = TodoSinkItem(t)
 	}
 	return items
 }

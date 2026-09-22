@@ -961,36 +961,6 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	return tools.SendResult{Delivered: true, ReceiptID: receipt.ID}, nil
 }
 
-// deliverToWorker re-dispatches a previously HELD worker follow-up once it has
-// been approved (see inbound.go). It re-reads the worker session for its current
-// coordinator/depth rather than trusting stale values captured at hold time.
-func (r *Runtime) deliverToWorker(ctx context.Context, workerSessionID, message string) error {
-	ws, err := r.db.GetSession(ctx, workerSessionID)
-	if err != nil {
-		return fmt.Errorf("worker session %s not found: %w", workerSessionID, err)
-	}
-	agent, err := r.db.GetAgent(ctx, ws.AgentID)
-	if err != nil {
-		return fmt.Errorf("worker agent gone: %w", err)
-	}
-	if err := r.applyProfileAllowlist(&agent); err != nil {
-		return err
-	}
-	r.workerQueueMu.Lock()
-	if r.workerTurnActive(workerSessionID) {
-		queue := r.workerQueue[workerSessionID]
-		if len(queue) >= maxWorkerQueueDepth {
-			r.workerQueueMu.Unlock()
-			return fmt.Errorf("worker %s queue is full (max %d)", workerSessionID, maxWorkerQueueDepth)
-		}
-		r.workerQueue[workerSessionID] = append(queue, message)
-		r.workerQueueMu.Unlock()
-		return nil
-	}
-	r.workerQueueMu.Unlock()
-	return r.dispatchWorkerTurn(ctx, agent, workerSessionID, message, ws.CoordinatorSessionID, ws.CoordinatorDepth)
-}
-
 // dispatchWorkerTurn reserves a background slot, records the follow-up as an
 // injected user note, and launches the worker's turn goroutine. Shared by the
 // immediate send_to_worker path and the queued-message drain; the busy / queue

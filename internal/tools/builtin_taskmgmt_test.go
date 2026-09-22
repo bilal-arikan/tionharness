@@ -49,7 +49,7 @@ func TestCreateTaskDescriptionOnlyUsesRuntimeTitler(t *testing.T) {
 		titled <- struct{}{}
 		return "AI başlık", nil
 	})
-	out, err := create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"AG1"}`))
+	_, err := create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"AG1"}`))
 	if err == nil {
 		t.Fatal("unknown owner must still be validated")
 	}
@@ -57,7 +57,7 @@ func TestCreateTaskDescriptionOnlyUsesRuntimeTitler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err = create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"`+agent.ID+`"}`))
+	out, err := create.Call(ctx, json.RawMessage(`{"description":"Açıklamadan gelen kart","ownerAgentId":"`+agent.ID+`"}`))
 	if err != nil {
 		t.Fatalf("description-only create: %v", err)
 	}

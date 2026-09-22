@@ -37,7 +37,7 @@ düşer (ham anahtar yoluna değil).
 ## 3. Dosya haritası
 
 ```
-internal/settings/language.go        # SupportedLanguages, EffectiveUILanguage, LanguageDisplayName
+internal/settings/language.go        # SupportedLanguages, LanguageDisplayName (UI dili çözümü bootLocale.ts'te)
 frontend/src/i18n/
 ├── locales.ts                       # dil kaydı: kod, endonym etiket, Intl tag, dir (RTL hazır)
 ├── catalog.ts                       # import.meta.glob ile katalog toplama

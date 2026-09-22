@@ -174,8 +174,8 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 - [ ] Flow-builder UI'da `outputSchema`/`jsonField` görsel düzenleyicisi (graf JSON'unda destekli).
 
 ### Insight ve maliyet açıkları (2026-09-22)
-- [ ] Workspace-seviyesi insight taraması için in-app rapor artifact'i — `RenderAppFixReport` hazır,
-  artifact session-scoped ([60-RETROSPEKTIF-TARAMA.md](60-RETROSPEKTIF-TARAMA.md) tek açık madde).
+- [ ] Workspace-seviyesi insight taraması için in-app rapor artifact'i — eski
+  `RenderAppFixReport` render'ı çağrısız kaldığı için kaldırıldı (2026-09-22), artifact session-scoped ([60-RETROSPEKTIF-TARAMA.md](60-RETROSPEKTIF-TARAMA.md) tek açık madde).
 - [ ] [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) açık maddeleri: **#2** kodlama ajanlarında
   playwright/tarayıcı MCP satırlarını kapat, `climcp.WriteConfig` DisabledTools'a saygı; **#4** native
   döngüde tur-ortası `Prune`'u kaldır (claude-cli yolu zaten kalıcı); **#5** yapılandırılabilir TTL,

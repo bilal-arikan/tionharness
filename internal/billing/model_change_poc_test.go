@@ -24,9 +24,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-//go:fix inline
-func strPtr(s string) *string { return new(s) }
-
 // TestModelChangeDoesNotRepricePastUsage, bütçe tarafının doğru davrandığını uçtan
 // uca gösterir: model değişimi ne günlük usage'ı ne de session usage'ı geriye
 // dönük değiştirir; iki modelin kayıtları ByModel içinde ayrık ve doğru fiyatlı

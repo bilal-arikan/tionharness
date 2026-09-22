@@ -4,6 +4,8 @@
 // at init so PriceFor resolves market-installed providers. Ballpark, not billing.
 package providers
 
+import "maps"
+
 var marketPrices = map[string]map[string]Price{
 	"xai": {
 		"grok-4.3":                  {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.25},
@@ -243,8 +245,6 @@ func init() {
 		if priceTable[prov] == nil {
 			priceTable[prov] = map[string]Price{}
 		}
-		for id, p := range models {
-			priceTable[prov][id] = p
-		}
+		maps.Copy(priceTable[prov], models)
 	}
 }

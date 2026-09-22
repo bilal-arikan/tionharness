@@ -340,7 +340,8 @@ func TestSpawnConcurrencyCap(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	rt.tun.SetSpawnLimits(2, 0, 0)
 
-	if !rt.acquireSpawnSlot() || !rt.acquireSpawnSlot() {
+	first, second := rt.acquireSpawnSlot(), rt.acquireSpawnSlot()
+	if !first || !second {
 		t.Fatal("first two slots should be available")
 	}
 	if rt.acquireSpawnSlot() {

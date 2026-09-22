@@ -36,26 +36,6 @@ func TestNormalizeUILanguage(t *testing.T) {
 	}
 }
 
-// TestEffectiveUILanguage covers the resolution order: explicit UI choice wins,
-// otherwise the agent reply language, otherwise the default.
-func TestEffectiveUILanguage(t *testing.T) {
-	cases := []struct {
-		in   Settings
-		want string
-	}{
-		{Settings{Language: "tr", UILanguage: "en"}, "en"},
-		{Settings{Language: "en", UILanguage: ""}, "en"},
-		{Settings{Language: "tr", UILanguage: ""}, "tr"},
-		{Settings{}, DefaultLanguage},
-		{Settings{Language: "xx", UILanguage: "xx"}, DefaultLanguage},
-	}
-	for _, c := range cases {
-		if got := EffectiveUILanguage(c.in); got != c.want {
-			t.Errorf("EffectiveUILanguage(%+v) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 // TestLanguageDisplayNameCoversEverySupportedLocale keeps the prompt-facing name
 // table in step with SupportedLanguages: adding a locale without a display name
 // would silently drop the "reply in <language>" directive from the system prompt.

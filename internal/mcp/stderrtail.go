@@ -86,28 +86,3 @@ func (s *stderrTail) waitNonEmpty(d time.Duration) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
-
-// lastLines keeps only the final n non-empty lines of the tail. Startup failures
-// usually end with the actionable message, while everything before it is banner
-// and allocator noise.
-func (s *stderrTail) lastLines(n int) string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	raw := string(s.buf)
-	s.mu.Unlock()
-	lines := []string{}
-	for ln := range strings.SplitSeq(raw, "\n") {
-		if ln = strings.TrimSpace(ln); ln != "" {
-			lines = append(lines, ln)
-		}
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, " | ")
-}

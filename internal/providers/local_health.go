@@ -88,7 +88,7 @@ func (h *healthCache) probe(ctx context.Context, baseURL string) bool {
 }
 
 // forget drops any cached verdict for baseURL, so the next probe hits the
-// network. Used by tests and by callers that just changed the endpoint.
+// network. Test seam: production never evicts a verdict early.
 func (h *healthCache) forget(baseURL string) {
 	h.mu.Lock()
 	delete(h.m, baseURL)

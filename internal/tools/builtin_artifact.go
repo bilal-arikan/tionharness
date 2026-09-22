@@ -103,13 +103,7 @@ func (CreateArtifactTool) Call(ctx context.Context, input json.RawMessage) (stri
 	if sink == nil {
 		return "", fmt.Errorf("artifacts are not available in this context (only in interactive chat)")
 	}
-	ref, err := sink.CreateArtifact(ctx, CreateArtifactSpec{
-		Title:      in.Title,
-		Kind:       in.Kind,
-		Language:   in.Language,
-		Content:    in.Content,
-		SourcePath: in.SourcePath,
-	})
+	ref, err := sink.CreateArtifact(ctx, CreateArtifactSpec(in))
 	if err != nil {
 		return "", fmt.Errorf("save artifact: %w", err)
 	}

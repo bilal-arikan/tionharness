@@ -1,8 +1,9 @@
 package settings
 
-import "maps"
-
-import "time"
+import (
+	"maps"
+	"time"
+)
 
 // ProviderInstance is a user-configured provider: a kind (the built-in
 // behaviour it runs — "anthropic", "claude-cli", "openai-compat", ...) plus a
@@ -43,33 +44,11 @@ type providerInstanceFile struct {
 }
 
 func (p ProviderInstance) toFile() providerInstanceFile {
-	return providerInstanceFile{
-		ID:           p.ID,
-		KindID:       p.KindID,
-		Label:        p.Label,
-		Icon:         p.Icon,
-		Enabled:      p.Enabled,
-		DefaultModel: p.DefaultModel,
-		Models:       p.Models,
-		Config:       p.Config,
-		SecretsEnc:   p.SecretsEnc,
-		CreatedAt:    p.CreatedAt,
-	}
+	return providerInstanceFile(p)
 }
 
 func (f providerInstanceFile) toInstance() ProviderInstance {
-	return ProviderInstance{
-		ID:           f.ID,
-		KindID:       f.KindID,
-		Label:        f.Label,
-		Icon:         f.Icon,
-		Enabled:      f.Enabled,
-		DefaultModel: f.DefaultModel,
-		Models:       f.Models,
-		Config:       f.Config,
-		SecretsEnc:   f.SecretsEnc,
-		CreatedAt:    f.CreatedAt,
-	}
+	return ProviderInstance(f)
 }
 
 // ProviderInstanceDTO is the masked, client-facing view of a ProviderInstance:

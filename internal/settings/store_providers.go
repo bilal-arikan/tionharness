@@ -424,9 +424,6 @@ func writeProviderInstanceFiles(path string, list []ProviderInstance) error {
 	for i, p := range list {
 		files[i] = p.toFile()
 	}
-	if files == nil {
-		files = []providerInstanceFile{}
-	}
 	data, err := json.MarshalIndent(files, "", "  ")
 	if err != nil {
 		return err

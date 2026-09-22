@@ -25,10 +25,11 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
+const maxArtifactImageSourceBytes int64 = 20_971_520
+
 const (
-	maxArtifactImageSourceBytes int64 = 20_971_520
-	maxArtifactImageDimension         = 8_192
-	maxArtifactImagePixels            = 40_000_000
+	maxArtifactImageDimension = 8_192
+	maxArtifactImagePixels    = 40_000_000
 )
 
 var errArtifactImageTooLarge = errors.New("artifact image exceeds byte limit")

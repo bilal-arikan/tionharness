@@ -211,9 +211,7 @@ func (s *Scheduler) armWakeLocked(sc db.Schedule) {
 	delay := max(time.Until(time.Unix(sc.FireAt, 0)),
 		// overdue (e.g. recovered after a restart) → fire now-ish
 		time.Second)
-	if delay > maxWakeDelay {
-		delay = maxWakeDelay
-	}
+	delay = min(delay, maxWakeDelay)
 	id := sc.ID
 	s.wakeTimers[id] = time.AfterFunc(delay, func() { s.fireWake(id) })
 	s.rt.emitScheduleArmed(sc, time.Now().Add(delay).Unix())

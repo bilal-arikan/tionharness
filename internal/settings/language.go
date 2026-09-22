@@ -42,16 +42,3 @@ func LanguageDisplayName(code string) string { return languageNames[code] }
 func isSupportedLanguage(code string) bool {
 	return slices.Contains(SupportedLanguages, code)
 }
-
-// EffectiveUILanguage resolves the language the interface should render in: the
-// explicit UI choice when set, otherwise the agent reply language. Callers get a
-// supported code back, never "".
-func EffectiveUILanguage(s Settings) string {
-	if isSupportedLanguage(s.UILanguage) {
-		return s.UILanguage
-	}
-	if isSupportedLanguage(s.Language) {
-		return s.Language
-	}
-	return DefaultLanguage
-}

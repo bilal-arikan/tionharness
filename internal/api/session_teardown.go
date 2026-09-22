@@ -178,7 +178,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			s.noteTeardownGrace(wsp, sessionID, "mcp_calls", deadline, grace)
-			return nil, abort(fmt.Errorf("Interaction MCP calls did not stop within %s", grace))
+			return nil, abort(fmt.Errorf("interaction MCP calls did not stop within %s", grace))
 		}
 		timer := time.NewTimer(remaining)
 		select {
@@ -188,7 +188,7 @@ func (s *Server) prepareSessionRuntimeLocked(wsp *workspace.Workspace, sessionID
 			}
 		case <-timer.C:
 			s.noteTeardownGrace(wsp, sessionID, "mcp_calls", deadline, grace)
-			return nil, abort(fmt.Errorf("Interaction MCP calls did not stop within %s", grace))
+			return nil, abort(fmt.Errorf("interaction MCP calls did not stop within %s", grace))
 		}
 	}
 

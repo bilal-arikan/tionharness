@@ -133,7 +133,7 @@ func TestProposalDefaultsAndRules(t *testing.T) {
 		t.Fatal("policy values must win")
 	}
 	seen := map[string]bool{}
-	for _, r := range ProposalRules() {
+	for _, r := range proposalRules {
 		k := r.Surface + "." + r.Field
 		if seen[k] {
 			t.Fatalf("duplicate rule %s", k)

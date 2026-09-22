@@ -22,23 +22,6 @@ var backlogRelPath = filepath.Join("_Docs", "INSIGHT-BACKLOG.md")
 // findings append to (the Channel B sink).
 var workspaceActionsRelPath = filepath.Join("insight", "WORKSPACE-ACTIONS.md")
 
-// RenderAppFixReport builds a dev-facing markdown report of the given app-fix
-// findings, newest-first. generatedAt is passed in (not read from the clock) so
-// the output is deterministic and testable.
-func RenderAppFixReport(findings []Finding, generatedAt string) string {
-	var b strings.Builder
-	b.WriteString("# TionHarness — App Fix Findings\n\n")
-	fmt.Fprintf(&b, "_Generated: %s_\n\n", generatedAt)
-	if len(findings) == 0 {
-		b.WriteString("No app-fix findings.\n")
-		return b.String()
-	}
-	for _, f := range findings {
-		writeFindingBlock(&b, f, "")
-	}
-	return b.String()
-}
-
 func writeFindingBlock(b *strings.Builder, f Finding, repoDir string) {
 	fmt.Fprintf(b, "## %s\n\n", strings.TrimSpace(orDash(f.Title)))
 	if f.Severity != "" {

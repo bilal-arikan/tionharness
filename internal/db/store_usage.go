@@ -32,18 +32,6 @@ const (
 	UsageKindOther    = "other"
 )
 
-// SystemUsageKind keeps its legacy operation-only system qualification.
-func SystemUsageKind(kind string) string {
-	kind = strings.TrimSpace(kind)
-	if kind == "" {
-		kind = UsageKindOther
-	}
-	if kind == UsageKindSystem || strings.HasPrefix(kind, UsageKindSystem+":") {
-		return kind
-	}
-	return UsageKindSystem + ":" + kind
-}
-
 // SystemAgentUsageKind qualifies an operation with the exact system-agent key.
 // Consumers can roll up all system calls by "system:" or one actor by its key.
 func SystemAgentUsageKind(systemKey, kind string) (string, error) {

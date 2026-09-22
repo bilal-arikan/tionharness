@@ -15,9 +15,6 @@ func openInheritDB(t *testing.T) (*DB, context.Context) {
 	return d, context.Background()
 }
 
-//go:fix inline
-func strp(s string) *string { return new(s) }
-
 // TestDeriveAgentInheritsEverything: a fresh child resolves to its parent's
 // values with no overrides, and follows later parent edits.
 func TestDeriveAgentInheritsEverything(t *testing.T) {

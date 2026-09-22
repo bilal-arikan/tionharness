@@ -153,7 +153,7 @@ func TestCatalogIntegrity(t *testing.T) {
 			t.Fatalf("%s: lookup failed", m.Key)
 		}
 	}
-	if len(Keys()) != len(seen) {
-		t.Fatal("Keys() disagrees with Catalog()")
+	if len(byKey) != len(seen) {
+		t.Fatal("byKey disagrees with Catalog()")
 	}
 }

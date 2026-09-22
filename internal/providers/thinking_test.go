@@ -47,7 +47,7 @@ func TestThinkingTiersFor(t *testing.T) {
 		return slices.Contains(tiers, v)
 	}
 	// Always-on class: no "off" (thinking cannot be disabled), full depth ramp.
-	fable := ThinkingTiersFor("claude-fable-5")
+	fable := ThinkingTiersForProvider("", "claude-fable-5")
 	if has(fable, "off") {
 		t.Errorf("fable should not offer off: %v", fable)
 	}
@@ -55,14 +55,14 @@ func TestThinkingTiersFor(t *testing.T) {
 		t.Errorf("fable should offer xhigh/max: %v", fable)
 	}
 	// Adaptive class: full ramp including off + xhigh/max.
-	adaptive := ThinkingTiersFor("claude-opus-4-8")
+	adaptive := ThinkingTiersForProvider("", "claude-opus-4-8")
 	for _, v := range []string{"off", "low", "medium", "high", "xhigh", "max"} {
 		if !has(adaptive, v) {
 			t.Errorf("adaptive should offer %q: %v", v, adaptive)
 		}
 	}
 	// Concrete legacy model: off/low/medium/high, but NOT xhigh/max (they clamp).
-	legacy := ThinkingTiersFor("claude-haiku-4-5-20251001")
+	legacy := ThinkingTiersForProvider("", "claude-haiku-4-5-20251001")
 	if has(legacy, "xhigh") || has(legacy, "max") {
 		t.Errorf("legacy should not offer xhigh/max: %v", legacy)
 	}
@@ -72,7 +72,7 @@ func TestThinkingTiersFor(t *testing.T) {
 	// Bare alias / custom / empty: full ramp (provider clamps).
 	fullRamp := []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
 	for _, m := range []string{"opus", "sonnet", ""} {
-		full := ThinkingTiersFor(m)
+		full := ThinkingTiersForProvider("", m)
 		if !slices.Equal(full, fullRamp) {
 			t.Errorf("alias %q should get full ramp %v: %v", m, fullRamp, full)
 		}
@@ -80,13 +80,13 @@ func TestThinkingTiersFor(t *testing.T) {
 	// Coarse effort (DeepSeek V4.x): off plus the three real levels.
 	effort := []string{"off", "low", "high", "max"}
 	for _, m := range []string{"deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"} {
-		if got := ThinkingTiersFor(m); !slices.Equal(got, effort) {
+		if got := ThinkingTiersForProvider("", m); !slices.Equal(got, effort) {
 			t.Errorf("%s should offer %v: %v", m, effort, got)
 		}
 	}
 	// Forced thinking (GLM-5.3 family): the same levels without "off".
 	for _, m := range []string{"glm-5.3", "glm-5.3-flash", "glm-5.3-flashx"} {
-		if got := ThinkingTiersFor(m); !slices.Equal(got, []string{"low", "high", "max"}) {
+		if got := ThinkingTiersForProvider("", m); !slices.Equal(got, []string{"low", "high", "max"}) {
 			t.Errorf("%s should offer low/high/max only: %v", m, got)
 		}
 	}

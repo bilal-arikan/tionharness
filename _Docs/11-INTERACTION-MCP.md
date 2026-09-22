@@ -885,7 +885,7 @@ da erteleniyordu → ilk turda `No such tool available`.
   canlı validation'da (`TestLiveGatewayActivate`) yakalandı — Doc 52 §12.
 - Session kimliği = Bearer token (stable per-(session,agent), Doc 52 §3-D) → bir persistent
   claude-cli process'i için tier başına kalıcı SSE stream.
-- `interaction.Handler` compat shim olarak korundu (`NewServer`'a delege eder).
+- `interaction.Handler` compat shim'i çağrısız kaldığı için kaldırıldı (2026-09-22); tek giriş `NewServer`.
 - **Davranış:** Faz 1-a tek başına araç yüzeyini değiştirmez (extended hâlâ tam set ilan
   eder); yalnız **push altyapısını** kurar. Dinamik büyütme (extended boş→activate ile
   büyüme) Faz 1-b'de bağlanacak.

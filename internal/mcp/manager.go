@@ -206,28 +206,6 @@ func ListServerTools(ctx context.Context, cfg ServerConfig) ([]Tool, error) {
 	return client.ListTools(ctx)
 }
 
-// BuildCatalog connects to each server config and returns the union of their
-// tools, namespaced. A server that fails to connect is skipped and its error
-// recorded in errs (keyed by server name) rather than aborting the whole build.
-func BuildCatalog(ctx context.Context, cfgs []ServerConfig) (entries []CatalogEntry, errs map[string]string) {
-	errs = map[string]string{}
-	for _, cfg := range cfgs {
-		tools, err := ListServerTools(ctx, cfg)
-		if err != nil {
-			errs[cfg.Name] = err.Error()
-			continue
-		}
-		for _, t := range tools {
-			entries = append(entries, CatalogEntry{
-				Server:         cfg.Name,
-				NamespacedName: NamespaceTool(cfg.Name, t.Name),
-				Tool:           t,
-			})
-		}
-	}
-	return entries, errs
-}
-
 // CallNamespaced dials the server owning the namespaced tool and invokes it.
 // cfgByServer maps the sanitized server name to its config.
 func CallNamespaced(ctx context.Context, cfgByServer map[string]ServerConfig, namespaced string, args json.RawMessage) (CallToolResult, error) {

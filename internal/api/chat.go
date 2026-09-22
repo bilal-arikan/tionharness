@@ -1,63 +1,10 @@
 package api
 
 import (
-	"strings"
-	"time"
-
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
-
-// inflightRecorder accumulates a NON-STREAMING turn's persistable trace and
-// snapshots it to the session's inflight sidecar on a throttle — crash-recovery
-// parity with the streaming path (chat_stream.go `snapshot`). Previously only
-// the SSE path wrote the sidecar, so a mid-turn process death (a dev rebuild, a
-// crash) silently lost the whole non-stream turn: reply, trace, usage (the
-// AlgoBench v2 incident). Steps arrive from the calling goroutine
-// (CompleteWithToolsStream contract), so no locking is needed.
-type inflightRecorder struct {
-	db        *db.DB
-	sessionID string
-	agentID   string
-	replyID   string
-	startedAt int64
-	partial   strings.Builder
-	kept      []agent.TurnStep
-	lastSnap  time.Time
-}
-
-func (rec *inflightRecorder) onStep(st agent.TurnStep) {
-	if st.Running || st.Append {
-		return
-	}
-	switch st.Kind {
-	case agent.StepDelta:
-		rec.partial.WriteString(st.Text)
-	case agent.StepAsk, agent.StepToolDelta, agent.StepTombstone, agent.StepPermission:
-		// Transient (live-UI only) — never part of the persisted trace.
-	default:
-		rec.kept = append(rec.kept, st)
-	}
-	if time.Since(rec.lastSnap) < 600*time.Millisecond {
-		return
-	}
-	rec.lastSnap = time.Now()
-	_ = rec.db.WriteInflight(db.InflightTurn{
-		MessageID: rec.replyID,
-		SessionID: rec.sessionID,
-		AgentID:   rec.agentID,
-		StartedAt: rec.startedAt,
-		Text:      rec.partial.String(),
-		Steps:     marshalSteps(rec.kept),
-	})
-}
-
-// interruptedTrace returns the steps kept so far with a trailing error step —
-// the streaming path's "preserve what the agent already produced" shape.
-func (rec *inflightRecorder) interruptedTrace(detail, reason string) []agent.TurnStep {
-	return append(rec.kept, agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
-}
 
 // messageUsage converts a provider Usage into the compact per-message form stored
 // on the assistant turn, returning nil when the turn reported no tokens (so an
@@ -128,8 +75,7 @@ type chatResp struct {
 // handleChat is defined in chat_queue.go: after the durable cutover (_Docs/58) it
 // enqueues onto the session's serial send-queue and returns the persisted reply,
 // rather than running the turn inline. The inline provider path that used to live
-// here was removed with that cutover; inflightRecorder (below) is retained because
-// the streaming worker path and its test still exercise it.
+// here was removed with that cutover.
 
 // buildSystemPrompt delegates to the agent package's single persona assembler
 // (soul + identity) so the chat/preview and headless paths can

@@ -84,10 +84,6 @@ func TestAddUsageKind_SystemAndOperationKindsDoNotDoubleCount(t *testing.T) {
 	}
 	const agent = "agent-1"
 
-	if got := SystemUsageKind("system:title"); got != "system:title" {
-		t.Fatalf("SystemUsageKind(system:title) = %q, want %q", got, "system:title")
-	}
-
 	systemDelta := UsageDelta{Calls: 1, InputTokens: 120}
 	if err := d.AddUsageKind(ctx, agent, "system:title", "anthropic", "system-model", systemDelta); err != nil {
 		t.Fatalf("add system usage: %v", err)
