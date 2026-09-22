@@ -369,6 +369,7 @@ export function SettingsPanel({
                     runTest={runTest}
                     workspaceClaudeHome={wsClaudeHome}
                     workspaceCodexHome={wsCodexHome}
+                    onOpenDecider={() => setCat('decider')}
                   />
                 )}
                 {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
@@ -376,7 +377,9 @@ export function SettingsPanel({
                 {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
                 {cat === 'hooks' && <HooksPanel onError={onError} />}
                 {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
-                {cat === 'decider' && <DeciderPanel onError={onError} />}
+                {cat === 'decider' && (
+                  <DeciderPanel onError={onError} onOpenProviders={() => setCat('providers')} />
+                )}
                 {cat === 'sound' && <SoundPanel />}
                 {cat === 'advanced' && (
                   <>

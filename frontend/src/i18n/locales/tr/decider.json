@@ -1,37 +1,205 @@
 {
-  "title": "Karar modeli",
-  "intro": "Karar modeli tipli sorulara (evet/hayır, birini seç, puanla) bir saniyenin çok altında ve kuruşun kesri bir maliyetle cevap verir. Uygulama onu belirli karar noktalarında kullanır; her nokta kapalı kalabilir, gölgede çalışabilir (arka planda sorulur ve mevcut mantığın yanında ölçülür, hiçbir şeyi değiştirmez) ya da açılabilir.",
-  "privacy": "Yargılanan içerik (bir shell komutu, bir koordinatör mesajı, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra sağlayıcıya gönderilir.",
-  "enabled": "Karar modelini kullan",
-  "enabledHint": "Ana anahtar. Kapalıyken hiçbir yere bir şey gönderilmez ve her karar noktası eskisi gibi çalışır.",
-  "general": "Bağlantı",
-  "backend": "Backend",
-  "instance": "Sağlayıcı hesabı",
-  "instanceAuto": "Otomatik (kullanılabilir ilk hesap)",
-  "instanceHint": "Mevcut bir sağlayıcı örneğinin API anahtarını kullanır; burada anahtar saklanmaz.",
-  "instanceMissing": "Bu backend için kullanılabilir hesap yok. Ayarlar → Sağlayıcılar altından bir OpenRouter örneği ekle.",
-  "instanceUnavailable": "{{id}} (şu an kullanılamıyor)",
-  "model": "Model",
-  "modelCustom": "Özel model kimliği…",
-  "modelCustomPlaceholder": "ör. typesafe/jev-1.13",
-  "modelHint": "Ölçüm yaparken sabit bir snapshot kullan: \"latest\" takma adı yeni sürümleri izler ve gölge sonuçlarını karşılaştırılamaz hale getirir.",
-  "price": "Milyon girdi token'ı başına ${{input}} · çıktı ücretsiz",
-  "timeout": "Deneme başına zaman aşımı (ms)",
-  "timeoutHint": "Zaman aşımına uğrayan çağrı bir kez yeniden denenir. Model cevap veremediğinde karar noktası eski mantığına döner.",
-  "sites": "Karar noktaları",
-  "sitesHint": "Gölgede başla, aşağıdaki uyum oranını izle, güvendiğinde noktayı aç.",
-  "threshold": "Eşik",
-  "modeLabel": {
+  "title": "Karar mercileri",
+  "intro": "Karar mercileri, uygulamada kararı bir karar sağlayıcısına devreden noktalardır. Karar sağlayıcısı, tipli sorulara (evet/hayır, birini seç, puanla) bir saniyenin çok altında cevap veren bir modeldir. Her merci kapalı kalabilir, gölgede çalışabilir (arka planda sorulur ve mevcut mantığın yanında ölçülür, hiçbir şeyi değiştirmez) ya da açılabilir; her biri kendi sağlayıcısını, yedeğini ve rakibini kullanabilir.",
+  "privacy": "Yargılanan içerik (bir shell komutu, bir koordinatör mesajı, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra karar modeline gönderilir. Kendi makinendeki bir model içeriği yerelde tutar.",
+  "enabled": "Karar katmanını kullan",
+  "enabledHint": "Ana anahtar. Kapalıyken hiçbir yere bir şey gönderilmez ve her karar mercii eskisi gibi çalışır.",
+  "defaultModel": "Varsayılan karar sağlayıcısı",
+  "defaultModelHint": "Kendi sağlayıcısını seçmemiş her karar merciine cevap verir.",
+  "defaultModelAuto": "Etkin ilk sağlayıcı",
+  "noModels": "Henüz karar sağlayıcısı yok.",
+  "providersSummary": "{{n}} karar sağlayıcısı tanımlı.",
+  "openProviders": "Sağlayıcılar ekranında yönet →",
+  "setup": {
+    "title": "Kurulum",
+    "done": "tamam",
+    "goProviders": "Sağlayıcılar'a git →",
+    "account": {
+      "title": "Sağlayıcı hesabı",
+      "text": "Sağlayıcı örneklerine bir OpenRouter hesabı ekle ve API anahtarını gir. Yerel bir model (LM Studio, Ollama, OpenJev) ya da kendi anahtarıyla bir karar sağlayıcısı kullanacaksan bu adım gerekmez."
+    },
+    "provider": {
+      "title": "Karar sağlayıcısı",
+      "text": "“+ Yeni karar sağlayıcısı” ile ekle (“Jev · OpenRouter” şablonu yukarıdaki hesabı ödünç alır), sonra kartında Dene'ye bas.",
+      "action": "{{preset}} ekle"
+    },
+    "enable": {
+      "title": "Karar mercileri",
+      "text": "Karar Mercileri ekranında “Karar katmanını kullan”ı aç; mercileri önce Gölge'de çalıştır, uyum yükselince Açık'a al.",
+      "goAuthorities": "Karar Mercileri'ne git →"
+    }
+  },
+  "status": {
+    "ready": "Hazır",
+    "notReady": "Hazır değil",
     "off": "Kapalı",
-    "shadow": "Gölge",
-    "on": "Açık"
+    "model": "Varsayılan sağlayıcı: {{label}}",
+    "pausedUntil": "Hatalardan sonra {{time}} saatine kadar duraklatıldı"
   },
-  "modeHint": {
-    "off": "Hiç sorulmaz.",
-    "shadow": "Arka planda sorulur ve mevcut kararın yanına kaydedilir; hiçbir şeyi değiştirmez.",
-    "on": "Cevabı kullanılır; hata olursa önceki mantığa dönülür."
+  "providers": {
+    "title": "Karar sağlayıcıları",
+    "hint": "Sohbet etmek yerine tipli sorulara cevap veren modeller: Jev (OpenRouter, TypeSafe), OpenJev ya da herhangi bir yerel model (Ollama, LM Studio). Ajanların model seçicilerinde görünmezler.",
+    "openAuthorities": "Nerede kullanılacaklarını Karar Mercileri'nde seç →",
+    "loading": "Yükleniyor…",
+    "add": "+ Yeni karar sağlayıcısı",
+    "empty": "Henüz karar sağlayıcısı yok. Yukarıdaki düğmeyle ekle.",
+    "saved": "Karar sağlayıcısı güncellendi",
+    "added": "Karar sağlayıcısı eklendi",
+    "confirmDelete": "\"{{label}}\" karar sağlayıcısını silmek istediğine emin misin?",
+    "deleted": "Karar sağlayıcısı silindi",
+    "deletedUsed": "Karar sağlayıcısı silindi. Bunlar artık varsayılan sağlayıcıyı kullanıyor: {{list}}",
+    "state": {
+      "ready": "hazır",
+      "paused": "duraklatıldı",
+      "problem": "hazır değil",
+      "disabled": "devre dışı"
+    },
+    "id": "id",
+    "model": "model",
+    "endpoint": "uç nokta",
+    "usedBy": "kullanan",
+    "usedByDefault": "varsayılan",
+    "viaProvider": "{{id}} sağlayıcısı üzerinden",
+    "free": "ücretsiz · yerel",
+    "approximate": "yaklaşık olasılıklar",
+    "statsLine": "{{calls}} çağrı · p50 {{p50}} ms · {{cost}}",
+    "test": "Dene",
+    "testing": "Deneniyor…",
+    "edit": "Düzenle",
+    "delete": "Sil",
+    "testOk": "{{ms}} ms'de cevap verdi · {{cost}} · onay gerekir: {{probability}} · risk seviyesi {{level}}",
+    "testFailed": "Deneme başarısız: {{error}}"
   },
-  "site": {
+  "form": {
+    "newTitle": "Yeni karar sağlayıcısı",
+    "editTitle": "Düzenle: {{label}}",
+    "template": "Şablon",
+    "templateNone": "Bir şablondan başla (isteğe bağlı)…",
+    "kind": "Tür",
+    "label": "Etiket",
+    "labelPlaceholder": "Etiket (ör. GPU makinesindeki OpenJev)",
+    "enabled": "Etkin",
+    "model": "Model",
+    "modelCustom": "Özel model kimliği…",
+    "modelCustomPlaceholder": "Sunucunun listelediği model kimliği",
+    "credentials": "Kimlik bilgisi",
+    "credentialsOwn": "Kendi uç noktası ve anahtarı",
+    "credentialsProvider": "Sağlayıcı hesabını ödünç al",
+    "credentialsProviderHint": "O sağlayıcının anahtarını ve uç noktasını kullanır; anahtar iki kez girilmez.",
+    "provider": "Sağlayıcı hesabı",
+    "providerAuto": "Otomatik (kullanılabilir ilk hesap)",
+    "providerMissing": "Bu tür için kullanılabilir sağlayıcı hesabı yok. Yukarıdan bir tane ekle ya da kendi uç noktası ve anahtarını kullan.",
+    "providerUnavailable": "{{id}} (şu an kullanılamıyor)",
+    "baseUrl": "Taban URL",
+    "baseUrlHint": "Boş = {{url}}",
+    "apiKey": "API anahtarı",
+    "apiKeyOptional": "API anahtarı (isteğe bağlı)",
+    "apiKeyStored": "(kayıtlı — değiştirmek için yaz)",
+    "apiKeySaved": "✓ kayıtlı (şifreli)",
+    "apiKeyClear": "Kayıtlı anahtarı kaldır",
+    "apiKeyRequired": "Bu tür bir API anahtarı ister.",
+    "timeout": "Deneme başına zaman aşımı (ms)",
+    "timeoutHint": "Zaman aşımına uğrayan çağrı bir kez yeniden denenir; sonra karar mercii eski mantığına döner.",
+    "context": "Bağlam boyutu (token)",
+    "contextHint": "Boş = türün {{tokens}} değeri. Küçük bağlamla başlatılmış yerel bir sunucu için düşür.",
+    "price": "Milyon girdi token'ı başına ${{input}}",
+    "localFree": "Bu makinede ya da ağda çalışır: token maliyeti yok.",
+    "uncalibrated": "Sıradan bir modelin token olasılıklarını okur: işe yarar ama Jev gibi kalibre değildir.",
+    "add": "Ekle",
+    "update": "Güncelle",
+    "saving": "Kaydediliyor…",
+    "cancel": "İptal"
+  },
+  "backend": {
+    "openrouter": {
+      "label": "OpenRouter Decisions",
+      "description": "OpenRouter'ın Decisions API'si (alfa). TypeSafe Jev'i sunar: kalibre olasılıklarla evet/hayır, birini seç ve puan cevapları, bir saniyenin çok altında."
+    },
+    "systemone": {
+      "label": "System One API (TypeSafe · OpenJev)",
+      "description": "TypeSafe'in kendi karar API'si ve onu konuşan her sunucu: TypeSafe'in kendisi, OpenRouter'ın System One uç noktası ve kendi donanımında bir karar modeli çalıştıran açık OpenJev sunucuları."
+    },
+    "llm-logprobs": {
+      "label": "Herhangi bir LLM (token olasılıkları)",
+      "description": "Sıradan bir sohbet modelini karar modeline çevirir: her soru tek harfli çoktan seçmeli olarak sorulur ve cevabın olasılıkları modelin token olasılıklarından okunur. Ollama, LM Studio, llama.cpp, vLLM ve logprobs döndüren her OpenAI uyumlu sunucuyla çalışır.",
+      "field": {
+        "suffix": {
+          "label": "Soru eki",
+          "help": "Her sorunun sonuna eklenir. Hibrit akıl yürüten modeller hemen cevap vermeli: Qwen3 için /no_think."
+        },
+        "extraBody": {
+          "label": "Ek istek alanları (JSON)",
+          "help": "Her istek gövdesine eklenir, ör. vLLM ya da llama.cpp'de akıl yürütmeyi kapatmak için."
+        },
+        "topLogprobs": {
+          "label": "Top logprobs",
+          "help": "Token başına okunan alternatif sayısı (1-20). Bunların dışında kalan seçenekler sıfır sayılır."
+        },
+        "maxTokens": {
+          "label": "En fazla cevap token'ı",
+          "help": "Modelin etiketinden önce harcayabileceği token (boş bir <think></think> bloğu, baştaki boşluk)."
+        },
+        "parallel": {
+          "label": "Paralel soru",
+          "help": "Aynı anda sorulan soru sayısı. Sunucu istekleri tek tek işliyorsa düşür."
+        }
+      }
+    }
+  },
+  "preset": {
+    "jev-openrouter": {
+      "label": "Jev · OpenRouter",
+      "description": "Zaten sahip olduğun bir OpenRouter sağlayıcısının anahtarıyla TypeSafe Jev."
+    },
+    "jev-typesafe": {
+      "label": "Jev · TypeSafe",
+      "description": "Bir TypeSafe API anahtarıyla TypeSafe'in kendi API'si."
+    },
+    "jev-openrouter-systemone": {
+      "label": "Jev · OpenRouter (System One)",
+      "description": "Zaten sahip olduğun bir OpenRouter sağlayıcısının anahtarıyla OpenRouter'ın System One uç noktası."
+    },
+    "openjev-local": {
+      "label": "OpenJev · bu makine",
+      "description": "Bu bilgisayardaki bir OpenJev sunucusu (docker compose up, varsayılan port 8080). Ücretsiz ve gizli; GPU ister."
+    },
+    "ollama-local": {
+      "label": "Ollama · bu makine",
+      "description": "Bu bilgisayarda Ollama'nın sunduğu bir model (port 11434)."
+    },
+    "lmstudio-local": {
+      "label": "LM Studio · bu makine",
+      "description": "LM Studio'nun yerel sunucusunda yüklü model (port 1234)."
+    }
+  },
+  "authorities": {
+    "title": "Karar mercileri",
+    "hint": "Uygulamada kararı bir karar sağlayıcısına devredebilen her nokta. Gölgede başla, uyum oranını izle, güvendiğinde aç. Yedek, sağlayıcı cevap veremediğinde devreye girer; rakip aynı soruyu arka planda cevaplar, böylece yeni bir sağlayıcı devralmadan önce ölçülebilir.",
+    "model": "Sağlayıcı",
+    "modelDefault": "Varsayılan ({{label}})",
+    "fallback": "Yedek",
+    "challenger": "Rakip",
+    "none": "Yok",
+    "explicit": "istek üzerine",
+    "failClosed": "kapalı kalır",
+    "failClosedHint": "Hiçbir model cevap veremezse eski mantığa dönmek yerine reddeder (kapı kapalı kalır)."
+  },
+  "group": {
+    "safety": "Güvenlik",
+    "coordination": "Koordinasyon",
+    "flows": "Flow ve Rota",
+    "routing": "Yönlendirme",
+    "context": "Bağlam",
+    "housekeeping": "Bakım"
+  },
+  "pattern": {
+    "gate": "evet/hayır",
+    "pick": "birini seç",
+    "rate": "puanla",
+    "select": "süz",
+    "triage": "sınıflandır"
+  },
+  "authority": {
     "stall-judge": {
       "label": "Koordinatör takılma yargıcı",
       "description": "Koordinatörün son mesajı hiç açılmamış worker'lar açtığını mı iddia ediyor? Boşta kalan her koordinatör turundaki Haiku çağrısının yerini alır.",
@@ -49,48 +217,58 @@
     },
     "phase-gate": {
       "label": "Rota judge kapıları",
-      "description": "\"judge\" türündeki faz kapıları, fazın çıkış koşulunun sağlanıp sağlanmadığını kök oturumun son transkriptine bakarak sorar. Model cevap veremezse kapı kapalı kalır.",
+      "description": "\"judge\" türündeki faz kapıları, fazın çıkış koşulunun sağlanıp sağlanmadığını kök oturumun son transkriptine bakarak sorar. Hiçbir model cevap veremezse kapı kapalı kalır.",
       "threshold": "Kapının açılması için çıkış koşulunun sağlanma olasılığının en düşük değeri."
     }
   },
-  "status": {
-    "ready": "Hazır",
-    "notReady": "Hazır değil",
+  "threshold": "Eşik",
+  "modeLabel": {
     "off": "Kapalı",
-    "account": "Hesap: {{id}}",
-    "pausedUntil": "Hatalardan sonra {{time}} saatine kadar duraklatıldı"
+    "shadow": "Gölge",
+    "on": "Açık"
+  },
+  "modeHint": {
+    "off": "Hiç sorulmaz.",
+    "shadow": "Arka planda sorulur ve mevcut kararın yanına kaydedilir; hiçbir şeyi değiştirmez.",
+    "on": "Cevabı kullanılır; hata olursa önceki mantığa dönülür."
   },
   "actions": {
     "save": "Kaydet",
     "saving": "Kaydediliyor…",
     "saved": "Kaydedildi",
     "unsaved": "Kaydedilmemiş değişiklik",
-    "test": "Deneme sorusu gönder",
+    "test": "Varsayılan sağlayıcıyı dene",
     "testing": "Deneniyor…",
-    "testOk": "{{ms}} ms'de cevap verdi · {{cost}} · onay gerekir: {{probability}}",
-    "testFailed": "Deneme başarısız: {{error}}",
-    "loadFailed": "Karar modeli ayarları yüklenemedi: {{error}}"
+    "loadFailed": "Karar mercii ayarları yüklenemedi: {{error}}"
   },
   "stats": {
     "title": "Son {{days}} gün",
-    "empty": "Henüz kaydedilmiş karar yok.",
     "calls": "Çağrı",
     "agreement": "Uyum",
     "agreementHint": "Gölge karşılaştırmalarında modelin mevcut mantıkla aynı karara vardığı oran.",
     "applied": "Uygulanan",
     "errors": "Hata",
+    "fallbacks": "Yedeğe düşen",
     "latency": "p50 / p95",
     "latencyValue": "{{p50}} / {{p95}} ms",
     "cost": "Maliyet",
     "readyToSwitch": "Uyum yüksek: açmaya hazır.",
     "keepShadow": "Uyum düşük: gölgede tut.",
-    "needsData": "Veri toplanıyor ({{done}} / {{needed}} karşılaştırma)."
+    "needsData": "Veri toplanıyor ({{done}} / {{needed}} karşılaştırma).",
+    "challenger": "Rakip {{label}}",
+    "challengerLine": "{{done}} karşılaştırmada uyum {{rate}} · p50 {{p50}} ms · {{cost}}",
+    "challengerNone": "henüz karşılaştırma yok",
+    "challengerReady": "Rakip model devralacak kadar sık aynı kararı veriyor.",
+    "challengerKeep": "Rakip model devralmak için çok sık ayrışıyor.",
+    "challengerCollect": "Rakip ölçülüyor ({{done}} / {{needed}} karşılaştırma)."
   },
   "recent": {
     "title": "Son kararlar",
     "empty": "Henüz yok.",
-    "vs": "öncesi {{baseline}}",
+    "vs": "karşısında {{baseline}}",
     "applied": "uygulandı",
-    "failed": "başarısız: {{error}}"
+    "failed": "başarısız: {{error}}",
+    "challenger": "rakip",
+    "fallback": "yedek"
   }
 }

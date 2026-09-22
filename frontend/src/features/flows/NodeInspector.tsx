@@ -228,7 +228,7 @@ export function NodeInspector({
             <JudgeFields
               question={node.judgeQuestion ?? ''}
               onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
-              hint="Her dal bir seçeneği düz cümleyle tarif eder; karar modeli son çıktının hangisine uyduğunu seçer. Emin değilse ya da cevap veremezse varsayılan (boş) dala gider. Ayarlar → Karar Modeli'nde açık olmalı."
+              hint="Her dal bir seçeneği düz cümleyle tarif eder; karar modeli son çıktının hangisine uyduğunu seçer. Emin değilse ya da cevap veremezse varsayılan (boş) dala gider. Ayarlar → Karar Mercileri'nde açık olmalı."
             />
           )}
           <span className="block text-xs text-[var(--color-text-dim)]">

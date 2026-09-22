@@ -1,25 +1,226 @@
 {
-  "title": "Decision model",
-  "intro": "A decision model answers typed questions (yes/no, pick one, score) in well under a second for a fraction of a cent. The app asks it at specific decision points; each point can stay off, run in shadow (asked in the background and measured next to the current logic, changing nothing) or be switched on.",
-  "privacy": "What is judged (a shell command, a coordinator message, a flow output, a transcript excerpt) is sent to the provider after obvious secrets are masked.",
-  "enabled": "Use the decision model",
-  "enabledHint": "Master switch. While off nothing is sent anywhere and every decision point behaves as before.",
-  "general": "Connection",
-  "backend": "Backend",
-  "instance": "Provider account",
-  "instanceAuto": "Automatic (first usable account)",
-  "instanceHint": "Uses the API key of an existing provider instance; no key is stored here.",
-  "instanceMissing": "No usable account for this backend. Add an OpenRouter instance under Settings → Providers.",
-  "instanceUnavailable": "{{id}} (not usable now)",
-  "model": "Model",
-  "modelCustom": "Custom model id…",
-  "modelCustomPlaceholder": "e.g. typesafe/jev-1.13",
-  "modelHint": "Keep a pinned snapshot while measuring: the \"latest\" alias follows new releases and makes shadow numbers incomparable.",
-  "price": "${{input}} per million input tokens · output free",
-  "timeout": "Timeout per attempt (ms)",
-  "timeoutHint": "A timed-out call is retried once. Whenever the model cannot answer, the decision point falls back to its old logic.",
-  "sites": "Decision points",
-  "sitesHint": "Start in shadow, watch the agreement below, switch a point on when you trust it.",
+  "title": "Decision authorities",
+  "intro": "Decision authorities are the places in the app that hand a decision to a decision provider: a model that answers typed questions (yes/no, pick one, rate) in a fraction of a second. Each authority can stay off, run in shadow (asked in the background and measured next to the existing logic, changing nothing) or be switched on, and each can use its own provider with a fallback and a challenger.",
+  "privacy": "What is judged (a shell command, a coordinator message, a flow output, a transcript excerpt) is sent to the decision model after obvious secrets are masked. A model on your own machine keeps it local.",
+  "enabled": "Use the decision layer",
+  "enabledHint": "Master switch. While off nothing is sent anywhere and every authority behaves as before.",
+  "defaultModel": "Default decision provider",
+  "defaultModelHint": "Answers for every authority that names no provider of its own.",
+  "defaultModelAuto": "First enabled provider",
+  "noModels": "No decision provider yet.",
+  "providersSummary": "{{n}} decision providers configured.",
+  "openProviders": "Manage them under Providers →",
+  "setup": {
+    "title": "Setup",
+    "done": "done",
+    "goProviders": "Go to Providers →",
+    "account": {
+      "title": "Provider account",
+      "text": "Add an OpenRouter account under provider instances and enter its API key. Not needed if you use a local model (LM Studio, Ollama, OpenJev) or give a decision provider its own key."
+    },
+    "provider": {
+      "title": "Decision provider",
+      "text": "Add one with “+ New decision provider” (the “Jev · OpenRouter” template borrows the account above), then press Test on its card.",
+      "action": "Add {{preset}}"
+    },
+    "enable": {
+      "title": "Decision authorities",
+      "text": "On the Decision authorities screen turn on “Use the decision layer”; run authorities in Shadow first and switch them On once the agreement is high.",
+      "goAuthorities": "Go to Decision authorities →"
+    }
+  },
+  "status": {
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "off": "Off",
+    "model": "Default provider: {{label}}",
+    "pausedUntil": "Paused after failures until {{time}}"
+  },
+  "providers": {
+    "title": "Decision providers",
+    "hint": "Models that answer typed questions instead of chatting: Jev (OpenRouter, TypeSafe), OpenJev or any local model (Ollama, LM Studio). They never appear in an agent's model picker.",
+    "openAuthorities": "Choose where they are used under Decision authorities →",
+    "loading": "Loading…",
+    "add": "+ New decision provider",
+    "empty": "No decision provider yet. Add one with the button above.",
+    "saved": "Decision provider updated",
+    "added": "Decision provider added",
+    "confirmDelete": "Are you sure you want to delete the decision provider \"{{label}}\"?",
+    "deleted": "Decision provider deleted",
+    "deletedUsed": "Decision provider deleted. These now use the default provider: {{list}}",
+    "state": {
+      "ready": "ready",
+      "paused": "paused",
+      "problem": "not ready",
+      "disabled": "disabled"
+    },
+    "id": "id",
+    "model": "model",
+    "endpoint": "endpoint",
+    "usedBy": "used by",
+    "usedByDefault": "default",
+    "viaProvider": "via provider {{id}}",
+    "free": "free · local",
+    "approximate": "approximate probabilities",
+    "statsLine": "{{calls}} calls · p50 {{p50}} ms · {{cost}}",
+    "test": "Test",
+    "testing": "Testing…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "testOk": "Answered in {{ms}} ms · {{cost}} · needs approval: {{probability}} · risk level {{level}}",
+    "testFailed": "Test failed: {{error}}"
+  },
+  "form": {
+    "newTitle": "New decision provider",
+    "editTitle": "Edit: {{label}}",
+    "template": "Template",
+    "templateNone": "Start from a template (optional)…",
+    "kind": "Kind",
+    "label": "Label",
+    "labelPlaceholder": "Label (e.g. OpenJev on the GPU box)",
+    "enabled": "Enabled",
+    "model": "Model",
+    "modelCustom": "Custom model id…",
+    "modelCustomPlaceholder": "The model id as the server lists it",
+    "credentials": "Credentials",
+    "credentialsOwn": "Own endpoint and key",
+    "credentialsProvider": "Borrow a provider account",
+    "credentialsProviderHint": "Uses the key and endpoint of that provider; no key is entered twice.",
+    "provider": "Provider account",
+    "providerAuto": "Automatic (first usable account)",
+    "providerMissing": "No usable provider account for this kind. Add one above, or use an own endpoint and key.",
+    "providerUnavailable": "{{id}} (currently unavailable)",
+    "baseUrl": "Base URL",
+    "baseUrlHint": "Empty = {{url}}",
+    "apiKey": "API key",
+    "apiKeyOptional": "API key (optional)",
+    "apiKeyStored": "(saved — type to replace)",
+    "apiKeySaved": "✓ saved (encrypted)",
+    "apiKeyClear": "Remove the saved key",
+    "apiKeyRequired": "This kind needs an API key.",
+    "timeout": "Timeout per attempt (ms)",
+    "timeoutHint": "A timed-out call is retried once; then the authority falls back.",
+    "context": "Context size (tokens)",
+    "contextHint": "Empty = the kind's {{tokens}}. Lower it for a local server started with a small context.",
+    "price": "${{input}} per million input tokens",
+    "localFree": "Runs on this machine or network: no token cost.",
+    "uncalibrated": "Reads an ordinary model's token probabilities: useful, but not calibrated like Jev.",
+    "add": "Add",
+    "update": "Update",
+    "saving": "Saving…",
+    "cancel": "Cancel"
+  },
+  "backend": {
+    "openrouter": {
+      "label": "OpenRouter Decisions",
+      "description": "OpenRouter's Decisions API (alpha). Serves TypeSafe's Jev: yes/no, pick-one and score answers with calibrated probabilities in well under a second."
+    },
+    "systemone": {
+      "label": "System One API (TypeSafe · OpenJev)",
+      "description": "TypeSafe's native decision API and every server that speaks it: TypeSafe itself, OpenRouter's System One endpoint, and open OpenJev servers running a decision model on your own hardware."
+    },
+    "llm-logprobs": {
+      "label": "Any LLM (token probabilities)",
+      "description": "Turns an ordinary chat model into a decision model: each question is asked as a one-letter multiple choice and the answer's probabilities are read from the model's token probabilities. Works with Ollama, LM Studio, llama.cpp, vLLM and any OpenAI-compatible server that returns logprobs.",
+      "field": {
+        "suffix": {
+          "label": "Question suffix",
+          "help": "Appended to every question. Hybrid reasoning models must answer at once: /no_think for Qwen3."
+        },
+        "extraBody": {
+          "label": "Extra request fields (JSON)",
+          "help": "Merged into every request body, e.g. to switch reasoning off on vLLM or llama.cpp."
+        },
+        "topLogprobs": {
+          "label": "Top logprobs",
+          "help": "Alternatives read per token (1-20). Options outside them count as zero."
+        },
+        "maxTokens": {
+          "label": "Max answer tokens",
+          "help": "Tokens the model may spend before its label (an empty <think></think> block, a leading space)."
+        },
+        "parallel": {
+          "label": "Parallel questions",
+          "help": "Questions asked at once. Lower it if the server runs one request at a time."
+        }
+      }
+    }
+  },
+  "preset": {
+    "jev-openrouter": {
+      "label": "Jev · OpenRouter",
+      "description": "TypeSafe Jev through the key of an OpenRouter provider you already have."
+    },
+    "jev-typesafe": {
+      "label": "Jev · TypeSafe",
+      "description": "TypeSafe's own API with a TypeSafe API key."
+    },
+    "jev-openrouter-systemone": {
+      "label": "Jev · OpenRouter (System One)",
+      "description": "OpenRouter's System One endpoint through the key of an OpenRouter provider you already have."
+    },
+    "openjev-local": {
+      "label": "OpenJev · this machine",
+      "description": "An OpenJev server on this computer (docker compose up, default port 8080). Free and private; needs a GPU."
+    },
+    "ollama-local": {
+      "label": "Ollama · this machine",
+      "description": "A model served by Ollama on this computer (port 11434)."
+    },
+    "lmstudio-local": {
+      "label": "LM Studio · this machine",
+      "description": "The model loaded in LM Studio's local server (port 1234)."
+    }
+  },
+  "authorities": {
+    "title": "Decision authorities",
+    "hint": "Every place in the app that can hand a decision to a decision provider. Start in shadow, watch the agreement, switch on when you trust it. A fallback answers when the provider cannot; a challenger is asked the same question in the background, so a new provider can be measured before it takes over.",
+    "model": "Provider",
+    "modelDefault": "Default ({{label}})",
+    "fallback": "Fallback",
+    "challenger": "Challenger",
+    "none": "None",
+    "explicit": "on request",
+    "failClosed": "fail-closed",
+    "failClosedHint": "When no model can answer it refuses (the gate stays shut) instead of falling back."
+  },
+  "group": {
+    "safety": "Safety",
+    "coordination": "Coordination",
+    "flows": "Flows and Rota",
+    "routing": "Routing",
+    "context": "Context",
+    "housekeeping": "Housekeeping"
+  },
+  "pattern": {
+    "gate": "yes/no",
+    "pick": "pick one",
+    "rate": "rate",
+    "select": "select",
+    "triage": "triage"
+  },
+  "authority": {
+    "stall-judge": {
+      "label": "Coordinator stall judge",
+      "description": "Does the coordinator's last message claim it opened workers it never opened? Replaces a Haiku call per idle coordinator turn.",
+      "threshold": "Minimum probability of \"stalled\" before the coordinator is nudged."
+    },
+    "tool-risk": {
+      "label": "Shell command risk check",
+      "description": "A second look at shell commands that would run without asking (auto mode or an \"always allow\" rule such as git *). When on, a risky command becomes an approval prompt; an unattended run is never blocked.",
+      "threshold": "Minimum probability that the command needs approval before you are asked."
+    },
+    "flow-judge": {
+      "label": "Flow judge nodes",
+      "description": "Branch and loop nodes in the \"judge\" match mode let the model pick the arm or decide the loop's exit condition instead of matching text.",
+      "threshold": "Minimum probability for an arm to be taken (otherwise the default arm) or for the exit condition to count as met."
+    },
+    "phase-gate": {
+      "label": "Rota judge gates",
+      "description": "Phase gates of kind \"judge\" ask whether the phase's exit condition holds, judged against the root session's recent transcript. If no model can answer, the gate stays shut.",
+      "threshold": "Minimum probability that the exit condition holds before the gate opens."
+    }
+  },
   "threshold": "Threshold",
   "modeLabel": {
     "off": "Off",
@@ -27,70 +228,47 @@
     "on": "On"
   },
   "modeHint": {
-    "off": "Not consulted.",
-    "shadow": "Asked in the background and logged next to the current verdict; changes nothing.",
-    "on": "Its answer is used; failures fall back to the previous logic."
-  },
-  "site": {
-    "stall-judge": {
-      "label": "Coordinator stall judge",
-      "description": "Did the coordinator's last message claim worker spawns that never happened? Replaces a Haiku call per idle coordinator turn.",
-      "threshold": "Minimum probability of \"stalled\" before the coordinator is nudged."
-    },
-    "tool-risk": {
-      "label": "Shell command risk check",
-      "description": "A second look at shell commands that would run without asking (auto mode, or an \"always allow\" grant such as git *). When on, a risky command becomes an approval prompt; an unattended run is never blocked.",
-      "threshold": "Minimum probability that the command needs approval before you are asked."
-    },
-    "flow-judge": {
-      "label": "Flow judge nodes",
-      "description": "Branch and loop nodes whose match mode is \"judge\" let the model pick the arm or decide the loop's exit condition instead of matching text.",
-      "threshold": "Minimum probability for an arm (otherwise the default arm) or for the exit condition to count as met."
-    },
-    "phase-gate": {
-      "label": "Rota judge gates",
-      "description": "Phase gates of kind \"judge\" ask whether the phase's exit condition holds, judged against the root session's recent transcript. The gate stays closed when the model cannot answer.",
-      "threshold": "Minimum probability that the exit condition holds before the gate opens."
-    }
-  },
-  "status": {
-    "ready": "Ready",
-    "notReady": "Not ready",
-    "off": "Switched off",
-    "account": "Account: {{id}}",
-    "pausedUntil": "Paused after failures until {{time}}"
+    "off": "Never asked.",
+    "shadow": "Asked in the background and recorded next to the current decision; changes nothing.",
+    "on": "Its answer is used; on an error the previous logic takes over."
   },
   "actions": {
     "save": "Save",
     "saving": "Saving…",
     "saved": "Saved",
     "unsaved": "Unsaved changes",
-    "test": "Send a test question",
+    "test": "Test the default provider",
     "testing": "Testing…",
-    "testOk": "Answered in {{ms}} ms · {{cost}} · needs approval: {{probability}}",
-    "testFailed": "Test failed: {{error}}",
-    "loadFailed": "Decision model settings could not be loaded: {{error}}"
+    "loadFailed": "Could not load the decision authority settings: {{error}}"
   },
   "stats": {
     "title": "Last {{days}} days",
-    "empty": "No decisions recorded yet.",
     "calls": "Calls",
     "agreement": "Agreement",
-    "agreementHint": "Share of shadow comparisons in which the model reached the same verdict as the current logic.",
+    "agreementHint": "Share of shadow comparisons in which the model reached the same decision as the existing logic.",
     "applied": "Applied",
     "errors": "Errors",
+    "fallbacks": "Fallbacks",
     "latency": "p50 / p95",
     "latencyValue": "{{p50}} / {{p95}} ms",
     "cost": "Cost",
-    "readyToSwitch": "Agreement is high: ready to switch on.",
-    "keepShadow": "Agreement is low: keep it in shadow.",
-    "needsData": "Collecting data ({{done}} of {{needed}} comparisons)."
+    "readyToSwitch": "High agreement: ready to switch on.",
+    "keepShadow": "Low agreement: keep it in shadow.",
+    "needsData": "Collecting data ({{done}} / {{needed}} comparisons).",
+    "challenger": "Challenger {{label}}",
+    "challengerLine": "agreement {{rate}} over {{done}} comparisons · p50 {{p50}} ms · {{cost}}",
+    "challengerNone": "no comparisons yet",
+    "challengerReady": "The challenger agrees often enough to take over.",
+    "challengerKeep": "The challenger disagrees too often to take over.",
+    "challengerCollect": "Measuring the challenger ({{done}} / {{needed}} comparisons)."
   },
   "recent": {
     "title": "Recent decisions",
-    "empty": "Nothing yet.",
-    "vs": "was {{baseline}}",
+    "empty": "None yet.",
+    "vs": "vs {{baseline}}",
     "applied": "applied",
-    "failed": "failed: {{error}}"
+    "failed": "failed: {{error}}",
+    "challenger": "challenger",
+    "fallback": "fallback"
   }
 }

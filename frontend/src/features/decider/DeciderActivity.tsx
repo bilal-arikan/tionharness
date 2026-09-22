@@ -1,20 +1,26 @@
-// The decision ledger's most recent entries: what each point decided, how sure
-// the model was, what the existing logic said (shadow), latency and cost.
+// The decision ledger's most recent entries: which authority decided what, with
+// which model, how sure it was, what it was compared with (the existing logic
+// in shadow mode, the answering model for a challenger), latency and cost.
 import { useTranslation } from 'react-i18next'
-import type { DeciderRecord } from '@/types/decider'
+import type { DeciderAuthority, DeciderModelInstance, DeciderRecord } from '@/types/decider'
 import { Badge, SectionHead } from '@/shared/components'
 import { formatTime } from '@/shared/lib/intl'
 import { percent, usd } from '@/shared/lib/format'
+import { modelLabel } from './deciderModel'
 
 interface Props {
   records: DeciderRecord[]
   days: number
+  models: DeciderModelInstance[]
+  authorities: DeciderAuthority[]
 }
 
 const MODE_TONE = { off: 'muted', shadow: 'accent', on: 'success' } as const
 
-export function DeciderActivity({ records, days }: Props) {
+export function DeciderActivity({ records, days, models, authorities }: Props) {
   const { t } = useTranslation('decider')
+  const authorityLabel = (id: string) =>
+    t(`authority.${id}.label`, { defaultValue: authorities.find((a) => a.id === id)?.label ?? id })
   return (
     <section className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <SectionHead>
@@ -27,10 +33,15 @@ export function DeciderActivity({ records, days }: Props) {
           {records.map((r, i) => (
             <li key={`${r.at}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
               <span className="tabular-nums text-[var(--color-text-dim)]">{formatTime(r.at)}</span>
-              <span className="font-medium">
-                {t(`site.${r.site}.label`, { defaultValue: r.site })}
-              </span>
+              <span className="font-medium">{authorityLabel(r.authority)}</span>
               <Badge tone={MODE_TONE[r.mode] ?? 'muted'}>{t(`modeLabel.${r.mode}`)}</Badge>
+              {r.role === 'challenger' && <Badge tone="warning">{t('recent.challenger')}</Badge>}
+              {r.fallback && <Badge tone="warning">{t('recent.fallback')}</Badge>}
+              {r.instance && (
+                <span className="text-[var(--color-text-dim)]">
+                  {modelLabel(models, r.instance)}
+                </span>
+              )}
               {r.error ? (
                 <span className="text-[var(--color-danger)]">
                   {t('recent.failed', { error: r.error })}

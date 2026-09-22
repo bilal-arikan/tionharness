@@ -27,8 +27,9 @@ export const APP_CATS: CatMeta[] = [
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
   // The agents the app runs for itself (titler, compaction, insight, workers).
   { key: 'sysagents', label: 'Sistem Ajanları', icon: Bot },
-  // Decision model (internal/decider): typed yes/no / choice / score answers.
-  { key: 'decider', label: 'Karar Modeli', icon: Scale },
+  // Decision authorities (internal/decider): which decision provider answers
+  // where. The decision providers themselves sit on the Providers page.
+  { key: 'decider', label: 'Karar Mercileri', icon: Scale },
   { key: 'hooks', label: 'Hooks', icon: Webhook },
   { key: 'exttools', label: 'Harici Araçlar', icon: ScanSearch },
   // Dedicated audio page: sound effects, speech input (STT) + output (TTS).

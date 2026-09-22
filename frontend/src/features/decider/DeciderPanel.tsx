@@ -1,43 +1,71 @@
-// Settings page of the decision-model layer (backend: internal/decider). Self
+// Decision authorities screen (backend: internal/decider): the master switch,
+// the default decision provider, every authority's mode, threshold, provider,
+// fallback and challenger, and the recent decisions. The decision providers
+// themselves are managed on Settings → Providers (DeciderProviders). Self
 // managed: it loads and saves /api/decider itself, outside the app-settings
-// draft, because the decider keeps its own settings document.
-import { useCallback, useEffect, useState } from 'react'
+// draft, because the decider keeps its own settings documents.
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Scale } from 'lucide-react'
 import { api } from '@/api'
 import type { DeciderConfig, DeciderTestResult, DeciderView } from '@/types/decider'
-import { Badge, Button, LoadingState, SectionHead, toast } from '@/shared/components'
-import { Toggle } from '@/features/settings/primitives'
+import { Badge, Button, LoadingState, toast } from '@/shared/components'
+import { Field, Toggle, inputCls } from '@/features/settings/primitives'
 import { formatTime } from '@/shared/lib/intl'
 import { percent, usd } from '@/shared/lib/format'
-import { sameConfig, statsFor, statusTone } from './deciderModel'
-import { DeciderConnection } from './DeciderConnection'
-import { DeciderSiteRow } from './DeciderSiteRow'
+import {
+  defaultModelId,
+  modelLabel,
+  pruneModelRefs,
+  sameConfig,
+  setupSteps,
+  statusTone,
+} from './deciderModel'
+import { DeciderSetupGuide } from './DeciderSetupGuide'
+import { DeciderAuthorities } from './DeciderAuthorities'
 import { DeciderActivity } from './DeciderActivity'
 
 interface Props {
   onError: (msg: string) => void
+  // onOpenProviders switches to Settings → Providers, where decision providers
+  // are added and edited.
+  onOpenProviders?: () => void
 }
 
-export function DeciderPanel({ onError }: Props) {
+export function DeciderPanel({ onError, onOpenProviders }: Props) {
   const { t } = useTranslation('decider')
   const [view, setView] = useState<DeciderView | null>(null)
   const [draft, setDraft] = useState<DeciderConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [test, setTest] = useState<DeciderTestResult | null>(null)
+  // saved is the configuration the server last reported, read by applyView
+  // after an await (a render's closure may be stale by then).
+  const saved = useRef<DeciderConfig | null>(null)
 
-  const apply = useCallback((v: DeciderView) => {
+  // applyView takes a view the server sent. A draft with unsaved edits survives
+  // it (minus references to a model that is gone); a clean one follows the
+  // server.
+  const applyView = (v: DeciderView) => {
+    const before = saved.current
+    saved.current = v.config
     setView(v)
-    setDraft(v.config)
-  }, [])
+    setDraft((d) =>
+      d && before && !sameConfig(d, before)
+        ? pruneModelRefs(
+            d,
+            v.models.map((m) => m.id),
+          )
+        : v.config,
+    )
+  }
 
   // Load once on mount. onError may be a fresh function on every parent render,
   // and a reload would overwrite unsaved edits in the draft.
   useEffect(() => {
     api
       .getDecider()
-      .then(apply)
+      .then(applyView)
       .catch((e) => onError(t('actions.loadFailed', { error: (e as Error).message })))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -46,11 +74,23 @@ export function DeciderPanel({ onError }: Props) {
 
   const dirty = !sameConfig(draft, view.config)
   const tone = statusTone(view.status, view.config.enabled)
+  const defaultLabel = modelLabel(
+    view.models,
+    view.status.model || defaultModelId(view.config, view.models),
+  )
+  // The model "automatic" resolves to: the first enabled one.
+  const autoModel = modelLabel(
+    view.models,
+    defaultModelId({ ...draft, defaultModel: '' }, view.models),
+  )
 
   const save = async () => {
     setSaving(true)
     try {
-      apply(await api.saveDecider(draft))
+      const v = await api.saveDecider(draft)
+      saved.current = v.config
+      setView(v)
+      setDraft(v.config)
       toast.success(t('actions.saved'))
     } catch (e) {
       onError((e as Error).message)
@@ -64,9 +104,8 @@ export function DeciderPanel({ onError }: Props) {
     setTest(null)
     try {
       setTest(await api.testDecider())
-      // The test refreshes the health badge (a failure may have paused the endpoint).
-      const fresh = await api.getDecider()
-      setView(fresh)
+      // The test refreshes the health badge (a failure may have paused the model).
+      applyView(await api.getDecider())
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -91,9 +130,7 @@ export function DeciderPanel({ onError }: Props) {
         </p>
         <p>{t('intro')}</p>
         <p className="text-xs">{t('privacy')}</p>
-        {view.status.instance && (
-          <p className="text-xs">{t('status.account', { id: view.status.instance })}</p>
-        )}
+        {defaultLabel && <p className="text-xs">{t('status.model', { label: defaultLabel })}</p>}
         {view.status.backoffUntil ? (
           <p className="text-xs text-[var(--color-warning)]">
             {t('status.pausedUntil', { time: formatTime(view.status.backoffUntil) })}
@@ -104,6 +141,32 @@ export function DeciderPanel({ onError }: Props) {
         )}
       </div>
 
+      <DeciderSetupGuide
+        steps={setupSteps(view)}
+        actions={
+          onOpenProviders && {
+            account: (
+              <button
+                type="button"
+                onClick={onOpenProviders}
+                className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+              >
+                {t('setup.goProviders')}
+              </button>
+            ),
+            provider: (
+              <button
+                type="button"
+                onClick={onOpenProviders}
+                className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+              >
+                {t('setup.goProviders')}
+              </button>
+            ),
+          }
+        }
+      />
+
       <Toggle
         label={t('enabled')}
         hint={t('enabledHint')}
@@ -111,26 +174,45 @@ export function DeciderPanel({ onError }: Props) {
         onChange={(v) => setDraft({ ...draft, enabled: v })}
       />
 
-      <DeciderConnection
-        draft={draft}
-        backends={view.backends}
-        candidates={view.candidates}
-        onChange={setDraft}
-      />
+      <p className="flex flex-wrap items-center gap-x-2 text-xs text-[var(--color-text-dim)]">
+        {view.models.length === 0 ? (
+          <span className="text-[var(--color-warning)]">{t('noModels')}</span>
+        ) : (
+          <span>{t('providersSummary', { n: view.models.length })}</span>
+        )}
+        {onOpenProviders && (
+          <button
+            type="button"
+            onClick={onOpenProviders}
+            className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+            data-testid="decider-open-providers"
+          >
+            {t('openProviders')}
+          </button>
+        )}
+      </p>
 
-      <section className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <SectionHead>{t('sites')}</SectionHead>
-        <p className="text-xs text-[var(--color-text-dim)]">{t('sitesHint')}</p>
-        {view.sites.map((site) => (
-          <DeciderSiteRow
-            key={site.id}
-            site={site}
-            draft={draft}
-            stats={statsFor(view.stats, site.id)}
-            onChange={setDraft}
-          />
-        ))}
-      </section>
+      {view.models.length > 0 && (
+        <Field label={t('defaultModel')} hint={t('defaultModelHint')}>
+          <select
+            className={inputCls}
+            value={draft.defaultModel}
+            onChange={(e) => setDraft({ ...draft, defaultModel: e.target.value })}
+            data-testid="decider-default-model"
+          >
+            <option value="">
+              {autoModel ? `${t('defaultModelAuto')} (${autoModel})` : t('defaultModelAuto')}
+            </option>
+            {view.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label || m.id}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      <DeciderAuthorities view={view} draft={draft} onChange={setDraft} />
 
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={save} disabled={!dirty || saving} data-testid="decider-save">
@@ -139,7 +221,7 @@ export function DeciderPanel({ onError }: Props) {
         <Button
           variant="secondary"
           onClick={runTest}
-          disabled={testing || dirty}
+          disabled={testing || dirty || view.models.length === 0}
           data-testid="decider-test"
         >
           {testing ? t('actions.testing') : t('actions.test')}
@@ -154,16 +236,22 @@ export function DeciderPanel({ onError }: Props) {
           data-testid="decider-test-result"
         >
           {test.ok && test.response
-            ? t('actions.testOk', {
+            ? t('providers.testOk', {
                 ms: test.response.latencyMs,
                 cost: usd(test.response.usage.costUsd),
                 probability: approval === undefined ? '?' : percent(approval),
+                level: test.response.answers?.risk?.score?.toFixed(1) ?? '?',
               })
-            : t('actions.testFailed', { error: test.error ?? '' })}
+            : t('providers.testFailed', { error: test.error ?? '' })}
         </p>
       )}
 
-      <DeciderActivity records={view.recent} days={view.statsDays} />
+      <DeciderActivity
+        records={view.recent}
+        days={view.statsDays}
+        models={view.models}
+        authorities={view.authorities}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { CodexAuthDialog } from './CodexAuthDialog'
 import { ProviderInstanceForm } from './providers/ProviderInstanceForm'
 import { ProviderInstanceList, type ProviderAuthView } from './providers/ProviderInstanceList'
 import { useProviderInstances } from './providers/useProviderInstances'
+import { DeciderProviders } from '@/features/decider'
 
 interface Props {
   draft: AppSettings
@@ -17,6 +18,8 @@ interface Props {
   runTest: (provider: string, model?: string) => void
   workspaceClaudeHome?: string
   workspaceCodexHome?: string
+  // onOpenDecider switches to the Decision authorities screen.
+  onOpenDecider?: () => void
 }
 
 function ProviderInstances() {
@@ -148,7 +151,7 @@ function ProviderInstances() {
   )
 }
 
-export function ProvidersPanel(_props: Props) {
+export function ProvidersPanel({ onOpenDecider }: Props) {
   return (
     <>
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -159,6 +162,9 @@ export function ProvidersPanel(_props: Props) {
         kaydedilir.
       </p>
       <ProviderInstances />
+      {/* Decision providers (internal/decider): answer typed questions only,
+          so they live in their own list and never reach a model picker. */}
+      <DeciderProviders onOpenAuthorities={onOpenDecider} />
     </>
   )
 }
