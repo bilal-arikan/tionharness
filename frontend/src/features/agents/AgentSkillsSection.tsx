@@ -42,11 +42,13 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
   // assigned they move into the selected list, so only the not-yet-picked ones
   // are offered here. Available-to-assign = restricted skills not yet picked.
   const shared = useMemo(
-    () => all.filter((s) => s.shared && !selected.includes(s.slug)),
+    () => all.filter((s) => s.shared && !s.archived && !selected.includes(s.slug)),
     [all, selected],
   )
+  // Archived skills are never offered: agents cannot load them. One that is
+  // already assigned still shows in the selected list (via bySlug).
   const available = useMemo(
-    () => all.filter((s) => !s.shared && !selected.includes(s.slug)),
+    () => all.filter((s) => !s.shared && !s.archived && !selected.includes(s.slug)),
     [all, selected],
   )
 

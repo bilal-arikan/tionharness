@@ -9,9 +9,12 @@ import { isWorkerSystemAgent } from '@/features/agents/agentRoster'
  * them at session start only produces a pick the server rejects.
  *
  * Worker profiles (systemKey "subagent-*") are system agents too, but they ARE
- * meant to be addressed directly, so they stay selectable.
+ * meant to be addressed directly, so they stay selectable. Archived agents are
+ * never startable.
  */
 export function isStartableAgent(agent: Agent): boolean {
+  // An archived agent cannot run (the backend answers 409), so never offer it.
+  if (agent.archived) return false
   if (!agent.system) return true
   return isWorkerSystemAgent(agent)
 }

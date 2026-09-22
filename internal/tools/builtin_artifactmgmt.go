@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
@@ -127,7 +128,7 @@ func (ListArtifactsTool) Def() providers.ToolDef {
 		Description: "List the artifacts in this workspace (id, title, kind, optional contentFile path, and whether each " +
 			"was created by an agent — provenance only; you can delete any of them). Results are PAGINATED: " +
 			"pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you " +
-			"reach the next page with offset += limit. Filters: sessionId (only artifacts from that session), " +
+			"reach the next page with offset += limit. Live (non-archived) artifacts are returned by default; archived=true returns only archived artifacts, never mixed with live ones. Filters: sessionId (only artifacts from that session), " +
 			"kind (markdown|code|html|text|svg|mermaid|image|video|audio|file), origin (chat|manual|agent|tool|plan). Sort: updated_desc " +
 			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc (name sorts by title). " +
 			"Use read_artifact to get content by id, update_artifact to edit, delete_artifact to remove.",
@@ -137,6 +138,7 @@ func (ListArtifactsTool) Def() providers.ToolDef {
     "sessionId": { "type": "string", "description": "Only artifacts created in this session." },
     "kind": { "type": "string", "description": "Only artifacts of this kind (markdown|code|html|text|svg|mermaid|image|video|audio|file)." },
     "origin": { "type": "string", "description": "Only artifacts with this origin (chat|manual|agent|tool|plan)." },
+    "archived": { "type": "boolean", "description": "When true, return only archived artifacts. Omit or false for live ones." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
     "limit": { "type": "integer", "description": "Max artifacts per page (default 20, max 100)." },
     "offset": { "type": "integer", "description": "How many matching artifacts to skip before this page (default 0)." }
@@ -151,6 +153,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (str
 		SessionID string `json:"sessionId"`
 		Kind      string `json:"kind"`
 		Origin    string `json:"origin"`
+		Archived  bool   `json:"archived"`
 		Sort      string `json:"sort"`
 		Limit     int    `json:"limit"`
 		Offset    int    `json:"offset"`
@@ -168,8 +171,12 @@ func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (str
 	}
 	kind := strings.TrimSpace(in.Kind)
 	origin := strings.TrimSpace(in.Origin)
+	archived := archive.FromBool(in.Archived)
 	matches := make([]db.Artifact, 0, len(artifacts))
 	for _, a := range artifacts {
+		if !archived.Keep(a.Archived) {
+			continue
+		}
 		if kind != "" && a.Kind != kind {
 			continue
 		}

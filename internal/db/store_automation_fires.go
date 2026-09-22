@@ -37,7 +37,10 @@ const (
 	AutomationSkipBackstop       = "absolute_backstop"
 	AutomationSkipAutonomyPaused = "autonomy_paused"
 	AutomationSkipTargetMissing  = "target_missing"
-	AutomationSkipEmptyPrompt    = "empty_prompt"
+	// AutomationSkipAgentArchived: the rule's target agent is archived and
+	// archived agents never run (Agent.RunnableErr).
+	AutomationSkipAgentArchived = "agent_archived"
+	AutomationSkipEmptyPrompt   = "empty_prompt"
 )
 
 // AutomationFireRecord is one ledger line.

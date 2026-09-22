@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/textutil"
@@ -217,7 +218,8 @@ func (s *Server) captureAttachmentArtifacts(ctx context.Context, database *db.DB
 
 // handleListArtifacts lists artifacts in the workspace, optionally filtered via
 // query params: sessionId (origin session), kind, origin, q (title substring,
-// case-insensitive), archived (bool). With any of limit/offset/sort present the
+// case-insensitive), archived (true = archived only, false = live only, all or
+// absent = both — see archive.ParseFilter). With any of limit/offset/sort present the
 // response is the standard {items,total,offset,limit,hasMore} envelope (same
 // keys as the list_artifacts tool); without them it stays the legacy full
 // unwrapped list so existing UI clients keep working.
@@ -237,9 +239,8 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 	kind := strings.TrimSpace(q.Get("kind"))
 	origin := strings.TrimSpace(q.Get("origin"))
 	search := textutil.FoldLower(strings.TrimSpace(q.Get("q")))
-	archived, archivedGiven, err := boolQuery(q, "archived")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	archived, ok := archiveFilterQuery(w, q, archive.All)
+	if !ok {
 		return
 	}
 	// A listing is metadata: the body of every artifact would otherwise ride
@@ -264,7 +265,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 		if search != "" && !textutil.ContainsFold(a.Title, search) {
 			continue
 		}
-		if archivedGiven && a.Archived != *archived {
+		if !archived.Keep(a.Archived) {
 			continue
 		}
 		if stripContent {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -32,7 +34,10 @@ import {
   PaneHeader,
   RestoreDefaultButton,
   SeedDefaultBadge,
+  ArchiveViewToggle,
+  ArchiveViewBanner,
 } from '@/shared/components'
+import { archiveSide } from '@/shared/lib/archive'
 import {
   NewItemButton,
   SELECTED_ITEM_CLS,
@@ -217,13 +222,19 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
     null,
   )
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.skillsListOpen')
+  // Archive view (the kanban board's pattern): the list shows only archived
+  // skills — never advertised to agents — with a restore action, instead of
+  // the live catalog. The backend returns both sides; the view picks one.
+  const [showArchived, setShowArchived] = useState(false)
+  const [archiveBusy, setArchiveBusy] = useState(false)
+  const sideList = useMemo(() => archiveSide(list, showArchived), [list, showArchived])
 
   // Skills sorted newest-edited first. Since useGroupedList preserves incoming
   // order within each bucket, feeding it this pre-sorted list makes every group
   // list its skills from most- to least-recently edited (by SKILL.md mtime).
   const sortedList = useMemo(
-    () => [...list].sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0)),
-    [list],
+    () => [...sideList].sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0)),
+    [sideList],
   )
 
   // Skills bucketed by group (named groups first, ungrouped last), with
@@ -261,6 +272,13 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
   }, [onError])
 
   useEffect(() => reload(), [reload, skillsTick])
+
+  // Keep the selection on the shown side: switching views (or archiving the
+  // selected skill) moves it to the first skill of that side.
+  useEffect(() => {
+    if (activeSlug && sideList.some((s) => s.slug === activeSlug)) return
+    setActiveSlug(sideList[0]?.slug ?? null)
+  }, [sideList, activeSlug, setActiveSlug])
 
   // Load the selected skill's full body lazily when the selection changes.
   useEffect(() => {
@@ -389,6 +407,23 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       .catch((e) => onError((e as Error).message))
   }, [sel, activeSlug, reload, onError])
 
+  // Archive or restore skills. Either way they leave the current view; the
+  // catalog is re-read so the list and the selection follow.
+  const setArchived = useCallback(
+    (slugs: string[], archived: boolean) => {
+      if (slugs.length === 0) return
+      setArchiveBusy(true)
+      Promise.all(slugs.map((slug) => api.setArchived('skills', slug, archived)))
+        .then(() => {
+          sel.clear()
+          reload()
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setArchiveBusy(false))
+    },
+    [sel, reload, onError],
+  )
+
   // Bulk-set the catalog-visibility tier (full | summary | name-only | hidden)
   // for every selected skill at once, then refresh the catalog and keep the
   // selection so the user can chain another action. The tier chips update in
@@ -457,7 +492,7 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
     [reload, onError],
   )
   const dnd = useGroupDnD<Skill>({
-    items: list,
+    items: sideList,
     idOf: skillId,
     groupOf: skillGroupKey,
     ungroupedLabel: UNGROUPED,
@@ -486,9 +521,19 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Skills · {list.length}
+            Skills · {sideList.length}
           </span>
           <div className="flex items-center gap-1.5">
+            <ArchiveViewToggle
+              testId="skills-archived-toggle"
+              active={showArchived}
+              onToggle={() => {
+                sel.clear()
+                setShowArchived((v) => !v)
+              }}
+              backLabel="Skills"
+              backTitle="Aktif becerilere dön"
+            />
             {grouped.length > 1 && (
               <button
                 data-testid="skills-toggle-all"
@@ -509,14 +554,23 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
             </button>
           </div>
         </div>
-        <NewItemButton
-          onClick={() => setEditor({ mode: 'create' })}
-          label="Yeni Beceri"
-          title="Yeni beceri oluştur"
-          testId="skills-create"
-        />
+        {showArchived ? (
+          <ArchiveViewBanner
+            testId="skills-archive-banner"
+            count={sideList.length}
+            noun="beceri"
+            restoreHint="ajanlara hiç sunulmaz; seçip “Arşivden çıkar”a bas."
+          />
+        ) : (
+          <NewItemButton
+            onClick={() => setEditor({ mode: 'create' })}
+            label="Yeni Beceri"
+            title="Yeni beceri oluştur"
+            testId="skills-create"
+          />
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {list.length === 0 && (
+          {!showArchived && list.length === 0 && (
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
               <Sparkles size={28} className="opacity-40" />
               <p>
@@ -700,6 +754,13 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
               {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
             </SelectionBarButton>
           </div>
+          <SelectionBarButton
+            icon={showArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+            onClick={() => setArchived([...sel.selected], !showArchived)}
+            disabled={archiveBusy}
+          >
+            {showArchived ? 'Arşivden çıkar' : 'Arşivle'}
+          </SelectionBarButton>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>
@@ -781,6 +842,20 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
                 >
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
+                </button>
+                <button
+                  data-testid="skill-detail-archive"
+                  onClick={() => setArchived([active.slug], !active.archived)}
+                  disabled={archiveBusy}
+                  title={
+                    active.archived
+                      ? 'Arşivden çıkar: ajanlara yeniden sunulsun'
+                      : 'Arşivle: dosya kalır, ajanlara sunulmaz ve haritadan gizlenir'
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+                >
+                  {active.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                  {active.archived ? 'Arşivden çıkar' : 'Arşivle'}
                 </button>
                 <CopyPathButton path={active.dir} />
                 {/* Shipped skills only. The automatic re-seed refreshes a skill

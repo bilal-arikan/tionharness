@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/backup"
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -404,6 +405,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerExecutionRoutes(mux)
 	s.registerArtifactRoutes(mux)
 	s.registerSkillRoutes(mux)
+	s.registerEntityArchiveRoutes(mux)
 	s.registerMarketRoutes(mux)
 	s.registerIngestRoutes(mux)
 	s.registerTTSRoutes(mux)
@@ -719,8 +721,8 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/automations/{id}", s.handleUpdateAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/toggle", s.handleToggleAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/reset", s.handleResetAutomation)
-	// Archive (curator-safe hide) + the per-rule fire ledger (_Docs/77 R5).
-	mux.HandleFunc("POST /api/automations/{id}/archive", s.handleArchiveAutomation)
+	// The per-rule fire ledger (_Docs/77 R5). Archive/unarchive live in
+	// registerEntityArchiveRoutes with the other archivable entities.
 	mux.HandleFunc("POST /api/automations/{id}/pin", s.handlePinAutomation)
 	mux.HandleFunc("GET /api/automations/{id}/fires", s.handleAutomationFires)
 	mux.HandleFunc("DELETE /api/automations/{id}", s.handleDeleteAutomation)
@@ -1107,6 +1109,8 @@ func writeDBError(w http.ResponseWriter, err error, notFoundMsg string) bool {
 		return false
 	case errors.Is(err, db.ErrNotFound):
 		writeError(w, http.StatusNotFound, notFoundMsg)
+	case errors.Is(err, archive.ErrArchived):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}

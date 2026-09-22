@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -511,8 +512,12 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 		}
 	}
 	// Prefer an existing agent so a user-named agent wins over a same-named profile.
-	if a, err := r.resolveAgent(ctx, target); err == nil {
+	a, err := r.resolveAgent(ctx, target)
+	if err == nil {
 		return a, false, nil
+	}
+	if errors.Is(err, archive.ErrArchived) {
+		return db.Agent{}, false, err
 	}
 	if p, ok := r.subagentProfile(target); ok {
 		return r.ephemeralSubagent(caller, p), true, nil

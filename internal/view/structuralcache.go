@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 )
@@ -85,8 +86,16 @@ func (c *structuralCache) activeTasks(ctx context.Context) ([]db.Task, error) {
 	return c.tasks.get(func() ([]db.Task, error) { return c.p.store.ListActiveTasks(ctx) })
 }
 
+// The Map (and every structural walk) hides archived entities, the way the
+// board hides archived cards (activeTasks): an archived agent, artifact,
+// automation or skill is put away, not part of the workspace's live structure.
+// Their REST/tool lists still reach them through the archive filter.
+
 func (c *structuralCache) allAgents(ctx context.Context) ([]db.Agent, error) {
-	return c.agents.get(func() ([]db.Agent, error) { return c.p.store.ListAgents(ctx) })
+	return c.agents.get(func() ([]db.Agent, error) {
+		list, err := c.p.store.ListAgents(ctx)
+		return archive.Apply(list, archive.Active, func(a db.Agent) bool { return a.Archived }), err
+	})
 }
 
 func (c *structuralCache) allFlowRuns(ctx context.Context) ([]db.FlowRun, error) {
@@ -94,11 +103,17 @@ func (c *structuralCache) allFlowRuns(ctx context.Context) ([]db.FlowRun, error)
 }
 
 func (c *structuralCache) allArtifacts(ctx context.Context) ([]db.Artifact, error) {
-	return c.artifacts.get(func() ([]db.Artifact, error) { return c.p.store.ListArtifacts(ctx, "") })
+	return c.artifacts.get(func() ([]db.Artifact, error) {
+		list, err := c.p.store.ListArtifacts(ctx, "")
+		return archive.Apply(list, archive.Active, func(a db.Artifact) bool { return a.Archived }), err
+	})
 }
 
 func (c *structuralCache) allAutomations(ctx context.Context) ([]db.Automation, error) {
-	return c.automations.get(func() ([]db.Automation, error) { return c.p.store.ListAutomations(ctx) })
+	return c.automations.get(func() ([]db.Automation, error) {
+		list, err := c.p.store.ListAutomations(ctx)
+		return archive.Apply(list, archive.Active, func(a db.Automation) bool { return a.Archived }), err
+	})
 }
 
 func (c *structuralCache) allSkills() ([]skills.Skill, error) {
@@ -106,7 +121,7 @@ func (c *structuralCache) allSkills() ([]skills.Skill, error) {
 		if c.p.sources.Skills == nil {
 			return nil, fmt.Errorf("view: category skills: skill catalog unavailable")
 		}
-		return c.p.sources.Skills.List(), nil
+		return archive.Apply(c.p.sources.Skills.List(), archive.Active, func(s skills.Skill) bool { return s.Archived }), nil
 	})
 }
 

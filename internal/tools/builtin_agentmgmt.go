@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
@@ -518,7 +519,7 @@ func (ListAgentsTool) Def() providers.ToolDef {
 		Description: "List the agents in this workspace (id, name, state, provider/model, and whether each was " +
 			"created by an agent — provenance only; you can edit/delete any of them). Results are PAGINATED: " +
 			"pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you " +
-			"reach the next page with offset += limit. Filters: provider (case-insensitive substring), model " +
+			"reach the next page with offset += limit. Live (non-archived) agents are returned by default; archived=true returns only archived agents, never mixed with live ones. Archived agents cannot run until restored. Filters: provider (case-insensitive substring), model " +
 			"(case-insensitive substring), state (enabled = the active roster, the default; disabled = agents " +
 			"marked deleted but kept so past conversations still render their author). Sort: updated_desc " +
 			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
@@ -527,6 +528,7 @@ func (ListAgentsTool) Def() providers.ToolDef {
   "properties": {
     "provider": { "type": "string", "description": "Only agents whose provider contains this substring (case-insensitive)." },
     "model": { "type": "string", "description": "Only agents whose model contains this substring (case-insensitive)." },
+    "archived": { "type": "boolean", "description": "When true, return only archived agents. Omit or false for live ones." },
     "state": { "type": "string", "enum": ["enabled", "disabled"], "description": "enabled (default) = active roster; disabled = deleted-but-kept agents." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
     "limit": { "type": "integer", "description": "Max agents per page (default 20, max 100)." },
@@ -542,6 +544,7 @@ func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string
 		Provider string `json:"provider"`
 		Model    string `json:"model"`
 		State    string `json:"state"`
+		Archived bool   `json:"archived"`
 		Sort     string `json:"sort"`
 		Limit    int    `json:"limit"`
 		Offset   int    `json:"offset"`
@@ -581,7 +584,11 @@ func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string
 	provider := strings.ToLower(strings.TrimSpace(in.Provider))
 	model := strings.ToLower(strings.TrimSpace(in.Model))
 	matches := make([]db.Agent, 0, len(agents))
+	archived := archive.FromBool(in.Archived)
 	for _, a := range agents {
+		if !archived.Keep(a.Archived) {
+			continue
+		}
 		if provider != "" && !strings.Contains(strings.ToLower(a.Provider), provider) {
 			continue
 		}

@@ -101,5 +101,10 @@ once, no chain). Board/token/counter rules never self-loop.
 - **Switching kind via update** must leave a valid shape (a `tag` rule needs a
   `triggerTag`; a spawn rule needs a target) — the server rejects incoherent edits
   (`ValidateAutomationShape`).
+- **Archived rules and targets** — an archived automation never fires (fire ledger
+  reason `archived`); a rule whose target agent is archived is skipped with reason
+  `agent_archived` instead of spawning a turn that would fail. `list_automations`
+  hides archived rules unless called with `archived:true`. Restore with
+  `POST /api/automations/{id}/unarchive` (or unarchive the agent) — do not recreate.
 - **Token vs counter cadence** — token thresholds fire unpredictably (cache-inflated);
   reach for `counter` when you want a steady rhythm.

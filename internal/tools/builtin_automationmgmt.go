@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
@@ -458,6 +459,7 @@ func (ListAutomationsTool) Def() providers.ToolDef {
 			"enabled, iterationCount/maxIterations, and whether each was created by an agent — provenance only; " +
 			"you can edit/delete any of them). Results are PAGINATED: pass limit (default 20, max 100) and offset " +
 			"to page; the reply reports total and hasMore, and you reach the next page with offset += limit. " +
+			"Live (non-archived) automations are returned by default; archived=true returns only archived automations, never mixed with live ones. Archived automations never fire until restored. " +
 			"Filters: enabled (true/false), triggerKind (tag|board|token), targetAgentId (exact). Sort: " +
 			"updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
 		InputSchema: json.RawMessage(`{
@@ -466,6 +468,7 @@ func (ListAutomationsTool) Def() providers.ToolDef {
     "enabled": { "type": "boolean", "description": "Only enabled (true) or disabled (false) automations." },
     "triggerKind": { "type": "string", "enum": ["tag", "board", "token"], "description": "Only automations with this trigger kind." },
     "targetAgentId": { "type": "string", "description": "Only automations targeting this agent." },
+    "archived": { "type": "boolean", "description": "When true, return only archived automations. Omit or false for live ones." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
     "limit": { "type": "integer", "description": "Max automations per page (default 20, max 100)." },
     "offset": { "type": "integer", "description": "How many matching automations to skip before this page (default 0)." }
@@ -480,6 +483,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 		Enabled       *bool  `json:"enabled"`
 		TriggerKind   string `json:"triggerKind"`
 		TargetAgentID string `json:"targetAgentId"`
+		Archived      bool   `json:"archived"`
 		Sort          string `json:"sort"`
 		Limit         int    `json:"limit"`
 		Offset        int    `json:"offset"`
@@ -504,7 +508,11 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 	}
 	target := strings.TrimSpace(in.TargetAgentID)
 	matches := make([]db.Automation, 0, len(autos))
+	archived := archive.FromBool(in.Archived)
 	for _, a := range autos {
+		if !archived.Keep(a.Archived) {
+			continue
+		}
 		if in.Enabled != nil && a.Enabled != *in.Enabled {
 			continue
 		}

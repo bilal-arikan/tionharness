@@ -25,6 +25,8 @@ import {
   SelectionBarButton,
   PaneHeader,
   LoadingState,
+  ArchiveViewToggle,
+  ArchiveViewBanner,
 } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useStableCallback } from '@/shared/lib/useStableCallback'
@@ -598,21 +600,16 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
               {/* The board's projection — the same bytes an agent gets from
                   get_view{kind:'board'}: column histogram + the signals. */}
               <ViewButton target={{ kind: 'board', id: 'board' }} />
-              <button
-                data-testid="task-board-archived-toggle"
-                onClick={() => {
+              <ArchiveViewToggle
+                testId="task-board-archived-toggle"
+                active={showArchived}
+                onToggle={() => {
                   sel.clear()
                   setShowArchived((v) => !v)
                 }}
-                title={showArchived ? 'Aktif panoya dön' : 'Arşivlenenleri göster'}
-                className={`flex flex-shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs transition ${
-                  showArchived
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
-                }`}
-              >
-                <Archive size={13} /> {showArchived ? 'Panoya dön' : 'Arşiv'}
-              </button>
+                backLabel="Panoya dön"
+                backTitle="Aktif panoya dön"
+              />
               {!showArchived && groupBy === 'status' && (
                 <button
                   data-testid="task-board-columns-editor"
@@ -674,14 +671,11 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
         )}
 
         {showArchived && !loading && (
-          <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]">
-            <Archive size={13} className="flex-shrink-0" />
-            <span className="min-w-0 flex-1">
-              {tasks.length === 0
-                ? 'Arşivlenmiş görev yok.'
-                : `${tasks.length} arşivlenmiş görev — bir kartı geri almak için “Geri al”e bas.`}
-            </span>
-          </div>
+          <ArchiveViewBanner
+            count={tasks.length}
+            noun="görev"
+            restoreHint="bir kartı geri almak için “Geri al”e bas."
+          />
         )}
 
         {/* Board. Hidden (not unmounted) during the first load so column widths and

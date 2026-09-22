@@ -309,6 +309,13 @@ Explorer haritasının küçük varlıkları. Hepsi L0/L1'dir (transkript yok, L
 hepsi aynı kurala uyar: **boş alan satır üretmez**, ayrıştırılamayan alan
 "(okunamadı)" der.
 
+**Arşivliler haritada yok (2026-09-22):** yapısal yürüyüş (`structuralCache` —
+`Graph`, `Children`, `Neighborhood`, `get_view` hepsi onu kullanır) arşivli ajan,
+artifact, otomasyon ve skill'leri yüklerken eler; pano zaten yalnız aktif kartları
+okur (`ListActiveTasks`). Bir ajan arşivlenince onun oturum dalı da haritadan düşer
+(oturumlar yine "Oturumlar" kategorisinden görünür). REST/araç listeleri arşive
+`archived` filtresiyle ulaşmaya devam eder (`_Docs/02` "Ortak arşiv").
+
 **Schedule** — cron mu, tek seferlik uyanma mı:
 
 ```

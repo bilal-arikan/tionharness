@@ -1,5 +1,7 @@
 package db
 
+import "github.com/bilal-arikan/tionharness/internal/archive"
+
 // backfillProviderInstance fills a zero-value ProviderInstanceID at READ time
 // (_Docs/71 §2.5/§3): an agent row written before this field existed carries
 // "" here, but its Provider already holds a kind id, and every migrated
@@ -219,8 +221,27 @@ type Agent struct {
 	Deleted   bool  `json:"deleted,omitempty"`
 	DeletedAt int64 `json:"deletedAt,omitempty"`
 
+	// Archived puts the agent away like an archived kanban card: it leaves the
+	// roster's default view and the Map, but keeps its configuration, sessions
+	// and schedules and can be restored (SetAgentArchived). Unlike Deleted it is
+	// fully reversible. An archived agent is NOT runnable: every turn, spawn and
+	// delegation targeting it fails with an archive.ErrArchived error (RunnableErr)
+	// instead of being skipped silently. Not inheritable — a child agent keeps
+	// running when its parent is archived.
+	Archived   bool  `json:"archived,omitempty"`
+	ArchivedAt int64 `json:"archivedAt,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
+}
+
+// RunnableErr reports why the agent may not run a turn, or nil when it may.
+// Today the only such state is Archived; the error wraps archive.ErrArchived.
+func (a Agent) RunnableErr() error {
+	if a.Archived {
+		return archive.Error("agent", a.ID, a.Name)
+	}
+	return nil
 }
 
 // NativeWebSearchEnabled resolves the three-state NativeWebSearch toggle: an

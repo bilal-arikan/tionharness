@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	agentpkg "github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
@@ -44,6 +45,12 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Optional filters (none by default → legacy full roster).
+	// archived: absent/all keeps the full roster (history rendering needs
+	// archived authors too); true lists only archived agents, false only live.
+	archived, ok := archiveFilterQuery(w, q, archive.All)
+	if !ok {
+		return
+	}
 	state := q.Get("state")
 	provider := strings.ToLower(q.Get("provider"))
 	model := strings.ToLower(q.Get("model"))
@@ -61,6 +68,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeError(w, http.StatusBadRequest, "state must be enabled or disabled")
 			return
+		}
+		if !archived.Keep(a.Archived) {
+			continue
 		}
 		if provider != "" && !strings.Contains(strings.ToLower(a.Provider), provider) {
 			continue
@@ -256,6 +266,8 @@ func (s *Server) handleDuplicateAgent(w http.ResponseWriter, r *http.Request) {
 	clone.CreatedBy = ""  // user-owned copy, not an agent-created entity
 	clone.Deleted = false // never inherit the deleted flag
 	clone.DeletedAt = 0
+	clone.Archived = false // a copy starts live, like a fresh agent
+	clone.ArchivedAt = 0
 	clone.CreatedAt = 0 // stamped by CreateAgent
 	clone.UpdatedAt = 0
 	// A clone is an ordinary, editable agent: never a locked built-in, and never

@@ -101,7 +101,8 @@ export function CoordinatorWorkflowPicker({
     api
       .listSkills()
       .then((all) => {
-        if (alive) setRecipes(all.filter((s) => s.kind === 'coordinator-workflow'))
+        // Archived recipes are refused by the backend, so never offer them.
+        if (alive) setRecipes(all.filter((s) => s.kind === 'coordinator-workflow' && !s.archived))
       })
       .catch(() => {
         if (alive) setRecipes([])

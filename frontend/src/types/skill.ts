@@ -70,6 +70,9 @@ export interface Skill {
   // from autoSummary/nameOnly/summaryOnly on the backend. The single value the
   // Skills screen's tier selector reads and writes; mirrors a tool's visibility.
   visibility?: ToolVisibility
+  // Archived (frontmatter `archived: true`): listed only in the Skills screen's
+  // archive view; never advertised to agents, and use_skill refuses it.
+  archived?: boolean
   source: SkillSource
   // Non-empty for a specialised skill. 'coordinator-workflow' marks a saved
   // coordinator recipe (M5) — a reusable orchestration pattern selectable in the
