@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // rgTimeout bounds a delegated ripgrep run; a search that outlasts it falls back to
@@ -114,7 +115,12 @@ func runRipgrepCommand(ctx context.Context, exe string, args []string, dir strin
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	h := procwatch.Default().Begin(ctx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: "ripgrep", Command: exe + " " + strings.Join(args, " "), Dir: dir,
+	})
+	err := runTrackedCmd(cmd, h)
+	h.AppendOutput(stderr.String())
+	h.Finish(err)
 	return stdout.String(), err
 }
 

@@ -213,6 +213,16 @@ board should poll `get_view board` rather than re-listing every turn.
 **Logs** — `read_logs` (read the app log ring buffer). Load-on-demand — activate
 it like the rest of this suite.
 
+**Processes** — `list_processes` (read-only) lists the native OS processes
+TionHarness started for the agents: shell tool calls (foreground + background),
+`run_code`/`transform_data` interpreters, claude-cli/codex-cli transports, stdio
+MCP servers, hooks and external tool runs, each with its command line, pid,
+owner (session + agent), status, exit code and a short output tail. Filter by
+`status`/`kind`/`session`. Reach for it before starting yet another long
+command — a build that never exited is visible here and nowhere else. There is
+no kill tool: stopping a process is a user action in the workspace process panel,
+and your OWN background shells are stopped with `shell_manage`.
+
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
 the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions
 of EVERY kind — chat + spawn/worker/flow/task/schedule; optional `kind`/`state` filters; a context

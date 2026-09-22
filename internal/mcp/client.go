@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 const (
@@ -125,6 +126,8 @@ type StdioClient struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	reader *bufio.Reader
+	// watch is this server's entry in the process ledger (internal/procwatch).
+	watch *procwatch.Handle
 
 	writeMu sync.Mutex // serializes writes to stdin
 
@@ -210,6 +213,17 @@ func DialStdio(ctx context.Context, command string, args, env []string, dir stri
 		nextID:  1,
 		pending: map[int]chan reply{},
 	}
+	// Ledger entry: an MCP server is a native process that lives as long as the
+	// pool keeps it, with no turn to associate it with once the handshake is done.
+	// Stop routes through Close so the pool's own teardown runs too.
+	c.watch = procwatch.Default().Begin(context.WithoutCancel(ctx), procwatch.Meta{
+		Kind:    procwatch.KindMCP,
+		Label:   command,
+		Command: strings.TrimSpace(command + " " + strings.Join(args, " ")),
+		Dir:     dir,
+		Stop:    func() { _ = c.Close() },
+	})
+	c.watch.Started(cmd)
 	go c.readLoop()
 
 	if err := c.initialize(ctx); err != nil {
@@ -320,6 +334,9 @@ func (c *StdioClient) failAll(err error) {
 	// pipe broke mid-session — surface why, and how many calls were stranded.
 	// A clean EOF after our own Close() is routine teardown, so stay quiet.
 	if !wasClosed {
+		// The process died under us: close the ledger entry here, or the panel
+		// would keep advertising a server that is gone until something calls Close.
+		c.watch.Finish(err)
 		level := slog.LevelWarn
 		if errors.Is(err, io.EOF) {
 			level = slog.LevelInfo
@@ -507,6 +524,8 @@ func (c *StdioClient) Close() error {
 	c.closed = true
 	c.mu.Unlock()
 
+	c.watch.MarkStopping()
+	defer c.watch.Finish(nil)
 	_ = c.stdin.Close()
 	if c.cmd.Process != nil {
 		// Give it a moment, then kill.

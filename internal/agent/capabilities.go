@@ -10,6 +10,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/indexstate"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // Capability is a probe + context-block contract for an OPTIONAL external tool a
@@ -73,7 +74,15 @@ const codebaseMemoryCommandMarker = "codebase-memory-mcp"
 var runIndexRepository = func(ctx context.Context, command, repoPath string) ([]byte, error) {
 	cmd := proc.CommandContext(ctx, command, "cli", "index_repository", "--repo-path", repoPath)
 	cmd.Env = os.Environ()
-	return cmd.CombinedOutput()
+	h := procwatch.Default().Begin(ctx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: "codebase-memory index",
+		Command: command + " cli index_repository --repo-path " + repoPath, Dir: repoPath,
+	})
+	out, err := cmd.CombinedOutput()
+	h.Started(cmd)
+	h.AppendOutput(string(out))
+	h.Finish(err)
+	return out, err
 }
 
 // codebaseMemoryCommand returns the configured codebase-memory-mcp executable path

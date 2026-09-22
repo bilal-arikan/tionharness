@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // updateTimeout caps one update run. Package-manager installs pull from the
@@ -42,7 +43,14 @@ func RunUpdate(ctx context.Context, t Tool) (string, error) {
 	cmd.Env = proc.HardenedEnv(nil)
 	proc.TreeKill(cmd)
 
+	h := procwatch.Default().Begin(ctx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: t.Name + " update",
+		Command: t.Update.Command + " " + strings.Join(t.Update.Args, " "),
+	})
 	out, err := cmd.CombinedOutput()
+	h.Started(cmd)
+	h.AppendOutput(string(out))
+	h.Finish(err)
 	text := strings.TrimSpace(string(out))
 	if ctx.Err() != nil {
 		return text, fmt.Errorf("güncelleme zaman aşımına uğradı (%s)", updateTimeout)

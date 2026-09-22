@@ -533,6 +533,10 @@ func codexIdleOutputWindow() time.Duration {
 // produced no terminal-classified failure, no salvageable content, and ran no
 // tool.
 func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request, home string) (resp *Response, retryable bool, err error) {
+	// Ledger entry + stop path for this transport process; ctx is shadowed so a
+	// panel stop travels the same route as a user stop (see watchCLI).
+	ctx, stopCLI, watch := watchCLI(ctx, "codex-cli", c.binPath, args)
+	defer stopCLI()
 	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// codex spawns its own children (MCP servers, and whatever the turn shells
 	// out to — a Gradle daemon outlives the build that started it). They inherit
@@ -570,8 +574,10 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 		return nil, false, serr
 	}
 	if serr := cmd.Start(); serr != nil {
+		watch.Finish(serr)
 		return nil, false, serr
 	}
+	watch.Started(cmd)
 
 	p := newCodexParser(model, req.OnEvent)
 	rd := bufio.NewReader(stdout)
@@ -707,6 +713,7 @@ readLoop:
 		}
 	}
 	runErr := cmd.Wait()
+	watch.Finish(runErr)
 
 	// Every failure from here on happens AFTER the subprocess ran, so the request
 	// may have reached the provider and spent tokens: each one goes out through

@@ -14,6 +14,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/indexstate"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // codebaseMemoryIndexTimeout bounds one index_repository run. An incremental
@@ -38,7 +39,14 @@ var codebaseMemoryCLI = func(ctx context.Context, command string, args ...string
 	cmd.Env = os.Environ()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	h := procwatch.Default().Begin(ctx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: "codebase-memory",
+		Command: command + " cli " + strings.Join(args, " "),
+	})
 	out, err := cmd.Output()
+	h.Started(cmd)
+	h.AppendOutput(stderr.String())
+	h.Finish(err)
 	if len(bytes.TrimSpace(out)) == 0 {
 		return stderr.Bytes(), err
 	}

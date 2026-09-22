@@ -58,6 +58,10 @@
 - **Yeni API filtreleri:** `GET /api/logs?component=&session=&since=&until=`
   (since/until unix **milisaniye**, kapsayıcı). `q` araması terfi eden
   alanları da kapsar.
+> **Loglar ≠ süreçler.** Bu doküman "ne oldu"yu anlatan kayıt akışını tanımlar;
+> "şu anda hangi yerel süreç çalışıyor" sorusunun yeri süreç defteridir
+> (`88-SUREC-IZLEME.md`, `list_processes`, Workspace → İşlemler).
+
 - **`read_logs` aracı:** `q` mesaj + attrs + kaynak alanlarında arar (API ile
   tutarlı); `component` ve `session` filtre parametreleri eklendi.
 - **Gürültü azaltma:** `toolloop` "tool call" logu INFO→DEBUG (block/deny INFO'da).

@@ -127,6 +127,7 @@ TionHarness/
 │   │                            # DİKKAT (SKILL.md): tazeleme yalnız GÖVDEYİ yayar; frontmatter kullanıcı config'i sayılır ve korunur (defaults.go::seedConfig Merge). Yani bir shipped skill'in `description`/`when_to_use` alanını repo default'unda düzeltmek KURULU kopyaya geçmez — kurulu SKILL.md'leri elle güncelle ya da "Varsayılan'a döndür" (RestoreDefault) kullan.
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
+│   ├── procwatch/               # ajanlar adına başlatılan YEREL SÜREÇLERİN defteri (canlı + sınırlı geçmiş); /api/workspace/processes, list_processes, Workspace → İşlemler (bkz. 88-SUREC-IZLEME.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go); prefix'li ID'ler (id.go, ws-counter.json)
 │   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events/insight

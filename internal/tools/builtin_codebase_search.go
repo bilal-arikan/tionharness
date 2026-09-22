@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -181,7 +182,9 @@ func (t CodebaseWorkspaceSearchTool) runCLI(ctx context.Context, tool string, pa
 	}
 	cmd := proc.CommandContext(ctx, t.command, "cli", tool, string(arg))
 	cmd.Env = os.Environ()
-	stdout, err := cmd.Output()
+	stdout, err := procwatch.TrackOutput(ctx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: "codebase-memory", Command: t.command + " cli " + tool,
+	}, cmd)
 	if err != nil {
 		return "", err
 	}

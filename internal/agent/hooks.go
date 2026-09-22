@@ -8,6 +8,7 @@ import (
 	"os/exec"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -366,7 +367,9 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	runErr := cmd.Run()
+	runErr := procwatch.TrackRun(runCtx, procwatch.Meta{
+		Kind: procwatch.KindHook, Label: h.Event, Command: h.Command, Dir: cmd.Dir, Stop: cancel,
+	}, cmd)
 
 	out := stdout.Bytes()
 	if len(out) > hookOutputCap {

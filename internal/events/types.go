@@ -73,6 +73,12 @@ const (
 	TypeFlowNode = "flow_node"
 	// TypeLog carries one captured log record for the live Logs tail (Event.Log).
 	TypeLog = "log"
+	// TypeProcess signals that a tracked native process changed state — started,
+	// was asked to stop, or finished (internal/procwatch). Deliberately
+	// PAYLOAD-FREE: the process panel re-reads GET /api/workspace/processes when
+	// it sees one, so a burst of spawns coalesces into one read instead of N
+	// frames the client has to merge in order. A control signal, never a toast.
+	TypeProcess = "process"
 
 	// --- Workspace stream types (structured; never toasts; never on /api/events) ---
 	//

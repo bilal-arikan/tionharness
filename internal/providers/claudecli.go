@@ -738,6 +738,15 @@ func cliStartupTimeout() time.Duration {
 }
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
+	// Ledger entry + stop path for this transport process. ctx is SHADOWED by the
+	// cancellable child deliberately: a stop from the process panel then reaches
+	// every ctx check in this function exactly as a user stop does.
+	//
+	// Registered FIRST so its cancel runs LAST (defers are LIFO): the compaction
+	// classifier below reads ctx.Err() to tell a cancelled attempt from a failed
+	// one, and would otherwise see nothing but this function's own teardown.
+	ctx, stopCLI, watch := watchCLI(ctx, "claude-cli", c.binPath, args)
+	defer stopCLI()
 	if req.cliCompaction == nil {
 		req.cliCompaction = newCLICompactionEmitter(req)
 	}
@@ -847,8 +856,10 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	claudeauth.SerializeRefresh(c.configDir)
 	if serr := cmd.Start(); serr != nil {
 		lifecycleErrorKind = "startup_error"
+		watch.Finish(serr)
 		return nil, false, serr
 	}
+	watch.Started(cmd)
 
 	// Parse events as they stream so OnEvent fires step-by-step. ReadString
 	// handles arbitrarily long lines (tool results / the init tool list).
@@ -933,6 +944,7 @@ readLoop:
 		}
 	}
 	runErr := cmd.Wait()
+	watch.Finish(runErr)
 	if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 		processExitCode = exitErr.ExitCode()
 	}

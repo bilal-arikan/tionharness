@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // --- Persistent claude-cli session (Phase 4) ---
@@ -57,8 +58,13 @@ type cliTextBlock struct {
 // Turns are serialised by mu (the CLI handles one turn at a time). It is created
 // and owned by a CLISessionPool.
 type CLISession struct {
-	mu     sync.Mutex
-	cmd    *exec.Cmd
+	mu  sync.Mutex
+	cmd *exec.Cmd
+	// watch is this process's entry in the ledger (internal/procwatch). A
+	// persistent CLI outlives every turn that uses it, so it is the one provider
+	// process a user can find running with nothing obviously running — which is
+	// exactly what the process panel is for.
+	watch  *procwatch.Handle
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 	stderr *bytes.Buffer
@@ -260,6 +266,11 @@ func (s *CLISession) killProcessLocked() error {
 	if s.cmd == nil || s.cmd.Process == nil {
 		return nil
 	}
+	// Announced to the ledger before the kill so the entry lands as "killed"
+	// rather than as a process that failed on its own (see MarkStopping). Both
+	// teardown paths — Close and the in-turn abort — come through here.
+	s.watch.MarkStopping()
+	defer s.watch.Finish(nil)
 	proc.KillTree(s.cmd) // reap MCP servers / tool subprocesses holding the pipes
 	err := s.cmd.Process.Kill()
 	if err == nil || errors.Is(err, os.ErrProcessDone) {
@@ -421,7 +432,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 		return nil, serr
 	}
 
-	return &CLISession{
+	sess := &CLISession{
 		cmd:         cmd,
 		stdin:       stdinPipe,
 		stdout:      bufio.NewReader(stdoutPipe),
@@ -429,7 +440,18 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 		sysFilePath: sysPath,
 		fingerprint: c.persistentFingerprint(req, sys),
 		model:       model,
-	}, nil
+	}
+	// Stop goes through closeChecked, the same door the pool and session delete
+	// use: stopping this process from the panel must also mark the session closed,
+	// or the pool would keep handing out a dead one.
+	sess.watch = procwatch.Default().Begin(context.WithoutCancel(ctx), procwatch.Meta{
+		Kind:    procwatch.KindProvider,
+		Label:   "claude-cli (persistent)",
+		Command: strings.TrimSpace(c.binPath + " " + strings.Join(args, " ")),
+		Stop:    func() { _ = sess.closeChecked() },
+	})
+	sess.watch.Started(cmd)
+	return sess, nil
 }
 
 // persistentFingerprint hashes everything that, if changed, requires restarting the

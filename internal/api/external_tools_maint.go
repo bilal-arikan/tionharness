@@ -8,6 +8,7 @@ import (
 	"os/exec"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -57,7 +58,9 @@ func runToolCmd(ctx context.Context, name string, args ...string) (out string, f
 	// Exit status is ignored on purpose: `rtk gain` and friends report useful text
 	// on stdout even when they exit non-zero (rtk exits 3 on some success paths —
 	// see internal/agent/rtk_optimizer.go). The OUTPUT is the product here.
-	_ = c.Run()
+	_ = procwatch.TrackRun(runCtx, procwatch.Meta{
+		Kind: procwatch.KindExternal, Label: name, Command: bin + " " + strings.Join(args, " "), Stop: cancel,
+	}, c)
 	return strings.TrimRight(ansiEscapeRe.ReplaceAllString(buf.String(), ""), "\r\n"), true
 }
 

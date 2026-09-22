@@ -24,6 +24,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/settings"
 	"github.com/bilal-arikan/tionharness/internal/workspace"
@@ -202,6 +203,19 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 			return
 		}
 		bus.Publish(events.Event{Type: "log", Level: strings.ToLower(e.Level), Time: e.Time / 1000, Log: b})
+	})
+
+	// Process ledger → SSE: every start/stop/finish of a native agent-spawned
+	// process nudges the workspace process panel to refetch. The frame carries no
+	// entry (events.TypeProcess): a turn that runs ten shell commands should cost
+	// the panel one read, not ten merges.
+	procwatch.Default().SetNotify(func(e procwatch.Entry) {
+		bus.Publish(events.Event{
+			Type:        events.TypeProcess,
+			Level:       "info",
+			WorkspaceID: e.Owner.WorkspaceID,
+			Target:      map[string]string{"processId": e.ID, "status": string(e.Status)},
+		})
 	})
 
 	// Workspace manager: each workspace owns its own DB + agent runtime.

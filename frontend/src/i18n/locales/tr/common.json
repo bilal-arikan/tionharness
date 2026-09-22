@@ -99,7 +99,8 @@
   },
   "workspace": {
     "tabs": {
-      "logs": "Loglar"
+      "logs": "Loglar",
+      "processes": "İşlemler"
     }
   },
   "session": {

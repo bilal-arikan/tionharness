@@ -97,6 +97,11 @@ func sseEventName(typ string) (name string, skip bool) {
 		return "flownodestep", false
 	case "log":
 		return "log", false
+	case "process":
+		// The process panel's refresh cue. Named apart from "notify" so an open
+		// panel refetches while every other window ignores it (a spawned shell is
+		// not news anyone needs a toast for).
+		return "process", false
 	}
 	return "notify", false
 }

@@ -456,6 +456,9 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspace/stream", s.handleWorkspaceStream)
 	// The composed "what is running right now" snapshot + spawn capacity (_Docs/77 R2).
 	mux.HandleFunc("GET /api/workspace/liveness", s.handleWorkspaceLiveness)
+	// The native processes agents spawned, running + recent history (internal/procwatch).
+	mux.HandleFunc("GET /api/workspace/processes", s.handleListProcesses)
+	mux.HandleFunc("POST /api/workspace/processes/{id}/stop", s.handleStopProcess)
 	// Trajectory ("Rota") reads: index rows + one full graph (_Docs/77 R4, F0).
 	mux.HandleFunc("GET /api/trajectories", s.handleListTrajectories)
 	// Rota F3: per-recipe rollup of the index (registered before the {id}

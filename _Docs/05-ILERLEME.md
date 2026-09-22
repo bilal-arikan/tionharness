@@ -1,13 +1,53 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
-> kayıtlar `05-ARSIV.md`'dedir. Son girişler: depo temizliği 2. tur (`slices.SortFunc`, coordination/store bölme,
+> **Özet (2026-09-23):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
+> kayıtlar `05-ARSIV.md`'dedir. Son girişler: süreç defteri + Workspace "İşlemler" paneli
+> (`_Docs/88`, TSK1040), depo temizliği 2. tur (`slices.SortFunc`, coordination/store bölme,
 > `useKeyedReset` ile efektten render-fazına geçiş, ortak biçimlendiriciler) ve 1. tur
 > (modernize, staticcheck, ölü kod, frontend lint, deprecated oturum-bilgisi alanları),
 > doküman temizliği (bayat referanslar, arşive
 > taşınan plan gövdeleri), karar modelleri + karar mercileri (`_Docs/87`), DeepSeek V4.1 Flash
 > ve Z.ai GLM-5.3 ailesi + kaba-effort düşünme sınıfı, ortak arşiv aracı `set_archived`
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
+
+## Süreç defteri ve Workspace "İşlemler" paneli (2026-09-23) ✅ (TSK1040)
+
+- **Ne:** Ajanlar adına başlatılan **yerel işletim sistemi süreçleri** artık görünür.
+  Yeni `internal/procwatch` paketi tek bir sınırlı defter tutuyor (canlı kayıtlar +
+  300 kayıtlık bitmiş geçmişi); okuma yüzeyleri `GET /api/workspace/processes`,
+  salt okunur `list_processes` ajan aracı ve Workspace ekranının **İşlemler**
+  sekmesi. Sözleşme: `_Docs/88-SUREC-IZLEME.md`.
+- **Defter:** `Begin/Started/AppendOutput/Finish` — paket süreç **başlatmaz**, yalnız
+  kaydeder; `nil` Handle güvenli olduğu için enstrümante edilmemiş bağlam (test,
+  önizleme) çağrı yerini değiştirmez. Durum sınıflandırması tek yerde ve sıralı:
+  durdurma isteği → süresi dolmuş bağlam → `ExitError` → diğer hata → başarı
+  (`running`/`succeeded`/`failed`/`killed`/`timed_out`). Komut satırı 2000 rune'da,
+  çıktı kuyruğu 4 KB'de kırpılır.
+- **Enstrümantasyon:** ön plan kabuk (`builtin_shell.go` — `runShellCmd` artık
+  `Run` yerine `Start`+`Wait` yapıyor ki PID koşu **sırasında** yayınlanabilsin),
+  arka plan kabuk (`shell_manage` kill'i defterin `RequestStop`'undan geçer, yoksa
+  kullanıcı kaynaklı durdurma "başarısız" görünürdü), `run_code`/`transform_data`,
+  claude-cli tek atış + **kalıcı** oturum + codex-cli (ctx gölgelenir: panelden
+  durdurma kullanıcı durdurmasıyla aynı yolu izler), stdio MCP sunucuları (beklenmedik
+  ölüm `failAll`'da kapatılır), hook'lar ve harici araç koşuları (ripgrep,
+  codebase-memory, zvec-grep indeksi, sürüm/güncelleme yoklamaları). `rtk`/`sqz`
+  optimizer koşuları ve API'nin git plumbing okumaları **bilerek** dışarıda.
+- **Sahiplik:** `procwatch.WithOwner` tur hazırlığında (`toolloop_phases.go`) tek
+  yerden damgalanır; o fazın ctx'i turun başlattığı her şeye ulaşır. Oturum dışında
+  doğan süreçler (havuzun MCP sunucusu, açılış yoklaması) sahipsiz listelenir ve her
+  workspace'te görünür — gösterilemeyen süreç bu özelliğin önlemek istediği şeydir.
+- **Durdurma:** yalnız kullanıcı eylemi. `POST /api/workspace/processes/{id}/stop`
+  yalnız **sinyaldir**; kayıt, süreci başlatan yer onu reap ettiğinde terminal duruma
+  geçer. Bitmiş kaydı durdurmak hata değil (200 + `stopped:false` + gerekçe).
+- **Canlılık:** yüksüz `process` SSE frame'i (`events.TypeProcess`) — panel görünce
+  listeyi yeniden okur (300 ms debounce), toast üretmez. On kabuk komutu koşan bir tur
+  panele bir okuma maliyeti çıkarır.
+- **Testler:** `internal/procwatch` birim testleri (sınıflandırma, idempotent finish,
+  sınırlı geçmiş — çalışan kayıt budanmaz, filtreler, notify), kabuk entegrasyonu
+  (ön plan kaydı + sahip + PID + çıktı kuyruğu, başarısız çıkış kodu, arka plan
+  kill'in `killed` olarak inmesi), API testleri (facet filtreleri, durdurma üç sonucu)
+  ve `ProcessPanel.test.tsx` (satır/süre, olay patlamasında **tek** refetch, onaylı
+  durdurma, başarısız yükleme boş liste gibi görünmez).
 
 ## Depo temizliği 2. tur: slices.SortFunc, dosya bölme, frontend efekt kalıpları (2026-09-22) ✅
 

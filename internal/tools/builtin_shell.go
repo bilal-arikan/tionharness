@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -224,9 +225,9 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, argv...), t.sb.Confined)
 	}
 	if args.RunInBackground {
-		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
+		return startBackgroundShell(ctx, t.mgr, t.sb, args, "Bash", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter, t.cmdFilter)
+	return runShell(ctx, t.sb, args, "Bash", onChunk, build, t.outFilter, t.cmdFilter)
 }
 
 // PowerShellTool runs a command through PowerShell (pwsh preferred, else
@@ -322,9 +323,9 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command), t.sb.Confined)
 	}
 	if args.RunInBackground {
-		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)
+		return startBackgroundShell(ctx, t.mgr, t.sb, args, "PowerShell", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter, t.cmdFilter)
+	return runShell(ctx, t.sb, args, "PowerShell", onChunk, build, t.outFilter, t.cmdFilter)
 }
 
 // shellInputSchema builds the shared shell-tool schema. run_in_background is only
@@ -367,14 +368,14 @@ func parseShellArgs(input json.RawMessage) (shellArgs, error) {
 // manager and returns the assigned shell id with a usage hint. It applies the same
 // confined-mode git brake as runShell, then hands off to the manager (which owns
 // the process lifecycle). A nil manager reports background execution is unavailable.
-func startBackgroundShell(mgr *ShellManager, sb Sandbox, args shellArgs, label string, build func(ctx context.Context, command string) *exec.Cmd) (string, error) {
+func startBackgroundShell(ctx context.Context, mgr *ShellManager, sb Sandbox, args shellArgs, label string, build func(ctx context.Context, command string) *exec.Cmd) (string, error) {
 	if mgr == nil {
 		return "", fmt.Errorf("run_in_background is not available here — run the command in the foreground instead")
 	}
 	if sb.Confined && isNetworkMutatingGit(args.Command) {
 		return "", fmt.Errorf("blocked in confined (autonomous) mode: this command pushes to a git remote — run it from an interactive chat session instead")
 	}
-	id, err := mgr.Start(sb, args.Command, label, build)
+	id, err := mgr.Start(ctx, sb, args.Command, label, build)
 	if err != nil {
 		return "", err
 	}
@@ -408,7 +409,7 @@ const rtkDegradedNote = "\n\n[optimizer note: this command FAILED and the text a
 	"\"No tests found\". If the summary does not explain the failure, re-run the SAME command with " +
 	"no_compress: true to get the byte-exact output.]"
 
-func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd, outFilter ShellOutputFilter, cmdFilter ShellCommandFilter) (string, error) {
+func runShell(ctx context.Context, sb Sandbox, args shellArgs, label string, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd, outFilter ShellOutputFilter, cmdFilter ShellCommandFilter) (string, error) {
 	// Autonomous brake: when the sandbox is confined (autonomous turn + the
 	// AutonomousConfine guard), block network-mutating git operations. A scheduled
 	// or spawned agent must not push to a remote without a human in the loop;
@@ -439,15 +440,27 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	cmd := build(runCtx, command)
 	cmd.Dir = sb.Root
 
+	// Ledger entry (internal/procwatch): a foreground shell blocks the turn for up
+	// to the hard timeout, so it is exactly the kind of process the user needs to
+	// see — and stop — from the process panel. The COMMAND recorded is the one that
+	// actually runs (rtk's rewrite when it applied), not what the agent typed, so a
+	// pid in the panel matches the command line next to it.
+	h := procwatch.Default().Begin(runCtx, procwatch.Meta{
+		Kind: procwatch.KindShell, Label: label, Command: command, Dir: sb.Root, Stop: cancel,
+	})
+
 	// Same writer for stdout+stderr: exec serialises writes when they are equal,
 	// so onChunk is never called concurrently.
 	w := &shellStreamWriter{onChunk: onChunk, max: shellMaxOutputBytes}
 	cmd.Stdout = w
 	cmd.Stderr = w
-	runErr, setupErr := runShellCmd(cmd, sb.Confined)
+	runErr, setupErr := runShellCmd(cmd, sb.Confined, h.Started)
 	if setupErr != nil {
+		h.Finish(setupErr)
 		return "", setupErr
 	}
+	h.AppendOutput(w.buf.String())
+	h.Finish(runErr)
 
 	out := w.buf.Bytes()
 	truncated := w.truncated

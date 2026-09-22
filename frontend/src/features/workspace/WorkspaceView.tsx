@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Boxes,
+  Cpu,
   ScrollText,
   FolderGit2,
   Lightbulb,
@@ -15,22 +16,29 @@ import { WorkspacePanel } from '@/features/settings/WorkspacePanel'
 import { AppearancePanel } from '@/features/settings/appPanels'
 import { LogsPanel } from '@/features/logs/LogsPanel'
 import { ProjectPanel } from './ProjectPanel'
+import { ProcessPanel } from './ProcessPanel'
 import { WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { RecommendationsPanel } from './RecommendationsPanel'
 import { Button, CollapsibleListShell, toast } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import { useTranslation } from 'react-i18next'
 
-type Tab = 'general' | 'appearance' | 'project' | 'logs' | 'export' | 'recommendations'
+type Tab =
+  'general' | 'appearance' | 'project' | 'logs' | 'processes' | 'export' | 'recommendations'
 
 const WORKSPACE_TAB_KEYS: Tab[] = [
   'general',
   'appearance',
   'project',
   'logs',
+  'processes',
   'export',
   'recommendations',
 ]
+
+// Tabs that render their own PaneHeader and span the full pane: they get no
+// workspace header, no Save button and no centered form column.
+const FULL_PANE_TABS: Tab[] = ['logs', 'processes']
 
 interface Props {
   onError: (msg: string) => void
@@ -56,6 +64,7 @@ const TABS: { key: Tab; label: string; labelKey?: string; icon: LucideIcon }[] =
   { key: 'appearance', label: 'Görünüm', icon: Palette },
   { key: 'project', label: 'Proje', icon: FolderGit2 },
   { key: 'logs', label: 'Logs', labelKey: 'workspace.tabs.logs', icon: ScrollText },
+  { key: 'processes', label: 'İşlemler', labelKey: 'workspace.tabs.processes', icon: Cpu },
   { key: 'export', label: 'Dışa Aktar', icon: PackageCheck },
   { key: 'recommendations', label: 'Öneriler', icon: Lightbulb },
 ]
@@ -133,10 +142,12 @@ export function WorkspaceView({
   const headerDirty = dirty
   const headerSaving = saving
   const onHeaderSave = save
-  // Appearance/Export/Recommendations manage their own actions. Logs renders its
-  // own PaneHeader, so the workspace header is omitted for that tab.
+  // Appearance/Export/Recommendations manage their own actions. Logs and
+  // İşlemler render their own PaneHeader, so the workspace header is omitted for
+  // those tabs.
+  const fullPane = FULL_PANE_TABS.includes(tab)
   const showSave =
-    tab === 'appearance' || tab === 'export' || tab === 'recommendations' ? false : tab !== 'logs'
+    tab === 'appearance' || tab === 'export' || tab === 'recommendations' ? false : !fullPane
   const activeMeta = TABS.find((t) => t.key === tab)
 
   // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
@@ -168,7 +179,7 @@ export function WorkspaceView({
               <span className="flex-1 truncate">
                 {t.labelKey ? translate(t.labelKey) : t.label}
               </span>
-              {(t.key === 'logs'
+              {(FULL_PANE_TABS.includes(t.key)
                 ? false
                 : t.key === 'appearance' || t.key === 'export' || t.key === 'recommendations'
                   ? false
@@ -188,7 +199,7 @@ export function WorkspaceView({
           intrinsic width, so a wide prompt preview (code blocks/tables/long lines
           in the Files tab) pushes the whole column past the viewport. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {tab !== 'logs' && (
+        {!fullPane && (
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
             <span className="flex items-center gap-2 text-sm font-semibold">
               {activeMeta && (
@@ -215,10 +226,10 @@ export function WorkspaceView({
           </div>
         )}
 
-        {/* Logs spans the full pane; form tabs stay in a centered column. */}
+        {/* Logs/İşlemler span the full pane; form tabs stay in a centered column. */}
         <div
           className={`mx-auto w-full min-w-0 flex-1 ${
-            tab === 'logs'
+            fullPane
               ? 'flex max-w-none overflow-hidden'
               : 'th-column max-w-2xl space-y-4 overflow-y-auto p-4 sm:p-6 3xl:max-w-4xl'
           }`}
@@ -241,6 +252,8 @@ export function WorkspaceView({
             <RecommendationsPanel onError={onError} onShowCards={onShowRecommendations} />
           ) : tab === 'logs' ? (
             <LogsPanel onError={onError} />
+          ) : tab === 'processes' ? (
+            <ProcessPanel onError={onError} />
           ) : (
             <div />
           )}

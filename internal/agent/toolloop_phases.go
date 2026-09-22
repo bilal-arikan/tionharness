@@ -10,6 +10,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/conversation"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/mcp/repair"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -129,6 +130,19 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	if t.autonomous {
 		t.req.TaskBudgetTokens = t.r.tun.AutonomousTaskBudget()
 	}
+
+	// Process ledger ownership (internal/procwatch): every native process this
+	// turn spawns — shell tool calls, code-mode interpreters, the CLI transport
+	// itself, hooks — is attributed to this session and agent from here, because
+	// the ctx built in this phase is the one that reaches all of them. Stamped
+	// unconditionally: an unowned entry is still tracked, it is just harder to
+	// place in the panel.
+	t.ctx = procwatch.WithOwner(t.ctx, procwatch.Owner{
+		WorkspaceID: t.r.wsID,
+		SessionID:   SessionIDFrom(t.ctx),
+		AgentID:     t.agent.ID,
+		AgentName:   t.agent.Name,
+	})
 
 	// Resolve this turn's working directory: the session's WorkingDir override
 	// (else the workspace default). The result roots the fs/shell sandbox

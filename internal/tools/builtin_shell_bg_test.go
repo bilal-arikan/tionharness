@@ -47,7 +47,7 @@ func TestShellManagerErrors(t *testing.T) {
 
 	// A nil manager reports background unavailable rather than panicking.
 	var nilMgr *ShellManager
-	if _, err := nilMgr.Start(NewSandbox(t.TempDir()), "x", "Bash", nil); err == nil {
+	if _, err := nilMgr.Start(t.Context(), NewSandbox(t.TempDir()), "x", "Bash", nil); err == nil {
 		t.Fatal("nil manager Start should error")
 	}
 }
@@ -63,7 +63,7 @@ func portableEcho(ctx context.Context, _ string) *exec.Cmd {
 func TestShellManagerRunBackground(t *testing.T) {
 	m := NewShellManager()
 	sb := NewSandbox(t.TempDir())
-	id, err := m.Start(sb, "echo hello", "Bash", portableEcho)
+	id, err := m.Start(t.Context(), sb, "echo hello", "Bash", portableEcho)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}

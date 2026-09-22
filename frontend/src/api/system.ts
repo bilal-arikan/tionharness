@@ -8,6 +8,10 @@ import type {
   PromptsResponse,
   LogEntry,
   AppEvent,
+  ProcessEntry,
+  ProcessKind,
+  ProcessStatus,
+  StopProcessResult,
   WorkspaceUsage,
   ExternalToolStatus,
   ExternalToolUpdate,
@@ -40,6 +44,9 @@ const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
 const flowNodeStepSubs = new Set<EventCb>()
 const logSubs = new Set<LogCb>()
+// Process-change subscribers. The `process` frame is payload-free by design, so
+// these callbacks take no argument: they are a "refetch the list" cue, not data.
+const processSubs = new Set<() => void>()
 // Resync subscribers: notified when the feed reopens after a drop (see onopen).
 const reconnectSubs = new Set<() => void>()
 // Whether the shared feed has ever been open, so the first open is not mistaken
@@ -63,7 +70,8 @@ function ensureConnection(): void {
       stepSubs.size > 0 ||
       flowNodeSubs.size > 0 ||
       flowNodeStepSubs.size > 0 ||
-      logSubs.size > 0
+      logSubs.size > 0 ||
+      processSubs.size > 0
     if (hasSubs) setTimeout(ensureConnection, 2000)
   }
   sharedES.addEventListener('notify', (ev) => {
@@ -115,6 +123,12 @@ function ensureConnection(): void {
     const entry = parsed.log
     logSubs.forEach((cb) => cb(entry))
   })
+  // A tracked process started, was stopped or finished. The frame carries no
+  // entry (only target.processId/status), so there is nothing to merge: every
+  // subscriber re-reads the list instead.
+  sharedES.addEventListener('process', () => {
+    processSubs.forEach((cb) => cb())
+  })
   // A RECONNECT (any open after the first) means the feed was down for a while:
   // every frame published in that window is gone for good — the backend bus is
   // fire-and-forget, there is no replay and no Last-Event-ID cursor here. Any view
@@ -136,6 +150,7 @@ function closeIfIdle(): void {
     flowNodeSubs.size === 0 &&
     flowNodeStepSubs.size === 0 &&
     logSubs.size === 0 &&
+    processSubs.size === 0 &&
     reconnectSubs.size === 0 &&
     sharedES
   ) {
@@ -199,6 +214,22 @@ function subscribeLogs(onLog: LogCb): () => void {
   }
 }
 
+// subscribeProcesses registers `onChange` for the shared feed's `process` event
+// — fired whenever a tracked native process starts, is stopped or finishes. The
+// frame is payload-free, so the callback's only correct reaction is to re-read
+// GET /api/workspace/processes.
+function subscribeProcesses(onChange: () => void): () => void {
+  ensureConnection()
+  processSubs.add(onChange)
+  let unsubscribed = false
+  return () => {
+    if (unsubscribed) return
+    unsubscribed = true
+    processSubs.delete(onChange)
+    closeIfIdle()
+  }
+}
+
 export const systemApi = {
   // Application settings (global).
   getSettings: () => req<AppSettings>('/api/settings'),
@@ -225,6 +256,36 @@ export const systemApi = {
   subscribeLogs,
   // "The feed reopened after a drop" signal — for SSE-driven views to resync.
   subscribeReconnect,
+  // "A tracked process changed state" cue — same SSE stream, `process` frames.
+  subscribeProcesses,
+
+  // Native processes TionHarness spawned for this workspace: the running ones
+  // plus the bounded recent history, newest first. status/kind take a list and
+  // are sent comma-separated, the shape the backend's csvValues accepts.
+  listProcesses: (opts?: {
+    status?: ProcessStatus[]
+    kind?: ProcessKind[]
+    session?: string
+    agent?: string
+    limit?: number
+  }) => {
+    const p = new URLSearchParams()
+    if (opts?.status?.length) p.set('status', opts.status.join(','))
+    if (opts?.kind?.length) p.set('kind', opts.kind.join(','))
+    if (opts?.session) p.set('session', opts.session)
+    if (opts?.agent) p.set('agent', opts.agent)
+    if (opts?.limit) p.set('limit', String(opts.limit))
+    const qs = p.toString()
+    return req<ProcessEntry[]>(`/api/workspace/processes${qs ? `?${qs}` : ''}`)
+  },
+
+  // Terminate one tracked process. A 200 with stopped=false is not an error: it
+  // means the entry was already finished or carries no stop path, and `reason`
+  // says which — the caller should surface it rather than assume success.
+  stopProcess: (id: string) =>
+    req<StopProcessResult>(`/api/workspace/processes/${encodeURIComponent(id)}/stop`, {
+      method: 'POST',
+    }),
 
   // Application + workspace logs (global ring buffer).
   getLogs: (opts?: {

@@ -21,11 +21,22 @@ var confinedShellJobLimits = proc.JobLimits{ActiveProcesses: 128}
 // setupErr means containment could not be established and the command did not
 // run. A confined command never falls back to running uncontained.
 //
+// started, when non-nil, is called once the process exists and before the wait,
+// so the process ledger can publish its pid while the command is still running
+// (internal/procwatch). This is why the uncontained path spells Start+Wait out
+// instead of calling cmd.Run: Run offers no point between the two.
+//
 // This is a process/resource boundary only. The command still runs as the same
 // user with the same filesystem access; see the note above shellMaxOutputBytes.
-func runShellCmd(cmd *exec.Cmd, confined bool) (runErr, setupErr error) {
+func runShellCmd(cmd *exec.Cmd, confined bool, started func(*exec.Cmd)) (runErr, setupErr error) {
 	if !confined {
-		return cmd.Run(), nil
+		if err := cmd.Start(); err != nil {
+			return err, nil
+		}
+		if started != nil {
+			started(cmd)
+		}
+		return cmd.Wait(), nil
 	}
 	job, err := proc.NewJob(confinedShellJobLimits)
 	if err != nil {
@@ -34,6 +45,9 @@ func runShellCmd(cmd *exec.Cmd, confined bool) (runErr, setupErr error) {
 	defer job.Close()
 	if err := job.Start(cmd); err != nil {
 		return nil, fmt.Errorf("confined shell: cannot start the command inside a process job: %w", err)
+	}
+	if started != nil {
+		started(cmd)
 	}
 	return cmd.Wait(), nil
 }

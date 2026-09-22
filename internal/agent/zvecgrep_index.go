@@ -13,6 +13,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/exttools"
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // zvecGrepIndexDir is the directory zvec-grep keeps a workspace index in. It
@@ -47,7 +48,15 @@ var (
 		cmd := proc.CommandContext(ctx, command, "index", root, "--embedding", embedding)
 		cmd.Env = os.Environ()
 		proc.TreeKill(cmd)
-		return cmd.CombinedOutput()
+		h := procwatch.Default().Begin(ctx, procwatch.Meta{
+			Kind: procwatch.KindExternal, Label: "zvec-grep index",
+			Command: command + " index " + root + " --embedding " + embedding, Dir: root,
+		})
+		out, err := cmd.CombinedOutput()
+		h.Started(cmd)
+		h.AppendOutput(string(out))
+		h.Finish(err)
+		return out, err
 	}
 	// zvecGrepDetect is the catalog's resolver, behind a var so tests can stub it.
 	zvecGrepDetect = func() (bool, string) { return exttools.Detect(exttools.ZvecGrepToolName) }

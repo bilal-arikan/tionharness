@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -148,7 +149,13 @@ func (t TransformDataTool) Call(ctx context.Context, input json.RawMessage) (str
 	w := &capWriter{buf: &logBuf, max: transformDataMaxLogBytes}
 	cmd.Stdout = w
 	cmd.Stderr = w
-	runErr := cmd.Run()
+	h := procwatch.Default().Begin(runCtx, procwatch.Meta{
+		Kind: procwatch.KindCode, Label: "transform_data", Command: interp + " " + strings.Join(cmdArgs, " "),
+		Dir: t.sb.Root, Stop: cancel,
+	})
+	runErr := runTrackedCmd(cmd, h)
+	h.AppendOutput(logBuf.String())
+	h.Finish(runErr)
 
 	logs := strings.TrimSpace(logBuf.String())
 	if w.truncated {

@@ -12,6 +12,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/codemode"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -242,7 +243,15 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	w := &capWriter{buf: &logBuf, max: runCodeMaxLogBytes}
 	cmd.Stdout = w
 	cmd.Stderr = w
-	runErr := cmd.Run()
+	// Ledger entry: an interpreter run is an opaque native process to everyone
+	// outside this call, and one that can sit at the timeout with its own
+	// children (proc.TreeKill above), so the panel gets to show and stop it.
+	h := procwatch.Default().Begin(runCtx, procwatch.Meta{
+		Kind: procwatch.KindCode, Label: "run_code", Command: interp + " " + scriptPath, Dir: t.sb.Root, Stop: cancel,
+	})
+	runErr := runTrackedCmd(cmd, h)
+	h.AppendOutput(logBuf.String())
+	h.Finish(runErr)
 
 	logs := strings.TrimSpace(logBuf.String())
 	if w.truncated {

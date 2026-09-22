@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
@@ -85,6 +86,21 @@ func (w *bgWriter) drainFrom(cursor int64) (out string, next int64, lost bool) {
 	return string(w.buf[from-bufStart:]), w.total, lost
 }
 
+// tail returns the last n bytes still in the ring, without touching either read
+// cursor — the process ledger keeps a short diagnostic tail of its own and must
+// not consume output shell_manage has yet to deliver.
+func (w *bgWriter) tail(n int) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if n <= 0 || len(w.buf) == 0 {
+		return ""
+	}
+	if n > len(w.buf) {
+		n = len(w.buf)
+	}
+	return string(w.buf[len(w.buf)-n:])
+}
+
 // bgProc is one tracked background shell process.
 type bgProc struct {
 	id        string
@@ -93,6 +109,10 @@ type bgProc struct {
 	startedAt time.Time
 	w         *bgWriter
 	cancel    context.CancelFunc
+	// watch is this shell's entry in the process ledger (internal/procwatch), so
+	// a detached shell that outlives its turn is still visible — and stoppable —
+	// from the workspace process panel. nil when no ledger is wired.
+	watch *procwatch.Handle
 
 	mu       sync.Mutex
 	done     bool
@@ -146,7 +166,10 @@ func NewShellManager() *ShellManager { return &ShellManager{procs: map[string]*b
 // Start launches command in the background through the shell built by build,
 // rooted at sb.Root, and returns the assigned shell id. It enforces the live-shell
 // cap and prunes finished shells beyond the retention bound.
-func (m *ShellManager) Start(sb Sandbox, command, label string, build func(context.Context, string) *exec.Cmd) (string, error) {
+// ctx attributes the shell to its session/agent in the process ledger; it does
+// NOT bound the run. A background shell deliberately outlives the turn that
+// started it, so the process itself runs under a fresh cancellable context.
+func (m *ShellManager) Start(ctx context.Context, sb Sandbox, command, label string, build func(context.Context, string) *exec.Cmd) (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("background execution is not available in this context")
 	}
@@ -164,7 +187,7 @@ func (m *ShellManager) Start(sb Sandbox, command, label string, build func(conte
 	m.pruneDoneLocked()
 	m.seq++
 	id := "bg" + strconv.Itoa(m.seq)
-	ctx, cancel := context.WithCancel(context.Background())
+	runCtx, cancel := context.WithCancel(context.Background())
 	p := &bgProc{
 		id:        id,
 		command:   command,
@@ -173,18 +196,26 @@ func (m *ShellManager) Start(sb Sandbox, command, label string, build func(conte
 		w:         &bgWriter{max: bgShellRingBytes},
 		cancel:    cancel,
 	}
+	// Registered before the shell is published into m.procs, so a concurrent
+	// Kill/List can never observe a bgProc whose ledger handle is still nil.
+	p.watch = procwatch.Default().Begin(runCtx, procwatch.Meta{
+		Kind: procwatch.KindShellBackground, Label: label, Command: command, Dir: sb.Root,
+		Owner: procwatch.OwnerFrom(ctx), Stop: cancel,
+	})
 	m.procs[id] = p
 	m.mu.Unlock()
 
-	cmd := build(ctx, command)
+	cmd := build(runCtx, command)
 	cmd.Dir = sb.Root
 	cmd.Stdout = p.w
 	cmd.Stderr = p.w
 	if err := cmd.Start(); err != nil {
 		cancel()
 		p.finish(-1)
+		p.watch.Finish(err)
 		return "", fmt.Errorf("failed to start background shell: %w", err)
 	}
+	p.watch.Started(cmd)
 	go func() {
 		err := cmd.Wait()
 		cancel() // release the context regardless of how it exited
@@ -197,6 +228,8 @@ func (m *ShellManager) Start(sb Sandbox, command, label string, build func(conte
 			}
 		}
 		p.finish(code)
+		p.watch.AppendOutput(p.w.tail(procwatch.OutputTailBytes))
+		p.watch.FinishCode(code)
 	}()
 	return id, nil
 }
@@ -271,7 +304,11 @@ func (m *ShellManager) Kill(id string) (string, error) {
 	if p.isDone() {
 		return fmt.Sprintf("%s already finished (code %d)", id, p.exitCode), nil
 	}
-	p.cancel()
+	// Through the ledger, not p.cancel() directly: the entry has to know the exit
+	// was REQUESTED, otherwise the process panel reports this kill as a failure.
+	if !p.watch.RequestStop() {
+		p.cancel()
+	}
 	return fmt.Sprintf("Signalled %s to stop; poll shell_manage (action=output) to confirm it exited.", id), nil
 }
 
