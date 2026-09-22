@@ -31,6 +31,14 @@
   gönderim sırasında senkron toast'lar düşer, aynı ton+mesaj 10 sn tekilleşir,
   10 sn'de en fazla 20 rapor; fazlası pencere dönünce tek "N toast log report(s)
   suppressed" uyarısıyla bildirilir.
+- **Ton seçimi (TSK1046):** `toast.error` yalnız işlemin gerçekten başarısız
+  olduğu yerde. İşlem kısmen başarılı ya da kullanıcı devam edebiliyorsa
+  (kısmi başarı, çakışma sonrası "tekrar dene", çalışmayan/atlanan iyileştirici,
+  henüz olmayan kaynak, dikkat isteyen durum) `toast.warning` kullanılır — bunlar
+  da WARN olarak loglanır. Salt bilgi/onay (`Panoya kopyalandı`, olay duyuruları)
+  `toast.info`/`toast.success` kalır ve loglanmaz. Workspace sinyal köprüsü
+  (`app/workspaceSignals.ts`) de `warning` seviyesi üretir: takılı otomasyon
+  atlaması ve Rota'nın `abandoned`/`waiting` geçişleri.
 - **Okuma:** Loglar ekranı bileşen seçicisinde `ui-toast` sabit seçenek; REST
   `GET /api/logs?component=ui-toast&level=warn`; `read_logs` `component:"ui-toast"`.
 

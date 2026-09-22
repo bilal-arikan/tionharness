@@ -155,8 +155,8 @@ export function useWorkspaces(setError: (msg: string) => void) {
       try {
         const wsNew = await api.createWorkspace(data)
         // The optional `git init` is advisory: the workspace was created regardless,
-        // so a failure is surfaced as an error banner instead of failing the flow.
-        if (wsNew.gitInitError) setError('Git deposu başlatılamadı: ' + wsNew.gitInitError)
+        // so a failure is surfaced as a warning instead of failing the flow.
+        if (wsNew.gitInitError) toast.warning('Git deposu başlatılamadı: ' + wsNew.gitInitError)
         // Re-fetch the list so the icon/color (stored in ws-settings, absent from
         // the create response) are reflected immediately; fall back to appending.
         try {

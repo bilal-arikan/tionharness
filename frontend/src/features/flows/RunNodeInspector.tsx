@@ -355,7 +355,7 @@ export function RunNodeInspector({
                   const ws = getActiveWorkspace()
                   window.location.hash = `#/w/${ws ?? ''}/rota/${r.trajectoryId}`
                 })
-                .catch(() => toast.info('Bu koordinatör düğümünün henüz rotası yok'))
+                .catch(() => toast.warning('Bu koordinatör düğümünün henüz rotası yok'))
             }}
             title="Bu koordinatörün rotasını Rota ekranında aç"
             className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"

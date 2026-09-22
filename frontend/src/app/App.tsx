@@ -324,9 +324,12 @@ export default function App() {
   // how hard it may push transcript state: off the chat view nobody renders
   // `messages`, so 20Hz churn would only steal frames from the screen that IS
   // mounted (agent settings, tools, …). A ref keeps view switches free of a
-  // stream resubscribe.
+  // stream resubscribe. The ref is synced in an effect (not during render); its
+  // only reader is the stream callback, which runs after effects have flushed.
   const transcriptVisible = useRef(view === 'chat')
-  transcriptVisible.current = view === 'chat'
+  useEffect(() => {
+    transcriptVisible.current = view === 'chat'
+  }, [view])
 
   // Chat-turn streaming machinery (send loop, interventions, slash commands).
   const chat = useChatStream({

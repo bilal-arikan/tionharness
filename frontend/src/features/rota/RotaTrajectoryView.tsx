@@ -186,11 +186,11 @@ export function RotaTrajectoryView({
                     api
                       .optimizeRecipe(slug)
                       .then((r) =>
-                        toast.info(
-                          r.ran
-                            ? `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi) — İçgörü ▸ recipe-opt`
-                            : `Optimizer çalışmadı: ${r.skipped ?? '—'}`,
-                        ),
+                        r.ran
+                          ? toast.info(
+                              `✦ Optimizer: ${r.proposals.length} öneri (${r.dropped} elendi) — İçgörü ▸ recipe-opt`,
+                            )
+                          : toast.warning(`Optimizer çalışmadı: ${r.skipped ?? '—'}`),
                       )
                       .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
                   }}
