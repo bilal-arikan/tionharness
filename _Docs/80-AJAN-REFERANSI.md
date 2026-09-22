@@ -86,6 +86,12 @@ cp /tmp/dosya.full <dosya>
   `t.TempDir()` temizliği rastgele düşer. `SpawnSession`, `ReportToCoordinator`,
   `NotifyCoordinator` çağıran her testin sonuna koy; rota grafını okuyan test
   `drainSpawns` veya `waitTrajectory` kullanmalı.
+- `internal/agent` testleri `TestMain` içinde `TIONHARNESS_DATA_DIR`'ı paket başına
+  bir temp dizine yönlendirir (`runIsolated`, `spawn_test.go`): her `NewRuntime` global
+  skills dizinine default seed yazar ve onu tarar; gerçek `~/.tionharness` paylaşılırsa
+  başka worktree'lerin eşzamanlı testleri SKILL.md'leri kendi gömülü sürümlerine geri
+  yazar. Global tier'ı gözleyen test ayrıca `t.Setenv("TIONHARNESS_DATA_DIR", t.TempDir())`
+  ile kendine özel dizin alır (TSK1047).
 - `.go` dosyalarına BOM yazma: cover instrumentation dosyayı yeniden yazınca
   `invalid BOM in the middle of the file` ile paket derlenmez.
 - `//go:embed`'lenen varlıklar LF kalmalı; `.gitattributes`

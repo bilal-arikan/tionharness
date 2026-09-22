@@ -18,7 +18,27 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, `error loading C:\Users\user\.codex\config.toml: unknown field features.rmcp_client at line 4`)
 		os.Exit(2)
 	}
-	os.Exit(m.Run())
+	os.Exit(runIsolated(m))
+}
+
+// runIsolated points TIONHARNESS_DATA_DIR at a throwaway directory for the whole
+// package. Every NewRuntime seeds shipped default skills into the global skills
+// dir (<DataDir>/skills) and scans it; without this, tests share the developer's
+// real ~/.tionharness with the running app and with concurrent test processes of
+// other worktrees, whose seed.Ensure rewrites the same SKILL.md files to their own
+// embedded versions — flipping a skill catalog mid-test.
+func runIsolated(m *testing.M) int {
+	dir, err := os.MkdirTemp("", "tionharness-agent-test-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create isolated data dir: %v\n", err)
+		return 2
+	}
+	defer os.RemoveAll(dir)
+	if err := os.Setenv("TIONHARNESS_DATA_DIR", dir); err != nil {
+		fmt.Fprintf(os.Stderr, "set TIONHARNESS_DATA_DIR: %v\n", err)
+		return 2
+	}
+	return m.Run()
 }
 
 // drainSpawns waits for all fire-and-forget background goroutines to finish so the

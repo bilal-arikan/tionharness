@@ -8,6 +8,10 @@ import (
 )
 
 func TestSkillCatalogChangePublishesControlEvent(t *testing.T) {
+	// The store fingerprints the global tier too, so it must be private to this
+	// test: any write to a shared global skills dir between Create and Reload is a
+	// genuine catalog change and would (correctly) publish a second event.
+	t.Setenv("TIONHARNESS_DATA_DIR", t.TempDir())
 	rt, _ := newTestRuntime(t, t.TempDir())
 	bus := events.NewBus()
 	rt.bus = bus
