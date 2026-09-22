@@ -13,6 +13,7 @@ const apiMock = vi.hoisted(() => ({
   listSkills: vi.fn(),
   getSkill: vi.fn(),
   restoreSkill: vi.fn(),
+  setArchived: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({ api: apiMock }))
@@ -141,5 +142,61 @@ describe('SkillsPanel shipped skill state', () => {
     expect(onError).toHaveBeenCalledWith('restore failed')
     expect(container.textContent).toContain('düzenlendi')
     expect(apiMock.listSkills).toHaveBeenCalledOnce()
+  })
+})
+
+describe('SkillsPanel archive view', () => {
+  const liveSkill: SkillDetail = { ...editedSkill, slug: 'live-skill', name: 'Live Skill' }
+  const shelvedSkill: SkillDetail = {
+    ...editedSkill,
+    slug: 'shelved-skill',
+    name: 'Shelved Skill',
+    archived: true,
+  }
+
+  function names(container: HTMLElement) {
+    return container.textContent ?? ''
+  }
+
+  it('lists only live skills by default and only archived ones in the archive view', async () => {
+    apiMock.listSkills.mockResolvedValue([liveSkill, shelvedSkill])
+    apiMock.getSkill.mockImplementation((slug: string) =>
+      Promise.resolve(slug === 'shelved-skill' ? shelvedSkill : liveSkill),
+    )
+    const { container } = renderPanel()
+    await flush()
+
+    expect(names(container)).toContain('Live Skill')
+    expect(names(container)).not.toContain('Shelved Skill')
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="skills-archived-toggle"]',
+    )!
+    act(() => toggle.click())
+    await flush()
+
+    expect(container.querySelector('[data-testid="skills-archive-banner"]')).toBeTruthy()
+    expect(names(container)).toContain('Shelved Skill')
+    expect(apiMock.getSkill).toHaveBeenLastCalledWith('shelved-skill')
+  })
+
+  it('restores the selected archived skill through the shared archive API', async () => {
+    apiMock.listSkills.mockResolvedValue([shelvedSkill])
+    apiMock.getSkill.mockResolvedValue(shelvedSkill)
+    apiMock.setArchived.mockResolvedValue({ id: 'shelved-skill', archived: false })
+    const { container, onError } = renderPanel()
+    await flush()
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-testid="skills-archived-toggle"]')!.click(),
+    )
+    await flush()
+
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-testid="skill-detail-archive"]')!.click(),
+    )
+    await flush()
+
+    expect(apiMock.setArchived).toHaveBeenCalledWith('skills', 'shelved-skill', false)
+    expect(onError).not.toHaveBeenCalled()
   })
 })

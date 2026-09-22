@@ -41,6 +41,11 @@ export interface Agent {
   // still resolves its name/avatar. Filtered out of pickers, kept for rendering.
   deleted?: boolean
   deletedAt?: number
+  // Archive (reversible, like an archived kanban card): hidden from the roster's
+  // default view, pickers and the Map; an archived agent cannot run until it is
+  // restored. POST /api/agents/{id}/archive | unarchive.
+  archived?: boolean
+  archivedAt?: number
   // Legacy allowlist (JSON array); retained for subagent profiles. User-facing
   // agents leave it empty and use blockedTools instead.
   allowedTools: string

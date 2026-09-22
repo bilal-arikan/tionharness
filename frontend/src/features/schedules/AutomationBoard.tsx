@@ -12,7 +12,8 @@ import type {
   Flow,
   Schedule,
 } from '@/types'
-import { PaneHeader, toast } from '@/shared/components'
+import { ArchiveViewToggle, PaneHeader, toast } from '@/shared/components'
+import { ArchivedAutomationsList } from './ArchivedAutomationsList'
 import { AutomationCard } from './AutomationCard'
 import { AutomationModal } from './AutomationModal'
 import { BoardColumn } from './BoardColumn'
@@ -50,6 +51,9 @@ type Editor =
 // (ScheduleModal / AutomationModal) so the lanes stay compact.
 export function AutomationBoard({ agents, focusId, onError }: Props) {
   const [curatorOpen, setCuratorOpen] = useState(false)
+  // Archive view (the kanban board's pattern): the lanes give way to the list of
+  // archived automations, each restorable back into its lane.
+  const [showArchived, setShowArchived] = useState(false)
   const schedulesTick = useRefreshTrigger(SIGNAL_SCHEDULES)
   const automationsTick = useRefreshTrigger(SIGNAL_AUTOMATIONS)
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -237,13 +241,13 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   }
 
   // Archive: the rule leaves the lanes and stops firing but keeps its config and
-  // ledger (restorable through the API; a curator screen will list archived rules).
+  // ledger; the header's "Arşiv" view lists it and restores it.
   const archiveAutomation = async (a: Automation) => {
     if (!confirm('Otomasyon arşivlensin mi? (Silinmez; ateşlenmeyi durdurur ve listeden kalkar)'))
       return
     setAutomations((prev) => prev.filter((x) => x.id !== a.id))
     try {
-      await api.archiveAutomation(a.id, true)
+      await api.setArchived('automations', a.id, true)
       toast.success('Otomasyon arşivlendi')
     } catch (e) {
       onError((e as Error).message)
@@ -399,9 +403,16 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneHeader
-        title="Otomasyon"
+        title={showArchived ? 'Otomasyon — Arşiv' : 'Otomasyon'}
         right={
           <>
+            <ArchiveViewToggle
+              testId="automations-archived-toggle"
+              active={showArchived}
+              onToggle={() => setShowArchived((v) => !v)}
+              backLabel="Panoya dön"
+              backTitle="Otomasyon panosuna dön"
+            />
             <button
               type="button"
               onClick={() => setCuratorOpen(true)}
@@ -463,7 +474,13 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
           a readable minimum width (BoardColumn) and only grows when there is
           spare room, so a narrow window scrolls sideways instead of squeezing
           all lanes into unreadable slivers. */}
-      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain p-3 md:snap-none">
+      {showArchived && (
+        <ArchivedAutomationsList agents={agents} onError={onError} onRestored={reloadAutomations} />
+      )}
+      {/* Kept mounted (hidden) in the archive view so lane scroll survives. */}
+      <div
+        className={`${showArchived ? 'hidden' : 'flex'} min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain p-3 md:snap-none`}
+      >
         <BoardColumn
           testId="automation-lane-schedules"
           title="Zamanlamalar"

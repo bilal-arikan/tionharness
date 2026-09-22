@@ -11,6 +11,7 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   absolute_backstop: 'mutlak tavan',
   autonomy_paused: 'otonomi duraklatıldı',
   target_missing: 'hedef yok',
+  agent_archived: 'hedef ajan arşivli',
   empty_prompt: 'boş prompt',
   // Rota watcher that names no automation (agent/automation_trajectory.go).
   not_found: 'otomasyon bulunamadı',

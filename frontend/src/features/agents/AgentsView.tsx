@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, Trash2, Activity, Pencil } from 'lucide-react'
+import { RefreshCw, Trash2, Activity, Pencil, Archive, ArchiveRestore } from 'lucide-react'
 import type { Agent, AgentPatch } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
@@ -22,7 +22,10 @@ import {
   SelectionBarButton,
   ListPane,
   PaneHeader,
+  ArchiveViewToggle,
+  ArchiveViewBanner,
 } from '@/shared/components'
+import { archiveSide } from '@/shared/lib/archive'
 import {
   SidebarHeader,
   NewItemButton,
@@ -103,6 +106,10 @@ export function AgentsView({
   const [refreshing, setRefreshing] = useState(false)
   const [systemActionPending, setSystemActionPending] = useState(false)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
+  // Archive view: the roster shows only archived agents (with a restore action)
+  // instead of the live ones — the kanban board's archive pattern. System agents
+  // cannot be archived, so they only ever appear in the live view.
+  const [showArchived, setShowArchived] = useState(false)
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
@@ -161,25 +168,30 @@ export function AgentsView({
     else setInternalId(id)
   }
 
-  // Keep a valid selection: prefer the current one, else the default, else first.
+  // The roster side currently shown (live or archived).
+  const visibleAgents = useMemo(() => archiveSide(agents, showArchived), [agents, showArchived])
+
+  // Keep a valid selection within the shown side: prefer the current one, else
+  // the default, else first.
   useEffect(() => {
-    if (selectedId && agents.some((a) => a.id === selectedId)) return
-    const fallback = defaultAgentId ?? agents[0]?.id ?? null
+    if (selectedId && visibleAgents.some((a) => a.id === selectedId)) return
+    const defaultVisible = !!defaultAgentId && visibleAgents.some((a) => a.id === defaultAgentId)
+    const fallback = (defaultVisible ? defaultAgentId : null) ?? visibleAgents[0]?.id ?? null
     if (fallback) select(fallback)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agents, defaultAgentId, selectedId])
+  }, [visibleAgents, defaultAgentId, selectedId])
 
   const selected = agents.find((a) => a.id === selectedId) ?? null
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
   const byId = useMemo(() => indexAgents(agents), [agents])
-  const regularAgents = useMemo(() => agents.filter((a) => !a.system), [agents])
+  const regularAgents = useMemo(() => visibleAgents.filter((a) => !a.system), [visibleAgents])
   // System section, split into services vs worker profiles and GROUPED: each
   // locked built-in first, then the workspace customisations bound to its role
   // (indented, with the lineage stripe), so "which row serves this role" reads
   // top-down without a second column.
-  const systemGroups = useMemo(() => groupSystemAgents(agents), [agents])
+  const systemGroups = useMemo(() => groupSystemAgents(visibleAgents), [visibleAgents])
   const orderedIds = useMemo(() => regularAgents.map((a) => a.id), [regularAgents])
   const bulkDelete = async () => {
     const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
@@ -196,6 +208,26 @@ export function AgentsView({
   }
 
   const bulkAgents = regularAgents.filter((agent) => sel.selected.has(agent.id))
+
+  // Archive or restore agents. Either way they leave the CURRENT roster side,
+  // so the roster is re-fetched afterwards. Failures (e.g. a system agent, 409)
+  // surface through onError instead of being swallowed.
+  const setArchived = async (ids: string[], archived: boolean) => {
+    try {
+      for (const id of ids) await api.setArchived('agents', id, archived)
+    } catch (e) {
+      onError?.((e as Error).message)
+    } finally {
+      await onRefresh?.()
+    }
+  }
+  const bulkArchive = async (archived: boolean) => {
+    const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
+    if (ids.length === 0) return
+    await setArchived(ids, archived)
+    setBulkEditOpen(false)
+    sel.clear()
+  }
 
   const canSubmit = name.trim() !== '' && (createParentId !== '' || model !== null)
 
@@ -337,6 +369,16 @@ export function AgentsView({
         testId="agents-list-toggle"
       >
         <SidebarHeader title="Ajanlar" onCollapse={toggleRoster}>
+          <ArchiveViewToggle
+            testId="agents-archived-toggle"
+            active={showArchived}
+            onToggle={() => {
+              sel.clear()
+              setShowArchived((v) => !v)
+            }}
+            backLabel="Ajanlar"
+            backTitle="Aktif ajanlara dön"
+          />
           {onRefresh && (
             <button
               onClick={doRefresh}
@@ -351,14 +393,24 @@ export function AgentsView({
         </SidebarHeader>
 
         {/* Prominent new-agent button (shared chrome). */}
-        <NewItemButton
-          onClick={() => setShowForm((v) => !v)}
-          label="Yeni Ajan"
-          title="Yeni ajan"
-          testId="agent-create-toggle"
-        />
+        {!showArchived && (
+          <NewItemButton
+            onClick={() => setShowForm((v) => !v)}
+            label="Yeni Ajan"
+            title="Yeni ajan"
+            testId="agent-create-toggle"
+          />
+        )}
+        {showArchived && (
+          <ArchiveViewBanner
+            testId="agents-archive-banner"
+            count={regularAgents.length}
+            noun="ajan"
+            restoreHint="arşivli ajan çalıştırılamaz; seçip “Arşivden çıkar”a bas."
+          />
+        )}
 
-        {showForm && (
+        {!showArchived && showForm && (
           <div className="mx-3 mb-2 space-y-2 rounded-lg bg-[var(--color-surface-2)] p-3">
             <input
               value={name}
@@ -377,7 +429,7 @@ export function AgentsView({
               >
                 <option value="">— Sıfırdan —</option>
                 {agents
-                  .filter((a) => !a.deleted)
+                  .filter((a) => !a.deleted && !a.archived)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
@@ -483,7 +535,7 @@ export function AgentsView({
               {systemGroups.workers.map(rosterItem)}
             </>
           )}
-          {agents.length === 0 && (
+          {!showArchived && visibleAgents.length === 0 && (
             <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
               Henüz ajan yok. + ile oluştur.
             </p>
@@ -513,6 +565,18 @@ export function AgentsView({
           <SelectionBarButton icon={<Pencil size={13} />} onClick={() => setBulkEditOpen(true)}>
             {t('agents.bulkEdit.button')}
           </SelectionBarButton>
+          {showArchived ? (
+            <SelectionBarButton
+              icon={<ArchiveRestore size={13} />}
+              onClick={() => bulkArchive(false)}
+            >
+              Arşivden çıkar
+            </SelectionBarButton>
+          ) : (
+            <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
+              Arşivle
+            </SelectionBarButton>
+          )}
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>
@@ -536,6 +600,24 @@ export function AgentsView({
                     title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
                     onError={onError}
                   />
+                  {!selected.system && (
+                    <button
+                      type="button"
+                      data-testid="agent-archive-action"
+                      onClick={() => setArchived([selected.id], !selected.archived)}
+                      title={
+                        selected.archived
+                          ? 'Ajanı arşivden çıkar (yeniden çalıştırılabilir)'
+                          : 'Ajanı arşivle (silinmez; çalıştırılamaz, listeden ve haritadan gizlenir)'
+                      }
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                    >
+                      {selected.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                      <span className="hidden sm:inline">
+                        {selected.archived ? 'Arşivden çıkar' : 'Arşivle'}
+                      </span>
+                    </button>
+                  )}
                 </>
               )}
               {/* Toggle the right-hand activity feed from the top bar (like chat's Detay). */}
@@ -558,57 +640,71 @@ export function AgentsView({
         />
         <div className="flex min-h-0 flex-1">
           {/* Middle: selected agent's settings */}
-          <div className="min-w-0 flex-1">
-            {selected ? (
-              <AgentSettingsForm
-                key={selected.id}
-                agent={selected}
-                dirtyView="agents"
-                isDefault={defaultAgentId === selected.id}
-                defaultSaveState={defaultAgentSaveState}
-                onSetDefault={() => onSetDefault(selected.id)}
-                onSave={(p) => onUpdateAgent(selected.id, p)}
-                onDuplicate={selected.system ? undefined : () => onDuplicateAgent(selected.id)}
-                onDerive={
-                  onDeriveAgent && !selected.system
-                    ? (opts) => onDeriveAgent(selected.id, opts)
-                    : undefined
-                }
-                readOnly={selected.system}
-                readOnlyNote={
-                  <>
-                    Bu bir <strong>sistem ajanı</strong>: bu ekranda yalnızca incelenir. Düzenlemek
-                    için <strong>Ayarlar → Sistem ajanları</strong> ekranını kullan.
-                  </>
-                }
-                lineage={selectedLineage}
-                parent={selectedParent}
-                parentOptions={selectedParentOptions}
-                onSelectAgent={select}
-                onDelete={
-                  selected.system
-                    ? undefined
-                    : async () => {
-                        if (
-                          confirm(
-                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
-                          )
-                        ) {
-                          await onDeleteAgent(selected.id)
-                          if (!onSelectAgent) setInternalId(null)
-                        }
-                      }
-                }
-                onRestoreDefault={
-                  selected.parentId && !selected.system ? () => restoreDefault(selected) : undefined
-                }
-                systemActionPending={systemActionPending}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
-                Düzenlemek için soldan bir ajan seç.
+          <div className="flex min-w-0 flex-1 flex-col">
+            {selected?.archived && (
+              <div
+                data-testid="agent-archived-notice"
+                className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]"
+              >
+                <Archive size={13} className="flex-shrink-0" />
+                Bu ajan arşivde: oturum açılamaz; görev, otomasyon ve zamanlamalar onu çalıştıramaz.
+                Arşivden çıkarınca yeniden kullanılabilir.
               </div>
             )}
+            <div className="min-h-0 flex-1">
+              {selected ? (
+                <AgentSettingsForm
+                  key={selected.id}
+                  agent={selected}
+                  dirtyView="agents"
+                  isDefault={defaultAgentId === selected.id}
+                  defaultSaveState={defaultAgentSaveState}
+                  onSetDefault={() => onSetDefault(selected.id)}
+                  onSave={(p) => onUpdateAgent(selected.id, p)}
+                  onDuplicate={selected.system ? undefined : () => onDuplicateAgent(selected.id)}
+                  onDerive={
+                    onDeriveAgent && !selected.system
+                      ? (opts) => onDeriveAgent(selected.id, opts)
+                      : undefined
+                  }
+                  readOnly={selected.system}
+                  readOnlyNote={
+                    <>
+                      Bu bir <strong>sistem ajanı</strong>: bu ekranda yalnızca incelenir.
+                      Düzenlemek için <strong>Ayarlar → Sistem ajanları</strong> ekranını kullan.
+                    </>
+                  }
+                  lineage={selectedLineage}
+                  parent={selectedParent}
+                  parentOptions={selectedParentOptions}
+                  onSelectAgent={select}
+                  onDelete={
+                    selected.system
+                      ? undefined
+                      : async () => {
+                          if (
+                            confirm(
+                              `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Bu ajandan kalıtım alanlar bir üst ebeveyne bağlanır (değerleri korunur). Çalışan bir ajan silinemez.`,
+                            )
+                          ) {
+                            await onDeleteAgent(selected.id)
+                            if (!onSelectAgent) setInternalId(null)
+                          }
+                        }
+                  }
+                  onRestoreDefault={
+                    selected.parentId && !selected.system
+                      ? () => restoreDefault(selected)
+                      : undefined
+                  }
+                  systemActionPending={systemActionPending}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
+                  Düzenlemek için soldan bir ajan seç.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right: selected agent's live activity feed — opened from the top bar's

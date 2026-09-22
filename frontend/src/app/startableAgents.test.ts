@@ -17,6 +17,10 @@ describe('isStartableAgent', () => {
     expect(isStartableAgent(agent({ system: true, systemKey: 'insight' }))).toBe(false)
   })
 
+  it('rejects an archived agent (it cannot run until restored)', () => {
+    expect(isStartableAgent(agent({ id: 'dev', archived: true }))).toBe(false)
+  })
+
   it('accepts a worker profile even though it is a system agent', () => {
     expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-coder' }))).toBe(true)
     expect(isStartableAgent(agent({ system: true, systemKey: 'subagent-explore' }))).toBe(true)
