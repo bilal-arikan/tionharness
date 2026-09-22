@@ -118,6 +118,9 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewDeleteArtifactTool(r.db, agent.ID),
 		tools.NewListArtifactsTool(r.db, agent.ID),
 		tools.NewReadArtifactTool(r.db, agent.ID),
+		// Shared archive (agents, skills, artifacts, automations, goals): one
+		// tool over the same store calls as POST /api/<entity>/{id}/archive.
+		tools.NewSetArchivedTool(r.db, agent.ID, r.skillArchiver()),
 		tools.NewReadLogsTool(r.logs),
 		// Search indexes: the agent-facing half of the index lifecycle. The
 		// capability prompts forbid running `zg index` / index_repository by hand,

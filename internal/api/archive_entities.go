@@ -47,23 +47,10 @@ func (s *Server) registerEntityArchiveRoutes(mux *http.ServeMux) {
 	})
 }
 
-// setGoalArchived maps the archive pair onto a goal's status, which already
-// carries the archived state (GoalStatusArchived). Archiving moves the goal to
-// "archived"; unarchiving an archived goal returns it to "draft" — the same
-// transition the Goals screen offers — so a restored goal never resumes
-// autonomous evolution without the user re-activating it. Unarchiving a goal
-// that is not archived is a no-op.
+// setGoalArchived maps the archive pair onto a goal's status via
+// db.SetGoalArchived (archive → "archived", unarchive → "draft"), shared with
+// the set_archived agent tool.
 func setGoalArchived(r *http.Request, id string, archived bool) error {
-	database := ws(r).DB
-	g, err := database.GetGoal(r.Context(), id)
-	if err != nil {
-		return err
-	}
-	switch {
-	case archived:
-		_, err = database.SetGoalStatus(r.Context(), id, db.GoalStatusArchived, db.GoalByUser)
-	case g.Status == db.GoalStatusArchived:
-		_, err = database.SetGoalStatus(r.Context(), id, db.GoalStatusDraft, db.GoalByUser)
-	}
+	_, err := ws(r).DB.SetGoalArchived(r.Context(), id, archived, db.GoalByUser)
 	return err
 }

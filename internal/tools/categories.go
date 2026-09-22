@@ -74,6 +74,7 @@ var builtinCategory = map[string]string{
 	"list_schedules": CategoryAutomation, "schedule_wake": CategoryAutomation,
 	"list_tasks": CategoryAutomation, "get_task": CategoryAutomation, "create_task": CategoryAutomation,
 	"update_task": CategoryAutomation, "move_task": CategoryAutomation,
+	"set_archived":      CategoryAutomation,
 	"set_archived_task": CategoryAutomation, "delete_task": CategoryAutomation, "todo_write": CategoryAutomation,
 	"list_hooks": CategoryAutomation, "create_hook": CategoryAutomation,
 	"update_hook": CategoryAutomation, "delete_hook": CategoryAutomation,

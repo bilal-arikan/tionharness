@@ -1,6 +1,6 @@
 # TionHarness — Veri Modeli
 
-> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz; ajanlar tek `set_archived` aracıyla arşivleyip geri alabilir — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
 
 > ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
 > entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
@@ -309,7 +309,14 @@ uçları `?archived=true|false|all` alır; varsayılanlar geriye uyumludur: ajan
 artifact / hedef listesi **hepsini** döndürür (UI tarafında ayrılır; ajan listesi
 geçmiş yazarlarını çözebilmek için tam kalır), otomasyon listesi yalnız **canlıları**.
 **Araçlar:** `list_agents` / `list_artifacts` / `list_automations` `list_tasks`
-geleneğini izler (`archived:true` yalnız arşiv, karışmaz). Arşivleme aracı henüz yok.
+geleneğini izler (`archived:true` yalnız arşiv, karışmaz). **Arşivleme aracı (TSK1045):**
+tek genel `set_archived` self-management aracı `{kind: agent|skill|artifact|automation|goal,
+id, archived}` alır ve REST ile **aynı store çağrılarını** kullanır (`SetAgentArchived`,
+`SetArtifactArchived`, `SetAutomationArchived`, `skills.Store.SetArchived`,
+`db.SetGoalArchived` — hedefin `archived → draft` kuralı artık tek yerde, REST de onu
+çağırır). Sistem ajanı reddi aynen korunur (açık hata). Kanban kartı kendi
+`set_archived_task` aracında kalır. Beş ayrı araç yerine tek araç: işlem, argüman ve
+sonuç her varlıkta aynı; yalnız store çağrısı farklı.
 
 **Yazım anında hedef kapısı (TSK1044):** arşivli bir ajan yeni bir **hedef** olarak
 yazılamaz. Zamanlama (`agentId`), otomasyon (`targetAgentId`) ve görev sahibi

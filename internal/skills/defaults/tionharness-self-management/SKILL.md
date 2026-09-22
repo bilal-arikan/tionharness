@@ -110,6 +110,15 @@ archive/delete ANY task (including user-created ones) — `delete_task` is irrev
 external commands that intercept native tool calls (standard hook contract).
 Read/create any; delete only ones you created.
 
+**Archive (agents, skills, artifacts, automations, goals)** — `set_archived` with
+`{kind, id, archived}` (`kind` = `agent`|`skill`|`artifact`|`automation`|`goal`; for a
+skill `id` is the slug). A reversible hide: the entity leaves default lists (see it
+again with `archived:true` on `list_agents`/`list_artifacts`/`list_automations`) and
+`archived:false` restores it. Archived agents cannot run, archived automations do not
+fire, archived skills are not offered. Built-in (system) agents cannot be archived.
+Restoring a goal returns it to draft. Prefer archiving over `delete_*` when the user
+may want it back. Kanban cards use `set_archived_task`.
+
 **MCP servers** — `list_mcp_servers`, `create_mcp_server`, `toggle_mcp_server`,
 `delete_mcp_server`. Wire up a new external tool source (stdio subprocess or
 sse/http endpoint); a new/enabled server's tools appear on your NEXT turn.

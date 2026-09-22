@@ -147,6 +147,19 @@ func (l agentSkillLib) SearchSkills(query string, limit int) []tools.SkillHit {
 	return out
 }
 
+// skillArchiver adapts skills.Store.SetArchived (the call behind
+// POST /api/skills/{slug}/archive) for the set_archived tool. nil when the
+// runtime has no skill store, which makes the tool refuse kind "skill".
+func (r *Runtime) skillArchiver() tools.SkillArchiver {
+	if r.skills == nil {
+		return nil
+	}
+	return func(slug string, archived bool) error {
+		_, err := r.skills.SetArchived(slug, archived)
+		return err
+	}
+}
+
 // agentSkillWriter adapts *skills.Store to the tools.SkillWriter interface so the
 // create_skill / delete_skill self-management tools can author workspace skills
 // without the tools package importing the skills package. db (optional) lets
