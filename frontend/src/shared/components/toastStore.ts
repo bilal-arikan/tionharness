@@ -1,6 +1,8 @@
 // Toast state + the imperative `toast.*` API. Kept apart from the <Toaster/> UI so
 // that module stays component-only (fast refresh).
-export type ToastTone = 'error' | 'success' | 'info'
+import { logToast } from '@/shared/lib/toastLog'
+
+export type ToastTone = 'error' | 'warning' | 'success' | 'info'
 
 export interface ToastItem {
   id: number
@@ -19,11 +21,14 @@ function emit() {
   for (const l of listeners) l(items)
 }
 
-function push(message: string, tone: ToastTone, ttl: number): number | undefined {
+function push(message: string, tone: ToastTone, ttl: number, detail?: string): number | undefined {
   if (!message) return undefined
   const id = ++seq
   items = [...items, { id, message, tone, ttl }]
   emit()
+  // Error/warning toasts are persisted to the log store so they outlive the
+  // bubble (see toastLog.ts for the dedupe/burst and loop guards).
+  if (tone === 'error' || tone === 'warning') logToast({ tone, message, detail })
   return id
 }
 
@@ -42,9 +47,11 @@ export function dismiss(id: number) {
   emit()
 }
 
-// Public API. Errors linger longer (8s) than positive/neutral notices (4s).
+// Public API. Errors/warnings linger longer (8s/6s) than positive/neutral
+// notices (4s). The optional detail is not shown; it is only written to the log.
 export const toast = {
-  error: (message: string, ttl = 8000) => push(message, 'error', ttl),
+  error: (message: string, ttl = 8000, detail?: string) => push(message, 'error', ttl, detail),
+  warning: (message: string, ttl = 6000, detail?: string) => push(message, 'warning', ttl, detail),
   success: (message: string, ttl = 4000) => push(message, 'success', ttl),
   info: (message: string, ttl = 4000) => push(message, 'info', ttl),
   dismiss,

@@ -9,6 +9,9 @@ export interface ClientErrorReport {
   source: string
   message: string
   stack?: string
+  detail?: string
+  // Client-side unix milliseconds when the event happened (defaults to now).
+  time?: number
   level?: 'error' | 'warn' | 'info'
 }
 
@@ -44,6 +47,8 @@ export function reportClientError(rep: ClientErrorReport): void {
       source: rep.source,
       message: rep.message,
       stack: rep.stack ?? '',
+      detail: rep.detail ?? '',
+      time: rep.time ?? Date.now(),
       url: typeof location !== 'undefined' ? location.href : '',
     })
     // keepalive lets the report survive a page unload (e.g. a crash on navigation).

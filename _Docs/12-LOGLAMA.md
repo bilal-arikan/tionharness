@@ -1,18 +1,38 @@
 # TionHarness — Loglama Sistemi
 
-> **Özet (2026-09-03):** Uygulama loglaması: tek `slog.Logger` bellek-içi ring buffer +
+> **Özet (2026-09-22):** Uygulama loglaması: tek `slog.Logger` bellek-içi ring buffer +
 > stdout + disk dosyasına tee'lenir, `GET /api/logs` ile filtrelenip UI'a (LogsPanel) ve
 > dış araçlara sunulur, `/api/events` üzerinden `log` SSE olayıyla canlı akar. Durum:
 > uygulanmış ve olgun — kaynak alanları (component/session/agent/workspace), HTTP
-> panic-recovery, frontend hata köprüsü (ErrorBoundary + global handler) ve akıllı
+> panic-recovery, frontend hata köprüsü (ErrorBoundary + global handler + hata/uyarı
+> toast'ları `component=ui-toast`) ve akıllı
 > gürültü azaltma (başarılı GET/HEAD loglanmaz) hepsi devrede. Kalan işler: log
 > rotation/boyut sınırı ve bearer auth ile ağa açma. Dayandığı dosyalar:
 > `internal/logbuf`, `internal/api/logs.go`, `internal/app/app.go` (`SetupLogging`).
 
-> Son güncelleme: **2026-07-13**
+> Son güncelleme: **2026-09-22**
 > Uygulama logları bir **bellek-içi ring buffer**'a yakalanır, **stdout'a** ve
 > **disk dosyasına** yazılır, `GET /api/logs` ile UI'a + dış araçlara sunulur ve
 > `/api/events` üzerinden **`log` SSE olayı** olarak canlı yayınlanır.
+
+## UI toast'larının kalıcı kaydı (2026-09-22)
+
+- **Kanca:** `frontend/src/shared/components/toastStore.ts` `push`, tonu `error` veya
+  `warning` olan her toast'ı `shared/lib/toastLog.ts` `logToast`'a verir; o da
+  `reportClientError` ile `POST /api/logs`'a `source:"toast"` raporu gönderir
+  (mesaj, `detail`, çağrı-sitesi stack'i, istemci zamanı `time`). Çağrı siteleri
+  kendi başına loglamaz.
+- **Kayıt biçimi:** `handleClientLog` `source=toast` için `component=ui-toast`,
+  başlık `ui toast: <mesaj>`; diğer istemci raporları `component=ui`, başlık
+  `client error`. Attr'lar: `source`, `message`, `url`, varsa `detail`, `stack`,
+  `client_time`. Seviye: error → ERROR, warning → WARN. `component` kayıt-anı
+  attr'ı API logger'ının `component=api`'sini ezer.
+- **Döngü/burst koruması:** ham `fetch` + `.catch` (POST hatası toast açmaz),
+  gönderim sırasında senkron toast'lar düşer, aynı ton+mesaj 10 sn tekilleşir,
+  10 sn'de en fazla 20 rapor; fazlası pencere dönünce tek "N toast log report(s)
+  suppressed" uyarısıyla bildirilir.
+- **Okuma:** Loglar ekranı bileşen seçicisinde `ui-toast` sabit seçenek; REST
+  `GET /api/logs?component=ui-toast&level=warn`; `read_logs` `component:"ui-toast"`.
 
 ## Kaynak alanları + SSE canlı akış + UI yükseltmesi (2026-07-13)
 
