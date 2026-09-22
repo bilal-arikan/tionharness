@@ -1,0 +1,96 @@
+{
+  "title": "Karar modeli",
+  "intro": "Karar modeli tipli sorulara (evet/hayır, birini seç, puanla) bir saniyenin çok altında ve kuruşun kesri bir maliyetle cevap verir. Uygulama onu belirli karar noktalarında kullanır; her nokta kapalı kalabilir, gölgede çalışabilir (arka planda sorulur ve mevcut mantığın yanında ölçülür, hiçbir şeyi değiştirmez) ya da açılabilir.",
+  "privacy": "Yargılanan içerik (bir shell komutu, bir koordinatör mesajı, bir flow çıktısı, bir transkript kesiti) belirgin sırlar maskelendikten sonra sağlayıcıya gönderilir.",
+  "enabled": "Karar modelini kullan",
+  "enabledHint": "Ana anahtar. Kapalıyken hiçbir yere bir şey gönderilmez ve her karar noktası eskisi gibi çalışır.",
+  "general": "Bağlantı",
+  "backend": "Backend",
+  "instance": "Sağlayıcı hesabı",
+  "instanceAuto": "Otomatik (kullanılabilir ilk hesap)",
+  "instanceHint": "Mevcut bir sağlayıcı örneğinin API anahtarını kullanır; burada anahtar saklanmaz.",
+  "instanceMissing": "Bu backend için kullanılabilir hesap yok. Ayarlar → Sağlayıcılar altından bir OpenRouter örneği ekle.",
+  "instanceUnavailable": "{{id}} (şu an kullanılamıyor)",
+  "model": "Model",
+  "modelCustom": "Özel model kimliği…",
+  "modelCustomPlaceholder": "ör. typesafe/jev-1.13",
+  "modelHint": "Ölçüm yaparken sabit bir snapshot kullan: \"latest\" takma adı yeni sürümleri izler ve gölge sonuçlarını karşılaştırılamaz hale getirir.",
+  "price": "Milyon girdi token'ı başına ${{input}} · çıktı ücretsiz",
+  "timeout": "Deneme başına zaman aşımı (ms)",
+  "timeoutHint": "Zaman aşımına uğrayan çağrı bir kez yeniden denenir. Model cevap veremediğinde karar noktası eski mantığına döner.",
+  "sites": "Karar noktaları",
+  "sitesHint": "Gölgede başla, aşağıdaki uyum oranını izle, güvendiğinde noktayı aç.",
+  "threshold": "Eşik",
+  "modeLabel": {
+    "off": "Kapalı",
+    "shadow": "Gölge",
+    "on": "Açık"
+  },
+  "modeHint": {
+    "off": "Hiç sorulmaz.",
+    "shadow": "Arka planda sorulur ve mevcut kararın yanına kaydedilir; hiçbir şeyi değiştirmez.",
+    "on": "Cevabı kullanılır; hata olursa önceki mantığa dönülür."
+  },
+  "site": {
+    "stall-judge": {
+      "label": "Koordinatör takılma yargıcı",
+      "description": "Koordinatörün son mesajı hiç açılmamış worker'lar açtığını mı iddia ediyor? Boşta kalan her koordinatör turundaki Haiku çağrısının yerini alır.",
+      "threshold": "Koordinatör dürtülmeden önce gereken en düşük \"takıldı\" olasılığı."
+    },
+    "tool-risk": {
+      "label": "Shell komutu risk kontrolü",
+      "description": "Sormadan çalışacak shell komutlarına (auto mod ya da git * gibi bir \"her zaman izin ver\" kuralı) ikinci bir bakış. Açıkken riskli bir komut onay istemine dönüşür; gözetimsiz bir çalışma asla bloklanmaz.",
+      "threshold": "Sana sorulmadan önce komutun onay gerektirme olasılığının en düşük değeri."
+    },
+    "flow-judge": {
+      "label": "Flow judge düğümleri",
+      "description": "Eşleşme modu \"judge\" olan dallanma ve döngü düğümlerinde kolu ya da döngünün çıkış koşulunu metin eşleştirmek yerine model belirler.",
+      "threshold": "Bir kolun seçilmesi (yoksa varsayılan kol) ya da çıkış koşulunun sağlanmış sayılması için gereken en düşük olasılık."
+    },
+    "phase-gate": {
+      "label": "Rota judge kapıları",
+      "description": "\"judge\" türündeki faz kapıları, fazın çıkış koşulunun sağlanıp sağlanmadığını kök oturumun son transkriptine bakarak sorar. Model cevap veremezse kapı kapalı kalır.",
+      "threshold": "Kapının açılması için çıkış koşulunun sağlanma olasılığının en düşük değeri."
+    }
+  },
+  "status": {
+    "ready": "Hazır",
+    "notReady": "Hazır değil",
+    "off": "Kapalı",
+    "account": "Hesap: {{id}}",
+    "pausedUntil": "Hatalardan sonra {{time}} saatine kadar duraklatıldı"
+  },
+  "actions": {
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "Kaydedildi",
+    "unsaved": "Kaydedilmemiş değişiklik",
+    "test": "Deneme sorusu gönder",
+    "testing": "Deneniyor…",
+    "testOk": "{{ms}} ms'de cevap verdi · {{cost}} · onay gerekir: {{probability}}",
+    "testFailed": "Deneme başarısız: {{error}}",
+    "loadFailed": "Karar modeli ayarları yüklenemedi: {{error}}"
+  },
+  "stats": {
+    "title": "Son {{days}} gün",
+    "empty": "Henüz kaydedilmiş karar yok.",
+    "calls": "Çağrı",
+    "agreement": "Uyum",
+    "agreementHint": "Gölge karşılaştırmalarında modelin mevcut mantıkla aynı karara vardığı oran.",
+    "applied": "Uygulanan",
+    "errors": "Hata",
+    "latency": "p50 / p95",
+    "latencyValue": "{{p50}} / {{p95}} ms",
+    "cost": "Maliyet",
+    "readyToSwitch": "Uyum yüksek: açmaya hazır.",
+    "keepShadow": "Uyum düşük: gölgede tut.",
+    "needsData": "Veri toplanıyor ({{done}} / {{needed}} karşılaştırma)."
+  },
+  "recent": {
+    "title": "Son kararlar",
+    "empty": "Henüz yok.",
+    "vs": "öncesi {{baseline}}",
+    "applied": "uygulandı",
+    "failed": "başarısız: {{error}}"
+  }
+}

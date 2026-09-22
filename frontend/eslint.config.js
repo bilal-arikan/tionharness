@@ -14,7 +14,11 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // It is an allowlist rather than a global rule because the other ~450 files still
 // hold ~2.2k Turkish literals; turning the rule on everywhere at once would bury
 // real violations under known debt.
-const I18N_MIGRATED = ['src/i18n/**/*.{ts,tsx}', 'src/shared/lib/{time,format,intl}.ts']
+const I18N_MIGRATED = [
+  'src/i18n/**/*.{ts,tsx}',
+  'src/shared/lib/{time,format,intl}.ts',
+  'src/features/decider/**/*.{ts,tsx}',
+]
 
 export default defineConfig([
   globalIgnores(['dist']),

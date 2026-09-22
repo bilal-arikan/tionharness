@@ -32,6 +32,7 @@ import { goalApi } from './api/goals'
 import { evolutionApi } from './api/evolution'
 import { dashboardApi } from './api/dashboard'
 import { searchIndexApi } from './api/searchIndexes'
+import { deciderApi } from './api/decider'
 
 export { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace }
 export type { ChatStreamHandlers } from './api/chat'
@@ -65,4 +66,5 @@ export const api = {
   ...evolutionApi,
   ...dashboardApi,
   ...searchIndexApi,
+  ...deciderApi,
 }

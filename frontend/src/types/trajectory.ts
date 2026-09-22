@@ -15,7 +15,7 @@ type TrajectoryEdgeKind =
   'next' | 'spawned' | 'reported' | 'fired' | 'feeds' | 'blocked_by' | 'forked_from'
 
 interface TrajectoryGate {
-  kind: 'artifact' | 'verdict' | 'human' | 'schema'
+  kind: 'artifact' | 'verdict' | 'human' | 'schema' | 'judge'
   value?: string
 }
 

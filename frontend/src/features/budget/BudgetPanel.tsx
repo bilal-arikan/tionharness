@@ -86,6 +86,7 @@ const KIND_LABELS: Record<string, string> = {
   summary: 'Özet',
   reflect: 'Yansıma',
   compact: 'Sıkıştırma',
+  decide: 'Karar',
   system: 'System agent',
   other: 'Diğer',
 }

@@ -18,6 +18,7 @@ export const KIND_COLORS: Record<string, string> = {
   summary: '#22c55e',
   reflect: '#eab308',
   compact: '#ef4444',
+  decide: '#f97316',
   other: CATEGORY_FALLBACK,
 }
 

@@ -9,7 +9,7 @@ export type SkillSource = 'global' | 'workspace'
 
 // A phase's exit condition (recipe frontmatter `gate`).
 interface GateSpec {
-  kind: 'artifact' | 'verdict' | 'human' | 'schema'
+  kind: 'artifact' | 'verdict' | 'human' | 'schema' | 'judge'
   value?: string
 }
 

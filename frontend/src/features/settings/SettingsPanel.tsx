@@ -30,6 +30,7 @@ import { HooksPanel } from './HooksPanel'
 import { ExternalToolsPanel } from './ExternalToolsPanel'
 import { SecretsPanel } from './SecretsPanel'
 import { SystemAgentsPanel } from './SystemAgentsPanel'
+import { DeciderPanel } from '@/features/decider'
 
 interface Props {
   onError: (msg: string) => void
@@ -58,7 +59,7 @@ const ALL_CATS: Cat[] = APP_CATS.map((c) => c.key)
 // Categories whose panel owns its own persistence entirely: they save through
 // their own API on each edit, so the header's app-settings draft indicator and
 // Save button would be misleading noise.
-const SELF_MANAGED_CATS = new Set<Cat>(['secrets', 'exttools', 'sysagents'])
+const SELF_MANAGED_CATS = new Set<Cat>(['secrets', 'exttools', 'sysagents', 'decider'])
 
 // Categories that only READ app settings (no editable field): the draft state is
 // still meaningful, but there is nothing here to save.
@@ -375,6 +376,7 @@ export function SettingsPanel({
                 {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
                 {cat === 'hooks' && <HooksPanel onError={onError} />}
                 {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
+                {cat === 'decider' && <DeciderPanel onError={onError} />}
                 {cat === 'sound' && <SoundPanel />}
                 {cat === 'advanced' && (
                   <>

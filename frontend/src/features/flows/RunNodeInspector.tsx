@@ -18,6 +18,7 @@ import { UserBubble } from '@/features/chat/UserBubble'
 import { TurnSteps } from '@/features/chat/TurnSteps'
 import { subscribeFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import type { NodeStatus } from './flowGraph'
+import { parseJudgeLabel } from './judgeLabel'
 
 // CopyButton copies `text` to the clipboard, surfacing success through the
 // app-wide toast (single feedback channel). A tiny local control so the node
@@ -88,10 +89,20 @@ function PriorThread({ msgs, agents }: { msgs: FlowMsg[]; agents: Agent[] }) {
 // output label "→ <label>"). Turns "why did the flow go here?" into a glance.
 function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | undefined }) {
   const value = entry?.input ?? ''
-  const label = (entry?.output ?? '').replace(/^→\s*/, '') // matched arm's `contains`, or "default"
+  const rawLabel = (entry?.output ?? '').replace(/^→\s*/, '') // matched arm's `contains`, or "default"
   const mode = node.matchMode ?? 'contains'
+  // Judge mode appends the decision model's note ("(judge 0.93)") to the label.
+  const { arm: label, note: judgeNote } =
+    mode === 'judge' ? parseJudgeLabel(rawLabel) : { arm: rawLabel, note: '' }
   const arms = node.branches ?? []
-  const modeLabel = mode === 'equals' ? 'eşittir' : mode === 'regex' ? 'regex' : 'içerir'
+  const modeLabel =
+    mode === 'equals'
+      ? 'eşittir'
+      : mode === 'regex'
+        ? 'regex'
+        : mode === 'judge'
+          ? 'karar modeli'
+          : 'içerir'
   return (
     <div className="space-y-3">
       <div className="rounded bg-[var(--color-surface-2)] p-3 text-sm">
@@ -102,6 +113,9 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
         <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
           {value || <span className="italic text-[var(--color-text-dim)]">boş</span>}
         </div>
+        {judgeNote && (
+          <div className="mt-2 text-xs text-[var(--color-text-dim)]">Karar: {judgeNote}</div>
+        )}
       </div>
       <div className="space-y-1">
         {arms.map((b, i) => {

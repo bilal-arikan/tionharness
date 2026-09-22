@@ -1,0 +1,96 @@
+{
+  "title": "Decision model",
+  "intro": "A decision model answers typed questions (yes/no, pick one, score) in well under a second for a fraction of a cent. The app asks it at specific decision points; each point can stay off, run in shadow (asked in the background and measured next to the current logic, changing nothing) or be switched on.",
+  "privacy": "What is judged (a shell command, a coordinator message, a flow output, a transcript excerpt) is sent to the provider after obvious secrets are masked.",
+  "enabled": "Use the decision model",
+  "enabledHint": "Master switch. While off nothing is sent anywhere and every decision point behaves as before.",
+  "general": "Connection",
+  "backend": "Backend",
+  "instance": "Provider account",
+  "instanceAuto": "Automatic (first usable account)",
+  "instanceHint": "Uses the API key of an existing provider instance; no key is stored here.",
+  "instanceMissing": "No usable account for this backend. Add an OpenRouter instance under Settings → Providers.",
+  "instanceUnavailable": "{{id}} (not usable now)",
+  "model": "Model",
+  "modelCustom": "Custom model id…",
+  "modelCustomPlaceholder": "e.g. typesafe/jev-1.13",
+  "modelHint": "Keep a pinned snapshot while measuring: the \"latest\" alias follows new releases and makes shadow numbers incomparable.",
+  "price": "${{input}} per million input tokens · output free",
+  "timeout": "Timeout per attempt (ms)",
+  "timeoutHint": "A timed-out call is retried once. Whenever the model cannot answer, the decision point falls back to its old logic.",
+  "sites": "Decision points",
+  "sitesHint": "Start in shadow, watch the agreement below, switch a point on when you trust it.",
+  "threshold": "Threshold",
+  "modeLabel": {
+    "off": "Off",
+    "shadow": "Shadow",
+    "on": "On"
+  },
+  "modeHint": {
+    "off": "Not consulted.",
+    "shadow": "Asked in the background and logged next to the current verdict; changes nothing.",
+    "on": "Its answer is used; failures fall back to the previous logic."
+  },
+  "site": {
+    "stall-judge": {
+      "label": "Coordinator stall judge",
+      "description": "Did the coordinator's last message claim worker spawns that never happened? Replaces a Haiku call per idle coordinator turn.",
+      "threshold": "Minimum probability of \"stalled\" before the coordinator is nudged."
+    },
+    "tool-risk": {
+      "label": "Shell command risk check",
+      "description": "A second look at shell commands that would run without asking (auto mode, or an \"always allow\" grant such as git *). When on, a risky command becomes an approval prompt; an unattended run is never blocked.",
+      "threshold": "Minimum probability that the command needs approval before you are asked."
+    },
+    "flow-judge": {
+      "label": "Flow judge nodes",
+      "description": "Branch and loop nodes whose match mode is \"judge\" let the model pick the arm or decide the loop's exit condition instead of matching text.",
+      "threshold": "Minimum probability for an arm (otherwise the default arm) or for the exit condition to count as met."
+    },
+    "phase-gate": {
+      "label": "Rota judge gates",
+      "description": "Phase gates of kind \"judge\" ask whether the phase's exit condition holds, judged against the root session's recent transcript. The gate stays closed when the model cannot answer.",
+      "threshold": "Minimum probability that the exit condition holds before the gate opens."
+    }
+  },
+  "status": {
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "off": "Switched off",
+    "account": "Account: {{id}}",
+    "pausedUntil": "Paused after failures until {{time}}"
+  },
+  "actions": {
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "unsaved": "Unsaved changes",
+    "test": "Send a test question",
+    "testing": "Testing…",
+    "testOk": "Answered in {{ms}} ms · {{cost}} · needs approval: {{probability}}",
+    "testFailed": "Test failed: {{error}}",
+    "loadFailed": "Decision model settings could not be loaded: {{error}}"
+  },
+  "stats": {
+    "title": "Last {{days}} days",
+    "empty": "No decisions recorded yet.",
+    "calls": "Calls",
+    "agreement": "Agreement",
+    "agreementHint": "Share of shadow comparisons in which the model reached the same verdict as the current logic.",
+    "applied": "Applied",
+    "errors": "Errors",
+    "latency": "p50 / p95",
+    "latencyValue": "{{p50}} / {{p95}} ms",
+    "cost": "Cost",
+    "readyToSwitch": "Agreement is high: ready to switch on.",
+    "keepShadow": "Agreement is low: keep it in shadow.",
+    "needsData": "Collecting data ({{done}} of {{needed}} comparisons)."
+  },
+  "recent": {
+    "title": "Recent decisions",
+    "empty": "Nothing yet.",
+    "vs": "was {{baseline}}",
+    "applied": "applied",
+    "failed": "failed: {{error}}"
+  }
+}

@@ -15,7 +15,7 @@ export type FlowNodeType =
   | 'join'
   | 'coordinator'
 
-export type BranchMatchMode = 'contains' | 'equals' | 'regex'
+export type BranchMatchMode = 'contains' | 'equals' | 'regex' | 'judge'
 
 interface FlowBranch {
   contains: string // case-insensitive substring; "" = default
@@ -32,6 +32,7 @@ export interface FlowNode {
   branches?: FlowBranch[] // branch routing arms ("" contains = default)
   matchMode?: BranchMatchMode // branch: how arm values match (default: contains)
   jsonField?: string // branch: match on this top-level JSON field of the value (structured routing)
+  judgeQuestion?: string // judge mode (branch/loop): what the decision model is asked to look at
   parallel?: string[]
   joinNext?: string
   delayMs?: number // delay node: ms to wait

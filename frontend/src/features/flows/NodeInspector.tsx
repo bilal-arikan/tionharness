@@ -10,6 +10,7 @@ import { Workflow } from 'lucide-react'
 import { NumberField } from '@/features/settings/primitives'
 import { chromeFor, nodeHeaderForeground } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
+import { JudgeFields } from './JudgeFields'
 
 interface Props {
   node: FlowNode
@@ -220,8 +221,16 @@ export function NodeInspector({
               <option value="contains">İçerir (substring)</option>
               <option value="equals">Eşittir (tam)</option>
               <option value="regex">Regex</option>
+              <option value="judge">Karar modeli (judge)</option>
             </select>
           </label>
+          {node.matchMode === 'judge' && (
+            <JudgeFields
+              question={node.judgeQuestion ?? ''}
+              onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
+              hint="Her dal bir seçeneği düz cümleyle tarif eder; karar modeli son çıktının hangisine uyduğunu seçer. Emin değilse ya da cevap veremezse varsayılan (boş) dala gider. Ayarlar → Karar Modeli'nde açık olmalı."
+            />
+          )}
           <span className="block text-xs text-[var(--color-text-dim)]">
             Dallar (hedef için kenar çiz)
           </span>
@@ -239,7 +248,9 @@ export function NodeInspector({
                     ? 'eşittir… (boş = varsayılan)'
                     : (node.matchMode ?? 'contains') === 'regex'
                       ? 'regex… (boş = varsayılan)'
-                      : 'içeriyorsa… (boş = varsayılan)'
+                      : node.matchMode === 'judge'
+                        ? 'seçeneği tarif et… (boş = varsayılan)'
+                        : 'içeriyorsa… (boş = varsayılan)'
                 }
                 className={input}
               />
@@ -470,7 +481,11 @@ export function NodeInspector({
             <input
               value={node.until ?? ''}
               onChange={(e) => onPatch({ until: e.target.value })}
-              placeholder="boş = yalnız iterasyon sınırı"
+              placeholder={
+                node.untilMode === 'judge'
+                  ? 'koşulu düz cümleyle yaz (ör. İnceleme değişikliği onayladı)'
+                  : 'boş = yalnız iterasyon sınırı'
+              }
               className={input}
             />
           </label>
@@ -484,8 +499,16 @@ export function NodeInspector({
               <option value="contains">İçerir (substring)</option>
               <option value="equals">Eşittir (tam)</option>
               <option value="regex">Regex</option>
+              <option value="judge">Karar modeli (judge)</option>
             </select>
           </label>
+          {node.untilMode === 'judge' && (
+            <JudgeFields
+              question={node.judgeQuestion ?? ''}
+              onQuestion={(judgeQuestion) => onPatch({ judgeQuestion })}
+              hint="Karar modeli her turdan sonra çıkış koşulunun sağlanıp sağlanmadığına bakar. Cevap veremezse döngü iterasyon sınırına kadar sürer; sınır yoksa akış hata verir."
+            />
+          )}
         </div>
       )}
     </div>

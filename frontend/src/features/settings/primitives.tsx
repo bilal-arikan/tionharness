@@ -24,6 +24,7 @@ export type Cat =
   | 'context'
   | 'tools'
   | 'sysagents'
+  | 'decider'
   | 'hooks'
   | 'exttools'
   | 'sound'

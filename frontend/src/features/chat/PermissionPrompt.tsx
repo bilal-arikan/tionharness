@@ -13,6 +13,10 @@ function riskLabel(risk?: string): string {
   switch (risk) {
     case 'exec':
       return 'komut çalıştırma'
+    // The decider's tool-risk check flagged a command that would otherwise have
+    // run without asking (auto mode or an "always allow" family grant).
+    case 'exec:decider':
+      return 'riskli komut — karar modeli onay önerdi'
     case 'write':
       return 'dosya/durum değişikliği'
     default:
