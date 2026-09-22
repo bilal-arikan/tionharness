@@ -1,219 +1,338 @@
-# 87 — Karar Katmanı (Decider) ve Jev
+# 87 — Karar Katmanı (Decider), Karar Modelleri ve Karar Mercileri
 
-> **Özet (2026-09-22):** Uygulamanın belirli karar noktalarında metin üretmeyen,
-> yalnız tipli soruları (evet/hayır, birini seç, puanla) kalibre olasılıkla
-> cevaplayan bir **karar modeli** kullanmasını sağlayan ayrı katman:
-> `internal/decider`. İlk backend OpenRouter'ın alpha **Decisions API**'si
-> üzerinden TypeSafe **Jev** (`typesafe/jev-1.13`); yeni karar modelleri chat
-> sağlayıcılarına dokunmadan yeni bir backend dosyasıyla eklenir. Dört karar
-> noktası (site) bağlandı: koordinatör takılma yargıcı, shell komutu risk
-> kontrolü, flow `judge` eşleşme modu, Rota `judge` kapısı. Her site
-> `off / shadow / on` modunda çalışır. Varsayılan olarak her şey kapalıdır (ana
-> anahtar). Durum: **uygulandı (2026-09-22)**, ayar ekranı Ayarlar → Karar Modeli.
+> **Özet (2026-09-22):** Uygulamanın belirli noktalarında metin üretmeyen, yalnız
+> tipli soruları (evet/hayır, birini seç, puanla) olasılıkla cevaplayan **karar
+> modelleri** kullanmasını sağlayan ayrı katman: `internal/decider`. **Karar
+> modelleri** sağlayıcı örnekleri gibi eklenip düzenlenir (kendi uç noktası +
+> şifreli anahtar ya da bir sağlayıcı hesabını ödünç alma); üç backend var:
+> OpenRouter Decisions (Jev), System One API (TypeSafe · OpenJev) ve logprobs
+> üzerinden **herhangi bir yerel LLM** (Ollama, LM Studio, llama.cpp, vLLM).
+> **Karar mercileri** (`Authority`) kararı modele devreden noktalardır; kendi
+> paketlerinden kayıt olur ve her biri `off / shadow / on`, eşik, kendi modeli,
+> **yedek** ve **rakip** model alır. Dört merci bağlı (tool-risk, stall-judge,
+> flow-judge, phase-gate); yenileri için `Pick / Select / Triage` desenleri
+> hazır. Durum: **uygulandı (2026-09-22)**; karar sağlayıcıları Ayarlar →
+> Sağlayıcılar, merciler Ayarlar → Karar Mercileri.
 
 ## 1. Neden ayrı bir katman
 
-- **Chat provider değil.** `providers.Provider` arayüzü yalnız chat'tir
-  (`Complete(ctx, Request) (*Response, error)`); bir kind'ın `Build`'i chat
-  provider döndürmek zorundadır ve kind'ın `Manifest.Models` listesi her ajan
-  model seçicisinde görünür. Jev ise `/chat/completions`'ı reddeder
-  (`typesafe/jev-1.13 is a decisions model and cannot be used with the
-  chat/completions endpoint`), metin ya da tool call üretmez.
-- **Alternatifler eklenebilsin.** Katman bir backend kaydı üzerine kurulu
-  (`decider.Register`, provider kind'larıyla aynı `init()` deseni). TypeSafe'in
-  kendi API'si, başka bir Decisions sağlayıcısı ya da yerel bir sınıflandırıcı
-  yeni bir `Backend` implementasyonu olarak eklenir; çağıran siteler değişmez.
-- **Ölçmeden açma.** Her site önce `shadow` modunda koşup mevcut mantığın
-  kararıyla yan yana kaydedilebilir; uyum oranı görülmeden davranış değişmez.
+- **Chat provider değil.** `providers.Provider` yalnız chat'tir; bir kind'ın
+  `Manifest.Models` listesi her ajan model seçicisinde görünür. Jev ise
+  `/chat/completions`'ı reddeder, metin ya da tool call üretmez. Karar modelleri
+  bu yüzden kendi kayıt defterinde tutulur, hiçbir chat seçicide görünmez.
+- **Birden çok model, birden çok merci.** Aynı anda hem barındırılan Jev hem
+  yerel bir OpenJev ya da küçük bir Ollama modeli tanımlanabilir; her karar
+  mercii hangisinin cevap vereceğini seçer.
+- **Ölçmeden açma, ölçmeden değiştirme.** Merci önce `shadow` modunda mevcut
+  mantığın yanında ölçülür; yeni bir model önce **rakip** olarak aynı soruları
+  arka planda cevaplar, uyumu görülmeden devralmaz.
 
-## 2. Jev ve OpenRouter Decisions API
+## 2. Kavramlar
 
-Kaynaklar: TypeSafe blog (System One models), OpenRouter Go SDK `Alpha.Decisions`,
-`OpenRouterTeam/ai-sdk-provider#562`, bağımsız test harness'leri. **Canlı doğrulama
-2026-09-21** (gerçek anahtar, 9 çağrı):
+| Kavram | Kod | Ne |
+|---|---|---|
+| Backend | `decider.Backend`, `Register` | Bir karar API'si ailesi (wire formatı, URL türetme, faturalama). `init()` ile kayıt olur. |
+| Karar modeli | `ModelInstance`, `ModelStore` | Kullanıcının eklediği giriş: backend + uç nokta + kimlik bilgisi + model id + zaman aşımı + bağlam + backend alanları. `DM<n>` id'si. |
+| Karar mercii | `Authority`, `RegisterAuthority` | Kararı modele devreden nokta. Grup, desen, modlar, varsayılan eşik, `Explicit`, `FailClosed`. |
+| Merci ayarı | `AuthorityConfig` | `mode`, `threshold`, `model` (boş = varsayılan), `fallback`, `challenger`. |
+| Hub | `decider.Hub` | Uygulama çapında servis: model başına istemci önbelleği ve sağlık, fallback, challenger, ledger. |
+| Desen | `Pick`, `Hub.Select`, `Hub.Triage` | En sık karar biçimleri için hazır istek kurucu + yorumlayıcı. |
+
+## 3. Backend'ler
+
+### 3.1 OpenRouter Decisions (`openrouter`)
+
+`POST {base}/../alpha/decisions` (`…/api/v1` → `…/api/alpha/decisions`), TypeSafe
+Jev. Canlı doğrulama 2026-09-21 (9 çağrı):
 
 ```
-POST https://openrouter.ai/api/alpha/decisions      Authorization: Bearer <OpenRouter key>
 {"model":"typesafe/jev-1.13","state":<metin | JSON>,"questions":{
   "k1":{"type":"noul","instructions":"…","criteria":{"true":"…","false":"…"}},
   "k2":{"type":"choice","instructions":"…","criteria":{"a":"…","b":"…"}},
   "k3":{"type":"score","instructions":"…","criteria":["düşük","orta","yüksek"]}}}
 → {"id":"gen-dec-…","model":"typesafe/jev-1.13-20260917","provider":"TypeSafe",
-   "answers":{"k1":{"type":"noul","noul":0.96},
-              "k2":{"type":"choice","choice":"a","probabilities":{…},"confidence":0.66},
-              "k3":{"type":"score","score":2,"legend":{…},"probabilities":{…},"confidence":1}},
+   "answers":{"k1":{"type":"noul","noul":0.96}, "k2":{"choice":"a","probabilities":{…},"confidence":0.66},
+              "k3":{"score":2,"legend":{…},"probabilities":{…},"confidence":1}},
    "usage":{"input_tokens":606,"output_tokens":92,"cost":2.5452e-05}}
 ```
 
 | Gözlem | Sonuç |
 |---|---|
 | 4 soruluk istek | 0,80 sn, $0.0000255 (yalnız girdi: 606 × $0.042/M) |
-| Tek soruluk istek ×5 | 0,30–0,71 sn, medyan 0,35 sn |
-| `~typesafe/jev-latest` | Aynı snapshot'a gider: `typesafe/jev-1.13-20260917` |
-| noul `criteria` tek taraflı | **400** (`criteria.false` zorunlu); hiç verilmezse geçerli |
-| `/chat/completions` | **400**, yukarıdaki mesaj |
-| `/api/v1/models` | Jev **listelenmiyor** (443 model) — id'ler elle tanımlı |
-| Hata gövdesi | `{"error":{"message","code"}}`; doğrulama mesajı string'lenmiş zod JSON'u |
+| Tek soru ×5 | 0,30–0,71 sn, medyan 0,35 sn |
+| noul `criteria` tek taraflı | **400**; `Request.Normalized` eksik tarafı doldurur |
+| `/chat/completions`, `/api/v1/models` | Jev reddedilir / listelenmez; id'ler elle tanımlı |
 
-Bilinen sınırlar: alpha uç nokta (şekil değişebilir), bağlam OpenRouter'da 32k,
-metin/tool call/görsel yok, test-time reasoning yok (akıl yürütmesiz LLM düzeyi),
-topluluk raporlarında çağrıların bir kısmı read timeout'ta asılı kalıyor.
+Her çağrı `openrouter` altında faturalanır (Decisions API yalnız orada vardır).
 
-## 3. Paket haritası
+### 3.2 System One API (`systemone`) — TypeSafe ve OpenJev
 
-| Yer | Görev |
-|---|---|
-| `internal/decider/types.go` | `Request`/`Question`/`Answer`/`Response`/`Usage`, `Decider` arayüzü; `Answer.Yes/Level/Strength` |
-| `internal/decider/question.go` | `Noul`/`Choice`/`Score` kurucuları, `Validate`, `Normalized` (tek taraflı noul kriterini tamamlar) |
-| `internal/decider/backend.go` | Backend kaydı: `Register`, `Lookup`, `Manifests`, `IsDecisionModel`; `Endpoint` (anahtar yerine `Authorize` fonksiyonu) |
-| `internal/decider/openrouter.go` | OpenRouter Decisions backend'i; `DecisionsURL` (`…/api/v1` → `…/api/alpha/decisions`, `/v1` ile bitmeyen tabanı reddeder) |
-| `internal/decider/http.go` | Deneme başına zaman aşımı + tek hızlı retry (408/429/5xx/524/529, 200 ms), yanıt 1 MB sınırı, `"<ad> HTTP <kod>: …"` hata biçimi |
-| `internal/decider/config.go`, `store.go` | `Config`/`Site`/`Mode`; `<dataDir>/decider.json` (settings.json'dan ayrı, atomik yazım) |
-| `internal/decider/hub.go` | Uygulama çapında servis: istemci önbelleği (provider `Generation`'ına bağlı), otomatik hesap seçimi, circuit breaker, anahtar karantinası, state hazırlığı |
-| `internal/decider/ledger.go` | `<dataDir>/decider/ledger.jsonl` (4 MB'ta döner, bellekte son 5000 kayıt), site başına istatistik |
-| `internal/decider/redact.go` | Gönderilen state'teki sırların maskelenmesi, `TrimMiddle` |
-| `internal/providers/registry_http.go` | `Registry.HTTPAccess` — anahtarı string olarak dışarı vermeden `Authorize` kapanışı; `InstanceBaseURL` |
-| `internal/agent/decide*.go`, `flow_judge.go`, `trajectory_gate_judge.go` | Site entegrasyonları, usage kaydı, shadow arka plan çağrıları |
-| `internal/orchestration/judge.go` | `MatchJudge`, opsiyonel `JudgeRunner` arayüzü |
-| `internal/api/decider*.go` | `/api/decider` uç noktaları, kayıt defteri adaptörü, chat modeli koruması, claude-cli izin yolu |
-| `frontend/src/features/decider/` | Ayarlar → Karar Modeli ekranı (i18n namespace `decider`, `I18N_MIGRATED`'da) |
+TypeSafe'in kendi API'si `POST https://api.typesafe.ai/v1/systemone`; aynı wire
+formatını OpenRouter `…/api/v1/systemone` altında ve açık **OpenJev** sunucuları da
+konuşur (TypeSafe SDK'ları onlara değişmeden bağlanır). Tek backend hepsini kapsar;
+fark yalnız taban URL, anahtar ve model id'sidir. URL kuralı: `…/v1` → `+/systemone`,
+tam `…/systemone` olduğu gibi, sürümsüz taban (`https://api.typesafe.ai`) →
+`+/v1/systemone`. Cevap çözümü toleranslıdır: `type` alanı yoksa da, score dağılımı
+dizi (`[0.1,0.2,0.7]`) gelse de okunur.
 
-`internal/decider` hiçbir internal paketi import etmez; `scripts/depcheck.sh`
-`internal/agent`'ı import etmediğini doğrular.
+Araştırma (2026-09-22) — OpenJev ailesi:
 
-## 4. Yapılandırma
+| Proje | Nasıl | Arayüz |
+|---|---|---|
+| `razorback16/openjev` | DiffusionGemma 26B, vLLM (NVIDIA ≥24 GB) ya da MLX | `POST /v1/systemone`, port 8080, model `openjev-latest` (`jev-latest` takma adı da) |
+| `openjev/openjev` (HF) | 27B, vLLM + karar shim'i | `POST /v1/systemone`; ≤52 seçenek, 16k prompt, H100'de ~80–210 ms |
+| `zefan-cai/open-jev` | Qwen tabanlı 2B/9B/27B | `POST /v1/systemone` |
+| `zhihz/openjev`, OpenJevPro, poorjev, von, laya … | Kendi formatları / kütüphane | Doğrudan desteklenmez; logprobs backend'i aynı işi görür |
 
-`<dataDir>/decider.json` (API: `GET/PUT /api/decider`):
+Faturalama host'a göre: loopback / özel ağ / `.local` → `local` (bilinen sıfır),
+`openrouter.ai` → `openrouter` (çıplak id `typesafe/` önekiyle), `api.typesafe.ai` →
+`typesafe`. Limitler: seçenek ≤52, score seviyesi ≤10.
+
+### 3.3 Herhangi bir LLM — logprobs (`llm-logprobs`)
+
+Sıradan bir sohbet modelini karar modeline çevirir. Her soru tek etiketli çoktan
+seçmeli olarak sorulur (noul: `A) Yes / B) No`, choice: anahtara göre sıralı `A…Z,
+a…z`, score: `0…9`), `logprobs: true, top_logprobs: 20` ile OpenAI uyumlu
+`/chat/completions`'a gider; cevap pozisyonundaki alternatiflerin olasılıkları
+etiketler üzerinde normalize edilir (`" A"` ile `"A"` aynı cevaptır). Boş
+`<think></think>` bloğu, baştaki boşluk ya da `Answer:` öneki atlanır; açık bir
+düşünme bloğu içindeki harfler cevap sayılmaz. Sorular paralel koşar (varsayılan 4).
+
+- Destek: Ollama ≥0.12.11, LM Studio ≥0.3.39, llama.cpp server, vLLM, OpenRouter
+  (logprobs veren modeller).
+- Logprobs dönmezse metinden okunur, cevap kesin 0/1 olur ve `warnings`'e yazılır.
+- Backend alanları: `suffix` (Qwen3 için `/no_think`), `extraBody` (JSON, ör.
+  `{"chat_template_kwargs":{"enable_thinking":false}}`), `topLogprobs`, `maxTokens`
+  (varsayılan 8), `parallel`.
+- `DecisionOnly=false`: bu modeller chat için de kullanılabilir; chat koruması onları
+  reddetmez. `Calibrated=false`: arayüz "yaklaşık olasılıklar" rozeti gösterir.
+- **Canlı doğrulama 2026-09-22**: LM Studio + Qwen3-8B (`/no_think`),
+  `git push --force` → P(onay)=1,00 · risk 2 (800 ms); `git status` → 0,00 · risk 0
+  (419 ms). Ham cevapta `B 0,99996 / A 0,00004` — model gerçekten emin; kalibrasyon
+  Jev düzeyinde değildir.
+
+### 3.4 Ödünç alınan uç nokta kuralı
+
+Bir model sağlayıcı hesabını ödünç alırsa anahtar yalnız o sağlayıcının kendi uç
+noktasına gider: formda taban URL alanı gizlenir ve sunucu da temizler. Sağlayıcı
+örneği taban URL'yi boş bıraktıysa kind'ın varsayılanı kullanılır (`openrouter` →
+`https://openrouter.ai/api/v1`, `lmstudio` → `:1234`), **backend varsayılanı asla**:
+aksi hâlde boş alanlı bir OpenRouter hesabının anahtarı TypeSafe'e giderdi
+(`endpoint_base.go`, test `TestBorrowedEndpointNeverFallsBackToTheBackendDefault`).
+
+## 4. Karar modelleri (kayıt defteri)
+
+- Dosya `<dataDir>/decider/models.json`; kendi anahtarı sağlayıcı sırlarıyla aynı
+  şifreleyiciyle (`ProviderStore.Cipher()`) saklanır, API yalnız `secretsSet` döner.
+  Sır kuralı sağlayıcılarla aynı: alan yok = koru, boş = sil, değer = değiştir.
+- Bozuk dosya `models.json.corrupt-<unix>` olarak kenara alınır, açılış engellenmez.
+- İlk çalıştırmada (dosya yokken) bir model tohumlanır: eski v1 `decider.json`'daki
+  bağlantı (backend, sağlayıcı örneği, model, timeout) ya da hiç yapılandırma yoksa
+  "Jev · OpenRouter" (ilk OpenRouter hesabını otomatik ödünç alır). Silinmiş bir
+  liste yeniden tohumlanmaz.
+- Doğrulama (`normalizeModelInput`): backend kayıtlı olmalı ve düzenlemede
+  değişemez; `KeyRequired` backend kendi uç noktasında anahtar ister; bilinmeyen
+  alan/sır reddedilir; timeout 500–60000 ms, bağlam 1024–1.000.000 token
+  (0 = backend'in); backend alanları `ValidateConfig` ile denetlenir.
+- Hazır şablonlar (manifest `Presets`): Jev · OpenRouter, Jev · TypeSafe,
+  Jev · OpenRouter (System One), OpenJev · bu makine, Ollama · bu makine,
+  LM Studio · bu makine.
+
+API: `POST /api/decider/models`, `PUT|DELETE /api/decider/models/{id}`,
+`POST /api/decider/models/{id}/test` (kapalı modeli de dener, faturalamaz).
+Her değişiklik tüm görünümü döner; silme, modele bağlı olanları (`usedBy`:
+`default` ve merci id'leri) raporlar ve referansları temizler.
+
+## 5. Karar mercileri
+
+### 5.1 Kayıt ve ayarlar
+
+Merci kendi paketinden kayıt olur (`decider.RegisterAuthority` bir `init()` içinde;
+bkz. `internal/agent/decide_authorities.go`). Descriptor: `ID`, `Group`
+(`safety`, `coordination`, `flows`, `routing`, `context`, `housekeeping`),
+`Pattern` (`gate`, `pick`, `rate`, `select`, `triage`), `Modes`, `DefaultMode`,
+`DefaultThreshold` (0,50–0,99), `Explicit` (gölge modu yok), `FailClosed`.
+Hatalı descriptor `init()`'te panikler.
+
+`<dataDir>/decider.json` (sürüm 2):
 
 | Alan | Varsayılan | Anlam |
 |---|---|---|
-| `enabled` | `false` | Ana anahtar. Kapalıyken hiçbir yere bir şey gönderilmez. |
-| `backend` | `openrouter` | Kayıtlı backend id'si |
-| `providerInstanceId` | `""` | Anahtarı ödünç alınan sağlayıcı örneği; boş = backend'in kabul ettiği ilk etkin/kullanılabilir örnek (`openrouter` kind'ı, sonra openrouter.ai'ye bakan `openai-compat`) |
-| `model` | `typesafe/jev-1.13` | Sabit snapshot; `~typesafe/jev-latest` kayan takma addır (gölge ölçümlerini karşılaştırılamaz kılar) |
-| `timeoutMs` | `3000` | Deneme başına; 500–15000 arasında kıstırılır |
-| `sites.<id>` | site varsayılanı | `mode` + `threshold` (0,50–0,99) |
+| `enabled` | `false` | Ana anahtar; kapalıyken hiçbir yere bir şey gönderilmez |
+| `defaultModel` | `""` | Kendi modelini seçmemiş mercilere cevap veren model; boş = ilk etkin model |
+| `authorities.<id>.mode/threshold` | merci varsayılanı | `off / shadow / on`, eşik |
+| `authorities.<id>.model` | `""` | Bu merciin modeli; boş = varsayılan |
+| `authorities.<id>.fallback` | `""` | Model cevap veremezse (ulaşılamaz, circuit/karantina, timeout, 5xx, 401) sorulan model |
+| `authorities.<id>.challenger` | `""` | Her cevaptan sonra aynı soruyu arka planda cevaplayan rakip |
 
-Anahtar burada **saklanmaz**; seçilen örneğin şifreli anahtarı kullanılır. Market'teki
-"openrouter" paketi `openai-compat` olarak kurulduğu için o örnekler de adaydır.
+Sürüm 1 dosyası (`backend/providerInstanceId/model/timeoutMs/sites`) açılışta
+dönüştürülür: `sites` → `authorities`, bağlantı → `DM1`; dosya sürüm 2 olarak
+yeniden yazılır. Kayıtlı olmayan merciin ayarı düşer; olmayan modele referans
+temizlenir.
 
-## 5. Karar noktaları (siteler)
+### 5.2 Çağrı akışı (`Hub.Decide`)
 
-| Site | Varsayılan mod | Varsayılan eşik | Soru | Cevap veremezse |
+1. Ana anahtar kapalı → `ErrDisabled`; merci `off` → `ErrSiteOff` (sessiz).
+2. Etkin model: merciinki → varsayılan → ilk etkin model. Yoksa `ErrNoModel`.
+3. `ask`: model kapalı mı, genel doğrulama (`ErrInvalidRequest`), model sağlığı,
+   istemci (önbellek anahtarı: modelin revizyonu + ödünç sağlayıcı + sağlayıcı
+   `Generation`'ı), backend limitleri, redaksiyon + bağlam bütçesi, çağrı.
+4. Hata ve `fallback` varsa ve hata "başka model deneyebilir" türündeyse
+   (geçersiz istek ve iptal hariç) yedek sorulur; cevap `Fallback=true` taşır.
+   İkisi de düşerse iki hata birleşik döner.
+5. Cevaptan sonra `challenger` varsa arka planda sorulur (en çok 4 eşzamanlı; yer
+   yoksa atlanır, kuyruğa girmez; 30 sn sınır). Ledger'a `role: challenger` kaydı:
+   `Outcome` = rakibin kararı, `Baseline` = cevap veren modelinki. Karar sözlüğü
+   `WithOutcome` ile merciinkidir ("stalled"/"ok"), verilmezse genel `Verdict`
+   (`yes/no`, seçenek, `L<seviye>`).
+6. Faturalama `WithBilling` ile çağırana: birincil, yedek ve rakip çağrılarının
+   hepsi. `WithBackground` rakibi çağıranın yaşam döngüsünde koşturur (agent'ta
+   `startBackgroundTurn` bariyeri).
+
+Sağlık **model başına**: 3 ardışık geçici hata → 60 sn circuit; 401/402/403 →
+10 dk karantina (ödünç anahtarda sağlayıcılar yeniden kaydedilince, kendi
+anahtarında model güncellenince kalkar). Bir modelin dinlenmesi diğerini
+etkilemez: yerel sunucu kapalıyken barındırılan yedek çalışmaya devam eder.
+
+### 5.3 Bağlı merciler
+
+| Merci | Grup · desen | Varsayılan | Soru | Cevap yoksa |
 |---|---|---|---|---|
-| `stall-judge` | shadow | 0,70 | noul `stalled` — stall-judge prompt'unun birebir karşılığı | LLM yargıcına döner |
-| `tool-risk` | shadow | 0,80 | noul `needs_approval` + score `risk` (3 seviye) | Komut eskisi gibi çalışır |
-| `flow-judge` | on (açık site) | 0,60 | choice `arm` (dallar) / noul `holds` (döngü) | Varsayılan dal; döngüde sınıra kadar devam, sınır yoksa hata |
-| `phase-gate` | on (açık site) | 0,80 | noul `holds` — kök oturumun son 40 mesajı | **Kapı kapalı kalır** (fail-closed) |
+| `tool-risk` | safety · gate | shadow, 0,80 | noul `needs_approval` + score `risk` | Komut eskisi gibi çalışır |
+| `stall-judge` | coordination · gate | shadow, 0,70 | noul `stalled` (stall-judge prompt'unun karşılığı) | LLM yargıcına döner |
+| `flow-judge` | flows · pick | on (açık), 0,60 | choice `arm` / noul `holds` | Varsayılan dal; döngüde sınıra kadar |
+| `phase-gate` | flows · gate | on (açık, fail-closed), 0,80 | noul `holds` (kök oturumun son 40 mesajı) | **Kapı kapalı kalır** |
 
-- **stall-judge** (`decide_stall.go`): `on` modunda `judgeCoordinatorStalledUncached`
-  Haiku çağrısı yerine karar modelini sorar; `shadow` modunda LLM kararından sonra
-  arka planda sorar ve ikisini kaydeder. Test dikişi `stallJudgeFn` önceliklidir.
-- **tool-risk** (`decide_toolrisk.go`, `permission.go`): insan kararı olmadan
-  çalışacak exec çağrılarına ikinci bakış — auto moddaki her exec çağrısı ve ask
-  modda bir aile kuralına (`Bash(git *)`) takılan çağrılar. Salt-okunur komutlar
-  (`git status/diff/log`, `ls`, `go test` …, `decide_toolrisk_readonly.go`) hiç
-  sorulmaz. `on` modunda onay gerekir denirse çağrı **izin istemine** döner (kart
-  etiketi `exec:decider`: "riskli komut — karar modeli onay önerdi"). Soracak kimse
-  yoksa (otonom tur) **asla bloklamaz**, yalnız arka planda ölçer. İşaretlenmiş bir
-  çağrıya "Her zaman izin ver" o **tam komutu** onaylar (`tools.ExactGrantRule`),
-  aile kuralı yazmaz. claude-cli ask modundaki izin-prompt aracı da aynı kontrolü
-  kullanır (`api/decider_cli_permission.go`).
-- **flow-judge** (`orchestration/judge.go`, `agent/flow_judge.go`): dallanma
-  düğümünde `matchMode: "judge"` — her dalın `contains` metni bir seçeneği tarif
-  eder; döngüde `untilMode: "judge"` — `until` düz cümleli koşuldur. İsteğe bağlı
-  `judgeQuestion`. İz etiketi `"<dal> (judge 0.93)"` / `"default (judge unsure, 0.41)"`.
-  Faturayı çıktısı yargılanan ajan öder.
-- **phase-gate** (`trajectory_gate_judge.go`): kapı türü `judge`, değeri fazın
-  çıkış koşulu. Doğrulayıcının kod bloğu içindeki ya da farklı sözcüklerle yazılmış
-  onayını da tanır; şablon yankısı `VERDICT: PASS | FAIL` kapıyı açmaz.
+Ayrıntılar (değişmedi): tool-risk salt-okunur komutları sormaz, `on`'da riskli
+komutu onay istemine çevirir (`exec:decider`), gözetimsiz turu asla bloklamaz,
+işaretli çağrıda "her zaman izin ver" tam komutu onaylar; claude-cli izin aracı da
+aynı kontrolü kullanır. flow-judge: dallanmada `matchMode: "judge"`, döngüde
+`untilMode: "judge"`. phase-gate: kapı türü `judge`, değeri çıkış koşulu.
 
-## 6. Ledger, istatistik ve shadow → on geçişi
+## 6. Desenler (yeni merci yazarken)
 
-Her karar bir `Record` olarak yazılır: site, mod, model, gecikme, girdi token'ı,
-maliyet, karar (`Outcome`) ve gücü, mevcut mantığın kararı (`Baseline`),
-uygulanıp uygulanmadığı, kısa hata sınıfı (`timeout`, `http_401` …; ham metin
-**asla**). Yargılanan içerik ledger'a yazılmaz. `GET /api/decider/stats?days=N` site
-başına çağrı, hata, karşılaştırma, uyum, uygulanan, p50/p95 ve maliyet verir.
+| Desen | API | Kullanım |
+|---|---|---|
+| gate | `Noul` + `Answer.Yes(th)` | Bir koşul sağlanıyor mu |
+| pick | `Choice` + `decider.Pick(resp, key, th)` | N seçenekten biri; eşik altında "emin değil" (eğilim yine döner) |
+| rate | `Score` + `Answer.Level()` | Sıralı ölçekte yer |
+| select | `hub.Select(ctx, merci, state, SelectSpec, []Candidate)` | Çok aday arasından ilgili olanlar: aday başına noul, istek başına ≤64 soru, parçalar paralel, en olası önce, `MaxK` |
+| triage | `hub.Triage(ctx, merci, TriageSpec, []Item)` | Listedeki her öğeye etiket: öğeler aynı state'te `[i000] …` olarak, öğe başına choice; bayt bütçesine (`ChunkBytes`) ve 64 soruya göre parçalanır |
 
-Ekran rehberi (`frontend/src/features/decider/deciderModel.ts`): en az **50**
-karşılaştırmadan sonra uyum **≥ %90** ise "açmaya hazır", **< %80** ise "gölgede
-tut". Açık siteler (flow-judge, phase-gate) kullanıcı zaten açıkça istediği için
-gölge modu sunmaz.
+Select/Triage bütün olarak başarısız olur (yarım cevapla hareket edilmez); her parça
+normal `Decide`'dan geçtiği için mod, yedek, rakip ve faturalama aynen geçerlidir.
 
-## 7. Güvenlik, gizlilik, hata davranışı
+## 7. Yeni karar mercii ekleme
 
-- Anahtar `providers.HTTPAccess` içinde bir kapanışta kalır; katmana string olarak
-  hiç girmez, log/hata mesajına düşemez.
-- Gönderilen her state maskelenir (`sk-…`, `ghp_…`, `github_pat_…`, `AKIA…`,
-  `AIza…`, Slack token'ları, `Bearer …`, `password/token/secret/api_key =…`,
-  private key blokları, URL içi parolalar). Metin state bağlam bütçesine göre
-  ortadan kırpılır; sığmayan yapılandırılmış state gönderilmez.
-- 3 ardışık geçici hata → 60 sn circuit (siteler anında eski mantığa döner);
-  401/402/403 → örnek 10 dk karantina ya da sağlayıcılar yeniden kaydedilene kadar.
-  400/404/413 isteğe özgüdür, circuit'i tetiklemez.
-- Shadow çağrıları çağıranı hiç bekletmez; `startBackgroundTurn` bariyeri altında
-  koşar, workspace kapanışı onları bekler.
+1. Descriptor: `decider.RegisterAuthority(decider.Authority{…})` merciin paketinde
+   (`init()`); grup ve desen seç, `Modes`/`DefaultMode`/eşik ver.
+2. Çağrı: `r.decide(ctx, id, caller, req, decider.WithOutcome(…))` (agent içi) ya da
+   `hub.Decide/Select/Triage(…, decider.WithBilling(…), decider.WithBackground(…))`.
+3. `decider.NewRecord` ile ledger kaydı (`Outcome`, `Strength`, gölgede `Baseline`,
+   uygulandıysa `Applied`).
+4. Hata hâlinde eski mantığa dön (fail-open) ya da güvenlik kapısıysa kapalı kal
+   (`FailClosed: true`).
+5. `frontend/src/i18n/locales/{en,tr}/decider.json` → `authority.<id>.*`.
 
-## 8. Maliyet ve faturalama
+### 7.1 Taslaklar (henüz bağlı değil)
 
-- Kullanım yeni `decide` çağrı türüyle (`db.UsageKindDecide`) **çağıran ajana**
-  yazılır, sağlayıcı olarak backend'in faturalama sağlayıcısı (`openrouter`) ile.
-- Fiyat tablosu `providers/pricing.go`: `typesafe/jev-1.13`, `~typesafe/jev-latest` =
-  girdi $0.042/M, çıktı $0. Kayıt **istenen** model id'siyle yapılır; sunulan
-  snapshot (`…-20260917`) tabloda yoktur.
-- Ajansız çağrılar (claude-cli izin prompt'u) ajan bütçesine düşmez, ledger'da
-  maliyetleriyle görünür. Bütçe ekranında tür etiketi "Karar".
+- **Model yönlendirici** (`routing` · pick): tur başında isteği ve ajanın aday
+  model kademelerini (hızlı / dengeli / öncü, açıklamalarıyla) `Choice` olarak sor;
+  eşik altında ajanın varsayılan modeli. Gölgede: seçilen kademe ile gerçekten
+  kullanılanı karşılaştır. Dikkat: CLI oturumlarında tur ortasında model değişimi
+  ve prompt cache kaybı.
+- **Oturum/görev temizleyici** (`housekeeping` · triage): boşta kalan oturumları
+  (başlık, son mesaj özeti, yaş, durum) `Triage` ile `keep / archive / merge`
+  etiketle; `on`'da yalnız geri alınabilir işlemi (arşiv) uygula, diğerlerini öneri
+  olarak göster. Görevlerde tahta durumu değiştirmek yerine öneri üret.
+- **Bağlam seçici** (`context` · select): tur başında kullanıcı mesajı state,
+  ajanın skill/lazy tool/artefakt kataloğu aday; `Select` ile en olası `MaxK` tanesi
+  dinamik ek bloğa ("Bu istek için ilgili: …") girer (statik önbellekli prefix'e
+  asla). Gölgede: önerilen skill'in turda gerçekten kullanılıp kullanılmadığı.
 
-## 9. Chat modeli koruması
+## 8. Yeni backend ekleme
 
-`decider.IsDecisionModel` (manifest model id'leri + `typesafe/`, `~typesafe/`
-önekleri) ajan create/update'te `model` alanını reddeder: "… is a decision model
-… set it under Settings → Decision model instead". Jev hiçbir provider
-manifest'ine konmadı, dolayısıyla hiçbir chat seçicide görünmez.
-
-## 10. Yeni backend ekleme (alternatif karar modeli)
-
-1. `internal/decider/<ad>.go`: `Backend` arayüzü — `Manifest()` (id, etiket,
-   `ProviderKinds`, `BillingProvider`, `Models`, `DefaultModel`, `ContextTokens`,
-   `ModelPrefixes`), `Accepts(kind, baseURL)`, `New(Endpoint, ClientOptions)`.
+1. `internal/decider/<ad>.go`: `Backend` — `Manifest()` (id, etiket,
+   `ProviderKinds`, `DefaultBaseURL`, `KeyRequired`, `Fields`, `Models`,
+   `DefaultModel`, `ContextTokens`, `DefaultTimeoutMs`, `Limits`, `ModelPrefixes`,
+   `DecisionOnly`, `Calibrated`, `Presets`), `Accepts(kind, baseURL)`,
+   `New(Endpoint, ClientOptions)`; gerekirse `ValidateConfig`.
 2. `init()` içinde `Register(...)`.
-3. Yanıtı nötr `Answer` tiplerine çevir; istenmiş her soru için cevap yoksa hata.
-4. `providers/pricing.go`'ya faturalama sağlayıcısı altında fiyat satırları.
-5. `httptest` ile istek/yanıt şekli testi (bkz. `openrouter_test.go`).
+3. URL'yi `endpointBase(ep)` üzerinden türet (ödünç uç nokta kuralı).
+4. Cevabı nötr `Answer`'a çevir, `BillingProvider`/`BillingModel` doldur; fiyat
+   `providers/pricing.go`'da ya da manifest modelinde (servis maliyet bildirmezse
+   `fillCost` manifest fiyatını kullanır).
+5. `httptest` ile istek/yanıt şekli testi.
 
-Kendi anahtarını isteyen bir backend (ör. TypeSafe'in yerel API'si) için önce bir
-provider kind'ı gerekir (anahtar oradan `HTTPAccess` ile ödünç alınır).
+## 9. Arayüz
 
-## 11. Yeni site ekleme
+İki ekran (`frontend/src/features/decider/`, namespace `decider`, `I18N_MIGRATED`):
 
-1. `config.go` `sites` listesine `Site` (id, modlar, varsayılan mod/eşik, açıklama).
-2. `internal/agent/decide_<site>.go`: istek kurucu + `r.decide` / `r.shadowDecision`
-   / `r.backgroundDecision` çağrıları, `decider.NewRecord` ile ledger kaydı.
-3. Hata hâlinde sitenin eski mantığına dön (fail-open) ya da güvenlik kapısıysa
-   kapalı kal (fail-closed) — hangisi olduğunu dokümana yaz.
-4. `frontend/src/i18n/locales/{en,tr}/decider.json` → `site.<id>.*` metinleri.
+- **Ayarlar → Sağlayıcılar → "Karar sağlayıcıları"** (`DeciderProviders`): sağlayıcı
+  örneklerinin hemen altında, onlarla aynı kart/form tasarımında (`providerStyles.ts`
+  sağlayıcı ekranının sınıflarını paylaşır). "+ Yeni karar sağlayıcısı" → form:
+  isteğe bağlı şablon, tür (backend; düzenlemede kilitli) + etiket, Etkin, model
+  (öneri listesi ya da özel id), kimlik bilgisi (kendi uç noktası + şifreli API
+  anahtarı ya da sağlayıcı hesabını ödünç alma — hesap listesi form açılırken
+  tazelenir), zaman aşımı, bağlam, backend alanları. Kart: etiket, tür, durum
+  (hazır / hazır değil / duraklatıldı / devre dışı), yerel ve yaklaşık rozetleri,
+  id/model/uç nokta/kullanan, istatistik, Dene / Düzenle / Sil. Değişiklikler anında
+  kaydedilir. Ajan model seçicilerinde görünmezler.
+- **Ayarlar → Karar Mercileri** (`DeciderPanel`): başlık kartı (durum, varsayılan
+  sağlayıcı), ana anahtar, varsayılan karar sağlayıcısı, sağlayıcı sayısı ve
+  Sağlayıcılar'a geçiş bağlantısı, gruplu merciler (mod, eşik, sağlayıcı / yedek /
+  rakip — cevap veren sağlayıcı yedek/rakip listesinde çıkmaz —, istatistik, gölge ve
+  rakip önerileri), Kaydet, varsayılan sağlayıcıyı deneme, son kararlar (rakip ve yedek
+  rozetleri).
 
-## 12. Sonraki adaylar
+**Kurulum akışı** (`DeciderSetupGuide`, `setupSteps`): iki ekranın başında, üç adım
+bitene kadar görünen rehber; her adım tamamlanınca işaretlenir:
 
-Araştırmada belirlenen ama bu fazda bağlanmayan noktalar: auto-continue "iş bitti mi?",
-lesson reflect ön-kapısı ve tur başı lesson alaka seçimi, worker brief "yazma
-gerekir mi?" regex'lerinin yerine geçmek, fan-out `reviewer-selects`, insight
-scanner ön elemesi, skill önerisi, kullanıcı tanımlı `decision` hook tipi, spawn
-anında model kademe seçimi, WebFetch/MCP sonuçlarında prompt-injection taraması.
+1. **Sağlayıcı hesabı** — Sağlayıcı örneklerine bir OpenRouter hesabı ekle ve API
+   anahtarını gir (tür "OpenRouter (OpenAI-uyumlu)" → "API Anahtarı"). Yerel bir model
+   (LM Studio, Ollama, OpenJev) ya da kendi anahtarıyla bir karar sağlayıcısı
+   kullanılacaksa gerekmez. Tamam sayılır: ödünç alınabilir bir hesap ya da kendi
+   anahtarı (gerekiyorsa) olan bir karar sağlayıcısı var.
+2. **Karar sağlayıcısı** — "Jev · OpenRouter ekle" düğmesi şablonla formu açar (hesabı
+   ödünç alır, token ikinci kez girilmez) → Ekle → kartta Dene. Tamam sayılır: etkin ve
+   hazır bir karar sağlayıcısı var.
+3. **Karar mercileri** — Karar Mercileri'nde "Karar katmanını kullan"ı aç; merciler önce
+   Gölge'de, uyum yükselince Açık. Tamam sayılır: ana anahtar açık.
 
-## 13. Test haritası
+Rehber (`deciderModel.ts`): en az 50 karşılaştırmadan sonra uyum ≥ %90 "açmaya
+hazır" / "rakip devralabilir", < %80 "gölgede tut" / "rakip çok ayrışıyor".
 
-- `internal/decider/*_test.go`: istek/yanıt şekli (canlı yanıttan türetilmiş gövde),
-  retry/timeout, `DecisionsURL`, `Accepts`, `IsDecisionModel`, config
-  normalize/validate/round-trip, ledger istatistikleri + yeniden yükleme, hub
-  (anahtarlar, otomatik hesap, önbellek, karantina, circuit, redaksiyon/bütçe,
-  kalıcılık), redaksiyon kalıpları.
-- `internal/agent/decide*_test.go`: faturalama (`openrouter|typesafe/jev-1.13`,
-  `decide` türü), stall-judge on/shadow/fallback, salt-okunur komut tablosu,
-  tool-risk (auto, ask + aile kuralı, gözetimsiz tur, shadow/off, tam komut onayı),
-  flow judge dal/koşul, phase-gate judge (geçer/kalır/kapalı kalır).
-- `internal/orchestration/judge_test.go`, `internal/api/decider_test.go`,
-  `internal/providers/registry_http_test.go`, `internal/tools/grants_exact_test.go`.
-- Frontend: `features/decider/deciderModel.test.ts`, `features/flows/judgeLabel.test.ts`,
-  i18n katalog paritesi.
+## 10. Güvenlik, gizlilik, maliyet
+
+- Ödünç anahtar `providers.HTTPAccess` kapanışında kalır; kendi anahtarı şifreli
+  saklanır, API ve log'a düşmez (test: `TestDeciderModelsCRUD`).
+- Gönderilen her state maskelenir (bilinen anahtar biçimleri, `Bearer`, `password=…`,
+  private key blokları, URL içi parolalar); metin state bağlama göre ortadan kırpılır,
+  sığmayan yapılandırılmış state gönderilmez. Yerel modele de aynı maskeleme uygulanır.
+- Kullanım `decide` çağrı türüyle çağıran ajana yazılır; sağlayıcı sütunu modelin
+  faturalama sağlayıcısıdır (`openrouter`, `typesafe`, `local`). Fiyat tablosu:
+  `openrouter` altında `typesafe/jev-1.13`, `~typesafe/jev-latest`,
+  `typesafe/jev-latest`; `typesafe` altında `jev-latest`, `jev-1.13` (girdi
+  $0.042/M, çıktı $0); `local` ve `lmstudio` bilinen sıfır.
+- Chat koruması: `IsDecisionModel` yalnız `DecisionOnly` backend'lerin model ve
+  öneklerini (`typesafe/`, `~typesafe/`, `jev-`, `openjev`) reddeder.
+
+## 11. Test haritası
+
+- `internal/decider`: `hub_test` (anahtarlar, ödünç/kendi kimlik bilgisi, önbellek,
+  model başına karantina ve circuit, yedek, rakip + faturalama + sözlük, redaksiyon,
+  kalıcılık, v1 dönüşümü, maliyet doldurma), `modelstore_test`, `config_test`,
+  `ledger_test` (rakip/yedek istatistikleri, eski `site` satırları), `authority_test`,
+  `patterns_test` (Pick, Verdict, Select/Triage parçalama, uçtan uca Select),
+  `openrouter_test`, `systemone_test` (tolerant cevap, URL kuralı, host'a göre
+  faturalama, ödünç uç nokta kuralı), `logprobs_test` (dağılım, think bloğu, logprobs
+  yok, akıl yürüten model uyarısı, paralellik, etiketler); canlı testler
+  `TestLiveOpenRouterDecisions` (`OPENROUTER_LIVE_KEY`) ve
+  `TestLiveLocalLLMDecisions` (`DECIDER_LLM_LIVE_URL`, `DECIDER_LLM_LIVE_MODEL`,
+  `DECIDER_LLM_LIVE_SUFFIX`).
+- `internal/agent/decide*_test.go`: faturalama, rakibin faturası ve sözlüğü,
+  stall-judge, tool-risk, flow judge, phase-gate.
+- `internal/api/decider_test.go`: ayar turu, model CRUD (anahtar sızmaz, `usedBy`,
+  silmede referans temizliği, ulaşılamayan model testi), chat koruması.
+- Frontend: `features/decider/deciderModel.test.ts`, `modelDraft.test.ts`, i18n
+  katalog paritesi.
