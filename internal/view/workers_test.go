@@ -80,11 +80,26 @@ func TestParseVerdict(t *testing.T) {
 		"rapor hazır":               "",
 		"the VERDICT: is unclear":   "", // marker must start the line
 		"VERDICT: MAYBE":            "",
+		"VERDICT: STALE — a.go":     verdictStale,
 	}
 	for in, want := range cases {
 		if got := parseVerdict(in); got != want {
 			t.Errorf("parseVerdict(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A STALE validator issued no verdict on the code; the summary must say so and
+// point at re-validation instead of counting it as PASS or FAIL.
+func TestWorkerSummaryLineReportsStale(t *testing.T) {
+	got := workerSummaryLine(0, 2, verdictTally{pass: 1, stale: 1})
+	for _, want := range []string{"1 PASS, 0 FAIL, 1 STALE", "re-validate", "ALL workers are finished"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("summary %q missing %q", got, want)
+		}
+	}
+	if strings.Contains(workerSummaryLine(0, 1, verdictTally{pass: 1}), "STALE") {
+		t.Error("STALE mentioned with no stale validator")
 	}
 }
 

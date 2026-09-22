@@ -1874,9 +1874,34 @@ tarafındaki `get_view board` projeksiyonunda ise ayrı bir sinyal satırı. Ayr
 `REVIEW_ROUND_BUDGET` onun elle senkronlanan aynasıdır.
 
 Bunun tamamlayıcısı olan iki disiplin kuralı — **karar defteri**
-(`<scratchpad>/<KART-ID>-findings.md`) ve **ağaç sabitleme** (validator brief'i
-`git HEAD` + kirli dosya listesi taşır, uyuşmazsa `STALE` deyip çıkar) —
+(`<scratchpad>/<KART-ID>-findings.md`) ve **ağaç sabitleme** —
 `orchestrator-doctrine` skill'i §10'da ve `coordinator.md` promptunda.
+
+**Ağaç sabitleme kartın kapsamına daraltıldı (TSK772, 2026-09-22).** İlk sürümde
+validator brief'i tüm ağacı (`git HEAD` + kirli dosya listesi) sabitliyordu.
+Paylaşılan çalışma ağacında paralel oturumlar sürekli ilgisiz dosyaları
+değiştirdiği için bu sabitleme neredeyse her koşuda `STALE` veriyordu (TSK692:
+hedef dosyalar ve commit'ler sabitken tüm-ağaç STALE). Yeni kural:
+
+- Sabitleme **yalnız kartın dosyalarını** kapsar: HEAD + kapsam dosya listesi +
+  yalnız o dosyaların içerik parmak izi. `STALE` yalnız **kapsam içi** bir dosya
+  değiştiğinde verilir; kapsam dışı churn ve kapsamı etkilemeyen commit'ler
+  `notes`'ta raporlanır, verdict'i geçersiz kılmaz. Validated içeriğin aynen
+  commit'lenmesi de değişiklik sayılmaz (diskteki ağaç hâlâ doğrulanan ağaçtır).
+- Mekanik yardımcı: `internal/treepin` + `cmd/treepin`. Bu depoda:
+  `go run ./cmd/treepin capture <kart dosyaları/dizinleri>` tek satırlık
+  `treepin1 head=… files=… digest=… scope=…` jetonu basar; validator
+  `go run ./cmd/treepin verify '<jeton>'` ile `FRESH` / `STALE` alır (derlenmiş
+  binary'de STALE çıkış kodu 3; `go run` bunu 1'e çevirir, karar satırın
+  kendisidir). Özet: kapsam pathspec'lerinin eşleştiği her dosya (takipli +
+  takipsiz, `.gitignore` hariç) için yol + boyut + içerik sha256; diskten silinen
+  takipli dosya bir silme işaretiyle özete girer. Kapsamsız sabitleme reddedilir.
+- `subagent-validator` sözleşmesine üçüncü verdict eklendi: `VERDICT: STALE`
+  (kod hakkında hiçbir yargı yok). Worker durum bloğu (`internal/view/workers.go`)
+  bunu `⏸ STALE` rozeti ve özet satırında "re-pin and re-validate" notuyla
+  gösterir; PASS/FAIL sayımına karışmaz.
+- Promptlar genel kalır: `treepin` olmayan depolarda aynı kural
+  `git hash-object -- <dosyalar>` ile uygulanır.
 
 ### 19.6 Kapsam sözleşmesi
 

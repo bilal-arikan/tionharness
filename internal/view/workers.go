@@ -61,7 +61,7 @@ func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 	}
 
 	running, finished := 0, 0
-	pass, fail := 0, 0
+	var tally verdictTally
 	for _, w := range in.Workers {
 		if w.Running || w.Delegating {
 			running++
@@ -69,9 +69,11 @@ func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 			finished++
 			switch parseVerdict(w.Summary) {
 			case verdictPass:
-				pass++
+				tally.pass++
 			case verdictFail:
-				fail++
+				tally.fail++
+			case verdictStale:
+				tally.stale++
 			}
 		}
 	}
@@ -86,7 +88,7 @@ func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 		"Regenerated every turn from real session state; trust THIS over the notifications in history."
 
 	if level == LevelTiny || len(in.Workers) == 0 {
-		v.Body = workerSummaryLine(running, finished, pass, fail)
+		v.Body = workerSummaryLine(running, finished, tally)
 		v.finalize()
 		return v, nil
 	}
@@ -110,7 +112,7 @@ func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 	for _, w := range listed {
 		l.add("%s", workerLine(w, now))
 	}
-	l.add("%s", workerSummaryLine(running, finished, pass, fail))
+	l.add("%s", workerSummaryLine(running, finished, tally))
 	v.Body = l.String()
 	v.finalize()
 	return v, nil
@@ -119,13 +121,19 @@ func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 // Verdict markers a validator worker emits as the FIRST line of its report (see
 // the subagent-validator prompt). Reading this contracted marker is a rule-based
 // L1 signal — deterministic, no LLM — not fragile parsing of free prose: only the
-// exact "VERDICT: PASS|FAIL" contract is recognised, anything else yields none.
+// exact "VERDICT: PASS|FAIL|STALE" contract is recognised, anything else yields
+// none. STALE means the validator's pinned in-scope files changed under it, so it
+// issued no verdict on the code at all.
 const (
-	verdictPass = "PASS"
-	verdictFail = "FAIL"
+	verdictPass  = "PASS"
+	verdictFail  = "FAIL"
+	verdictStale = "STALE"
 )
 
-// parseVerdict extracts a validator's PASS/FAIL from the first line of its reply,
+// verdictTally counts finished validators per verdict.
+type verdictTally struct{ pass, fail, stale int }
+
+// parseVerdict extracts a validator's PASS/FAIL/STALE from the first line of its reply,
 // or "" when the line is not a verdict marker (a non-validator worker, or a
 // validator that broke its contract — neither is guessed at).
 func parseVerdict(summary string) string {
@@ -144,6 +152,8 @@ func parseVerdict(summary string) string {
 		return verdictPass
 	case strings.HasPrefix(rest, verdictFail):
 		return verdictFail
+	case strings.HasPrefix(rest, verdictStale):
+		return verdictStale
 	default:
 		return ""
 	}
@@ -177,6 +187,8 @@ func workerLine(w Worker, now time.Time) string {
 			badge = " ✅ PASS"
 		case verdictFail:
 			badge = " ❌ FAIL"
+		case verdictStale:
+			badge = " ⏸ STALE"
 		}
 	}
 
@@ -192,18 +204,25 @@ func workerLine(w Worker, now time.Time) string {
 // a validator verdict, a PASS/FAIL tally is appended so the coordinator can scan
 // outcomes without re-reading each line — and a FAIL is called out as needing a
 // re-task, since a failed verdict is work that is NOT done.
-func workerSummaryLine(running, finished, pass, fail int) string {
+func workerSummaryLine(running, finished int, v verdictTally) string {
 	s := fmt.Sprintf("Summary: %d running, %d finished.", running, finished)
-	if pass > 0 || fail > 0 {
-		s += fmt.Sprintf(" Verdicts: %d PASS, %d FAIL.", pass, fail)
-		if fail > 0 {
+	if v.pass > 0 || v.fail > 0 || v.stale > 0 {
+		s += fmt.Sprintf(" Verdicts: %d PASS, %d FAIL", v.pass, v.fail)
+		if v.stale > 0 {
+			s += fmt.Sprintf(", %d STALE", v.stale)
+		}
+		s += "."
+		if v.fail > 0 {
 			s += " A FAIL is unfinished work — re-task its implementer; do not commit or conclude on it."
+		}
+		if v.stale > 0 {
+			s += " A STALE validator judged nothing — its in-scope files changed mid-run; re-pin and re-validate once they settle."
 		}
 	}
 	// A failed validator is explicit pending delegation work. An otherwise-finished
 	// fleet may legitimately be the end of the plan, so it must not be told that it
 	// failed to spawn a worker merely because the running count reached zero.
-	if running == 0 && fail > 0 {
+	if running == 0 && (v.fail > 0 || v.stale > 0) {
 		s += " ALL workers are finished — there is NO running worker to wait for;" +
 			" spawn the remaining steps or conclude."
 	}
