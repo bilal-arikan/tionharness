@@ -343,12 +343,13 @@ func PriceFor(provider, model string) (Price, bool) {
 		provider = "minimax"
 	case "deepseek-anthropic":
 		provider = "deepseek"
-	case "lmstudio":
+	case "lmstudio", "local":
 		// A model running on the user's own machine is not metered: every token is
 		// free regardless of the model id. That is a KNOWN price of zero, not an
 		// unknown one, so it returns ok=true — otherwise the budget screens would
 		// flag local spend as "unpriced" and offer a subscription-equivalent
-		// estimate for hardware the user already owns.
+		// estimate for hardware the user already owns. "local" is what decision
+		// models on a loopback or private-network server bill under.
 		return Price{}, true
 	}
 	models, ok := priceTable[provider]
