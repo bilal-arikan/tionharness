@@ -8,6 +8,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 )
 
+require github.com/coder/websocket v1.8.15 // indirect
+
 require (
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	golang.org/x/sys v0.0.0-20210218145245-beda7e5e158e

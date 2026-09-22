@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -36,44 +34,10 @@ type WebFetchTool struct {
 // refuses connections to loopback, private, link-local and other non-public
 // addresses (SSRF guard). The check runs on the *resolved* IP for every dial,
 // so DNS-rebinding and redirect hops to internal hosts are blocked too.
+// The guard itself lives in egress_guard.go: it is shared with the monitor
+// URL/WebSocket sources so there is exactly one egress boundary to audit.
 func NewWebFetchTool() WebFetchTool {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	dialer.Control = func(network, address string, _ syscall.RawConn) error {
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return err
-		}
-		ip := net.ParseIP(host)
-		if ip == nil || isBlockedIP(ip) {
-			return fmt.Errorf("blocked address %q (private/loopback/link-local not allowed)", host)
-		}
-		return nil
-	}
-	transport := &http.Transport{
-		DialContext:           dialer.DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: time.Second,
-	}
-	return WebFetchTool{client: &http.Client{Timeout: 30 * time.Second, Transport: transport}}
-}
-
-// isBlockedIP reports whether ip must not be reached by the WebFetch tool:
-// loopback, unspecified, link-local (incl. the 169.254.169.254 cloud-metadata
-// endpoint), private RFC1918 / unique-local ranges, and carrier-grade NAT.
-func isBlockedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() || ip.IsMulticast() {
-		return true
-	}
-	// 100.64.0.0/10 (RFC 6598, carrier-grade NAT) is not covered by IsPrivate.
-	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64 {
-		return true
-	}
-	return false
+	return WebFetchTool{client: newGuardedHTTPClient(30 * time.Second)}
 }
 
 func (WebFetchTool) Def() providers.ToolDef {

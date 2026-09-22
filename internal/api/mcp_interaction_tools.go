@@ -426,14 +426,14 @@ func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, toolNa
 // success: an agent that thinks it armed a monitor would end its turn and wait for
 // a wake that can never arrive.
 func (b *interactionBackend) callMonitor(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	mgr, shellMgr := run.monitorFor()
+	mgr, shellMgr, sb := run.monitorFor()
 	if mgr == nil {
 		return interaction.CallResult{
 			Text:    "monitoring is not available in this context",
 			IsError: true,
 		}, nil
 	}
-	out, err := tools.NewMonitorTool(mgr, shellMgr).Call(ctx, args)
+	out, err := tools.NewMonitorTool(mgr, shellMgr, sb).Call(ctx, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}

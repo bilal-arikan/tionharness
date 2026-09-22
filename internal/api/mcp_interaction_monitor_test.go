@@ -43,7 +43,7 @@ func TestCallMonitorDispatchesToTheSessionManager(t *testing.T) {
 		return "SCH1", nil
 	})
 	defer mgr.Close()
-	run.setMonitor(mgr, tools.NewShellManager())
+	run.setMonitor(mgr, tools.NewShellManager(), tools.NewSandbox(t.TempDir()))
 
 	b := &interactionBackend{runs: runs}
 	res, err := b.callMonitor(context.Background(), run, json.RawMessage(`{"action":"list"}`))
@@ -76,7 +76,7 @@ func TestCallMonitorDispatchesToTheSessionManager(t *testing.T) {
 func TestMonitorIsAdvertisedAndDispatchable(t *testing.T) {
 	// Advertised: the def the bridge builds from a bare tool carries the name and a
 	// schema, so the CLI can call it.
-	def := tools.NewMonitorTool(nil, nil).Def()
+	def := tools.NewMonitorTool(nil, nil, tools.Sandbox{}).Def()
 	if def.Name != "monitor" {
 		t.Fatalf("tool name drifted: %q", def.Name)
 	}
@@ -91,7 +91,7 @@ func TestMonitorIsAdvertisedAndDispatchable(t *testing.T) {
 	defer runs.unregister("r-mon-dispatch")
 	mgr := tools.NewMonitorManager(func(context.Context, string, string) (string, error) { return "SCH1", nil })
 	defer mgr.Close()
-	run.setMonitor(mgr, tools.NewShellManager())
+	run.setMonitor(mgr, tools.NewShellManager(), tools.NewSandbox(t.TempDir()))
 
 	b := &interactionBackend{runs: runs}
 	res, err := b.callMonitor(context.Background(), run, json.RawMessage(`{"action":"list"}`))

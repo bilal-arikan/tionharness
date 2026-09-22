@@ -184,15 +184,17 @@ func (r *Runtime) monitorMgrFor(sessionID, agentID string) *tools.MonitorManager
 }
 
 // SessionMonitorManagers returns the monitor and background-shell managers for a
-// session, creating them on first use — the accessor the claude-cli bridge needs,
-// since a bridged turn builds no native registry of its own. A monitor armed here
-// wakes agentID. Both are nil when shell execution is disabled for the workspace
-// or the session id is empty.
-func (r *Runtime) SessionMonitorManagers(sessionID, agentID string) (*tools.MonitorManager, *tools.ShellManager) {
+// session plus the sandbox a watched file path resolves against — the accessor
+// the claude-cli bridge needs, since a bridged turn builds no native registry of
+// its own. The managers are created on first use and a monitor armed here wakes
+// agentID. Both managers are nil when shell execution is disabled for the
+// workspace or the session id is empty; the sandbox is then the zero value, whose
+// Resolve reports the sandbox is not configured.
+func (r *Runtime) SessionMonitorManagers(sessionID, agentID string) (*tools.MonitorManager, *tools.ShellManager, tools.Sandbox) {
 	if !r.tun.ShellEnabled() {
-		return nil, nil
+		return nil, nil, tools.Sandbox{}
 	}
-	return r.monitorMgrFor(sessionID, agentID), r.shellMgrFor(sessionID)
+	return r.monitorMgrFor(sessionID, agentID), r.shellMgrFor(sessionID), tools.NewSandbox(r.SessionWorkdir(sessionID))
 }
 
 // buildRegistry assembles the tool registry for an agent: built-in tools plus
@@ -467,10 +469,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 				// detached processes started with run_in_background.
 				builtins = append(builtins, tools.NewShellManageTool(shellMgr))
 				// monitor is the PUSH counterpart of shell_manage's polling: it watches a
-				// background shell for a pattern and wakes the agent on a match, so a long
-				// wait costs no turns at all. Registered alongside, on the same manager.
+				// background shell, a file or a URL/WebSocket for a pattern and wakes the
+				// agent on a match, so a long wait costs no turns at all. Registered
+				// alongside, on the same manager; sb bounds a watched file path.
 				builtins = append(builtins, tools.NewMonitorTool(
-					r.monitorMgrFor(SessionIDFrom(ctx), agent.ID), shellMgr))
+					r.monitorMgrFor(SessionIDFrom(ctx), agent.ID), shellMgr, sb))
 			}
 			builtins = append(builtins, tools.NewTransformDataTool(sb))
 		}

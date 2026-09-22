@@ -101,6 +101,7 @@ type chatRun struct {
 	shell       shellRunner                  // current agent's shell runner, for the Interaction MCP shell tool
 	monitor     *tools.MonitorManager        // current session's monitor manager, for the Interaction MCP monitor tool
 	monitorSh   *tools.ShellManager          // current session's shell manager, the source monitor watches
+	monitorSb   tools.Sandbox                // sandbox a monitored file path resolves against
 	runAgent    runAgentRunner               // current agent's run_subagent runner (delegation on), for the Interaction MCP run_subagent tool
 	// bridge exposes the responding agent's lazy self-management tools to the CLI
 	// path (CLI-3): bridgeDefs are advertised in tools/list + the allowlist, and
@@ -387,17 +388,18 @@ func (r *chatRun) shellRunnerFor() shellRunner {
 // MCP monitor tool (CLI path) can arm and list monitors. Nil values disable it
 // (shell off, or a build with no session), and the bridge then reports monitoring
 // is unavailable rather than silently doing nothing.
-func (r *chatRun) setMonitor(m *tools.MonitorManager, sh *tools.ShellManager) {
+func (r *chatRun) setMonitor(m *tools.MonitorManager, sh *tools.ShellManager, sb tools.Sandbox) {
 	r.mu.Lock()
-	r.monitor, r.monitorSh = m, sh
+	r.monitor, r.monitorSh, r.monitorSb = m, sh, sb
 	r.mu.Unlock()
 }
 
-// monitorFor returns the current monitor + shell managers (nil when not installed).
-func (r *chatRun) monitorFor() (*tools.MonitorManager, *tools.ShellManager) {
+// monitorFor returns the current monitor + shell managers and the sandbox a
+// watched file path resolves against (managers nil when not installed).
+func (r *chatRun) monitorFor() (*tools.MonitorManager, *tools.ShellManager, tools.Sandbox) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.monitor, r.monitorSh
+	return r.monitor, r.monitorSh, r.monitorSb
 }
 
 // runAgentRunner runs a run_subagent call for the responding agent (CLI path),

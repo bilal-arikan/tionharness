@@ -1,10 +1,13 @@
 # 85 — Monitor sözleşmesi
 
-> **Özet (2026-09-22):** `monitor` aracı bir arka plan kabuğunun (background
-> shell) çıktısını bir regex'e karşı izler ve eşleşme olduğunda ajanı **uyandırır**
-> — böylece uzun süren bir işin beklenmesi hiç tur harcamaz. v1 kapsamı yalnız
-> kabuk çıktısı kaynağıdır; dosya/URL/WebSocket kaynakları ertelendi (TSK941),
-> ama `MonitorSource` arayüzü onları yöneticiye dokunmadan almak üzere şekillendi.
+> **Özet (2026-09-22):** `monitor` aracı bir kaynağı bir regex'e karşı izler ve
+> eşleşme olduğunda ajanı **uyandırır** — böylece uzun süren bir işin beklenmesi
+> hiç tur harcamaz. Dört kaynak vardır: arka plan kabuğu (`shell_id`), dosya
+> kuyruğu (`path`), periyodik URL yoklaması ve WebSocket aboneliği (ikisi de
+> `url`, şemadan yönlendirilir). Kaynak seçimi tek bir alanla değil, üç alandan
+> **tam birini** vermekle yapılır. Dışarı çıkan kaynaklar WebFetch ile **aynı**
+> SSRF korumalı taşıyıcıyı (`egress_guard.go`) kullanır; dosya kaynağı sandbox
+> sınırına uyar.
 > Monitörler **yalnız bellektedir**: süreç yeniden başlarsa kaybolur ve uyandırma
 > **en fazla bir kez** (at-most-once) çalışır. Durum: **uygulandı**. Bir ajan
 > için: bu dosya sözleşmeyi (kaynak arayüzü, uyandırma zinciri, kapasiteler,
@@ -45,11 +48,19 @@ type MonitorSource interface {
   gelen bir eşleşme kaybolmaz.
 
 **Filtreleme kaynağın işi değildir.** Kaynak gördüğü her şeyi bildirir; hangi
-olayın eşleştiğine monitör katmanı karar verir. Yeni bir kaynak (dosya kuyruğu,
-URL yoklaması) eklemek yalnız bu arayüzü uygulamak demektir; `MonitorManager`
-değişmez.
+olayın eşleştiğine monitör katmanı karar verir. Yeni bir kaynak eklemek yalnız bu
+arayüzü uygulamak demektir; `MonitorManager` değişmez — aşağıdaki dört kaynak da
+yöneticiye tek satır dokunmadan eklendi.
 
-### v1 kaynağı: kabuk çıktısı (`monitor_source_shell.go`)
+### Kaynak seçimi (`monitor_source_select.go`)
+
+Araç `shell_id`, `path` ve `url` alanlarından **tam birini** ister. Hiçbiri
+verilmezse izlenecek bir şey yoktur; birden fazlası verilirse hangisinin
+izleneceği belirsizdir ve yanlış şeyi sessizce izlemektense ikisi de hata olur.
+`url`, şemasına göre yönlendirilir: `http(s)` yoklama kaynağına, `ws(s)` soket
+kaynağına. Böylece ajan bir arka uç seçmek zorunda kalmaz.
+
+### Kaynak 1: kabuk çıktısı (`monitor_source_shell.go`)
 
 `shellSource`, `bgWriter`'ın yeni `drainFrom(cursor)` metoduyla **kendi mutlak
 bayt imlecini** tutar. Bu kritik: `shell_manage` (action=output) kendi
@@ -65,6 +76,83 @@ Diğer kurallar:
 - Bilinmeyen `shell_id` **gerçek bir hatadır**. Sessizce hiçbir şeyi izlemeyen
   bir monitör, ajanı asla gelmeyecek bir uyandırma için beklemeye yollardı.
 - Monitörü durdurmak izlediği süreci **durdurmaz**: kabuk `ShellManager`'ındır.
+
+### Kaynak 2: dosya kuyruğu (`monitor_source_file.go`)
+
+`fileSource`, bir dosyaya eklenen satırları izler. Yol, aracın **sandbox**'ından
+(`Sandbox.Resolve`) geçirilir; confined bir sandbox'ta kök dışına çıkan bir yol
+reddedilir — monitör, fs araçlarının sınırını dolaşmanın yolu olamaz.
+
+`fsnotify` yerine `os.Stat` yoklaması seçildi, üç gerekçeyle (ağırlık sırasıyla):
+
+1. Yönetici zaten her kaynağı süren 1 sn'lik **tek** bir tik sahibi. İzleyici,
+   ajanın algılayabileceği bir gecikme kazandırmadan ikinci bir olay yolu ekler —
+   uyandırma zaten `monitorMinCooldown` (5 sn) ile kapılı.
+2. Eklenen baytlar, değişikliğin nasıl fark edildiğinden bağımsız olarak yine bir
+   boyut imleciyle okunup satırlara bölünmek zorunda; izleyici bu kodun hiçbirini
+   ortadan kaldırmaz.
+3. Windows'ta `ReadDirectoryChangesW` olayları birleştirir ve başka bir sürecin
+   yazdığı dosyalarda zaman zaman olay düşürür; boyut yoklamasının böyle bir kör
+   noktası yok. Bedeli monitör başına saniyede bir `Stat`.
+
+Diğer kurallar:
+
+- İmleç, monitör kurulduğu andaki **dosya boyutundan** başlar; birikmiş içerik
+  tekrar oynatılmaz.
+- Boyut geriye giderse (döndürülmüş/`truncate` edilmiş log) imleç sıfırlanır ve
+  yeni baştan okunur — aksi halde imleç sonsuza dek EOF'un ötesinde kalırdı.
+- Satır sonu olmayan kuyruk parçası **bir sonraki yoklamaya** saklanır, böylece
+  iki yoklamaya bölünen bir satır tek parça olarak bildirilir.
+- Var olmayan yol ya da dizin **kurulum anında** hatadır.
+- Dosyanın silinmesi terminal durumdur ve **bir kez** bildirilir.
+
+### Kaynak 3: URL yoklaması (`monitor_source_url.go`)
+
+`urlSource` bir `http(s)` adresini periyodik çeker ve gövde **değiştiğinde** olay
+üretir (olayın yükü yeni gövdedir, regex ona uygulanır). İlk çekim sessiz bir
+**taban çizgisi**dir: monitör bundan sonra olanı bildirir.
+
+- Yoklama aralığı en az **30 sn**'dir (`urlSourceMinInterval`) ve yöneticinin 1
+  sn'lik tikinden bağımsızdır: cooldown uyandırmayı sınırlar, bu ise **isteği**.
+- Gövde 256KB ile sınırlıdır; ajana giden yük `monitorPayloadBytes` ile çok daha
+  aşağıda kapanır.
+- Durum kodu, hash'lenen yükün parçasıdır — 200'den 500'e düşmek de bir
+  değişikliktir, hata değil.
+- Üst üste **5** başarısız çekim terminal durumdur; tek bir kesinti monitörü
+  öldürmez, gerçekten yok olan bir uç nokta da oturum boyunca yoklanmaz.
+
+### Kaynak 4: WebSocket aboneliği (`monitor_source_ws.go`)
+
+`wsSource` bir `ws(s)` adresine bağlanır ve her gelen mesaj bir olaydır. Diğer
+iki kaynaktan farkı **push** olmasıdır: mesajlar yönetici tik attığında değil,
+sunucu gönderdiğinde gelir. Bu yüzden kaynak, bağlantıyı sınırlı bir kuyruğa
+boşaltan bir okuyucu goroutine'i sahiplenir; `Poll` yalnız biriken sonuçları
+devreder. Uyandırma zamanını yine yöneticinin tiki belirler.
+
+- Kuyruk **256** mesajla sınırlıdır; taşma, kaybın görünür olması için "düşürüldü"
+  notu olarak bildirilir.
+- İkili (binary) çerçeveler bir regex'in eşleşebileceği metin taşımaz; baytlar
+  metinmiş gibi gösterilmez, yerine boyut notu geçer.
+- Soketin kapanması terminal durumdur ve **bir kez** bildirilir; son mesajlar
+  kapanışla **birlikte** teslim edilir, böylece son mesaja gelen eşleşme kaybolmaz.
+- **Bağımlılık seçimi:** `github.com/coder/websocket` (eski adıyla
+  `nhooyr.io/websocket`). Geçişli bağımlılığı **sıfır** olan tek yaygın Go
+  istemcisi — üç doğrudan bağımlılığı olan bir ağaca tam bir modül ekler —,
+  context tabanlı API'si `Poll` imzasına oturur ve **çağıranın verdiği
+  `*http.Client` ile** el sıkışır. Bu sonuncusu belirleyici oldu: WebFetch'in
+  SSRF korumalı taşıyıcısı buraya olduğu gibi uygulanabiliyor. `gorilla/websocket`
+  kendi dialer'ını kullanır ve koruma yeniden yazılmak zorunda kalırdı.
+
+### Dışarı çıkış sınırı (`egress_guard.go`)
+
+URL ve WebSocket kaynakları, WebFetch'in kullandığı dialer'ın **aynısını**
+kullanır: her bağlantının **çözülmüş IP**'si denetlenir, yani loopback, özel,
+link-local ve bulut meta-veri adresleri DNS rebinding ya da bir yönlendirme
+sıçraması üzerinden de engellenir. Koruma tek bir yerde durur (önceden
+`builtin_http.go` içinde gömülüydü, oraya da bu iş sırasında çıkarıldı): ikinci ve
+ince farklı bir dialer, bir SSRF açığının sonradan içeri girme biçimidir. Monitör
+gözetimsiz ve uzun ömürlü bir çekim döngüsü olduğu için bu sınır burada tek
+seferlik bir çekimdekinden daha önemlidir, daha az değil.
 
 ## 3. Uyandırma zinciri — tek yol
 
@@ -125,6 +213,9 @@ monitör artık var olmayan bir oturumu uyandırmayı sürdürebilirdi.
 | Yer | Ne |
 |-----|-----|
 | `internal/tools/builtin_monitor.go` | Aracın kendisi (`action=start\|list\|stop`) |
+| `internal/tools/monitor_source_select.go` | Kaynak seçimi: `shell_id`/`path`/`url`'den tam biri, `url` şemadan yönlendirilir |
+| `internal/tools/monitor_source_{shell,file,url,ws}.go` | Dört `MonitorSource` uygulaması, kaynak başına bir dosya |
+| `internal/tools/egress_guard.go` | WebFetch ile paylaşılan SSRF korumalı dialer/taşıyıcı |
 | `internal/agent/toolsetup.go` | `monitorMgrFor` + `shellMgr != nil` bloğunda kayıt; `SessionMonitorManagers` (köprü erişimcisi) |
 | `internal/tools/categories.go` | `CategoryFiles` |
 | `internal/tools/tierdefaults.go` | `VisibilityNameOnly` — yalnız `run_in_background` sonrası gerekir |
@@ -133,15 +224,24 @@ monitör artık var olmayan bir oturumu uyandırmayı sürdürebilirdi.
 | `internal/api/chat_control.go`, `chat_turn_phases.go` | `setMonitor` ile tur başına yöneticilerin takılması |
 | `frontend/src/shared/lib/toolIcons.ts` | `Radar` ikonu |
 
-Köprü, kabuk kapısının (`ShellEnabled`) arkasındadır: monitör yalnız arka plan
-kabuğu izler, kabuk kapalıyken izleyecek bir şey yoktur. Yönetici yoksa köprü
-**açık bir hata** döndürür ("monitoring is not available in this context") —
-sessiz bir başarı, ajanı asla gelmeyecek bir uyandırma için turunu bitirmeye
-yollardı.
+Köprü, kabuk kapısının (`ShellEnabled`) arkasındadır. Bu kapı, dosya/URL/soket
+kaynakları eklendikten sonra da olduğu gibi bırakıldı: `SessionMonitorManagers`,
+kabuk kapalıyken monitör yöneticisini hiç kurmaz, dolayısıyla araç tümüyle
+kapanır. Kabuksuz bir turda yalnız URL izlemeye izin vermek ayrı bir kapı
+tasarımı ister (bkz. aşağıdaki açık uç). Yönetici yoksa köprü **açık bir hata**
+döndürür ("monitoring is not available in this context") — sessiz bir başarı,
+ajanı asla gelmeyecek bir uyandırma için turunu bitirmeye yollardı.
 
-## 7. Ertelenen: diğer kaynaklar (TSK941)
+`SessionMonitorManagers` artık üçüncü bir değer olarak **sandbox** döndürür:
+izlenen dosya yolu buna göre çözülür. CLI köprüsü bunu `chatRun.monitorSb`
+içinde taşır, native yol ise kayıt kurulumundaki `sb`'yi doğrudan geçirir — iki
+yol da aynı sınırı kullanır.
 
-Dosya, URL ve WebSocket kaynakları v1'de yoktur. Arayüz onları taşıyacak
-şekilde tasarlandı; eklerken `MonitorSource`'u uygulamak ve `monitor` aracına
-kaynak seçici bir alan eklemek yeter — `MonitorManager`'ın yaşam döngüsü,
-kapasiteleri ve uyandırma zinciri değişmemeli.
+## 7. Açık uçlar
+
+- **Kabuk kapısı ile dışarı çıkan kaynaklar birlikte kapanıyor.** URL/WebSocket
+  izleme kabuk çalıştırmayı gerektirmez, ama bugün `ShellEnabled` kapalıyken
+  onlar da kapalı. Ayrıştırmak, monitör yöneticisinin ömrünü kabuk yöneticisinden
+  ayırmayı gerektirir.
+- **Monitörler bellekte.** Süreç yeniden başlarsa dosya imleci, URL taban
+  çizgisi ve soket aboneliği kaybolur; kalıcılık hâlâ kapsam dışı (bkz. §4).

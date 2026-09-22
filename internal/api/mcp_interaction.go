@@ -620,7 +620,7 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// so without shell execution it has nothing to observe. The def is built from a
 		// bare tool (schema only); the real managers are installed per turn by
 		// setMonitor, exactly like the shell runner above.
-		defs = append(defs, tools.NewMonitorTool(nil, nil).Def())
+		defs = append(defs, tools.NewMonitorTool(nil, nil, tools.Sandbox{}).Def())
 	}
 	// spawn_session is a self-management capability, always advertised now (the
 	// self-manage master toggle was removed). The per-turn spawn tool is installed
