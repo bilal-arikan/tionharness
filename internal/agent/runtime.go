@@ -153,11 +153,6 @@ type Runtime struct {
 	// process. Keyed by "<cwd>|<store>"; value is bool. See EnsureCodebaseIndexed.
 	cbmIndexed sync.Map
 
-	// zgIndexed guards the best-effort zvec-grep auto-index so a repository is
-	// indexed at most once per process. Keyed by the index root; value is bool.
-	// See EnsureZvecGrepIndexed.
-	zgIndexed sync.Map
-
 	// shellMgrs holds one *tools.ShellManager per session id, tracking that session's
 	// background shells (run_in_background) so their output can be polled and they can
 	// be stopped across turns. Session-scoped and persistent across turns; keyed by

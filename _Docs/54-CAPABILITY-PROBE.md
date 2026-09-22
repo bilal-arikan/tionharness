@@ -1,15 +1,35 @@
 # 54 — Capability Probe → Context Genişletme (+ per-workspace codebase-memory store)
 
-> **Özet (2026-09-03):** Uygulanmış ve aktif genel bir katmandır — cihazda opsiyonel bir
-> harici yetenek (codebase-memory-mcp, rtk/sqz token-optimizer) tespit edildiğinde ajanın
-> cachelenebilir statik prompt prefix'ine kısa bir bilgi bloğu enjekte eder. Genişletme tek
-> nokta: `internal/agent/capabilities.go`'daki `Capability` slice'ına yeni bir kayıt eklemek
-> yeterli. Önemli kararlar: per-workspace codebase-memory store 2026-08-11'de kaldırıldı
-> (sunucu tek-hesap-tek-cache-root kuralı getirdiği için), canlılık üç durumla derecelendirilir
-> (alive/unknown/dead), ve harici araç sürüm/güncelleme kontrolü (`internal/exttools`) aynı
-> dokümanda platform-bazlı (Windows/Linux/macOS) update stratejileriyle birlikte anlatılır.
-> Dayandığı dosyalar: `internal/agent/capabilities.go`, `internal/agent/capabilities_tokenopt.go`,
-> `internal/exttools/*.go`.
+> **Özet (2026-09-22):** Uygulanmış ve aktif genel bir katmandır — cihazda opsiyonel bir
+> harici yetenek (codebase-memory-mcp, zvec-grep, rtk/sqz token-optimizer) tespit edildiğinde
+> ajanın cachelenebilir statik prompt prefix'ine kısa bir bilgi bloğu enjekte eder. Genişletme
+> tek nokta: `internal/agent/capabilities.go`'daki `Capability` slice'ına yeni bir kayıt
+> eklemek yeterli. Önemli kararlar: per-workspace codebase-memory store 2026-08-11'de
+> kaldırıldı (sunucu tek-hesap-tek-cache-root kuralı getirdiği için), canlılık üç durumla
+> derecelendirilir (alive/unknown/dead), zvec-grep 2026-09-14'te codebase-memory ile aynı
+> katmanlarda eklendi (prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne
+> otomatik indeks + `.git/info/exclude`, allowlist muafiyeti artık iki sunuculu küme), ve harici
+> araç sürüm/güncelleme kontrolü (`internal/exttools`) aynı dokümanda platform-bazlı
+> (Windows/Linux/macOS) update stratejileriyle birlikte anlatılır. Dayandığı dosyalar:
+> `internal/agent/capabilities.go`, `internal/agent/capabilities_zvecgrep.go`,
+> `internal/agent/zvecgrep_index.go`, `internal/agent/capabilities_tokenopt.go`,
+> `internal/mcp/repair/zvecgrep.go`, `internal/exttools/*.go`. **2026-09-22 (TSK975):**
+> indeksler artık gerçekten **yönetiliyor** — `internal/indexstate` paketi (araç, kök)
+> başına `missing/indexing/ready/stale/failed` defteri tutar ve
+> `internal/agent/indexmanager.go` create/refresh/rebuild geçişlerini sürer;
+> embedding modeli **veya** araç sürümü değişince `rebuild` (eski vektörler farklı
+> bir uzaydan geldiği için `refresh` sessizce anlamsız sonuç verirdi), drop ise
+> yalnız kök yolunu tekrar eden kullanıcı onayıyla. Durum
+> `GET /api/search-indexes`'ten okunur. Ayrıntı: `_Docs/05`. Yetenek yalnız
+> **enabled bir MCP sunucu satırı** varken tetiklenir: WS5 workspace'ine
+> `zvec_grep` satırı 2026-09-22'de eklendi (TSK974, `_Docs/05`), o tarihe kadar
+> blok bu workspace'te hiç yayınlanmamıştı. Blok yayınlanmasının **tek başına
+> yetmediği** 2026-09-22'de ölçümle görüldü (TSK978): MCP araçları name-only
+> katmanında olduğu için (`internal/tools/tierdefaults.go`, `MCPBundleWildcard`)
+> önce şema yüklenmeden çağrılamıyor; bu yüzden blok artık şema yükleme adımını
+> birebir komutuyla yazar ve loader adını transport'a göre seçer (CLI'da
+> `ToolSearch`, native'de `tool_search`) — `Capability.Context` bu yüzden
+> `provider` parametresi alır.
 
 > Generic bir katman: cihazda/işlemde bir **opsiyonel harici yetenek** mevcutsa,
 > ajanın **cachelenebilir statik** sistem-prompt prefix'ine kısa bir bilgi bloğu
@@ -30,6 +50,47 @@ komutlar optimize EDİLMEZ → blok "eşleşen aracı tercih et" der (kritik: bu
 `PowerShell`-ağırlıklı oturumda ikisi de hiç ateşlenmemişti). `rtk` agent-Bash ile,
 `sqz` PostToolUse çıkış sıkıştırmasıyla; ikisinin de mekaniği `17-TOKEN-OPTIMIZASYON.md`.
 Test: `capabilities_tokenopt_test.go` (WS5-şekli + kelime-sınırı + wildcard).
+
+## zvec-grep capability — codebase-memory paritesi (2026-09-14)
+
+`zvec-grep` (npm `@zvec/zvec-grep`, CLI `zg`) yerel hibrit (tam metin + vektör) bir indekstir.
+`zg server --stdio` paylaşılan daemon'u (`127.0.0.1:7999`) başlatır ya da yeniden kullanır ve
+MCP'yi stdio'ya köprüler. Varsayılan `agent` araç seti tek araç yayar: `zvec_grep_search`
+(zorunlu argüman `root`, mutlak yol). codebase-memory **yapısal** soruyu (sembol, çağrı zinciri,
+etki) cevaplar; zvec-grep **niyet** sorusunu (adı bilinmeyen kod, doküman, config). Biri
+diğerinin yerine geçmez, iki blok yan yana durur.
+
+**Canlı ölçüm (zg 0.2.2, 2026-09-14):**
+
+- İndeks repo **içinde** durur: `<root>/.zvec-grep/` (`manifest.json`, `index.zvec`, …). zg bu
+  klasörü kendisi git'ten hariç tutmaz. `~/.zvec-grep/` ise aynı adı taşıyan **daemon durumu /
+  model önbelleği** klasörüdür, indeks değildir.
+- Alt dizin `root`'u (`<repo>/internal/agent`) repo indeksine çözülür; `\` ve `/` ikisi de çalışır.
+- İndeksi olmayan kök → `isError` + `[INDEX_MISSING] Indexed search requires a built zvec-grep
+  index for <root>…`. `root` eksik → MCP input validation hatası.
+- Yeni indeks model ister (`--embedding` / `ZVEC_GREP_EMBEDDING` / global varsayılan); yerleşik
+  varsayılan yok.
+- MCP `initialize.instructions` zg'nin yönlendirme kurallarını taşır ama **TionHarness bu alanı
+  modele iletmez** → gereken kurallar capability bloğunda yeniden yazıldı.
+
+| Katman | Yer | Davranış |
+|---|---|---|
+| Tespit | `capabilities_zvecgrep.go` `isZvecGrepServer` | stdio satırı; komutun **taban adı** `zg` (`zg.cmd` / `.ps1` / `.exe`) ya da komut/argümanlarda `zvec-grep` (node, npx). Alt-dize `zg` bilerek eşlenmez (`zgrep`). |
+| Prompt bloğu | `zvecGrepCapability` | "# Semantic workspace search available": tam namespaced araç adı, zvec ↔ Glob/Grep ayrımı, `root` kuralı, `[INDEX_MISSING]` → Glob/Grep, **ajan `zg index` koşturmaz**; codebase-memory de açıksa yapı/niyet ayrımı; cwd satırı (geçici çalışma kopyasında "indekslenmez"). alive/unknown/dead derecelendirmesi ve denylist erişilebilirlik kontrolü codebase-memory ile aynı. |
+| `root` prefill | `repair/args.go` `PrefillArgs` | `zvec_grep_*` aracında eksik `root` → mutlak session cwd. Başka sunucunun `root` argümanına dokunulmaz. |
+| `[INDEX_MISSING]` onarımı | `repair/zvecgrep.go` `RepairZvecGrep` + `toolloop_phases.go` | Çağrı zehirlenir (aynı tekrar `Precheck`'te zvec ipucuyla reddedilir), ipucu eklenir. Kök session cwd ile ilişkiliyse (aynı / içinde / kapsayan) arka plan indeksi tetiklenir; "indeks yolda" cümlesi **yalnız indeks gerçekten varsa ya da kuruluyorsa** eklenir. Başka bir kökün indeksi tetiklenmez. |
+| Otomatik indeks | `zvecgrep_index.go` `EnsureZvecGrepIndexed` | Chat ve headless yolda `EnsureCodebaseIndexed`'in yanında. Atlar: boş/göreli cwd, worktree/scratchpad, home ya da volume kökü, toggle/sunucu yok, üst dizinde mevcut indeks (`manifest.json`; daemon watcher'ı tazeler, home hariç). Hedef: çevreleyen git repo kökü (yukarı yürüyüş home'da durur). Önce `.git/info/exclude`'a `.zvec-grep/` yazılır (yazılamazsa indeks **başlatılmaz**), sonra `zg index <root> --embedding local/potion-code-16m-v2` — `ZVEC_GREP_EMBEDDING` yalnız `local/` bir model adıysa kullanılır, arka plan işi uzak embedding başlatmaz. 30 dk timeout, kök başına süreç içinde tek sefer; hata loglanır ve guard silinir. |
+| Allowlist muafiyeti | `mcpservergate.go` `allowlistExemptServers` | Artık küme: codebase-memory + zvec-grep (her biri kendi toggle'ıyla), namespace anahtarı sanitize edilmiş ad. `mcpServerGate(agent, exempt...)` native + claude-cli + codex yollarında. Açık denylist yine kaldırır. |
+| Toggle | `WSSettings.ZvecGrepEnabled` (varsayılan açık) → `Runtime.SetZvecGrep` → DTO `zvecGrepEnabled` → WorkspacePanel | Kapalı = blok, otomatik indeks ve muafiyet birlikte kaybolur; MCP sunucusu ekliyse araçları yine listelenir. |
+| Katalog | `exttools` `zg` (dev / mcp), `zvecgrep.go` | Tespit sırası: `TIONHARNESS_ZG` (kırıksa PATH'e düşmez) → PATH → `%APPDATA%\npm\zg.cmd` → `~/.nvm/versions/node/v*/bin` (en yeni sürüm önce; Windows'ta `zg.cmd`). Ölçüldü: `zg` nvm-sh npm'iyle kurulu ve o bin dizini yalnız Git Bash PATH'inde — PowerShell'den başlayan backend `zg`'yi "bulunamadı" diye raporluyordu. Otomatik indeks de aynı çözücüyü kullanır (`zvecGrepCLI`: satırın mutlak `zg` komutu → çözücü → çıplak `zg`). Güncelleme **manual**: daemon native `.node` addon'larını kilitler → `zg server off` → `npm install -g @zvec/zvec-grep`. GitHub release akışı npm'in gerisinde (v0.2.0 ↔ 0.2.2) → `Compare` "güncel" der. |
+| UI | `ZvecGrepCallout.tsx`, `shared/lib/zvecGrep.ts`, `recommendations.ts` | `zg` satırının altında tek tık MCP ekle/kaldır (`name: zvec_grep`, `args: ["server","--stdio"]`); öneri kartları `zvec-add` / `zvec-enable`; bu kart bekliyorsa `no-mcp` susar. |
+
+Kapsam dışı: `codebase_workspace_search` benzeri fan-out — zg'de indeksli kökleri listeleyen bir
+komut yok.
+
+Testler: `capabilities_zvecgrep_test.go`, `zvecgrep_index_test.go`,
+`mcpservergate_zvecgrep_test.go`, `repair/zvecgrep_test.go`, `shared/lib/zvecGrep.test.ts`,
+`recommendations.test.ts` (zvec-grep kuralları).
 
 ## Amaç
 

@@ -5,6 +5,128 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## Arama indeksleri için (araç, kök) başına yaşam döngüsü yöneticisi (TSK975, 2026-09-22) ✅
+
+- **Belirti:** Yetenek prompt'u ajana "indeksi asla kendin oluşturma/yeniden
+  kurma/düşürme — TionHarness zvec-grep indekslerini yönetir" diyordu, ama
+  ortada yönetim yoktu: yalnız **tek seferlik, en-iyi-çaba bir CREATE** vardı
+  (`EnsureZvecGrepIndexed`, `EnsureCodebaseIndexed`). Hiçbir şey refresh /
+  rebuild / drop etmiyordu, başarısız bir koşunun izi kalmıyordu ve bitmiş bir
+  indeks ile başarısız olan biri birbirinden ayırt edilemiyordu.
+- **En sinsi boşluk — embedding modeli değişimi:** Eski yol yalnız
+  "`manifest.json` var mı" diye bakıyordu. Model değiştiğinde (ör.
+  `ZVEC_GREP_EMBEDDING` başka bir yerel modele çevrildiğinde) eski vektörler
+  yerinde kalıyordu; iki farklı modelin vektörleri aynı uzayı paylaşmadığı için
+  arama **sessizce anlamsız** sonuç döndürüyordu. Artık model **veya** araç
+  sürümü değişince karar `rebuild` oluyor ve eski depo koşudan önce siliniyor —
+  `refresh` eski vektörleri koruduğu için bu durumda yanlış olurdu.
+- **Çözüm:** Yeni `internal/indexstate` paketi (araç, kök) başına bir durum
+  defteri: `missing | indexing | ready | stale | failed`. Karar tablosu
+  `Decide()` içinde tek yerde: depo yok → `create`; embedding değişti →
+  `rebuild`; araç sürümü değişti → `rebuild`; depo geride kaldı → `refresh`;
+  aksi halde iş yok. Bilinmeyen metadata (okunamayan manifest, başarısız sürüm
+  probu) **rebuild tetiklemez** — aksi halde her açılışta koca bir depo yeniden
+  gömülürdü.
+- **Paket yeri (bağımlılık yönü):** `internal/indexstate` bilerek
+  `internal/agent`'tan bağımsız tutuldu; geçişleri agent runtime **sürüyor**,
+  HTTP API ise **okuyor**, yani defterin ikisinin de altında durması gerekiyor.
+  `scripts/depcheck.sh` yeşil.
+- **Korunan kalkanlar (kaldırılmadı, yöneticiye taşındı):** yalnız **yerel**
+  embedding modeli (uzak model dosya içeriğini sağlayıcıya yükler ve etkileşimli
+  yetki ister; arka plan işi asla oraya düşmemeli), `.git/info/exclude` yazımı
+  (dışlama yazılamazsa indeks **oluşturulmaz** — alternatifi `git add -A`'nın bir
+  adım ötesinde duran takipsiz ikili depo), home/disk kökü ve ephemeral
+  worktree/scratchpad atlamaları, ve süreç-geneli tek-koşu kilidi (aynı depoyu
+  açan iki workspace runtime'ı tek depoyu paylaşır). Her biri ayrı testle
+  çivilendi.
+- **Drop yalnız kullanıcı onayıyla:** `indexstate.Drop` onay olarak **boolean
+  değil kök yolunun kendisini** ister (`confirmRoot`). `confirm: true` her
+  çağıranın —bir ajanın da— set edebileceği bir bayraktır; yolu tekrar etmek
+  onaylayan tarafın hangi indeksi yok ettiğini bildiğini gösterir. Onaysız veya
+  eşleşmeyen istek hiçbir şey silmez (409). Otomatik drop yolu **yok**: kaybolan
+  bir proje dizini defterden düşürülür (`Forget`), deposu silinmez — yeniden
+  indeksleme pahalı, yanlış silme geri alınamaz.
+- **Hata politikası:** Başarısız koşu `failed` olur, sebebi (indeksleyicinin
+  kendi çıktısının kuyruğu dahil) hem loglanır hem deftere yazılır; asla sessizce
+  `ready` görünmez. `Usable()` yalnız `ready`/`stale` için true.
+- **API:** `GET /api/search-indexes` (liste; defter süreç-geneli olduğu için
+  workspace gerektirmez) ve `POST /api/search-indexes/drop` (onay kapılı, USER
+  eylemi — ajan aracı olarak **açılmadı**).
+- **Dosyalar:** `internal/indexstate/{state,decide,drop,sort}.go`,
+  `internal/agent/{indexmanager,indexmanager_paths,indexmanager_drop,zvecgrep_manifest}.go`,
+  `internal/api/search_indexes.go`. `EnsureZvecGrepIndexed` adı korundu (prompt
+  kurucu, araç döngüsü ve sohbet turu onu çağırıyor) ama artık yöneticiye
+  delege ediyor; ölü kalan `zgIndexed` / `zvecGrepIndexRunning` guard'ları
+  defter onların işini üstlendiği için kaldırıldı.
+- **Sonraki adım (bu kartın kapsamı dışı):** ajan tarafında `search_index`
+  aracı (Card C) ve Ayarlar'da indeks paneli (Card D) bu yönetici + endpoint
+  üzerine bağlanacak.
+
+## codebase-memory yetenek bloğu artık şema yükleme adımını da söylüyor (TSK978, 2026-09-22) ✅
+
+- **Belirti:** Ajanlar codebase-memory araçlarını neredeyse hiç çağırmıyordu.
+  Ölçüm (SES3320–SES3389, 43 oturum, 2705 araç çağrısı, kaynak
+  `store/sessions/*/messages.jsonl` içindeki `steps` alanı): codebase-memory
+  **4 çağrı / 1 oturum** (SES3385), Grep+Glob **141 çağrı** (135 Grep + 6 Glob).
+- **Kök sebep (eleme ile):** Yetenek bloğu yayınlanıyordu ve sunucu canlıydı,
+  yani "blok yayınlanmıyor" hipotezi yanlıştı. Başarısız/terk edilmiş tek bir
+  çağrı da yoktu, yani "yok sayılıyor" da değildi. Gerçek sebep **katman**:
+  `internal/tools/tierdefaults.go:34` `MCPBundleWildcard: VisibilityNameOnly`
+  tüm MCP araçlarını name-only (load-on-demand) katmanına koyar; şema
+  yüklenmeden çağrı `InputValidationError` verir. Grep/Glob ise eager, yani
+  tek adımda çağrılabilir. Kanıt: 4 başarılı çağrının **tamamı** açık bir
+  `ToolSearch select:mcp__codebase-memory-mcp__...` çağrısından sonra geldi.
+  Blok "use its tools FIRST" derken bu ön koşuldan hiç söz etmiyordu; model de
+  en az dirençli yolu (Grep) seçiyordu.
+- **Neden prompt tarafı düzeltildi (eager'a alınmadı):** Araçları
+  `VisibilityFull` yapmak 15 büyük MCP şemasını **her workspace'te, her ajanın
+  her turunda** cache prefix'ine sokardı — name-only katmanının var oluş sebebi
+  tam olarak bu maliyeti önlemek. Deferred katman bilinçli bir tasarım kararı
+  (`tierdefaults.go:33-34`), yan etki değil. Eksik olan tek şey bloğun bu adımı
+  söylememesiydi.
+- **Değişiklik:** `codebaseMemoryGuidance` artık şema yükleme adımını **birebir
+  komutuyla** yazıyor. Loader adı transport'a göre değişiyor (CLI yolunda
+  `ToolSearch` + `select:` sorgusu, native yolda `tool_search(...)`), bu yüzden
+  `Capability.Context` imzasına `provider` eklendi ve `CapabilityContext`
+  elindeki ajan satırından geçiriyor. Yanlış loader adı yazmak, bloğun zaten
+  koruduğu "bare tool name" hatasıyla aynı sınıfta bir hata olurdu.
+- **Test:** `TestCodebaseMemoryGuidanceNamesSchemaLoadStep` — CLI yolunda tam
+  `select:` sorgusunun, native yolda `tool_search("codebase-memory-mcp")`
+  çağrısının bulunduğunu ve iki loader adının birbirine sızmadığını doğrular.
+
+## WS5 workspace'ine `zvec_grep` MCP sunucusu bağlandı — yetenek bloğu artık yayınlanıyor (TSK974, 2026-09-22) ✅
+
+- **Belirti:** zvec-grep entegrasyonu (2026-09-14) kodda tamdı ama WS5
+  ("TionHarnessRepo") workspace'inde yalnız `codebase-memory-mcp` (MCP28) ve
+  `playwright` (MCP27) kayıtlıydı. `zvecGrepCapability.Detect` enabled bir
+  zvec-grep satırı aradığı için yetenek hiç tetiklenmiyor, prompt bloğu hiç
+  yayınlanmıyor ve `EnsureZvecGrepIndexed` hiç koşmuyordu.
+- **Değişiklik (yalnız yapılandırma, kod değişikliği yok):** tek-tık UI'ın
+  (`frontend/src/features/settings/ZvecGrepCallout.tsx`) ürettiğiyle birebir
+  aynı satır eklendi: ad `zvec_grep`, transport `stdio`, command
+  `C:\Users\Bilal\.local\bin\zg.cmd` (katalog çözümlemesi, zg 0.2.2), args
+  `["server","--stdio"]`. Yeni kayıt: **MCP29**, enabled.
+- **Kanıt — sunucu:** `GET /api/mcp-servers` (X-Workspace-Id: WS5) üç satır
+  döndürüyor, MCP29 `enabled=true`. `POST /api/mcp-servers/MCP29/test`
+  `{"ok":true,"toolCount":1}` ve tek araç olarak `zvec_grep_search` döndürüyor.
+- **Kanıt — yetenek bloğu:** `GET /api/mcp-servers/pool` `zvec_grep` için
+  `live=1` gösteriyor, yani `zvecGrepState` = `ServerAlive`; bu durumda
+  `Detect` true döner ve blok "A zvec-grep MCP server is connected." cümlesiyle
+  yazılır. Kod tarafı ayrıca yeşil: `go test ./internal/agent -run ZvecGrep`
+  dokuz testin hepsini geçiyor — aralarında `zvecGrepRow()` fikstürünü (aynı
+  `zg.cmd` + `["server","--stdio"]` şekli) kullanan
+  `TestZvecGrepCapabilityFollowsSwitchAndDenylist` de var.
+- **Otomatik indeksleme:** depo kökünde `.zvec-grep/` (manifest dahil) zaten
+  vardı — kullanıcının 14 Eylül'de elle kurduğu indeks. `EnsureZvecGrepIndexed`
+  bu durumda `zvecGrepIndexedRoot(cwd) != ""` dalında erken `true` dönüyor,
+  yani yeni bir indeksleme **ve** `.git/info/exclude` yazımı beklendiği gibi
+  tetiklenmiyor. İndeksin git'ten dışlanması yine de sağlanmış durumda:
+  `git check-ignore -v .zvec-grep` → `.gitignore:87:.zvec-grep/`. Bu bir hata
+  değil; `ensureZvecGrepGitExclude` yalnız YENİ indeks yolunda çalışır.
+- **Açık kalan:** boş bir repoda (indekssiz kök) otomatik indeksleme +
+  `.git/info/exclude` yazımı canlı olarak henüz gözlenmedi; yalnız birim
+  testiyle (`TestEnsureZvecGrepGitExclude`) doğrulanmış durumda.
+
 ## `dist/release-test-worktree/` bayat kopyası silindi — arama sonuçlarının kirlenmesi (TSK954, 2026-09-22) ✅
 
 - **Belirti:** `dist/release-test-worktree/` altında 27 Ağustos'tan kalma tam

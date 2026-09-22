@@ -958,6 +958,13 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// external_tools_maint.go). Fixed-argv commands, no request parameters.
 	mux.HandleFunc("GET /api/external-tools/token-report", s.handleTokenToolReport)
 	mux.HandleFunc("POST /api/external-tools/sqz-reset-cache", s.handleSqzResetCache)
+	// Search-index lifecycle, keyed by (tool, root): which indexes exist, which
+	// are being built, which failed and why. Read-only; the transitions belong to
+	// the agent runtime that runs the indexer.
+	mux.HandleFunc("GET /api/search-indexes", s.handleSearchIndexes)
+	// Delete one index. USER action, confirmation-gated (the body must repeat the
+	// root); deliberately not an agent tool.
+	mux.HandleFunc("POST /api/search-indexes/drop", s.handleSearchIndexDrop)
 }
 
 // workspaceQueryKeys are the query parameters that scope a request to a workspace,
@@ -1048,6 +1055,12 @@ func workspaceOptionalPath(path string) bool {
 	case path == "/api/pick-folder":
 		return true
 	case path == "/api/external-tools" || strings.HasPrefix(path, "/api/external-tools/"):
+		return true
+	// Listing indexes needs no workspace: the ledger is process-wide, because two
+	// workspaces on the same repository share one store on disk. Dropping one
+	// still does — it goes through that workspace's runtime — so only the GET
+	// path is exempt.
+	case path == "/api/search-indexes":
 		return true
 	case path == "/api/events":
 		return true

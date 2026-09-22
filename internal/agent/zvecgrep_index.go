@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -39,15 +38,12 @@ const zvecGrepDefaultEmbedding = "local/potion-code-16m-v2"
 
 // zvecGrepIndexTimeout bounds one background index run. A first index of a large
 // repository takes minutes (the daemon embeds every file), so it is generous; it
-// exists so a wedged child cannot hold the per-root guard for the life of the
-// process.
+// exists so a wedged child cannot hold the ledger's per-root claim for the life
+// of the process.
 const zvecGrepIndexTimeout = 30 * time.Minute
 
 var (
-	// zvecGrepIndexRunning is process-wide: two workspace runtimes working in the
-	// same repository share one daemon and one index, so one run is enough.
-	zvecGrepIndexRunning sync.Map
-	runZvecGrepIndex     = func(ctx context.Context, command, root, embedding string) ([]byte, error) {
+	runZvecGrepIndex = func(ctx context.Context, command, root, embedding string) ([]byte, error) {
 		cmd := proc.CommandContext(ctx, command, "index", root, "--embedding", embedding)
 		cmd.Env = os.Environ()
 		proc.TreeKill(cmd)
@@ -57,73 +53,16 @@ var (
 	zvecGrepDetect = func() (bool, string) { return exttools.Detect(exttools.ZvecGrepToolName) }
 )
 
-// EnsureZvecGrepIndexed fires a best-effort background index of the repository
-// that contains cwd, at most once per root per process — the zvec-grep sibling of
-// EnsureCodebaseIndexed, with the same skips (empty or throwaway working copy, no
-// enabled server) plus three of its own: a relative cwd, a home or volume-root
-// cwd (an index there would cover far more than a project), and an existing index
-// at or above cwd, which the daemon's watcher keeps fresh on its own.
+// EnsureZvecGrepIndexed brings the index covering cwd to a usable state,
+// reporting whether one exists or is being built after the call — so the tool
+// loop only tells the model "an index is on its way" when that is true.
 //
-// It reports whether an index covering cwd exists or is being built after the
-// call, so the tool loop only tells the model "an index is on its way" when that
-// is true. Failures are LOGGED and clear the guard so a later turn can retry.
+// The lifecycle itself (which of create/refresh/rebuild is due, the single-run
+// claim, and the recorded outcome) lives in EnsureZvecGrepIndex on top of the
+// indexstate ledger. This name is kept because it is what the prompt builder,
+// the tool loop and the chat turn already call.
 func (r *Runtime) EnsureZvecGrepIndexed(ctx context.Context, cwd string) bool {
-	cwd = strings.TrimSpace(cwd)
-	if cwd == "" || !filepath.IsAbs(cwd) {
-		return false
-	}
-	if isEphemeralWorkdir(cwd) {
-		r.logger.Debug("zvec-grep auto-index skipped: ephemeral working copy", "cwd", cwd)
-		return false
-	}
-	if zvecGrepBroadDir(cwd) {
-		r.logger.Debug("zvec-grep auto-index skipped: home or volume root", "cwd", cwd)
-		return false
-	}
-	server, ok := r.zvecGrepServer(ctx)
-	if !ok {
-		return false
-	}
-	if zvecGrepIndexedRoot(cwd) != "" {
-		return true
-	}
-	command := zvecGrepCLI(server)
-	if command == "" {
-		r.logger.Warn("zvec-grep auto-index skipped: zg executable not found", "server", server.Name, "cwd", cwd)
-		return false
-	}
-	root := zvecGrepIndexTarget(cwd)
-	if _, seen := r.zgIndexed.LoadOrStore(root, true); seen {
-		return true
-	}
-	go func() {
-		runningKey := filepath.ToSlash(root)
-		if runtime.GOOS == "windows" {
-			runningKey = strings.ToLower(runningKey)
-		}
-		if _, running := zvecGrepIndexRunning.LoadOrStore(runningKey, true); running {
-			r.logger.Info("zvec-grep index already running, skipping", "root", root)
-			return
-		}
-		defer zvecGrepIndexRunning.Delete(runningKey)
-
-		if err := ensureZvecGrepGitExclude(root); err != nil {
-			// No exclude entry, no index: the alternative is an untracked binary
-			// store one `git add -A` away from a commit.
-			r.logger.Warn("zvec-grep auto-index skipped: could not exclude the index from git",
-				"root", root, "error", err)
-			r.zgIndexed.Delete(root)
-			return
-		}
-		ictx, cancel := context.WithTimeout(context.Background(), zvecGrepIndexTimeout)
-		defer cancel()
-		if out, err := runZvecGrepIndex(ictx, command, root, zvecGrepEmbedding()); err != nil {
-			r.logger.Warn("zvec-grep auto-index failed",
-				"root", root, "error", err, "output", zvecGrepTail(out))
-			r.zgIndexed.Delete(root) // allow a later turn to retry
-		}
-	}()
-	return true
+	return r.EnsureZvecGrepIndex(ctx, cwd)
 }
 
 // zvecGrepEmbedding returns the model for a new index: ZVEC_GREP_EMBEDDING when it
