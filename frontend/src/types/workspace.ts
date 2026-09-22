@@ -137,6 +137,9 @@ export interface WorkspaceSettings {
   // rule only holds when it is always in force, so it is a prompt, not a skill.
   terseMode: boolean
   codebaseMemoryEnabled: boolean
+  // zvec-grep capability switch: prompt block, allowlist exemption and the
+  // background index of the session repository (see _Docs/54).
+  zvecGrepEnabled: boolean
   promptEpochEnabled: boolean
   // Codex plugin support: the master switch plus the configured sources and the
   // enabled "<plugin>@<marketplace>" selectors. Both lists are always present
@@ -179,6 +182,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'themePreset'
     | 'terseMode'
     | 'codebaseMemoryEnabled'
+    | 'zvecGrepEnabled'
     | 'promptEpochEnabled'
     | 'codexPluginsEnabled'
     | 'codexMarketplaces'

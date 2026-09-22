@@ -1209,6 +1209,20 @@ func (t *toolLoopTurn) runToolCall(b *toolBatch, call providers.ToolCall) (stop 
 			}
 			t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
 		}
+	} else if plan, ok := t.repair.RepairZvecGrep(call, res, t.r.sessionCwd(t.ctx)); ok {
+		// zvec-grep has no argument to correct: its one repairable failure is a root
+		// without an index, and the remedy is the session repository's background
+		// index. "An index is on its way" is appended only when that index really
+		// exists or is being built, never on the strength of the plan alone.
+		res.Content += plan.Hint
+		if plan.IndexPath != "" && t.r.EnsureZvecGrepIndexed(t.ctx, plan.IndexPath) {
+			res.Content += repair.ZvecGrepIndexingHint
+			t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair_index", Detail: plan.IndexPath})
+			rec := mcpRepairStep(reasonMCPRepairIndex, plan.IndexPath, b.batch)
+			t.steps = append(t.steps, rec)
+			safeEmit(rec)
+		}
+		t.r.emitDebug(t.ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: t.agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
 	}
 
 	b.results = append(b.results, res)

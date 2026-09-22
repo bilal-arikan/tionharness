@@ -54,8 +54,8 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	// coordinator reads a decision, not raw logs.
 	//
 	// It has NO browser: driving one needs the playwright MCP server, and no
-	// profile allowlist names a browser tool (the codebase-memory graph is the one
-	// exemption — allowlistExemptServer — and it is not a browser), so e2e is
+	// profile allowlist names a browser tool (the codebase-memory graph and zvec-grep
+	// search are the exemptions — allowlistExemptServers — and neither is a browser), so e2e is
 	// out of scope here — the
 	// prompt says "(when available) a browser" and reports "e2e: n/a", which is
 	// the honest answer for every profile worker. This comment once claimed the

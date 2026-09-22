@@ -115,6 +115,7 @@ export function WorkspaceView({
         defaultWorkingDir: ws.defaultWorkingDir,
         terseMode: ws.terseMode,
         codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
+        zvecGrepEnabled: ws.zvecGrepEnabled,
         promptEpochEnabled: ws.promptEpochEnabled,
         shellOutputCompression: ws.shellOutputCompression,
         shellCommandRewrite: ws.shellCommandRewrite,

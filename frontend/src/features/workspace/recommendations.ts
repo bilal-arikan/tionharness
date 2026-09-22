@@ -16,6 +16,7 @@ import {
   FolderCog,
   Plug,
   Scissors,
+  Search,
   Wrench,
   Zap,
   type LucideIcon,
@@ -31,6 +32,12 @@ import type {
   MCPServer,
   WorkspaceSettings,
 } from '@/types'
+import {
+  ZVEC_GREP_SERVER_ARGS,
+  ZVEC_GREP_SERVER_NAME,
+  ZVEC_GREP_TOOL,
+  isZvecGrepServer,
+} from '@/shared/lib/zvecGrep'
 
 // Marker matched against an MCP server's command to tell whether codebase-memory is
 // already wired — the same rule the backend uses to route it to the isolated store.
@@ -191,6 +198,48 @@ export const RULES: Rule[] = [
   },
   {
     meta: {
+      key: 'zvec-add',
+      icon: Search,
+      title: 'Anlamsal aramayı ekle',
+      summary: 'zvec-grep (zg) PATH’te kuruluysa ama MCP olarak eklenmemişse.',
+    },
+    detect: (ctx) => {
+      const zg = ctx.tools.find((t) => t.name === ZVEC_GREP_TOOL && t.found)
+      if (!zg || ctx.servers.some(isZvecGrepServer)) return null
+      return {
+        desc: 'zvec-grep kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen ajan adını bilmediği kodu ve dokümanı niyetle bulur; çalışma dizini arka planda indekslenir.',
+        actionLabel: 'MCP’yi ekle',
+        act: async () => {
+          await api.createMCPServer({
+            name: ZVEC_GREP_SERVER_NAME,
+            transport: 'stdio',
+            command: zg.path ?? zg.name,
+            args: [...ZVEC_GREP_SERVER_ARGS],
+          })
+        },
+      }
+    },
+  },
+  {
+    meta: {
+      key: 'zvec-enable',
+      icon: Search,
+      title: 'Anlamsal aramayı aç',
+      summary: 'zvec-grep MCP ekliyken workspace toggle’ı kapalıysa.',
+    },
+    detect: (ctx) => {
+      if (!ctx.servers.some(isZvecGrepServer) || ctx.ws.zvecGrepEnabled) return null
+      return {
+        desc: 'zvec-grep MCP ekli ama bu workspace’te kapalı. Açarsan ajanın bağlamına arama yönergesi eklenir ve çalışma dizini otomatik indekslenir.',
+        actionLabel: 'Aç',
+        act: async () => {
+          await api.updateWorkspaceSettings({ zvecGrepEnabled: true })
+        },
+      }
+    },
+  },
+  {
+    meta: {
       key: 'token',
       icon: Zap,
       title: 'Token optimizasyonu bağla',
@@ -259,12 +308,16 @@ export const RULES: Rule[] = [
       key: 'no-mcp',
       icon: Plug,
       title: 'MCP kaynağı yok',
-      summary: 'Hiç MCP sunucusu yoksa (ve codebase-memory zaten önerilmiyorsa).',
+      summary: 'Hiç MCP sunucusu yoksa (ve codebase-memory / zvec-grep zaten önerilmiyorsa).',
     },
     detect: (ctx) => {
       if (ctx.servers.length > 0) return null
-      const cbmPending = ctx.tools.some((t) => t.name === CBM_TOOL && t.found)
-      if (cbmPending) return null
+      // A specific "add this MCP" card (codebase-memory, zvec-grep) already covers
+      // the empty list; a second, generic card about it would just stack.
+      const specificPending = ctx.tools.some(
+        (t) => (t.name === CBM_TOOL || t.name === ZVEC_GREP_TOOL) && t.found,
+      )
+      if (specificPending) return null
       return {
         desc: 'Harici veri/araç bağlamak için bir MCP sunucusu ekleyebilirsin (market veya .mcp.json import).',
         actionLabel: 'Market’i aç',

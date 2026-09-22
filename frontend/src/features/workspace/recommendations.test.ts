@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ZVEC_GREP_SERVER_NAME, ZVEC_GREP_TOOL } from '@/shared/lib/zvecGrep'
 
 // The rules only *reference* the api modules inside their `act` callbacks, but
 // importing recommendations.ts pulls them in, so stub both to keep this a pure
@@ -254,6 +255,66 @@ describe('codebase-memory rules', () => {
     expect(createMCPServer).toHaveBeenCalledWith(
       expect.objectContaining({ name: CBM_TOOL, transport: 'stdio', command: CBM_TOOL }),
     )
+  })
+})
+
+describe('zvec-grep rules', () => {
+  const zgInstalled = {
+    name: ZVEC_GREP_TOOL,
+    found: true,
+    path: 'C:/Users/u/.nvm/versions/node/v24.18.1/bin/zg.cmd',
+    wire: 'mcp',
+  }
+  const zgServer = { transport: 'stdio', command: zgInstalled.path, args: '["server","--stdio"]' }
+
+  it('offers to add the MCP server when zg is on PATH but unwired', () => {
+    const keys = keysOf(
+      healthyCtx({ tools: [zgInstalled], servers: [] } as unknown as Partial<RecContext>),
+    )
+    expect(keys).toContain('zvec-add')
+    // Same yield as codebase-memory: one specific card, not a second generic one.
+    expect(keys).not.toContain('no-mcp')
+  })
+
+  it('recognises a server added by hand under another name by its shim', () => {
+    const keys = keysOf(
+      healthyCtx({
+        tools: [zgInstalled],
+        servers: [{ ...zgServer, name: 'semantic', command: 'C:\\npm\\ZG.CMD' }],
+      } as unknown as Partial<RecContext>),
+    )
+    expect(keys).not.toContain('zvec-add')
+  })
+
+  it('offers to enable the workspace toggle once the server is added', () => {
+    const keys = keysOf(
+      healthyCtx({
+        servers: [zgServer],
+        ws: {
+          defaultWorkingDir: 'C:/work',
+          codebaseMemoryEnabled: true,
+          zvecGrepEnabled: false,
+          shellOutputCompression: 'on',
+          terseMode: true,
+        },
+      } as unknown as Partial<RecContext>),
+    )
+    expect(keys).toContain('zvec-enable')
+    expect(keys).not.toContain('zvec-add')
+  })
+
+  it('wires zg as an MCP stdio bridge to the shared daemon', async () => {
+    await runRules(
+      healthyCtx({ tools: [zgInstalled], servers: [] } as unknown as Partial<RecContext>),
+    )
+      .find((r) => r.key === 'zvec-add')
+      ?.act()
+    expect(createMCPServer).toHaveBeenCalledWith({
+      name: ZVEC_GREP_SERVER_NAME,
+      transport: 'stdio',
+      command: zgInstalled.path,
+      args: ['server', '--stdio'],
+    })
   })
 })
 

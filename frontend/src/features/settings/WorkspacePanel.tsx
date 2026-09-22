@@ -79,6 +79,16 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Anlamsal arama (zvec-grep)
+      </div>
+      <Toggle
+        label="zvec-grep yeteneği"
+        hint="Bu workspace'te bir zvec-grep MCP sunucusu varsa: ajanın bağlamına 'anlamsal workspace araması mevcut' bloğu eklenir (zvec_grep_search ne zaman Grep yerine kullanılır, mutlak root kuralı), araç ajan allowlist'inden muaf tutulur ve oturumun çalışma dizini indeksi yoksa arka planda indekslenir — indeks git reposunun köküne .zvec-grep/ olarak yazılır, .git/info/exclude'a eklenir ve yerel local/potion-code-16m-v2 modeliyle kurulur. Kapalı = bu entegrasyon devre dışı; MCP sunucusu ekliyse araçları yine listelenir."
+        checked={ws.zvecGrepEnabled}
+        onChange={(v) => setWsField('zvecGrepEnabled', v)}
+      />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Codex plugin desteği
       </div>
       <Toggle
