@@ -2,8 +2,6 @@ package agent
 
 import (
 	"context"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/indexstate"
@@ -12,10 +10,9 @@ import (
 // IndexStatus is one line of the agent-facing status report: what TionHarness
 // knows about the index covering a root, for one tool.
 //
-// It is a flattened view rather than the raw ledger Entry because the two
-// managed tools do not share a backing store. zvec-grep entries come straight
-// from the ledger; codebase-memory has no ledger integration yet, so its rows
-// are assembled from the in-process auto-index guards and say so via Managed.
+// It is a flattened view rather than the raw ledger Entry so a row can carry a
+// Note, and so a root the ledger has no record of yet can still be answered
+// from a direct observation of the tool's store.
 type IndexStatus struct {
 	Tool        string `json:"tool"`
 	Root        string `json:"root"`
@@ -27,10 +24,10 @@ type IndexStatus struct {
 	Usable      bool   `json:"usable"`
 	// Managed reports whether this tool's index lifecycle is driven through the
 	// ledger, and therefore whether refresh/rebuild will do anything for it.
-	// False for codebase-memory, whose row is observational only.
+	// True for every tool the manager knows (zvec-grep and codebase-memory).
 	Managed bool `json:"managed"`
-	// Note carries the human-readable qualification for an unmanaged or
-	// otherwise special row, e.g. why codebase-memory cannot be refreshed here.
+	// Note carries the human-readable qualification for a special row, e.g. an
+	// ephemeral working copy that is never indexed.
 	Note string `json:"note,omitempty"`
 }
 
@@ -94,63 +91,48 @@ func (r *Runtime) zvecGrepStatus(root string) (IndexStatus, bool) {
 	return st, true
 }
 
-// codebaseMemoryStatus reports what is CHEAPLY knowable about the code graph's
-// coverage of root — no CLI call, no store read.
+// codebaseMemoryStatus reports the code graph's coverage of root from the
+// ledger, falling back to asking the server when this process has no record.
 //
-// codebase-memory is not in the ledger (a separate card). What this process does
-// know is whether it has already fired its best-effort auto-index for this
-// directory in this run, and whether one is in flight, which is exactly the
-// question an agent asks before deciding to grep instead. Anything beyond that
-// (does the store really hold this project, how fresh is it) would cost a
-// subprocess per status call, so it is reported as unknown rather than guessed.
+// The fallback costs one short CLI call, which is acceptable for an explicit
+// status request (the automatic per-turn path records its observation in the
+// ledger, so a working session normally never reaches it). Like zvec-grep's
+// fallback it does NOT record what it saw: a status read must not overwrite a
+// phase a concurrent run is about to set. A server answer that cannot be read
+// reports phase "unknown" with the reason — never a guessed ready.
 func (r *Runtime) codebaseMemoryStatus(ctx context.Context, root string) (IndexStatus, bool) {
-	if !r.CodebaseMemoryEnabled() || r.codebaseMemoryCmd(ctx) == "" {
+	command := r.codebaseMemoryCmd(ctx)
+	if command == "" {
 		return IndexStatus{}, false
 	}
 	root = strings.TrimSpace(root)
-	if root == "" {
+	if root == "" || !isAbsPath(root) {
 		return IndexStatus{}, false
 	}
 
-	st := IndexStatus{
-		Tool:    codebaseMemoryToolName,
-		Root:    root,
-		Managed: false,
-		Note: "kod grafiği indeksi TionHarness kayıt defterinde tutulmuyor; durum yalnızca bu " +
-			"süreçteki otomatik indeksleme durumundan okunur. Tazeleme için oturumun normal " +
-			"akışındaki otomatik indeksleme yeterlidir; index_repository'yi kendin çağırma.",
-	}
-	switch {
-	case isEphemeralWorkdir(root):
+	st := IndexStatus{Tool: codebaseMemoryToolName, Root: root, Managed: true}
+	if isEphemeralWorkdir(root) {
 		st.Phase = string(indexstate.PhaseMissing)
 		st.Note = "geçici çalışma kopyası hiç indekslenmez; üst deponun indeksi bu kodu zaten kapsar"
-	case r.codebaseIndexInFlight(root):
-		st.Phase = string(indexstate.PhaseIndexing)
-	default:
-		if _, fired := r.cbmIndexed.Load(root); fired {
-			// The auto-index ran for this directory in this process and did not
-			// clear its guard, i.e. it did not fail. That is evidence of coverage,
-			// not proof the store answers a given query, so it reads as usable
-			// rather than ready.
-			st.Phase = string(indexstate.PhaseStale)
-			st.Usable = true
-			st.Note = "bu süreçte otomatik indekslendi; tazeliği sunucunun kendi izleyicisi yönetir"
-		} else {
-			st.Phase = "unknown"
-			st.Note = "bu süreçte indekslenmedi; sunucunun kendi deposunda kayıt olabilir. " + st.Note
-		}
+		return st, true
+	}
+	if e, seen := indexLedger.Get(codebaseMemoryToolName, root); seen {
+		st.Phase = string(e.Phase)
+		st.Action, st.Error, st.Usable = e.Action, e.Error, e.Usable()
+		return st, true
+	}
+
+	obs, err := observeCodebaseMemory(ctx, command, root)
+	if err != nil {
+		st.Phase = "unknown"
+		st.Note = "kod grafiği deposu okunamadı: " + err.Error()
+		return st, true
+	}
+	phase := obsPhase(obs)
+	st.Phase = string(phase)
+	st.Usable = indexstate.Entry{Phase: phase}.Usable()
+	if !obs.Exists {
+		st.Note = "bu kök için kod grafiği yok; search_index refresh ile oluşturulabilir"
 	}
 	return st, true
-}
-
-// codebaseIndexInFlight reports whether the process-wide codebase-memory
-// auto-index is running for root. Mirrors the key EnsureCodebaseIndexed builds
-// so the two cannot disagree about what "running" means.
-func (r *Runtime) codebaseIndexInFlight(root string) bool {
-	key := filepath.ToSlash(root)
-	if runtime.GOOS == "windows" {
-		key = strings.ToLower(key)
-	}
-	_, running := codebaseIndexRunning.Load(key)
-	return running
 }

@@ -35,6 +35,24 @@ type DropRequest struct {
 	IndexDir string
 }
 
+// CheckDropConfirmation is the drop gate on its own, for a tool whose store this
+// package cannot delete as a directory (codebase-memory deletes through its own
+// CLI) but whose drop must obey the same rule: root is absolute, and confirmRoot
+// repeats it under the host's path comparison.
+func CheckDropConfirmation(tool, root, confirmRoot string) error {
+	root = strings.TrimSpace(root)
+	if root == "" || !filepath.IsAbs(root) {
+		return fmt.Errorf("indeks kökü mutlak bir yol olmalı: %q", root)
+	}
+	if strings.TrimSpace(confirmRoot) == "" {
+		return ErrDropNotConfirmed
+	}
+	if NewKey(tool, confirmRoot) != NewKey(tool, root) {
+		return ErrDropRootMismatch
+	}
+	return nil
+}
+
 // Drop deletes an index from disk after checking the confirmation gate.
 //
 // There is NO unconfirmed path into this function and no automatic caller: a
@@ -43,16 +61,10 @@ type DropRequest struct {
 // want. Re-indexing a large repository is expensive and a wrong automatic delete
 // is not recoverable, so the asymmetry is resolved toward keeping the data.
 func (m *Manager) Drop(req DropRequest) error {
+	if err := CheckDropConfirmation(req.Tool, req.Root, req.ConfirmRoot); err != nil {
+		return err
+	}
 	root := strings.TrimSpace(req.Root)
-	if root == "" || !filepath.IsAbs(root) {
-		return fmt.Errorf("indeks kökü mutlak bir yol olmalı: %q", req.Root)
-	}
-	if strings.TrimSpace(req.ConfirmRoot) == "" {
-		return ErrDropNotConfirmed
-	}
-	if NewKey(req.Tool, req.ConfirmRoot) != NewKey(req.Tool, root) {
-		return ErrDropRootMismatch
-	}
 	if strings.TrimSpace(req.IndexDir) == "" {
 		return fmt.Errorf("%s aracının indeks dizini bilinmiyor, silinemez", req.Tool)
 	}

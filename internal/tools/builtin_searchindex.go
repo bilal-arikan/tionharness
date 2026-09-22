@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,10 @@ type SearchIndexEntry struct {
 // happening) rather than a failure.
 type SearchIndexBridge interface {
 	SearchIndexStatus(ctx context.Context, root string) []SearchIndexEntry
-	RefreshSearchIndex(ctx context.Context, root, action string) (entry SearchIndexEntry, started bool, err error)
+	RefreshSearchIndex(ctx context.Context, tool, root, action string) (entry SearchIndexEntry, started bool, err error)
+	// IndexTools returns the managed tools enabled for this workspace ("zg",
+	// "codebase-memory"); a refresh that names no tool acts on each of them.
+	IndexTools(ctx context.Context) []string
 	// IndexRoots returns the roots this session may act on: its working root
 	// first. A request naming anything else is refused — see SearchIndexTool.
 	IndexRoots(ctx context.Context) []string
@@ -64,10 +68,11 @@ func (SearchIndexTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "search_index",
 		Description: "Inspect or repair the search indexes TionHarness manages for you (zvec-grep's " +
-			"vector store, and what is known about codebase-memory's graph). Use `status` when a search " +
+			"vector store `zg` and codebase-memory's code graph `codebase-memory`). Use `status` when a search " +
 			"returned [INDEX_MISSING] or looked stale, then `refresh` to bring the index up to date " +
 			"(keeps the existing store) or `rebuild` to discard and re-create it (only when the index is " +
-			"corrupt or built with a different embedding model). Runs are asynchronous: the call returns " +
+			"corrupt or built with a different embedding model). `tool` limits refresh/rebuild to one index; " +
+			"omitted, every managed index for the root is acted on. Runs are asynchronous: the call returns " +
 			"once the run is claimed, not when it finishes — re-check with `status`. You may only target " +
 			"your own session's working root (the default) or a root already known to be indexed; " +
 			"deleting an index is not available here. Never run `zg index` or index_repository through " +
@@ -76,7 +81,8 @@ func (SearchIndexTool) Def() providers.ToolDef {
   "type": "object",
   "properties": {
     "action": { "type": "string", "enum": ["status", "refresh", "rebuild"], "description": "status (default): report index state. refresh: re-index in place. rebuild: discard and re-create the store." },
-    "root": { "type": "string", "description": "Absolute path of the root to act on. Defaults to this session's working root; other paths are refused unless already indexed." }
+    "root": { "type": "string", "description": "Absolute path of the root to act on. Defaults to this session's working root; other paths are refused unless already indexed." },
+    "tool": { "type": "string", "enum": ["zg", "codebase-memory"], "description": "Index to refresh/rebuild. Omit to act on every managed index for the root. Ignored by status." }
   },
   "additionalProperties": false
 }`),
@@ -90,6 +96,7 @@ func (SearchIndexTool) Def() providers.ToolDef {
 // searchIndexResult is the tool's JSON reply.
 type searchIndexResult struct {
 	Action  string             `json:"action"`
+	Tool    string             `json:"tool,omitempty"`
 	Root    string             `json:"root"`
 	Started bool               `json:"started,omitempty"`
 	Message string             `json:"message"`
@@ -100,6 +107,7 @@ func (t SearchIndexTool) Call(ctx context.Context, input json.RawMessage) (strin
 	var in struct {
 		Action string `json:"action"`
 		Root   string `json:"root"`
+		Tool   string `json:"tool"`
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &in); err != nil {
@@ -136,19 +144,58 @@ func (t SearchIndexTool) Call(ctx context.Context, input json.RawMessage) (strin
 		return marshalResult(res)
 	}
 
-	entry, started, err := t.bridge.RefreshSearchIndex(ctx, root, action)
+	tools, err := t.refreshTools(ctx, in.Tool)
 	if err != nil {
 		return "", err
 	}
-	res := searchIndexResult{Action: action, Root: entry.Root, Started: started, Indexes: []SearchIndexEntry{entry}}
-	if started {
-		res.Message = "A " + action + " is now running for " + entry.Root +
-			". It runs in the background — call status again to see when it finishes."
-	} else {
-		res.Message = "A run is already in flight for " + entry.Root +
-			"; nothing new was started. Call status again to see when it finishes."
+	res := searchIndexResult{Action: action, Root: root, Tool: strings.TrimSpace(in.Tool)}
+	var msgs []string
+	var errs []error
+	for _, tool := range tools {
+		entry, started, err := t.bridge.RefreshSearchIndex(ctx, tool, root, action)
+		if err != nil {
+			// One tool's refusal must not hide another tool's run that did start,
+			// so a partial failure is reported per tool; only an all-failed request
+			// is an error.
+			errs = append(errs, fmt.Errorf("%s: %w", tool, err))
+			msgs = append(msgs, tool+": "+err.Error())
+			continue
+		}
+		res.Indexes = append(res.Indexes, entry)
+		if started {
+			res.Started = true
+			msgs = append(msgs, tool+": a "+entry.Action+" is now running for "+entry.Root+
+				". It runs in the background — call status again to see when it finishes.")
+		} else {
+			msgs = append(msgs, tool+": a run is already in flight for "+entry.Root+
+				"; nothing new was started. Call status again to see when it finishes.")
+		}
 	}
+	if len(res.Indexes) == 0 {
+		return "", errors.Join(errs...)
+	}
+	res.Message = strings.Join(msgs, " ")
 	return marshalResult(res)
+}
+
+// refreshTools resolves which indexes a refresh/rebuild acts on: the one named,
+// or every managed tool enabled for this workspace. An unknown or disabled tool
+// is an error, not a silent no-op.
+func (t SearchIndexTool) refreshTools(ctx context.Context, want string) ([]string, error) {
+	enabled := t.bridge.IndexTools(ctx)
+	if len(enabled) == 0 {
+		return nil, fmt.Errorf("no managed search index is enabled for this workspace")
+	}
+	want = strings.TrimSpace(want)
+	if want == "" {
+		return enabled, nil
+	}
+	for _, e := range enabled {
+		if e == want {
+			return []string{want}, nil
+		}
+	}
+	return nil, fmt.Errorf("index tool %q is not enabled for this workspace (enabled: %s)", want, strings.Join(enabled, ", "))
 }
 
 // resolveRoot applies the root restriction: an agent may act on its own

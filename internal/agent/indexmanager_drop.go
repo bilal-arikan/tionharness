@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -14,14 +15,16 @@ var ErrUnknownIndexTool = fmt.Errorf("bu araç için indeks yönetimi tanımlı 
 // dispatching on the tool.
 //
 // confirmRoot must repeat root exactly; see indexstate.Drop for why the
-// confirmation is a path and not a flag. Only zvec-grep is droppable here:
-// codebase-memory keeps its store in the user's cache directory under its own
-// naming scheme, and removing that is the tool's own `delete_project` operation,
-// not a directory this package should delete behind its back.
-func (r *Runtime) DropSearchIndex(tool, root, confirmRoot string) error {
+// confirmation is a path and not a flag. zvec-grep's store is a directory under
+// the root and is removed as one; codebase-memory keeps its store in the user's
+// cache directory under its own naming, so its drop goes through the server's
+// own `delete_project` rather than deleting files behind its back.
+func (r *Runtime) DropSearchIndex(ctx context.Context, tool, root, confirmRoot string) error {
 	switch tool {
 	case exttoolsZvecGrepName:
 		return r.DropZvecGrepIndex(root, confirmRoot)
+	case codebaseMemoryToolName:
+		return r.DropCodebaseMemoryIndex(ctx, root, confirmRoot)
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownIndexTool, tool)
 	}

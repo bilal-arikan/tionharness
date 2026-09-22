@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -10,11 +11,14 @@ import (
 // fakeIndexBridge records what the tool asked for and returns canned state.
 type fakeIndexBridge struct {
 	roots     []string
+	tools     []string // nil means just "zg"
 	entries   []SearchIndexEntry
 	started   bool
 	err       error
+	failTool  string // when set, only this tool's refresh fails with err
 	gotRoot   string
 	gotAction string
+	gotTools  []string
 	calls     int
 }
 
@@ -23,13 +27,21 @@ func (f *fakeIndexBridge) SearchIndexStatus(_ context.Context, root string) []Se
 	return f.entries
 }
 
-func (f *fakeIndexBridge) RefreshSearchIndex(_ context.Context, root, action string) (SearchIndexEntry, bool, error) {
+func (f *fakeIndexBridge) RefreshSearchIndex(_ context.Context, tool, root, action string) (SearchIndexEntry, bool, error) {
 	f.calls++
 	f.gotRoot, f.gotAction = root, action
-	if f.err != nil {
+	f.gotTools = append(f.gotTools, tool)
+	if f.err != nil && (f.failTool == "" || f.failTool == tool) {
 		return SearchIndexEntry{}, false, f.err
 	}
-	return SearchIndexEntry{Tool: "zg", Root: root, Phase: "indexing", Action: action, Managed: true}, f.started, nil
+	return SearchIndexEntry{Tool: tool, Root: root, Phase: "indexing", Action: action, Managed: true}, f.started, nil
+}
+
+func (f *fakeIndexBridge) IndexTools(context.Context) []string {
+	if f.tools == nil {
+		return []string{"zg"}
+	}
+	return f.tools
 }
 
 func (f *fakeIndexBridge) IndexRoots(context.Context) []string { return f.roots }
@@ -173,5 +185,71 @@ func TestSearchIndexWithoutARootHasNothingToActOn(t *testing.T) {
 	b := &fakeIndexBridge{roots: nil}
 	if _, err := NewSearchIndexTool(b).Call(context.Background(), json.RawMessage(`{"action":"status"}`)); err == nil {
 		t.Fatal("a session with no working root should not resolve a target")
+	}
+}
+
+// With no tool named, a refresh acts on every managed index for the root —
+// zvec-grep AND the codebase-memory graph — and reports each one.
+func TestSearchIndexRefreshWithoutAToolActsOnEveryManagedIndex(t *testing.T) {
+	b := &fakeIndexBridge{roots: []string{`C:epo`}, tools: []string{"zg", "codebase-memory"}, started: true}
+	res, err := callIndexTool(t, b, `{"action":"refresh"}`)
+	if err != nil {
+		t.Fatalf("refresh failed: %v", err)
+	}
+	if strings.Join(b.gotTools, ",") != "zg,codebase-memory" {
+		t.Fatalf("tools refreshed = %v, want both", b.gotTools)
+	}
+	if len(res.Indexes) != 2 || res.Indexes[1].Tool != "codebase-memory" {
+		t.Errorf("reply did not report both runs: %+v", res.Indexes)
+	}
+}
+
+func TestSearchIndexRefreshOfOneNamedTool(t *testing.T) {
+	b := &fakeIndexBridge{roots: []string{`C:epo`}, tools: []string{"zg", "codebase-memory"}, started: true}
+	res, err := callIndexTool(t, b, `{"action":"rebuild","tool":"codebase-memory"}`)
+	if err != nil {
+		t.Fatalf("rebuild failed: %v", err)
+	}
+	if strings.Join(b.gotTools, ",") != "codebase-memory" {
+		t.Fatalf("tools rebuilt = %v, want only codebase-memory", b.gotTools)
+	}
+	if res.Tool != "codebase-memory" || len(res.Indexes) != 1 {
+		t.Errorf("reply = %+v", res)
+	}
+}
+
+// Naming a tool that is not enabled is an error, not a silent no-op.
+func TestSearchIndexRefusesADisabledTool(t *testing.T) {
+	b := &fakeIndexBridge{roots: []string{`C:epo`}, tools: []string{"zg"}}
+	_, err := NewSearchIndexTool(b).Call(context.Background(), json.RawMessage(`{"action":"refresh","tool":"codebase-memory"}`))
+	if err == nil || !strings.Contains(err.Error(), "not enabled") {
+		t.Fatalf("err = %v, want a not-enabled refusal", err)
+	}
+	if b.calls != 0 {
+		t.Error("a disabled tool reached the manager")
+	}
+}
+
+// One tool's refusal must not hide the other tool's run; only an all-failed
+// request is an error.
+func TestSearchIndexReportsAPartialFailurePerTool(t *testing.T) {
+	b := &fakeIndexBridge{
+		roots: []string{`C:epo`}, tools: []string{"zg", "codebase-memory"}, started: true,
+		err: errors.New("zg executable not found"), failTool: "zg",
+	}
+	res, err := callIndexTool(t, b, `{"action":"refresh"}`)
+	if err != nil {
+		t.Fatalf("a partial failure was reported as a total one: %v", err)
+	}
+	if len(res.Indexes) != 1 || res.Indexes[0].Tool != "codebase-memory" {
+		t.Errorf("indexes = %+v, want the codebase-memory run", res.Indexes)
+	}
+	if !strings.Contains(res.Message, "zg executable not found") {
+		t.Errorf("message hid the zg failure: %q", res.Message)
+	}
+
+	b = &fakeIndexBridge{roots: []string{`C:epo`}, tools: []string{"zg", "codebase-memory"}, err: errors.New("boom")}
+	if _, err := NewSearchIndexTool(b).Call(context.Background(), json.RawMessage(`{"action":"refresh"}`)); err == nil {
+		t.Fatal("an all-failed refresh was reported as success")
 	}
 }

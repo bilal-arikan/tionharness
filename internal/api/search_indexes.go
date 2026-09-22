@@ -99,7 +99,7 @@ func (s *Server) handleSearchIndexDrop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("search index drop requested", "tool", req.Tool, "root", req.Root)
-	if err := wsp.Runtime.DropSearchIndex(req.Tool, req.Root, req.ConfirmRoot); err != nil {
+	if err := wsp.Runtime.DropSearchIndex(r.Context(), req.Tool, req.Root, req.ConfirmRoot); err != nil {
 		if code := writeDropError(w, err); code == http.StatusInternalServerError {
 			s.logger.Warn("search index drop failed", "tool", req.Tool, "root", req.Root, "error", err)
 		}
@@ -114,12 +114,14 @@ func (s *Server) handleSearchIndexDrop(w http.ResponseWriter, r *http.Request) {
 //
 // The reason text always travels in the body: the Settings panel prints it
 // verbatim, and a confirmation mismatch is something the user has to read to
-// act on. A failed confirmation is 409 (retryable by confirming correctly),
-// while an unknown tool is 404 — confirming harder cannot fix it.
+// act on. A failed confirmation is 409 (retryable by confirming correctly), as
+// is a drop refused because an index run is in flight (retryable once it
+// finishes), while an unknown tool is 404 — confirming harder cannot fix it.
 func writeDropError(w http.ResponseWriter, err error) int {
 	var status int
 	switch {
-	case errors.Is(err, indexstate.ErrDropNotConfirmed), errors.Is(err, indexstate.ErrDropRootMismatch):
+	case errors.Is(err, indexstate.ErrDropNotConfirmed), errors.Is(err, indexstate.ErrDropRootMismatch),
+		errors.Is(err, agent.ErrIndexRunInFlight):
 		status = http.StatusConflict
 	case errors.Is(err, agent.ErrUnknownIndexTool):
 		status = http.StatusNotFound

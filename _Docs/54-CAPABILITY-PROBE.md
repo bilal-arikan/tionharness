@@ -48,8 +48,14 @@
 > çağrılabilir adı yazar (`searchIndexToolFor`; ortak cümle
 > `searchIndexDirective` içinde tek yerde). Kök kısıtı zorlanır: yalnız
 > oturumun kendi çalışma kökü. `drop` araçta **yok** (kullanıcı eylemi olarak
-> Ayarlar'daki onay kapısında kalır). codebase-memory henüz deftere alınmadı:
-> yalnız gözlemsel `status` (`managed:false`), `refresh` reddedilir.
+> Ayarlar'daki onay kapısında kalır). **2026-09-22 (TSK980):** codebase-memory de
+> artık defterde (`managed:true`): otomatik indeks (`EnsureCodebaseIndexed`) ve açık
+> `refresh`/`rebuild` `Begin`/`Succeed`/`Fail` ile kaydedilir; durum sunucunun kendi
+> `cli index_status` yanıtından gözlenir (hata yanıtı stderr'dedir), `rebuild` ve
+> kullanıcı `drop`'u `cli delete_project` ile yapılır (dosya silinmez). Aynı kök
+> korumaları (mutlak yol, worktree/scratchpad, ev/disk kökü) iki yolda da geçerli;
+> `search_index` aracına `tool` (`zg` | `codebase-memory`) parametresi eklendi,
+> verilmezse etkin tüm indeksler işlenir. Ayrıntı: `internal/agent/indexmanager_cbm.go`.
 
 > Generic bir katman: cihazda/işlemde bir **opsiyonel harici yetenek** mevcutsa,
 > ajanın **cachelenebilir statik** sistem-prompt prefix'ine kısa bir bilgi bloğu

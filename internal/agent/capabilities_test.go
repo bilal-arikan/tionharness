@@ -168,11 +168,12 @@ func TestEnsureCodebaseIndexedSkipsConcurrentSamePath(t *testing.T) {
 
 	original := runIndexRepository
 	t.Cleanup(func() { runIndexRepository = original })
+	stubCodebaseMemoryCLI(t, `{"status":"not_found"}`, nil)
 	started := make(chan struct{})
 	release := make(chan struct{})
 	finished := make(chan struct{})
 	var calls atomic.Int32
-	runIndexRepository = func(_, _ string) ([]byte, error) {
+	runIndexRepository = func(_ context.Context, _, _ string) ([]byte, error) {
 		defer close(finished)
 		calls.Add(1)
 		close(started)
@@ -207,12 +208,13 @@ func TestEnsureCodebaseIndexedRunsDifferentPathsConcurrently(t *testing.T) {
 
 	original := runIndexRepository
 	t.Cleanup(func() { runIndexRepository = original })
+	stubCodebaseMemoryCLI(t, `{"status":"not_found"}`, nil)
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	var calls atomic.Int32
 	var finished sync.WaitGroup
 	finished.Add(2)
-	runIndexRepository = func(_, _ string) ([]byte, error) {
+	runIndexRepository = func(_ context.Context, _, _ string) ([]byte, error) {
 		defer finished.Done()
 		calls.Add(1)
 		started <- struct{}{}

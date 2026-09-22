@@ -144,13 +144,14 @@ export function SearchIndexPanel({ onError }: Props) {
         <span className="font-medium text-[var(--color-text)]">Yeniden kur</span> store'u silip
         baştan kurar (gömme modeli değiştiyse tek çare),{' '}
         <span className="font-medium text-[var(--color-text)]">Sil</span> ise indeksi diskten
-        kaldırır ve kök yolunun elle yazılmasını ister.
+        kaldırır ve kök yolunun elle yazılmasını ister. codebase-memory satırlarında yenile artımlı
+        yeniden indeksler, yeniden kur ve sil projeyi sunucunun kendi deposundan kaldırır.
       </p>
 
       {rows && rows.length === 0 && (
         <p data-testid="search-index-empty" className="mt-2">
-          Henüz yönetilen bir indeks yok. zvec-grep MCP sunucusu ekliyken bir oturum açıldığında
-          çalışma dizininin indeksi arka planda kurulur ve burada görünür.
+          Henüz yönetilen bir indeks yok. zvec-grep veya codebase-memory MCP sunucusu ekliyken bir
+          oturum açıldığında çalışma dizininin indeksi arka planda kurulur ve burada görünür.
         </p>
       )}
 

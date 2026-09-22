@@ -3,15 +3,13 @@ package agent
 import (
 	"context"
 	"os"
-
-	"github.com/bilal-arikan/tionharness/internal/proc"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/indexstate"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // Capability is a probe + context-block contract for an OPTIONAL external tool a
@@ -69,14 +67,14 @@ func (r *Runtime) CapabilityContext(ctx context.Context, agent db.Agent, cwd str
 // stored MCP server's Command path (the server has no slug field).
 const codebaseMemoryCommandMarker = "codebase-memory-mcp"
 
-var (
-	codebaseIndexRunning sync.Map
-	runIndexRepository   = func(command, repoPath string) ([]byte, error) {
-		cmd := proc.Command(command, "cli", "index_repository", "--repo-path", repoPath)
-		cmd.Env = os.Environ()
-		return cmd.CombinedOutput()
-	}
-)
+// runIndexRepository runs one incremental `index_repository` of repoPath into
+// the server's own store. Behind a var so tests can stub the binary; ctx bounds
+// the run (see codebaseMemoryIndexTimeout).
+var runIndexRepository = func(ctx context.Context, command, repoPath string) ([]byte, error) {
+	cmd := proc.CommandContext(ctx, command, "cli", "index_repository", "--repo-path", repoPath)
+	cmd.Env = os.Environ()
+	return cmd.CombinedOutput()
+}
 
 // codebaseMemoryCommand returns the configured codebase-memory-mcp executable path
 // when an enabled stdio MCP server points at it, or "" when absent. One scan backs
@@ -297,47 +295,49 @@ func isEphemeralWorkdir(cwd string) bool {
 	return false
 }
 
-// EnsureCodebaseIndexed fires a best-effort, background incremental index of cwd
-// into the server's own store, at most once per cwd per process. No-op when cwd
-// is empty, sits in a throwaway working copy (isEphemeralWorkdir), or no
-// codebase-memory server is enabled. Failures are LOGGED (not silently
-// swallowed) and clear the guard so a later turn can retry.
+// EnsureCodebaseIndexed brings the code graph covering cwd up to date in the
+// background and records every transition in the index ledger, at most once per
+// cwd per runtime. No-op when cwd is empty, fails a root guard
+// (codebaseMemoryRootAllowed: relative, ephemeral worktree/scratchpad, home or
+// volume root), or no codebase-memory server is enabled.
+//
+// The ledger claim is the process-wide single-run lock: two workspace runtimes
+// on the same repository share one store, so the second sees the first one's
+// run and does not start its own. A failed run is recorded as failed WITH its
+// reason and clears the per-runtime guard so a later turn can retry.
 func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	cwd = strings.TrimSpace(cwd)
 	if cwd == "" {
 		return
 	}
-	// A worktree/scratchpad is a copy of a repo the parent index already covers;
-	// indexing it burns disk and dial time for a store discarded with the task.
-	if isEphemeralWorkdir(cwd) {
-		r.logger.Debug("codebase-memory auto-index skipped: ephemeral working copy", "cwd", cwd)
+	if err := codebaseMemoryRootAllowed(cwd); err != nil {
+		r.logger.Debug("codebase-memory auto-index skipped", "cwd", cwd, "reason", err)
 		return
 	}
 	command := r.codebaseMemoryCmd(ctx) // "" when disabled or no server
 	if command == "" {
 		return
 	}
-	key := cwd
-	if _, seen := r.cbmIndexed.LoadOrStore(key, true); seen {
+	if _, seen := r.cbmIndexed.LoadOrStore(cwd, true); seen {
 		return
 	}
 	go func() {
-		repoPath := filepath.ToSlash(cwd)
-		runningKey := repoPath
-		if runtime.GOOS == "windows" {
-			runningKey = strings.ToLower(runningKey)
+		// Observe first so the ledger records create vs refresh honestly; the run
+		// itself is the same incremental index_repository either way.
+		obs, obsErr := observeCodebaseMemory(context.Background(), command, cwd)
+		if obsErr != nil {
+			r.logger.Warn("codebase-memory index observation failed", "cwd", cwd, "error", obsErr)
+		} else {
+			indexLedger.Observe(codebaseMemoryToolName, cwd, obsPhase(obs), "", "")
 		}
-		if _, running := codebaseIndexRunning.LoadOrStore(runningKey, true); running {
-			r.logger.Info("index already running for " + repoPath + ", skipping")
+		action := codebaseMemoryAction(obs, obsErr, indexstate.ActionRefresh)
+		entry, claimed := indexLedger.Begin(codebaseMemoryToolName, cwd, action)
+		if !claimed {
+			r.logger.Info("codebase-memory index already running, skipping", "cwd", cwd, "action", entry.Action)
 			return
 		}
-		defer codebaseIndexRunning.Delete(runningKey)
-
-		// Flag form: codebase-memory-mcp 0.10 deprecated raw-JSON CLI args.
-		if out, runErr := runIndexRepository(command, repoPath); runErr != nil {
-			r.logger.Warn("codebase-memory auto-index failed",
-				"cwd", cwd, "error", runErr, "output", strings.TrimSpace(string(out)))
-			r.cbmIndexed.Delete(key) // allow a later turn to retry
+		if !r.runCodebaseMemoryAction(command, cwd, action, entry.Run) {
+			r.cbmIndexed.Delete(cwd) // allow a later turn to retry
 		}
 	}()
 }

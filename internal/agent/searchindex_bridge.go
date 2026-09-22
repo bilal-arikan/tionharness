@@ -23,23 +23,18 @@ func (b searchIndexBridge) SearchIndexStatus(ctx context.Context, root string) [
 	return out
 }
 
-// RefreshSearchIndex runs an explicit refresh/rebuild through the manager and
-// all of its guards.
-//
-// Only zvec-grep is actionable: codebase-memory is not driven through the
-// ledger, and its own incremental index already runs on the normal turn path, so
-// asking for one here would be a no-op the agent could not distinguish from a
-// real run. It is refused with that explanation instead.
+// RefreshSearchIndex runs an explicit refresh/rebuild of one tool's index
+// through the manager and all of its guards.
 //
 // A run already in flight is NOT an error: the work the caller asked for is
 // happening, so it reports started=false and lets the tool say so.
-func (b searchIndexBridge) RefreshSearchIndex(ctx context.Context, root, action string) (tools.SearchIndexEntry, bool, error) {
+func (b searchIndexBridge) RefreshSearchIndex(ctx context.Context, tool, root, action string) (tools.SearchIndexEntry, bool, error) {
 	act := indexstate.ActionRefresh
 	if action == "rebuild" {
 		act = indexstate.ActionRebuild
 	}
 	entry, err := b.rt.RequestIndexRun(ctx, IndexRequest{
-		Tool:   exttoolsZvecGrepName,
+		Tool:   tool,
 		Root:   root,
 		Action: act,
 	})
@@ -50,6 +45,19 @@ func (b searchIndexBridge) RefreshSearchIndex(ctx context.Context, root, action 
 		return tools.SearchIndexEntry{}, false, err
 	}
 	return entryToToolEntry(entry), true, nil
+}
+
+// IndexTools returns the managed tools enabled for this workspace, in the order
+// a tool-less refresh acts on them.
+func (b searchIndexBridge) IndexTools(ctx context.Context) []string {
+	var out []string
+	if b.rt.ZvecGrepEnabled() {
+		out = append(out, exttoolsZvecGrepName)
+	}
+	if b.rt.codebaseMemoryCmd(ctx) != "" {
+		out = append(out, codebaseMemoryToolName)
+	}
+	return out
 }
 
 // IndexRoots returns the roots this session may act on. The session's working
@@ -63,7 +71,7 @@ func (b searchIndexBridge) IndexRoots(ctx context.Context) []string {
 	return []string{dir}
 }
 
-// entryToToolEntry converts a ledger entry into the tool's reply shape. zvec-grep
+// entryToToolEntry converts a ledger entry into the tool's reply shape. Ledger
 // entries are always managed — an unmanaged tool never reaches the ledger.
 func entryToToolEntry(e indexstate.Entry) tools.SearchIndexEntry {
 	return tools.SearchIndexEntry{

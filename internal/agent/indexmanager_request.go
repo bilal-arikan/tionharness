@@ -60,6 +60,8 @@ func (r *Runtime) RequestIndexRun(ctx context.Context, req IndexRequest) (indexs
 	switch req.Tool {
 	case exttoolsZvecGrepName:
 		return r.requestZvecGrepRun(ctx, req.Root, req.Action)
+	case codebaseMemoryToolName:
+		return r.requestCodebaseMemoryRun(ctx, req.Root, req.Action)
 	default:
 		return indexstate.Entry{}, fmt.Errorf("%w: %s", ErrUnknownIndexTool, req.Tool)
 	}

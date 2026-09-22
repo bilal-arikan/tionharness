@@ -358,14 +358,14 @@ func TestDropRequiresConfirmationAndKeepsTheStore(t *testing.T) {
 	writeManifest(t, repo, zvecGrepDefaultEmbedding, time.Now())
 	indexLedger.Observe(exttoolsZvecGrepName, repo, indexstate.PhaseReady, zvecGrepDefaultEmbedding, "1.0.0")
 
-	if err := rt.DropSearchIndex(exttoolsZvecGrepName, repo, ""); err == nil {
+	if err := rt.DropSearchIndex(context.Background(), exttoolsZvecGrepName, repo, ""); err == nil {
 		t.Fatal("an unconfirmed drop succeeded")
 	}
 	if _, err := os.Stat(zvecGrepManifestPath(repo)); err != nil {
 		t.Fatal("an unconfirmed drop deleted the index")
 	}
 
-	if err := rt.DropSearchIndex(exttoolsZvecGrepName, repo, repo); err != nil {
+	if err := rt.DropSearchIndex(context.Background(), exttoolsZvecGrepName, repo, repo); err != nil {
 		t.Fatalf("confirmed drop failed: %v", err)
 	}
 	if _, err := os.Stat(zvecGrepIndexPath(repo)); !os.IsNotExist(err) {
@@ -378,7 +378,7 @@ func TestDropRefusesAnUnknownTool(t *testing.T) {
 	repo := newRepo(t)
 	// Guessing a directory from an unknown tool's name is exactly what the gate
 	// exists to prevent.
-	if err := rt.DropSearchIndex("mystery-tool", repo, repo); err == nil {
+	if err := rt.DropSearchIndex(context.Background(), "mystery-tool", repo, repo); err == nil {
 		t.Fatal("a drop for an unknown tool was accepted")
 	}
 }

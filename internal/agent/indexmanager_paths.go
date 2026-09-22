@@ -12,10 +12,10 @@ import (
 // never drift onto two different spellings of the same tool.
 const exttoolsZvecGrepName = exttools.ZvecGrepToolName
 
-// codebaseMemoryToolName is the key the status report uses for the code graph.
-// It is NOT a ledger key: codebase-memory keeps its store in the user's cache
-// directory under its own naming and is not driven through indexstate yet, so
-// this name only ever labels an observational status row.
+// codebaseMemoryToolName is the ledger's tool key for the code graph. Its store
+// lives in the user's cache directory under the server's own naming, so the
+// manager drives it through the server's CLI (index_status, index_repository,
+// delete_project) instead of touching files — see indexmanager_cbm.go.
 const codebaseMemoryToolName = "codebase-memory"
 
 // exttoolsLocalVersion is the version probe, behind a var so tests can stub it
