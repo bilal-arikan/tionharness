@@ -103,6 +103,13 @@ type agentSkillLib struct {
 }
 
 func (l agentSkillLib) Body(slug string) (string, error) {
+	// An archived skill answers with its own explicit error before the allowlist
+	// check, so an agent that still has it assigned learns WHY it cannot load it.
+	if sk, ok := l.store.Get(slug); ok {
+		if err := sk.UsableErr(); err != nil {
+			return "", err
+		}
+	}
 	if !l.allow[slug] {
 		return "", fmt.Errorf("skill %q is not enabled for this agent", slug)
 	}
@@ -117,7 +124,7 @@ func (l agentSkillLib) AllowedTools(slug string) []string {
 		return nil
 	}
 	sk, ok := l.store.Get(slug)
-	if !ok {
+	if !ok || sk.Archived {
 		return nil
 	}
 	return sk.AlwaysAllow

@@ -81,17 +81,32 @@ func (r *Runtime) resolveAgent(ctx context.Context, ref string) (db.Agent, error
 	if ref == "" {
 		return db.Agent{}, fmt.Errorf("no agent specified")
 	}
+	// Every caller resolves an agent in order to RUN it (spawn, delegate, message),
+	// so an archived match is refused here with its explicit error instead of
+	// being started.
 	if a, err := r.db.GetAgent(ctx, ref); err == nil {
-		return a, nil
+		return a, a.RunnableErr()
 	}
 	agents, err := r.db.ListAgents(ctx)
 	if err != nil {
 		return db.Agent{}, err
 	}
+	var archived *db.Agent
 	for _, a := range agents {
-		if strings.EqualFold(strings.TrimSpace(a.Name), ref) {
-			return a, nil
+		if !strings.EqualFold(strings.TrimSpace(a.Name), ref) {
+			continue
 		}
+		// A live agent wins over an archived namesake.
+		if a.Archived {
+			if archived == nil {
+				archived = &a
+			}
+			continue
+		}
+		return a, nil
+	}
+	if archived != nil {
+		return *archived, archived.RunnableErr()
 	}
 	return db.Agent{}, fmt.Errorf("no agent named %q in this workspace", ref)
 }

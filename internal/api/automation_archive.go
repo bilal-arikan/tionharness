@@ -5,7 +5,8 @@ import (
 	"strconv"
 )
 
-// Archive endpoints (_Docs/77 R5). Archiving is the curator's ceiling on
+// Archive endpoints (_Docs/77 R5) for schedules and hooks; automations use the
+// shared pair in archive_entities.go. Archiving is the curator's ceiling on
 // destructive action: the rule/schedule/hook keeps its configuration and
 // history, stops firing, leaves the default lists, and can be restored. It is
 // deliberately separate from Enabled (the user's on/off switch) so a restore
@@ -13,19 +14,6 @@ import (
 
 type archiveReq struct {
 	Archived bool `json:"archived"`
-}
-
-func (s *Server) handleArchiveAutomation(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	req, ok := bindJSON[archiveReq](w, r)
-	if !ok {
-		return
-	}
-	if err := ws(r).DB.SetAutomationArchived(r.Context(), id, req.Archived); writeDBError(w, err, "automation not found") {
-		return
-	}
-	s.logger.Info("automation archived", "id", id, "archived", req.Archived)
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "archived": req.Archived})
 }
 
 // handleAutomationFires serves the rule's fire ledger (fired / skipped / failed

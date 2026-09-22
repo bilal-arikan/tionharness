@@ -4,19 +4,22 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/goals"
 )
 
 // Evolution goals (_Docs/83 §4.1).
 //
-//	GET    /api/goals                → every goal (?status= filters)
+//	GET    /api/goals                → every goal (?status= filters; ?archived=true|false|all)
 //	GET    /api/goals/catalog        → metric catalog + scope candidates
 //	POST   /api/goals                → user creates a goal directly (validated)
 //	POST   /api/goals/intake         → {text, goalId?}: the goal-writer agent drafts / rewrites a goal
 //	GET    /api/goals/{id}
 //	PUT    /api/goals/{id}           → user edit (validated; appends a revision)
 //	POST   /api/goals/{id}/status    → {status}: draft | active | paused | archived
+//	POST   /api/goals/{id}/archive   → status archived (archive_entities.go)
+//	POST   /api/goals/{id}/unarchive → archived goal back to draft
 //	DELETE /api/goals/{id}
 
 func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
@@ -32,9 +35,12 @@ func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	if list == nil {
-		list = []db.Goal{}
+	// A goal's archive state is its status; absent keeps every goal.
+	archived, ok := archiveFilterQuery(w, r.URL.Query(), archive.All)
+	if !ok {
+		return
 	}
+	list = archive.Apply(list, archived, func(g db.Goal) bool { return g.Status == db.GoalStatusArchived })
 	writeJSON(w, http.StatusOK, list)
 }
 

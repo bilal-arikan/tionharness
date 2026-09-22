@@ -165,6 +165,7 @@ func scanDir(t tier) []scannedSkill {
 			AutoSummary:     isAutoSummary(fm),
 			NameOnly:        isNameOnly(fm),
 			SummaryOnly:     isSummaryOnly(fm),
+			Archived:        isArchived(fm),
 			Source:          t.source,
 			Path:            path,
 		}
@@ -278,6 +279,17 @@ func isSummaryOnly(fm frontmatter) bool {
 	return false
 }
 
+// isArchived reports whether a skill's frontmatter marks it archived
+// (`archived: true`, written by Store.SetArchived). Defaults to FALSE; only an
+// explicit true/yes/on/1 archives it. See Skill.Archived.
+func isArchived(fm frontmatter) bool {
+	switch strings.ToLower(strings.TrimSpace(fm.scalar("archived"))) {
+	case "true", "yes", "on", "1":
+		return true
+	}
+	return false
+}
+
 // isUserInvocable mirrors Claude Code's user-invocable (default TRUE). Only an
 // explicit false/no/off/0 disables it. (SK-4)
 func isUserInvocable(fm frontmatter) bool {
@@ -346,6 +358,11 @@ func (s *Store) Body(slug string) (string, error) {
 // known sub-skills. The plain Body method is left untouched for the raw detail
 // view — only the tool path appends the footer.
 func (s *Store) UseSkillBody(slug string, allow map[string]bool) (string, error) {
+	if sk, ok := s.Get(slug); ok {
+		if err := sk.UsableErr(); err != nil {
+			return "", err
+		}
+	}
 	body, err := s.Body(slug)
 	if err != nil {
 		return "", err
@@ -434,7 +451,7 @@ func (s *Store) subskillFooter(sk Skill, allow map[string]bool) string {
 			continue
 		}
 		child, ok := s.Get(sub)
-		if !ok {
+		if !ok || child.Archived {
 			continue
 		}
 		if child.Description != "" {
@@ -561,6 +578,37 @@ func (s *Store) SetVisibility(slug, tier string) (Skill, error) {
 	updated := setFrontmatterAutoSummary(string(data), autoSummary)
 	updated = setFrontmatterNameOnly(updated, nameOnly)
 	updated = setFrontmatterSummaryOnly(updated, summaryOnly)
+	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
+	}
+	s.Reload()
+	out, _ := s.Get(slug)
+	return out, nil
+}
+
+// SetArchived archives (archived=true) or restores a skill by writing or
+// removing the `archived: true` frontmatter marker, without touching any other
+// field or the body, then reloads the catalog. Returns the updated skill. The
+// marker lives in the frontmatter, which the shipped-default re-seed preserves,
+// so archiving a bundled skill survives upgrades like a visibility edit does.
+func (s *Store) SetArchived(slug string, archived bool) (Skill, error) {
+	sk, ok := s.Get(slug)
+	if !ok {
+		return Skill{}, fmt.Errorf("skill %q not found", slug)
+	}
+	data, err := os.ReadFile(sk.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.Reload()
+			return Skill{}, fmt.Errorf("skill %q is no longer available (its file was moved or deleted); catalog refreshed", slug)
+		}
+		return Skill{}, fmt.Errorf("read skill %q: %w", slug, err)
+	}
+	val := ""
+	if archived {
+		val = "true"
+	}
+	updated := setFrontmatterFields(string(data), []fmField{{Key: "archived", Val: val}}, nil)
 	if err := os.WriteFile(sk.Path, []byte(updated), 0o644); err != nil {
 		return Skill{}, fmt.Errorf("write skill %q: %w", slug, err)
 	}
@@ -782,8 +830,22 @@ func oneLine(s string) string {
 const DefaultSkillTool = "use_skill"
 
 // CatalogBlock renders the prompt section advertising EVERY available skill.
+// Archived skills are never advertised.
 func (s *Store) CatalogBlock() string {
-	return renderCatalog(s.List(), DefaultSkillTool)
+	return renderCatalog(s.ActiveList(), DefaultSkillTool)
+}
+
+// ActiveList returns the non-archived skills in display order — the set every
+// agent-facing surface (catalog, skill_search) draws from. List keeps returning
+// archived skills too, for the Skills screen's archive view and the REST API.
+func (s *Store) ActiveList() []Skill {
+	out := []Skill{}
+	for _, sk := range s.List() {
+		if !sk.Archived {
+			out = append(out, sk)
+		}
+	}
+	return out
 }
 
 // CatalogBlockFor renders the prompt section for a specific ordered selection of
@@ -800,7 +862,7 @@ func (s *Store) CatalogBlockFor(slugs []string) string {
 		if slug == "" || seen[slug] {
 			continue
 		}
-		if sk, ok := s.Get(slug); ok {
+		if sk, ok := s.Get(slug); ok && !sk.Archived {
 			picked = append(picked, sk)
 			seen[slug] = true
 		}
@@ -826,7 +888,7 @@ func (s *Store) SharedList() []Skill {
 // kept out of the per-turn catalog. An empty query returns the full list. (SK-2)
 func (s *Store) Search(query string, limit int) []Skill {
 	terms := strings.Fields(strings.ToLower(query))
-	all := s.List()
+	all := s.ActiveList()
 	out := make([]Skill, 0, len(all))
 	for _, sk := range all {
 		hay := strings.ToLower(sk.Slug + " " + sk.Name + " " + sk.Description + " " + sk.WhenToUse)
@@ -858,12 +920,15 @@ func (s *Store) effectiveFor(assigned []string) []Skill {
 		if slug == "" || seen[slug] {
 			continue
 		}
-		if sk, ok := s.Get(slug); ok {
+		if sk, ok := s.Get(slug); ok && !sk.Archived {
 			out = append(out, sk)
 			seen[slug] = true
 		}
 	}
 	for _, sk := range s.SharedList() {
+		if sk.Archived {
+			continue
+		}
 		// A shared skill with auto-summary turned off is NOT advertised
 		// automatically — it only reaches an agent via explicit assignment
 		// (handled by the assigned loop above, which already ran).

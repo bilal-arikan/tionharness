@@ -153,6 +153,13 @@ func (r *Runtime) completeTraced(ctx context.Context, agent db.Agent, provider p
 }
 
 func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool, onStep func(TurnStep)) (*providers.Response, []TurnStep, error) {
+	// Archived agents never run. Every tool-loop turn (chat, spawn, schedule,
+	// automation, flow node, worker) funnels through here, so this is the
+	// backstop behind the earlier entry-point checks: the turn fails with an
+	// explicit archive error rather than quietly doing nothing.
+	if err := agent.RunnableErr(); err != nil {
+		return nil, nil, err
+	}
 	// Stuck-session gate (self-healing Faz D): a session whose consecutive
 	// bad-turn counter crossed the threshold gets no further AUTONOMOUS turns —
 	// unattended retries of a failing session only burn budget. Manual chat is

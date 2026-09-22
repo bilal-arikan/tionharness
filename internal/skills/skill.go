@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/seed"
 )
 
@@ -64,6 +65,15 @@ func KnownPattern(p string) bool {
 	return false
 }
 
+// UsableErr reports why the skill may not be loaded or applied, or nil when it
+// may. Today the only such state is Archived; the error wraps archive.ErrArchived.
+func (s Skill) UsableErr() error {
+	if s.Archived {
+		return archive.Error("skill", s.Slug, s.Name)
+	}
+	return nil
+}
+
 // IsCoordinatorWorkflow reports whether this skill is a saved coordinator recipe.
 func (s Skill) IsCoordinatorWorkflow() bool {
 	return strings.EqualFold(strings.TrimSpace(s.Kind), KindCoordinatorWorkflow)
@@ -104,6 +114,9 @@ func ResolveRecipe(store *Store, ref string) (*Skill, error) {
 	}
 	if !sk.IsCoordinatorWorkflow() {
 		return nil, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
+	}
+	if err := sk.UsableErr(); err != nil {
+		return nil, err
 	}
 	if sk.Pattern != "" && !KnownPattern(sk.Pattern) {
 		return nil, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, PatternValues)
@@ -233,6 +246,13 @@ type Skill struct {
 	// was changed, so shipped improvements no longer reach it. Set in scanDir for
 	// the global tier only; drives the "restore default" button and its badge.
 	DefaultState seed.State `json:"defaultState,omitempty"`
+	// Archived puts the skill away like an archived kanban card (frontmatter
+	// `archived: true`, written by Store.SetArchived). The file stays on disk and
+	// the Skills screen lists it under its archive view, but the skill is out of
+	// every agent-facing surface: never advertised in "# Available Skills", never
+	// returned by skill_search, and use_skill / recipe resolution refuse it with
+	// an explicit ErrArchived error. Unarchiving drops the marker.
+	Archived bool `json:"archived,omitempty"`
 	// Path is the absolute path of the backing SKILL.md (not serialised; the
 	// body is exposed via the detail endpoint instead).
 	Path string `json:"-"`

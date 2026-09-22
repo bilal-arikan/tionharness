@@ -499,6 +499,17 @@ func (e *AutomationEngine) guardReason(ctx context.Context, a db.Automation) str
 	if a.Archived {
 		return db.AutomationSkipArchived
 	}
+	// Archived target agent: the rule would start a turn that must fail (archived
+	// agents never run), so it is refused up front with its own ledger reason —
+	// the fire is visibly declined, never silently dropped. The no-LLM board
+	// actions (archive / move a card) run no agent and are not affected.
+	if a.TargetAgentID != "" && a.BoardAction != db.BoardActionArchive && a.BoardAction != db.BoardActionMove {
+		if ag, err := e.db.GetAgent(ctx, a.TargetAgentID); err == nil && ag.Archived {
+			e.logger.Info("automation: target agent is archived, skipping",
+				"automation", a.ID, "agent", a.TargetAgentID)
+			return db.AutomationSkipAgentArchived
+		}
+	}
 	// Expiry: past its optional end date → auto-disable and stop.
 	if a.ExpiresAt > 0 && time.Now().Unix() >= a.ExpiresAt {
 		e.logger.Info("automation: past end date; auto-disabling",

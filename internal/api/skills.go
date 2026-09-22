@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
@@ -19,13 +20,16 @@ type skillDetail struct {
 }
 
 // handleListSkills returns the resolved skill catalog (frontmatter only) for the
-// workspace, newest tier winning on slug collisions.
+// workspace, newest tier winning on slug collisions. ?archived=true lists only
+// archived skills, false only live ones; absent/all keeps both (the Skills
+// screen splits them into its active and archive views client-side).
 func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
-	store := ws(r).Runtime.Skills()
-	list := store.List()
-	if list == nil {
-		list = []skills.Skill{}
+	archived, ok := archiveFilterQuery(w, r.URL.Query(), archive.All)
+	if !ok {
+		return
 	}
+	store := ws(r).Runtime.Skills()
+	list := archive.Apply(store.List(), archived, func(sk skills.Skill) bool { return sk.Archived })
 	writeJSON(w, http.StatusOK, list)
 }
 

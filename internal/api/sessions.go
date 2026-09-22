@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -185,14 +186,18 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	// back to the workspace's first (newest) agent so a session can be created
 	// session-first, then routed per-turn via "@mention".
 	if req.AgentID == "" {
+		// Archived agents cannot run, so they are never picked as the default.
 		agents, _ := ws(r).DB.ListAgents(r.Context())
+		agents = archive.Apply(agents, archive.Active, func(a db.Agent) bool { return a.Archived })
 		if len(agents) == 0 {
 			writeError(w, http.StatusBadRequest, "no agents exist; create an agent first")
 			return
 		}
 		req.AgentID = agents[0].ID
-	} else if _, err := ws(r).DB.GetAgent(r.Context(), req.AgentID); err != nil {
+	} else if a, err := ws(r).DB.GetAgent(r.Context(), req.AgentID); err != nil {
 		writeError(w, http.StatusBadRequest, "agent not found")
+		return
+	} else if writeDBError(w, a.RunnableErr(), "") {
 		return
 	}
 

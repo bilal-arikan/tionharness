@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bilal-arikan/tionharness/internal/archive"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -51,20 +52,15 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Archived rules are hidden unless asked for (archived=true lists ONLY them,
-	// archived=false only live ones, absent = live ones) — _Docs/77 R5.
-	archived, hasArchived, err := boolQuery(q, "archived")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	// archived=false or absent only live ones, archived=all both) — _Docs/77 R5.
+	archived, ok := archiveFilterQuery(w, q, archive.Active)
+	if !ok {
 		return
 	}
 	target := q.Get("targetAgentId")
 	matches := make([]db.Automation, 0, len(autos))
 	for _, a := range autos {
-		if hasArchived {
-			if a.Archived != *archived {
-				continue
-			}
-		} else if a.Archived {
+		if !archived.Keep(a.Archived) {
 			continue
 		}
 		if hasEnabled && a.Enabled != *enabled {
