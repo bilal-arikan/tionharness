@@ -182,8 +182,12 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "targetAgentId or flowId is required")
 			return
 		}
-		if _, err := ws(r).DB.GetAgent(ctx, req.TargetAgentID); err != nil {
+		ag, err := ws(r).DB.GetAgent(ctx, req.TargetAgentID)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "target agent not found")
+			return
+		}
+		if writeDBError(w, ag.AssignableErr(""), "") {
 			return
 		}
 	}
@@ -316,8 +320,12 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		cur.FlowID = f
 		cur.TargetAgentID = ""
 	} else if a := strings.TrimSpace(req.TargetAgentID); a != "" {
-		if _, err := ws(r).DB.GetAgent(ctx, a); err != nil {
+		ag, err := ws(r).DB.GetAgent(ctx, a)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "target agent not found")
+			return
+		}
+		if writeDBError(w, ag.AssignableErr(cur.TargetAgentID), "") {
 			return
 		}
 		cur.TargetAgentID = a

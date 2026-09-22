@@ -142,8 +142,12 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	wsp := ws(r)
 	if req.OwnerAgentID != "" {
-		if _, err := wsp.DB.GetAgent(ctx, req.OwnerAgentID); err != nil {
+		ag, err := wsp.DB.GetAgent(ctx, req.OwnerAgentID)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "owner agent not found")
+			return
+		}
+		if writeDBError(w, ag.AssignableErr(""), "") {
 			return
 		}
 	}
@@ -262,8 +266,12 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.OwnerAgentID != nil {
 		if *req.OwnerAgentID != "" {
-			if _, err := wsp.DB.GetAgent(r.Context(), *req.OwnerAgentID); err != nil {
+			ag, err := wsp.DB.GetAgent(r.Context(), *req.OwnerAgentID)
+			if err != nil {
 				writeError(w, http.StatusBadRequest, "owner agent not found")
+				return
+			}
+			if writeDBError(w, ag.AssignableErr(oldOwner), "") {
 				return
 			}
 		}

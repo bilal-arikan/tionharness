@@ -36,6 +36,7 @@ import { useBoardView } from './views/useBoardView'
 import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTasks'
 import { DROP_REFUSED_REASON, columnKeysOf, deriveColumns, dropPatch } from './views/deriveColumns'
 import { consumePendingBoardChanges } from './boardChangeHighlights'
+import { pickableAgents } from '@/shared/components/agents/pickableAgents'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -800,7 +801,7 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
           >
             <option value="">⊕ Ajan ata…</option>
-            {agents.map((a) => (
+            {pickableAgents(agents).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>

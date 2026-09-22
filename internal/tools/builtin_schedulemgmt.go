@@ -152,8 +152,12 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		if in.AgentID == "" || in.Prompt == "" {
 			return "", fmt.Errorf("agentId and prompt are required (or provide flowId)")
 		}
-		if _, err := t.d.db.GetAgent(ctx, in.AgentID); err != nil {
+		ag, err := t.d.db.GetAgent(ctx, in.AgentID)
+		if err != nil {
 			return "", fmt.Errorf("no agent with id %q (use list_agents)", in.AgentID)
+		}
+		if err := ag.AssignableErr(""); err != nil {
+			return "", err
 		}
 	}
 	enabled := false
@@ -255,8 +259,12 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		cur.FlowID = fid
 		cur.AgentID = ""
 	} else if in.AgentID != nil && strings.TrimSpace(*in.AgentID) != "" {
-		if _, err := t.d.db.GetAgent(ctx, *in.AgentID); err != nil {
+		ag, err := t.d.db.GetAgent(ctx, *in.AgentID)
+		if err != nil {
 			return "", fmt.Errorf("no agent with id %q", *in.AgentID)
+		}
+		if err := ag.AssignableErr(cur.AgentID); err != nil {
+			return "", err
 		}
 		cur.AgentID = *in.AgentID
 		cur.FlowID = ""

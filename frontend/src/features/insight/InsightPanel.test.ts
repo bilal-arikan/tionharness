@@ -15,6 +15,12 @@ describe('InsightPanel analysis agent selection', () => {
     })
   })
 
+  it('never defaults to an archived agent', () => {
+    const withArchived = [{ id: 'AGT0', archived: true }, ...agents] as Agent[]
+    expect(withDefaultAnalysisAgent({}, withArchived)).toEqual({ autoScanAgentId: 'AGT1' })
+    expect(withDefaultAnalysisAgent({}, [withArchived[0]])).toEqual({})
+  })
+
   it('optimistically selects and persists the complete settings payload', async () => {
     const settings: InsightSettings = { autoScanAgentId: 'AGT1', maxSessions: 25 }
     const setSettings = vi.fn()

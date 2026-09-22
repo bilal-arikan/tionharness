@@ -172,7 +172,13 @@ the Map ("Harita"), and it can be restored. `list_agents`, `list_artifacts` and
 `list_automations` follow the `list_tasks` convention — live items by default,
 `archived:true` returns ONLY archived ones. An archived **agent cannot run**: spawning,
 delegating, messaging or chatting with it fails with an explicit "is archived" error,
-and an automation targeting it is skipped with ledger reason `agent_archived`. An
+and an automation targeting it is skipped with ledger reason `agent_archived`. It
+also cannot be made a NEW target: `create_schedule` / `update_schedule`,
+`create_automation` / `update_automation` and `create_task` / `update_task`
+(`ownerAgentId`) return the same "is archived" error when the agent id points at an
+archived agent. Re-sending a record's already-stored archived agent (e.g. renaming
+it) is still accepted; the record just keeps refusing to run until the agent is
+restored or retargeted. An
 archived **automation never fires** (ledger reason `archived`). An archived **skill** is
 never advertised in "# Available Skills", never returned by `skill_search`, and
 `use_skill` refuses it with the same explicit error. There is no archive tool yet:
