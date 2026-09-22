@@ -1,6 +1,7 @@
 package indexstate
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -29,6 +30,9 @@ func TestCreateTransitionMissingToIndexingToReady(t *testing.T) {
 	if !claimed {
 		t.Fatal("first run was not claimed")
 	}
+	if e.Run == 0 {
+		t.Fatal("a granted claim carried no run token")
+	}
 	if e.Phase != PhaseIndexing || e.Action != ActionCreate {
 		t.Fatalf("begin: phase=%q action=%q, want indexing/create", e.Phase, e.Action)
 	}
@@ -36,7 +40,7 @@ func TestCreateTransitionMissingToIndexingToReady(t *testing.T) {
 		t.Error("an index still being built reported as usable")
 	}
 
-	e = m.Succeed(testTool, "/repo", "local/potion-code-16m-v2", "1.2.0")
+	e = mustSucceed(t, m, "/repo", e.Run, "local/potion-code-16m-v2", "1.2.0")
 	if e.Phase != PhaseReady || !e.Usable() {
 		t.Fatalf("succeed: phase=%q usable=%v, want ready/true", e.Phase, e.Usable())
 	}
@@ -47,7 +51,8 @@ func TestCreateTransitionMissingToIndexingToReady(t *testing.T) {
 
 func TestBeginIsASingleRunClaim(t *testing.T) {
 	m := New()
-	if _, claimed := m.Begin(testTool, "/repo", ActionCreate); !claimed {
+	first, claimed := m.Begin(testTool, "/repo", ActionCreate)
+	if !claimed {
 		t.Fatal("first claim refused")
 	}
 	// Two workspace runtimes on the same repository share one store; the second
@@ -55,16 +60,23 @@ func TestBeginIsASingleRunClaim(t *testing.T) {
 	if _, claimed := m.Begin(testTool, "/repo", ActionCreate); claimed {
 		t.Fatal("a second run was claimed while one was in flight")
 	}
-	m.Succeed(testTool, "/repo", "local/m", "1.0.0")
-	if _, claimed := m.Begin(testTool, "/repo", ActionRefresh); !claimed {
+	mustSucceed(t, m, "/repo", first.Run, "local/m", "1.0.0")
+	second, claimed := m.Begin(testTool, "/repo", ActionRefresh)
+	if !claimed {
 		t.Fatal("a run after the previous one finished was refused")
+	}
+	if second.Run == first.Run {
+		t.Fatalf("two runs share claim token %d", first.Run)
 	}
 }
 
 func TestFailedNeverReadsBackAsReady(t *testing.T) {
 	m := New()
-	m.Begin(testTool, "/repo", ActionCreate)
-	e := m.Fail(testTool, "/repo", "zg exited 1")
+	c, _ := m.Begin(testTool, "/repo", ActionCreate)
+	e, err := m.Fail(testTool, "/repo", c.Run, "zg exited 1")
+	if err != nil {
+		t.Fatalf("Fail with the current claim: %v", err)
+	}
 
 	if e.Phase != PhaseFailed {
 		t.Fatalf("phase=%q, want failed", e.Phase)
@@ -85,7 +97,11 @@ func TestFailedNeverReadsBackAsReady(t *testing.T) {
 
 func TestFailAlwaysCarriesAReason(t *testing.T) {
 	m := New()
-	e := m.Fail(testTool, "/repo", "   ")
+	c, _ := m.Begin(testTool, "/repo", ActionCreate)
+	e, err := m.Fail(testTool, "/repo", c.Run, "   ")
+	if err != nil {
+		t.Fatalf("Fail with the current claim: %v", err)
+	}
 	if e.Error == "" {
 		t.Fatal("a failed entry was left with no explanation")
 	}
@@ -158,69 +174,100 @@ func TestTimestampsAreRecorded(t *testing.T) {
 	if !e.StartedAt.Equal(at) {
 		t.Fatalf("StartedAt=%v, want %v", e.StartedAt, at)
 	}
-	e = m.Succeed(testTool, "/repo", "local/m", "1.0.0")
+	e = mustSucceed(t, m, "/repo", e.Run, "local/m", "1.0.0")
 	if !e.UpdatedAt.Equal(at) {
 		t.Fatalf("UpdatedAt=%v, want %v", e.UpdatedAt, at)
 	}
 }
 
-// Succeed's doc comment claims "only a run that Begin claimed may close an
-// entry, so a late goroutine from a superseded run cannot mark a newer one
-// ready". The code does NOT enforce that: Succeed goes through entryLocked,
-// which mints a fresh entry on first touch and overwrites the phase
-// unconditionally. These two tests pin the behaviour that actually ships, so
-// the divergence is recorded rather than assumed away. Both are the mechanism
-// behind a silently-ready index, which is exactly what this package exists to
-// prevent — see TSK981.
-func TestSucceedOnAnUnclaimedEntryStillMarksItReady(t *testing.T) {
+// mustSucceed closes a claimed run and fails the test if the ledger refuses.
+func mustSucceed(t *testing.T, m *Manager, root string, run uint64, embedding, version string) Entry {
+	t.Helper()
+	e, err := m.Succeed(testTool, root, run, embedding, version)
+	if err != nil {
+		t.Fatalf("Succeed with the current claim: %v", err)
+	}
+	return e
+}
+
+// Only the run Begin claimed may close an entry. Each of the tests below is a
+// path to a silently-ready (or silently-rewritten) index that the claim check
+// closes; each asserts ErrStaleClaim AND that the ledger was left untouched.
+
+func TestSucceedOnAnUnclaimedEntryIsRejected(t *testing.T) {
 	m := New()
 	// No Observe, no Begin: nothing ever claimed this (tool, root).
-	e := m.Succeed(testTool, "/never-claimed", "local/m", "1.0.0")
-
-	if e.Phase != PhaseReady || !e.Usable() {
-		t.Fatalf("phase=%q usable=%v, want the documented-but-unenforced gate to be absent (ready/true)", e.Phase, e.Usable())
+	if _, err := m.Succeed(testTool, "/never-claimed", 1, "local/m", "1.0.0"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("err=%v, want ErrStaleClaim", err)
 	}
-	// The giveaway that no run produced this entry: Begin is what stamps
-	// StartedAt, so an unclaimed success reports a ready index that never started.
-	if !e.StartedAt.IsZero() {
-		t.Errorf("StartedAt=%v, want zero — Begin is the only writer of StartedAt", e.StartedAt)
-	}
-	if _, seen := m.Get(testTool, "/never-claimed"); !seen {
-		t.Error("Succeed did not create the entry it reported on")
+	if _, seen := m.Get(testTool, "/never-claimed"); seen {
+		t.Error("a rejected Succeed minted a ledger entry")
 	}
 }
 
-func TestLateSucceedOverwritesARecordedFailure(t *testing.T) {
+func TestSucceedWithoutAClaimOnAnObservedEntryIsRejected(t *testing.T) {
 	m := New()
-	m.Begin(testTool, "/repo", ActionCreate)
-	m.Fail(testTool, "/repo", "zg exited 1")
-
-	// A goroutine from the run that already failed (or from a superseded run)
-	// reporting success: the failure and its reason are both lost.
-	e := m.Succeed(testTool, "/repo", "local/m", "1.0.0")
-	if e.Phase != PhaseReady {
-		t.Fatalf("phase=%q, want ready (no claim check today)", e.Phase)
+	m.Observe(testTool, "/repo", PhaseMissing, "", "")
+	// Token 0 is what a caller that never called Begin holds.
+	if _, err := m.Succeed(testTool, "/repo", 0, "local/m", "1.0.0"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("err=%v, want ErrStaleClaim", err)
 	}
-	if e.Error != "" {
-		t.Fatalf("error=%q, want it cleared by Succeed", e.Error)
+	if got, _ := m.Get(testTool, "/repo"); got.Phase != PhaseMissing {
+		t.Errorf("phase=%q, want missing to survive the rejected close", got.Phase)
+	}
+}
+
+func TestLateSucceedCannotOverwriteARecordedFailure(t *testing.T) {
+	m := New()
+	c, _ := m.Begin(testTool, "/repo", ActionCreate)
+	if _, err := m.Fail(testTool, "/repo", c.Run, "zg exited 1"); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+
+	// The same run reporting again after it already closed: the claim is spent.
+	if _, err := m.Succeed(testTool, "/repo", c.Run, "local/m", "1.0.0"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("err=%v, want ErrStaleClaim", err)
 	}
 	got, _ := m.Get(testTool, "/repo")
-	if got.Phase != PhaseReady || got.Error != "" {
-		t.Errorf("ledger kept phase=%q error=%q", got.Phase, got.Error)
+	if got.Phase != PhaseFailed || got.Error != "zg exited 1" {
+		t.Errorf("ledger phase=%q error=%q, want the failure and its reason kept", got.Phase, got.Error)
 	}
 }
 
-func TestFailOnAnUnclaimedEntryRecordsAReason(t *testing.T) {
+func TestSupersededRunCannotCloseTheNewerRun(t *testing.T) {
 	m := New()
-	// Fail is unguarded the same way Succeed is; the reason must still be
-	// present, since a failed entry with no explanation is the silent failure
-	// this package prevents.
-	e := m.Fail(testTool, "/never-claimed", "zg not found")
-	if e.Phase != PhaseFailed || e.Usable() {
-		t.Fatalf("phase=%q usable=%v, want failed/false", e.Phase, e.Usable())
+	old, _ := m.Begin(testTool, "/repo", ActionCreate)
+	// The old run's entry is Forgotten (e.g. its project vanished) and a new run
+	// claims the same root while the old goroutine is still alive.
+	m.Forget(testTool, "/repo")
+	cur, claimed := m.Begin(testTool, "/repo", ActionRebuild)
+	if !claimed {
+		t.Fatal("re-claim after Forget refused")
 	}
-	if e.Error != "zg not found" {
-		t.Errorf("reason=%q, want the failure text", e.Error)
+
+	if _, err := m.Succeed(testTool, "/repo", old.Run, "local/old", "0.9.0"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("stale Succeed err=%v, want ErrStaleClaim", err)
+	}
+	if _, err := m.Fail(testTool, "/repo", old.Run, "old run died"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("stale Fail err=%v, want ErrStaleClaim", err)
+	}
+	got, _ := m.Get(testTool, "/repo")
+	if got.Phase != PhaseIndexing || got.Run != cur.Run || got.Error != "" {
+		t.Fatalf("newer run disturbed: %+v", got)
+	}
+	// The owning run still closes normally.
+	if e := mustSucceed(t, m, "/repo", cur.Run, "local/new", "1.0.0"); e.Embedding != "local/new" {
+		t.Errorf("embedding=%q, want the owning run's", e.Embedding)
+	}
+}
+
+func TestFailOnAnUnclaimedEntryIsRejected(t *testing.T) {
+	m := New()
+	if _, err := m.Fail(testTool, "/never-claimed", 7, "zg not found"); !errors.Is(err, ErrStaleClaim) {
+		t.Fatalf("err=%v, want ErrStaleClaim", err)
+	}
+	if _, seen := m.Get(testTool, "/never-claimed"); seen {
+		t.Error("a rejected Fail minted a ledger entry")
 	}
 }
 

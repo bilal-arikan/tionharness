@@ -123,7 +123,7 @@ func (r *Runtime) EnsureZvecGrepIndex(ctx context.Context, cwd string) bool {
 		return true // a run claimed by another caller is still a run on its way
 	}
 
-	go r.runZvecGrepAction(command, root, action, want)
+	go r.runZvecGrepAction(command, root, action, entry.Run, want)
 
 	// True covers both "an index is here" and "one is on its way": the caller
 	// uses this to decide whether to tell the model an index is coming, and a
@@ -134,14 +134,14 @@ func (r *Runtime) EnsureZvecGrepIndex(ctx context.Context, cwd string) bool {
 // runZvecGrepAction performs one claimed lifecycle run and closes the ledger
 // entry. It always closes it: a run that returns without Succeed or Fail would
 // strand the entry in PhaseIndexing and block every later attempt.
-func (r *Runtime) runZvecGrepAction(command, root, action string, want indexstate.Desired) {
+func (r *Runtime) runZvecGrepAction(command, root, action string, run uint64, want indexstate.Desired) {
 	// The exclude entry must exist BEFORE the store does, so the index never
 	// appears as untracked files even briefly. A root that cannot be excluded is
 	// not indexed at all.
 	if err := ensureZvecGrepGitExclude(root); err != nil {
 		r.logger.Warn("zvec-grep index skipped: could not exclude the index from git",
 			"root", root, "action", action, "error", err)
-		indexLedger.Fail(exttoolsZvecGrepName, root, "indeks git'ten dışlanamadı: "+err.Error())
+		r.failIndexRun(exttoolsZvecGrepName, root, run, "indeks git'ten dışlanamadı: "+err.Error())
 		return
 	}
 
@@ -152,7 +152,7 @@ func (r *Runtime) runZvecGrepAction(command, root, action string, want indexstat
 		if err := os.RemoveAll(zvecGrepIndexPath(root)); err != nil {
 			r.logger.Warn("zvec-grep rebuild failed: could not remove the old index",
 				"root", root, "error", err)
-			indexLedger.Fail(exttoolsZvecGrepName, root, "eski indeks silinemedi: "+err.Error())
+			r.failIndexRun(exttoolsZvecGrepName, root, run, "eski indeks silinemedi: "+err.Error())
 			return
 		}
 	}
@@ -170,7 +170,7 @@ func (r *Runtime) runZvecGrepAction(command, root, action string, want indexstat
 		// Logged AND recorded: a failed index must never read back as ready.
 		r.logger.Warn("zvec-grep index run failed", "root", root, "action", action, "error", err,
 			"output", zvecGrepTail(out))
-		indexLedger.Fail(exttoolsZvecGrepName, root, reason)
+		r.failIndexRun(exttoolsZvecGrepName, root, run, reason)
 		return
 	}
 
@@ -182,8 +182,25 @@ func (r *Runtime) runZvecGrepAction(command, root, action string, want indexstat
 	if info, mErr := readZvecGrepManifest(root); mErr == nil && info.Embedding != "" {
 		built.Embedding = info.Embedding
 	}
-	indexLedger.Succeed(exttoolsZvecGrepName, root, built.Embedding, built.ToolVersion)
+	if _, err := indexLedger.Succeed(exttoolsZvecGrepName, root, run, built.Embedding, built.ToolVersion); err != nil {
+		// The store on disk was built, but this run no longer owns the entry (it
+		// was Forgotten or re-claimed meanwhile). The ledger keeps what the owning
+		// run records; this outcome is reported, not silently dropped.
+		r.logger.Error("zvec-grep index run finished but the ledger rejected it",
+			"root", root, "action", action, "run", run, "error", err)
+		return
+	}
 	r.logger.Info("zvec-grep index run finished", "root", root, "action", action, "embedding", built.Embedding)
+}
+
+// failIndexRun records a failed run in the ledger. A rejected close (the run no
+// longer holds its claim) is logged at error level: the failure reason would
+// otherwise vanish without a trace.
+func (r *Runtime) failIndexRun(tool, root string, run uint64, reason string) {
+	if _, err := indexLedger.Fail(tool, root, run, reason); err != nil {
+		r.logger.Error("index run failed but the ledger rejected the failure",
+			"tool", tool, "root", root, "run", run, "reason", reason, "error", err)
+	}
 }
 
 // observeZvecGrep inspects the store at root and reports what is there.

@@ -5,6 +5,28 @@ turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda
 kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
 tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
 
+## İndeks defteri: `Succeed`/`Fail` artık claim'i gerçekten doğruluyor (TSK1008, 2026-09-22) ✅
+
+- **Neydi:** `internal/indexstate` doc yorumu "yalnız `Begin`'in claim ettiği run
+  bir girdiyi kapatabilir" diyordu ama kod bunu yapmıyordu (350bf87e testleri bunu
+  kayda geçirmişti): `Succeed`/`Fail` hiç görülmemiş bir anahtar için bile girdi
+  üretip fazı koşulsuz eziyordu — `Begin` görmemiş bir `ready` indeks, ya da
+  `Fail`'den sonra gelen geç bir `Succeed`'in hatayı ve sebebini silmesi mümkündü.
+- **Ne değişti:** `Begin` artık defter genelinde tekil, tekrar kullanılmayan bir
+  claim token'ı üretir (`Entry.Run`, `Forget`'ten sonra da sayaç sürer).
+  `Succeed(tool, root, run, …)` ve `Fail(tool, root, run, reason)` bu token'ı ister
+  ve `(Entry, error)` döner; girdi yoksa, token eşleşmiyorsa veya girdi artık
+  `indexing` değilse `ErrStaleClaim` döner ve defter **dokunulmadan** kalır (yeni
+  girdi de üretilmez). Doküman düzeltilmedi, kod doc'a getirildi.
+- **Çağıranlar:** `internal/agent/indexmanager.go` run goroutine'ine `entry.Run`'ı
+  taşır; reddedilen bir `Succeed`/`Fail` sessizce yutulmaz, `Error` seviyesinde
+  loglanır (`failIndexRun`) — sebep kaybolmasın diye.
+- **Testler (`internal/indexstate/state_test.go`):** eski "unenforced" testleri
+  tersine çevrildi — claim'siz `Succeed`/`Fail` reddi (girdi üretilmez), token 0
+  reddi, kapanmış run'ın geç `Succeed`'i `failed`'ı ve sebebini ezemez,
+  `Forget` + yeniden claim sonrası eski run'ın `Succeed`/`Fail`'i yeni run'ı bozamaz.
+  `scripts/test.sh full` yeşil.
+
 ## Duyuru fan-out: sürümü TionHarness'in kendisi duyuruyor (TSK352, 2026-09-22) ✅
 
 - **Neydi:** Sürüm duyurusu için bir CI botu yazmak yerine, kartın istediği gibi

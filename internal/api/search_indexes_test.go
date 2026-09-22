@@ -56,8 +56,10 @@ func TestSearchIndexesReportsPhaseAndUsability(t *testing.T) {
 func TestSearchIndexesReportsAFailureRatherThanHidingIt(t *testing.T) {
 	ledger := agent.IndexLedger()
 	root := t.TempDir()
-	ledger.Begin("zg", root, indexstate.ActionCreate)
-	ledger.Fail("zg", root, "zg exited 1")
+	claim, _ := ledger.Begin("zg", root, indexstate.ActionCreate)
+	if _, err := ledger.Fail("zg", root, claim.Run, "zg exited 1"); err != nil {
+		t.Fatalf("Fail with the current claim: %v", err)
+	}
 	t.Cleanup(func() { ledger.Forget("zg", root) })
 
 	w := httptest.NewRecorder()

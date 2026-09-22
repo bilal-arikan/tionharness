@@ -15,6 +15,8 @@
 package indexstate
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -85,7 +87,20 @@ type Entry struct {
 	// StartedAt / UpdatedAt bound the last run.
 	StartedAt time.Time `json:"startedAt,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	// Run is the claim token of the last run Begin granted on this entry (0 before
+	// the first one). It is unique across the ledger, so a Succeed or Fail
+	// carrying an older token — a superseded run, or a run whose entry was
+	// Forgotten and re-claimed — can be told apart from the run that owns the
+	// entry now.
+	Run uint64 `json:"run,omitempty"`
 }
+
+// ErrStaleClaim is returned by Succeed and Fail when the caller does not hold
+// the entry's current claim: the entry is not in PhaseIndexing, was never
+// claimed, was Forgotten, or was re-claimed by a newer run. The entry is left
+// untouched — a late report must never overwrite what a newer run recorded, nor
+// resurrect a failed run as ready.
+var ErrStaleClaim = errors.New("index run does not hold the current claim")
 
 // Usable reports whether a search against this index would return meaningful
 // results. Stale counts: a lagging index still answers, it just misses the newest
@@ -117,6 +132,9 @@ func NewKey(tool, root string) Key {
 type Manager struct {
 	mu      sync.Mutex
 	entries map[Key]*Entry
+	// lastRun is the most recently issued claim token. Tokens are never reused,
+	// including across Forget, so a stale token cannot collide with a live one.
+	lastRun uint64
 	// now is the clock, injectable so tests can assert timestamps.
 	now func() time.Time
 }
@@ -187,6 +205,9 @@ func (m *Manager) Observe(tool, root string, phase Phase, embedding, toolVersion
 // process-wide single-run lock, which matters because two workspace runtimes
 // pointed at the same repository share one daemon and one store. The caller must
 // not start its CLI when this returns false.
+//
+// A granted claim is identified by the returned Entry.Run token; the run must
+// hand that token back to Succeed or Fail to close the entry.
 func (m *Manager) Begin(tool, root, action string) (Entry, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -194,7 +215,8 @@ func (m *Manager) Begin(tool, root, action string) (Entry, bool) {
 	if e.Phase == PhaseIndexing {
 		return *e, false
 	}
-	e.Phase, e.Action = PhaseIndexing, action
+	m.lastRun++
+	e.Phase, e.Action, e.Run = PhaseIndexing, action, m.lastRun
 	e.Error = ""
 	e.StartedAt = m.now()
 	e.UpdatedAt = e.StartedAt
@@ -202,34 +224,61 @@ func (m *Manager) Begin(tool, root, action string) (Entry, bool) {
 }
 
 // Succeed closes a run that finished, recording what the new store was built
-// with. Only a run that Begin claimed may close an entry, so a late goroutine
-// from a superseded run cannot mark a newer one ready.
-func (m *Manager) Succeed(tool, root, embedding, toolVersion string) Entry {
+// with. Only the run that Begin claimed may close an entry: run must be the
+// Entry.Run token Begin returned, and the entry must still be in PhaseIndexing
+// under that token. Anything else — a never-claimed key, a late goroutine from
+// a superseded run, a report after the run already closed — is rejected with
+// ErrStaleClaim and leaves the entry unchanged.
+func (m *Manager) Succeed(tool, root string, run uint64, embedding, toolVersion string) (Entry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	e := m.entryLocked(tool, root)
+	e, err := m.claimedLocked(tool, root, run)
+	if err != nil {
+		return Entry{}, err
+	}
 	e.Phase = PhaseReady
 	e.Embedding, e.ToolVersion = embedding, toolVersion
 	e.Error = ""
 	e.UpdatedAt = m.now()
-	return *e
+	return *e, nil
 }
 
-// Fail closes a run that failed. The reason is REQUIRED: an entry that landed in
-// PhaseFailed with no explanation is the silent failure this package exists to
-// prevent, so an empty reason is replaced with an explicit placeholder rather
-// than left blank.
-func (m *Manager) Fail(tool, root, reason string) Entry {
+// Fail closes a run that failed. It enforces the same claim check as Succeed.
+//
+// The reason is REQUIRED: an entry that landed in PhaseFailed with no
+// explanation is the silent failure this package exists to prevent, so an empty
+// reason is replaced with an explicit placeholder rather than left blank.
+func (m *Manager) Fail(tool, root string, run uint64, reason string) (Entry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	e := m.entryLocked(tool, root)
+	e, err := m.claimedLocked(tool, root, run)
+	if err != nil {
+		return Entry{}, err
+	}
 	e.Phase = PhaseFailed
 	if reason = strings.TrimSpace(reason); reason == "" {
 		reason = "index run failed without a reported reason"
 	}
 	e.Error = reason
 	e.UpdatedAt = m.now()
-	return *e
+	return *e, nil
+}
+
+// claimedLocked returns the entry for a key only when run holds its current
+// claim. It never creates an entry: a close for a key the ledger has no record
+// of is by definition unclaimed. Caller holds mu.
+func (m *Manager) claimedLocked(tool, root string, run uint64) (*Entry, error) {
+	k := NewKey(tool, root)
+	e, ok := m.entries[k]
+	switch {
+	case !ok:
+		return nil, fmt.Errorf("%w: %s %s has no ledger entry", ErrStaleClaim, k.Tool, k.Root)
+	case run == 0 || e.Run != run:
+		return nil, fmt.Errorf("%w: %s %s is claimed by run %d, not %d", ErrStaleClaim, k.Tool, k.Root, e.Run, run)
+	case e.Phase != PhaseIndexing:
+		return nil, fmt.Errorf("%w: %s %s run %d already closed as %s", ErrStaleClaim, k.Tool, k.Root, run, e.Phase)
+	}
+	return e, nil
 }
 
 // Forget removes an entry from the ledger. This is bookkeeping only — it does

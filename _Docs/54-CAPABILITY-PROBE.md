@@ -19,7 +19,9 @@
 > `internal/agent/indexmanager.go` create/refresh/rebuild geçişlerini sürer;
 > embedding modeli **veya** araç sürümü değişince `rebuild` (eski vektörler farklı
 > bir uzaydan geldiği için `refresh` sessizce anlamsız sonuç verirdi), drop ise
-> yalnız kök yolunu tekrar eden kullanıcı onayıyla. Durum
+> yalnız kök yolunu tekrar eden kullanıcı onayıyla. Bir run'ı yalnız onu `Begin` ile
+> claim eden kapatabilir: `Succeed`/`Fail` `Entry.Run` token'ını ister, eşleşmeyen
+> ya da kapanmış claim `ErrStaleClaim` ile reddedilir (TSK1008). Durum
 > `GET /api/search-indexes`'ten okunur. **2026-09-22 (TSK977):** bu defterin
 > kullanıcı yüzeyi de var — Ayarlar ▸ Harici Araçlar'da zvec-grep callout'unun
 > altındaki `SearchIndexPanel` her `(araç, kök)` satırını fazı, son güncellemesi
