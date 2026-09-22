@@ -99,9 +99,9 @@ Açıkça `logger.Warn/Error` ile loglanmayan hataların da kaydı tutulur:
   `orchestration/engine.go` paralel+sıralı node'lar
   — node panic'i süreç çökmesi yerine loglanan flow hatasına dönüşür.
 - **Frontend hata köprüsü**: `POST /api/logs` (`handleClientLog`) istemci
-  hatalarını aynı slog akışına yazar. Frontend `lib/reportError.ts`
+  hatalarını aynı slog akışına yazar. Frontend `shared/lib/reportError.ts`
   (`reportClientError` throttle'lı+keepalive'li + `installGlobalErrorHandlers`:
-  `window.onerror` + `unhandledrejection`) ve `components/ErrorBoundary.tsx`
+  `window.onerror` + `unhandledrejection`) ve `shared/components/ErrorBoundary.tsx`
   (React render çökmesi → rapor + kurtarılabilir fallback) `main.tsx`'te kurulur.
   Böylece beyaz-ekran çökmeleri ve sessiz JS hataları da Loglar ekranında görünür.
 
@@ -208,7 +208,6 @@ de access-log'a yansısın diye withRequestLog'un içinde).
 | `agent created` / `updated` / `deleted` | `api/agents.go` | agent, id, provider, model |
 | `session created` / `deleted` | `api/sessions.go` | session, agent |
 | `task created` | `api/tasks.go` | task, title, owner |
-| `task run finished` | `agent/executor.go` | task, trigger, status |
 | `schedule created` / `toggled` | `api/schedules.go` | id, agent, cron, enabled |
 | `mcp server toggled` / `tested` | `api/mcp.go` | server, tools (test başarısız → WARN) |
 | `flow run started` / `finished` | `agent/flow.go` | flow, run, status, steps |
@@ -265,7 +264,7 @@ Invoke-RestMethod "http://127.0.0.1:8090/api/logs?q=provider"
   level + message + attrs) tek satıra katlar, `×N` rozeti + ilk→son zaman
   aralığı (tooltip) gösterir. Yalnız **ardışık** olanlar gruplanır (kronolojik
   akış bozulmaz); araya başka log girince yeni grup başlar. Mantık
-  `lib/logGroup.ts` `groupConsecutive` (imza = level+message+sıralı attrs).
+  `features/logs/logGroup.ts` `groupConsecutive` (imza = level+message+sıralı attrs).
   Başlıkta "N satır · M kayıt" özeti. **Önemli:** bir attr bile farklıysa
   (ör. `dur=0s` vs `dur=1ms`) grup kırılır — bu kasıtlıdır.
 - Seviye renkleri: ERROR kırmızı, WARN amber, INFO mavi, DEBUG soluk.
@@ -286,15 +285,15 @@ Sınırlar ve güvenlik:
 - **Loopback bind (varsayılan `127.0.0.1`):** yalnız **aynı makinedeki** süreçler
   erişir. Ağa açmak için `TIONHARNESS_ADDR=0.0.0.0:8090` (bkz. `02-VERI-MODELI.md`,
   Windows Güvenlik Duvarı notu).
-- **Kimlik doğrulama yok:** yerel tek-kullanıcı dev varsayımı. Ağa açılırsa
-  bearer/token koruması eklenmeli (bkz. *Gelecek*).
-- **Kapsam:** yalnız **backend `slog`** kayıtları. Tarayıcı/frontend (browser
-  console) hataları bu tampona **düşmez** — istemcide kalır.
+- **Kimlik doğrulama:** varsayılan kapalı (yerel tek-kullanıcı); ağa açılırsa opt-in
+  bearer auth kullanılır (`79-HARICI-API.md`).
+- **Kapsam:** backend `slog` kayıtları + `POST /api/logs` ile köprülenen frontend
+  hataları ("Takip edilmeyen hataları yakalama" bölümü).
 
 ## Sınırlar / dikkat
 
-- Ring buffer **bellek-içi**, 2000 kayıt; restart'ta sıfırlanır. Diske kalıcı log
-  yok (stdout hariç).
+- Ring buffer **bellek-içi**, 2000 kayıt; restart'ta sıfırlanır. Kalıcı kayıt log
+  dosyasındadır (aşağıda *Gelecek* §1, `GET /api/logs/path`).
 - `Debug` seviyesi varsayılan kapalı (`HandlerOptions.Level = LevelInfo`).
 - `/api/logs`, `/api/events`, `/health` access-log'a girmez; ayrıca **başarılı
   GET/HEAD** istekleri de loglanmaz (akıllı gürültü azaltma — yukarı bkz.). Bu
@@ -315,18 +314,15 @@ Sınırlar ve güvenlik:
 
 ## Gelecek (öneri — henüz yok)
 
-1. ~~**Canlı log SSE**~~ ✅ **Yapıldı (2026-07-13)** — `/api/events` `log` olayı;
-   dış ajan da poll'suz canlı log (hatalar dahil) alabilir.
-2. ~~**Frontend hata köprüsü**~~ ✅ **Yapıldı (2026-06-18)** — `POST /api/logs` +
-   `ErrorBoundary` + global handler'lar (bkz. yukarıdaki "Takip edilmeyen
-   hataları yakalama" bölümü).
-3. **Kalıcı log dosyası — yarı tamam:** dosyaya yazma ✅ yapıldı
+> Yapıldı: canlı log SSE (2026-07-13, `/api/events` `log` olayı) ve frontend hata
+> köprüsü (2026-06-18, `POST /api/logs`).
+
+1. **Kalıcı log dosyası — yarı tamam:** dosyaya yazma ✅ yapıldı
    (`internal/config/config.go` `LogFilePath()` + `internal/app/app.go`
    `io.MultiWriter`, `GET /api/logs/path` ile yol açığa çıkar), restart sonrası
    geçmiş diskte korunur. **Kalan:** rotation/boyut sınırı ve UI'dan disk
    dosyası geçmişini okuma modu.
-4. **Bearer auth + ağ bind:** gerçek uzak-ajan erişimi için token'lı koruma.
-5. **Log satırı → oturum linki:** `session` alanından ilgili oturuma/
+2. **Log satırı → oturum linki:** `session` alanından ilgili oturuma/
    SessionDebugModal'a atlama.
 
 ## İlgili dosyalar

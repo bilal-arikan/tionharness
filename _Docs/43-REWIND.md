@@ -49,14 +49,15 @@ graph LR
 - `useChatStream`: `rewindOpen`/`openRewind`/`closeRewind` + `rewindTo(msgId)` +
   `/rewind` komutu (`chatCommands`, ikon ⟲). `rewindTo` görünüm + sunucuyu atomik siler,
   silinen prompt metnini döndürür.
-- `RewindDialog.tsx` — `frontend/src/components/chat/RewindDialog.tsx` (checkpoint picker).
+- `RewindDialog.tsx` — `frontend/src/features/chat/RewindDialog.tsx` (checkpoint picker).
 - **Balon hover aksiyonu:** her kullanıcı balonunun altında ⟲ **"Buraya geri sar"** butonu
   (`RewindButton.tsx`, iki-adımlı onay — `DeleteButton` deseni) → picker açmadan doğrudan o
   mesaja geri sarar. `UserTurn` → `MessageList` (`onRewind`) → `App`.
-- `App.tsx`: ortak `handleRewind` (dialog + balon aksiyonu ikisi de kullanır) → `rewindTo` +
+- `app/App.tsx`: ortak `handleRewind` (dialog + balon aksiyonu ikisi de kullanır) → `rewindTo` +
   `writeSessionDraft` (silinen promptu composer draft'ına yaz) + `composerKey` bump ile
   Composer remount (draft yeniden okunur).
-- `writeSessionDraft` — `frontend/src/hooks/useSessionDraft.ts` (hook dışından draft yazımı).
+- `writeSessionDraft` — `frontend/src/shared/lib/sessionDrafts.ts` (hook dışından draft yazımı;
+  `features/chat/useSessionDraft.ts` de onu kullanır).
 
 ## Sınırlar
 

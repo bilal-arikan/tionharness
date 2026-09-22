@@ -58,18 +58,7 @@ yürütme tetikleyicileri:
 **aktif bir tur başlatmak** (spawn / schedule / flow). Bir mesajı kuyruğa atıp
 "bir ara işlenir" beklemek artık çalışmıyor — onu işleyecek döngü yok.
 
-## Bu üç primitifin kaderi
-
-| Primitif | Bugünkü model | Heartbeat sonrası | Karar |
-|----------|---------------|-------------------|-------|
-| `call_agent` | senkron, mevcut ajan, parent bağlamını miras alır | turla çalışır, etkilenmez | **Çekirdeğe katla** (flag kombinasyonu) |
-| `spawn_session` | async detached, yeni kalıcı oturum | `go runSpawn` → etkilenmez | **SİL** (native yüzeyden kaldırıldı; yerine `spawn_worker`) |
-| `send_agent_message` | inbox'a yaz + `Wake` ile işlet | `Wake` gitti → **işleyici yok, ölü mektup** | **SİL** (gereksiz/kırık) |
-
-`send_agent_message` neden silinir: heartbeat olmadan mesaj inbox'a düşer ama
-hiçbir şey onu işlemez. "Bir ajana iş verip beklememe" ihtiyacı koordinatör
-modundaki `spawn_worker` ile karşılanır (aktif tur başlatır). Yarı-kırık bir
-primitifi generic sistemde taşımak anlamsız.
+> Üç eski primitifin (`call_agent`, `spawn_session`, `send_agent_message`) kader tablosu → [arsiv/25-SUBAGENT-ISOLATION-PLAN.md](arsiv/25-SUBAGENT-ISOLATION-PLAN.md).
 
 ## Tasarım: tek generic çekirdek
 
@@ -132,9 +121,6 @@ varsayılanlarla → en yaygın kullanım = izole senkron alt-ajan):
 }
 ```
 
-- **Geri uyumluluk:** İstenirse `call_agent` ve `spawn_session` adları **ince
-  alias** olarak bırakılabilir (aynı çekirdeğe sabit flag'lerle); ama generic
-  hedef için **tercih: tek `run_subagent`**, diğer ikisi kaldırılır.
 - **Paralel:** Tek turda birden çok `run_subagent` çağrısı eşzamanlı koşar.
 
 ## Yapılandırılmış görev sözleşmesi (objective / output_format / boundaries) — 2026-06-25
@@ -193,38 +179,10 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
 
 ## Çekirdek yapılar
 
-```go
-// internal/agent/subagent.go (yeni)
-
-// AgentContext is one isolated execution scope. Shared infra (db, providers,
-// registry, tunables) is borrowed by pointer from the root Runtime; only the
-// request/messages are private to this scope (A2 selective-sharing).
-type AgentContext struct {
-    rt       *Runtime
-    agent    db.Agent          // real agent OR ephemeral profile persona
-    req      providers.Request // PRIVATE: clean (isolated) or cloned (inherited)
-    callKind CallKind          // KindSubagent / KindSpawn
-    deleg    delegState        // depth / visited / shared per-turn budget
-}
-
-type RunSpec struct {
-    Target   string // profile id or existing agent ref
-    Task     string
-    Context  RunCtx     // isolated | inherited
-    Session  RunSession // ephemeral | persistent
-    Model    string
-    ParentReq *providers.Request // only used when Context==inherited
-}
-
-type RunResult struct {
-    AgentName string
-    Reply     string // the subagent's final text
-}
-
-// runAgent is the single entry point. It always runs the subagent to completion
-// and returns its final text; there is no detached mode.
-func (r *Runtime) runAgent(ctx context.Context, spec RunSpec) (RunResult, error)
-```
+Tek giriş noktası `internal/agent/subagent.go` içindeki
+`func (r *Runtime) runAgent(ctx, caller db.Agent, parentReq *providers.Request, autonomous bool, spec tools.RunAgentSpec) (tools.RunAgentResult, error)`;
+girdi/çıktı tipleri `internal/tools/subagent.go` (`RunAgentSpec`, `RunAgentResult`). Alt-ajan
+her zaman sonuna kadar koşar ve final metnini döndürür; detached mod yoktur.
 
 **Paylaşılan (root'a yazar):** db/store, providers, `tools.Registry`, tunables,
 usage sayaçları, eşzamanlılık slotları. **İzole (parent'ı ezemez):**
@@ -311,22 +269,7 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 
 ## Dosya haritası
 
-| Dosya | Tür | İş |
-|-------|-----|-----|
-| `internal/agent/subagent.go` | **yeni** | `AgentContext`, `RunSpec`, `runAgent`, profiller, paralel fan-out |
-| `internal/tools/subagent.go` | **yeni** | tek `run_subagent` tool def + `WithRunAgent(ctx, fn)` |
-| `internal/agent/delegate.go` | **düzenle/küçült** | guard'ları ortak helper'a çıkar; `call_agent` runner'ı `runAgent`'a delege (veya kaldır); `SendAgentMessage` **sil** |
-| `internal/tools/delegate.go` | **kaldır/sadeleş** | `call_agent` ya alias ya silinir |
-| `internal/tools/builtin_spawn.go` | **kaldır** | `spawn_session` native yüzeyden çıkar |
-| `internal/agent/spawn.go` | **düzenle** | detached koşu + feed-event ortak `launchSpawn`'a taşınır (`spawn_worker`/köprü/flow yolu) |
-| `internal/tools/builtin_agentmsg.go` | **SİL** | `send_agent_message` kaldırılır |
-| `internal/agent/callkind.go` + `internal/db/` | düzenle | `KindSubagent` / `UsageKindSubagent` |
-| `internal/agent/trace.go` | düzenle | `StepSubagent` + `TurnStep.SubSteps` |
-| `internal/agent/toolloop.go` | düzenle | çoklu `tool_use` paralel; subagent iz gömme |
-| `internal/agent/toolsetup.go` | düzenle | tek `run_subagent` kaydı; eski 3 kaydın çıkarılması |
-| `internal/agent/tunables.go` | düzenle | guard tunable'larını paylaş (`Subagent*` veya mevcut delegation/spawn alanları) |
-| `frontend/src/features/chat/SubagentStep.tsx` | **yeni** | iç içe katlanabilir kart |
-| `frontend/src/shared/stepKinds.ts`, `frontend/src/features/chat/tools.ts`, `types/*.ts` | düzenle | `subagent` kind + `run_subagent` |
+Uygulama dosya haritası (yeni/sil tablosu) → [arsiv/25-SUBAGENT-ISOLATION-PLAN.md](arsiv/25-SUBAGENT-ISOLATION-PLAN.md).
 
 > **Dokümantasyon temizliği ✅ (tamamlandı):** `00-GENEL-BAKIS`, `05-ILERLEME`,
 > `24-SELF-MANAGEMENT` ve proje SKILL'inde artık "heartbeat/`Wake`/`send_agent_message`"
@@ -335,48 +278,7 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 > kalan tek geçiş bilinçli **negatif ifadedir** ("heartbeat ticker yoktur",
 > "`send_agent_message` diye ayrı bir araç yoktur") — korunmalıdır.
 
-## Fazlama
-
-- **A2.0 ✅ — Çekirdek + guard birleştirme.** `AgentContext` + `runAgent`;
-  `delegate.go` guard'larını ortak helper'a çıkar (davranış korunur).
-- **A2.1 ✅ — `run_subagent` (profil · izole · senkron) + profiller.** Çekirdek değer.
-- **A2.2 ✅ — Paralel fan-out.**
-- **A2.3 ✅ — `subagent` StepKind + iç içe UI.**
-- **A2.4 ✅ — Birleştirme/temizlik:** `call_agent` kaldırıldı; `spawn_session` native
-  tool'dan kaldırıldı; `send_agent_message` **silindi**; heartbeat dokümanları
-  arındırıldı. (Bu adımda `run_subagent`'a eklenen async modu daha sonra tekrar
-  kaldırıldı — aşağıdaki "Senkron-tek mod" bölümü.)
-
-> Her faz ayrı atomik commit + `go build`/`vet`/`test ./...` + frontend `tsc` yeşil.
-
-## Test planı
-
-- `agent/subagent_test.go`: izolasyon (alt-ajan parent mesajlarını görmez), guard
-  (depth/budget/visited), profil çözümleme, ephemeral ajan kalıcı olmaz.
-- `agent/delegate_test.go`: `call_agent` davranışı (alias/inherit) refactor sonrası
-  yeşil — geri uyumluluk kanıtı (alias bırakılırsa).
-- `send_agent_message` testleri **kaldırılır**.
-- Paralel: N alt-ajan eşzamanlı + ortak bütçe sayacı atomikliği (race detector).
-- `trace_test.go`: `StepSubagent` + `SubSteps` JSON round-trip.
-
-## Riskler / açık sorular
-
-1. **Geri uyumluluk:** `call_agent`/`spawn_session` adları alias olarak kalsın mı,
-   yoksa tamamen `run_subagent`'a mı taşınsın? **Öneri:** generic hedef için ikisini
-   de kaldır, tek `run_subagent`; istenirse kısa geçiş dönemi alias'ı.
-2. **`send_agent_message` peer-mesajlaşma:** Silince "ajana not bırak" senaryosu
-   koordinatör modundaki `spawn_worker` ile karşılanır (aktif tur başlatır).
-   Eğer ileride gerçek bir
-   asenkron işleyici (örn. inbox'ı tarayan scheduler job'u) gelirse yeniden
-   değerlendirilir.
-3. **Bütçe muhasebesi:** alt-ajan token'ları aynı ajan-kimliğine yazılır
-   (paylaşılan altyapı), `KindSubagent` ile ayrıştırılır.
-4. **Ephemeral kalıcılık:** `run_subagent` (ephemeral) ayrı session açmaz;
-   iz parent turunun `SubSteps`'inde gömülü. Kalıcı ajan hedefi kendi child
-   oturumunu açar.
-5. **İptal yayılımı (A3):** parent iptalinde alt-ajanlara sentetik `cancelled`
-   (`toolloop.go fillCancelledResults` zaten var).
-6. **Profil kaynağı:** önce kod sabiti (A2.1), sonra `settings.json`.
+> Fazlama (A2.0–A2.4, tümü ✅), test planı ve kapanmış risk/açık soru kararları → [arsiv/25-SUBAGENT-ISOLATION-PLAN.md](arsiv/25-SUBAGENT-ISOLATION-PLAN.md).
 
 ## Kalıcı child session gözlemlenebilirliği (2026-08-30)
 
@@ -726,5 +628,5 @@ mevcut `runAgentFanOut` yolunu yeniden kullanır.
 ## İlgili dokümanlar
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — native yüzeyden kaldırıldı)
-- `24-SELF-MANAGEMENT.md` (call_agent/send_agent_message araç yüzeyi — güncellenecek)
+- `24-SELF-MANAGEMENT.md` (ajan araç yüzeyi)
 - `20-SCHEDULE-WAKE.md` (heartbeat sonrası kalan otonomi tetikleyicisi)

@@ -11,7 +11,7 @@ graph TD
     API --> ORC[Orchestration<br/>internal/orchestration]
     API --> TASK[Task Board<br/>db + api + agent/executor]
     RT --> CONV[Conversation<br/>internal/conversation]
-    RT --> PROV[Providers<br/>internal/providers<br/>5 kind]
+    RT --> PROV[Providers<br/>internal/providers<br/>kind_*.go]
     RT --> MCP[MCP Istemci<br/>internal/mcp]
     CONV --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
     TASK --> DB
@@ -62,7 +62,6 @@ graph LR
 ### 4. Orchestration (`internal/orchestration`)
 - Yapılandırılmış oturumlar: dallanma (branch), döngü (loop), paralel birleşme (join).
 - Şablon (template) tabanlı, restart-safe run state.
-- Facilitator + participant rolleri.
 
 ### 5. ~~Memory (`internal/memory`)~~ — **KALDIRILDI (2026-07-05)**
 Hafıza alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI)
@@ -78,7 +77,7 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 
 ### 6. Providers (`internal/providers`)
 - Ortak `Provider` arayüzü; her LLM için ayrı implementasyon.
-- **Mevcut (6 kind):** `anthropic` (ince HTTP istemci, SDK yok), `claude-cli` (anahtarsız, OAuth/abonelik), `minimax` (OpenAI-uyumlu), `minimax-anthropic` (Anthropic uyumlu MiniMax ucu), `openrouter` (OpenAI-uyumlu proxy, yüzlerce model — `kind_openrouter.go`), `zai` (Z.ai GLM ailesi, Anthropic uyumlu uç `https://api.z.ai/api/anthropic` — `kind_zai.go`, `minimax-anthropic` kalıbı, kendi anahtarı). Ortak HTTP iskeleti `transport.go` (`postJSON`).
+- **Mevcut kind'lar:** her biri bir `internal/providers/kind_*.go` dosyası (güncel liste için oraya bak); `anthropic` ince HTTP istemcidir (SDK yok), `claude-cli`/`codex-cli` anahtarsız CLI köprüleridir. Ortak HTTP iskeleti `transport.go` (`postJSON`).
 - **DeepSeek + Z.ai model aileleri (2026-09-22):** `deepseek` / `deepseek-anthropic` aynı model listesini paylaşır (`deepseekModels`): varsayılan `deepseek-flash` (DeepSeek-V4.1-Flash, 2026-09-10), `deepseek-v4-pro` (V4-Pro-0813) ve V4.1 Flash'a yönlenen eski ad `deepseek-v4-flash`. `zai`'nin varsayılanı `glm-5.3`; listede `glm-5.3-flash` / `glm-5.3-flashx` da var. Bu iki aile **kaba-effort** sınıfındadır (`thinking_effort.go`): derinlik `low|high|max` effort'uyla taşınır (`budget_tokens` yok sayılır), "kapalı" açıkça gönderilir, GLM-5.3'te düşünme kapatılamaz — ayrıntı `07-CHAT-UX.md` "Kaba-effort sınıfı".
 - Her kind `init()` içinde `RegisterKind` ile kaydolur; yeni transport = yeni `kind_*.go` dosyası, başka hiçbir yere dokunulmaz.
 - **Streaming birinci sınıf:** opsiyonel `Streamer` arayüzü (`Stream(ctx, req, onDelta)`); `anthropic` + `minimax` native token akışı yapar, claude-cli kendi stream-json izini yayınlar. UI'a SSE ile akar (bkz. `07-CHAT-UX.md`).
@@ -95,7 +94,7 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
   `internal/mcp/repair` (MCP çağrı koruması: argüman ön-kontrolü, not-indexed onarımı,
   başarısızlık serisi/breaker, sunucu-yok notu), `internal/flows` (state-delta yazıcısı,
   varsayılan flow tohumlama). Hiçbiri `internal/agent`'ı import etmez (`scripts/depcheck.sh`).
-- **Görevler (ayrı paket yok):** Kanban/pano + atama + yürütme mantığı `internal/db` (model+store) + `internal/api` + `internal/agent/executor.go` içinde yaşar — ayrı bir `internal/tasks` paketi yoktur.
+- **Görevler (ayrı paket yok):** Kanban/pano + atama + yürütme mantığı `internal/db` (model+store) + `internal/api` + `internal/agent/executor.go` (`invokeTraced`/`complete`) içinde yaşar — ayrı bir `internal/tasks` paketi yoktur.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
 - **Web (`internal/web`):** `embed.go` — `//go:embed all:dist` ile derleme anında `frontend/dist/` SPA'sini binary'ye gömer; `Handler()` ile SPA + fallback to `index.html` sunar. Ayrı statik sunum/CDN gerekmez.
@@ -114,9 +113,10 @@ TionHarness/
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
 │   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (task/run/schedule/usage/mcp/flow/artifact/hook/automation/lessons/search)
-│   ├── providers/               # provider arayüzü (+Streamer), anthropic, claudecli, minimax, minimax-anthropic, openrouter, zai, catalog, transport, registry
+│   ├── providers/               # provider arayüzü (+Streamer), kind_*.go (her kind bir dosya), catalog, transport, registry
 │   ├── web/                     # embed.go — go:embed all:dist → frontend SPA'yi binary'ye gömer, http.Handler sunar
-│   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi/StepKind), tunables, flow
+│   ├── agent/                   # runtime, worker, executor, scheduler (cron), budget, titler, toolloop, toolsetup, trace (aktivite izi/StepKind), tunables, flow
+│   ├── climcp/                  # claude-cli --mcp-config/--tools/--settings üretimi (climcp.go, allowlist.go, matcher.go, hookcmd.go, settings.go)
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go, reactive.go, repair.go)
 │   ├── turnqueue/               # per-session tur kabul kuyruğu (tek FIFO, _Docs/58)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
@@ -130,7 +130,7 @@ TionHarness/
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go); prefix'li ID'ler (id.go, ws-counter.json)
 │   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events/insight
-├── frontend/                    # React + Vite + TS + Tailwind v4; vis-network + vis-data (ilişki grafiği), @xyflow/react (flow canvas), lucide-react (ikonlar), @fontsource-variable/inter + jetbrains-mono
+├── frontend/                    # React + Vite + TS + Tailwind v4; vis-network + vis-data (Harita ekranı), @xyflow/react (flow canvas), lucide-react (ikonlar), @fontsource-variable/inter + jetbrains-mono
 └── go.mod
 ```
 
@@ -141,6 +141,6 @@ TionHarness/
 ## Tasarım İlkeleri
 
 1. **Modülerlik:** Her sorumluluk ayrı pakette, kod ayrı dosyalara bölünmüş.
-2. **Arayüz odaklı:** Provider, Memory gibi katmanlar interface ile soyutlanır → kolay test ve genişletme.
+2. **Arayüz odaklı:** Provider, MCP gibi katmanlar interface ile soyutlanır → kolay test ve genişletme.
 3. **Restart-safe:** Run state DB'de tutulur; çökme sonrası kaldığı yerden devam.
 4. **Dil kuralı:** Kod ve yorumlar İngilizce; dokümanlar Türkçe.

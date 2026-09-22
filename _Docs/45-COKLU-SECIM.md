@@ -4,10 +4,10 @@
 > yeni backend yok) — listelerde Ctrl/Cmd+Click ve Shift+Click ile çoklu seçim yapıp toplu
 > eylem (sil, taşı, ata, gruplama vb.) uygulama. Çekirdek: liste-agnostik `useMultiSelect`
 > hook'u + sticky `SelectionBar` bileşeni; her liste kendi `handleClick`/`isSelected`
-> entegrasyonunu yapar. On iki liste bağlanmış (Sohbet/Ajanlar/Ayarlar ▸ Sistem Ajanları/Board/Hafıza/Artifact/
+> entegrasyonunu yapar. On liste bağlanmış (Sohbet/Ajanlar/Ayarlar ▸ Sistem Ajanları/Board/Artifact/
 > Skills/Flows/Araçlar/Aktivite); toplu eylemler mevcut tekil API'leri `Promise.all` ile
-> çağırır, yeni endpoint yoktur. Dayandığı dosyalar: `frontend/src/hooks/useMultiSelect.ts`,
-> `frontend/src/components/common/SelectionBar.tsx`.
+> çağırır, yeni endpoint yoktur. Dayandığı dosyalar: `frontend/src/shared/hooks/useMultiSelect.ts`,
+> `frontend/src/shared/components/SelectionBar.tsx`.
 
 > **Numara notu:** Eski adı `40-COKLU-SECIM.md` idi; `40-PLAN-MODE.md` ile numara
 > çakıştığı için 2026-07-02'de **45**'e taşındı.
@@ -34,7 +34,7 @@ tuşlarıyla ayrışır:
 
 ## Mimari
 
-### `frontend/src/hooks/useMultiSelect.ts`
+### `frontend/src/shared/hooks/useMultiSelect.ts`
 Liste-agnostik seçim çekirdeği. Yalnız seçim `Set`'ini ve shift-aralık `anchor`
 ref'ini tutar; render eden liste `isSelected` ile stil verir, her satırın
 `onClick`'inden `handleClick` çağırır.
@@ -46,12 +46,12 @@ ref'ini tutar; render eden liste `isSelected` ile stil verir, her satırın
   `replace(ids)`.
 - `Escape` global dinleyicisi yalnız `selected.size > 0` iken bağlanır.
 
-### `frontend/src/components/common/SelectionBar.tsx`
+### `frontend/src/shared/components/SelectionBar.tsx`
 Seçim ≥1 olunca beliren sticky toplu eylem çubuğu:
 - `SelectionBar` — sayaç + "(+N filtre dışı)" ipucu + opsiyonel "Tümü" + temizle
   (X) + `children` (liste-özel eylem butonları). `count===0` ise hiç render etmez.
 - `SelectionBarButton` — kompakt eylem butonu (`danger` varyantı kırmızı).
-- `common/index.ts`'ten export edilir.
+- `shared/components/index.ts`'ten export edilir.
 
 ## Yeni Bir Listeye Ekleme (recipe)
 
@@ -82,7 +82,6 @@ onClick={(e) => {
 | Ajanlar | `AgentsView` | Ajanı seç | Sağlayıcı örneği + model düzenle · Sil |
 | Sistem ajanları (Ayarlar) | `SystemAgentsPanel` + `SystemAgentsBulkBar` | Ajanın formunu aç | Sağlayıcı örneği + model düzenle (yalnız sistem ajanları; "Tümü" Servisler + Worker'lar) |
 | Board kartları | `TaskBoard` | Task detayı | Sütuna taşı · Ajan ata · Sil |
-| Hafıza | `MemoryPanel` | Kartı genişlet | Sil (**yalnız modifier-click seçer**) |
 | Artifact | `ArtifactsPanel` | Artifact aç | **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil |
 | Skills | `SkillsPanel` | Skill detayı | Görünürlük türü (Tam/Özet/İsim/Gizli) · **Erişim** (Kısıtla/Paylaş) · **Grup ata** (input+datalist, "Ata"/"Grupsuz") · Sil (katlanmış grupları atlar) |
 | Flows | `FlowsPanel` (Akışlarım) | Flow'u aç | Çalıştır · Sil |
@@ -112,9 +111,6 @@ onClick={(e) => {
   dışı)" gösterir (sessions). `orderedIds` yalnız görünürleri içerdiğinden
   shift-aralık tutarlıdır.
 - **Yıkıcı eylem:** Tek `confirm("N öğe silinsin mi?")` onayı.
-- **Hafıza özel durumu:** Kart-içi tıklamalar (genişlet/sil) plain-click ile
-  çalışır; bu yüzden hafıza kartı **yalnız modifier-click** ile seçilir ve kart-içi
-  handler'lar `if (e.ctrlKey||e.metaKey||e.shiftKey) return` ile modifier'ı yutar.
 - **Araçlar select-all modeli:** Checkbox/toggle doğasına uygun; plain-click eski
   "anında yasakla" davranışını korur, modifier-click toplu seçim + tek `setAgentTools`.
 - **Metin seçimi çakışması:** Liste satırları `<button>` olduğundan shift+click

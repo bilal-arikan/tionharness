@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-09-22):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
+> **Özet (2026-09-22):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/features/chat/`.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -324,7 +324,7 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
 
 Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 
-### Markdown katmanı (`components/markdown/`)
+### Markdown katmanı (`shared/components/markdown/`)
 
 - `Markdown.tsx` — GFM markdown: başlık, liste, tablo, görev listesi, satır-içi
   kod. Özel render'lar: kod blokları (`CodeBlock`), linkler (yerel yol → tıklanır
@@ -347,7 +347,7 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `as=text` yalnız workspace **render kökü** (`<store>/render/`) altını `text/plain`
   ile servis eder; asla `text/html` değil. Kaynak: `render_template` aracı çıktısı.
 - `DiffView.tsx` — unified diff'i satır bazlı +/- renkli ve `+N / −M` istatistik
-  başlığıyla çizer (`lib/diff.ts` ayrıştırır).
+  başlığıyla çizer (`shared/lib/diff.ts` ayrıştırır).
 - `MermaidDiagram.tsx` — ` ```mermaid ` blokunu **tema-duyarlı SVG**'ye
   çevirir. `mermaid@^11` **dinamik `import()`** ile lazy yüklenir; chunk bölmesini
   bundler'ın kendisi yapar (elle `manualChunks` grubu **verilmez** — verildiğinde
@@ -423,7 +423,7 @@ kırpıldı:
    arrow verse bile). Handler yoksa `undefined` kalır — çağıranlar `!!onRetry` ile
    affordance'a karar veriyor.
 
-### Sohbet bileşenleri (`components/chat/`)
+### Sohbet bileşenleri (`features/chat/`)
 
 - `TurnSteps.tsx` — bir turun iz listesini sırayla çizer; `parseSteps` JSON'u
   güvenli çözer, `stepTruncated` sunucunun kırptığı adımı bildirir.
@@ -432,7 +432,7 @@ kırpıldı:
   dimmed/italik). Varsayılan kapalı.
 - `ActivityCard.tsx` — tek tool çağrısı: ikon + etiket + tek satır niyet
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
-  **Başlık özeti içerik-odaklı (2026-07-09):** `lib/tools.ts summarize` artık
+  **Başlık özeti içerik-odaklı (2026-07-09):** `features/chat/tools.ts summarize` artık
   ham anahtar-listesi fallback'ini KALDIRDI — yan bilgi ya gerçek içeriği
   (komut/yol/mesaj/başlık/`question`/`reason`/`worker`/`template`) ya da birincil
   dizi alanının değerlerini gösterir (`activate_tools.names`, `todo_write.todos`
@@ -510,7 +510,7 @@ kırpıldı:
      içeriğidir (binlerce `+` satırı, bilgi değeri düşük) → varsayılan kapalı,
      `Yeni dosya · N satır` rozetinin arkasında. Düzenlemeler açık başlar.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere, **URL'leri
-  de gerçek `<a target="_blank">` linkine** çevirir (`lib/paths.ts` tespit eder).
+  de gerçek `<a target="_blank">` linkine** çevirir (`shared/lib/paths.ts` tespit eder).
   `splitPaths` artık `{ text, kind: 'text' | 'path' | 'url' }` segmentleri döner;
   URL deseni yol deseninden **önce** denenir — aksi hâlde `https://host/x` içindeki
   `//host/x` kuyruğu "yol" sanılıp şeması kesiliyor ve WebSearch/WebFetch adımının
@@ -521,7 +521,7 @@ kırpıldı:
   sonlandırıcısı bulunduğunda tek segment olarak linklenir. Aynı `splitPaths`
   parser'ı Markdown metin düğümlerinde de kullanılır; kod/link/görsel düğümlerine
   yeniden ayrıştırma uygulanmaz.
-- `lib/paths.ts` → `isExternalUrl` tek kaynaktır; `Markdown.tsx` ve `Gallery.tsx`
+- `shared/lib/paths.ts` → `isExternalUrl` tek kaynaktır; `Markdown.tsx` ve `Gallery.tsx`
   kendi kopya `isExternal` yardımcılarını kullanmaz. `mediaUrl` uzak (http/https)
   bir görsel adresini artık `/api/files?path=…` ile sarmalamaz, olduğu gibi geçirir.
 - `WorkerWaitBanner.tsx` (2026-07-27) — koordinatör oturumunda **çalışan worker**
@@ -641,7 +641,7 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   - `AgentHeader.tsx` (avatar+ad, 2 yerde paylaşılır), `WorkingDots.tsx`,
     `DeleteButton.tsx` — paylaşılan küçük parçalar.
 - `Composer.tsx` artık yalnız input state + olay kablolaması. Yardımcılar
-  `components/chat/composer/` altında:
+  `features/chat/composer/` altında:
   - `trigger.ts` — `detectTrigger` + `buildMenuItems` (saf mantık), `Trigger`/`MenuItem` tipleri.
   - `AutocompleteMenu.tsx` — `@`/`#`/`/` açılır menüsü.
   - `ComposerPicker.tsx` — düşünme + izin seçicisini birleştiren **tek generic** picker;
@@ -794,13 +794,13 @@ rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde
   (`publishHub`, global bus event'i YOK) → ipucu sadece **aktif oturum** için
   çalışır. Ekranda olmayan bir oturumdaki `ask_user` sessizdir; kapsamak için
   backend'in interaction'ı process-wide bus'a da yayınlaması gerekir.
-- `hooks/useOutsideClick.ts` — dışarı-tıklama efekti tek hook'a çıkarıldı ve **7
+- `shared/hooks/useOutsideClick.ts` — dışarı-tıklama efekti tek hook'a çıkarıldı ve **7
   bileşende** (Composer pickerları, WorkDirBadge, AgentPicker, FolderPickerButton,
   WorkspaceSwitcher, SessionsSidebar, EmojiPicker) tekrar yerine kullanıldı.
 
-### Yardımcılar (`lib/`)
+### Yardımcılar (`shared/lib/`)
 
-- `tools.ts` — tool adı → ikon/etiket/özet/`isDiff` meta verisi (MCP namespace'i
+- `features/chat/tools.ts` — tool adı → ikon/etiket/özet/`isDiff` meta verisi (MCP namespace'i
   `server · tool` olarak ayrıştırılır).
 - `paths.ts` — dosya yolu tespiti, görsel `mediaUrl`, yol kısaltma.
 - `diff.ts` — unified diff ayrıştırma + +/- istatistik.
@@ -1105,7 +1105,7 @@ UI'a yine `session_change("title")` ile anında yansır.
   💬 Düşünce (ara `text` — `TextStep`), 🛠️ Tool (`tool` — `ActivityCard`). Nihai
   cevap tam görünür kalır.
 - **Mesaj meta satırı (`chat/MessageMeta.tsx`):** her mesajın altında **gönderilme saati**
-  (`MessageTime`, hover'da tam tarih; `lib/time.ts` `clockTime`/`fullDateTime`) ve her asistan
+  (`MessageTime`, hover'da tam tarih; `shared/lib/time.ts` `clockTime`/`fullDateTime`) ve her asistan
   turunda **çalışma süresi** (`TurnDuration` "⏱ 2 dk 15 sn"). Akış sürerken son balonda her
   saniye tıklayan **`LiveTimer`**; `formatDuration`/`formatDurationMs` ortak biçimleyici.
 - **Süreler SUNUCUDAN gelir (2026-07-28):** tamamlanmış turun süresi artık frontend'de

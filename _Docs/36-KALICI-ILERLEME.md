@@ -22,10 +22,6 @@ yeni oturum açıldığında / ajan değiştiğinde liste görünmez olurdu. Ant
 ise tersi: ajan her oturum başında **diskteki** ilerleme dosyasını okuyup devralır
 (*"read the progress files to get up to speed on what was recently worked on"*).
 
-Core memory (MemGPT blokları) bu boşluğu doldurmaz: o serbest yapılı persona/human
-belleğidir, yapılandırılmış görev durumu değil. Session `Goal` da oturum-başına tek
-hedeftir, adım listesi değil.
-
 ## Tasarım
 
 `todo_write` listesi **oturuma özel** bir progress dosyasına yazılır ve fresh
@@ -60,7 +56,7 @@ güncellemelerinde değişmeyen içerikleri yeniden göndermemek (~400 → ~40 c
 graph TD
     AGENT["Ajan: todo_write"] --> TOOL["TodoWriteTool.Call"]
     TOOL -->|"ctx'te sink varsa"| SINK["TodoSink.SaveTodos"]
-    SINK --> DISK["progress.Save<br/>&lt;cwd&gt;/.tionharness/progress.json"]
+    SINK --> DISK["progress.Save<br/>&lt;store&gt;/progress/&lt;sessionID&gt;/.tionharness/progress.json"]
     TOOL --> STEP["StepTodo trace<br/>(session.jsonl)"]
     FRESH["Yeni/restart oturum"] --> CB["todoContextBlock"]
     CB -->|"oturum trace'i boş"| LOAD["progress.Load"]
@@ -85,9 +81,9 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
 - `internal/tools/todosink.go` — `TodoSink` arayüzü + `WithTodoSink`/`HasTodoSink`
   (ctx). `builtin_todo.go::Call` ctx'te sink varsa `SaveTodos` çağırır (best-effort;
   hata todo dönüşünü bozmaz).
-- `internal/agent/todosink.go` — `Runtime.NewTodoSink(sessionID, agentID, cwd)` →
-  cwd çözer (boşsa store fallback), `progress.Load`+merge+`progress.Save`, `progress`
-  event yayınlar.
+- `internal/agent/todosink.go` — `Runtime.NewTodoSink(sessionID, agentID)` → dizini
+  `Runtime.ProgressDir(sessionID)` ile çözer, `progress.Load`+merge+`progress.Save`,
+  `progress` event yayınlar.
 - **Native yol:** `toolloop.go` artifact fallback'inin yanında todo sink fallback'i
   kurar (`SessionIDFrom(ctx)!="" && ProgressPersist && !HasTodoSink`); `workDir`
   zaten orada çözülü.
@@ -108,12 +104,12 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
 
 ## Geri yükleme
 
-`internal/api/todos.go::todoContextBlock(ctx, db, sessionID, cwd, agentID, resume)`:
+`internal/api/todos.go::todoContextBlock(ctx, db, sessionID, dir, resume)`:
 oturumun kendi todo trace'i varsa onu render eder (mevcut davranış); yoksa ve
-`resume` açıksa `progress.Load(progressDir(...))` ile diskten yükleyip
-`renderResumedBlock` ile "Resumed progress" başlıklı bloğu döner (tamamlanmamış
-liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
-`s.tun.ProgressResume()` geçirir. `progressDir` çözümü `NewTodoSink` ile **aynı**.
+`resume` açıksa `progress.Load(dir)` ile diskten yükleyip `renderResumedBlock` ile
+"Resumed progress" başlıklı bloğu döner (tamamlanmamış liste; hepsi tamamsa boş).
+`chat_turn.go::composeTurnRequest` `Runtime.ProgressDir(session.ID)` +
+`s.tun.ProgressResume()` geçirir — dizin çözümü `NewTodoSink` ile **aynı**.
 
 ## Diğer Kalıcılık Katmanlarıyla İlişki
 
@@ -123,8 +119,7 @@ liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
 | ~~Session Goal~~ | ~~Tek kuzey-yıldızı~~ | — | — | **KALDIRILDI (2026-07-28)** |
 | **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Oturum** | `<store>/progress/<sessionID>/` |
 
-Kalan iki katman tamamlayıcıdır, çakışmaz; ikisi de `SystemDynamic`'e ayrı bloklar girer. Progress
-recall'a girmez (disk dosyası, knowledge_source değil).
+Progress bloğu `SystemDynamic`'e ayrı bir blok olarak girer.
 
 ## Ayarlar
 
@@ -151,8 +146,8 @@ Yeni default skill **`tionharness-progress`** (`internal/skills/defaults/tionhar
 SKILL.md`, `access: shared`): ajana hem **otomatik** progress.json katmanını (her
 `todo_write` diske yazılır, fresh oturum geri yükler) hem de **insan-okunur**
 `PROGRESS.md` konvansiyonunu (mevcut kilitsiz `Read`/`Write`/`Edit` ile proje
-kökünde tut: oturum başında oku → tek iş seç → bitince dated entry ekle) öğretir;
-core memory/goal'dan ayrımı belirtir. `//go:embed` ile otomatik dahil; yeni
+kökünde tut: oturum başında oku → tek iş seç → bitince dated entry ekle) öğretir.
+`//go:embed` ile otomatik dahil; yeni
 ajanların baseline skill setine girer.
 
 ## UI görüntüleyici (salt-okunur kart)
@@ -213,9 +208,5 @@ cd frontend; npm run build
 İlk üç devam maddesi (feature_list zenginliği, PROGRESS.md skill'i, UI
 görüntüleyici) **uygulandı** (yukarıdaki bölümlere bakın). Kalan fikirler:
 
-- **Düzenlenebilir kart:** salt-okunur viewer'ı düzenlenebilir yap (madde durumu
-  değiştir / sil) — şu an yalnız görüntüleme.
 - **Log telemetrisi:** progress log girdilerinden "oturum başına tamamlanan madde"
   metriği (token-optimizasyon tasarruf kartı deseni).
-- **Çoklu-ajan eşzamanlılık:** aynı cwd'de paralel ajanlar tek dosyayı paylaşır
-  (Anthropic'in sıralı-oturum modeli); gerekirse ajan-başına dosya veya kilit.

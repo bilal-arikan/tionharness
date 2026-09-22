@@ -10,7 +10,7 @@
 > Dayandığı dosyalar: `internal/db/debug_journal.go`, `internal/agent/debugjournal.go`,
 > `internal/tools/builtin_debug.go`, `frontend/src/features/sessions/SessionDebugCard.tsx`.
 
-> Son güncelleme: **2026-09-01**
+> Son güncelleme: **2026-09-03**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
 > debug akışı (`debug.jsonl`) yazılır. Amaç: debug, token/gecikme optimizasyonu
 > ve ajanın **kendi kendini geliştirebilmesi** için okuyabileceği veri.
@@ -330,12 +330,8 @@ budget (para) arasındaki yeri netleştirir.
   Her biri `severity` (warn/info) + `code` + Türkçe `message`. Sağlıklı oturumda boş.
 - **Zaman serisi:** `turnDurSeries` (tur süreleri) + `tokenSeries` (çağrı-başına
   in+out), en yeni `debugSeriesCap=40` nokta. UI'da bağımlılıksız SVG sparkline.
-- **Reflektör entegrasyonu (self-improvement):** ~~`reflect()` dream-cycle'da
-  `r.debugPerfNotes(agentID)` ajanın en yeni ≤5 oturumunun anomalilerini
-  toplar ve reflect prompt'una ekler → kalıcı reflection belleğine yedirir.~~
-  **KALDIRILDI (2026-07-05):** memory alt sistemiyle birlikte dream-cycle
-  reflektörü de çıkarıldı. Hata-odaklı self-improvement artık **hata→ders
-  döngüsünden** geçer (`internal/agent/lessons.go`, `lesson` debug olayı;
+- **Self-improvement:** hata-odaklı iyileştirme **hata→ders döngüsünden**
+  geçer (`internal/agent/lessons.go`, `lesson` debug olayı;
   bkz. `56-SELF-HEALING.md` Faz F). UI'da kartta anomaliler
   (warn=kırmızı/info=gri rozet) + iki sparkline (tur süresi / çağrı token) gösterilir.
 - Test: `db/debug_journal_test.go` (`TestDebugSummaryAnomaliesAndSeries`,

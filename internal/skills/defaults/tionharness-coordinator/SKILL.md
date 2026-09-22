@@ -118,14 +118,14 @@ bir skill olarak yazıp ekleyebilirsin.
 - **Otomatik tur sayısı ve ağaç geneli worker bütçesi artık sınırsızdır.**
   `normalize` her yükleme/kaydetmede `CoordinatorMaxTurns` ve
   `CoordinatorMaxSubtreeSessions` değerlerini **-1'e (sınırsız) sabitler**
-  (`internal/settings/store.go:689` ve `:702`); ayarlar arayüzündeki iki girdi de
+  (`normalize`, `internal/settings/store.go`); ayarlar arayüzündeki iki girdi de
   kaldırılmıştır. Yani bu ikisi pratikte hiçbir zaman devreye girmez: notify
   döngüsü tur sayısı yüzünden durmaz, ağaç genelinde toplam worker bütçesi
   yüzünden spawn reddedilmez. Daha önce sonlu bir değer kaydedilmiş
   workspace'lerde de ilk okumada sınırsıza çevrilir.
 - **Ağaç bütçesi kapalı olduğu için `Tree budget:` satırı da çıkmaz.** Bütçe
   değerlendirmesi sınırsızda (`<= 0`) hemen dönüyor
-  (`evalCoordinatorTreeBudget`, `internal/agent/coordination.go:583`), dolayısıyla
+  (`Runtime.evalCoordinatorTreeBudget`, `internal/agent/coordination.go`), dolayısıyla
   `spawn_worker` sonucunda `Tree budget: N/M live …` satırını **bekleme** ve
   spawn'ın ağaç bütçesi yüzünden reddedilmesini planlama. Fan-out'u sen
   sınırlarsın: `CoordinatorMaxWorkers` (eşzamanlı) + `CoordinatorMaxDepth`

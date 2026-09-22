@@ -14,7 +14,7 @@ import (
 // They hold the OAuth token / login and would otherwise leak into backup archives
 // that can be moved off-machine. The per-workspace copies stay on disk (auth keeps
 // working); they are simply omitted from backups. A restored workspace re-seeds these
-// on next open (from the global home) or relies on the injected auth env. See _Docs/51.
+// on next open (from the global home) or relies on the injected auth env. See _Docs/71 §4.5.
 var backupExcludeNames = map[string]bool{
 	".credentials.json": true, // claude-cli OAuth/API credential
 	".claude.json":      true, // claude-cli login/session state

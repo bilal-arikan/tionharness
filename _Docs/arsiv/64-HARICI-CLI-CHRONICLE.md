@@ -1,5 +1,7 @@
 # 64 — an external CLI agent `/chronicle` Oturum İçgörü Ailesi
 
+> **Arşiv (2026-09-22):** Salt referans kıyas dokümanıdır, kod değişikliği tanımlamaz; fikir listesinin bir kısmı insight lensleriyle karşılandı (`60-RETROSPEKTIF-TARAMA.md` Faz 6.3).
+
 > *Numara notu: bu doküman 2026-07-27'de **59 → 64** olarak yeniden numaralandı
 > (59, CLI steer planı dokümanıyla çakışıyordu).*
 

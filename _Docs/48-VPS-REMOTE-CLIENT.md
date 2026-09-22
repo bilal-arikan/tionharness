@@ -1,6 +1,8 @@
 # 48 — VPS Uzak Sunucu + Mobil İnce İstemci
 
-> **Durum:** FİZİBİLİTE / TASARIM 📐 (2026-07-04). Henüz uygulanmadı.
+> **Durum:** FİZİBİLİTE / TASARIM 📐 (2026-07-04) — **kısmen uygulandı**: Tailscale erişimi
+> (`scripts/tailscale-serve.ps1`) ve mobil UI cilası (F4 → [49-MOBIL-RESPONSIVE-UI.md](49-MOBIL-RESPONSIVE-UI.md))
+> yapıldı; dosya indirme endpoint'i ve PWA/APK istemci hâlâ açık.
 > **Amaç:** TionHarness backend'ini bir VPS'te (7/24 Linux) çalıştırıp, telefondan
 > **ince bir istemci** (WebView APK / PWA) ile erişmek. Workspaceler ve tüm
 > dosyalar VPS diskinde yaşar; telefon yalnızca uzak bir kullanıcı arayüzüdür.

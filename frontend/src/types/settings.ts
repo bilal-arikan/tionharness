@@ -23,10 +23,6 @@ export interface AppSettings {
   uiLanguage: Locale | ''
 
   defaultPermissionMode: string
-  // CLAUDE_CONFIG_DIR for claude-cli subprocesses. Now a FALLBACK only: each turn
-  // is overridden to the per-workspace config home (<workspace>/claude-home) so the
-  // CLI shares skills/settings/login with its workspace (see _Docs/51). This global
-  // value is used solely when no workspace is derivable; shown read-only in the UI.
   // claude-cli credential injected into the subprocess env so an isolated config
   // dir authenticates without an interactive in-dir login. kind selects the env
   // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.

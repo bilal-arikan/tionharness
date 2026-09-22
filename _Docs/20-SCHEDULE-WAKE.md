@@ -53,7 +53,7 @@ Ajan turunda (native veya CLI)
 | `internal/api/chat_control.go` | `chatRun.wake` alanı + getter/setter |
 | `internal/api/mcp_interaction.go` | `schedule_wake` araç tanımı + `callWake` dispatch |
 | `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__tionharness_extended__schedule_wake` |
-| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionHarness'in schedule_wake'i yerine geçer) |
+| `internal/climcp/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionHarness'in schedule_wake'i yerine geçer) |
 | `internal/api/schedules.go` | Bekleyen one-shot satır liste filtresi + one-shot düzenleme reddi (400) |
 | `internal/tools/builtin_schedulemgmt.go` | Aynı filtre + `update_schedule`'da one-shot reddi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |

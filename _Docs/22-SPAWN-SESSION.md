@@ -110,7 +110,7 @@ Akış:
    kapanınca spawn ölmesin.
 7. `runSpawn`: `trackSession` (Aktivite feed'inde canlı "çalışıyor" rozeti) →
    `invokeTraced(WithCallKind(ctx, KindSpawn), agent, prompt, true)` (autonomous →
-   günlük bütçe guardrail'i geçerli) → `AddMessage(assistant, output, steps)` →
+   `guardedComplete` otonomi freni + kullanım takibi) → `AddMessage(assistant, output, steps)` →
    `untrackSession` → `releaseSpawnSlot` → tamamlanma event'i yayınla.
 
 > **Neden streaming değil de `invokeTraced`?** Aktivite feed'i mesajları poll
@@ -137,10 +137,9 @@ Akış:
   `spawn_session`'ı kullanmayı sürdürür.
 
 **c) UI**
-- `ExecutionsPanel`: `spawned` kind metadata (✨ "Spawn") + filtre sekmesi;
-  başlıkta **"+ Başlat"** butonu → `SpawnSessionModal` (ajan seçici + prompt +
-  opsiyonel model). Başarıda yeni yürütme seçilir, feed yenilenir.
-- `api.spawnSession(agentId, prompt, modelOverride?)`.
+- Eski `ExecutionsPanel` / `SpawnSessionModal` UI'ı kaldırıldı; spawn edilen oturumlar
+  normal oturum listesinde görünür.
+- `api.spawnSession(agentId, prompt, modelOverride?)` (`frontend/src/api/sessions.ts`; şu an çağıranı yok).
 
 ## Guard'lar (özet)
 
@@ -150,8 +149,7 @@ Akış:
 | Bekleyen spawn üst sınırı | `SpawnQueueMax` (16) | `spawnQueue` shallow/deep kuyrukları |
 | Tur başına spawn sayısı | `SpawnMaxPerTurn` (4) | `spawn_session` tool örneği |
 | Workspace içinde kal | — | `resolveAgent` zaten workspace-scoped; çapraz-ws yok |
-| Otonomi bütçesi | günlük bütçe | `invokeTraced(autonomous=true)` → `guardedComplete` |
-| Tool gating | `SelfManageEnabled` | `toolsetup.go` |
+| Otonomi freni | global otonomi-pause (ajan başına günlük limit 2026-07-01'de kaldırıldı) | `invokeTraced(autonomous=true)` → `guardedComplete` |
 
 ## Dosyalar
 
@@ -163,10 +161,8 @@ Akış:
 - `internal/agent/tunables.go` — `spawnMaxConcurrent`/`spawnQueueMax`/`spawnMaxPerTurn` + `SetSpawnLimits`.
 - `internal/settings/settings.go` — `SpawnMaxConcurrent`/`SpawnQueueMax`/`SpawnMaxPerTurn` (DTO+Patch+defaults).
 - `internal/api/server.go::applySettings` — `tun.SetSpawnLimits(...)`.
-- `internal/agent/toolsetup.go` — self-manage bloğunda `spawn_session` kaydı.
-- Frontend: `api/sessions.ts` (spawnSession), `components/panels/ExecutionsPanel.tsx`
-  (kind; "✨ Başlat" butonu 2026-06-19'da kaldırıldı), `components/sessions/SpawnSessionModal.tsx`
-  (artık bağlı değil, öksüz).
+- `internal/agent/toolsetup.go` — `spawn_session` kaydı.
+- Frontend: `api/sessions.ts` (`spawnSession`; çağıranı yok).
 
 ## CLI köprüsü (2026-06-19) — claude-cli ajanları da spawn edebilir
 
@@ -177,8 +173,8 @@ için `spawn_session`'ı bulamıyordu (Coder testinde "No such tool" → doğaç
 
 Çözüm — Interaction MCP köprüsüne eklendi (bkz. `11-INTERACTION-MCP.md §8`):
 
-- `internal/api/mcp_interaction.go` — `interactionBackend.tun` ile gate; `Tools()`
-  self-manage açıkken `spawn_session` ilan eder; `Call()` → `callSpawn`.
+- `internal/api/mcp_interaction.go` — `Tools()` `spawn_session`'ı
+  ilan eder; `Call()` → `callSpawn`.
 - `internal/api/chat_control.go` — `chatRun.spawn` (`*tools.SpawnSessionTool`) +
   `setSpawnTool`/`spawnTool`.
 - `internal/api/chat_stream.go` — her ajan turunda taze spawn tool örneği kurulur

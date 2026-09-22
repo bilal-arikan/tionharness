@@ -1,6 +1,6 @@
 # 69 — Codex CLI Sağlayıcı: Fizibilite ve Referans
 
-> **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (bkz. `70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
+> **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
@@ -10,7 +10,7 @@
 > (per-tool onay ve native araç bastırma); ikisinin de telafisi var ama parite
 > %100 değil. Detay aşağıda.
 >
-> Bu dosya **referans + fizibilite**dir. Uygulama adımları için → `70-CODEX-CLI-UYGULAMA-PLANI.md`.
+> Bu dosya **referans + fizibilite**dir. Uygulamadan çıkan notlar → §13 (plan: `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`).
 
 ---
 
@@ -328,7 +328,7 @@ http_headers = { Authorization = "Bearer <token>" }
 ```
 
 TionHarness'in in-process Interaction MCP sunucusu **Streamable HTTP + Bearer**
-kullanıyor (`climcp.go`). Codex'in `StreamableHttp` varyantı **literal
+kullanıyor (`internal/climcp/climcp.go`). Codex'in `StreamableHttp` varyantı **literal
 `http_headers`** kabul ediyor → köprü **olduğu gibi** takılıyor. Ek olarak
 `bearer_token_env_var` ile token'ı komut satırından tamamen gizlemek de mümkün
 (daha güvenli, tercih edilmeli).
@@ -348,7 +348,7 @@ codex exec --json \
 satır içi TOML tablosu **kabul edildi** (config parse hatası yok).
 
 > **Ölçek uyarısı:** çok sayıda MCP sunucusu + uzun Bearer token, Windows'ta
-> 32 KB komut satırı limitine yaklaştırabilir. Bu yüzden `70` dosyasındaki plan
+> 32 KB komut satırı limitine yaklaştırabilir. Bu yüzden uygulama planı (`arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`)
 > **her tur için `CODEX_HOME/config.toml` yazma**yı birincil yol, `-c`'yi ince
 > ayar yolu olarak seçiyor — ve üretimde uygulanan da bu yoldur.
 
@@ -554,9 +554,9 @@ Q4 doğrulaması (codebase-memory-mcp çağrılarının `project` argümanı eks
 bile çalışması) **PASS** geçti, ama bunun **neden** çalıştığı önemli: TionHarness'in
 kendi ajan döngüsü eksik `project` argümanını oturumun working directory'sinden
 otomatik dolduruyor ve düzeltilebilir kimlik hatalarını tekrar koşturarak
-onarıyor (`internal/agent/mcpargs.go`, `mcprepair.go`). **Bu koruma codex-cli
-yolunda devrede DEĞİL** — `internal/providers/codexcli.go` `internal/agent`
-paketine hiç referans vermiyor, yani `mcpargs.go`/`mcprepair.go`'daki prefill/
+onarıyor (`internal/mcp/repair/args.go`, `repair.go`). **Bu koruma codex-cli
+yolunda devrede DEĞİL** — `internal/providers/codexcli.go` ne `internal/agent`
+ne `internal/mcp/repair` paketine referans veriyor, yani `internal/mcp/repair`'deki prefill/
 repair mantığı codex'in tool-call döngüsüne hiç bağlanmıyor. Tıpkı
 `CLAUDE.md`'nin claude-cli için zaten söylediği gibi ("claude-cli sağlayıcısında
 bu koruma yoktur — araç döngüsünü CLI kendi koşturur"), **codex-cli için de
@@ -694,7 +694,7 @@ Prompt cache **ilk turda bile** çalışıyor (Codex kendi sistem promptunu cach
 ## 9. Dört gerçek boşluk ve telafileri
 
 > Bu bölüm 2026-08-18'de sekiz sorulu bir canlı entegrasyon doğrulaması (Q1-Q8,
-> özet tablo `70-CODEX-CLI-UYGULAMA-PLANI.md` §8'de) ile genişletildi: Boşluk-1/2
+> özet §13'te) ile genişletildi: Boşluk-1/2
 > keşif aşamasından; Boşluk-3/4 (hook/sqz, lazy tool loading) o doğrulamadan geldi.
 
 ### ❌ Boşluk-1: "ask" modunda per-tool onay yok
@@ -723,7 +723,7 @@ Yani `--permission-prompt-tool`'un karşılığı `codex exec`'te **yok**.
    İnsan onayı değil, model onayı. Otonom akışlar için makul.
 3. **`codex app-server`** (JSON-RPC daemon) — bu ServerRequest'ler orada
    **cevaplanabilir**, yani gerçek per-tool onay UI'ı mümkün. Ama app-server
-   `[experimental]` işaretli. → Faz 4 (opsiyonel), `70` dosyasında.
+   `[experimental]` işaretli. → Faz 4 (opsiyonel), `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`.
 
 > **Karar (önerilen):** Faz 1'de yol 1 + 2. TionHarness UI'ında `ask` modunun
 > codex-cli ajanlarında **"sandbox ile sınırla"** anlamına geldiği açıkça
@@ -862,7 +862,7 @@ Kanıt zinciri:
 - codex `cliMCP` dalı `recordedComplete` çağırıp `internal/agent/toolloop.go:376`'da
   **erken return** ediyor — native tool loop'a hiç girmiyor, dolayısıyla
   `runPreToolHooks`/`runPostToolHooks` çağrılarına hiç ulaşmıyor.
-- claude-cli bunu `internal/agent/climcp.go` → `writeCLISettings` ile telafi
+- claude-cli bunu `internal/climcp/settings.go` → `WriteSettings` ile telafi
   ediyor: workspace hook'larını claude'un kendi `--settings` `hooks` sözleşmesine
   çevirip yazıyor, CLI'nin **kendi** tool loop'u tetikliyor. **codex'te eşdeğer
   bir `writeCodexSettings`/hook-çeviri yolu yok.**
@@ -903,7 +903,7 @@ Bu boşluk artık **sessiz değil**, ürün içinde açıkça görünüyor:
   PostToolUse token-optimizer sıkıştırmasının da bu yüzden devre dışı
   olduğunu açıkça belirtiyor.
 - **Ajan düzenleyici** (`frontend/src/features/agents/AgentSettingsForm.tsx`):
-  `ProviderModelSelect`'in hemen altında, seçili sağlayıcının kataloğundaki
+  `ProviderInstanceModelSelect`'in hemen altında, seçili sağlayıcının kataloğundaki
   `appliesToolHooks === false` olduğu durumda aynı stilde bir satır uyarı
   çıkıyor — kullanıcı bir ajanı codex-cli'ye çevirdiği anda, o ajana hiç hook
   uygulanmayacağını orada görüyor.
@@ -1014,7 +1014,7 @@ yalnız aktive edilen araçlar kadar büyür).
 | Ne kaybediyoruz? | (a) UI'da per-tool onay ("ask" modu sandbox'a düşer), (b) paralel araç gruplama rozeti, (c) native araç bastırmanın çoğu — ki bunun büyük kısmı Codex'te **gereksiz**. |
 | Ne kazanıyoruz? | OS sandbox, ölçülmüş reasoning token, sabit thread id, output-schema, ikinci bir abonelik havuzu (ChatGPT Plus/Pro), OpenAI model ailesi. |
 
-**Öneri: yapılmalı.** Uygulama planı → `70-CODEX-CLI-UYGULAMA-PLANI.md`.
+**Öneri: yapılmalı** (uygulandı; bkz. §13).
 
 ---
 
@@ -1149,9 +1149,7 @@ yazıp susan sahte bir codex çalıştırır.
 
 ---
 
-## İlgili dokümanlar
-
-### Koordinatör spawn iddiası guard'ı
+## Koordinatör spawn iddiası guard'ı
 
 Codex CLI kendi araç döngüsünü çalıştırdığı için TionHarness'in MCP onarım katmanı
 bu yolda devreye girmez. Koordinatör turu hiç araç adımı üretmeden worker veya
@@ -1161,8 +1159,48 @@ deterministik guard mesajın sonuna görünür İngilizce uyarı ekler ve
 yazar. Soru ve gelecek-zaman planları iddia sayılmaz; turdaki herhangi bir araç
 çağrısı guard'ı kapatır.
 
-- `70-CODEX-CLI-UYGULAMA-PLANI.md` — faz faz uygulama planı
+---
+
+## 13. Uygulama notları (arşivlenen 70 §8'den taşındı)
+
+Uygulama planı (`arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`) Faz 0-4 ile 2026-08-18'de
+merge edildi. Plandan sapan ve hâlâ geçerli noktalar:
+
+- **`Order: 8`** (`internal/providers/kind_codexcli.go`): planlanan `Order 1`
+  slotu `anthropic`'e ait; çift `Order` katalog sırasını map iterasyonuna
+  bağlardı. Yalnız picker'daki konumu etkiler.
+- **Arayüz adı `ConfigureCLIMCP(spec)`** (`internal/providers/provider.go`):
+  claude tarafındaki 5 argümanlı `ConfigureMCP` ile çakışmasın diye.
+  `ClaudeCLI.ConfigureCLIMCP` o imzaya ince bir sarmalayıcıdır.
+- **Ayrı bir `AuthProber` arayüzü yok.** claude-cli planı `internal/claudeauth`
+  ile okunur (`catalog_claudecli.go` `claudeSubscriptionTier`, `max`/`pro`);
+  codex-cli'de `catalog_codexcli.go` `codexSubscriptionTier` yalnız
+  `<codex-home>/auth.json`'un okunabilir olduğuna bakıp sabit `"chatgpt"` döner —
+  Codex `auth.json`'u plan adını stabil bir alanda açığa çıkarmıyor. Kasıtlı
+  asimetri.
+- **Katalog sürüm probe'u:** `internal/api/catalog_codexcli.go`,
+  `catalog_claudecli.go`'nun aynası (10 dk başarı / 1 dk hata TTL'li
+  `codex --version` önbelleği). `internal/exttools/catalog.go` `CodexToolName`
+  Harici Araçlar panelinde claude'un kardeşidir.
+- **Fiyatlandırma:** `internal/providers/pricing.go` `"openai"` tablosu yalnız
+  `EstimateFor`'un `codex-cli` case'ini besler (`priceTable`'da `codex-cli`
+  anahtarı yok — abonelik = fiyatsız). `gpt-5.4` (ChatGPT login'iyle
+  kullanılamıyor) ve `gpt-5.2` (yayınlanmış per-token fiyat yok) bilerek
+  tablodan çıkarıldı; gerekçe kod yorumunda.
+- **Canlı Q1-Q8 doğrulaması (2026-08-18):** Q1 (uçtan uca tur) ve Q2
+  (`mcp__tionharness_interaction__*` araçları) geçti. Q3/Q5 (hook ve sqz) →
+  Boşluk-3; Q7 (lazy tool loading) → Boşluk-4, `?full=1` ile çözüldü. Q4
+  (codebase-memory `project` argümanı) modelin doğru argüman vermesiyle geçti;
+  prefill/repair güvencesi codex yolunda devrede değil (§5
+  "codebase-memory-mcp prefill guard"). Q6 (`ask`/`read-only` gerçekten
+  OS-sandbox seviyesinde mi) kanıtlanmadı → Boşluk-1.
+
+---
+
+## İlgili dokümanlar
+
+- `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md` — faz faz uygulama planı (tarihsel)
 - `17-*` — sağlayıcı soyutlaması, prompt-cache muhasebesi
-- `51-CLAUDE-CONFIG-BIRLESIK.md` — per-workspace config evi deseni
+- `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.4 — örnek başına CLI config evi
 - `52-MCP-GATEWAY.md` — iki-tier MCP köprüsü
 - `40-*` — izin/onay katmanı

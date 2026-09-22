@@ -29,10 +29,12 @@
 > tasarruf sayaçları (`CompactSavedBytes` / `compactSavedBytes`) ve tüm bütçe/UI
 > hücreleriyle birlikte **çıkarıldı**. Bu iş artık tamamen **harici araçlara** devredildi:
 >
-> - **`rtk`** — komut-katmanında **agent tarafından** çağrılır (Bash sarmalayıcı; bkz.
->   kullanıcı `CLAUDE.md`'sindeki manuel fallback).
-> - **`sqz`** — **PostToolUse hook** olarak bağlanır; araç çıktısını modele dönmeden
->   önce hook zincirinde kısaltır.
+> - **`rtk`** — komut-katmanında: workspace'te rtk bağlıysa runtime shell komutunu
+>   çalıştırmadan önce `rtk` üzerinden yeniden yazar (`Runtime.rtkCommandFilter`, `internal/agent/rtk_optimizer.go`;
+>   aşağıda). Ajan komutu elle sarmalamaz.
+> - **`sqz`** — çıktı katmanında: workspace'te sqz hook'u bağlıysa runtime shell çıktısını
+>   modele dönmeden önce in-process sıkıştırır (`Runtime.sqzShellFilter`,
+>   `internal/agent/shell_optimizer.go`; aşağıda).
 >
 > Server-tarafı `clear_tool_uses` / API-native compaction (eskiyen/taşan sonuçlar) ve
 > retrieval katmanı zaten transcript-düzeyi baskıyı karşılıyordu; ham araç-çıktısı
@@ -1561,14 +1563,6 @@ ama CLI'nin tool-use/stream-json/permission davranışını bozma riski var. Bey
 + risk/fayda tasarımı ayrı bir çalışmada (Craft session "claude-cli --system-prompt
 Brainstorm", 2026-07-06). Alternatif: native anthropic-API provider (harness tamamen
 kalkar, anahtarsız/oauth avantajı gider).
-
-## Dinamik bağlam (recall) gürültü kapısı — KALDIRILDI (2026-07-05)
-
-> **KALDIRILDI (2026-07-05):** Bu bölüm memory alt sistemine ait recall/journal
-> enjeksiyonu ile `journalMinLen`/`recallMinScore` gürültü kapılarını anlatıyordu.
-> Memory alt sistemi (journal recall + core memory) projeden tamamen çıkarıldığında
-> bu ayarlar ve dinamik "Relevant memory" bloğu da kaldırıldı. Bölüm yalnız tarihsel
-> referans olarak korunur.
 
 ## Ayrıca Bakınız
 

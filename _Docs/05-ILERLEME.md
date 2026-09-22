@@ -1,9 +1,29 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte. Şu anki en yeni girişler şu konularda: karar modellerinin sağlayıcılar gibi eklenip düzenlenmesi ve karar mercileri çerçevesi (System One/OpenJev ve logprobs üzerinden yerel LLM backend'leri, merci başına model + yedek + rakip, Pick/Select/Triage desenleri — `_Docs/87`), DeepSeek V4.1 Flash (`deepseek-flash`) ve Z.ai GLM-5.3 ailesinin eklenmesi + kaba-effort (`effort`) düşünme sınıfı — iki satıcının Anthropic ucu `budget_tokens`'ı yok sayar, derinlik `output_config.effort`; DeepSeek'te "kapalı" açıkça gönderilir, GLM-5.3'te düşünme kapatılamaz (`_Docs/07`), ajanların ajan/skill/artifact/otomasyon/hedefi tek `set_archived` aracıyla REST ile aynı store çağrıları üzerinden arşivleyip geri alabilmesi (TSK1045, `_Docs/02` "Ortak arşiv", `_Docs/24`), arşivli ajanın zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaması (REST 409 + araç hatası, seçicilerde gizleme, mevcut değer "(arşivli)" — TSK1044, `_Docs/02` "Ortak arşiv"), Hedefler ekranındaki konfigürasyon sürümü kırılımının sağlamlaştırılması (yetersiz-veri kapısı, medyan/kırpılmış ortalama, ajan filtresi, araç çağrısı başına maliyet, sağlayıcı/auth hatalarının `errorTurnsRatio`'dan ayrılması — TSK1043, `_Docs/83` §8.1d), toast tonlarının gözden geçirilmesi (kısmi başarı/tekrar dene durumları `toast.warning`, `App.tsx` ref-render lint hatası giderildi — TSK1046, `_Docs/12`), `TestSkillCatalogChangePublishesControlEvent` flake'inin kök nedeni olan paylaşılan global skills dizininin test izolasyonu (TSK1047, `_Docs/80` §6), tüketicisi kalmayan `GET /api/flows/{id}` rotasının kaldırılması (TSK1041, `_Docs/15`), kanban kartı arşivinin ajan/skill/artifact/otomasyon/hedefe yayılması (ortak `internal/archive`, arşivli ajan çalışmaz, arşivli skill ajanlara sunulmaz, Harita arşivlileri gizler — `_Docs/02` "Ortak arşiv", TSK1037), UI hata/uyarı toast'larının log deposuna kalıcı yazılması (`component=ui-toast`, TSK1038 — `_Docs/12`), sohbet başlığındaki "Akış" (oturumu akış olarak göster) özelliğinin tamamen kaldırılması (TSK1039, `_Docs/15`), karar katmanı (`internal/decider`: tipli karar modelleri, OpenRouter üzerinden TypeSafe Jev, dört karar noktası — `_Docs/87`), ajanın `spawn_session` ile açtığı oturumun "spawned" yerine düz "Sohbet" (`kind:"chat"`) olarak açılması, kökenin `spawn` + tetikleyen oturumla açıkça damgalanması (TSK1005, `_Docs/22`), güvenlik/izolasyon kümesi — confined sandbox'ta kök içindeki junction/symlink kaçışının handle tabanlı gerçek-yol kontrolüyle kapanması (TSK393), confined shell komutunun Windows Job Object içinde koşması (kopmuş süreçler çağrı bitince ölür, süreç sınırı; yol sınırı değil — TSK392, `_Docs/26`) ve validator ağaç sabitlemesinin kartın kapsamına daraltılması (`treepin`, `VERDICT: STALE` — TSK772, `_Docs/47`), kuyruktaki canlı yönlendirme (steer) butonunun gerçek steerability'ye bağlanması (`steerable` bayrağı `queue_update` olayında, tur sınırında tazeleniyor — `_Docs/59`, `_Docs/07`), steer ve `reviewer-selects` yollarının gerçek test kapsamına alınması (tautolojik `steerableForTurn` testi sabit tabloya çevrildi, `foldSteer()` ve hakem seçimi doğrudan test edildi — `_Docs/59`, `_Docs/25`), arşivlenen bir oturuma bağlı zamanlamaların pasifleştirilmesi + uçuştaki uyandırma turunun loglanarak reddedilmesi (arşivleme bir durdurma jesti — `_Docs/02`), çalışma dizini talimat dosyasında `AGENTS.md` fallback'i (CLAUDE.md önce, yalnız ad — içerik inline değil; headless parite + oturum bilgisi alanı — `_Docs/26`, `_Docs/53`), claude-cli kalıcı süreç havuzunda paralel turların birbirini beklemesinin giderilmesi (`EvictIdle` tur ortasındaki oturumu beklemeden atlıyor — `_Docs/17`), Ayarlar ▸ Sistem Ajanları ekranında toplu seçim + toplu sağlayıcı/model düzenleme (`_Docs/45`, `_Docs/74`), zvec-grep entegrasyonu (codebase-memory paritesi: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks + `.git/info/exclude`, iki sunuculu allowlist muafiyeti — `_Docs/54`), sistem ajanı çağrılarının kendi sağlayıcı/modelinde koşması + geçersiz anahtar karantinası, sistem ajanı konuşmalarının kaydedilip sohbette sürdürülebilmesi, CLI yerleşik araçlarının izlenerek serbest bırakılması (claude-cli `TodoWrite` + codex `update_plan` progress aynası, claude-cli `Agent(Explore|Plan)` transkriptinin ana çağrıya katlanması, ajan-düzeyi native shell opt-in'i, codex `web_search` modunun üst-düzey anahtara taşınması — `_Docs/17`, `_Docs/69`, `_Docs/25`), token kalibrasyonu (claude-cli harness ek yükünün gerçek turlardan CLI sürümü + araç kataloğu hash'i başına otomatik öğrenilmesi, sabit prefix'in `count_tokens` ile bir kez kesin sayılıp hash'le cache'lenmesi; `_Docs/17`), Codex tarafında GPT-6 Astra desteği (katalog + fiyat, `gptFamily` ve Codex düşünme rampası geçitlerinin `gpt-6`'ya genişletilmesi), Rota kanvasında aralıklı bir oturumun çubuğunun gerçekten çalıştığı oturuşlara bölünmesi ve bu bölmenin oturuş eşiğinin sabit 600 sn yerine zoom'dan türetilmesi (`_Docs/78` §16), workspace kapanışında uçuştaki arka plan
-turlarının (spawn/worker/inbox **ve flow motoru sürüşleri** — red yolunda run'ın
-kapatılması / resume claim'inin geri verilmesi, sweeper ise bariyer yerine
-tick-başı erken çıkışla; `_Docs/58`) DB kapanmadan drenajı, kuyrukta bekleyen bir mesajın çalışan tura canlı yönlendirme (steer) olarak atomik biçimde taşınabilmesi (`_Docs/59`, `_Docs/58`), `internal/ingest/toml.go` doc yorumlarının gofmt tipografi kuralına takılmasının giderilmesi (`gofmt -l internal/` artık boş), claude-cli `read-only` modda canlı steer'in "steered" diye yalan raporlamasının giderilmesi (`_Docs/59`), `run_subagent` fan-out'una seçici `majority` ve `reviewer-selects` stratejilerinin eklenmesi (`_Docs/25`, `_Docs/47`), steer (canlı yönlendirme) mesajlarının araçsız turda ve buffer dolduğunda sessizce kaybolmasının giderilmesi (`_Docs/59`), `run_subagent` şemasından `wait` alanının tamamen kaldırılması (`_Docs/25`, `_Docs/24`), steer (canlı yönlendirme) taşıyıcı × izin modu destek matrisinin araştırmayla doğrulanması (`_Docs/59`), oturum bilgisi panelinin MCP dial'ını beklememesi (`_Docs/06`), alt-ajan oturum başlığının ebeveyn oturumu adlandırması (`_Docs/25`, `_Docs/22`), arşivli oturumun gerçek bir tur gelince kendini canlandırması (`_Docs/02`, `_Docs/47`), geç gelen başlığın oturumun "son aktivite" damgasını ileri taşımasının giderilmesi (`_Docs/02`, `_Docs/07`), Stop ve oturum teardown'ının superseded (kuşak dışı) run'ları da iptal edip beklemesi (`_Docs/58`), `ultra` düşünme kademesinin native (Messages API) yolda sessizce max'a düşmesinin giderilmesi (`_Docs/07`), `internal/agent` turn_record terminal-state testlerinin HEAD'de kırık olmadığının mutasyonla doğrulanması, canlı workspace silmede defter yazımının tek kilit tutuşuna alınması + rollback (`_Docs/06`), artifact testindeki gereksiz `as unknown as` cast'inin kaldırılması, evrim E2 (`workspace-evolver` sistem ajanı, `evolution` kanalı, kodda kural katmanı, Öneriler bloğu — `_Docs/83`), sayaç (counter) otomasyon türünün tamamen kaldırılması, tüm sol liste panellerinin tek standartla daraltılabilir olması (varsayılan açık, yeniden-açma rayı, İçgörü paneli `ListPane`'e taşındı — `_Docs/49` §7.8), dört katmanlı responsive kabuk (dar/kare/geniş/çok geniş + en-boy oranı, `useViewport` + `useShellLayout`, kare katmanda peek rail ve drawer detay paneli, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri — `_Docs/49` §7.7), evrim E1 (konfigürasyon snapshot'ı + oturum atfı + LLM'siz hedef fitness'i) ve E0 (Goal varlığı, `goal-writer` sistem ajanı, Hedefler ekranı — `_Docs/83`), yerel sunucu erişilebilirlik rozeti, LM Studio ile yerel model desteği (anahtarsız yerel uç nokta, muhafazakâr yerel bağlam penceresi, sıfır maliyet), Rota kanvasında yoğunluk + yakınlaştırma, Rota'da süre log ekseni, Rota çubuklarında worker bekleme aralıkları, Rota'ya çip süzgeci + oturuma gitme düğmeleri, Rota kanvasında boş zaman aralıklarının kırpılması, sistem ajanı özelleştirmesinin workspace kapsamının görünür kılınması, Ayarlar ▸ Sistem Ajanları ekranı, roster'da ayrı "Sistem worker'ları" bölümü, taşma-öncesi araç çıktısı budaması (tur-içi tahmine araç şemalarının eklenmesi + pencereye göre ölçeklenen budama eşiği), ajan kalıtımı + kilitli yerleşik sistem ajanları (parentId/overrides/locked, derive API, kalıtım şeritli UI), claude-cli token maliyeti düşürme (prefix anatomisi + araç allowlist + auxiliary-call native routing), Rota (Trajectory) özelliğinin gerçek-LLM uçtan uca testi ve dört bulgu düzeltmesi, Rota F5 (faz kapıları: artifact/verdict/human) + F4-v2 (otomatik reçete budama), Rota F4 (LLM tabanlı reçete optimizer — yalnız öneri), Rota F3 (deterministik metrik + LLM'siz haftalık küratör) ve Rota F2 (otomasyon tetikleyicileri grafikte). Durum: **canlı, sürekli güncellenen kayıt**. 2026-06-30 ve öncesi kapanmış kayıtlar `05-ARSIV.md`'ye taşınmıştır. Bir ajan için: "TionHarness'te en son ne yapıldı" sorusunun cevabı burada, tarih sırasıyla.
+> **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
+> kayıtlar `05-ARSIV.md`'dedir. Son girişler: doküman temizliği (bayat referanslar, arşive
+> taşınan plan gövdeleri), karar modelleri + karar mercileri (`_Docs/87`), DeepSeek V4.1 Flash
+> ve Z.ai GLM-5.3 ailesi + kaba-effort düşünme sınıfı, ortak arşiv aracı `set_archived`
+> (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
+
+## Doküman temizliği: bayat referanslar ve arşive taşınan planlar (2026-09-22) ✅
+
+- **Ne:** SES3485 (`_Docs` 00–24) ve SES3489 (kök dokümanlar, `CLAUDE.md`, `_Docs/80`,
+  `.claude/skills`) denetim raporlarındaki doğrulanmış bulgular uygulandı. Kırık doküman
+  bağlantıları, taşınmış kod yolları (`frontend/src/{components,hooks,lib}` →
+  `features/`/`shared/`/`app/`, `internal/agent/climcp*.go` → `internal/climcp/`), kaldırılmış
+  `SelfManageEnabled` gate'i, memory/`runs`/`knowledge` kalıntıları, `update_session`'a
+  birleşen oturum araçları, CLI Pre/PostToolUse hook üretimi ve codex-cli'nin canlı
+  Interaction MCP durumu düzeltildi.
+- **Arşiv:** `23-ILISKI-GRAFIGI.md` tümüyle `arsiv/`'e taşındı (git mv); 03/04/11'in
+  tarihsel bölümleri `arsiv/03-YOL-HARITASI-KALDIRILAN.md`, `arsiv/04-TEKNOLOJI-ILK-PLAN.md`,
+  `arsiv/11-INTERACTION-MCP-TARIHSEL.md`'ye çıkarıldı. `00-GENEL-BAKIS.md` indeksi diğer
+  temizlik işçilerinin arşivlediği 42/51/55/64/70 ve plan gövdeleriyle birlikte güncellendi.
+- **Ajan kuralları:** kök `CLAUDE.md` global kurallar/hook'lar/araç açıklamalarıyla
+  tekrarlanan maddelerden arındırıldı (depcheck paket listesi → `scripts/depcheck.sh`);
+  `_Docs/80` project id ve `internal/mcp/repair` yolu düzeltildi; `run-app` skill'i dört
+  launch konfigürasyonunu, `test` skill'i `full`'daki depcheck'i belgeliyor. Kökteki 0 baytlık
+  kaza dosyası `0` silindi.
 
 ## Karar modelleri sağlayıcılar gibi + karar mercileri çerçevesi (OpenJev, yerel LLM, yedek/rakip) (2026-09-22) ✅
 
@@ -3399,7 +3419,7 @@ Testler: `anthropic_fable51_test.go` (sınıf, binding, uçtan uca beta+body+tra
 dinamik anchor'un iterasyonlar arası bayt-sabitliği, fiyat), `ingest_test`, alias testi.
 Yapılmayan (isteğe bağlı beta'lar): mesaj-başı effort, `clear_at` tur-kapsamlı sistem mesajı,
 `display: "updates"` ilerleme notları, `mid-conversation-tool-changes` (activate_tools'un
-şema eklemesini düzenleme saymayan yol) — `_Docs/55` yol haritasına aday.
+şema eklemesini düzenleme saymayan yol) — `_Docs/arsiv/55` yol haritasına aday.
 
 ## Paket bölme, adım 1/2/3/5 (2026-09-03) ✅
 
@@ -5309,7 +5329,7 @@ found with session ID: …` + exit 1, üstelik "yeniden denenebilir" göründü�
   canlı turlar yeşil: claude soğuk+sıcak, codex `gpt-5.6-sol`. Per-workspace ev
   tohumlamasını anlatan ölü yorumlar (`workspace.Manager.open`, `toolloop`) da
   kaldırıldı — kod 65c58e9'da gitmişti.
-- Detay → `71-SAGLAYICI-ORNEKLERI-PLANI.md` §3.1 ve `51-CLAUDE-CONFIG-BIRLESIK.md`.
+- Detay → `71-SAGLAYICI-ORNEKLERI-PLANI.md` §3.1 ve `arsiv/51-CLAUDE-CONFIG-BIRLESIK.md`.
 
 ## codex-cli sağlayıcısı: katalog + fiyatlandırma + frontend yüzeyi (2026-08-18) ✅
 
@@ -5342,7 +5362,7 @@ tamamlandıktan sonra kalan yüzey işi:
   hatası veriyor — ayrıca raporlandı, bu turun kapsamı değil). Frontend `tsc
 --noEmit` ve `vitest run` (245+ test) temiz; dokunulan dosyalar prettier'e
   uygun (config'li).
-- Detay ve plan-vs-gerçek farkları → `_Docs/70-CODEX-CLI-UYGULAMA-PLANI.md` §8.
+- Detay ve plan-vs-gerçek farkları → `_Docs/69-CODEX-CLI-SAGLAYICI.md` §13 (eski 70 §8).
 
 ## `tionharness-terse` skill'i kaldırıldı (2026-08-18) ✅
 
@@ -7188,7 +7208,7 @@ outside allowed roots`. Ek: paylaşılan havuz bağlantısı bayat oturuma çöz
   geçersizdir. Kaynak tek → chat (`composeTurnRequest`) ve headless
   (`autonomousDynamicSuffix`) yolları aynı metni paylaşır; volatile dinamik suffix
   (gate mid-session değişebilir), epoch snapshot ile cache-güvenli.
-- **Doküman:** [53-CRAFTAGENT-PROMPT-PARITE.md](53-CRAFTAGENT-PROMPT-PARITE.md)
+- **Doküman:** [53-HARICI-AJAN-PROMPT-PARITE.md](53-HARICI-AJAN-PROMPT-PARITE.md)
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
@@ -9884,7 +9904,7 @@ t.sb.Confined)`); interaktif turlar imzayı korur (insan passphrase girebilir).
   ailesini (tips / improve / standup / cost-tips / search / reindex) + yerel
   SQLite session store mekaniğini açıklayan ve TionHarness muadilleriyle
   (`session.jsonl`+`debug.jsonl`, ders döngüsü `lessons.jsonl`,
-  `conversation_search`, Tasarruf Merkezi) kıyaslayan `_Docs/64-GITHUB-COPILOT-CHRONICLE.md`
+  `conversation_search`, Tasarruf Merkezi) kıyaslayan `_Docs/arsiv/64-HARICI-CLI-CHRONICLE.md`
   eklendi. Boşluk tespiti: proaktif `tips`/`standup` içgörü üreteci TionHarness'te yok
   (gelecek kart tohumları dokümanda). Kaynaklar dipnotlandı (GitHub Docs + changelog).
   `00-GENEL-BAKIS.md` dizinine 58 + 59 satırları eklendi. Kod değişikliği yok.
@@ -9962,7 +9982,7 @@ t.sb.Confined)`); interaktif turlar imzayı korur (insan passphrase girebilir).
   ajan yönlendirmesini** Bash-öncelikliye çevirir; kullanıcı workspace talimatı/CLAUDE.md
   ile bunu ezebilir.
 - **Doğrulama:** `go build ./...`, `go vet ./...`, `go test ./internal/...` — hepsi yeşil
-  (agent/api/tools dahil; frontend'e dokunulmadı). Detay `_Docs\51`, `_Docs\17`.
+  (agent/api/tools dahil; frontend'e dokunulmadı). Detay `_Docs/arsiv/51`, `_Docs\17`.
 
 ## Artifact detayında tekil grup düzenleme ✅ (2026-07-10, TSK44)
 
@@ -10826,7 +10846,7 @@ zaten self-recovered permission-deny sayıyor; fonksiyonel bug değil ama modeli
   duyurur, aksi halde boş string. **Volatile → dinamik suffix** (gate tur-ortası değişebilir):
   chat yolu `composeTurnRequest` (EnvironmentContextBlock'tan hemen sonra) + headless
   `autonomousDynamicSuffix`, `EnvironmentContextBlock` ile aynı OS/shell kimliğini paylaşır.
-- Build + vet + `internal/tools`/`internal/agent` testleri yeşil. Detay `53-CRAFTAGENT-PROMPT-PARITE.md`.
+- Build + vet + `internal/tools`/`internal/agent` testleri yeşil. Detay `53-HARICI-AJAN-PROMPT-PARITE.md`.
 
 ## Self-healing: Lessons UI + guardrail eşikleri ayarlara açıldı ✅ (2026-07-07)
 
@@ -11021,7 +11041,7 @@ yönlendirilsin.
 
 ## API-native P2+P3: sunucu web search/fetch + server-side compaction (toggle'lı) ✅ (2026-07-07)
 
-**İstek:** _Docs/55 P2 ve P3'ün eklenmesi, her ikisi de ayarlardan açılıp kapanabilir.
+**İstek:** _Docs/arsiv/55 P2 ve P3'ün eklenmesi, her ikisi de ayarlardan açılıp kapanabilir.
 İkisi de ek sunucu/süreç GEREKTİRMEZ — mevcut /v1/messages isteğinin alanlarıdır.
 
 **P2 — Sunucu-tarafı web search + web fetch (`AnthropicWebTools`, varsayılan kapalı):**
@@ -11046,7 +11066,7 @@ yönlendirilsin.
   (API şartı) — uzun tek turların (araç döngüsü) taşma sigortası. Turlar-arası transkripti
   istemci-tarafı compaction yönetmeye devam eder (çifte özetleme çakışması yok; tam
   turlar-arası server compaction, compaction bloklarının db persist'ini gerektirir — P3'ün
-  ileride derinleştirilecek kısmı olarak _Docs/55'te not edildi).
+  ileride derinleştirilecek kısmı olarak _Docs/arsiv/55'te not edildi).
 - Kayıt zinciri: settings → `SetAnthropicBetas(cache, ctxEdit, serverCompact)` (registry →
   kind cfg → `WithBetas`) + tunables aynası (rawEcho kapısı için).
 
@@ -11059,7 +11079,7 @@ bağımsızlık). ✅ build/vet temiz; `go test ./...` 734 test / 35 paket; fron
 
 ## API-native P1+P6+P7+P4: structured outputs, system mesajları, strict/effort, PTC ✅ (2026-07-07)
 
-**İstek:** _Docs/55 yol haritasının P1, P6, P7, P4 maddelerinin uygulanması.
+**İstek:** _Docs/arsiv/55 yol haritasının P1, P6, P7, P4 maddelerinin uygulanması.
 
 **P1 — Structured Outputs (`output_config.format`):**
 
@@ -11777,8 +11797,8 @@ API uçları `/api/agents/{id}/memories`, `/core`, `/reflect`, `/recall`, `memor
 frontend Hafıza ekranı/MemoryPanel/CoreMemoryCard/hafıza grafiği; ayarlar
 `journalMinLen`/`recallMinScore`/`journalCap`/`journalMaxLen`/`autoReflectThreshold`
 (+ `memoryPressureWarn`). Workspace Ağı / İlişki Grafiği'nin workspace tarafı
-(`/api/graph`) korundu. Doküman güncellemeleri: `31-MEMGPT-CORE-MEMORY.md` (kaldırıldı
-notu), `23-ILISKI-GRAFIGI.md` (yalnız Hafıza Bilgi Grafiği bölümü çıkarıldı),
+(`/api/graph`) korundu. Doküman güncellemeleri: `arsiv/31-MEMGPT-CORE-MEMORY.md` (kaldırıldı
+notu), `arsiv/23-ILISKI-GRAFIGI.md` (yalnız Hafıza Bilgi Grafiği bölümü çıkarıldı),
 `17-TOKEN-OPTIMIZASYON.md` (recall/journal kapıları), `00-GENEL-BAKIS.md`.
 
 ## Claude Sonnet 5 desteği ✅ (2026-07-05)
@@ -11809,7 +11829,7 @@ Yeni **Claude Sonnet 5** (`claude-sonnet-5`) modeli katalog + fiyat tablosuna ek
 
 claude-cli'nin config evi artık **per-workspace**: `<workspace>/claude-home` =
 `CLAUDE_CONFIG_DIR`. Böylece TionHarness ve driver ettiği CLI **aynı skill/settings/
-login** setini kullanır. Detay `51-CLAUDE-CONFIG-BIRLESIK.md`.
+login** setini kullanır. Detay `arsiv/51-CLAUDE-CONFIG-BIRLESIK.md`.
 
 - **Faz 1:** `providers.ClaudeCLI.SetConfigDir` (turluk override) + `Runtime.claudeHomeDir()`;
   `toolloop.go` choke point'te (`provider.(*providers.ClaudeCLI)` sonrası) her CLI turu
@@ -14605,7 +14625,7 @@ sağlayıcıların anahtarları dahil.
     gerekçeyle geçiyor.
   - codex → `OPENAI_` ön eki. Kanıt: `OPENAI_API_KEY` belgelenmiş codex login
     kanalı (`_Docs/69-CODEX-CLI-SAGLAYICI.md`) ve claude'un aksine codex için
-    backend enjeksiyon kanalı **yok** (`_Docs/70-…`) — miras alınan env veya
+    backend enjeksiyon kanalı **yok** (`_Docs/arsiv/70-…`) — miras alınan env veya
     önceden yapılmış `codex login` tek yol.
 - **Nesting sızıntısı geri gelmedi:** `cliBaseEnv` `ANTHROPIC_MODEL`,
   `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_*` ve tüm `CLAUDE_CODE_*`

@@ -2966,7 +2966,7 @@ hakkındaki kalıcı çıkarımları kısa satırlar olarak merge eder, `human`'
 - **Best-effort**: değişiklik yoksa no-op, limit aşılırsa truncate, hata yansımayı
   bozmaz. **Ayar** `AutoUserModel` (varsayılan açık) — settings + Tunables +
   applySettings + frontend toggle.
-- `go build` ✅, **206 test** ✅, `tsc` ✅. Detay: `31-MEMGPT-CORE-MEMORY.md` Parça 4b.
+- `go build` ✅, **206 test** ✅, `tsc` ✅. Detay: `arsiv/31-MEMGPT-CORE-MEMORY.md` Parça 4b.
 
 ## Çekirdek bellek: adlandırılmış bloklar + karakter limiti (MemGPT Parça 5) ✅ (2026-06-23)
 
@@ -2984,7 +2984,7 @@ ajanın istediği etikette tanımlayabildiği **dinamik bloklar**a genelleşti; 
 - **API**: `GET /core→{blocks}`, `PUT /core {blocks:{label:content}}`, `POST/DELETE
   /core/blocks[/{label}]`. **Frontend**: `CoreMemoryCard` dinamik + limit çubuğu +
   blok ekle/sil + read-only kilit.
-- Doğrulama: `go test` 141 ✅, `tsc` ✅. Detay: `31-MEMGPT-CORE-MEMORY.md` Parça 5.
+- Doğrulama: `go test` 141 ✅, `tsc` ✅. Detay: `arsiv/31-MEMGPT-CORE-MEMORY.md` Parça 5.
 
 ## Composer: oturum-başına taslak + ikon-tabanlı kontroller ✅ (2026-06-23)
 
@@ -3456,7 +3456,7 @@ Yapılan:
 **Hedef:** Letta'yı (Docker+Postgres+Python) koşmadan, fikirlerini native Go'da:
 bağlam-basıncı sinyali + ajanın in-place düzenlediği kalıcı **çekirdek bellek**.
 Tek binary / offline / dosya-tabanlı kimliği korunur, migration yok. Plan +
-sapmalar: `_Docs/31-MEMGPT-CORE-MEMORY.md`.
+sapmalar: `_Docs/arsiv/31-MEMGPT-CORE-MEMORY.md`.
 
 Yapılan (3 parça):
 
@@ -3876,7 +3876,7 @@ düzenlemeleri eksikti**; onları da ekle.
 - **Canlı mod (`workspaceToVis(graph, visible, 'live')`):** 5 sabit board-durumu sütun başlığı (`fixed`+`physics:false`), her görev `task→col` kenarıyla durum sütununa yaylanır. **Aktif bağ** = `owns` + görev `in_progress` (parlak accent kenar + gölge); diğer owns/created/runs/uses bağları canlı modda gizli. Skill/MCP bağları ajanla kalır.
 - **Gerçek zamanlı:** `NetworkPanel` canlı modda `/api/events` SSE'ye abone olur (600ms debounce) → grafiği yeniden çeker. `VisNetworkGraph` DataSet'i **artımlı** (diff, konum sıfırlamadan) günceller → fizik motoru ajanı yeni bağına kaydırarak animasyon yapar.
 - `VisNetworkGraph`'a `mode` prop'u (live'da düşük centralGravity + avoidOverlap); fit stabilizasyon sonrası yapılır.
-- **Doğrulama:** `go build`/`tsc`/`vite build` yeşil. Canlı Chrome (MINIMAX ws): 5 sütun başlığı + görevler durum renklerine göre sütun altlarında kümelendi; geçici olarak bir in_progress göreve sahip atayınca **ajan→aktif görev parlak bağı** render oldu (sonra sahip `""`'a geri alındı — gerçek veri korundu). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
+- **Doğrulama:** `go build`/`tsc`/`vite build` yeşil. Canlı Chrome (MINIMAX ws): 5 sütun başlığı + görevler durum renklerine göre sütun altlarında kümelendi; geçici olarak bir in_progress göreve sahip atayınca **ajan→aktif görev parlak bağı** render oldu (sonra sahip `""`'a geri alındı — gerçek veri korundu). Detay: `_Docs/arsiv/23-ILISKI-GRAFIGI.md`.
 
 ## Ajan kontrol-yüzeyi genişletme — hooks/mcp/secret-write/skill araçları ✅ (2026-06-19)
 
@@ -4223,7 +4223,7 @@ aynı hesap.
 - **vis-network'e geçiş (2026-06-19):** İlk React Flow + saf-TS force simülasyonu homojen dağılım vermedi (mesafe/yoğunluk kırılgan). Agent-MCP'nin de **`vis-network` (vis.js)** kullandığı `package.json`'dan doğrulanınca **`vis-network` v10.1.0 + `vis-data` v8.0.4**'e geçildi. Gerçek fizik motoru (`forceAtlas2Based` çözücü) bağsız/seyrek graflarda bile **homojen dağılım** veriyor. (Not: kısa süre denenen "Ağaç"/hiyerarşik mod bu döngüsel+bağsız veride bozuk göründüğü için kaldırıldı — hiyerarşi için Akışlar ekranı zaten gerçek DAG'dır; ağ yalnız fizik düzeni kullanır.) Eski `RelationGraph.tsx`/`EntityNode.tsx` + force layout fn'leri silindi; `lib/relationGraph.ts` artık DTO→vis eşleyici (`workspaceToVis`/`memoryToVis`), yeni `VisNetworkGraph.tsx` sarmalayıcı. vis-network ~515KB ayrı lazy chunk (ana bundle değişmedi).
 - **Yoğunluk kaydırıcısı + yeni katmanlar (2026-06-19):** Toolbar'a **Yoğunluk** kaydırıcısı (0.4×–2×) eklendi — `VisNetworkGraph` `density` prop'u forceAtlas2 itme/yay uzunluğunu canlı ölçekler. Ağa iki yeni düğüm türü eklendi: **beceri/skill** (sarı altıgen, `Agent.Skills`'ten, `skill` kenarı) ve **MCP sunucusu** (teal kare, etkin sunucular + `Agent.MCPEnabled`, `mcp` kenarı). Toolbar'da **katman chip'leri** (Görevler/Akışlar/Beceriler/MCP) ile her tür açılıp kapatılır; backend `/api/graph` skills/mcp düğüm+kenarlarını ve `stats`'a sayıları döndürür. Hafıza bilinçli olarak workspace ağına eklenmedi (yüzlerce düğüm → ayrı Hafıza→Ağ grafiği kapsar). Canlı doğrulama: MINIMAX ws'de teal "gateway" MCP düğümü + ajanlara teal kenarlar render oldu.
 - **Düğüm şekilleri + tooltip (2026-06-19):** Görevler artık **durum-renkli kare** (başlık altında etiket) + **hover açıklama tooltip'i** (vis `title`=HTMLElement; backend `graphNode.Desc`=`Task.Description` eklendi). Beceriler **yıldız**, MCP **üçgen** (kareyle çakışmasın diye). `lib/relationGraph.ts`'e `tip()`/`esc()` tooltip yardımcıları. Canlı doğrulama: MINIMAX ws'de kare görevler (durum renkli) + teal üçgen "gateway" render oldu; `desc` 23 görevde mevcut.
-- **Durum:** `go build/vet/test ./internal/...` + `tsc`/`vite build` yeşil; canlı API smoke + **canlı Chrome görsel doğrulaması** (MINIMAX ws, Fizik homojen yayılım; kare görevler, üçgen MCP, yoğunluk kaydırıcısı çalışıyor). Detay: `_Docs/23-ILISKI-GRAFIGI.md`.
+- **Durum:** `go build/vet/test ./internal/...` + `tsc`/`vite build` yeşil; canlı API smoke + **canlı Chrome görsel doğrulaması** (MINIMAX ws, Fizik homojen yayılım; kare görevler, üçgen MCP, yoğunluk kaydırıcısı çalışıyor). Detay: `_Docs/arsiv/23-ILISKI-GRAFIGI.md`.
 
 ## Ayarlar skill'i + canlı ayar tool'ları (`get_settings`/`update_settings`) ✅ (2026-06-19)
 
@@ -4943,7 +4943,7 @@ satırı; prompt-cache indirimini modelleme.
 
 ## external-agent incelemesi P0+P1 fix'leri (CG-1…CG-5) ✅ (2026-06-17)
 
-`_Docs/arsiv/13-CRAFT-AGENTS-INCELEME.md`'deki 4 P0 + 1 P1 boşluğu kapatıldı
+`_Docs/arsiv/13-HARICI-AJANLAR-INCELEME.md`'deki 4 P0 + 1 P1 boşluğu kapatıldı
 (davranış-koruyucu, geriye-uyumlu):
 
 - **CG-1 — Tool çıktısı boyut sınırı:** `tools/registry.go` `capToolOutput()`

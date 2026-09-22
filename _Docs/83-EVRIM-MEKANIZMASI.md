@@ -174,7 +174,7 @@ Depoda `goal`/`fitness`/`experiment`/`A/B` araması yalnız tesadüfi sonuç ver
 > o fazın ihtiyacı kadar geri eklenir. Hedef artık editörden doğrudan da oluşturulur
 > (`POST /api/goals`); `goal-writer` zorunlu kapı değil, "sözlerinle yazdır" yardımcısıdır.
 
-Metrik adları kapalı bir kataloğa bağlıdır (`internal/evolution/metrics.go`): reçete
+Metrik adları kapalı bir kataloğa bağlıdır (`internal/goals/catalog.go`): reçete
 istatistikleri, usage, pano sonuçları, otomasyon sayaçları, hata sınıfları, `Task.Rating`.
 **Açık uçlu hedefler** için rubrik: ayrı bağlamda çalışan `outcome-judge` sistem ajanı
 (araçsız, Anthropic Outcomes deseni) puan verir; kullanılmadan önce birkaç insan

@@ -6,8 +6,8 @@
 > uygulanmış ve olgun. En önemli kararlar: provenance guard'ı **workspace hariç**
 > tüm entity türlerinden kaldırıldı (ajan artık kullanıcı-oluşturduğu varlıkları da
 > düzenleyip silebilir; workspace silme yıkıcılığı yüzünden istisna kaldı), tüm
-> self-management araçları tek `SelfManageEnabled()` bayrağıyla kapatılıp lazy
-> yüklenir, `update_settings` değişikliği restart olmadan canlı uygular; `list_agents` / `list_artifacts` / `list_automations` `list_tasks` gibi arşivi ayırır (`archived:true` yalnız arşiv); tek `set_archived` aracı ajan/skill/artifact/otomasyon/hedefi REST ile aynı store çağrılarıyla arşivler/geri alır (TSK1045). Dayandığı
+> self-management araçları her zaman kurulu ve lazy
+> yüklenir (eski `SelfManageEnabled` gate'i 2026-07-01'de kaldırıldı), `update_settings` değişikliği restart olmadan canlı uygular; `list_agents` / `list_artifacts` / `list_automations` `list_tasks` gibi arşivi ayırır (`archived:true` yalnız arşiv); tek `set_archived` aracı ajan/skill/artifact/otomasyon/hedefi REST ile aynı store çağrılarıyla arşivler/geri alır (TSK1045). Dayandığı
 > dosyalar: `internal/tools/builtin_{agentmgmt,flowmgmt,schedulemgmt,taskmgmt,
 > hookmgmt,mcpmgmt,workspacemgmt,artifactmgmt,archivemgmt,skillmgmt,settings}.go`,
 > `internal/settings/validate.go`.
@@ -22,9 +22,9 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 
 ## Gating + lazy yükleme
 
-- **Tek anahtar:** tüm öz-yönetim araçları yalnız `SelfManageEnabled()` true ise
-  kaydedilir (env `TIONHARNESS_ENABLE_SELFMANAGE=1`). Kapalıyken hiç eklenmez (~+2000
-  tok/tur tasarrufu).
+- **Daima kurulu:** öz-yönetim araçları her zaman kaydedilir; eski
+  `SelfManageEnabled()` / `TIONHARNESS_ENABLE_SELFMANAGE` gate'i 2026-07-01'de kaldırıldı
+  (token maliyeti lazy yükleme ile karşılanır, `19-LAZY-TOOL-LOADING.md`).
 - **Hepsi lazy:** aile geniş ve turların azında kullanıldığı için şemalar her tura
   basılmaz; ajan "Available Tools (load on demand)" listesinden gerekeni
   `activate_tools` / `tool_search` ile **kendisi yükler** (`toolsetup.go`'da
@@ -39,7 +39,7 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 bu lazy aile, Interaction MCP **köprüsü** ile CLI ajanlarına önden advertise edilip
 native registry üzerinden dispatch edilir (`Runtime.BridgeTools` →
 `Registry.BridgeableDefs`; backend `Tools(token)` + `Call` default). Per-ajan
-`toolFilter` ve self-manage gate'i CLI'de de aynen geçerli. Detay:
+`toolFilter` CLI'de de aynen geçerli. Detay:
 `_Docs/11-INTERACTION-MCP.md`.
 
 ## Provenance guard'ı KALDIRILDI — workspace HARİÇ (2026-08-05)
@@ -65,7 +65,7 @@ köken/görüntüleme için tutulur — silme/düzenleme kapısını artık kapa
 
 | Alan | Araçlar | Notlar |
 |------|---------|--------|
-| **Agents** | `create_agent` / `update_agent` / `delete_agent` / `list_agents` | create canlı `Start`, delete `Stop`; edit/delete köken filtresi YOK (ajan kendini silemez). **Provider mirası (2026-08-06):** `create_agent` provider'ı boşsa **oluşturan ajanın** provider+model'i eşleşik çift olarak devralınır (koordinatör deepseek'te → alt-ajanlar da deepseek), yoksa `claude-cli`'ye düşer; model yalnız hem provider hem model boşken miras alınır (kaldırılan soyut workspace-default yerine agent-bazlı yaklaşım). **Cascade:** delete ajanın session'larını + bağlı schedule'larını (`AgentID`) + sahip olduğu task'ları (`OwnerAgentID`) ve run'larını da siler, ardından `reloadSchedules` ile cron registry'sini tazeler. **Arşiv (2026-09-22):** `list_agents` varsayılan canlı ajanları döndürür, `archived:true` yalnız arşivlileri; arşivli ajan **çalıştırılamaz** (spawn/delegasyon/mesaj/sohbet açık `is archived` hatası verir — `_Docs/02` "Ortak arşiv") |
+| **Agents** | `create_agent` / `update_agent` / `delete_agent` / `list_agents` | create canlı `Start`, delete `Stop`; edit/delete köken filtresi YOK (ajan kendini silemez). **Provider mirası (2026-08-06):** `create_agent` provider'ı boşsa **oluşturan ajanın** provider+model'i eşleşik çift olarak devralınır (koordinatör deepseek'te → alt-ajanlar da deepseek), yoksa `claude-cli`'ye düşer; model yalnız hem provider hem model boşken miras alınır (kaldırılan soyut workspace-default yerine agent-bazlı yaklaşım). **Cascade:** delete ajanın session'larını + bağlı schedule'larını (`AgentID`) + sahip olduğu task'ları (`OwnerAgentID`) da siler, ardından `reloadSchedules` ile cron registry'sini tazeler. **Arşiv (2026-09-22):** `list_agents` varsayılan canlı ajanları döndürür, `archived:true` yalnız arşivlileri; arşivli ajan **çalıştırılamaz** (spawn/delegasyon/mesaj/sohbet açık `is archived` hatası verir — `_Docs/02` "Ortak arşiv") |
 | **Ajan delegasyonu** | `run_subagent` | izole işçi başlat (built-in profil: `explore`/`coder`/`reviewer`; ya da mevcut ajan adı/id). **Daima senkrondur:** çağrı alt-ajan bitene kadar bekler ve final cevabını döndürür; detached/arka plan modu yoktur (arka plan işi için görevi birkaç küçük çağrıya böl ya da koordinatör modu + `spawn_worker`). Geçiş sürümünde no-op olarak tutulan `wait` alanı 2026-09-06'da (TSK747) şemadan tamamen kaldırıldı. Koşan bir alt-ajanı durduran araç yoktur; koordinatörün `stop_worker`'ı **ayrı bir araçtır** ve etkilenmedi. Tek turda birden çok çağrı paralel koşar. **Yapılandırılmış görev sözleşmesi (2026-06-25):** opsiyonel `objective`/`output_format`/`boundaries` alanları subagent system-prompt'una "Task contract" bloğu olarak enjekte edilir (iş tekrarı/boşluğu önler; verilmezse eski düz-`task` davranışı). Daima kurulu (2026-07-02'den beri gate yok; görünürlük araç-bazlı Araçlar ekranından). Bkz. `25-SUBAGENT-ISOLATION.md` |
 | **Peer mesajlaşma** | `send_message` | başka ajana **adresli DM** (`{to, message, summary?}`); alıcının kalıcı **inbox** oturumuna `<agent_message from="…">` etiketiyle düşer, alıcı arka planda geçmiş-duyarlı turla işler (fire-and-forget, `SpawnMaxConcurrent` guard, kendine-mesaj reddi). run_subagent (sonuç-odaklı) yanında "süregelen işbirliği" yolu. Bkz. `28-PEER-MESAJLASMA-PLANI.md` |
 | **Flows** | `create_flow` / `update_flow` / `delete_flow` / `list_flows` / `get_flow` / `run_flow` | `run_flow` otonom, bütçe-gated, executions feed'ine kaydeder. `update_flow` `tags` alanı da alır (2026-07-04'te `set_flow_tags` bununla birleşti; ayrı `SetFlowTags` ile persist) |
@@ -77,7 +77,6 @@ köken/görüntüleme için tutulur — silme/düzenleme kapısını artık kapa
 | **Artifacts** | `delete_artifact` / `list_artifacts` / `read_artifact` | create/update zaten tur-başı sink ile sağlanır; `list_artifacts` artık `contentFile` yolunu da döndürür; `read_artifact` ID ile içeriği döndürür (dosya yolu tahmin etmeye gerek yok). `list_artifacts` varsayılan canlı artifact'ları, `archived:true` yalnız arşivlileri döndürür |
 | **Automations (arşiv filtresi)** | `list_automations` | Varsayılan yalnız canlı kurallar (önceden arşivliler de karışıyordu); `create_/update_automation` arşivli bir ajanı yeni `targetAgentId` olarak reddeder (TSK1044); `archived:true` yalnız arşivliler. Arşivli kural ateşlenmez (`archived`), hedef ajanı arşivli kural `agent_archived` nedeniyle atlanır. Arşivleme/geri alma: `set_archived` (aşağıda) veya UI / `POST /api/automations/{id}/archive|unarchive` |
 | **Ortak arşiv (TSK1045)** | `set_archived` | `{kind: agent\|skill\|artifact\|automation\|goal, id, archived}` — tek araç, REST arşiv rotalarıyla aynı store çağrıları (`internal/tools/builtin_archivemgmt.go`). Sistem ajanı arşivlenemez (açık hata), hedef geri alınınca `draft`'a döner (revizyon `agent:<id>` ile), skill için `id` = slug. Kanban kartı için `set_archived_task`. Deferred (hidden tier) |
-| ~~**Memory**~~ | ~~`memory_add` / `memory_recall`~~ | **KALDIRILDI (2026-07-05)** — memory alt sistemi tamamen çıkarıldı |
 | **Oturum / handoff** | `handoff_session` | bağlam sınırına yaklaşan oturumu **temiz pencerede** sürdürür: handoff artifact yazıp child oturum açar (name-only tier'a terfi etti). Bkz. `35-CONTEXT-RESET-HANDOFF.md` |
 | **Oturum yönetimi (workspace-scoped)** | `list_sessions` / `update_session` / `archive_sessions` | `update_session` yalnız **bu** oturumu düzenler (title/working_dir/tags/**archive**). `archive_sessions` **başka** oturumları toplu arşivler (soft, geri alınabilir): **`kinds`** (oturum tipi) + `idle_days` (N günden eski) + `title_contains` filtreleri, `dry_run` önizleme, `exclude` listesi; **daima `r.db`'ye bağlı → fiziksel olarak bu workspace'e scope'lu** ve **mevcut oturumu varsayılan olarak hariç tutar** (registry-build anında `SessionIDFrom(ctx)`); `include_current:true` ile ajan **kendi oturumunu da** arşivleyebilir (soft/geri alınabilir, çalışan tur durmaz). **`kinds` (2026-07-13):** geçerli tipler `chat`, `spawned`, `worker`, `flow`, `task`, `schedule`, `inbox` — ya da hepsi için `["*"]`. **Verilmezse varsayılan `["chat"]`** (geri uyumluluk: araç eskiden tipi sabit `chat` olarak filtreliyordu, dolayısıyla mevcut "eski oturumları temizle" çağrıları birebir aynı davranır). Bilinmeyen bir tip **sessizce yutulmaz, hata döner**. Otonom çalıştırmaların (spawn/flow/task/schedule/inbox) bıraktığı oturumlar eskiden **hiçbir toplu araçla** arşivlenemiyordu — `kinds` bu boşluğu kapatır. ⚠️ `schedule` ve `inbox` oturumları uzun ömürlü/sistemseldir; `["*"]` bunları da süpürür → önce `dry_run` ile önizle (`dry_run` çıktısı her satırda oturum tipini `[flow]` gibi gösterir). Tip mantığı ayrı dosyada: `builtin_sessionkinds.go`. Bu, ajanın "eski oturumları temizle" isteğinde ham REST'e (`Invoke-RestMethod /api/sessions/{id}/state`) düşüp workspace scope'unu kaybetmesini önler — bir kez yanlış (default) workspace'i arşivleyen tam da o footgun'du. Kaynak: `builtin_sessionarchive.go`, `builtin_sessionupdate.go`, `builtin_sessions.go`. **Her zaman aktif** (cross-session farkındalığı toggle'ı kaldırıldı) |
 | **Loglar** | `read_logs` | ring-buffer log okuma |

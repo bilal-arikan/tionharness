@@ -372,7 +372,7 @@ const (
 	DebugTurn          = "turn"           // one assistant turn finished (durMs, stop, err)
 	DebugLLMCall       = "llm_call"       // one provider completion (model, in/out/cache tokens)
 	DebugTool          = "tool"           // one tool execution (name, durMs, outBytes, err)
-	DebugHook          = "hook"           // one PreToolUse/PostToolUse hook ran (name, detail)
+	DebugHook          = "hook"           // one tool or lifecycle hook ran (event name, detail)
 	DebugError         = "error"          // a turn-level / permission / budget error
 	DebugCompaction    = "compaction"     // in-flight history was compacted (savedBytes)
 	DebugRecovery      = "recovery"       // a turn recovery fired (output resume / compact)

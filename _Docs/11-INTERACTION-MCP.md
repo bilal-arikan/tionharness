@@ -2,18 +2,21 @@
 
 > **Durum: ✅ UYGULANDI.** Faz 0–3 tamamlandı (2026-06-16 … 2026-06-26); üzerine
 > iki-tier endpoint (2026-06-26) ve stateful streaming + `tools/list_changed` push
-> (2026-07-06) eklendi. Faz 4 (diğer CLI'lar) **düştü** — Gemini/Antigravity
-> provider'ları 2026-07-03'te kaldırıldı, tek CLI yolu claude-cli. Sonuçlar §14–20'de.
+> (2026-07-06) eklendi. Faz 4 (diğer CLI'lar): Gemini/Antigravity provider'ları
+> 2026-07-03'te kaldırıldı; **codex-cli** 2026-08-18'den beri aynı Interaction MCP'ye
+> bağlanır (`internal/agent/codexmcp.go`, `69-CODEX-CLI-SAGLAYICI.md` §13). Canlı CLI
+> yolları: claude-cli + codex-cli. Sonuçlar §14–20'de; tarihsel plan metinleri
+> [`arsiv/11-INTERACTION-MCP-TARIHSEL.md`](arsiv/11-INTERACTION-MCP-TARIHSEL.md).
 > **Amaç:** Tüm insan-etkileşimli (human-in-the-loop) ve UI-etkileyen araçları
-> (`ask_user`, `todo_write`, artifact, ileride onay/bildirim vb.) **tek bir ortak
+> (`ask_user`, `todo_write`, artifact, onay/bildirim vb.) **tek bir ortak
 > MCP sunucusu** üzerinden **kendi agentic döngüsünü çalıştıran her CLI ajanına**
-> (claude-cli, Codex, Gemini, Mistral Vibe…) kazandırmak. Böylece native
+> (claude-cli, codex-cli) kazandırmak. Böylece native
 > (anthropic/minimax) yolda zaten çalışan etkileşim araçları, CLI yollarında da
 > **aynı davranışla** çalışır (SDK-parite — bkz. `09-CLAUDE-AGENT-SDK.md`).
 >
 > **Kapsam genişledi (2026-06-16):** Tasarım artık yalnız claude-cli'ye değil,
 > MCP-over-HTTP destekleyen **tüm agent CLI'larına** CLI-agnostik biçimde yazılmıştır.
-> İlk hedef claude-cli; Codex / Gemini / Mistral Vibe aynı sunucuya bağlanır.
+> İlk hedef claude-cli'ydi; codex-cli aynı sunucuya bağlanır.
 
 ---
 
@@ -33,7 +36,7 @@ UI'ına bağlı değil.
 
 **Kök sebep:** Bu CLI'lar (`claude -p`, `codex exec`, `gemini`, `vibe`) **kendi**
 agentic tool döngüsünü çalıştırır. TionHarness yalnızca **dış** MCP sunucularını CLI'ye
-delege eder (`internal/agent/climcp.go`); **kendi** etkileşim araçlarını CLI'ye hiç
+delege eder (`internal/climcp/climcp.go`); **kendi** etkileşim araçlarını CLI'ye hiç
 sunmaz.
 
 **Belirti (kullanıcı):** "soru penceresi hiç çıkmıyor"; ajan "AskUserQuestion
@@ -65,20 +68,9 @@ graph TD
 yeniden tanımlamaz, **enumerate eder**. Böylece native ve CLI yolları zamanla
 ayrışamaz — tek doğruluk kaynağı `internal/tools`'taki built-in tanımlardır.
 
-Ortak çekirdek soyutlama — **`RunSession`** (aktif sohbet turunu temsil eder):
-
-```go
-type RunSession interface {
-    Emit(step TurnStep)                              // SSE'ye adım it (todo, artifact kartı, ...)
-    Ask(ctx context.Context, askID, question string, options []string) (string, error) // AskPrompt aç + cevabı bekle
-    Artifacts() ArtifactSink                         // artifact üret/güncelle
-    // ileride: Confirm, Notify, Pick, ...
-}
-```
-
-`chatRun` bu arayüzü uygular. Hem native built-in'ler (context ile), hem MCP
-sunucusu (token → run lookup ile) aynı `RunSession` üzerinden iş görür → **davranış
-birebir aynı**.
+Özgün planda ortak bir `RunSession` arayüzü öngörülmüştü; yazılmadı — gerçekte `chatRun`
+(`internal/api/chat_control.go`) + `internal/api/mcp_interaction.go` bu rolü üstlenir
+(gerçek dosya listesi §15). Plan metni: [`arsiv/11-INTERACTION-MCP-TARIHSEL.md`](arsiv/11-INTERACTION-MCP-TARIHSEL.md).
 
 ---
 
@@ -172,8 +164,7 @@ her CLI'da çalışan en küçük ortak payda:
 - Sunucu yalnız loopback'e bind (mevcut davranış). Token, aynı makinedeki başka
   süreçlerin tura müdahalesini engeller. Config temp dosyası tur sonunda silinir.
 
-> Tek opak token sayesinde ayrı `X-Swarm-Run` header'ı **gerekmez**; isteğe bağlı
-> debug için header de kabul edilebilir ama zorunlu değil.
+> Tek opak token sayesinde ayrı bir run header'ı gerekmez.
 
 ---
 
@@ -220,13 +211,11 @@ Her CLI'nin kendi mcp-config formatı + built-in-disable bayrağı var. Ortak ç
 
 | CLI | Provider dosyası | MCP config | HTTP alanı | Per-run token taşıma | Built-in ask kapatma |
 |-----|------------------|------------|------------|----------------------|----------------------|
-| **claude-cli** (ilk hedef) | `providers/claudecli.go` + `agent/climcp.go` | `--mcp-config` JSON (temp) | `type:"http"`, `url` | `headers:{Authorization}` | `--disallowedTools AskUserQuestion TodoWrite` *(doğrulandı)* |
-| **Codex CLI** | (yeni) `codexcli.go` | `config.toml` `[mcp_servers]` (veya `--config`) | `url` | `bearer_token_env_var` → env | doğrulanacak (Codex'in built-in ask'i farklı) |
-| **Mistral Vibe** | (yeni) `vibecli.go` | Vibe MCP config | doğrulanacak | doğrulanacak | doğrulanacak |
+| **claude-cli** (ilk hedef) | `providers/claudecli.go` + `climcp/climcp.go` | `--mcp-config` JSON (temp) | `type:"http"`, `url` | `headers:{Authorization}` | `--disallowedTools AskUserQuestion TodoWrite` *(doğrulandı)* |
+| **codex-cli** ✅ | `providers/codexcli*.go` + `agent/codexmcp.go` | tur başına `config.toml` `[mcp_servers]` | `url` | ayrıntı `69-CODEX-CLI-SAGLAYICI.md` §13 | config renderer çakışan native özellikleri kapatır (`codexmcp.go`) |
 
-> İlk fazda **yalnız claude-cli** kablolanır. Diğer CLI'lar için provider + adaptör
-> ayrı, sonraki işlerdir; **Interaction MCP server'ı ortaktır** (yeniden yazılmaz),
-> sadece her CLI'ye uygun config entry üretilir.
+> **Interaction MCP server'ı ortaktır** (yeniden yazılmaz); her CLI provider'ı yalnız
+> kendi config entry'sini üretir.
 
 ### 7.2 claude-cli wiring (Faz 1)
 
@@ -304,7 +293,7 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | `focus_view` (UI navigasyon) | bloklamayan | Faz 3 |
 | ~~`set_session_goal` / `complete_goal`~~ | — | **KALDIRILDI (2026-07-28)** |
-| `set_session_title` / `set_working_dir` / `archive_session` | bloklamayan | Faz 3 |
+| `update_session` (başlık / cwd / etiket / arşiv; eski `set_session_title`/`set_working_dir`/`archive_session`'ın yerine) | bloklamayan | Faz 3 → birleşik (`builtin_sessionupdate.go`) |
 
 Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native +
 MCP) otomatik yansır (tek şema kuralı, §2).
@@ -312,8 +301,7 @@ MCP) otomatik yansır (tek şema kuralı, §2).
 **`spawn_session` — CLI köprüsünde korunuyor (Faz 4, 2026-06-19):** Native ajan
 tool listesinden kaldırıldı. Ancak claude-cli ajanlarının **Interaction MCP köprüsünde**
 aktif olmaya devam eder — **fire-and-forget**: yeni bağımsız bir oturum açar, çıktı o
-oturuma düşer, bu konuşmaya DÖNMEZ. Bir self-management aracı olduğundan yalnızca
-`SelfManageEnabled()` açıkken ilan edilir (`interactionBackend.tun`). Stream handler
+oturuma düşer, bu konuşmaya DÖNMEZ. Stream handler
 her ajan turunda `chatRun`'a taze bir `*tools.SpawnSessionTool` örneği kurar
 (`setSpawnTool`); `Call()` dispatch bu örneğe `spawn_session` adıyla yönlendirir.
 Böylece claude-cli ajanları (Coder, Fasty …) bağımsız oturum başlatabilir — canlı doğrulandı.
@@ -371,16 +359,10 @@ fallback'leri de (oturum okunamadı / dizin yok / dizin değil) artık `Warn` il
 artık kurulum anında bir kez `Warn`'lanır (`Server.logWarn`, nil-logger toleranslı) ve oturum
 gerektiren her araç çağrı anında kendi açık `IsError` metnini döndürür.
 
-**`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
-_(Not: `core_memory_*` araçları 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI;
-bu bölümün core-memory kısmı tarihseldir, `conversation_search` köprüsü hâlâ geçerli.)_
-Bu üç araç **eager** built-in (native'de her turda hazır) ve native-loop ctx bağımlılığı
-yok — yalnız `r.mem` / `r.db` ister. Daha önce CLI ajanı core-memory bloğunu prompt'unda
-**görüyor** ama düzenleyemiyordu; geçmişte derin (tam-metin) arama da yoktu. Lazy işaretleyip
-köprülemek native UX'i bozardı (ajan önce `activate_tools` demek zorunda kalırdı). Bunun
-yerine `BridgeTools` eager def'leri köprü ilan listesine **doğrudan ekler** (gate'leri
-`CoreMemoryTools()` / `SessionContextEnabled()`); dispatch zaten `bridgeCallFor()` →
-`reg.Call` ile isimle çalışır (ekstra case gerekmez). Native tarafta eager kalırlar.
+**`conversation_search` — CLI köprüsüne eklendi (2026-06-22):** eager bir built-in
+(native'de her turda hazır, native-loop ctx bağımlılığı yok). Lazy işaretleyip köprülemek
+native UX'i bozardı; bunun yerine `BridgeTools` onu köprü ilan listesine **doğrudan ekler**
+(gate: `SessionContextEnabled()`); dispatch `bridgeCallFor()` → `reg.Call` ile isimle çalışır.
 
 **İsim hizalama (2026-06-22):** Çekirdek dosya/şel araçları artık claude-cli ile **aynı
 isimleri** taşır — `read_file→Read`, `write_file→Write`, `edit_file→Edit`, `list_dir→LS`,
@@ -427,13 +409,12 @@ advertise** edilip native registry üzerinden dispatch edilir. Mekanizma generic
   her istekte bearer'ı doğruluyor).
 - `Call()` default case → `run.bridgeCallFor()` ile native registry'ye dispatch.
   Advertise edilen katalog (+ per-ajan filter) hangi adın çağrılabileceğinin kapısı.
-- Self-manage kapalıyken katalog boş (lazy built-in yok) → köprü no-op.
 - **Köprü alt-küme sınırı (2026-06-19):** `BridgeableDefs`, lazy olsa bile
   `tools.bridgeExcluded` setindeki araçları atlar. Gerekçe: köprü **tam şema** ilan
   ettiğinden yüzeyi yalın tutmak gerekir. Dışlananlar: `WebFetch` (CLI'nin kendi
-  WebFetch'i var → çift maliyet) ve `call_agent` (dispatch native-loop'un kurduğu
-  `DelegationFrom(ctx)`'i ister; bridge dispatcher düz request ctx ile koşar →
-  köprülenirse hep "delegation not available" hatası). Native ajanlar etkilenmez.
+  WebFetch'i var → çift maliyet) ve native-loop'un ctx'e kurduğu runner'a ihtiyaç duyan
+  araçlar (`run_subagent` — kendi açık köprüsü var —, `run_adhoc_flow`, `run_code`).
+  Güncel liste: `internal/tools/registry.go` `bridgeExcluded`. Native ajanlar etkilenmez.
   Test: `tools/lazyload_test.go TestBridgeableDefsExcludesCLINative`.
 - Test: `mcp_interaction_test.go TestInteractionBridge` (advertise + dispatch +
   token izolasyonu). claude-cli ile canlı uçtan-uca doğrulama **beklemede**.
@@ -447,8 +428,7 @@ hem `Tools()`'u (advertise) hem `interactionAdvertisedNames(tun)`'ı üretir; st
 handler bu isimleri her turda `InteractionEndpoint.ToolNames`'e koyar; `climcp.go`
 allowlist'i bundan türetir. Sonuç: **araç eklemek = `interactionToolSpecs`'e bir
 `Def()` + `Call()`'a bir `case`** — allowlist otomatik takip eder, ikinci liste
-yok. (Self-manage'e bağlı `spawn_session` gating'i tek yerde kalır → advertise ve
-allowlist ikisi de aynı koşula uyar.) Değişmez: `mcp_interaction_test.go`
+yok. Değişmez: `mcp_interaction_test.go`
 `TestInteractionAdvertisedNames` advertise == allowlist isimlerini kilitler.
 
 **Köprü `toolFilter`'a uyar (2026-07-25):** Önceden köprü araç seti yalnız
@@ -463,23 +443,10 @@ aynı seti sunar. Değişmez: `gateway_dynamic_test.go TestInteractionToolsHonor
 
 ---
 
-## 9. Dosya değişiklikleri (tahmini)
+## 9. Dosya değişiklikleri
 
-**Yeni:**
-- `internal/api/mcp_interaction.go` — MCP-over-HTTP server (initialize/tools/list/tools/call), `internal/mcp` mesaj tiplerini reuse eder, bearer→run doğrulama, tool dispatch → `RunSession`.
-- `internal/interaction/session.go` — `RunSession` arayüzü; tool tanımları `tools.Registry`'den enumerate edilir (yeniden tanımlanmaz).
-- `internal/api/mcp_interaction_test.go` — protokol (initialize/list/call) + ask/answer round-trip + bearer reddi + emit mutex testi.
-
-**Değişen:**
-- `internal/api/chat_control.go` — `chatRun`'a `mu`/`write`/`token`/`answers` + `emit`; `register` token üretir; `answer` aksiyonu `askId`'ye yönlenir.
-- `internal/api/chat_stream.go` — `run.write = sse` kur; `OnEvent`/asker → `run.emit`; interaction endpoint+token'ı context'e koy.
-- `internal/agent/climcp.go` — interaction server entry'si **her zaman** eklenir + allowedTools; boş-dönüş davranışı kalkar.
-- claude-cli çağrısı (`providers/claudecli.go` / `agent/toolloop.go`/`climcp`) — `--disallowedTools` + system-prompt notu.
-- `internal/tools/ask.go` benzeri — `WithInteractionEndpoint` context köprüsü.
-- `_Docs/09-CLAUDE-AGENT-SDK.md` + `SKILL.md` — yeni mimari notu.
-
-**İleride (CLI başına, ayrı iş):**
-- `internal/providers/codexcli.go` · `vibecli.go` — her biri kendi MCP config yazıcısı + döngü shell-out'u; Interaction MCP server'ı ortak kullanır.
+Özgün tahmini liste arşivde ([`arsiv/11-INTERACTION-MCP-TARIHSEL.md`](arsiv/11-INTERACTION-MCP-TARIHSEL.md)); gerçekleşen dosya
+listesi §15'tedir.
 
 ---
 
@@ -491,7 +458,7 @@ aynı seti sunar. Değişmez: `gateway_dynamic_test.go TestInteractionToolsHonor
 | 1 | HTTP MCP server + `ask_user` (bloklayan) + `todo_write` + CLI wiring/disallow | ✅ 2026-06-16 (§15) |
 | 2 | `create_artifact`/`update_artifact` + `request_confirmation`; todo/artifact kart paritesi | ✅ 2026-06-16 (§16) |
 | 3 | `notify`, `focus_view`, oturum hedefi + metadata araçları | ✅ 2026-06-25/26 (§17–20) |
-| 4 | Diğer CLI'lar (Codex/Gemini/Mistral) | ❌ **düştü** — Gemini/Antigravity provider'ları 2026-07-03'te kaldırıldı |
+| 4 | Diğer CLI'lar | ✅ **codex-cli** (2026-08-18, `69` §13); Gemini/Antigravity provider'ları 2026-07-03'te kaldırıldı |
 
 Faz sonrası eklemeler: iki-tier endpoint (2026-06-26) ve stateful streaming +
 `tools/list_changed` push (2026-07-06) — ilgili bölümlerde.
@@ -507,15 +474,14 @@ Faz sonrası eklemeler: iki-tier endpoint (2026-06-26) ve stateful streaming +
 - **Parite:** aynı senaryo anthropic anahtarıyla native yolda → aynı UI/davranış.
 - **Regresyon:** dış MCP sunucuları + interaction birlikte; `--disallowedTools`
   diğer araçları bozmuyor; interaction entry üretilemezse tur düşmüyor (§12.5).
-- **CLI-agnostik (Faz 4):** Codex/Gemini handshake + ask/answer round-trip (her CLI
-  kurulu ise).
+- **CLI-agnostik (Faz 4):** codex-cli handshake + ask/answer round-trip (CLI kurulu ise).
 
 ---
 
 ## 12. Riskler & açık sorular
 
 1. **CLI Streamable HTTP MCP uyumu** — ✅ **claude-cli için ÇÖZÜLDÜ** (Faz 0 spike,
-   §14). Codex/Gemini/Vibe için Faz 4'te doğrulanacak; takılırsa **stdio fallback**.
+   §14); codex-cli için de canlı (Faz 4).
    *(eski en büyük risk; claude tarafı artık yeşil)*
 2. **Eşzamanlı repo düzenlemesi** — bu repoda başka bir oturum aktif olabilir;
    çakışmayı önlemek için iş ayrı dosyalarda yoğunlaşır.
@@ -598,7 +564,7 @@ MVP implemente edildi ve canlı claude-cli ile uçtan uca doğrulandı.
 - `internal/api/chat_control.go` — `chatRun`'a `token`/`done`/`mu`/`write` + `emit`/`setWrite`/`clearWrite`; `chatRuns.byToken`; register per-run token üretir, unregister `done`'ı kapatır.
 - `internal/api/chat_stream.go` — SSE yazımı `run.emit` üzerinden serileştirildi (handler + MCP goroutine yarışmaz); interaction endpoint context'e konur.
 - `internal/api/server.go` — `selfURL`/`interactionMCP` alanları, `SetBaseURL`, `/mcp/interaction` route (nil-guard'lı).
-- `internal/agent/climcp.go` — `writeCLIMCPConfig(ctx, mcpEnabled, inter)` imzası; interaction entry (`type:http`, `headers: Bearer`) + allow/disallow listeleri; `cliMCPServer.Headers`.
+- `internal/climcp/climcp.go` — `writeCLIMCPConfig(ctx, mcpEnabled, inter)` imzası; interaction entry (`type:http`, `headers: Bearer`) + allow/disallow listeleri; `cliMCPServer.Headers`.
 - `internal/agent/toolloop.go` — claude-cli, MCP kapalı olsa bile interaction endpoint varsa MCP-delegasyon yoluna girer.
 - `internal/providers/claudecli.go` — `ConfigureMCP(..., disallowedTools)`; `--disallowedTools` (AskUserQuestion/TodoWrite) + interaction sistem-prompt notu.
 - `cmd/tionharness/main.go` — `server.SetBaseURL(cfg.Addr)`.
@@ -611,9 +577,8 @@ yeşil. MCP **kapalı** ajanda çalışması, interaction'ın MCPEnabled'dan ba�
 kablolandığını kanıtlar.
 
 **Açık işler:** (1) ✅ keep-alive gereksiz çıktı (28h timeout — bkz. §12.3);
-(2) ✅ todo/artifact kart paritesi Faz 2'de çözüldü (§16); (3) askID bazlı
-çoklu-soru yönlendirme hâlâ ertelendi (şu an tek `answer` kanalı yeterli — tool
-döngüsü senkron, aynı anda tek soru).
+(2) ✅ todo/artifact kart paritesi Faz 2'de çözüldü (§16); (3) ✅ çoklu soru
+2026-07-08'de yapıldı (§3 "Çoklu soru").
 
 ## 16. Faz 2 sonucu (2026-06-16 — TAMAMLANDI ✅)
 
@@ -803,62 +768,18 @@ Type:"navigate", Target:{view, sessionId, agentId}}` yayınlar → SSE `/api/eve
 (claude-cli) `focus_view{view:artifacts}` çağırdı → `navigate` event SSE'de yakalandı →
 "navigated the UI to artifacts". Uçtan uca doğrulandı.
 
-> **Faz 3 kalan:** oturum metadata yazımı (`set_session_title`/`set_session_goal`+
-> `complete_goal`/cwd/archive) — ayrı iş; bkz. §8 tablosu son satır.
+## 19. Faz 3 — oturum hedefi (KALDIRILDI 2026-07-28)
 
-## 19. Faz 3 — `set_session_goal` / `complete_goal` (oturum hedefi) (2026-06-26 — TAMAMLANDI ✅)
-
-> **⚠️ BU BÖLÜM TARİHSELDİR.** Oturum-hedefi mekanizması **2026-07-28'de tamamen
-> kaldırıldı** (araçlar, `db.Session.Goal`/`GoalDone`, prompt enjeksiyonu, HTTP
-> endpoint'i, UI kartı, `goal`/`goal-done` etiketleri). İleride Claude Code'un
-> `/goal`'üne benzer — ayrı bir değerlendirici modelin tur sonunda durma koşulunu
-> yargıladığı — bir döngü olarak yeniden ele alınacak. Aşağısı ne yapıldığının kaydıdır.
-
-Ajan artık oturumun kalıcı **"north star" hedefini** kendisi koyabilir/tamamlayabilir —
-**mevcut `db.Session.Goal`/`GoalDone` ile paylaşımlı** (ayrı bir ajan-goal açılmadı). Daha
-önce yalnız kullanıcı UI'dan set ediyordu; ajan hedefi sistem prompt'unda (`goalContextBlock`)
-**görüyor** ama yazamıyordu. Artık iki araçla yazabilir; aynı alan, tek north-star.
-
-**Araç sözleşmesi:**
-- `set_session_goal(goal*)` → `Goal=goal, GoalDone=false`. Mevcut hedefi **ezer** ama yanıt
-  "replaced the previous goal: …" diye **şeffaf** bildirir (paylaşımlı alan, kullanıcının
-  hedefini sessizce ezmemek için). maxlen 2000.
-- `complete_goal()` (argümansız) → mevcut metni koruyup `GoalDone=true`; hedef kalır ama
-  context'e enjekte olmaz. Hedef yoksa/zaten done ise graceful mesaj (hata değil).
-- Sink yoksa (oturumsuz tur) graceful no-op.
-
-**Mekanizma:** `goalContextBlock` (`api/goal.go`) hedefi zaten her turun dinamik (cache-dışı)
-ekine enjekte ediyor; done olunca düşüyor. Araçlar yalnız bu mevcut alana yazar → ajanın
-koyduğu hedef **sonraki turdan** itibaren onu yönlendirir.
-
-**Dosyalar:**
-- `internal/tools/goalsink.go` — `GoalSink` (`Goal`/`SetGoal`) + `GoalState` + `WithGoal` köprüsü.
-- `internal/tools/builtin_goal.go` — `SetSessionGoalTool` + `CompleteGoalTool`.
-  `builtin_goal_test.go` (7 test: yaz/replace-flag/boş-red/sink-yok/complete/no-goal/already-done).
-- `internal/agent/goalsink.go` — concrete `Runtime.NewGoalSink(sessionID)` → `db.GetSession`/
-  `db.SetSessionGoal` (`artifactsink.go` deseni; "boş hedef done olamaz" guard'ı mirror).
-- `internal/agent/toolsetup.go` — native registry'ye iki eager built-in.
-- `internal/api/chat_control.go` — `chatRun.goal` + `setGoal`/`goalSinkFor()`.
-- `internal/api/chat_stream.go` + `autonomous_interaction.go` — `wsp.Runtime.NewGoalSink` / `rt.NewGoalSink` ile bağlanır.
-- `internal/api/mcp_interaction.go` — spec ×2 + `Call` case + `callGoal` (set/complete dispatch).
-- Skill: `tionharness-progress` (north-star satırı genişletildi) + `tionharness-guide` (interaction bölümü).
-
-**Yetki nüansı:** Hedef kullanıcıyla **paylaşımlı**. `set_session_goal` üzerine yazabilir ama
-değişikliği yanıtta açıkça bildirir (provenance ayrımı veri modelinde yok; şeffaflık yeterli
-görüldü). İleride sıkı guard istenirse `Session`'a "goal owner" alanı eklenebilir.
-
-**UI notu:** Goal kartı `SessionDetailPanel` yan panelinde; ajan set edince **canlı refresh
-event'i bu fazda eklenmedi** (panel yeniden açılınca/oturum değişince tazelenir). Kalıcılık +
-context enjeksiyonu anında çalışır. Canlı refresh istenirse ayrı küçük iş (SSE + panel handler).
-
-**Test:** `go build`/`vet`/`go test` (tools/agent/api) yeşil; 7 yeni birim test.
-
-> **Faz 3 kalan:** `set_session_title` / cwd / archive_session — ayrı iş (§8 tablosu son satır).
+`set_session_goal` / `complete_goal` ve `db.Session.Goal` 2026-07-28'de kaldırıldı;
+kayıt: [`arsiv/11-INTERACTION-MCP-TARIHSEL.md`](arsiv/11-INTERACTION-MCP-TARIHSEL.md).
 
 ## 20. Faz 3 — oturum metadata araçları + goal canlı-refresh (2026-06-26 — TAMAMLANDI ✅, Faz 3 KAPANDI)
 
 Faz 3'ün son artığı: ajanın **kendi oturumunu** düzenleyebilmesi + agent-set goal/metadata'nın
 UI'da **canlı** görünmesi.
+
+> Bu üç araç sonradan tek `update_session` aracında birleşti (`internal/tools/builtin_sessionupdate.go`);
+> aşağısı ilk sürümün kaydıdır.
 
 **Yeni araçlar (hepsi bloklamayan, oturum-bağlı; sink yoksa graceful):**
 - `set_session_title(title*)` — oturumu yeniden adlandır (sidebar etiketi; maxlen 200).
@@ -890,7 +811,7 @@ skill `tionharness-guide`.
 **Test:** tools/agent/api/db `build`/`vet`/`test` + `tsc`/`vite` yeşil. Canlı claude-cli doğrulaması.
 
 > **FAZ 3 TAMAMEN KAPANDI.** notify + focus_view + goal (set/complete) + oturum metadata
-> (title/cwd/archive) + canlı-refresh hepsi native+CLI+otonom. Kalan: Faz 4 (Codex/Gemini adaptörleri).
+> (title/cwd/archive) + canlı-refresh hepsi native+CLI+otonom. (Faz 4: codex-cli 2026-08-18'de bağlandı.)
 
 ### 20.1 Arşiv UI (2026-06-26)
 
@@ -916,7 +837,7 @@ da erteleniyordu → ilk turda `No such tool available`.
 | Anahtar | Path | `alwaysLoad` | İçerik |
 |---------|------|--------------|--------|
 | `tionharness_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `permission_prompt` |
-| `tionharness_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
+| `tionharness_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `update_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
 
 - `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine
   `ENABLE_TOOL_SEARCH=auto` geçilir (`claudecli.go runAttempt`) → EXTENDED %10 eşiğini

@@ -151,8 +151,8 @@ bulgularını uygulatır.
   `DELETE /api/automations/{id}`. Create'te hedef ajan doğrulanır; vars. maks=50.
 - **Araçlar:** `create/update/delete/list_automation` (self-management suite,
   provenance: ajan yalnız kendi oluşturduğunu düzenler/siler).
-- **UI:** `panels/Automations.tsx` — **Otomasyon** ekranında (NavRail'de eski
-  "Zamanlamalar" → **"Otomasyon"**, `NavRail.tsx` + `App.tsx`; ekran hâlâ cron
+- **UI:** `features/schedules/` (`Automation*` bileşenleri) — **Otomasyon** ekranında (NavRail'de eski
+  "Zamanlamalar" → **"Otomasyon"**, `app/NavRail.tsx` + `app/App.tsx`; ekran hâlâ cron
   Zamanlamalar + Otomasyonlar bölümlerini birlikte tutar) "Otomasyonlar" bölümü:
   oluşturma formu (ad/tetik/hedef/maks-iter/bekleme/**son tarih (ops.)**/prompt) +
   liste (aç-kapa, iterasyon sayacı `n/max`, spawn-etiket editörü, **inline düzenle**
@@ -409,26 +409,22 @@ türü (§2.6) tempo/bakım ihtiyacını karşılıyor. Ayrıntılı döküm `05
   `UpdatedAt` tazeleme) köprüler. `Session.MessageCount`/`ToolCallCount` sayaçları da
   UI için yerinde.
 - `GET /api/automations/live-stats` artık yalnız `{tokensToday}` döner.
-- Aşağıdaki "Ortak kod" ve "Oturum modu" notlarındaki counter atıfları tarihseldir;
+- Aşağıdaki "Oturum modu" notundaki counter atıfları tarihseldir;
   `EffectiveSessionMode` boş modu yalnız `token` için `continue` çözer.
 
 ### Ortak kod (refactor 2026-08-06)
-Dört tür büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):
-- **`deliverContinuity(a, prompt, trigger)`** (`agent/automation.go`) — token+counter fire'ın
-  birebir aynı olan flow/session sürücü seçimi (+pause-guard) tek yerde. `fireToken`/`fireCounter`
-  ~30→~8 satır.
-- **`notifyFired(a, sessionID, icon, suffix, prompt)`** — dört fire yolunun (tag/board/token/counter)
-  `RecordAutomationFire` + success event `publish` boilerplate'i ortak; her tür yalnız ikon+suffix verir.
-- **`commonVars(a)`** — dört `*Vars` fonksiyonunun ortak kuyruğu (`iteration`/`maxIterations`/
+Türler büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):
+- **`notifyFired(ctx, a, sessionID, icon, suffix, prompt)`** (`agent/automation.go`) — fire
+  yollarının `RecordAutomationFire` + success event `publish` boilerplate'i ortak; her tür yalnız
+  ikon+suffix verir.
+- **`commonVars(a)`** — `*Vars` fonksiyonlarının ortak kuyruğu (`iteration`/`maxIterations`/
   `automation`/`date`/`time`/`datetime`, "∞" mantığı dahil) tek yerde; her tür kendi anahtarını ekler.
-- **`Automation.EffectiveTokenScope()` / `EffectiveCounterScope()`** (`db/models_automation.go`) —
-  `scope=="" → session` normalizasyonu accessor'a; dağınık fallback'ler kaldırıldı.
+- **`Automation.EffectiveTokenScope()`** (`db/models_automation.go`) — `scope=="" → session`
+  normalizasyonu accessor'da; dağınık fallback'ler kaldırıldı.
 - **Doğrulama tekilleştirme** — **dört yazma yolundaki** (REST + ajan aracı × create + update)
   tür-bazlı `Valid*` tekrarları kaldırıldı; format/aralık/hedef doğrulaması artık **yalnız**
   `db.ValidateAutomationShape`'te (yollar ayrışamaz). Create handler'larında kalan tek özel
   kontrol: "zorunlu interval atlandı" (pointer nil). Update'te yalnız alan-atama + son shape freni.
-- **Not:** frontend `TokenTriggerFields` vs `CounterTriggerFields` **bilerek ayrı** bırakıldı —
-  counter'a `metric` alanı eklenince şekiller ayrıştı; zorlama ortak bileşen daha karmaşık olurdu.
 
 ### Oturum modu (`SessionMode`, 2026-08-06)
 Ajan-hedefli otomasyonlar artık **her tetikte yeni oturum mu / aynı kalıcı oturumu mu** kullanacaklarını
@@ -516,7 +512,7 @@ değişiklik varsa persist + `session` event (canlı UI refresh).
 Bağlam ▸ "Otomatik etiketleme" (`ContextPanel.tsx`). Kapalıyken hiçbir otomatik etiket
 yazılmaz (elle + ajan `set_session_tags` çalışmaya devam eder).
 
-**Canlı doğrulama (2026-07-03, WS2):** archived ekle/sil ✅, goal→`['goal']` ✅,
+**Canlı doğrulama (2026-07-03, WS2):** archived ekle/sil ✅,
 var-olmayan dosya Read → `is_error` → `tool-error` ✅; toggle OFF→etiket yazılmadı,
 ON→yazıldı ✅. Birim testi: `autotag_test.go` (`isPermissionDenyError` gerçek-hata
 vs politika-reddi ayrımı).
@@ -617,8 +613,6 @@ gate + hatalı input'ta kırmızı kenarlık.
   pozitif limit davranışı değişmemiş.
 
 ## Sıradaki
-- Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca; token maliyeti nedeniyle
-  unit testlerle ayrıldı).
 - Opsiyonel: `tionharness-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
   flow/schedule etiketlerini de tetikleyiciye açma (şimdilik yalnız session).
 

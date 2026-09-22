@@ -1,8 +1,5 @@
 # 63 — `render_template` + `html-preview` (Şablonlu HTML Render)
 
-> *Numara notu: bu doküman 2026-07-27'de **53 → 63** olarak yeniden numaralandı
-> (53, the external agent project prompt paritesi dokümanıyla çakışıyordu).*
-
 > Durum: ✅ **Uygulandı** (2026-07-06). the external agent project'ın "Source Templates / `render_template`"
 > özelliğinin TionHarness-native karşılığı.
 > İlgili: `_Docs/41-ARAC-BOSLUKLARI-YAPILACAKLAR.md` §8, `_Docs/07-CHAT-UX.md`.
@@ -81,11 +78,11 @@ sequenceDiagram
 | Araç | `internal/tools/builtin_render_template.go` | `render_template` Tool (Def/Call), render dir'e bağlı |
 | Test | `internal/tools/builtin_render_template_test.go` | escape, soft-warn, hard-fail'ler, traversal, no-session (8 test) |
 | Session dir | `internal/agent/renderdir.go` | `SessionRenderDir` = `<db.Root>/render/<sid>` |
-| Kayıt | `internal/agent/toolsetup.go` | builtins'e ekle + `MarkNameOnly("render_template")` |
+| Kayıt | `internal/agent/toolsetup.go` | builtins'e ekle (varsayılan name-only görünürlük) |
 | Servis | `internal/api/files.go` | `serveTextFile` (`as=text`) + `underDir` whitelist + `textServableExt` |
-| Inline UI | `frontend/src/components/markdown/HtmlPreview.tsx` | ```html-preview``` → sandbox iframe (tab desteği) |
-| Dispatch | `frontend/src/components/markdown/CodeBlock.tsx` | `lang==='html-preview'` → `HtmlPreview` |
-| URL helper | `frontend/src/lib/attachments.tsx` | `fileTextURL` (`?as=text&ws=`) |
+| Inline UI | `frontend/src/shared/components/markdown/HtmlPreview.tsx` | ```html-preview``` → sandbox iframe (tab desteği) |
+| Dispatch | `frontend/src/shared/components/markdown/CodeBlock.tsx` | `lang==='html-preview'` → `HtmlPreview` |
+| URL helper | `frontend/src/shared/lib/attachments.tsx` | `fileTextURL` (`?as=text&ws=`) |
 | Skill | `internal/skills/defaults/tionharness-templates/**` | SKILL.md + report/email şablonları + meta |
 | Prompt | `internal/workspace/defaults/default-instructions.md` | "## Rendering"e `html-preview` + `render_template` |
 | Guard | `internal/workspace/defaults_test.go` | `html-preview`/`render_template` yasak listesinden çıktı (artık native) |

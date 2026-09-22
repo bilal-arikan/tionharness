@@ -12,8 +12,8 @@
 the external agent project'ın (`external-agent-oss`) tam sistem promptu referans alınarak TionHarness'in
 kendi prompt kurgusuyla kısa karşılaştırması: neyi aldık, neyi bilinçli almadık, neyi
 farklı çözdük. İlgili: [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACHE-PARITE.md)
-(statik/dinamik cache bölünmesi), [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md)
-(araç eşleştirme), [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md).
+(statik/dinamik cache bölünmesi), [analiz-harici-ajan-arac-eslestirme.md](analiz-harici-ajan-arac-eslestirme.md)
+(araç eşleştirme), [arsiv/13-HARICI-AJANLAR-INCELEME.md](arsiv/13-HARICI-AJANLAR-INCELEME.md).
 
 ## İlke
 
@@ -56,7 +56,6 @@ suffix'ine (cache breakpoint'ten sonra). İkisi de cache'li prefix'i sabit tutar
 ### TionHarness'e özel ek dinamik bloklar (the external agent project'ta yok)
 Goal · Coordination scratchpad (M2) · Artifacts listesi · Todo/progress (kalıcı, resume) ·
 Cross-session özeti · Lifecycle-hook context · Memory-pressure uyarısı.
-*(Core memory + recall vardı → hafıza alt sistemi kaldırılınca gitti — `7849daf`.)*
 
 ## Recovery Context neden gereksiz
 
@@ -68,16 +67,6 @@ kalmaz. Daha dar olan tur-ortası süreç-ölümü riski için `inflight.json` c
 sidecar'ı vardır (`chat_stream.go`: ~600ms snapshot, reply-id paylaşımı → idempotent
 kurtarma; tur normal biterse silinir). Yani muadili özet değil **ham transkript** korur.
 
-## Bu oturumda uygulanan değişiklikler (commit izi)
-
-- `feat(prompt): environment marker + self-mgmt/destructive prompt polish`
-- `docs(prompt): add tionharness-deliverables to key skills + drop stale "memory"`
-- `feat(subagent): add "config" mini-agent profile` (the external agent project `getMiniAgentSystemPrompt`
-  karşılığı → `run_subagent` profili, config araçlarına sandbox'lı)
-- `feat(prompt): inject <session_state> block (session + workspace identity + mode)`
-
 ## Açık (bilinçli ertelenen)
 - **Tool Metadata (`_displayName/_intent`)** — her çağrıya token vergisi + guard yasağı;
   eklenirse settings-gated olmalı.
-- **Source Templates / `render_template`** — asıl blokör `html-preview` inline render;
-  ayrı planlama session'ında ele alınıyor.

@@ -1,6 +1,7 @@
 # 60 — Retrospektif Geçmiş Tarama (Insight Scan)
 
-> **Durum:** Faz 1–4 TAMAM (build OK · 899 test · tsc temiz). Canlı ilerleme `05-ILERLEME.md`'ye işlenecek.
+> **Durum:** Faz 1–6.4 uygulandı (§10). Tek açık madde: workspace-seviyesi tarama için
+> in-app rapor artifact'i (§10 başı). İlerleme kaydı `05-ILERLEME.md`'de.
 >
 > **Amaç:** Geçmiş session'ları **farklı amaçlarla (lens)** tarayan; taradığını tekrar
 > taramayan (session değiştiyse yeniden tarayan); bulguları **iki kanala** yönlendiren
@@ -551,7 +552,12 @@ untriaged bulgular üzerinden 30 kümelik iş üretti. Artık:
 
 ---
 
-## 10. Uygulama TODO
+## 10. Uygulama geçmişi (fazlar)
+
+Tüm fazlar uygulandı; aşağıdaki kayıtlar hâlâ geçerli mekanikleri (seed ledger, lens
+merge politikası, cache lensleri) anlatır. **Tek açık madde:** tarama sonrası in-app rapor
+artifact'i — `RenderAppFixReport` hazır ama artifact session-scoped, workspace-seviyesi
+taramanın session'ı yok.
 
 ### Faz 1 — İskelet (onaylı)
 

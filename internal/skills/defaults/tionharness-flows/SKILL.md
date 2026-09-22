@@ -67,7 +67,8 @@ opt out with `"fresh": true`); off by default = each node is a stateless call.
 
 ## Building a flow (self-management tools)
 
-These tools require self-management to be enabled for the workspace:
+These tools are load-on-demand (`activate_tools` them first; per-tool visibility is
+set on the Tools screen):
 
 - `create_flow` — define a flow (name, steps, dependencies).
 - `update_flow` — edit an existing flow.

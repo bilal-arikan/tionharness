@@ -1,5 +1,7 @@
 # 51 — Per-Workspace Claude Config Home (Birleşik Config)
 
+> **Arşiv (2026-09-22):** Per-workspace `claude-home` modeli kaldırıldı; CLI evleri artık sağlayıcı örneği başınadır. Hâlâ geçerli mekanikler (credential self-heal, `credentialRank`, `refreshgate`, `--resume` kontrolü, yedekten dışlama) `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.4–§4.5'e taşındı. Aşağıdaki `cmd/repair-provider-migration`, `EnsureWorkspaceClaudeHome` ve `internal/agent/climcp.go` gibi yollar artık yok.
+
 > **Amaç:** TionHarness'in workspace klasör yapısı ile claude-cli'nin `CLAUDE_CONFIG_DIR`
 > config evini **tek bir per-workspace dizinde** birleştirmek. Böylece hem TionHarness
 > hem de driver ettiği `claude` CLI **aynı skill/settings/login** setini kullanır.

@@ -48,6 +48,10 @@ graph LR
 
 ## 2. İş paketleri
 
+> P1–P7'nin hepsi uygulandı; aşağıda yalnız her paketin ✅ durum bloğu kalır. Uygulama öncesi
+> "Değişim" tasarım maddeleri ve plan bölümleri (§3 sıralama, §4 riskler, §5 test planı,
+> §6 kapsam dışı, §7 özet) → [arsiv/50-CLAUDE-CODE-CACHE-PARITE-PLAN.md](arsiv/50-CLAUDE-CODE-CACHE-PARITE-PLAN.md).
+
 ### P1 — Volatile dinamiği system'den mesaj kuyruğuna taşı (native paritesi) — *en büyük kazanç* ✅ UYGULANDI (2026-07-04)
 > **Durum:** anthropic + OpenAI-compat (openrouter) yollarında uygulandı; yalnız `extendedCache`/
 > `cacheSystem` açıkken devreye girer (cache kapalı yol birebir korundu). `anthropic.go`:
@@ -61,23 +65,6 @@ graph LR
 > (~8.2k tok) + geçmiş, dinamik **her tur değişmesine rağmen** turn-2'de `cache_read=8197`
 > HIT aldı → dinamiğin mesaj tail'ine taşınması önekin cache'ini bozmuyor. (P1'den önce
 > dinamik system'de olduğu için bu 0 olurdu.)
-
-- **Değişim:** `composeTurnRequest`/provider'lar `req.SystemDynamic`'i artık `system` alanına
-  koymasın; **son (yeni) kullanıcı mesajına ek metin bloğu** olarak eklesin, **persist etmeden**.
-- **anthropic.go:** `systemField` yalnız statik System döndürsün (breakpoint statik'te).
-  `attachHistoryBreakpoint` rolling breakpoint'i **son persist edilmiş** mesaja koysun; volatile
-  ek onun gerisinde ayrı bir content-block olsun.
-- **minimax.go:** `buildSystemMessage` yalnız statik; dinamik son user mesajına eklensin.
-- **Invariant (kritik):** cache öneki YALNIZ immutable içerik barındırmalı → volatile ek
-  **hiçbir zaman persist edilmez**, sadece uçuştaki mesaja binlir; breakpoint son persist
-  edilmiş mesajda. (claude-cli deseni birebir.)
-- **Ne taşınır:** date/time, recall (memory ContextBlock), todo/artifact özetleri → volatile
-  (tail). **Değerlendir:** core-memory persona + goal + cwd nispeten *stabil* — istenirse bunlar
-  statik-yakını cache'li konumda kalabilir (Faz P1b), ama ilk sürümde tümünü tail'e taşımak en
-  basit ve claude-cli ile simetrik.
-- **Kod:** muhtemelen `providers.Request`'e `DynamicPlacement` ipucu veya provider'da ortak
-  `appendVolatileToLastUser(msgs, dynamic)` helper'ı.
-- **Kabul:** turn-2'de volatile dinamik varken `cache_read > 0` (yeni live test).
 
 ### P2 — Özeti mesaja çevir (compact boundary), cache'lenebilir yap ✅ UYGULANDI (2026-07-05)
 > **Durum:** Özet artık volatile Dinamik'ten çıktı; `providers.Request.Summary` alanıyla
@@ -96,17 +83,6 @@ graph LR
 > aynı özet + geçmiş için `cache_read=8216` HIT aldı → stabil özet head'i cache'li önekin
 > parçası, her tur taze gönderilmiyor.
 
-- **Değişim:** `conversationSummaryBlock`'u Dinamik'ten çıkar; özeti canlı mesaj dizisinin
-  **başına** bir mesaj olarak koy (ör. `role=user`, `"[Önceki konuşmanın özeti]\n<summary>"`),
-  böylece cache önekinin parçası olur.
-- **Depolama aynı:** `session.Summary`/`SummaryMsgCount` dosya-tabanlı kalır; yalnız istek-kurma
-  anında blok yerine **head-message** olarak enjekte edilir.
-- **Cache davranışı:** özet iki fold arasında sabit → cache'li önekte **HIT**. Fold anında özet
-  mesajı değişir (bir cache-write), sonra stabil (Claude Code compact-boundary ile aynı).
-- **Önizleme:** "Özet" bölümü (zaten var, `_Docs`/bu oturumda eklendi) artık **cache'li mesaj**
-  olarak işaretlenir (yeşil); "Artık gönderilmeyen" turuncu grup korunur.
-- **Bağımlılık:** P1'den sonra temiz (dinamik tail'de → özet head-message ile çakışmaz).
-
 ### P3 — API-native context editing (opsiyonel, anthropic-only) — *microcompact muadili* ✅ UYGULANDI (2026-07-05)
 > **Durum:** `anthropic.go` — `context_management` beta (`context-management-2025-06-27` header).
 > `anthropicReq.ContextManagement` + `contextMgmt()` yalnız `contextEditing` açıkken bir
@@ -117,15 +93,6 @@ graph LR
 > uygular. Frontend: ContextPanel'de yeni toggle + `AppSettings.anthropicContextEditing`.
 > Default skill `tionharness-settings` belgeler. Testler: `TestContextEditing_Off/On`
 > (contextMgmt + betaHeader + body serileştirme). Client-side fold'a **ek**, alternatif değil.
-
-- Anthropic `context_management` beta: `clear_tool_uses_20250919` (trigger `input_tokens`,
-  `keep` son N tool_use, `clear_at_least`) + `clear_thinking_20251015`.
-- Sunucu, cache'li önekteki eski tool-result/thinking'i **yerinde** siler (`cache_edits`),
-  önek tam yeniden yazılmaz → sıcak kalır. (Not: o dönemki built-in tool-output
-  sıkıştırması — Sistem A/B, `CompactSavedBytes` — 2026-07-10'da kaldırıldı;
-  bu iş artık harici `rtk`/`sqz` katmanında, bkz. `17-TOKEN-OPTIMIZASYON.md`.)
-- `anthropic.go`'ya `extendedCache` açıkken ekle; beta header gerekir; ayar
-  `anthropicContextEditing` (vars. kapalı). Client-side fold'a alternatif/ek.
 
 ### P4 — Cache-break tespiti + telemetri (debug journal) ✅ UYGULANDI (2026-07-05)
 > **Durum:** `internal/agent/cachebreak.go` — `Runtime.cacheProbes` (sync.Map, oturum-başına
@@ -145,13 +112,6 @@ graph LR
 > Anthropic'te (prefix cache_creation'da) hem OpenRouter'da (prefix input'ta) yakalanır.
 > Canlı: sistem öneki başından değişince `cache_read` 8216→0, soğuk önek input=8222 → tetiklenir.
 
-- `promptCacheBreakDetection.ts` deseni: oturum-başına system+tools+cache_control hash'le,
-  turdan tura karşılaştır; `cache_read` %5+ ve 2k+ token düşerse sebep ata (systemPromptChanged
-  / toolSchemasChanged / modelChanged / TTL-expiry / server-side).
-- Yeni debug olayı `cache_break` (`_Docs\38-SESSION-DEBUG.md`); Debug kartı + `computeDebugAnomalies`.
-- Veri zaten var (`Usage.CacheRead/CacheWrite`) → yalnız atıf/attribution eklenir. P1/P2'nin
-  gerçekten HIT ürettiğini **kanıtlamak** için şart.
-
 ### P5 — TTL / breakpoint kararlılığı (hardening) ✅ UYGULANDI (2026-07-05)
 > **Durum:** Tüm anthropic breakpoint'leri (tools + statik System + rolling history) artık
 > tek `cacheTTL = "1h"` sabitinden türer (`anthropic.go`) → istek-içi TTL drift'i (Anthropic'in
@@ -163,19 +123,9 @@ graph LR
 > yolu tek tip `ephemeral` kullanır (TTL yok → drift riski yok). Mid-session flip yalnız
 > kullanıcı ayarı değişince olur (beklenen; P4 detektörü yakalar).
 
-- Claude Code 1h eligibility'yi **oturum-stabil latch**'liyor (mid-session flip cache bozar).
-  TionHarness tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
-  TTL/scope flip'i yapmıyor.
-- "Tek mesaj-seviyesi marker" ilkesi: TionHarness 3 breakpoint (limit 4) — history breakpoint P1
-  sonrası **son stabil mesajda** (volatile ekte değil) olmalı.
-
 ### P6 — Önizleme cache haritasını gerçeğe hizala ✅ UYGULANDI (2026-07-04)
 > `computeCachePreview` anthropic dalı: `CachedMsgCount = msgCount-1` (rolling), Araçlar+Sistem+
 > geçmiş cache'li, dinamik "tail/taze" notu. `hasDynamic` artık system'de değil.
-
-- P1/P2 sonrası `computeCachePreview` (anthropic dalı): `cachedMsgCount = msgCount-1` (rolling),
-  `toolsCached`/`systemCached` = true, **özet mesajı cache'li**. Dinamik notu: "tail, cache-dışı,
-  her tur taze". Bu, bu oturumda konuştuğumuz **önizleme-doğruluk boşluğunu** da kapatır.
 
 ### P7 — Chat yüzeyi: kırılımı sohbette göster ✅ UYGULANDI (2026-08-11)
 > **Durum:** P4 tespiti/atfı zaten vardı ama yalnız oturum-seviyesi Debug kartında görünüyordu;
@@ -196,38 +146,6 @@ graph LR
 > - **Testler:** `db.TestGetTurnDebugCacheBreak` (tur izolasyonu + waste), `agent.
 >   TestInlineCacheBreak` / `TestConsumeCacheBreak` / `TestCacheBreakStep`. Tüm Go suite +
 >   frontend `tsc`/vitest/build yeşil.
-
-## 3. Sıralama / bağımlılıklar
-`P1` (mesaj cache'ini açar) → `P2` (özet cache'i) → `P6` (önizleme hizası) → `P4` (telemetriyle
-kanıt) → `P3`/`P5` (opsiyonel/sağlamlaştırma). claude-cli yolu zaten optimal — **regresyon
-yaptırma**; tüm değişiklikler **native-only**.
-
-## 4. Riskler & azaltımlar
-- **İçerik yeri (system↔message):** persona/core-memory system'de daha iyi olabilir. Azaltım:
-  P1b'de stabil-dinamik (persona/goal/cwd) cache'li konumda tut, yalnız gerçek volatile (saat/
-  recall/özet-tazeleme) tail'e. İlk sürüm: hepsi tail (basit, claude-cli simetrik), kalite ölç.
-- **Persist tutarlılığı:** volatile ek **asla persist edilmemeli** (yoksa sonraki tur önek
-  uyuşmazlığı → miss). Invariant testi ile kilitle.
-- **İlk-tur maliyeti:** her değişiklikten sonraki ilk tur cache-write (ödenir); steady-state
-  kazandırır — uzun oturumda net pozitif (`_Docs\17` resume≈−43% ölçümü metodolojisiyle doğrula).
-- **Sağlayıcı paritesi:** OpenAI-compat'te tail-dinamik + head-özet aynı şekilde çalışmalı;
-  openrouter 2 breakpoint sınırına dikkat.
-
-## 5. Test / doğrulama
-- **Live (native):** turn-2 volatile dinamikle `cache_read>0` (mirror `claudecli_live_test`).
-- **Unit:** `composeTurnRequest` özeti head-message, dinamiği tail koyar; `systemField` statik-only.
-- **Preview:** `cachedMsgCount` rolling'i yansıtır; SES2-benzeri oturumda özet cache'li görünür.
-- **Bütçe ekranı:** 3-tur ölçümü ile cache tasarrufu artışını önce/sonra karşılaştır.
-
-## 6. Kapsam dışı (bilinçli)
-- **SDK'ya geçiş YOK** (external-agent gibi native `claude` binary'ye devretmek) — çok-sağlayıcı
-  felsefesi korunur. Yalnız **mekanik/desen** ödünç alınır.
-- Pi SDK / Claude-olmayan modeller: caching sağlayıcı-native kalır.
-
-## 7. Özet — tek cümle
-En büyük kazanç **P1**: native yolda volatile dinamiği system'den çıkarıp (claude-cli'nin zaten
-yaptığı gibi) uçuştaki mesaja taşımak → **tools+System zaten HIT olan yapıya mesaj-geçmişi
-cache'ini de eklemek**; ardından **P2** ile özeti cache'li mesaja çevirmek.
 
 ## 8. claude-cli süreç modeli ölçümü — respawn+resume vs kalıcı süreç (2026-07-05)
 

@@ -51,7 +51,7 @@ graph LR
   önlemek için **dışlanır** (bir workspace verisi backups klasörünün üstündeyse bile).
 - **Credential dışlama:** `backupExcludeNames` = `{.credentials.json, .claude.json}` —
   per-workspace `claude-home` altındaki claude-cli login/token dosyaları hiçbir yedek
-  zip'ine yazılmaz (arşiv makine dışına taşınabilir → sızıntı olmasın). Detay `51`.
+  zip'ine yazılmaz (arşiv makine dışına taşınabilir → sızıntı olmasın). Detay `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.5.
 - İsim string olarak kronolojik sıralanır → budama (`prune`) en eski arşivleri siler,
   workspace başına en yeni `backupRetain` adedi kalır. Yalnız `<id>-*.zip` deseni
   budanır; klasördeki alakasız dosyalara dokunulmaz.
@@ -95,7 +95,7 @@ sil"/"İptal", `deleteBackupArchive`). Üstteki **Kaydet** butonu config alanlar
 Tipler `types/settings.ts`
 (`BackupStatus`/`BackupResult`/`BackupArchive`/`BackupArchiveFile`/`WorkspaceArchives`),
 api `api/system.ts` (`getBackupStatus`/`runBackup`/`listBackupArchives`/`restoreBackup`).
-Bileşen `appPanels.tsx` → `BackupPanel`.
+Bileşen `features/settings/BackupPanel.tsx` (`appPanels.tsx` yalnız yeniden dışa aktarır).
 
 > **Neden app-geneli (workspace ekranında değil)?** Tek `backup.Manager` **tüm**
 > workspace'leri birden yedekler — bu bir workspace'e özel ayar değildir. Bu yüzden

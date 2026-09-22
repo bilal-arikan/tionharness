@@ -3,7 +3,7 @@ name: test
 description: >
   Run this repository's tests the right way: `scripts/test.sh fast` while iterating
   (changed Go packages + vitest when frontend changed), `scripts/test.sh full` before
-  delivering (go test ./... + vitest + git diff --check). Use for "run the tests",
+  delivering (go test ./... + vitest + scripts/depcheck.sh + git diff --check). Use for "run the tests",
   "does it pass", "/test", or before any commit.
 ---
 
@@ -14,7 +14,7 @@ filters provider log noise, and ends with `git diff --check`.
 
 ```bash
 scripts/test.sh fast   # seconds: only packages touched since main + vitest if frontend changed
-scripts/test.sh full   # 3–4 minutes: the delivery gate; run once before reporting done
+scripts/test.sh full   # 3–4 minutes: the delivery gate (also runs scripts/depcheck.sh); run once before reporting done
 ```
 
 Interpreting output:

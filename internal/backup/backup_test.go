@@ -115,7 +115,7 @@ func TestZipUnzipRoundTrip(t *testing.T) {
 // TestZipExcludesClaudeCredentials verifies the claude-cli credential/login files
 // under <workspace>/claude-home are NEVER written into a backup zip (they hold the
 // OAuth token and must not leak into archives), while ordinary claude-home content
-// (skills/settings) is still archived. See _Docs/51.
+// (skills/settings) is still archived. See _Docs/71 §4.5.
 func TestZipExcludesClaudeCredentials(t *testing.T) {
 	src := t.TempDir()
 	writeFile(t, filepath.Join(src, "store", "a.json"), `{"x":1}`)

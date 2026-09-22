@@ -124,8 +124,8 @@ reactive compaction (`toolloop.go` → `CompactInFlightMessages`) ile karşılan
 - Tur bitince `runSpawn` / `deliverPrompt` → `r.maybeAutoHandoff(ctx, sid, agent, overflowed)`.
 
 `maybeAutoHandoff` no-op olur tüm şu koşullar sağlanmadıkça: `HandoffAuto` açık **ve**
-turda overflow oldu **ve** `Pressure ≥ HandoffPressure` bandı **ve** reset zinciri
-(`handoffChainDepth` = `ParentSessionID` lineage) `HandoffMaxChain` altında.
+turda overflow oldu **ve** reset zinciri (`handoffChainDepth` = `ParentSessionID`
+lineage) `HandoffMaxChain` altında.
 
 ## Ayarlar
 
@@ -183,10 +183,10 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 - `internal/settings/{settings,store}.go` — `Handoff*` alanları + clamp'ler.
 - `internal/api/summary.go` — `handleSessionHandoff` (`POST /api/sessions/{id}/handoff`).
 - `internal/api/session_info.go` — soyağacı alanları.
-- Frontend: `hooks/useChatStream.ts` (`/handoff` komutu + `handoff()`), `api/sessions.ts`
-  (`handoffSession`), `types/session.ts`, `types/settings.ts`,
-  `components/settings/appPanels.tsx` (ContextPanel bölümü),
-  `components/sessions/SessionDetailPanel.tsx` (soyağacı link).
+- Frontend: `features/chat/useChatStream.ts` + `features/chat/chatStreamCommands.ts`
+  (`/handoff` komutu), `api/sessions.ts` (`handoffSession`), `types/session.ts`,
+  `types/settings.ts`, `features/settings/ContextPanel.tsx` (handoff ayarları),
+  `features/sessions/SessionTitleBlock.tsx` (soyağacı link).
 
 ## Testler
 
@@ -197,4 +197,4 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 
 - `_Docs/17-TOKEN-OPTIMIZASYON.md` — in-place compaction (rolling-summary) + tool-output sıkıştırma; reset onun tamamlayıcısıdır.
 - `_Docs/22-SPAWN-SESSION.md` — reset'in motoru olan `SpawnSession`.
-- _(Önceki bağlam-basıncı uyarısı + MemGPT çekirdek bellek — `31-MEMGPT-CORE-MEMORY.md` — 2026-07-05'te memory alt sistemiyle birlikte kaldırıldı. Bağlam sınırına karşı savunma artık in-place compaction + handoff'tur.)_
+- _(Önceki bağlam-basıncı uyarısı + MemGPT çekirdek bellek — [arsiv/31-MEMGPT-CORE-MEMORY.md](arsiv/31-MEMGPT-CORE-MEMORY.md) — 2026-07-05'te memory alt sistemiyle birlikte kaldırıldı. Bağlam sınırına karşı savunma artık in-place compaction + handoff'tur.)_

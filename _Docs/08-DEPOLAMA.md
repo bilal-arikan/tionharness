@@ -1,8 +1,7 @@
 # TionHarness — Depolama Katmanı (Dosya Sistemi)
 
-> **Özet (2026-09-03):** Dosya-tabanlı depolama tasarımını anlatır — SQLite'tan tamamen dosya sistemine geçiş, bellek-içi maps + atomik diske yazma (write-through), her workspace için `store/` altında entity-başına JSON + oturum-başına JSONL, insan-okunabilir prefix'li ID şeması (`WS`/`AGT`/`SES`/`TSK`/…), oturum header/transkript ayrımı ve tur-içi crash kurtarma (`inflight.json` sidecar). Durum: **uygulandı, canlı mimari**. En önemli kararlar: hiçbir veritabanı bağımlılığı yok (CGO-suz, tek binary hedefi), transkript yazımının oturum-başına ayrı mutex ile (global kilit değil) yapılması, aktivite sinyalinin WAL ile çökmeye dayanıklı teslimi. Dayandığı dosyalar: `internal/db/db.go`, `store.go`, `transcript_lock.go`, `inflight.go`.
+> **Özet (2026-09-22):** Dosya-tabanlı depolama tasarımını anlatır — SQLite'tan tamamen dosya sistemine geçiş, bellek-içi maps + atomik diske yazma (write-through), her workspace için `store/` altında entity-başına JSON + oturum-başına JSONL, insan-okunabilir prefix'li ID şeması (`WS`/`AGT`/`SES`/`TSK`/…), oturum header/transkript ayrımı ve tur-içi crash kurtarma (`inflight.json` sidecar). Durum: **uygulandı, canlı mimari**. En önemli kararlar: hiçbir veritabanı bağımlılığı yok (CGO-suz, tek binary hedefi), transkript yazımının oturum-başına ayrı mutex ile (global kilit değil) yapılması, aktivite sinyalinin WAL ile çökmeye dayanıklı teslimi. Dayandığı dosyalar: `internal/db/db.go`, `store.go`, `transcript_lock.go`, `inflight.go`.
 
-> Son güncelleme: **2026-06-19**
 > TionHarness'in kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.
 
@@ -22,7 +21,7 @@ insan-okunabilir **JSON / JSONL** dosyalarında. Avantajlar:
 
 `internal/db` paketi **yerinde** dosya-tabanlıya çevrildi; **tüm metod imzaları,
 model struct'ları, sabitler ve `ErrNotFound` aynı kaldı**. Bu sayede onu kullanan
-22 dosya (`agent`, `api`, `conversation`, `memory`, `workspace`) **tek satır
+22 dosya (`agent`, `api`, `conversation`, `workspace` …) **tek satır
 değişmeden** çalışmaya devam etti.
 
 - `Open(path)` → tüm entity'leri diskten okuyup belleğe yükler.
@@ -50,9 +49,7 @@ store/
 │   ├── messages.jsonl                # transkript — mesaj başına bir satır, append-only
 │   └── inflight.json                 # (geçici) stream'lenen asistan turu — crash kurtarma sidecar'ı
 ├── tasks/{id}.json
-├── runs/{id}.json
 ├── schedules/{id}.json
-├── knowledge/{id}.json              # embedding base64 olarak gömülü
 ├── mcp-servers/{id}.json
 ├── flows/{id}.json
 ├── flow-runs/{id}.json               # legacy uyumlu tam flow state checkpoint'i
@@ -64,6 +61,9 @@ store/
 │                                     #   turlardan GÖZLEMLENİR, yalnız değer değişince yazılır
 └── counters.json                      # entity-başına insan-okunabilir id sayacı
 ```
+
+> Ağaç kısaltılmıştır; diğer entity dizinleri (`artifacts/`, `hooks/`, `automations/`,
+> `goals/`, `trajectories/`, `agent-messages/` …) aynı `{id}.json` desenini izler.
 
 Aynı dosya adı **uygulama veri kökünde** de bulunur:
 `<dataDir>/model-resolutions.json` — workspace'ler arası paylaşılan, app-global
@@ -96,13 +96,17 @@ tarafından açılışta bir kez açılıp her workspace DB'sine bağlanır
 | Flow | `FLW` | `FLW5` |
 | Flow Run | `RUN` | `RUN128` |
 | Artifact | `ART` | `ART9` |
-| Knowledge/Memory | `MEM` | `MEM88` |
+| Session Ask | `SAK` | `SAK3` |
+| Agent Message | `AMS` | `AMS12` |
 | MCP Server | `MCP` | `MCP4` |
 | Hook | `HOK` | `HOK2` |
 | Schedule | `SCH` | `SCH7` |
+| Goal | `GOL` | `GOL1` |
+| Automation | `AUT` | `AUT2` |
+| Trajectory (Rota) | `RTA` | `RTA5` |
 
 > **Mesajlar** hâlâ UUID kullanır (yüksek hacimli hot-path + UI'da görünmez).
-> Task `Run` ID'leri de UUID'de kalır (legacy, artık üretilmiyor). Merkez-dışı
+> Merkez-dışı
 > geçici tanımlayıcılar (chat `runID`/`replyID`, spawn `SourceID`, upload dosya
 > adı) de UUID'de kalır. Workspace ID'leri ise ayrıca `WS<n>`'e geçti (aşağıda).
 
@@ -303,17 +307,17 @@ saklanır.
 ## Önemli detaylar
 
 - **Zaman damgaları:** unix epoch **saniye** (`int64`), değişmedi.
-- **Birincil anahtarlar:** UUID (`google/uuid`), değişmedi.
+- **Birincil anahtarlar:** prefix'li insan-okunabilir ID'ler (yukarıda); mesajlar ve eski kayıtlar UUID.
 - **Gömülü JSON alanları:** `tool_calls`, `graph`, `state`, `env_config` vb. yine
   TEXT-içinde-JSON string olarak tutulur (model değişmedi).
 - **Usage:** gün-bazlı dosya (`{agentID}__{gün}.json`), read-modify-write upsert.
 - **Cascade silme:**
-  - `DeleteTask` → task'ın run'ları; `DeleteFlow` → flow'un `flow_runs`'ı.
+  - `DeleteFlow` → flow'un `flow_runs`'ı.
   - `DeleteSession` → oturum mesajları + oturuma ait artifact kayıtları + upload
     klasörü (`workspace/artifacts/<sid>/`).
   - `DeleteAgent` → ajanın sahip olduğu **session'lar** (yukarıdaki kaskadla),
     ajana bağlı **schedule'lar** (`AgentID`), ajanın sahip olduğu **task'lar**
-    (`OwnerAgentID`) + bu task'ların **run'ları**. Hook/Flow'da doğrudan `AgentID`
+    (`OwnerAgentID`). Hook/Flow'da doğrudan `AgentID`
     alanı olmadığından (flow ajanları graph içinde referanslanır) bunlar silinmez.
     DB yalnızca kalıcı satırları temizler; canlı cron registry'si için çağıran
     katman (`api.handleDeleteAgent` / `delete_agent` tool'u) ayrıca
@@ -333,8 +337,8 @@ yapılabilir.
 
 ## Test
 
-- `internal/db/filestore_test.go` — round-trip: agent/session/mesaj/task/usage/
-  knowledge oluştur → close → reopen → diskten reload + sayaç + UTF-8 + HTML +
-  embedding + cascade-delete doğrulaması.
+- `internal/db/filestore_test.go` — round-trip: agent/session/mesaj/task/usage
+  oluştur → close → reopen → diskten reload + sayaç + UTF-8 + HTML + cascade-delete
+  doğrulaması.
 - Canlı API testi: entity oluşturma → doğru disk yapısı → **restart sonrası tüm
   entity'lerin diskten reload'u** + Türkçe başlık round-trip'i doğrulandı.

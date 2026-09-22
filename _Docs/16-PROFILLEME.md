@@ -109,12 +109,10 @@ go tool pprof -http=127.0.0.1:8000 http://127.0.0.1:6060/debug/pprof/heap
 Profil alırken şu adaylara dikkat et (mimariden türetilmiş hipotezler):
 
 1. **JSON marshal/unmarshal** — dosya-tabanlı store her yazımda entity'yi JSON'a
-   çevirir; recall vektörleri (`unmarshalVector`) her recall'da parse edilir.
-2. **Memory recall** — `Recall` → `cosineNorm`/`norm`/`buildVector`; her sohbet turu +
-   her görevde çalışır (`ContextBlock` enjeksiyonu).
-3. **Trace serileştirme** — `marshalSteps` / flow transcript render (büyük turlarda).
-4. **Token tahmini** — `EstimateTokens` her compaction kararında tüm mesajları gezer.
-5. **Goroutine sızıntısı** — workspace silme / ajan disable yollarında ticker `Stop()`
+   çevirir.
+2. **Trace serileştirme** — `marshalSteps` / flow transcript render (büyük turlarda).
+3. **Token tahmini** — `EstimateTokens` her compaction kararında tüm mesajları gezer.
+4. **Goroutine sızıntısı** — workspace silme / ajan disable yollarında ticker `Stop()`
    ve kanal kapanışı (Go 1.26 `goroutineleak` profili de kullanılabilir).
 
 ## Profilleri saklama / karşılaştırma

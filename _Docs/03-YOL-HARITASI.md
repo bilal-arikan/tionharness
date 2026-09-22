@@ -1,6 +1,6 @@
 # TionHarness — Yol Haritası (Aşama Aşama)
 
-> **Özet (2026-09-03):** Projenin faz-faz gelişim planını (Faz 0 İskelet → Faz 9 Masaüstü Paketleme) ve canlı backlog listesini (external-agent-oss/the external agent-Agent incelemelerinden türeyen P0–P4 maddeleri, mimari sıçrama, araç/yetki katmanı) tutar. Durum: **kısmen tarihsel, kısmen canlı** — Faz 0–8 tamamlandı ✅, Faz 6 (Memory) sonradan tamamen kaldırıldı (2026-07-05), Faz 9'da yalnız CI/paketleme kalemi açık. En önemli kararlar: MVP-önce-büyüt ilkesi, Wails yerine native WebView2, pasif kanban pano pivotu (2026-06-18). Backlog maddelerinin çoğu ✅ işaretli; güncel ilerleme günlüğü için `05-ILERLEME.md`'ye bakılmalı.
+> **Özet (2026-09-22):** Projenin faz-faz gelişim planını (Faz 0 İskelet → Faz 9 Masaüstü Paketleme) ve canlı backlog listesini (external-agent-oss/the external agent-Agent incelemelerinden türeyen P0–P4 maddeleri, mimari sıçrama, araç/yetki katmanı) tutar. Durum: **kısmen tarihsel, kısmen canlı** — Faz 0–8 tamamlandı ✅, Faz 6 (Memory) sonradan tamamen kaldırıldı (2026-07-05), Faz 9 (native pencere + çapraz-platform CI) tamamlandı. En önemli kararlar: MVP-önce-büyüt ilkesi, Wails yerine native WebView2, pasif kanban pano pivotu (2026-06-18). Backlog maddelerinin çoğu ✅ işaretli; güncel ilerleme günlüğü için `05-ILERLEME.md`'ye bakılmalı.
 
 > İlke: **MVP ile başla, katman katman büyüt.** Her faz çalışan ve test edilebilir bir çıktı verir.
 
@@ -26,7 +26,7 @@ graph LR
 - [x] Proje klasör yapısı + `go mod init`
 - [x] `_Docs` plan dokümanları
 - [x] `main.go` temel HTTP sunucu (health check)
-- [~] Wails v2 → **Faz 9'a ertelendi**
+- [~] Wails v2 → **Faz 9'a ertelendi** (sonra iptal edildi; native WebView2)
 - **Çıktı:** `go run` ile ayağa kalkan, `/health` dönen sunucu. ✅
 
 ## Faz 1 — Kalıcılık ve Config ✅
@@ -81,17 +81,13 @@ graph LR
 - [~] **Görev dispatcher'ı:** pivot sonrası **kapsam dışı** — pano pasif olduğundan
   "ajan todo'yu otomatik koşar" akışı artık hedef değil. Otomasyon flow/schedule katmanında.
 
-## Faz 6 — Memory ✅ → **KALDIRILDI (2026-07-05)**
-> ⚠️ Memory alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI/veri)
-> projeden **tamamen çıkarıldı**. Aşağısı tarihsel kayıttır; bu özellikler artık yoktur.
-- [x] ~~`internal/memory`: doküman + journal + reflection~~ — paket depodan **silindi**
-- [x] Recall: **embedding yerine saf Go lexical cosine** (anahtarsız/çevrimdışı; embedding ileride takılabilir)
-- [x] Dream cycle (`Reflect`) — journal'ı provider'a özetletip reflection üret
-- **Çıktı:** Hatırlayan, yansıtan ajanlar; sohbet+göreve otomatik enjeksiyon. ✅
+## Faz 6 — Memory → **KALDIRILDI (2026-07-05)**
+> Memory alt sistemi tamamen çıkarıldı; tarihsel madde listesi
+> [arsiv/03-YOL-HARITASI-KALDIRILAN.md](arsiv/03-YOL-HARITASI-KALDIRILAN.md).
 
 ## Faz 6.5 — Sağlamlaştırma ✅ (plan dışı, kıyas açığı kapatma)
 - [x] `internal/conversation`: token-bütçeli **compaction** (rolling summary)
-- [x] Otonom döngü **bütçe guardrail'i** (`guardedComplete` + `agent_usage`, ajan başına günlük limit)
+- [x] Otonom döngü **bütçe guardrail'i** (`guardedComplete` + `agent_usage`; ajan başına günlük limit 2026-07-01'de kaldırıldı, yalnız kullanım takibi kaldı)
 - [x] UI: context + bütçe meter; 3 kolonlu yerleşim (NavRail)
 - **Çıktı:** Uzun oturumlarda taşma yok, otonom maliyet sınırlı. ✅
 
@@ -118,21 +114,14 @@ graph LR
 
 - [x] Native pencere entegrasyonu ✅ — WebView2 (`jchv/go-webview2`), CGO'suz
 - [x] Çoklu pencere (N süreç / N pencere) ✅ — [30-COKLU-PENCERE.md](30-COKLU-PENCERE.md)
-- [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
-- **Çıktı:** Dağıtıma hazır masaüstü uygulaması. *(Pencere kısmı tamam; kalan iş CI/paketleme.)*
+- [x] GitHub Actions: Win/macOS/Linux otomatik derleme ✅ — `.github/workflows/release.yml` + `scripts/build-release.sh` (beş hedef; [75](75-YAYIN-SURECI.md))
+- **Çıktı:** Dağıtıma hazır masaüstü uygulaması. ✅
 
-> **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** TionHarness arka planda
-> çalışan otonom-ajanlı bir runtime; masaüstü dağıtımında **tray'e küçülme + durum göstergesi**
-> (kaç ajan aktif/çalışıyor) + hızlı menü (workspace aç/durdur, çıkış) + mevcut tür-bazlı
-> masaüstü bildirimleriyle bütünleşme doğal bir tamamlayıcı.
-> - **Önce Wails'in yerleşik tray API'sine bak** — varsa ayrı bağımlılığa gerek yok.
-> - **B planı:** [`gogpu/systray`](https://github.com/gogpu/systray) — **saf Go, CGO'suz** tray
->   kütüphanesi (Win `Shell_NotifyIconW` · macOS `NSStatusBar` · Linux D-Bus
->   StatusNotifierItem). TionHarness'in "tek binary, çapraz-derleme, minimal bağımlılık"
->   felsefesiyle birebir uyumlu. **Uyarılar:** (1) v0.1.0 — çok genç, üretime erken; (2) Wails'in
->   kendi event loop'u ile systray message-pump'ı çakışabilir (özellikle macOS main-thread →
->   deadlock riski), entegrasyonda test şart. Yalnız native masaüstü modunda anlamlı; web
->   dağıtımında işlevsiz.
+> **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** Masaüstü dağıtımında
+> tray'e küçülme + durum göstergesi (kaç ajan aktif) + hızlı menü (workspace aç/durdur, çıkış).
+> Aday: [`gogpu/systray`](https://github.com/gogpu/systray) — saf Go, CGO'suz (Win
+> `Shell_NotifyIconW` · macOS `NSStatusBar` · Linux D-Bus). Uyarı: v0.1.0, çok genç; WebView2
+> pencere döngüsüyle message-pump çakışması test edilmeli. Yalnız native masaüstü modunda anlamlı.
 
 > **Not (2026-06-16):** **Connectors fazı (Discord/Slack/Telegram köprüleri) kapsamdan çıkarıldı.** İhtiyaç olursa ayrı bir faz olarak yeniden değerlendirilebilir.
 
@@ -155,7 +144,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 > [05-ILERLEME.md](05-ILERLEME.md) (2026-07+) ve [05-ARSIV.md](05-ARSIV.md)
 > (2026-06 ve öncesi). Alt sistemlerin kendi dokümanları:
 > [19](19-LAZY-TOOL-LOADING.md) · [24](24-SELF-MANAGEMENT.md) ·
-> [23](23-ILISKI-GRAFIGI.md) · [11](11-INTERACTION-MCP.md).
+> [23](arsiv/23-ILISKI-GRAFIGI.md) · [11](11-INTERACTION-MCP.md).
 
 ### Mimari sıçrama
 - [x] **A2** ✅ (2026-06-19) — **Subagent / Task izolasyonu**: `AgentContext` + `runAgent` çekirdeği; `run_subagent` aracı (profil: `explore`/`coder`/`reviewer`); paralel fan-out; `subagent` StepKind + `SubagentStep.tsx`. `call_agent`/`send_agent_message` kaldırıldı; `spawn_session` native tool'dan kaldırıldı (`run_subagent` async moduna taşındı). **Detay:** `25-SUBAGENT-ISOLATION.md`.
@@ -167,26 +156,36 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 - [x] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O) ✅ 2026-06-18 — `internal/agent/hooks.go`, Ayarlar → Hooks; bkz. `_Docs/18-HOOKS.md`
 
 ### Bağlam, bellek, trace
-> ⚠️ **Bellek (C3/C5/C6) — KALDIRILDI (2026-07-05):** memory alt sistemi tamamen çıkarıldı;
-> aşağıdaki bellek maddeleri artık geçersiz tarihsel kayıttır. Bağlam maddeleri (compaction/handoff) geçerli.
-- ~~**C5 / C6 / C3**~~ — recency+importance ağırlıklı recall, MemGPT tarzı
-  self-editing çekirdek bellek ve memdir benzeri `memory_write` indeksleme.
-  **Hepsi 2026-07-05'te düştü** (memory alt sistemi kaldırıldı). Tarihsel tasarım:
-  [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md).
+> Bellek maddeleri (C3/C5/C6) 2026-07-05'te düştü (memory kaldırıldı); tarihsel kayıt
+> [arsiv/03-YOL-HARITASI-KALDIRILAN.md](arsiv/03-YOL-HARITASI-KALDIRILAN.md).
 - [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)
-- [~] **E3 kalan** — `subagent` StepKind ✅ (A2 ile tamamlandı); `tombstone`/`tool_delta` (canlı adım güncelleme altyapısı) — kalan
+- [x] **E3** ✅ — `subagent` StepKind (A2 ile) + `tombstone`/`tool_delta` canlı adım güncelleme altyapısı (`agent/trace.go`)
 - [ ] **C2** — Compaction emniyet katmanı (`snip`) — 1M tampon var, düşük öncelik
 
 ### MCP & dağıtım
 - [~] **D1** — MCP çoklu-transport: stdio + Streamable HTTP ✅ (+ hibrit `shared`/`scoped` kapsam); kalan: config kapsam-zinciri (local<user<project)
-- [~] **Faz 9** — Masaüstü: native pencere ✅ (WebView2, Wails iptal); kalan: çapraz-platform CI/paketleme
+- [x] **Faz 9** — Masaüstü: native pencere ✅ (WebView2, Wails iptal) + çapraz-platform CI (`release.yml`) ✅
 - [ ] **D3** — Server/Remote/Bridge (kapsam dışı, not olarak saklanır)
+
+### API-native kalan UI boşlukları (2026-09-22, `arsiv/55-API-NATIVE-YOL-HARITASI.md`'den)
+- [ ] Oturum bağlam önizlemesi (`session_context.go`) native-search modunda deferred kataloğu
+  yansıtmıyor — "shipped tools" listesine `deferred` rozeti.
+- [ ] Task budget'ın tur-meta'da gösterimi (otonom mesaj balonunda "bütçe: N token" rozeti).
+- [ ] Flow-builder UI'da `outputSchema`/`jsonField` görsel düzenleyicisi (graf JSON'unda destekli).
+
+### Insight ve maliyet açıkları (2026-09-22)
+- [ ] Workspace-seviyesi insight taraması için in-app rapor artifact'i — `RenderAppFixReport` hazır,
+  artifact session-scoped ([60-RETROSPEKTIF-TARAMA.md](60-RETROSPEKTIF-TARAMA.md) tek açık madde).
+- [ ] [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) açık maddeleri: **#2** kodlama ajanlarında
+  playwright/tarayıcı MCP satırlarını kapat, `climcp.WriteConfig` DisabledTools'a saygı; **#4** native
+  döngüde tur-ortası `Prune`'u kaldır (claude-cli yolu zaten kalıcı); **#5** yapılandırılabilir TTL,
+  varsayılan 5m; **#7** büyük araç sonuçlarını dosyaya yaz + özet; **#8** cache-kırılma dedektörü.
 
 ---
 
 ## external-agent-oss İncelemesinden (2026-06-17)
 
-> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md). Maddeler TionHarness koduna karşı doğrulandı.
+> Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss) v0.2.19→v0.10.3 (71 release) analizi. Tam gerekçe + kod-doğrulama (EXISTS/MISSING) + sürüm-sürüm liste: [13-HARICI-AJANLAR-INCELEME.md](arsiv/13-HARICI-AJANLAR-INCELEME.md). Maddeler TionHarness koduna karşı doğrulandı.
 
 ### 🔴 P0 — Doğrulanmış boşluklar (yüksek etki)
 - [x] **CG-1 — Tool çıktısı boyut sınırı** ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/registry.go` `capToolOutput()` (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`) `Registry.Call`/`CallStream`'de built-in + MCP tüm başarılı çıktılara uygulanır. `registry_cap_test.go`. *(craft v0.4.4)*
@@ -196,7 +195,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 
 ### 🟠 P1 — Çok-ajan mimarisine uyan
 - [x] **CG-5 — Ajanlar-arası mesajlaşma** (`send_agent_message`) ✅ **YAPILDI** (commit `69601ab`, 2026-06-17): `tools/builtin_agentmsg.go` self-manage gate'li — hedef ajanın `agent-inbox` oturumuna user-mesaj append + `Runtime.Wake` (fire-and-forget; `call_agent` senkron delegasyonun async tamamlayıcısı). `agentmsg_test.go`. Native yolunda. *(craft v0.8.8)* — **Sonraki durum (A2, 2026-06-19):** `send_agent_message` ve `call_agent` kaldırıldı; `run_subagent` ile birleştirildi.
-- [~] **CG-6 — Oturum öz-yönetim araçları** *(kısmî)*: **`list_sessions`** built-in tool'u **var** (`tools/builtin_sessions.go`, cross-session farkındalık, commit `54ab736`). **Kalan:** `set_session_labels`/`set_session_status`/`get_session_info` → kendini-kapatan otomasyon (görev bitince status=done → trigger). *(craft v0.8.3)*
+- [x] **CG-6 — Oturum öz-yönetim araçları** ✅: `list_sessions` (`tools/builtin_sessions.go`), `get_session_info` (`builtin_sessioninfo.go`), `update_session` (`builtin_sessionupdate.go`), `archive_sessions` (`builtin_sessionarchive.go`). *(craft v0.8.3)*
 - [~] **CG-7 — Hooks + koşullu otomasyon + webhook** *(kısmî)*: (a) command hook'ları (olay→shell, timeout + fail-open) **✅ YAPILDI** — Faz P4 (`internal/agent/hooks.go`, bkz. `_Docs/18-HOOKS.md`); ajan da `create_hook`/`update_hook`/`delete_hook` ile yönetebilir (`_Docs/24-SELF-MANAGEMENT.md`). **Kalan:** (b) otomasyon koşulları (time/state/label gate); (c) webhook action (exp. backoff retry); prompt-hook'ları + rate limiter. `events` bus + `scheduler` ile örtüşür. *(craft v0.4.3, v0.7.5, v0.7.7)*
 - [ ] **CG-8 — Otomasyon/flow geçmişi cap + compaction**: `flow_runs` sınırla (örn. 20/flow, 1000 global) + periyodik compaction. *(craft v0.7.8)*
 
@@ -236,7 +235,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 > İncelenen referans proje ~70 provider'ı "metadata'yı protokolden ayır" deseniyle düşük eforla ekliyor;
 > TionHarness zaten aynı mimaride (CG-19). Aşağıdakiler opsiyonel genişletmeler. **Plan — uygulanmadı.**
 
-- [x] **SC-1 — Built-in API provider preset kataloğu** (CLI değil) ✅ (2026-06-25): market'e **22 provider pack'i** eklendi (toplam 26), her biri `{id,label,kind,baseUrl,defaultModel,models}` — DeepSeek/Groq/OpenRouter/Ollama (mevcut) + xAI/Mistral/Gemini/Together/Fireworks/Perplexity/Cerebras/SambaNova/DeepInfra/Hyperbolic/Novita/Nebius/NVIDIA-NIM/Cohere/Moonshot/Qwen/Zhipu-GLM/MiniMax/SiliconFlow/GitHub-Models + Anthropic-uyumlu kimi/glm. Sıfır yeni protokol kodu; tek-tıkla market kurulumu. Betik: `gen_providers.py`. bkz. `21-MARKET.md`.
+- [x] **SC-1 — Built-in API provider preset kataloğu** (CLI değil) ✅ (2026-06-25): market'e **22 provider pack'i** eklendi (toplam 26), her biri `{id,label,kind,baseUrl,defaultModel,models}` — DeepSeek/Groq/OpenRouter/Ollama (mevcut) + xAI/Mistral/Gemini/Together/Fireworks/Perplexity/Cerebras/SambaNova/DeepInfra/Hyperbolic/Novita/Nebius/NVIDIA-NIM/Cohere/Moonshot/Qwen/Zhipu-GLM/MiniMax/SiliconFlow/GitHub-Models + Anthropic-uyumlu kimi/glm. Sıfır yeni protokol kodu; tek-tıkla market kurulumu. bkz. `21-MARKET.md`.
 - [ ] **SC-2 — Generic CLI factory** (CLI ailesi): referans projenin `streamGenericCliChat` deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan onlarca coding-CLI'yi tek handler + veri listesiyle ekle. Yeni `kind_genericcli.go` + `[]genericCLI{id,label,binary}`. **CLI işi — CLI fazı açılınca, SC-1'den sonra.**
 
 ---
@@ -248,17 +247,8 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 > TionHarness web-UI merkezli, tek-binary self-hosted orkestrasyon. İki alanda the external agent açık ara önde ve
 > TionHarness'e değer katacak. **Plan — uygulanmadı; ileride eklenebilecek featureler.**
 
-- [ ] **HA-1 — Gelişmiş hafıza: tam-metin arama + LLM özet + kullanıcı modelleme** *(yüksek değer)*:
-  the external agent hafızası üç katman taşıyor — (a) **FTS5 tam-metin arama** oturumlar üzerinde (TionHarness'te
-  mevcut **CG-16** ile örtüşür; Go tarafında ripgrep veya bleve/saf-Go ters-indeks ile, DB-siz
-  felsefeye uygun), (b) **LLM-destekli özetleme** ile çapraz-oturum recall (TionHarness'te `Reflect`
-  dream-cycle + rolling summary kısmen var; oturumlar-arası kalıcı özet indeksine genişletilir),
-  (c) **Honcho-benzeri kullanıcı modelleme** — etkileşimlerden kalıcı kullanıcı profili çıkarma
-  (tercihler/bağlam/davranış). TionHarness'in mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
-  üzerine kalıcı kullanıcı-profili entity'si + oto-güncelleme eklenir. İlişkili: **CG-16**, **C3** (memory_write).
-  > ✅ **(c) kullanıcı modelleme TAMAMLANDI (2026-06-23):** `human` çekirdek bloğu dream-cycle'a
-  > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `31-MEMGPT-CORE-MEMORY.md` Parça 4b).
-  > Kalan: (a) FTS5 tam-metin arama + (b) çapraz-oturum kalıcı özet indeksi.
+- ~~**HA-1 — Gelişmiş hafıza**~~ — memory alt sistemine dayanıyordu, 2026-07-05'te düştü; (a) tam-metin
+  arama **CG-16** ile yapıldı. Tarihsel metin: [arsiv/03-YOL-HARITASI-KALDIRILAN.md](arsiv/03-YOL-HARITASI-KALDIRILAN.md).
 - [ ] **HA-2 — Kendini-geliştiren prosedürel skill + skill hub** *(yüksek değer — ayırt edici)*:
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini
   otonom yazar** ve tekrar kullanımla **iyileştirir** (procedural memory); skill'ler
@@ -266,12 +256,12 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
   (dosya-tabanlı, global/workspace tier, `create_skill`/`delete_skill`) + market (HarnessPack v1)
   **zaten var** — eksik olan **otonom skill üretimi** (görev sonrası ajanın deneyimden skill
   damıtması) ve **skill'in zamanla iyileşmesi** (kullanım geri-bildirimiyle revizyon). Mevcut
-  self-management skill araçları + `Reflect` döngüsü bunun temelini oluşturuyor; üzerine
+  self-management skill araçları bunun temelini oluşturuyor; üzerine
   "görev-sonrası skill-damıtma" hook'u + agentskills.io uyumlu içe/dışa aktarım eklenir.
   İlişkili: market (`_Docs/21-MARKET.md`), self-management (`_Docs/24-SELF-MANAGEMENT.md`).
 
-> **Not:** İkisi de TionHarness'in mevcut alt sistemlerinin (Faz 6 hafıza, skill sistemi, market,
-> `Reflect`) **üzerine** kurulabilir; sıfırdan değil. harici ajanin diğer güçlü yanları (mesajlaşma
+> **Not:** HA-2 TionHarness'in mevcut alt sistemlerinin (skill sistemi, market) **üzerine**
+> kurulabilir; sıfırdan değil. harici ajanin diğer güçlü yanları (mesajlaşma
 > gateway → **CG-21**; çoklu çalıştırma backend'i Docker/SSH/Modal → kapsam dışı/D3) ayrı maddelerde.
 
 ---

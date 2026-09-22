@@ -21,7 +21,7 @@ type focusViewInput struct {
 // rejected so a typo can't emit a navigation the UI silently ignores.
 var focusableViews = map[string]bool{
 	"chat": true, "executions": true, "agents": true, "explorer": true,
-	"board": true, "schedules": true, "memory": true, "flows": true,
+	"board": true, "schedules": true, "flows": true,
 	"artifacts": true, "skills": true, "market": true, "budget": true,
 	"prompts": true, "workspace": true, "settings": true,
 }
@@ -43,14 +43,14 @@ func (FocusViewTool) Def() providers.ToolDef {
 		Description: "Drive the user's UI to a screen to direct their attention (e.g. open the " +
 			"artifacts/board/flows/prompts view, or jump to a chat session). Does NOT block — it navigates " +
 			"open windows and returns. For 'chat'/'executions' the optional sessionId selects a " +
-			"session (defaults to THIS session); for 'agents'/'memory' agentId selects an agent " +
+			"session (defaults to THIS session); for 'agents' agentId selects an agent " +
 			"(defaults to the responding agent). Use to show, not to ask.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "view": { "type": "string", "enum": ["chat","executions","agents","explorer","board","schedules","memory","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
+    "view": { "type": "string", "enum": ["chat","executions","agents","explorer","board","schedules","flows","artifacts","skills","market","budget","prompts","workspace","settings"], "description": "The screen to open." },
     "sessionId": { "type": "string", "description": "Optional session to select (chat/executions views). Defaults to the current session." },
-    "agentId": { "type": "string", "description": "Optional agent to select (agents/memory views). Defaults to the responding agent." }
+    "agentId": { "type": "string", "description": "Optional agent to select (agents view). Defaults to the responding agent." }
   },
   "required": ["view"],
   "additionalProperties": false

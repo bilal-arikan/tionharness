@@ -16,7 +16,8 @@ every live subsystem immediately** — no restart.
 
 ## Tools
 
-Two self-management tools (require the **self-management** capability to be on):
+Two self-management tools (always built; their visibility is set per tool on the
+Tools screen, and a load-on-demand tool is pulled in with `activate_tools`):
 
 - **`get_settings`** — returns the `settings.json` file path plus the current
   values as JSON. Secret API keys are masked (you only see whether a key is set).
@@ -57,7 +58,7 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 Providers are **not** part of `settings.json` anymore — they moved to a
 separate instance model (kind → instance) with their own store and API.
 This section only covers what is still a plain `get_settings`/`update_settings`
-field; for provider CRUD see below.
+field; for provider instances see below.
 
 - `defaultModel` — model id; `""` = the provider's own default.
 - CLI path, config home, and authentication are provider-instance fields, not
@@ -77,7 +78,8 @@ field; for provider CRUD see below.
 Provider credentials/config live in a separate, app-wide, AES-GCM encrypted
 store (`providers.json`), not in `settings.json`. A **kind** (`claude-cli`,
 `anthropic`, `minimax`, `minimax-anthropic`, `openrouter`, `zai`, `deepseek`,
-`deepseek-anthropic`, `codex-cli`, `openai-compat`, `anthropic-compat`) is a
+`deepseek-anthropic`, `codex-cli`, `openai-compat`, `anthropic-compat`,
+`lmstudio`) is a
 built-in template that declares its own config form; an **instance** is a
 concrete, user-created provider (a kind + label + filled fields + encrypted
 secrets). The same kind can have multiple instances (e.g. two `anthropic`
@@ -90,8 +92,10 @@ instances with different keys).
 - An **agent** selects a provider instance (`providerInstanceId`); its
   `provider` field is then a **derived** kind id, kept in sync automatically —
   do not set `provider` directly when creating/updating an agent.
-- These are managed through the Providers panel / provider CRUD tools, **not**
-  through `get_settings`/`update_settings` — there is no `defaultProvider`,
+- Instances are created, edited and deleted only from the Providers panel (or
+  the REST routes above). The only agent tool is the read-only `list_providers`
+  (credential-free listing) — there is no provider CRUD tool, and providers are
+  **not** managed through `get_settings`/`update_settings` — there is no `defaultProvider`,
   `minimaxKey`, `openrouterKey`, `zaiKey`, `deepseekKey`, or `anthropicKey`
   field on `settings.json` anymore.
 

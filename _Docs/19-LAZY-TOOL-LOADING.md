@@ -13,7 +13,7 @@
 - **Eager çekirdek küçültmesi (2026-06-19):** her zaman kurulan ama turların
   azında kullanılan 8 araç da lazy'ye indirildi (`toolsetup.go`, açık `MarkLazy`):
   `read_config`/`write_config`/`list_config` (workspace prompt/instruction
-  editing — nadir), `secret_list`/`secret_get` (yalnız kimlik-bilgili görevler),
+  editing — nadir), `secret` (eski `secret_list`/`secret_get`; yalnız kimlik-bilgili görevler),
   `list_sessions` (context bloğu zaten push'lanıyor), `WebFetch` (çoğu tur dış istek yapmıyor).
   `MarkLazy` builtins'te olmayan ada **no-op** olduğundan gate'li araçlar (vault/
   config kapalı) için ek koruma gerekmez.
@@ -32,8 +32,9 @@
   koşuda ilan eder (native yol yalnız ad+özet katalog satırı taşır).
 - **Bridge alt-küme sınırı (2026-06-19):** CLI tam şema ilan ettiği için köprü
   yüzeyi `tools.bridgeExcluded` ile budanır — **CLI'de native karşılığı olan**
-  (`WebFetch` → CLI'nin kendi WebFetch'i) ve **native-loop context'i gereken** (`call_agent`,
-  dispatch `DelegationFrom(ctx)` ister — bridge ctx'inde yok) araçlar köprülenmez.
+  (`WebFetch` → CLI'nin kendi WebFetch'i) ve **native-loop context'i gereken** (`run_subagent`,
+  `run_adhoc_flow`, `run_code` — runner'ı native döngü ctx'e kurar) araçlar köprülenmez
+  (`tools/registry.go` `bridgeExcluded`).
   Native ajanlar etkilenmez; bunlara `activate_tools` ile erişir. Test:
   `TestBridgeableDefsExcludesCLINative`.
 - **Rol-bazlı eager (2026-06-19):** `Agent.PermissionMode == "read-only"` ise
@@ -43,8 +44,8 @@
   `TestReadOnlyAgentDemotesWriteTools`.
 - **call_agent (2026-06-19, tarihsel):** senkron delegasyon tool'u o tarihte lazy
   hale getirilmişti — ancak A2 refactor'u (2026-06-19) kapsamında `run_subagent`'a
-  birleştirildi ve `call_agent` aracı **kaldırıldı**. `run_subagent` delegation
-  gate'li ve eagerly yüklenir.
+  birleştirildi ve `call_agent` aracı **kaldırıldı**. `run_subagent` eager yüklenir
+  (delegation gate'i 2026-07-02'de kaldırıldı).
 - **input_examples (2026-06-19):** `ToolDef.Examples []json.RawMessage` — şemanın
   ifade edemediği kullanım konvansiyonlarını (tarih/cron formatı, ID deseni, hangi
   opsiyonel alanın birlikte geldiği) gösteren somut örnek çağrılar. Anthropic
@@ -59,7 +60,7 @@
   - **2. dalga pilotlar (2026-06-19):** `create_hook` (matcher araç-adı glob'u +
     command'in stdin/stdout JSON sözleşmesi), `update_settings` (`patch`
     `additionalProperties:true` → şema anahtarları tamamen opak; örnek doğru
-    anahtarları gösterir), `create_mcp_server` (stdio vs sse/http; `args`/`env`
+    anahtarları gösterir), `create_mcp_server` (stdio vs http — deprecated `sse` desteklenmez; `args`/`env`
     escaped JSON string). Not: "permission-pattern" aday değil — ajan-yüzlü tool
     girdisi değil, kullanıcı onay katmanı (`permpattern.go`).
   - **3. dalga — edit/create araçları (2026-06-19):** `update_flow` (graph string +
@@ -80,7 +81,6 @@
     katlandığından bu en büyük kalemdi.
   - `create_artifact` (`builtin_artifact.go`): açıklama kısaltıldı (image/binary
     yönergesi + base64-etmeyin uyarısı korundu).
-  - _(Core memory araçları — `core_memory_append`/`replace` — 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI.)_
   - Tahmini kazanç: ~1.3 KB ham metin / her eager tur ≈ **~300-350 token**.
     Build temiz, `go test ./internal/tools/...` 152 geçti; şema/örnek JSON
     geçerliliği doğrulandı. **Öneri (Strateji B, uygulanmadı):** `run_subagent` +

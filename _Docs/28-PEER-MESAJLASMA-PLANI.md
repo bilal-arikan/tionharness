@@ -120,8 +120,8 @@ işbirliği).
    şimdilik Aktivite feed'inde görünür).
 4. ⏳ **Faz 4** — yapısal protokol mesajları (görev atama/durum) — **ertelendi** (opsiyonel;
    şimdilik `run_task`/Kanban yeterli).
-5. ✅ **Faz 5 (TSK340, 2026-08-28)** — **alıcı tarafı politikası + teslim makbuzu +
-   byte sınırı**. Ayrıntı: §9.
+5. ✅ **Faz 5 (TSK340, 2026-08-28)** — **teslim makbuzu +
+   byte sınırı** (alıcı politikası 2026-09-06'da kaldırıldı). Ayrıntı: §9.
 
 ## 7. Açık kararlar (kullanıcı onayı bekliyor)
 
@@ -138,7 +138,7 @@ işbirliği).
 - `internal/agent/toolsetup.go` (self-manage bloğuna ekle)
 - `internal/agent/agentmsg.go` → `DeliverAgentMessage(ctx, fromAgentID, toRef, summary, message)` (inbox + spawn)
 - `internal/tools/builtin_sendmessage_test.go`
-- Docs: bu plan + [[05-ILERLEME]] + [[23-ILISKI-GRAFIGI]]
+- Docs: bu plan + [[05-ILERLEME]] + [[arsiv/23-ILISKI-GRAFIGI]]
 
 ---
 *Desen kaynağı: Claude Code'un dışarıdan gözlemlenen mesajlaşma davranışı (kod kopyalanmadı, yalnız desen).
@@ -146,70 +146,35 @@ işbirliği).
 
 ---
 
-## 9. Alıcı tarafı: inbound politikası, makbuz ve byte sınırı (Faz 5)
+## 9. Alıcı tarafı: makbuz ve byte sınırı (Faz 5)
 
-> **Kaldırıldı (2026-09-06):** §9.1 inbound politikası (`accept|hold|refuse`) ve §9.3
-> tutulan-mesaj uçları (`/api/agent-messages/held|release|refuse`) koddan çıkarıldı.
-> Politika için hiçbir editör, tutulan mesaj için hiçbir UI ya da araç yazılmamıştı;
-> `hold`'a düşen bir mesajı kimse serbest bırakamıyordu. Teslim artık her zaman
-> `accepted`; makbuz durumları `accepted|refused|dropped` (refused yalnız boyut
-> sınırı gibi teslim-öncesi hatalarda). §9.2 makbuz ve §9.4 byte sınırı yaşıyor.
-> Aşağıdaki 9.1 ve 9.3 tarihçe olarak durur; geri istenirse bu bölümden yeniden
-> kurulabilir.
+> **Kaldırıldı (2026-09-06):** Inbound politikası (`accept|hold|refuse`) ve tutulan-mesaj
+> uçları (`/api/agent-messages/held|release|refuse`) koddan çıkarıldı. Politika için
+> hiçbir editör, tutulan mesaj için hiçbir UI ya da araç yazılmamıştı; `hold`'a düşen
+> bir mesajı kimse serbest bırakamıyordu. Teslim artık her zaman `accepted`.
 
 Faz 1–3'te gönderen her zaman kazanıyordu: mesaj ya teslim ediliyor ya da yalnız
-geçici bir araç hatasıyla düşüyordu; alıcının söz hakkı yoktu ve düşen mesajdan
-kalıcı bir iz kalmıyordu. Faz 5 üç boşluğu kapatır.
+geçici bir araç hatasıyla düşüyordu ve düşen mesajdan kalıcı bir iz kalmıyordu.
+Faz 5 bunu makbuz ve byte sınırıyla kapatır.
 
-### 9.1 Inbound politikası — `accept | hold | refuse`
-
-- Saklandığı yer: **ajanda** `Agent.InboundPolicy`, **oturumda**
-  `Session.InboundPolicy` (`internal/db/models.go`). Oturum ayarı **varsa** o kazanır,
-  yoksa ajanınki, o da boşsa `accept`.
-- **Boş değer = "ayarlanmamış" = `accept`.** Bu yüzden mevcut ajan/oturum satırları
-  hiç dokunulmadan eski davranışı sürdürür — geriye dönük uyum bozulmaz.
-- Bilinmeyen bir değer **sessizce accept'e düşmez**: `ValidateInboundPolicy` hata
-  döndürür, `UpdateAgent` / `SetSessionInboundPolicy` yazmayı reddeder ve teslim
-  sırasında çözümleme hata verir (`internal/db/models_agentmsg.go`).
-- Etkisi:
-  - `accept` → eskisi gibi teslim + arka plan turu.
-  - `hold` → mesaj **gövdesiyle birlikte** park edilir, tur başlatılmaz; onay bekler.
-  - `refuse` → teslim reddedilir, gönderen hatayı görür, red kalıcı olarak yazılır.
-- Inbox (`send_message`) yolunda oturum, teslim anında yaratıldığı için politika
-  **ajan** düzeyinde okunur; oturum override'ı zaten var olan oturumlar için (worker
-  oturumları, `send_to_worker`) geçerlidir.
-
-### 9.2 Teslim makbuzu — `accepted | held | refused | dropped`
+### 9.1 Teslim makbuzu — `accepted | dropped`
 
 `db.AgentMessage` (`internal/db/models_agentmsg.go`, store:
 `internal/db/store_agentmsg.go`, disk: `<store>/agent-messages/AMS<n>.json`) her
-teslim **denemesi** için yazılır. Sessiz düşme yoktur:
+teslim **denemesi** için `gateInbound` (`internal/agent/inbound.go`) tarafından
+yazılır. Sessiz düşme yoktur:
 
 | Durum | Anlamı |
 |---|---|
-| `accepted` | Politika kabul etti, teslim yapıldı |
-| `held` | Politika `hold`; gövde saklandı, teslim edilmedi, onay bekliyor |
-| `refused` | Politika `refuse` (ya da tutulan mesaj elle reddedildi) — gerekçe makbuzda |
+| `accepted` | Boyut kontrolünden geçti, teslim yapıldı |
 | `dropped` | Kabul edildi ama teslim **sonradan** başarısız oldu (slot tükendi, kuyruk dolu, DB hatası) |
 
 - `accepted → dropped` düşürmesi `dropDelivery` ile yapılır; asıl hata olduğu gibi
-  gönderene döner, üstüne makbuz kimliği eklenir (`internal/agent/inbound.go`).
-- `held → accepted/refused` geçişi **CAS**'tır (`ResolveHeldAgentMessage`): aynı mesaj
-  iki kez serbest bırakılıp iki kez çalıştırılamaz.
-- Makbuzlar diskte durduğundan onay bekleyen mesaj **yeniden başlatmayı da atlatır**.
+  gönderene döner, üstüne makbuz kimliği eklenir.
+- `refused` değeri makbuz doğrulamasında (`store_agentmsg.go`) hâlâ geçerli bir durum
+  olarak tanınır, ama politika kalktığından bugün hiçbir yol onu yazmaz.
 
-### 9.3 Tutulan mesajları görme / serbest bırakma
-
-HTTP (`internal/api/agent_messages.go`):
-
-- `GET  /api/agent-messages/held?agentId=…` — onay bekleyenler (eskiden yeniye).
-- `POST /api/agent-messages/{id}/release` — onayla ve **şimdi** teslim et.
-- `POST /api/agent-messages/{id}/refuse` — reddet (`{"reason": "..."}` opsiyonel).
-
-Serbest bırakma, mesajın yakalandığı kanala göre yeniden teslim eder: `inbox` →
-alıcının inbox oturumu, `worker` → worker oturumu (meşgulse worker kuyruğuna girer).
-
-### 9.4 Byte üst sınırı ve `message_too_large`
+### 9.2 Byte üst sınırı ve `message_too_large`
 
 Ayar: `agentMessageMaxKB` (varsayılan **64 KB**, `internal/settings/settings.go`);
 çalışma zamanı karşılığı `Tunables.AgentMessageMaxBytes()`
@@ -221,7 +186,6 @@ Ayar: `agentMessageMaxKB` (varsayılan **64 KB**, `internal/settings/settings.go
 | `send_to_worker` | `SendToWorker` içindeki `gateInbound` (`internal/agent/coordination.go`) | Aynı: kuyruk slotu bile alınmaz |
 | Worker bildirimi | `NotifyCoordinator` → `capNotification` | **Kırpılır**, atılmaz: turu biten worker'a hata döndürecek kimse yok; kırpma `message_too_large` işaretiyle açıkça yazılır (rune-güvenli kesim) |
 
-Testler: `internal/agent/inbound_test.go` (politika matrisi, byte sınırı, makbuz
-durumları, CAS'lı serbest bırakma, bildirim kırpması) ve
-`internal/db/store_agentmsg_test.go` (politika doğrulama + makbuz yaşam döngüsü +
-yeniden açılışta kalıcılık).
+Testler: `internal/agent/inbound_test.go` (byte sınırı, `send_to_worker` sınırı,
+`dropDelivery` makbuzu, bildirim kırpması) ve `internal/db/store_agentmsg_test.go`
+(makbuz yaşam döngüsü + yeniden açılışta kalıcılık).

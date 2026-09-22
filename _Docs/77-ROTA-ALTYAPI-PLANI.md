@@ -38,11 +38,6 @@ Tasarım ilkeleri, mevcut kararlarla uyumlu:
 - Mevcut seam'ler genişletilir, yenisi icat edilmez: `LaunchRun`, `SetBoardHook`,
   `SetActivityHook`, `SessionHub`, `FlowObserver`, `view.Sources`.
 
-> ⚠️ **Eşzamanlı çalışma.** Ana ağaç şu an başka bir oturum tarafından da
-> düzenleniyor (network fiziği, `05-ILERLEME`). Her kalem **ayrı worktree + kısa
-> PR**; `05-ILERLEME.md` yalnız kalem kapanınca güncellenir. `internal/skills/store.go`
-> son üç commit'te değişti — R6 rebase ile başlar.
-
 ## 1. Refactor kalemleri
 
 Her kalem: neden → ne → dosyalar → etki alanı → test → boyut (S/M/L) → hangi Rota
@@ -588,9 +583,7 @@ Rota F0 (projeksiyon ekranı) buradan sonra başlar.
 | B | R2, R3, R5, R6, R8 | 5 ayrı worktree | `runningSessionIDs` silindi; `/api/workspace/stream` gap-fill; 4 tetik registry'de; reçete şeması; run GC |
 | C | R7, R9, R10 | 3 ayrı worktree | Ağ'da koordinatör kenarı görünür; observer üzerinden aynı olaylar; yeni view iskeleti boş açılır |
 
-Her dalga sonunda: `go test ./... -count=1` (`TIONHARNESS_ENABLE_SHELL=1`),
-`cd frontend && npm test && npx tsc --noEmit`, `scripts\e2e-smoke.ps1 -SkipLLM`,
-`git diff --check`. Ek regresyon listesi: sidebar çip sayıları, Ağ canlı kapsamı,
+Her dalga sonunda `scripts/test.sh full` + `scripts/e2e-smoke.ps1 -SkipLLM`. Ek regresyon listesi: sidebar çip sayıları, Ağ canlı kapsamı,
 RunView canlı statü, koordinatör tur drain'i, Durable Ask devamı, çoklu pencere
 senkronu.
 

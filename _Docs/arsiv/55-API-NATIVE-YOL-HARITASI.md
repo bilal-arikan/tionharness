@@ -1,5 +1,7 @@
 # 55 — API-Native Özellikler Yol Haritası
 
+> **Arşiv (2026-09-22):** P0–P4, P6, P7 uygulandı; P5 (memory tool) hafıza alt sisteminin kaldırılmasıyla iptal. Açık kalan küçük UI boşlukları (deferred rozeti, task budget rozeti, flow-builder `outputSchema`/`jsonField` düzenleyicisi) yol haritasına aktarılmak üzere işaretlendi. Güncel ayarlar: `internal/settings/settings.go` (`AnthropicWebTools`, `AnthropicServerCompaction`, `AnthropicProgrammaticTools`).
+
 > Anthropic Messages API'nin sunucu-tarafı yeteneklerinin TionHarness'e kademeli entegrasyonu.
 > Amaç: istemci tarafında elle kurduğumuz mekanizmaları, model bunlara göre eğitildiği için
 > daha iyi çalışan API-native muadilleriyle tamamlamak/değiştirmek. Tümü yalnız **birinci-parti

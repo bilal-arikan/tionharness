@@ -16,24 +16,19 @@
 > `{provider: instanceId, model}` patch'iyle gider; handler instance id'yi doğrulayıp
 > `ProviderInstanceID` kaynağını ve türetilmiş `Provider` kind alanını senkronlar.
 >
-> İlgili: `17-TOKEN-OPTIMIZASYON.md` (provider soyutlaması), `51-CLAUDE-CONFIG-BIRLESIK.md`,
-> `69/70` (codex-cli — Faz 0 ön koşuluydu, merge edildi).
+> İlgili: `17-TOKEN-OPTIMIZASYON.md` (provider soyutlaması), `arsiv/51-CLAUDE-CONFIG-BIRLESIK.md`,
+> `69` (codex-cli — Faz 0 ön koşuluydu, merge edildi).
 
 ---
 
-## 1. Bugünkü durum (doğrulanmış)
+## 1. Başlangıç durumu (özet)
 
-| Katman | Bugün |
-|--------|-------|
-| Taslak | `providers.Manifest` + `ProviderKind` (`kind_*.go`, `init()` ile `RegisterKind`) — **zaten plugin şeklinde** |
-| Örnek | **Yok.** Kind id'nin kendisi örnektir: `Agent.Provider = "anthropic"` |
-| Kimlik/config | `settings.Settings` içinde **kind başına tekil, typed alan**: `AnthropicKeyEnc`, `MinimaxKeyEnc/BaseURL`, `OpenRouterKey…`, `ZAIKey…`, `DeepSeekKey…`, `ClaudeCLIPath/ConfigDir/AuthKind/AuthTokenEnc`, `CodexCLIPath/ConfigDir` |
-| Yarı-örnek | `settings.CustomProvider` (`id/label/kind("openai"\|"anthropic")/baseUrl/defaultModel/models/keyEnc`) — **instance modelinin %70'i zaten burada** |
-| Registry | `providers.Registry` — süreç başına **tek**, `internal/app/app.go:130`'da kurulur; alanları `Server.applySettings()` ile canlı güncellenir. `resolve(id)` bir **`switch id`** ile kimliği doğru typed alana eşler (`registry.go:310`+) |
-| Kapsam | Sağlayıcı örnekleri ve kimlik evleri **uygulama geneli**dir: örnekler `<dataDir>/providers.json`, otomatik oluşturulan CLI evleri `<dataDir>/provider-homes/<instance-id>` altındadır. Ajan yalnız örnek id'sini seçer; workspace CLI kimliğinin sahibi değildir. |
-
-Kodda zaten iki yerde "Faz 2 = data-driven instance model" notu duruyor
-(`kind.go:22`, `registry.go:310`). Bu doküman o fazın planıdır.
+Plan öncesinde kind id'nin kendisi örnekti (`Agent.Provider = "anthropic"`) ve
+kimlik/config `settings.Settings` içinde kind başına tekil typed alanlarda
+duruyordu; bu alanlar Faz 5'te kaldırıldı. Bugün sağlayıcı örnekleri ve kimlik
+evleri **uygulama geneli**dir: örnekler `<dataDir>/providers.json`, otomatik
+oluşturulan CLI evleri `<dataDir>/provider-homes/<instance-id>` altındadır. Ajan
+yalnız örnek id'sini seçer; workspace CLI kimliğinin sahibi değildir.
 
 ---
 
@@ -246,7 +241,7 @@ invaryantını doğrulayan test yazılacak (agent yazım yolu → alan senkronu)
 | `internal/api/catalog.go:39` | `e.ID == "claude-cli"` (CLI sürümü/abonelik rozeti) | `KindID == "claude-cli"` |
 
 `Manifest.Transport` alanı bu genellemeyi codex-cli için de doğru yapar
-(codex de MCP köprüsü kullanır → `cli`). Doc 70 §1.1'deki `CLIProvider`
+(codex de MCP köprüsü kullanır → `cli`). `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md` §1.1'deki `CLIProvider`
 arayüz refactor'u ile aynı yöne bakar; **o refactor bu planın ön koşuludur.**
 
 ### 4.3 Registry'nin `switch id` seam'i
@@ -310,6 +305,49 @@ düşüp (codex için var olmayan bir dizine, claude için sessizce workspace
 evinden sabit global eve) kaymasın diye. Kullanıcının elle yazdığı farklı bir
 yol asla dokunulmaz; onarım ikinci açılışta no-op'tur.
 
+### 4.5 claude-cli kimlik sağlığı ve yedek dışlama
+
+Bu bölüm arşivlenen `arsiv/51-CLAUDE-CONFIG-BIRLESIK.md`'den taşındı; eski
+per-workspace ev modeli kalktı ama aşağıdaki mekanikler fiilen kullanılan eve
+uygulanmaya devam eder.
+
+- **Tek pinleme girişi `Runtime.PinCLIHome(provider)`** (`internal/agent/codexhome.go`):
+  hem claude-cli hem codex-cli evini pinler; diğer transport'larda no-op. Tur
+  döngüsü dışında doğrudan `provider.Complete` çağıran her yer (`guardedComplete`,
+  `handoff.go`, `/compact`, ön-compaction) bunu çağırır. Fold çekirdeği
+  (compaction/handoff) ayrıca ctx'ten self-pin yapar:
+  `conversation.WithClaudeHome(ctx, ...)` (`internal/conversation/claudehome.go`).
+- **Credential self-heal (`ensureClaudeHomeCredential`,
+  `internal/agent/claudehome.go`):** per-turn CLI seam'inde çalışır. Adaylar
+  (global `~/.tionharness/claude-home` + gerçek `~/.claude`) `credentialRank` ile
+  sıralanır; evin kendi credential'ı daha iyi sıralanıyorsa asla ezilmez. Heal
+  ev başına kilitlenir ve kopyadan hemen önce hedef yeniden okunur (arada CLI'nin
+  yaptığı refresh kazanır).
+  **Sıralama ölçütü önce CANLI access token** (`credentialLiveness`): yalnız
+  expiry damgalarına bakmak yetmez — bayat bir evin `refreshTokenExpiresAt`'i
+  gelecekte olabilir ve harcanmış bir refresh token diskten anlaşılmaz. Süresi
+  dolmamış access token ise evin son bir saat içinde başarıyla kimlik
+  doğruladığının kanıtıdır (2026-08-01 hatası: 19 gün önce ölmüş global
+  credential kullanıcının canlı `~/.claude`'unun önüne geçiyor, CLI
+  `invalid_grant` alıp credential'ı siliyor, heal aynı ölü dosyayı geri
+  kopyalıyordu; bkz. `47` §14.8).
+- **Refresh serileştirme (`internal/claudeauth/refreshgate.go`,
+  `SerializeRefresh`):** OAuth refresh token'ları tek kullanımlıktır; aynı eve karşı
+  eşzamanlı CLI süreçleri aynı anda yenilerse kaybedenler `invalid_grant` alır ve
+  CLI credential'ı siler. Kapı yalnız yenilemenin gerçekten gerekli olduğu
+  pencerede tek süreç kabul eder, refresh dosyaya düşünce açılır (30 sn tavan).
+  Token sağlıklıyken kilit yoktur, paralel fan-out etkilenmez.
+- **`--resume` ve ev taşınması:** CLI transkriptleri config evinin içinde durur
+  (`<home>/projects/<cwd-slug>/<id>.jsonl`). `ClaudeCLI.CanResume(id)`
+  (`internal/providers/claudecli_resumecheck.go`) yeni evde transkript yoksa
+  resume yerine soğuk başlatır (tam transkript gönderilir); yarışta CLI yine
+  reddederse hata NON-retryable'dır ve id + ev adını söyler.
+- **Yedekten dışlama:** `internal/backup/archive.go` `backupExcludeNames` =
+  `{.credentials.json, .claude.json}`; bu dosya adları hiçbir yedek zip'ine
+  yazılmaz (`34-YEDEKLEME.md`). Credential diskte kalır, arşive girmez; restore
+  edilen ev yeniden login ya da heal ile kimlik kazanır. Test:
+  `backup/backup_test.go` `TestZipExcludesClaudeCredentials`.
+
 ---
 
 ## 5. API yüzeyi
@@ -370,7 +408,7 @@ Yanıtta ikisi de döner.
 
 ## 7. Fazlar ve sıralama
 
-> **Faz 0 zorunlu:** codex-cli işi (`_Docs/70`) **aynı dosyalara** dokunuyor —
+> **Faz 0 zorunlu:** codex-cli işi (`arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`) **aynı dosyalara** dokunuyor —
 > `internal/providers/registry.go`, `internal/settings/settings.go`,
 > `internal/providers/kind.go`. Şu an çalışma ağacında commit edilmemiş codex
 > dosyaları var. Bu plan **codex Faz 1-3 bittikten sonra** başlamalı; aksi hâlde
@@ -378,7 +416,7 @@ Yanıtta ikisi de döner.
 
 | Faz | İçerik | Çıktı ölçütü | Efor |
 |-----|--------|--------------|------|
-| **0** | ✅ Codex-cli'nin merge'ünü bekle; `CLIProvider` arayüz refactor'ı (Doc 70 §1.1) yerinde | `go build ./...` temiz, somut `*providers.ClaudeCLI` assertion'ı kalmadı | — |
+| **0** | ✅ Codex-cli'nin merge'ünü bekle; `CLIProvider` arayüz refactor'ı (`arsiv/70` §1.1) yerinde | `go build ./...` temiz, somut `*providers.ClaudeCLI` assertion'ı kalmadı | — |
 | **1** | ✅ `FieldSpec` + `Manifest.Fields/Transport`; her `kind_*.go` kendi alanlarını ilan eder; `ProviderInstance` modeli + `providers.json` store (**K2** — dosya `internal/settings/store_providers.go`, tip adı `ProviderStore`; plandaki "`internal/settings/provider_instance.go`" ismi kullanılmadı) + **boot migrasyonu** (`provider_migrate.go`) | Migrasyon testi: eski settings.json → beklenen örnek seti; davranış birebir aynı (`provider_migrate_test.go`) | ~1 gün |
 | **2** | ✅ `Registry` örnek-tabanlı: `SetInstances()`, `resolve()` örnekten, `KindOf()`; `Agent.ProviderInstanceID` alanı + `Provider` senkron aynası (**K3**); §4.2'deki 5 karşılaştırma `Transport`'a; `openai-compat`/`anthropic-compat` kind'ları → eski `CustomSpec` yolu düştü | Aynı kind'dan 2 örnek testi (2 anthropic, farklı key) yeşil; "`Provider` her zaman kind" invaryant testi yeşil | ~1 gün |
 | **3** | ✅ **BİTTİ** (2026-08-18): `/api/provider-kinds` (kind→form şeması), `/api/providers` CRUD (`GET`/`GET {id}`/`PUT`/`DELETE {id}`), `/api/settings/test-provider` örnek id kabul ediyor. Eski `settings.CustomProvider` API yazım yolu (`handleUpsertProvider`/`handleDeleteProvider`) kaldırıldı. `market_install.go`'daki `installProviderPack` aynı `upsertProviderInstance` doğrulama yoluna taşındı (`providers.json`'a yazıyor, `applySettings()` sonrası registry'de gerçek etkisi var) — `AllowMissingRequiredSecrets` (pack'in anahtarsız kurulabilmesi) ve `ExtraConfig` (legacy `reasoning`/`promptCache` bayraklarının standart olmayan `Config` anahtarları olarak taşınması) opsiyonları bu fazda eklendi. `ProvidersPanel` generic form (`ProviderInstanceList`/`ProviderInstanceForm`) — frontend | Backend+frontend: `go build`/`go vet`/`go test ./...` yeşil, CRUD+schema+secret-sızmama+silme-etki+market-pack-kurulum testleri yeşil (`internal/api/providers_test.go`) | ~1.5 gün |
@@ -598,6 +636,6 @@ değerlidir. Katalogdaki öneri listesi bu ayrımı açıklamalarında taşır.
 ## İlgili dokümanlar
 
 `17-TOKEN-OPTIMIZASYON.md` (provider soyutlaması, prompt-cache) ·
-`51-CLAUDE-CONFIG-BIRLESIK.md` (claude-home) ·
-`69-CODEX-CLI-SAGLAYICI.md` / `70-CODEX-CLI-UYGULAMA-PLANI.md` (paralel iş) ·
+`arsiv/51-CLAUDE-CONFIG-BIRLESIK.md` (eski claude-home modeli) ·
+`69-CODEX-CLI-SAGLAYICI.md` / `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md` (paralel iş) ·
 `02-VERI-MODELI.md` (entity/ID konvansiyonu) · `21-MARKET.md` (pack provider payload)

@@ -129,7 +129,7 @@ Toplam **görülmemiş** öğe sayısı pencere dışına da taşınır:
   (kabuk sağlarsa; yoksa no-op). `lib/appBadge.ts`.
 
 `unreadTotal` = okunmamış sohbet oturumları (aktif ws) + etkinlik olan diğer
-workspace'ler + chat-dışı view rozetleri (`App.tsx`). Hesap chat'i iki kez saymaz.
+workspace'ler + chat-dışı view rozetleri (`app/App.tsx`). Hesap chat'i iki kez saymaz.
 
 > Not: native ITaskbarList3 overlay ikonu istenirse `tionharnessSetBadge` köprüsü
 > `cmd/tionharness-desktop` tarafında uygulanabilir; Badging API çoğu durumu kapsar.
@@ -143,34 +143,15 @@ Bloklamaz; sink yoksa (otonom, açık client yok) graceful no-op. Native + claud
 yollarının ikisinde de çalışır; kaynak `internal/api/notifysink.go`. Kullanım: ajanın
 kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bitti", "hata").
 
-## Masaüstü bildirim ana anahtarı: workspace override (3-durumlu) — KALDIRILDI
+## Masaüstü bildirim ana anahtarı — workspace override KALDIRILDI
 
 > **2026-09-06:** Workspace-başına `inherit/on/off` override'ı kaldırıldı; ana anahtar
 > yalnız `AppSettings.desktopNotifications` (Ayarlar ▸ Bildirimler). Aynı ayarı iki
-> yerde düzenletmek karışıklık yaratıyordu, override kullanılmıyordu. Aşağıdaki tablo
-> tarihçedir (`WSSettings.DesktopNotifications`, `resolveDesktopNotifications`,
-> `onWorkspaceNotifySaved` artık yok). Tip-bazlı susturma değişmedi.
+> yerde düzenletmek karışıklık yaratıyordu, override kullanılmıyordu.
 
-Masaüstü OS-toast'larını kesen **ana anahtar** iki kaynaktan çözülür: uygulama-genel
-varsayılan (`AppSettings.DesktopNotifications`) + **aktif workspace'in override'ı**.
-Bu, TionHarness'in fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
-koşan bir "otonom" workspace'i susturup üzerinde çalıştığını açık tutabilir (ya da
-tersi).
-
-| Katman | Alan | Anlam |
-|--------|------|-------|
-| **Backend model** `internal/workspace/settings.go` | `WSSettings.DesktopNotifications *bool` (`omitempty`) | `nil` = genel ayarı miras al (varsayılan); `*true`/`*false` = bu workspace için zorla aç/kapat. |
-| **Patch** aynı dosya | `WSSettingsPatch.DesktopNotifications **bool` (`json:"-"`) + özel `UnmarshalJSON` | Üç durumu ayırır: nil (dokunma) / non-nil→nil iç (override'ı temizle) / non-nil bool (zorla). Tel string'i (`"inherit"\|"on"\|"off"`) `UnmarshalJSON` bu şekle map eder; tanınmayan değer hata verir. |
-| **DTO** `internal/api/workspace_settings.go` | `desktopNotifications string` (`desktopNotificationsToString`) | `nil→"inherit"`, `true→"on"`, `false→"off"`. |
-| **Frontend tip** `frontend/src/types/workspace.ts` | `DesktopNotificationsMode = 'inherit'\|'on'\|'off'` | `WorkspaceSettings.desktopNotifications` + patch alanı. |
-| **Çözümleyici** `frontend/src/shared/lib/desktopNotifications.ts` | `resolveDesktopNotifications(wsMode, globalEnabled)` | Override `inherit` değilse onu, yoksa geneli döndürür. |
-| **Efektif kapı** `frontend/src/app/useAppearance.ts` | `notifyEnabled` ref | Genel master + aktif-ws override iki ayrı ref'te; her biri değişince `applyResolvedNotify()` `notifyEnabled.current`'ı yeniden hesaplar. Bu ref, hem `useAppEvents` hem chat-stream toast yollarının **tek** ana kapısıdır. |
-| **UI** `frontend/src/features/settings/NotificationsPanel.tsx` | `Segmented` 3-durumlu kontrol | Ana toggle'ın altında "Bu workspace için bildirimler". Kendi kendine yüklenir/kaydeder (`updateWorkspaceSettings`), sonra `onWorkspaceNotifySaved(mode)` ile canlı yeniden çözümlemeyi tetikler (workspace switch beklemeden). |
-
-Not: **Tip-bazlı** mute (`notifyPrefs.ts`) hâlâ cihaz-özel (`localStorage`),
-workspace-bağımsız. Yalnız ana anahtar workspace-scoped yapıldı. Susturulabilir
-türlerin tam listesi artık tek registry'den gelir (aşağı bak) — `chat` (yanıt hazır)
-ve `prompt` (onay/soru) dahil.
+Not: **Tip-bazlı** mute (`notifyPrefs.ts`) cihaz-özel (`localStorage`),
+workspace-bağımsız. Susturulabilir türlerin tam listesi tek registry'den gelir
+(aşağı bak) — `chat` (yanıt hazır) ve `prompt` (onay/soru) dahil.
 
 ## Masaüstü toast: tek funnel + tek registry (2026-07-24 refactor)
 

@@ -1021,8 +1021,8 @@ func workspaceSkillsDir(workDir string) string {
 //
 // Note this home also holds the CLI's conversation transcripts
 // (projects/<cwd-slug>/<id>.jsonl), so a session's stored --resume id is only
-// valid for the home that was in force when it was written; see
-// ClaudeCLI.CanResume and cmd/repair-provider-migration.
+// valid for the home that was in force when it was written; ClaudeCLI.CanResume
+// checks that before a warm resume is attempted.
 func (r *Runtime) claudeHomeDir() string {
 	return appCLIHomeDir(r.dataDir, "claude-cli")
 }

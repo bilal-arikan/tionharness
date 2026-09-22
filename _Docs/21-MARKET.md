@@ -37,8 +37,9 @@
 > Qwen (DashScope Intl), Zhipu GLM (Z.AI), SiliconFlow, GitHub Models, ve
 > iki Anthropic-uyumlu uç (`kimi-anthropic`, `glm-anthropic`). MiniMax **eklenmedi**
 > (slug yerleşik `minimax` provider id'siyle çakışıyor — reserved). Bu, yol haritası
-> **SC-1**'i (built-in API provider preset kataloğu) karşılar. Üretici betik:
-> `sessions/.../data/gen_providers.py`. Model listeleri kurulumda düzenlenebilir.
+> **SC-1**'i (built-in API provider preset kataloğu) karşılar. Paketler bir oturum
+> scratch betiğiyle (`gen_providers.py`) üretildi; betik repoda yoktur. Model listeleri
+> kurulumda düzenlenebilir.
 >
 > **Sistem entegrasyonu (2026-06-25):** Provider pack'leri artık **capability metadata**
 > taşır ve TionHarness'in token/maliyet/cache/düşünme sistemlerine bağlanır:
@@ -67,9 +68,9 @@
 > **~8-13 güncel model** taşır (önceden 3-5). Önizlemede modeller **fiyatlarıyla**
 > listelenir (giriş/çıkış $/1M token). Bunun için yeni **`GET /api/prices`** endpoint'i
 > `providers.AllPrices()` ile tüm `priceTable`'ı döndürür; MarketPanel bir kez çekip
-> her modelin yanında gösterir (bilinmeyen → "—"). **Tek kaynak:** `data/gen_providers.py`
-> hem pack JSON'larını hem **üretilen `internal/providers/pricing_market.go`**'yu
-> (`var marketPrices`, init'te `priceTable`'a merge) yazar — pack ve fiyatlar drift etmez.
+> her modelin yanında gösterir (bilinmeyen → "—"). Fiyatlar **üretilmiş `internal/providers/pricing_market.go`**'dadır
+> (`var marketPrices`, init'te `priceTable`'a merge). Üretici `gen_providers.py` repoda
+> olmadığından pack ile fiyat tablosu elle senkron tutulur.
 > NVIDIA NIM ve GitHub Models fiyatsız (GPU/kota bazlı) → "—" gösterilir.
 >
 > **ProvidersPanel entegrasyonu (2026-06-25):** Ayarlar → Sağlayıcılar'daki özel
@@ -135,7 +136,7 @@ kardeşidir: çok-katmanlı (tier), tembel (lazy) dosya-tabanlı bir mağaza.
 **Tasarım ilkeleri:**
 
 1. **Bağımlılıksız & dosya-tabanlı** — registry, `*.harnesspack.json` dosyalarından
-   oluşan bir dizin. DB yok, ağ zorunluluğu yok (uzak registry ileride additive).
+   oluşan bir dizin. DB yok, ağ zorunluluğu yok (uzak registry additive — §7).
 2. **Sır sızdırmaz** — provider paketi **asla** `keyEnc` taşımaz; agent paketi
    ID/CreatedBy/secret taşımaz. Kurulumda kullanıcı kendi anahtarını girer.
 3. **Agent-agnostik taslaklar** — flow ve agent paketleri, hedef workspace'in
@@ -446,11 +447,11 @@ Boru hattı: `internal/fetch` (edinme) → `internal/ingest` (adapter'lar: keşi
 ## 5. Frontend
 
 - **Paylaşılan `Button` primitifi:** Market paneli, uygulamanın ortak `Button`
-  bileşenini (`components/common/Button.tsx`, `variant: primary|secondary|danger`,
+  bileşenini (`shared/components/Button.tsx`, `variant: primary|secondary|danger`,
   `size: sm|md|lg`) benimser. Aynı bileşen uygulama genelinde ~15 panelde kullanılır;
   renk ve boyut tutarlılığı tek noktadan sağlanır.
 - **NavRail**: yeni görünüm `market` — `{ key:'market', label:'Market', icon: Store }`.
-- **`components/panels/MarketPanel.tsx`**: tür sekmeleri (Tümü / Beceri / Ajan /
+- **`features/market/MarketPanel.tsx`**: tür sekmeleri (Tümü / Beceri / Ajan /
   Sağlayıcı / Akış), kart ızgarası (ikon + ad + açıklama + sürüm + yazar + "Kur"),
   sağ detay çekmecesi (skill → markdown önizleme, flow → salt-okunur
   `FlowCanvas readOnly` önizleme, agent/provider → alan özeti), "Yayınla" akışı

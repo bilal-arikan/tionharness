@@ -1,40 +1,18 @@
 # TionHarness — Ajan Rehberi
 
 Yalnız **her turda geçerli** kurallar buradadır. Ayrıntılı referans (internal/db
-haritası, codebase-memory `project` argümanı, deferred araçlar, Playwright, kısmi commit,
-`website/`) → `_Docs/80-AJAN-REFERANSI.md`. Doküman indeksi → `_Docs/00-GENEL-BAKIS.md`
-(her dokümanın başında 3–5 satırlık **Özet** bloğu var; önce onu oku).
+haritası, deferred araçlar, Playwright, kısmi commit, BOM/LF, `website/`) →
+`_Docs/80-AJAN-REFERANSI.md`. Doküman indeksi → `_Docs/00-GENEL-BAKIS.md`
+(dokümanların başındaki **Özet** bloğunu önce oku).
 
-## Kabuk ve araç zinciri
+## Araç zinciri
 
-- Zorunlu kabuk **Git Bash**; POSIX sözdizimi, Windows yolları `/c/...`. PowerShell'i
-  varsayılan yapma; Windows-native bir işlem gerçekten gerekirse
-  `powershell.exe -NoProfile -Command "..."` çağır.
-- Araçların yerini tahmin etme: `command -v go`, `command -v gofmt`. Go dosyası
-  değişince `gofmt -w <dosya>`; araç yoksa formatlama/test yapılmış gibi raporlama.
-- `rtk`/`sqz` token optimizasyonu hook olarak kuruludur; komutun başına elle `rtk`
-  ekleme.
-- Kod arama katmanları (görev tipine göre seç, sırayla deneme):
-  - **Adı bilmiyorsun, niyeti biliyorsun** → `zvec_grep_search` (MCP: `zvec_grep`).
-    Doğal dil sorgusu; dosya:satır + snippet döner. Markdown/JSON/YAML de indexli.
-  - **Sembol adı elinde, bağlantısını istiyorsun** → `codebase-memory-mcp`
-    (`project` = `C-Users-Bilal-Desktop-Projects-TionHarness`). Caller/callee,
-    impact analizi, bağımlılık zinciri. Vektör araması bunu veremez.
-  - **Birebir string / dosya deseni** → `Glob`/`Grep`. En hızlısı; literal
-    arama için MCP'ye gitme.
-  - Tipik akış: konum bilinmiyorsa `zvec_grep_search` ile bul, sembol çıkınca
-    `codebase-memory-mcp` ile ilişkilendir. Adı zaten biliyorsan doğrudan `Grep`.
-  - zg index'i yalnız bu repoda kuruludur; başka projede `zvec_grep_search`
-    sonuç vermezse index yok demektir, `Grep`'e düş.
-- `Grep` aracı **ripgrep** sözdizimidir: literal `{}` `()` `[]` kaçırılır
-  (`interface\{\}`), alternation düz `|` (`a\|b` değil).
-
-## Düzenleme
-
-- Edit'ten önce hedef bölgeyi `Read` ile oku; `old_string` çıktının birebir kopyası olsun
-  (unicode/emoji/boşluğu normalize etme). Eşleşmezse kısa, benzersiz bir ASCII parça hedefle.
-- Kod, yorum ve metin İngilizce; dokümanlar Türkçe. Yeni kodu olabildiğince ayrı dosyalara böl.
-- `.go` dosyalarına BOM yazma; `//go:embed` varlıkları LF kalmalı.
+- Go araçlarının yerini tahmin etme (`command -v go`, `command -v gofmt`); Go dosyası
+  değişince `gofmt -w <dosya>`. Ayrıntı `_Docs/80` §4.
+- Arama: niyet → `zvec_grep_search`, sembol ilişkisi → `codebase-memory-mcp`, birebir
+  string → `Grep`/`Glob`. codebase-memory `project` =
+  `C-Users-Bilal-Desktop-Projects-TionHarness`.
+- Edit `old_string` eşleşmezse kısa, benzersiz bir ASCII parça hedefle.
 
 ## Git
 
@@ -42,37 +20,24 @@ haritası, codebase-memory `project` argümanı, deferred araçlar, Playwright, 
   `git stash`, `git clean` **yasak**. Kendi dosyanı geri almak için yolu adıyla ver.
   İzole iş için `git worktree add`; `git checkout -b` "already exists" derse durdur
   (`git worktree list`).
-- Satır sonları: depo yapılandırması `core.autocrlf=false` + `core.eol=lf`; çalışma
-  ağacı LF'tir. Dosya yazarken LF kullan; `gofmt -l` bir dosya listeliyorsa gerçek hata.
-- Pre-commit hook (`git config core.hooksPath .githooks`) stage'lenmiş dosyaları
-  prettier/gofmt ile formatlar ve BOM soyar. Kısmi commit reçetesi → `_Docs/80` §5.
-- Frontend `frontend/.prettierrc.json` ile formatlanır; config'siz prettier koşma.
-  `cd frontend && npm run format:check` temizse `npm run format` koşma.
-- Teslimden önce depo kökünde `git diff --check`; çıktı varsa teslim FAIL.
-- Commit yalnız istenince; committen önce `git diff --exit-code` ile boş yama kontrolü.
+- Çalışma ağacı LF'tir; `gofmt -l` bir dosya listeliyorsa gerçek hatadır.
+- Kısmi commit reçetesi → `_Docs/80` §5. Commit yalnız istenince; committen önce
+  `git diff --exit-code` ile boş yama kontrolü.
 
 ## Test
 
 ```bash
-scripts/test.sh fast      # yalnız değişen Go paketleri + frontend vitest (dakikalar değil saniyeler)
-scripts/test.sh full      # go test ./... -count=1 + vitest (~3-4 dk; teslimden önce zorunlu)
+scripts/test.sh fast      # yalnız değişen Go paketleri + frontend vitest (saniyeler)
+scripts/test.sh full      # go test ./... -count=1 + vitest + depcheck + git diff --check (~3-4 dk; teslimden önce zorunlu)
 ```
 
-- `TIONHARNESS_ENABLE_SHELL=1` script tarafından ayarlanır; elle koşarken sen ayarla.
-- Harici araç isteyen testler `t.Skip` ile geçitlenir; goroutine başlatan test sonunda
-  `drainSpawns(t, rt)` çağırır (ayrıntı `_Docs/80` §6).
-- Paket alt-kümesi geçidi kurma; `full` teslim kapısıdır (`scripts/depcheck.sh`'i de
-  koşar: `internal/{climcp,trajectory,mcp/repair,flows}` asla `internal/agent`'ı import edemez).
+- Script dışında elle koşarken `TIONHARNESS_ENABLE_SHELL=1` ayarla.
+- Goroutine başlatan test sonunda `drainSpawns(t, rt)` çağırır (ayrıntı `_Docs/80` §6).
+- Paket alt-kümesi geçidi kurma; `full` teslim kapısıdır. Import yönü kuralı →
+  `scripts/depcheck.sh`.
 
 ## Delegasyon
 
 - `spawn_worker` / `run_subagent` için ajan adını önce `list_agents` ile doğrula.
 - Yerleşik `Agent` aracının `subagent_type` listesi TionHarness ajan listesinden ayrıdır;
   ikisini karıştırma.
-
-## Proje skill'leri (`.claude/skills/`)
-
-- `/test` — yukarıdaki test script'ini doğru modda koşturur ve sonucu yorumlar.
-- `/run-app` — uygulamayı `.claude/launch.json` ile başlatıp tarayıcıda açar.
-- `/docs-update` — bir değişiklikten sonra `_Docs/05-ILERLEME.md` girişi + ilgili
-  dokümanın Özet bloğunu güncelleme kalıbı.

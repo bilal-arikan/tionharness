@@ -5,7 +5,7 @@
 > uzun bir doküman. Dört koordinasyon yöntemi tanımlar: M1 (paralel fan-out, sync),
 > M2 (koordinatör-işçi, async notify-back — bu dokümanın asıl konusu), M3 (peer/takım
 > mesajlaşma), M4 (deterministik flow). Anahtar bileşenler: `spawn_worker`/`send_to_worker`/
-> `stop_worker`/`list_workers` araçları, `CoordinationEngine` + per-session tur kuyruğu,
+> `stop_worker`/`list_workers` araçları, `NotifyCoordinator` + per-session tur kuyruğu,
 > `<task-notification>` geri bildirim formatı, sınırsız derinlikte koordinatör ağacı
 > (rol≠ebeveynlik). Oturumu arşivlemek koordinatör için kesin bir **kill-switch**tir ve
 > öyle kalır: 2026-09-06'daki otomatik oturum canlandırması yalnız
@@ -20,7 +20,7 @@
 
 > **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
 > edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
-> kitabının hemen ardından girer, boşken sıfır token maliyeti olur. Bkz. **§16**.
+> kitabının hemen ardından girer, boşken sıfır token maliyeti olur. Bkz. **"Ajana özel koordinatör promptu"**.
 >
 > **(2026-08-11):** Koordinatörlük artık bir **ajan varsayılanı** da olabilir
 > (`Agent.CoordinatorMode` → oturuma doğuşta tohumlanır) ve yeni bir `planner` profili
@@ -114,20 +114,7 @@ geri bildirim → koordinatör devam eder" halkası eksik.
 
 ### 1.2 Eksik olan / riskli olan
 
-1. **Async worker → koordinatör geri bildirimi yok.** Bugün `wait:async`
-   ayrı bağımsız bir oturum açar; sonuç orada kalır, koordinatörün oturumuna
-   dönmez. `FireTurnFinished` yalnızca **yeni** bir oturum spawn edebiliyor
-   (automation), var olan koordinatör oturumuna besleme yapamıyor.
-2. **Aynı oturumda eşzamanlı tur koruması YOK.** `activeSessions` (bugün
-   `activeMu` altında oturum id → **kayıt listesi**; `trackSession` bir
-   `*sessionRun` tutamacı döndürür, `run.release()` yalnız o tutamacı siler)
-   yalnız UI "çalışıyor" göstergesi — **kilit değil**. 4 işçi aynı anda bitip
-   koordinatöre `<task-notification>` yazıp tur
-   tetiklerse: iç içe geçmiş mesajlar + çift tur = yarış. **Per-session tur
-   kuyruğu şart.**
-3. Koordinatör-farkında sistem promptu / işçi araç kısıtı yok.
-4. Koordinatör/işçi ilişkisini modelleyen alanlar yok (`ParentSessionID` handoff
-   için kullanılıyor, anlamı "devamı" — worker "tarafından-spawn-edildi" farklı).
+> Uygulama öncesi boşluk listesi (hepsi çözüldü) → [arsiv/47-KOORDINATOR-PLAN.md](arsiv/47-KOORDINATOR-PLAN.md).
 
 ---
 
@@ -166,7 +153,7 @@ kavramı altında birleştirilir.
 sequenceDiagram
     participant U as Kullanıcı
     participant C as Koordinatör oturumu
-    participant K as CoordinationEngine
+    participant K as runWorker (worker sürücüsü)
     participant Q as Per-session tur kuyruğu (C)
     participant W1 as Worker 1
     participant W2 as Worker 2
@@ -176,8 +163,8 @@ sequenceDiagram
     Note over C: Tur biter, koordinatör "beklemede"
     C-->>W1: SpawnSession (CoordinatorSessionID=C)
     C-->>W2: SpawnSession (CoordinatorSessionID=C)
-    W1->>K: turn finished (FireTurnFinished)
-    W2->>K: turn finished
+    W1->>K: tur bitti (başarı / hata / killed)
+    W2->>K: tur bitti
     K->>Q: NotifyCoordinator(<task-notification W1>)
     K->>Q: NotifyCoordinator(<task-notification W2>)
     Note over Q: İlk worker notu 5 sn pencere açar;<br/>sonrakiler deadline'ı uzatmadan aynı tura katılır
@@ -276,23 +263,11 @@ görür. Terminal `runState`, son worker mesajının sayaçları kalıcılaştı
 sonra yazılır; restart sonrası tamamlanmış worker canlı sanılmaz ve kalıcı
 `MessageCount`/`ToolCallCount` geriye düşmez.
 
-### 3.4 Kilit yeni bileşen: `CoordinationEngine` + per-session tur kuyruğu
+### 3.4 Geri bildirim yolu + per-session tur kuyruğu
 
-Yeni dosya `internal/agent/coordination.go`:
-
-```go
-// CoordinationEngine, bir worker turu bittiğinde (FireTurnFinished) devreye
-// girer: worker'ın CoordinatorSessionID'si varsa <task-notification> üretir ve
-// koordinatör oturumuna enjekte edip tur tetikler — per-session kuyruk üzerinden.
-type CoordinationEngine struct { db *db.DB; rt *Runtime; logger *slog.Logger }
-
-func (e *CoordinationEngine) OnWorkerFinished(ctx, tf TurnFinished) {
-    sess := e.db.GetSession(tf.SessionID)
-    if sess.CoordinatorSessionID == "" { return }   // worker değil → çık
-    note := formatTaskNotification(sess, tf.Output, "completed", usage)
-    e.rt.NotifyCoordinator(sess.CoordinatorSessionID, note)
-}
-```
+Worker turu bittiğinde geri bildirim `runWorker` içinden **doğrudan**
+`Runtime.NotifyCoordinator` ile yapılır (`internal/agent/coordination.go`); planlanan ayrı
+`CoordinationEngine`/turn-hook kurulmadı — gerekçe §9 "Tasarımdan sapma".
 
 `Runtime.NotifyCoordinator(coordID, note)`:
 
@@ -353,7 +328,7 @@ Role                 string   // "coordinator" | "worker" | "" (normal)
 
 | Risk                                                                                                                                                                                                           | Önlem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Worker kendi worker'ını spawn eder (sonsuz ağaç)                                                                                                                                                               | Worker oturumlarında `spawn_worker`/`send_to_worker` **gizli** (Role=worker → coordination araçları kapalı). + mevcut `delegState.depth`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Worker kendi worker'ını spawn eder (sonsuz ağaç)                                                                                                                                                               | Derinlik sınırsız bir koordinatör ağacı olarak tasarlandı; üstel dallanma guard'ları §14.3'te. |
 | Spawn fırtınası                                                                                                                                                                                                | Mevcut `SpawnMaxConcurrent` slot + yeni `CoordinatorMaxWorkers` (koordinatör başına aktif worker).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Sonsuz notify döngüsü                                                                                                                                                                                          | Koordinatör turu sayacı `CoordinatorMaxTurns` (vars. ~50, automation MaxIterations gibi); aşılınca notify enjeksiyonu durur, kullanıcıya uyarı.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Koordinatör oturumu kapanınca kaçak worker                                                                                                                                                                     | Oturum silme/arşivde `stop_worker` hepsine (cascade cancel).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -506,89 +481,11 @@ drain sonrası dahil), `TestSecondWaveGetsItsOwnIdleSignal`,
 
 ---
 
-## 4. Koordinatör Sistem Promptu / Skill
+## 4–8. Prompt taslağı, UI planı, fazlama, kabul kriterleri, açık kararlar
 
-Yeni gömülü skill `tionharness-coordinator` (`internal/skills/defaults/`), Claude
-Code'un `getCoordinatorSystemPrompt()`'undan uyarlanır (Türkçe doküman / İngilizce
-prompt kuralına göre prompt İngilizce):
-
-- Rolün = koordinatör; her mesajın kullanıcıya; worker bildirimleri iç sinyal,
-  onlara teşekkür etme.
-- Paralellik senin süper gücün: bağımsız worker'ları tek mesajda fan-out et.
-- **Sentezi SEN yap** — "based on your findings" YASAK; dosya:satır içeren
-  spesifik spec yaz.
-- Continue-vs-spawn karar tablosu (bağlam örtüşmesi yüksek→continue,
-  düşük→fresh).
-- Fazlar: Araştırma(paralel)→Sentez(sen)→Uygulama(dosya-seti başına tek)→Doğrulama.
-- Gerçek doğrulama: özelliği açıp test et, rubber-stamp etme.
-
-Prompt yalnız `Session.Role=="coordinator"` iken enjekte edilir (workspace prompt
-kompozisyonuna koşullu blok — `composeTurnRequest`).
-
-İşçi profilleri: mevcut `explore`/`coder`/`reviewer` (subagent.go) yeniden
-kullanılır; koordinatör bunları `spawn_worker(target=...)` ile hedefler ya da
-gerçek workspace ajanı adı verir.
-
----
-
-## 5. UI
-
-- **Koordinasyon paneli** (yeni): koordinatör oturumu açıkken sağda worker
-  kartları — ad, durum (⏳running / ✅done / ❌failed), süre, token, son özet;
-  karta tık → worker transkripti (executions feed'e deep-link, zaten var).
-- Composer'da **koordinasyon yöntemi rozeti** (M1–M4 seçimi; M2 için "Koordinatör"
-  toggle → oturum `Role=coordinator` olur, prompt+araçlar açılır).
-- SSE: mevcut `spawned`/`chat` event'lerine `worker`-tipli event (status geçişi)
-  eklenir → panel canlı güncellenir. Backend `emitSpawnEvent` deseni kopyalanır.
-
----
-
-## 6. Fazlama
-
-| Faz    | Kapsam                                                                                                                                                                        | Dosyalar                                                                            |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı                                                                                                                               | `_Docs/47`, `skills/defaults/tionharness-coordinator`                               |
-| **F1** | Çekirdek backend: session alanları + `NotifyCoordinator` + per-session tur kuyruğu + `CoordinationEngine.OnWorkerFinished` (workspace manager'a `SetTurnHook` zincirine ekle) | `db/models.go`, `agent/coordination.go`, `agent/runtime.go`, `workspace/manager.go` |
-| **F2** | Araçlar: `spawn_worker`/`send_to_worker`/`stop_worker`/`list_workers` + worker araç kısıtı + guard'lar (`CoordinatorMaxWorkers`/`MaxTurns`)                                   | `tools/builtin_coordination.go`, `agent/subagent.go`, `agent/tunables.go`           |
-| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `tionharness-coordinator` skill                                                                                             | `agent/prompts*`, `api/*compose*`, `skills/defaults/`                               |
-| **F4** | UI: koordinasyon paneli + yöntem seçici + `worker` SSE event                                                                                                                  | `frontend/src/components/`, `agent/coordination.go` (emit)                          |
-| **F5** | M3 ortak scratchpad + M1/M4 birleşik "yöntem" belgeleme + testler + doküman güncelleme                                                                                        | `_Docs/28`,`15`,`47`, `*_test.go`, `SKILL.md`                                       |
-
-### 6.1 F1 için en kritik teknik detay
-
-`FireTurnFinished` bugün **tek** hook'a gidiyor (`AutomationEngine.OnTurnFinished`,
-`manager.go:245`). İki tüketici gerekiyor (automation + coordination). Çözüm:
-`SetTurnHook`'u **çoklu-hook** yap (hook listesi) ya da manager'da tek bir
-"dispatcher" hook kur; o hem `AutomationEngine.OnTurnFinished` hem
-`CoordinationEngine.OnWorkerFinished` çağırsın. Basit ve geriye uyumlu:
-`manager.go`'da bir kompozit fonksiyon.
-
----
-
-## 7. Kabul Kriterleri (M2)
-
-1. Koordinatör oturumunda `spawn_worker` ×3 (tek tur) → 3 worker paralel koşar,
-   koordinatör turu **bloklanmadan** biter.
-2. Worker'lar bitince koordinatör oturumuna `<task-notification>` düşer ve **tek**
-   yeni koordinatör turu (hepsini gören) otomatik başlar.
-3. İki worker aynı anda bitse bile koordinatörde **çift tur olmaz** (kuyruk).
-4. `send_to_worker` biten worker'ı yüklü bağlamıyla devam ettirir; `stop_worker`
-   çalışanı iptal eder.
-5. Worker oturumu `spawn_worker` göremez (recursion engellendi).
-6. `CoordinatorMaxTurns` aşılınca notify döngüsü durur + kullanıcı bilgilendirilir.
-7. M1 (`run_subagent` sync) ve M3 (`send_message`/inbox) davranışları **değişmez**.
-
----
-
-## 8. Açık Kararlar (ÇÖZÜLDÜ — kararlar §9'da)
-
-1. **Kapsam:** F0–F5'in tamamı mı, yoksa önce yalnız F1+F2 (çalışan çekirdek M2,
-   UI'sız) mı? (Öneri: F1+F2+F3'ü ilk PR, F4 UI ikinci PR.)
-2. **`Role` alanı mı, yalnız `CoordinatorSessionID` mi?** (Öneri: ikisi de — Role
-   prompt/araç koşulu, CoordinatorSessionID bağ.)
-3. **Kuyruk uygulaması:** keyed-lock+flag (basit) vs per-session goroutine
-   (temiz ama daha çok makine). (Öneri: keyed-lock+flag.)
-4. **M3 scratchpad** bu turda mı yoksa sonraya mı? (Öneri: F5, opsiyonel.)
+> Uygulama öncesi plan bölümleri (§4 koordinatör prompt taslağı, §5 UI planı, §6 F0–F5
+> fazlama, §7 M2 kabul kriterleri, §8 çözülmüş açık kararlar) →
+> [arsiv/47-KOORDINATOR-PLAN.md](arsiv/47-KOORDINATOR-PLAN.md). Gerçekleşen durum §9'dan itibaren.
 
 ---
 
@@ -773,7 +670,7 @@ sağdaki terminal durumunun altında sağ hizalıdır.
 
 `<task-notification>` enjeksiyonları eskiden genel "Otomatik devam" notu olarak
 ham XML'iyle basılıyordu (okunmaz bir blok). Artık `Origin=worker-note` mesajlar
-kendi bileşeniyle çiziliyor: **`frontend/src/components/chat/TaskNotificationNote.tsx`**
+kendi bileşeniyle çiziliyor: **`frontend/src/features/chat/TaskNotificationNote.tsx`**
 (MessageList'te worker-note dalı). Kart; worker ajan adı + oturum id + durum
 rozeti (tamamlandı/başarısız/durduruldu), araç sayısı + süre satırı ve
 **varsayılan katlı** result gövdesi (tıklayınca açılır) gösterir. Parse
@@ -1551,7 +1448,7 @@ kapsanır (`BridgeTools` da aynı `toolFilter`'ı kullanır).
 **Test.** `internal/agent/toolfilter_skill_test.go`: allowlist'li profilde
 muafiyet, workspace-disabled'ın hâlâ kazanması, ajan denylist'inin hâlâ kazanması.
 
-## 16. Ajana özel koordinatör promptu (2026-08-17)
+## Ajana özel koordinatör promptu (2026-08-17)
 
 **Sorun.** Manager tipi ajanların soul'una "işi böl, worker aç, delege et" yazılıyordu.
 Ama soul **koşulsuz** enjekte edilir: aynı ajan koordinatör modu kapalı bir oturumda
@@ -1581,7 +1478,7 @@ Her parça isteğe bağlıdır ve **boş olan parça tamamen düşer**: boş bir
 `agents.json` dosyaları sıfır değerle (boş metin) sorunsuz yüklenir, **migration
 gerekmez**.
 
-### 16.1 Nereden ayarlanır
+### Nereden ayarlanır
 
 - **HTTP**: `POST /api/agents` ve `PUT /api/agents/{id}` gövdesinde
   `coordinatorPrompt` (`internal/api/agents.go`). Update tarafında pointer — alanı
@@ -1601,7 +1498,7 @@ gerekmez**.
   Reçetenin aksine çözülecek bir referansı olmadığı için kurulumda **birebir**
   yazılır.
 
-### 16.2 Testler
+### Testler (ajana özel koordinatör promptu)
 
 `coordinator_prompt_agent_test.go`: mod AÇIK + dolu prompt → metin bağlamda ve el
 kitabının **ardında**; mod KAPALI → hiç yok (el kitabı da yok); boş/yalnız-boşluk
@@ -1647,28 +1544,24 @@ materyalize **edilmiyor**; her biri kararlı bir sistem ajanına (`SystemKey`:
 `TestEnsureSystemAgentsAdoptsLegacyWorkerAgent`,
 `TestEnsureSystemAgentsDisablesRedundantLegacyWorker`.
 
-## 15. Worker'a giden mesajda alıcı politikası + byte sınırı (TSK340, 2026-08-28)
+## Worker'a giden mesajda byte sınırı + makbuz (TSK340, 2026-08-28)
 
 `send_to_worker` artık teslimden önce **alıcı tarafı kapısından** geçer
 (`gateInbound`, `internal/agent/inbound.go`). Tam tasarım
 [[28-PEER-MESAJLASMA-PLANI]] §9'da; koordinatör tarafına yansıyan kısmı:
 
-- **Politika:** worker oturumunun `Session.InboundPolicy`'si (yoksa worker ajanının
-  `Agent.InboundPolicy`'si, o da yoksa `accept`). `hold` ise takip mesajı **kuyruk
-  slotu bile almaz**: park edilir ve `SendResult.Held` + makbuz kimliğiyle döner —
-  araç, koordinatöre tur başlamadığını ve bildirim gelmeyeceğini açıkça söyler.
 - **Makbuz:** her `send_to_worker` bir `db.AgentMessage` bırakır. Kuyruk dolu ya da
   slot yoksa makbuz `dropped`'a düşürülür (`dropDelivery`), yani "gönderdim ama
   kayboldu" durumu artık kalıcı kayıtta görünür.
 - **Byte sınırı:** `agentMessageMaxKB` (varsayılan 64 KB). Aşan `send_to_worker`
-  çağrısı `message_too_large` ile **reddedilir**.
+  çağrısı `message_too_large` ile **reddedilir**; kuyruk slotu bile alınmaz.
 - **Worker → koordinatör bildirimi tersidir:** `NotifyCoordinator` bildirimi
   reddetmez, `capNotification` ile **kırpar** ve kırpmayı `message_too_large`
   işaretiyle belirtir. Gerekçe: turu bitmiş worker'a hata döndürecek kimse yoktur;
   bildirimi düşürmek koordinatörü sonsuza dek bekletirdi.
+- Alıcı politikası (`accept|hold|refuse`) 2026-09-06'da kaldırıldı (bkz. 28 §9).
 
-**Testler:** `TestSendToWorkerEnforcesSizeAndPolicy`,
-`TestReleaseHeldMessageDeliversOnce`, `TestRefuseHeldMessage`,
+**Testler:** `TestSendToWorkerEnforcesSize`, `TestDropDeliveryRecordsFailure`,
 `TestCapNotification` (`internal/agent/inbound_test.go`).
 
 ## 18. codex-cli native alt-ajanları (`spawn_agent`) nasıl kapatılır (2026-08-31)

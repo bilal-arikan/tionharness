@@ -64,7 +64,7 @@ inline AND capture it as an artifact.
 
 | You produced…                                   | Do this                                                        |
 |-------------------------------------------------|----------------------------------------------------------------|
-| A document / dataset / report / code file       | `write_file` / `Write`, or `create_artifact`                   |
+| A document / dataset / report / code file       | `Write`, then `create_artifact` (a file write alone is not one) |
 | A binary file already on disk (image, PDF)      | `create_artifact` with `kind` + `sourcePath` (never base64)    |
 | A diagram                                        | inline ```` ```mermaid ```` (or ```` ```diff ````) in reply    |
 | One image or video to show                       | inline `![alt](path-or-URL)` in reply                          |

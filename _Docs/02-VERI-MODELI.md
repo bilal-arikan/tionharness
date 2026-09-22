@@ -1,13 +1,11 @@
 # TionHarness — Veri Modeli
 
-> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz; ajanlar tek `set_archived` aracıyla arşivleyip geri alabilir — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz; ajanlar tek `set_archived` aracıyla arşivleyip geri alabilir — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
 
-> ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
-> entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
-> entity-başına **JSON dosyaları** (oturumlar `session.jsonl`) olarak saklanıyor. Diske
-> yazım biçimi, dizin yapısı ve eşzamanlılık için: **`_Docs/08-DEPOLAMA.md`**.
-
-Entity modeli başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a taşındı.
+Entity modeli başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a taşındı
+(diske yazım biçimi, dizin yapısı ve eşzamanlılık: `08-DEPOLAMA.md`). Skill'ler tablo değil
+`SKILL.md` dosyasıdır (`internal/skills`); sağlayıcı örnekleri uygulama-geneli
+`providers.json`'da (`SecretsEnc`) tutulur (`71-SAGLAYICI-ORNEKLERI-PLANI.md`).
 
 ## Tablolar (ER Diyagramı)
 
@@ -17,7 +15,6 @@ erDiagram
     sessions ||--o{ session_messages : "icerir"
     agents ||--o{ tasks : "sahip/atanan"
     agents ||--o{ schedules : "tetikler"
-    tasks ||--o{ runs : "uretir"
     agents ||--o{ agent_usage : "kullanim"
     flows ||--o{ flow_runs : "uretir"
 
@@ -102,25 +99,6 @@ erDiagram
         int  enabled
         int  created_at
     }
-    runs {
-        text id PK
-        text task_id FK
-        text agent_id FK
-        text status
-        text trigger
-        text output
-        text error
-        int  created_at
-        int  updated_at
-    }
-    skills {
-        text id PK
-        text name
-        text summary
-        text tags
-        int  is_live
-        text scope
-    }
     mcp_servers {
         text id PK
         text name
@@ -150,13 +128,6 @@ erDiagram
         int  created_at
         int  updated_at
     }
-    provider_configs {
-        text id PK
-        text agent_id FK
-        text model
-        text endpoint
-        text encrypted_key
-    }
 ```
 
 ## Tablo Açıklamaları
@@ -169,8 +140,7 @@ erDiagram
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; yalnız köken/görüntü, silme kapısı değil) |
 | `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz). **`session_mode`** (yalnız ajan hedefli zamanlamalarda) her ateşlemenin hangi oturumda koşacağını seçer: `reuse` (varsayılan; boş değer de böyle yorumlanır) ajanın tek uzun ömürlü `schedule` sohbetine yeni bir tur ekler — kullanıcı aralarda o sohbete yazıp yön verebilir; `spawn` her ateşlemede ajana **yeni bir oturum** açar — her koşu temiz bağlamla başlar ve ortak sohbet sınırsız büyümez. Akış (flow) hedefli zamanlamalarda yok sayılır, çünkü akış zaten kendi koşu transkriptini yazar |
-| `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
-| ~~`knowledge_sources`~~ | **KALDIRILDI (2026-07-05)** — hafıza alt sistemiyle birlikte çıkarıldı |
+| ~~`runs`~~ | **KALDIRILDI** — pano artık görev yürütmez; `Task.LastRun*` alanları yalnız eski kayıtlar için salt-okunur tutulur (`models_task.go`) |
 | `mcp_servers` | İsim, taşıma (`stdio` veya `http` — Streamable HTTP; deprecated `sse` desteklenmez), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı; yalnız köken/görüntü, silme kapısı değil) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
@@ -336,7 +306,7 @@ varsayılanı da arşivli bir ajana düşmez.
 
 ## Güvenlik / Şifreleme
 
-- `encrypted_key` alanları **AES-GCM** ile şifrelenir.
+- Sağlayıcı sırları (`providers.json` → `SecretsEnc`) ve `settings.json` **AES-GCM** ile şifrelenir.
 - Şifre anahtarı çözümü: `CREDENTIAL_SECRET` env → `DATA_DIR/credential-secret` dosyası → otomatik üretim.
 - Sırlar asla düz metin loglanmaz veya workspace manifestlerine yazılmaz.
 
@@ -362,8 +332,8 @@ varsayılanı da arşivli bir ajana düşmez.
 > eklenen alanlar bugün ilgili model struct'larında yaşar:
 
 - **Ana entity'ler** (eski `0001_init`): agents, sessions, session_messages, tasks,
-  schedules, runs, mcp_servers — `models*.go`. (`knowledge_sources` 2026-07-05'te kaldırıldı.)
-- **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
+  schedules, mcp_servers — `models*.go`.
+- **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt` (`Task.LastRun*` artık legacy/salt-okunur).
 - **Context/Budget** (eski `0004`): `Session.Summary*`, `Usage` (gün-bazlı dosya). *(`Agent.Daily*Limit` alanları 2026-07-01'de kaldırıldı.)*
 - **MCP/Tools** (eski `0005`): `MCPServer.Command/Args/URL/Enabled/Scope`, `Agent.MCPEnabled/AllowedTools`. **Ajan denylist (2026-06-26):** `Agent.BlockedTools` (JSON dizi) eklendi — ajan-düzeyi araç erişimi allowlist'ten denylist'e geçti; varsayılan tüm araçlar açık, listelenenler engelli. `AllowedTools` legacy (subagent profilleri); eski allowlist'ler `GET tools`'ta denylist'e çevrilir, ilk kaydetmede temizlenir. Eski JSON'da boş → "[]" (geriye uyumlu). **Yeni-agent default (2026-06-29):** `db.CreateAgent` `MCPEnabled=false` (Go zero value) gelen çağrıları `true`'ya çevirir — tüm oluşturma yolları (UI/API `POST /api/agents`, market/ingest install, workspace-template seeding, `create_agent` self-management aracı) tutarlı şekilde **tool-açık** ajan üretir. Chat-only ajan isteyen sonradan `UpdateAgentTools` ile `MCPEnabled=false`'ya çekebilir (`POST /api/agents/{id}/tools`). Test: `TestCreateAgent_DefaultsMCPEnabledOn` + `TestUpdateAgentTools_Toggle` (`internal/db/store_agent_default_test.go`). **Ajan araç override haritası (2026-07-27):** `Agent.ToolOverrides` (JSON object: araç adı veya `prefix*` deseni → tier) eklendi — 4 görünürlük tier'ı + `blocked` tek skalada birleşti, `blocked` eski denylist'in yerini aldı. `BlockedTools` artık **türetilmiş ayna**: `UpdateAgentTools` her yazışta `blocked` girdilerinden sıralı üretip yazar (eski okuyucular + market/şablon paketleri bozulmaz). Okuma daima `agent.ParseToolOverrides` üzerinden — legacy denylist `blocked` olarak katlanır. Detay `_Docs/19`.
 - **Self-management köken** (sürümsüz, son eklenen): `created_by` alanı `Agent`/`Task`/`Schedule`/`Flow`/`Hook`/`MCPServer` struct'larına eklendi (boş = kullanıcı). Eski JSON dosyaları okunurken boş kalır → kullanıcı varlığı sayılır (geriye dönük uyumlu). **Not (2026-08-05):** alan artık yalnız köken/görüntü amaçlı; silme/düzenleme kapısı olarak kullanılmıyor.

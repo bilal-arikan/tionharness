@@ -10,8 +10,8 @@
 > uygulandı (sözdizimi hatası artık bir hook'u sessizce kilitli bırakmıyor). Ajan
 > kendi hook'larını `list/create/update/delete_hook` ile yönetebilir. Dayandığı
 > dosyalar: `internal/agent/hooks.go`, `internal/db/models_hook.go`,
-> `internal/db/store_hook.go`, `internal/agent/toolloop.go`, `internal/agent/climcp_matcher.go`,
-> `internal/agent/climcp_hookcmd.go`.
+> `internal/db/store_hook.go`, `internal/agent/toolloop.go`, `internal/climcp/matcher.go`,
+> `internal/climcp/hookcmd.go`.
 
 > Kullanıcı-tanımlı dış komutların, native araç döngüsünde her araç çağrısının
 > **ve** turun/oturumun yaşam-döngüsü noktalarında çalışması. Claude Code'un **tam
@@ -22,8 +22,8 @@
 
 | Olay | Ne zaman | Kapsam | Etki |
 |------|----------|--------|------|
-| `PreToolUse` | araç çağrısı öncesi | yalnız native | girdi rewrite / onayla / **engelle** |
-| `PostToolUse` | araç çağrısı sonrası | yalnız native | çıktı dönüştür / bağlam ekle / engelle |
+| `PreToolUse` | araç çağrısı öncesi | **native + claude-cli** (`--settings`) | girdi rewrite / onayla / **engelle** |
+| `PostToolUse` | araç çağrısı sonrası | **native + claude-cli** (`--settings`) | çıktı dönüştür / bağlam ekle / engelle |
 | `UserPromptSubmit` | her kullanıcı promptu öncesi | **native + claude-cli** | bağlam enjekte / **turu engelle** |
 | `SessionStart` | oturumun ilk turu | **native + claude-cli** | bağlam enjekte (matcher = kaynak) |
 | `Stop` | ana ajan turu bitti | native + claude-cli | audit + **block→devam** (sınırlı yeniden-tur) |
@@ -102,10 +102,11 @@ otomatik onay kuralları, dış araç-çıktısı sıkıştırma (sqz).
 
 ## Kapsam: araç hook'ları native, yaşam-döngüsü hook'ları her ikisi
 
-**Araç** hook'ları (`PreToolUse`/`PostToolUse`) **yalnız native (anthropic/minimax)
-araç döngüsünde** uygulanır (`agent/toolloop.go`). **claude-cli** kendi döngüsünü
-sürer ve kendi hook'larını `~/.claude/settings.json`'dan okur — TionHarness araç
-hook'ları oraya yazılmaz (Faz P3 "CLI vs native ayrımı" deseni). **Yaşam-döngüsü**
+**Araç** hook'ları (`PreToolUse`/`PostToolUse`) native araç döngüsünde
+`agent/toolloop.go` tarafından uygulanır. **claude-cli** kendi döngüsünü sürdüğü için
+workspace'in araç hook'ları her turun ürettiği `--settings` dosyasına yazılır
+(`internal/climcp/settings.go`; matcher çevirisi aşağıda "claude-cli köprüsü"), böylece
+CLI kendi döngüsünde aynı hook'ları ateşler. **Yaşam-döngüsü**
 hook'ları (`UserPromptSubmit`/`SessionStart`/…) ise turun `SystemDynamic`'ine bağlam
 enjekte ettiği veya turu gözlemlediği için **hem native hem claude-cli** yolunda
 çalışır (üstteki tabloya bak).
@@ -177,7 +178,7 @@ zincirlenir; ilk `block` kazanır.
 > **claude-cli köprüsü (2026-07-13):** Virgül-glob **TionHarness'in native** sözdizimidir.
 > Claude Code matcher'ı **REGEX** sayar (alternation `|`, virgül literal), o yüzden
 > `writeCLISettings` matcher'ı `cliMatcherRegex` ile çevirir: virgül→`|`, glob→regex
-> (`*`→`.*`), `^…$` ankraj (`climcp_matcher.go`). **Önceden verbatim yazılıyordu → virgüllü
+> (`*`→`.*`), `^…$` ankraj (`internal/climcp/matcher.go`). **Önceden verbatim yazılıyordu → virgüllü
 > matcher CLI turlarında sessizce hiç ateşlenmiyordu** (sqz/rtk CLI ajanlarında ölüydü).
 > **Bridged-shell genişletme (2026-07-14):** built-in shell açıkken CLI, `Bash`/`PowerShell`
 > yerine köprülü `mcp__tionharness_interaction__Bash`/`__PowerShell`'i görür — o yüzden
@@ -209,14 +210,14 @@ zincirlenir; ilk `block` kazanır.
 > **Lehçe köprüsü (2026-08-17):** Şablon kaldırıldı ama **eski hook kayıtları
 > workspace store'larında duruyor** (5 workspace, 11 dosya) — yani "yaz-ve-uyar"
 > hâlâ yetmiyordu. `writeCLISettings` artık komutu da çevirir: `cliHookCommand`
-> (`climcp_hookcmd.go`), Windows'ta PowerShell **kaynak kodu** olan bir komutu
+> (`internal/climcp/hookcmd.go`), Windows'ta PowerShell **kaynak kodu** olan bir komutu
 > (`$` ataması, `[Type]::Üye`, `&`/`.` çağrı operatörü, `Verb-Noun` cmdlet)
 > `powershell.exe -NoProfile -NonInteractive -Command '<gövde>'` içine sarar —
 > gövde POSIX tek-tırnakla kaçırılır, yani bash için tek kelime, PowerShell için
 > orijinal metin. Yorumlayıcısını **zaten açıkça çağıran** komutlar
 > (`sqz hook claude`, `powershell -File …`, `node hook.js`) **aynen geçer**;
 > sarmalamak kendi tırnaklamalarını bozardı. stdin miras alındığı için payload
-> sözleşmesi değişmez. Test: `climcp_hookcmd_test.go`.
+> sözleşmesi değişmez. Test: `internal/climcp/hookcmd_test.go`.
 >
 > Matcher köprüsü (lehçe #1) ile birlikte bu, native↔CLI arasındaki **ikinci**
 > sessiz lehçe farkını kapatır. Çalışma zamanı tarafı da sertleştirildi — bkz.
@@ -259,16 +260,16 @@ Workspace-scoped (`X-Workspace-Id` header):
 
 ## Self-management (ajan araçları)
 
-Ajan, hook'ları kendi de yönetebilir (self-management gated, lazy yüklenir;
+Ajan, hook'ları kendi de yönetebilir (self-management, lazy yüklenir;
 `internal/tools/builtin_hookmgmt.go`):
 - `list_hooks` — workspace'teki hook'ları döner (id/event/matcher/command/enabled +
-  `createdByAgent` = silebilir mi).
+  `createdByAgent` köken bilgisi).
 - `create_hook` — yeni PreToolUse/PostToolUse hook (komut Claude Code hook
   sözleşmesini konuşur); `CreatedBy = actorID` ile etkin oluşturulur.
 - `update_hook` — mevcut hook'un event, matcher, command, timeout ve enabled
   alanlarını günceller.
-- `delete_hook` — **yalnız ajan-oluşturduğu** hook'u siler; `CreatedBy == ""`
-  (kullanıcı tanımlı) ise reddedilir (provenance guard'ı).
+- `delete_hook` — hook'u siler (kullanıcı ya da ajan oluşturmuş olsun; `CreatedBy`
+  yalnız köken bilgisidir, 2026-08-05'ten beri silme kapısı değildir).
 
 ## Dosyalar
 
@@ -280,9 +281,9 @@ Ajan, hook'ları kendi de yönetebilir (self-management gated, lazy yüklenir;
 | İz | `internal/agent/trace.go` (`StepHook`) |
 | Entegrasyon | `internal/agent/toolloop.go` (pre/post çağrıları) |
 | API | `internal/api/hooks.go` (+ `server.go` route) |
-| Ajan araçları | `internal/tools/builtin_hookmgmt.go` (`list/create/update/delete_hook`, self-manage gated) |
+| Ajan araçları | `internal/tools/builtin_hookmgmt.go` (`list/create/update/delete_hook`) |
 | Test | `internal/db/store_hook_test.go`, `internal/agent/hooks_test.go` |
-| Frontend | `types/hook.ts`, `api/hooks.ts`, `components/settings/HooksPanel.tsx`, `components/chat/HookStep.tsx`, `lib/stepKinds.ts` |
+| Frontend | `types/hook.ts`, `api/hooks.ts`, `features/settings/HooksPanel.tsx`, `features/chat/HookStep.tsx`, `shared/stepKinds.ts` |
 
 ## Durum
 
@@ -292,8 +293,8 @@ event/boş komut 400 → update → toggle → kalıcı liste → delete uçtan 
 doğrulandı. Motor birim testleri (block/modify/allow/matcher) geçti.
 
 **Kalan (ops.):** gerçek sağlayıcılı uçtan uca tur (bir araç çağrısını native
-döngüde gerçekten engelleyen/dönüştüren canlı test); claude-cli için
-`settings.json` hook üretimi (parite genişlemesi).
+döngüde gerçekten engelleyen/dönüştüren canlı test). claude-cli `--settings` hook
+üretimi yapıldı (yukarıda "claude-cli köprüsü").
 
 ## Kullanım telemetrisi ve arşiv (2026-09-02, `_Docs/77` R5)
 

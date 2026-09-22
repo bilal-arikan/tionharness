@@ -19,7 +19,7 @@ gözlemcileri yazar, ekran ve ajan okur. Kök oturum başına bir rota
 | Faz | Ne getirdi | Bölüm | Kod (başlıca) |
 |-----|------------|-------|---------------|
 | F0 | Workspace kök zaman-eksenli kanvas, `GET /api/trajectories` | §1–§4 | `frontend/src/features/rota/rotaLayout.ts`, `RotaCanvas.tsx`, `RotaPanel.tsx`; `internal/api/trajectories.go` |
-| F1a | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/agent/trajectory_graph.go`, `trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
+| F1a | Rota varlığının üretilmesi (reçeteden tohum, gözlemci bağlama), `trajectory` aracı, durum bloğu | §5 | `internal/trajectory/graph.go`, `internal/agent/trajectory_binder.go`, `trajectory_queue.go`, `trajectory_funcs.go`; `internal/tools/builtin_trajectory.go` |
 | F1b | Rota-içi faz-sütunlu görünüm, derin bağlantı, sohbet başlığı şeridi, köken çipi, reçete çipleri, ateşleme defteri, `ws:*` → toast | §6 | `features/rota/trajectoryLayout.ts`, `RotaTrajectoryView.tsx`, `RotaStrip.tsx`; `app/useWorkspaceSignals.ts` |
 | F2 | `phase` / `trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi, grafta "neden ateşlenmedi" | §7 | `internal/db/automation_trigger_traj.go`, `internal/agent/trajectory_transitions.go`, `automation_trajectory.go` |
 | F3 | Rota bitiş özeti, reçete istatistikleri, LLM'siz küratör, pin | §8 | `internal/agent/trajectory_summary.go`, `trajectory_recipe_stats.go`, `curator.go`; `features/schedules/CuratorPanel.tsx` |
@@ -171,9 +171,9 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 - `frontend/src/shared/lib/laneReducer.test.ts` — seed, stale reddi, rota
   revizyonu (`seedTrajectories`), liveness, halkalar, `createdAt` düşüşü.
 - `internal/api/trajectories_test.go` — liste, süzgeç (boş dizi), tekil, 404.
-- F1a: `internal/agent/trajectory_graph_test.go` (reçeteden tohum, faz
+- F1a: `internal/trajectory/graph_test.go` (reçeteden tohum, faz
   geçişleri + durum türetme, plan kuralları, metin render),
-  `trajectory_binder_test.go` (yaratılışta tohum, spawn/rapor bağlama +
+  `internal/agent/trajectory_binder_test.go` (yaratılışta tohum, spawn/rapor bağlama +
   durum bloğu + arşivde terk, araçla plan/faz/bitir + kayıt kapısı, Ask kapısı,
   akış koşusu, otomasyon çatalı), `internal/tools/builtin_trajectory_test.go`.
 
@@ -182,8 +182,8 @@ Backend (F0'da eklenen): `GET /api/trajectories` (indeks; `root`, `template`,
 F0 salt projeksiyondu; F1a **`Trajectory` varlığını üreten ve dolduran** tarafı
 ekler. Frontend'e dokunulmadı (yalnız `TrajectoryNode.optional` tipi); F0
 kanvası aynı `ws:trajectory` + `GET /api/trajectories` yolundan ◈/revizyonu
-zaten gösterir. Kod: `internal/agent/trajectory_graph.go` (saf graf
-yardımcıları), `trajectory_binder.go` (gözlemci + oturum/akış/Ask bağlama),
+zaten gösterir. Kod: `internal/trajectory/graph.go` (saf graf
+yardımcıları), `internal/agent/trajectory_binder.go` (gözlemci + oturum/akış/Ask bağlama),
 `trajectory_funcs.go` (araç işlevleri + durum bloğu),
 `internal/tools/builtin_trajectory.go` (araç tanımı).
 

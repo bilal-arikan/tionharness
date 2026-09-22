@@ -11,18 +11,16 @@ import (
 
 // inbound.go is the RECIPIENT-side gate for messages addressed at an agent:
 // send_message (peer inbox) and send_to_worker (coordinator → worker). Two
-// guarantees live here, both absent before:
+// guarantees live here:
 //
-//  1. Inbound policy. The recipient (agent, or one of its sessions) decides
-//     whether a message is accepted, held for approval, or refused, instead of
-//     every sender being able to start a background turn unconditionally.
-//  2. A durable delivery receipt (db.AgentMessage). Every attempt ends in
-//     accepted / held / refused / dropped, so a message NEVER disappears
-//     silently: a refusal and a capacity drop are both readable by the sender
-//     afterwards, not just a transient tool-error string.
-//
-// The size guard (message_too_large) is enforced here too, so all three delivery
-// paths share one limit and one error shape.
+//  1. A size guard (message_too_large), so every delivery path shares one limit
+//     and one error shape. An oversized message fails back to the sender and
+//     no receipt is written.
+//  2. A durable delivery receipt (db.AgentMessage). Every message that passes
+//     the size guard is recorded as accepted and, if the delivery itself then
+//     fails, downgraded to dropped, so a message NEVER disappears silently: a
+//     capacity drop is readable by the sender afterwards, not just a transient
+//     tool-error string.
 
 // ErrMessageTooLarge is the sentinel behind every "message_too_large" failure.
 // Callers match it with errors.Is; the wrapped text carries the actual sizes.
@@ -66,14 +64,11 @@ func capNotification(note string, max int) (string, bool) {
 		max, len(note)), true
 }
 
-// gateInbound applies the size guard and the inbound policy to one pending
-// delivery and records its receipt. The returned receipt is ALWAYS persisted:
-//
-//	accepted → the caller proceeds with the actual delivery and, if that fails,
-//	           must downgrade the receipt with dropDelivery (never silently).
-//	held     → the caller must NOT deliver; the body is parked in the receipt and
-//	           a later ReleaseHeldMessage completes the delivery.
-//	refused  → the caller returns the error to the sender.
+// gateInbound applies the size guard to one pending delivery and, if it passes,
+// persists its receipt with status accepted. The caller then performs the actual
+// delivery and, if that fails, must downgrade the receipt with dropDelivery
+// (never silently). A size or persistence error is returned to the sender and
+// nothing is delivered.
 func (r *Runtime) gateInbound(ctx context.Context, pending db.AgentMessage) (db.AgentMessage, error) {
 	path := "send_message"
 	if pending.Channel == db.ChannelWorker {

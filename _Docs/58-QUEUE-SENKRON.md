@@ -260,36 +260,11 @@ type PendingInteraction struct {
   "başka ekran cevaplıyor…" göstergesi + odaktaki pencereye bildirim gönderme
   (`29-BILDIRIM-SINYALLERI.md` ile birleşir).
 
-## 8 madde → faz eşlemesi
-
-| # | Madde | Faz |
-|---|---|---|
-| 1 | Cursor/sequence number (asıl primitive) | 1 |
-| 2 | Race = interaction CAS (mesajda değil) | 2 |
-| 3 | Steer vs queue politikası, UI'da görünür | 3 |
-| 4 | Idempotency = client-generated msg ID | 3 (interaction ID: 2) |
-| 5 | Kuyruk = dayanıklılık → inflight hack daralır | 3 |
-| 6 | Cancel/dequeue | 3 |
-| 7 | Presence | 4 |
-| 8 | Total order — herkes tek inbox (user+auto+peer+worker) | 1 (log) + 3 (inbox) |
-
 ## Ağ dayanıklılığı (doc 48 — VPS remote client)
 
 Client'lar ağ üzerinden bağlanabildiğinden cursor'lı SSE **reconnect + resume +
 gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/keepalive
 (mevcut 25sn).
-
-## Dokunulacak dosyalar (canlı liste)
-
-- **Yeni:** `internal/sessionhub/hub.go` (Hub + Event + ring + seq).
-- `internal/api/session_stream.go` (yeni): `GET /sessions/{id}/stream?since=`.
-- `internal/api/chat_stream.go`: her dayanıklı adımı hub'a `Publish` (seq'li);
-  efemer delta'yı `Ephemeral` işaretle.
-- `internal/api/chat_control.go`: interaction CAS (Faz 2); inbox worker (Faz 3).
-- `internal/db/`: inbox kalıcılığı (Faz 3, yeni `inbox.go`).
-- **Frontend:** `features/chat/useSessionStream.ts` (yeni, cursor'lı); `ChatView`
-  + `chatStream*` ailesini buna geçir; inflight polling + owner/non-owner kaldır;
-  interaction kartlarını `interaction_open/resolved` ile sür.
 
 ## Uygulama durumu (2026-07-10)
 

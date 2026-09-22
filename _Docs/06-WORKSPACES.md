@@ -13,7 +13,7 @@ workspace deep-link'i yokken) favori workspace açılır; deep-link verildiğind
 route makinesi onu sonradan uygular, yani açık linkler favoriyi ezer. Cihaz-yerel
 saklanır (`localStorage: tionharness.favoriteWs`), aktif-workspace işaretçisiyle aynı
 desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
-Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
+Kod: `app/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
 
 ## Yeni Workspace Başlangıç Ekibi
 
@@ -157,7 +157,7 @@ DATA_DIR/
 ├── ws-counter.json              # workspace id sayacı ({"n":N}) — tekrar-kullanımsız
 ├── credential-secret            # global şifreleme anahtarı
 └── workspaces/
-    ├── {id-1}/                   # örn. WS1/ (eski kayıtlar UUID kalabilir; bkz. cmd/migrate-ids)
+    ├── {id-1}/                   # örn. WS1/
     │   ├── store/               # Workspace 1'in TÜM verisi (JSON/JSONL dosyaları)
     │   ├── config/              # Editlenebilir config: prompts/*.md, instructions.md, README.md
     │   ├── ws-settings.json     # Workspace ayarları (override + instructions)
@@ -168,7 +168,7 @@ DATA_DIR/
         └── workspace/
 ```
 
-> **`config/` klasörü (2026-06-17):** runtime yardımcı promptları (summary/reflect/title),
+> **`config/` klasörü (2026-06-17):** runtime yardımcı promptları (summary/title),
 > workspace talimatları ve README **editlenebilir dosyalar** olarak burada tutulur. Hem
 > kullanıcı (diskten) hem uygulama (NavRail ▸ Promptlar) düzenler.
 > Bir prompt dosyası boş/yoksa uygulama gömülü varsayılana düşer. Detay: `agent/wsconfig.go`,
@@ -177,8 +177,7 @@ DATA_DIR/
 ## İlk Kurulum: Oluştur veya Mevcut Klasör Seç (2026-07-05)
 
 Fresh install'da (hiç workspace yokken) `OnboardingScreen` gösterilir; backend
-**varsayılan workspace tohumlamaz** (üstteki "Çalışma Şekli 2." maddesi eski
-davranıştır). Karşılama kartında **iki** aksiyon vardır:
+**varsayılan workspace tohumlamaz**. Karşılama kartında **iki** aksiyon vardır:
 
 - **Workspace Oluştur** → `WorkspaceCreateModal` (ad + emoji + şablon + **opsiyonel
   proje dizini**) → `POST /api/workspaces`. Veri klasörü **artık seçilmez**: data dir
@@ -213,13 +212,13 @@ mesaj onboarding ekranında satır-içi gösterilir (`data-testid="onboarding-er
 - **Frontend:** `api.attachWorkspace(path)` → `useWorkspaces.attachWorkspace` (hata
   **fırlatır**, `createWorkspace`'in aksine, ki onboarding satır-içi gösterebilsin) →
   başarıda yeni workspace aktifleşir ve App uygulama kabuğuna geçer. Kod:
-  `components/workspace/OnboardingScreen.tsx`, `hooks/useWorkspaces.ts`,
+  `features/workspace/OnboardingScreen.tsx`, `app/useWorkspaces.ts`,
   `api/workspaces.ts`.
 
 ## Çalışma Şekli
 
 1. **Manager** (`internal/workspace/manager.go`) açılışta `workspaces.json`'ı okur, her workspace için `store/` dizinini açar (diskten belleğe yükler) + runtime başlatır.
-2. Hiç workspace yoksa **"Varsayılan"** otomatik oluşturulur.
+2. Hiç workspace yoksa varsayılan tohumlanmaz; ilk kurulum ekranı (`OnboardingScreen`) açılır.
 3. Her HTTP isteği `X-Workspace-Id` header'ı taşır; `withWorkspace` middleware'i doğru workspace'i çözüp context'e koyar.
 4. Handler'lar `ws(r).DB` ve `ws(r).Runtime` ile yalnızca o workspace'in verisine erişir.
 5. Frontend aktif workspace id'sini **URL hash'inde** (`#/w/{id}/{view}`) kaynak-doğru olarak tutar; `localStorage` yalnızca hash'siz açılışta tohum (fallback) olarak okunur. Switcher'dan geçince tüm liste (ajan/oturum/mesaj) sıfırlanıp yeniden yüklenir.
@@ -294,12 +293,12 @@ penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a 
 #/w/{workspaceId}/{view}[/{entityId}]
    workspaceId → isteği izole backend DB'sine kapsar (X-Workspace-Id header'ına dönüşür)
    view        → NavRail görünümü (chat/board/agents/…)
-   entityId    → görünüme göre: chat→sessionId, agents/memory/tools→agentId,
+   entityId    → görünüme göre: chat→sessionId, agents/tools→agentId,
                  artifacts→artifactId, schedules→scheduleId
 ```
 
 **Nasıl çalışır:**
-- `lib/url.ts` (`parseRoute`/`buildRoute`/`routeIdForView`) + `hooks/useUrlSync.ts`
+- `app/url.ts` (`parseRoute`/`buildRoute`/`routeIdForView`) + `app/useUrlSync.ts`
   (state↔URL iki-yönlü senkron: ilk yazım `replaceState`, sonrası `pushState` →
   geri/ileri tuşları çalışır).
 - `App.tsx` modül yüklenirken `INITIAL_ROUTE = parseRoute(hash)`'i okur; hash bir
@@ -311,9 +310,8 @@ penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a 
   sunar → `window.open(origin+pathname+#/w/{id}/chat)` ile o workspace'e pinli yeni
   pencere açar; mevcut pencerenin seçimini bozmaz.
 
-> Not: Bu bir **web uygulaması** (Electron/native değil) — "ayrı pencere" tarayıcı
-> penceresi/sekmesi demektir. Görev çubuğunda bağımsız uygulama penceresi istenirse
-> ileride Electron/Tauri sarmalayıcı veya tarayıcının PWA modu gerekir.
+> Not: Tarayıcıda "ayrı pencere" tarayıcı penceresi/sekmesidir; masaüstünde native çoklu
+> pencere `cmd/tionharness-desktop` ile yapılır (`30-COKLU-PENCERE.md`).
 
 ### Çapraz-pencere "okunmadı" rozet senkronu
 
@@ -321,7 +319,7 @@ Workspace etkinlik rozetleri (`unreadWs`) **tüm pencereler arasında paylaşıl
 (`localStorage` anahtarı `tionharness.unreadWs` + `storage` event). TionHarness tek-kullanıcılı
 olduğundan ilke: **"herhangi bir pencerede görüldü = her yerde okundu"**.
 
-- `hooks/useWorkspaces.ts` paylaşılan ham seti `localStorage`'da tutar; her yazımda
+- `app/useWorkspaces.ts` paylaşılan ham seti `localStorage`'da tutar; her yazımda
   (`writeSharedUnread`) diğer pencereler `storage` event'iyle anında senkron olur
   (`storage` yazan dökümanda tetiklenmez, yalnız diğerlerinde → yazım/okuma döngüsü yok).
 - `markWorkspaceUnread(id)` rozet ekler (kendi aktif workspace'i hariç),
@@ -430,7 +428,6 @@ kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
 
 - **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin zamanlayıcıları paralel çalışır.
 - **Süreç-geneli per-session yapılar `(workspace, session)` ile anahtarlanır.** Oturum/ajan id'leri her store'un kendi sayacından gelir (`SES1`/`AGT1` HER workspace'te vardır), bu yüzden tüm workspace'ler için tek olan yapılar — session hub, gönderi kuyruğu, koşan turlar, etkileşim kartları, izin grant'ları — session id'yi tek başına anahtar olarak kullanamaz. 2026-08-14'te tam bu yüzden bir workspace'in oturumu diğerinde görünüyordu; detay `58-QUEUE-SENKRON.md` → "Workspace kapsamı".
-- **Silme koruması:** En az bir workspace her zaman kalır.
 - **fs/shell artık kilitli DEĞİL (2026-06-22):** `workspace/` dizini eskiden built-in
   `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash` araçları için
   bir **güvenlik kilidiydi** (mutlak yol yasak, `..` kaçışı reddedilir). Bu kilit
@@ -456,4 +453,4 @@ kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
   kapsamlı biçimde yeniden eklenecek.)
 - **Yeniden adlandırma ✅:** `rename_workspace` aracı (`internal/tools/builtin_workspacemgmt.go`) + WorkspaceBridge üzerinden yapılır.
 - **Workspace başına tema ✅:** görünüm/tema workspace-özeldir (`WSSettings`).
-- **Gelecek:** dışa/içe aktarma (export/import). *(Periyodik zip yedekleme zaten var → `34-YEDEKLEME.md`.)*
+- **Dışa aktarma / benimseme ✅:** şablon paketi ("Dışa Aktar" sekmesi), mevcut klasörü "Mevcut Workspace Seç" ile ekleme (yukarıda) ve periyodik zip yedekleme (`34-YEDEKLEME.md`).

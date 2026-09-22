@@ -1,6 +1,6 @@
 # TionHarness — Genel Bakış
 
-> **Özet (2026-09-03):** TionHarness'in giriş dokümanı — projenin ne olduğunu, teknoloji özetini, temel kavramları (Agent/Swarm/Session/Task/Provider) ve `_Docs` altındaki tüm doküman dizinini (00–78) listeler. Durum: **uygulandı ve canlı** — Faz 0–8 tamamlandı, public yayın yapıldı (repo + tanıtım sitesi, Apache-2.0), en son dalga Rota (workspace çalışma akışı grafiği) F0–F5 ile bitti (2026-09-02/03). En önemli kararlar: SQLite yerine dosya-tabanlı depolama, Wails yerine CGO'suz native WebView2 penceresi, memory alt sisteminin 2026-07-05'te tamamen kaldırılması. Bir ajan için: projeye ilk kez bakan veya hangi dokümanın neyi anlattığını bulmak isteyen herkesin başlangıç noktası.
+> **Özet (2026-09-22):** TionHarness'in giriş dokümanı — projenin ne olduğunu, teknoloji özetini, temel kavramları (Agent/Swarm/Session/Task/Provider) ve `_Docs` altındaki tüm doküman dizinini (00–87 + `arsiv/`) listeler. Durum: **uygulandı ve canlı** — Faz 0–8 tamamlandı, public yayın yapıldı (repo + tanıtım sitesi, Apache-2.0), en son dalga Rota (workspace çalışma akışı grafiği) F0–F5 ile bitti (2026-09-02/03). En önemli kararlar: SQLite yerine dosya-tabanlı depolama, Wails yerine CGO'suz native WebView2 penceresi, memory alt sisteminin 2026-07-05'te tamamen kaldırılması. Bir ajan için: projeye ilk kez bakan veya hangi dokümanın neyi anlattığını bulmak isteyen herkesin başlangıç noktası.
 
 > **TionHarness**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
 
@@ -39,7 +39,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - **Swarm (Sürü):** Delegasyon ile işbirliği yapan ajan toplulukları.
 - **Session (Oturum):** Mesaj geçmişini ve bağlamı koruyan konuşma dizisi.
 - **Task (Görev):** Yürütme politikaları, retry mantığı ve bağımlılıkları olan pano-tabanlı iş kuyruğu.
-- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması (11 kind: `anthropic`, `claude-cli`, `codex-cli`, `minimax`, `minimax-anthropic`, `openrouter`, `zai`, `deepseek`, `deepseek-anthropic`, `anthropic-compat`, `openai-compat`).
+- **Provider (Sağlayıcı):** LLM uç noktası soyutlaması; her kind bir `internal/providers/kind_*.go` dosyasıdır (güncel liste için oraya bak).
 
 ## Doküman Dizini
 
@@ -66,7 +66,6 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [20-SCHEDULE-WAKE.md](20-SCHEDULE-WAKE.md) | `schedule_wake`: ajanın kendi sohbetine geri dönmesi |
 | [21-MARKET.md](21-MARKET.md) | Uygulama içi market sistemi (marketplace) |
 | [22-SPAWN-SESSION.md](22-SPAWN-SESSION.md) | Spawn session (fire-and-forget paralel işçi) |
-| [23-ILISKI-GRAFIGI.md](23-ILISKI-GRAFIGI.md) | **KALDIRILDI (2026-09-05)** — İlişki grafiği / Ağ ekranı. Yerini Harita aldı (`68`): canlı katman + filtreler oraya taşındı; `VisNetworkGraph` ortak tuval olarak yaşıyor |
 | [24-SELF-MANAGEMENT.md](24-SELF-MANAGEMENT.md) | Self-management + ayarlar alt sistemi |
 | [25-SUBAGENT-ISOLATION.md](25-SUBAGENT-ISOLATION.md) | Generic ajan yürütme çekirdeği + alt-ajan (subagent) izolasyonu |
 | [26-CALISMA-DIZINI.md](26-CALISMA-DIZINI.md) | Çalışma dizini (working directory) — oturum-başına cwd |
@@ -85,7 +84,6 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [39-DIZIN-SITE-REGISTRY.md](39-DIZIN-SITE-REGISTRY.md) | Dizin-sitesi köprüsü (search connector) — skill dizin sitelerinden markete arama/önizleme |
 | [40-PLAN-MODE.md](40-PLAN-MODE.md) | Plan modu — claude-cli `ExitPlanMode` köprüsü + plan onay kartı |
 | [41-ARAC-BOSLUKLARI-YAPILACAKLAR.md](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md) | Araç boşlukları backlog'u (the external agent project↔TionHarness karşılaştırması) |
-| [42-REFAKTOR-MODULERLIK.md](42-REFAKTOR-MODULERLIK.md) | Refaktör/modülerlik — generic db/api/tools helper'ları + God-dosya bölmeleri |
 | [43-REWIND.md](43-REWIND.md) | `/rewind` — sohbet checkpoint geri sarma (yalnız-sohbet MVP) |
 | [44-CODE-EXECUTION-MCP.md](44-CODE-EXECUTION-MCP.md) | Code Execution with MCP — occupancy'yi kökten düşürme fizibilite + faz planı |
 | [45-COKLU-SECIM.md](45-COKLU-SECIM.md) | Çoklu seçim (Ctrl/Cmd+Click) + toplu eylemler (frontend-only; eski 40 numarasından taşındı) |
@@ -94,11 +92,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [48-VPS-REMOTE-CLIENT.md](48-VPS-REMOTE-CLIENT.md) | VPS uzak sunucu + mobil ince istemci (PWA/WebView APK) — tek kullanıcı/VPN, dosya önizle-indir-editle (fizibilite/tasarım) |
 | [49-MOBIL-RESPONSIVE-UI.md](49-MOBIL-RESPONSIVE-UI.md) | Mobil/dikey ekran uyumlu UI (responsive) — NavRail→alt tab bar, çok-panel→drawer/stack, full-screen sheet modallar; **2026-09-05'ten beri dört katmanlı kabuk** (narrow/square/wide/ultra + en-boy oranı: `useViewport`/`useShellLayout`, kare katmanda peek rail + drawer detay, ultra'da 88rem okuma ölçüsü, CSS durum geçişleri; tüm sol liste panelleri daraltılabilir, varsayılan açık, yeniden-açma rayı) |
 | [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACHE-PARITE.md) | Claude Code prompt-cache davranış paritesi — cache breakpoint stratejisi, API-native context editing, cache-break tespiti/telemetrisi |
-| [51-CLAUDE-CONFIG-BIRLESIK.md](51-CLAUDE-CONFIG-BIRLESIK.md) | Tarihsel per-workspace claude-cli config evi tasarımı; güncel modelde yeni CLI örnekleri `<dataDir>/provider-homes/<instance-id>` altında örnek-başına izole edilir, workspace evi yalnız legacy fallback'tir. Credential tohumlama/self-heal ve yedekten credential hariç tutma ayrıntıları |
-| [52-MCP-GATEWAY.md](52-MCP-GATEWAY.md) | MCP gateway (dinamik araç aktivasyonu) tasarım/analiz |
-| [53-CRAFTAGENT-PROMPT-PARITE.md](53-CRAFTAGENT-PROMPT-PARITE.md) | the external agent project sistem-promptu paritesi: statik/dinamik bloklar — alınan (env marker, session_state, self-mgmt, deliverables) / bilinçli dışlanan (datatable/call_llm/render_template/_displayName) / farklı çözülen (recovery_context → dosya-tabanlı) |
+| [52-MCP-GATEWAY.md](52-MCP-GATEWAY.md) | MCP gateway (dinamik araç aktivasyonu, `list_changed` push) — **uygulandı** (Faz 0-4); ilk plan gövdesi `arsiv/52-MCP-GATEWAY-PLANLAMA.md` |
+| [53-HARICI-AJAN-PROMPT-PARITE.md](53-HARICI-AJAN-PROMPT-PARITE.md) | the external agent project sistem-promptu paritesi: statik/dinamik bloklar — alınan (env marker, session_state, self-mgmt, deliverables) / bilinçli dışlanan (datatable/call_llm/render_template/_displayName) / farklı çözülen (recovery_context → dosya-tabanlı) |
 | [54-CAPABILITY-PROBE.md](54-CAPABILITY-PROBE.md) | Generic capability probe → cachelenebilir context genişletme (opsiyonel harici tool varsa statik prefix'e kısa blok); ilk müşteri codebase-memory (tek cache root — per-workspace izole store 2026-08-11'de kaldırıldı) + best-effort cwd auto-index; zvec-grep anlamsal arama aynı katmanlarla (2026-09-14: prompt bloğu, `root` prefill, `[INDEX_MISSING]` onarımı, repo köküne otomatik indeks, allowlist muafiyeti) |
-| [55-API-NATIVE-YOL-HARITASI.md](55-API-NATIVE-YOL-HARITASI.md) | Anthropic API-native özellikler yol haritası — structured outputs, sunucu web search/fetch, server-side compaction, task budgets, native tool search, programmatic tool calling (P0–P4/P6/P7 tamam; **P5 "memory tool" 2026-07-05 hafıza kaldırma kararıyla iptal**) |
 | [56-SELF-HEALING.md](56-SELF-HEALING.md) | Kendi kendini onaran oturum akışları: provider hata sınıflandırıcı + sınırlı retry (errclass), tool-loop guardrail (warn/block/halt), tur-içi mesaj dizisi onarımı (RepairSequence), kalıcı StuckTurns sayacı + `stuck` etiketi + otonom gate, hata→ders döngüsü (lessons) |
 | [57-PROMPT-EPOCH.md](57-PROMPT-EPOCH.md) | Prompt Epoch — statik system + araç şemalarını (session,agent) başına dondurup oturum-ortası cache kırılmalarını önleme; context-change diff notu + cache-warmth göstergesi |
 | [58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md) | Sohbet kuyruğu + çoklu-ekran senkronizasyonu (event-sourcing cutover): SessionHub cursor SSE + interaction CAS + durable send-queue + presence |
@@ -107,18 +103,17 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [61-MERKEZI-PROMPT-REGISTRY.md](61-MERKEZI-PROMPT-REGISTRY.md) | Merkezi prompt registry (`internal/prompts`) — 15 gömülü prompt tek kayıt defterinde: embed edilmiş .md default'lar, workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch rozeti, debug.jsonl prompt izi (promptKey/promptHash), drift-guard testi; sistem ajanına bağlı 14 prompt ekrandan çıkarıldı (Soul üzerinden düzenlenir) + soul editöründe "koddaki prompta dön" |
 | [62-BIRLESIK-RUN-AWAIT.md](62-BIRLESIK-RUN-AWAIT.md) | Birleşik Run (C+D) — `await-input` keystone (flow durable suspend/resume: `State.WaitingAt` + `FlowWaiting` statüsü + CAS resume + input delivery API/UI); `LaunchRun` fresh-launch launcher seam'i (Faz 3); peer-bridge (`list_flow_runs`/`deliver_flow_input`); await timeout/GC sweeper; `subflow` node (senkron flow kompozisyonu). Flow motoru accumulate/loop/paralel-fold: [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md) |
 | [63-SOURCE-TEMPLATES-RENDER.md](63-SOURCE-TEMPLATES-RENDER.md) | Source template render (`render_template`) — kaynak-başına HTML şablonlarıyla tutarlı veri sunumu *(eski numara: 53)* |
-| [64-GITHUB-COPILOT-CHRONICLE.md](64-GITHUB-COPILOT-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionHarness muadilleriyle kıyas (salt referans, doküman-only) *(eski numara: 59)* |
 | [65-DURABLE-ASK.md](65-DURABLE-ASK.md) | Durable Ask — native `ask_user` ve permission onayı temiz suspend noktasında diske park edilir (`SessionAsk` + CAS claim), cevap gelince tur kalıcı state'ten devam eder; `WithDurableAsk` gate'li, restart/crash'e dayanıklı |
 | [66-VIEW-KATMANI.md](66-VIEW-KATMANI.md) | **Faz 1-4 + 6 canlı** — View (projeksiyon) katmanı: flow run / session / board durumunun bağlam-ucuz özeti (deterministik L0+L1, LLM yok). `tiny/card/full` bütçe tier'ları, birimli `Elided` (sessiz kesme yok), `get_view` aracı (pull kanalı) ve **ajanla aynı ham DSL'i gösteren `◱ Özet` paneli**; `workspace` roll-up'ı + grafiklerle **Panel (dashboard) ekranı** (`GET /api/dashboard`). Faz 5 (L2 incremental fold) tasarım |
 | [67-BOARD-GORUNUMLERI.md](67-BOARD-GORUNUMLERI.md) | Board görünüm katmanı — facet filtre çubuğu (AND/OR semantiği, Türkçe I/ı arama katlaması), gruplama ekseni (durum/ajan/öncelik/etiket/tarih — sürükleme eksenin alanını yazar) ve workspace başına kayıtlı görünümler; aktif seçim pencere-yerel (localStorage) |
 | [68-OZET-HARITASI.md](68-OZET-HARITASI.md) | **Faz 1-3 + TSK66 canlı** — Özet Haritası / Workspace Explorer: View katmanı üstünde kök düğümden tıkladıkça bir katman açılan semantic-zoom drill-down. Backend: `agent`/`budget`/`tools`/`category` + TSK66'da `artifact`/`automation`/`skill`/`insight`/`logs` Kind'leri + deterministik projeksiyonlar (LLM yok), `Children(ref)` + `GET /children`, ajan **`expand` aracı**, `Sources` (skills/findings/logs) + `WithSources`. Frontend: NavRail "Harita" ekranı (`features/explorer`), **2026-09-04'ten beri vis-network tek fizik ağı** (`GET /api/views/graph` tüm haritayı tek çağrıda verir; merkezde workspace, halkada 11 grup, üyeler gruba bağlı; tek tık = odak + gömülü özet paneli), canlı SSE, URL deep-link + harita-içi arama. Opsiyonel/ertelendi: MCP resource tree + sigma.js (büyük-workspace) |
-| [69-CODEX-CLI-SAGLAYICI.md](69-CODEX-CLI-SAGLAYICI.md) | **Araştırma / fizibilite (kod yok)** — OpenAI Codex CLI'yi claude-cli gibi arka planda sürme fizibilitesi. `codex exec` bayrak yüzeyi, `--json` JSONL olay şeması (`thread.*`/`turn.*`/`item.*`), `CODEX_HOME` config izolasyonu, `-c` TOML override'ları, MCP köprüsü uyumu (Streamable HTTP + Bearer, `mcp__srv__tool` namespace'i), `developer_instructions` sistem-prompt kanalı ve **27 maddelik parite matrisi**. İki gerçek boşluk: exec'te per-tool onay yok + native araç bastırma sınırlı. Doğrulama: `codex-cli 0.147.0` canlı + `openai/codex` kaynak kodu |
-| [70-CODEX-CLI-UYGULAMA-PLANI.md](70-CODEX-CLI-UYGULAMA-PLANI.md) | **Faz 1-4 canlı (kod merge edildi, 2026-08-18)** — `codex-cli` ProviderKind'ının faz faz uygulama planı ve gerçekleşen durumu: `CLIProvider` arayüz refactor'ı, `codexcli*.go` (provider + JSONL parser + config.toml renderer + hata sınıflandırma), `kind_codexcli.go` (Order 8, gpt-5.x katalog), registry/settings entegrasyonu, `codexmcp.go` MCP köprüsü, katalog sürüm probe'u + fiyatlandırma + frontend ayar kartı. Fark notları planın sonunda |
-| [71-SAGLAYICI-ORNEKLERI-PLANI.md](71-SAGLAYICI-ORNEKLERI-PLANI.md) | **Faz 0-5 BİTTİ (2026-08-18)** — Sağlayıcı taslak→örnek modeli; uygulama-geneli `providers.json`; ajanların örnek seçimi; yeni CLI örneklerinde otomatik `<dataDir>/provider-homes/<instance-id>` izolasyonu ve örnek-bazlı auth rotaları; legacy workspace auth fallback'i; `InstanceCatalog()` ile aynı kind'ın örneklerini ayrı gösterme. **§12 (2026-09-04):** yerel sağlayıcılar — LM Studio kind'ı, host tabanlı anahtarsız çalışma, yüklenen bağlam boyutuna göre muhafazakâr pencere, sıfır maliyet |
+| [69-CODEX-CLI-SAGLAYICI.md](69-CODEX-CLI-SAGLAYICI.md) | **Araştırma / fizibilite; uygulama notları §13 (eski 70 §8)** — OpenAI Codex CLI'yi claude-cli gibi arka planda sürme fizibilitesi. `codex exec` bayrak yüzeyi, `--json` JSONL olay şeması (`thread.*`/`turn.*`/`item.*`), `CODEX_HOME` config izolasyonu, `-c` TOML override'ları, MCP köprüsü uyumu (Streamable HTTP + Bearer, `mcp__srv__tool` namespace'i), `developer_instructions` sistem-prompt kanalı ve **27 maddelik parite matrisi**. İki gerçek boşluk: exec'te per-tool onay yok + native araç bastırma sınırlı. Doğrulama: `codex-cli 0.147.0` canlı + `openai/codex` kaynak kodu |
+| [71-SAGLAYICI-ORNEKLERI-PLANI.md](71-SAGLAYICI-ORNEKLERI-PLANI.md) | **Faz 0-5 BİTTİ (2026-08-18)**; §4.5 claude-cli kimlik sağlığı + yedek dışlama (eski 51'den) — Sağlayıcı taslak→örnek modeli; uygulama-geneli `providers.json`; ajanların örnek seçimi; yeni CLI örneklerinde otomatik `<dataDir>/provider-homes/<instance-id>` izolasyonu ve örnek-bazlı auth rotaları; legacy workspace auth fallback'i; `InstanceCatalog()` ile aynı kind'ın örneklerini ayrı gösterme. **§12 (2026-09-04):** yerel sağlayıcılar — LM Studio kind'ı, host tabanlı anahtarsız çalışma, yüklenen bağlam boyutuna göre muhafazakâr pencere, sıfır maliyet |
 | [72-TANITIM-SITESI.md](72-TANITIM-SITESI.md) | **UYGULANDI (2026-08-25)** — `website/` altındaki statik tanıtım sitesi (Astro 5 + Tailwind v4, EN, tek sayfa). Placeholder politikası (`site.config.ts`'te `null` = henüz yok → ölü link yerine "Coming soon"), bölüm akışı, uygulamadan elle senkronlanan tema dosyaları, `scripts\shots.ps1` Playwright screenshot hattı ve "README'yi kaynak alma" içerik kuralı |
 | [73-LOKALIZASYON.md](73-LOKALIZASYON.md) | **Altyapı UYGULANDI (2026-08-25)** — UI i18n: `Settings.UILanguage` (ajan yanıt dilinden ayrı eksen, `""` = onu izle), i18next + feature-bazlı JSON katalogları, `Intl` biçimlendirme katmanı (`shared/lib/intl.ts`), dil değişiminde ağaç remount'u, katalog parite/çoğul guard testleri, migre klasörler için ESLint hardcoded-metin kapısı ve `npm run i18n:extract`. Kelime çevirileri kademeli |
 | [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md) | Sistem ajanları: canonical registry, kilitli yerleşik satır + özelleştirme çocuğu modeli (2026-09-03), çözümleme ve fallback, restore/disable semantiği, API/UI, özyineleme koruması ve usage taksonomisi |
 | [75-YAYIN-SURECI.md](75-YAYIN-SURECI.md) | **Yayın hattı UYGULANDI (2026-08-27)** — Etiket→test→derleme→GitHub Release + GitHub Pages akışı (`.github/workflows/release.yml`), `latest.json` şeması ve `deploy/release-host/` ile yerel Docker önizlemesi. VPS deploy hattı kaldırıldı |
+| [76-ARTIFACT-SISTEMI.md](76-ARTIFACT-SISTEMI.md) | **Uygulandı (TSK476/TSK477)** — Artifact sistemi: image artifact'ları üzerine tarayıcıda çizim ve türetilmiş (`derivedFromArtifactId`) artifact olarak kaydetme |
 | [77-ROTA-ALTYAPI-PLANI.md](77-ROTA-ALTYAPI-PLANI.md) | **UYGULANDI: R1–R10 (2026-09-02), üstüne Rota F0–F5 (2026-09-02/03)** — Rota (oturumları dinamik/çatallanan akış grafiğine hizalama + workspace canlı görünümü + koşu-sonu optimizer) öncesi altyapı hazırlığı: 10 refactor kalemi (oturum kökeni `SessionOrigin`, canlılık kaydı, workspace olay günlüğü, sidecar soyutlaması, otomasyon tetik registry + arşiv, reçete şeması, koordinasyon gözlemcisi, flow bağlantı düzeltmeleri, view/graph, frontend), üç dalga, kapı ölçütleri |
 | [78-ROTA-EKRANI.md](78-ROTA-EKRANI.md) | **F0–F5 tamamlandı (2026-09-02/03)** — Rota ekranı: workspace-kök zaman ekseni kanvası (git-graf metaforu: kök şerit + worker/handoff alt şeritleri, `spawned`/`reported`/`forked_from` kenarları, akış koşusu çubukları, ⚡/↷/✕ işaretleri, kurulu zamanlayıcı gelecek şeridi), `laneStore` veri yolu, `GET /api/trajectories[/{id}]`, sağ panelde `ViewPanel`; F1a: rota varlığı üretimi (reçeteden tohum, R7 gözlemcisiyle spawn/rapor/akış koşusu/Ask kapısı bağlama), `trajectory` aracı (`get|plan|phase|finish`), `<trajectory>` durum bloğu; F1b: rota-içi faz-sütunlu görünüm + derin bağlantı, sohbet başlığında rol rozeti + mini rota şeridi, oturum kökeni çipi, Beceriler'de reçete çipleri, otomasyon ateşleme defteri, `ws:*` → toast köprüsü; F2: `phase`/`trajectory_end` tetikleri, reçete izleyicilerinin ateşlenmesi ve grafta "neden ateşlenmedi"; F3: rota bitiş özeti (süre/token/maliyet/hayalet faz/sessiz izleyici), reçete istatistikleri, LLM'siz haftalık küratör (arşivle/öner, provenance, pin) + Küratör paneli; F4: `recipe-optimizer` sistem ajanı, kodda zorlanan değişmezler (kanıt, büyüme bütçesi), `recipe-opt` içgörü kanalı (yalnız öneri); F5: faz kapıları (artifact/verdict/human = Durable Ask), kanvastan faz ekle/atla/tamamla, buradan çatalla, RunView → Rota; F4-v2 `auto_prune` oto-budama |
 | [79-HARICI-API.md](79-HARICI-API.md) | Harici REST API (opt-in bearer auth) |
@@ -132,18 +127,35 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [87-KARAR-KATMANI.md](87-KARAR-KATMANI.md) | **Uygulandı (2026-09-22)** — Karar katmanı (`internal/decider`): tipli sorulara (noul/choice/score) olasılıkla cevap veren karar modelleri, chat provider'larından ayrı. **Karar modelleri** sağlayıcılar gibi eklenip düzenlenir (kendi uç noktası + şifreli anahtar ya da ödünç sağlayıcı hesabı); backend'ler: OpenRouter Decisions (Jev), System One API (TypeSafe · OpenJev), logprobs üzerinden herhangi bir yerel LLM (Ollama, LM Studio, llama.cpp, vLLM). **Karar mercileri** kayıt tabanlı: `off/shadow/on`, eşik, merci başına model + yedek + rakip; dört bağlı merci (tool-risk, stall-judge, flow-judge, phase-gate), yeni merciler için Pick/Select/Triage desenleri; karar sağlayıcıları Ayarlar → Sağlayıcılar'da, merciler Ayarlar → Karar Mercileri'nde |
 | [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
 | [INSIGHT-BACKLOG.md](INSIGHT-BACKLOG.md) | **Otomatik üretilir** — Insight taramasının "app-fix" kanalı; uygulama-tarafı bulgu birikimi (elle düzenlenmez; bkz. [60](60-RETROSPEKTIF-TARAMA.md)) |
-| [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionHarness araç eşleştirme analizi |
-| **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
-| [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → TionHarness çıkarımları |
+| [analiz-harici-ajan-arac-eslestirme.md](analiz-harici-ajan-arac-eslestirme.md) | the external agent project↔TionHarness araç eşleştirme analizi |
+| [analiz-harici-baglam-yonetimi.md](analiz-harici-baglam-yonetimi.md) | Harici ajan ↔ TionHarness bağlam yönetimi karşılaştırması (salt analiz) |
+| **arsiv/** | Tarihsel dokümanlar: kaldırılan özellikler, tamamlanan planlar ve ana dokümanlardan taşınan plan gövdeleri (referans/appendix) |
+| [arsiv/13-HARICI-AJANLAR-INCELEME.md](arsiv/13-HARICI-AJANLAR-INCELEME.md) | external-agent-oss release incelemesi → TionHarness çıkarımları |
 | [arsiv/14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md) | Çoklu-provider mimarisi incelemesi (gelecek plan) |
+| [arsiv/23-ILISKI-GRAFIGI.md](arsiv/23-ILISKI-GRAFIGI.md) | ~~İlişki grafiği / Ağ ekranı~~ (**KALDIRILDI 2026-09-05**, yerini Harita [68](68-OZET-HARITASI.md) aldı; 2026-09-22'de `arsiv/`'e taşındı) |
+| [arsiv/42-REFAKTOR-MODULERLIK.md](arsiv/42-REFAKTOR-MODULERLIK.md) | Refaktör/modülerlik — generic db/api/tools helper'ları + God-dosya bölmeleri (tamamlanan plan) |
+| [arsiv/51-CLAUDE-CONFIG-BIRLESIK.md](arsiv/51-CLAUDE-CONFIG-BIRLESIK.md) | Eski per-workspace claude-home modeli (kaldırıldı); geçerli kimlik mekanikleri 71 §4.5'te |
+| [arsiv/55-API-NATIVE-YOL-HARITASI.md](arsiv/55-API-NATIVE-YOL-HARITASI.md) | Anthropic API-native özellikler yol haritası — structured outputs, sunucu web search/fetch, server-side compaction, task budgets, native tool search, programmatic tool calling (P0–P4/P6/P7 tamam; **P5 "memory tool" 2026-07-05 hafıza kaldırma kararıyla iptal**) |
+| [arsiv/64-HARICI-CLI-CHRONICLE.md](arsiv/64-HARICI-CLI-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionHarness muadilleriyle kıyas (salt referans, doküman-only) *(eski numara: 59)* |
+| [arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md](arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md) | **Faz 1-4 canlı (kod merge edildi, 2026-08-18)** — `codex-cli` ProviderKind'ının faz faz uygulama planı ve gerçekleşen durumu: `CLIProvider` arayüz refactor'ı, `codexcli*.go` (provider + JSONL parser + config.toml renderer + hata sınıflandırma), `kind_codexcli.go` (Order 8, gpt-5.x katalog), registry/settings entegrasyonu, `codexmcp.go` MCP köprüsü, katalog sürüm probe'u + fiyatlandırma + frontend ayar kartı. Fark notları planın sonunda — güncel özgün bilgi 69 §13'te |
+| [arsiv/03-YOL-HARITASI-KALDIRILAN.md](arsiv/03-YOL-HARITASI-KALDIRILAN.md) | 03'ten taşınan memory tabanlı bölümler (Faz 6, C3/C5/C6, HA-1) |
+| [arsiv/04-TEKNOLOJI-ILK-PLAN.md](arsiv/04-TEKNOLOJI-ILK-PLAN.md) | 04'ün 2026-06-15 öncesi ilk teknoloji planı tabloları |
+| [arsiv/11-INTERACTION-MCP-TARIHSEL.md](arsiv/11-INTERACTION-MCP-TARIHSEL.md) | 11'in plan/tarihsel bölümleri (tahmini `RunSession`, tahmini dosya listesi, oturum hedefi araçları) |
+| [arsiv/25-SUBAGENT-ISOLATION-PLAN.md](arsiv/25-SUBAGENT-ISOLATION-PLAN.md) | 25'in plan gövdesi (primitif kader tablosu, dosya haritası, fazlama, test, riskler) |
+| [arsiv/27-CROSS-SESSION-SEARCH-PLAN.md](arsiv/27-CROSS-SESSION-SEARCH-PLAN.md) | 27'nin Parça 1–3 plan gövdesi |
+| [arsiv/30-COKLU-PENCERE-PLAN.md](arsiv/30-COKLU-PENCERE-PLAN.md) | 30'un plan gövdesi |
+| [arsiv/32-NATIVE-PENCERE-PLAN.md](arsiv/32-NATIVE-PENCERE-PLAN.md) | 32'nin plan gövdesi (CGO analizi, taslaklar, build script) |
+| [arsiv/39-DIZIN-SITE-REGISTRY-PLAN.md](arsiv/39-DIZIN-SITE-REGISTRY-PLAN.md) | 39'un §1 sonrası plan gövdesi |
+| [arsiv/41-ARAC-BOSLUKLARI-TAMAMLANANLAR.md](arsiv/41-ARAC-BOSLUKLARI-TAMAMLANANLAR.md) | 41'in tamamlanan maddeleri (1/3/4/5/7/8 + Bölüm E) |
+| [arsiv/44-CODE-EXECUTION-MCP-PLAN.md](arsiv/44-CODE-EXECUTION-MCP-PLAN.md) | 44'ün §5 fazlandırma ve §9 ilk faz gövdesi |
+| [arsiv/47-KOORDINATOR-PLAN.md](arsiv/47-KOORDINATOR-PLAN.md) | 47'nin plan bölümleri (§1.2, §4–§8) |
+| [arsiv/49-MOBIL-RESPONSIVE-UI-ANALIZ.md](arsiv/49-MOBIL-RESPONSIVE-UI-ANALIZ.md) | 49'un §1–§6 analiz/plan bölümleri |
+| [arsiv/50-CLAUDE-CODE-CACHE-PARITE-PLAN.md](arsiv/50-CLAUDE-CODE-CACHE-PARITE-PLAN.md) | 50'nin P1–P7 "Değişim" maddeleri + §3–§7 |
+| [arsiv/52-MCP-GATEWAY-PLANLAMA.md](arsiv/52-MCP-GATEWAY-PLANLAMA.md) | 52'nin uygulama öncesi analizi/faz planı (§0–§10) |
+| [arsiv/59-CLI-STEER-PLANI-TASARIM.md](arsiv/59-CLI-STEER-PLANI-TASARIM.md) | 59'un ilk plan/tasarım bölümleri |
 
-> **Numara notu:** 13–14 tarihsel inceleme dokümanları `arsiv/` altına taşındı (ana dizinde
-> 13–14 boş). 17/18/26 eski numara çakışmaları giderildi → native pencere **32**, çoklu
-> pencere **30**, MemGPT çekirdek bellek **31**. 40 çakışması giderildi (2026-07-02) →
-> plan modu **40**, çoklu seçim **45**. **Numara çakışmaları giderildi (2026-07-27):**
-> source-templates render **53 → 63**, an external CLI agent chronicle **59 → 64**.
-> Böylece her numara tek dosyaya karşılık gelir; **53** = the external agent project prompt paritesi,
-> **59** = CLI steer planı.
+> **Numara notu:** Her numara tek dosyaya karşılık gelir; ana dizindeki boş numaralar (10,
+> 13–14, 23, 31, 42, 51, 55, 64, 70) tarihsel dokümanların `arsiv/`'e taşınmasından kalır.
 
 ## Kurulu Ortam
 
@@ -153,7 +165,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Script'ler (`scripts\`)
 
-> Hepsi PowerShell. **ASCII-only tutulmalı** — WinPS 5.1 BOM'suz UTF-8'i ANSI çözer, parse bozulur.
+> `.ps1` script'leri **ASCII-only tutulmalı** — WinPS 5.1 BOM'suz UTF-8'i ANSI çözer, parse bozulur. `.sh` script'leri Git Bash ile koşar.
 
 | Script | Ne yapar | Detay |
 |---|---|---|
@@ -164,17 +176,14 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | `worktree.ps1` | Geliştirici git worktree yardımcısı (`add`/`list`/`remove`/`prune`); node_modules junction'lar | [26](26-CALISMA-DIZINI.md) |
 | `e2e-smoke.ps1` | 12 adımlı uçtan uca smoke testi (`-SkipLLM` ile hızlı/ucuz) | [33](33-DIS-AJAN-OTOMASYONU.md) |
 | `repair-encoding.ps1` | Bozuk UTF-8 kayıtlarını onarır (varsayılan dry-run, `-Apply`) | [33](33-DIS-AJAN-OTOMASYONU.md) |
+| `test.sh` | Test kapısı: `fast` (değişen Go paketleri + vitest) / `full` (`go test ./...` + vitest + `depcheck.sh` + `git diff --check`) | `CLAUDE.md` |
+| `depcheck.sh` | `internal/agent`'tan ayrılan paketlerin onu geri import etmediğini doğrular (`test.sh full` koşar) | [81](81-PAKET-BOLME-PLANI.md) |
+| `build-release.sh` | Sürüm derlemesi (çoklu hedef; CI `release.yml` kullanır) | [75](75-YAYIN-SURECI.md) |
+| `install.sh` / `install.ps1` | Sürüm feed'inden binary indirip kuran kurulum script'leri | [75](75-YAYIN-SURECI.md) |
 | `shots.ps1` | Tanıtım sitesi için ürün ekran görüntüleri (çalışan örneğe bağlanır, hash rotalarını gezer, `website/public/shots/`'a yazar). Playwright talep üzerine kurulur: `-InstallDeps` | [72](72-TANITIM-SITESI.md) |
 
-## Proje Durumu (2026-07-27)
+## Proje Durumu
 
-> Bu bölüm **periyodik anlık görüntüdür**; günlük ilerleme `05-ILERLEME.md`'de tutulur.
-> Bir tarihe takılmadan önce oradaki en son kaydı kontrol edin.
-
-✅ **Faz 0–8 + kapsamlı backlog tamamlandı:** İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Sağlamlaştırma (compaction + guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li ID'ler (WS/AGT/SES) · İlişki grafiği · Self-management suite · Hooks · İzin modeli · native masaüstü penceresi + çoklu pencere · oturum-başına cwd · MCP kalıcı bağlantı havuzu (+hibrit `shared`/`scoped` kapsam) · oturumlar-arası arama · peer mesajlaşma · bildirim sinyalleri.
-
-✅ **Sonraki dalga (07-10 → 07-27):** merkezi prompt registry ([61](61-MERKEZI-PROMPT-REGISTRY.md)) · retrospektif tarama/Insight kokpiti ([60](60-RETROSPEKTIF-TARAMA.md)) · sohbet kuyruğu + çoklu-ekran event-sourcing cutover ([58](58-QUEUE-SENKRON.md)) · in-process `sqz` shell filtresi ([17](17-TOKEN-OPTIMIZASYON.md)) · Flow motoru: accumulate cache + `loop` + session↔flow köprüsü, Birleşik Run `await-input`/`subflow`, Start/End node'ları + çıktı sözleşmesi ([15](15-FLOW-CANVAS.md) · [62](62-BIRLESIK-RUN-AWAIT.md)) · Claude Opus 5 model desteği.
-
-> **Not (2026-07-05):** Memory (hafıza) alt sistemi — journal recall + MemGPT/Letta tarzı core memory + hafıza grafiği + ilgili tool/API/UI/veri — projeden **tamamen kaldırıldı**. Detay: `05-ILERLEME.md`.
-
-➡️ **Sıradaki:** API-native kalan UI boşlukları (deferred-katalog rozeti, task-budget tur rozeti; [55](55-API-NATIVE-YOL-HARITASI.md) — *P5 "memory tool" maddesi 2026-07-05 kaldırma kararıyla düştü*) · gerçek byte-tasarrufu ölçümü: sqz delta'sını `runPostToolHooks`'ta ölçmek ([38](38-SESSION-DEBUG.md)) · claude-cli batching maliyet kıyası, koşul başına n≥5 ([MALIYET-DUSURME-PLANI](MALIYET-DUSURME-PLANI.md)) · Code Execution with MCP Faz 4/5 ([44](44-CODE-EXECUTION-MCP.md)) · araç backlog'u açık kalemler: `call_llm`, Monitor, Worktree ([41](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md)). Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).
+Güncel durum ve sıradaki adımlar için [05-ILERLEME.md](05-ILERLEME.md) (en yeni kayıt üstte);
+2026-06-30 ve öncesi [05-ARSIV.md](05-ARSIV.md). Memory (hafıza) alt sistemi 2026-07-05'te
+tamamen kaldırıldı.

@@ -1,11 +1,20 @@
 # Bağlam Yönetimi Karşılaştırması — External Context Agent ↔ TionHarness
 
-Kaynaklar (bu analizin okunduğu andaki durum):
+> **Özet (2026-09-22):** Harici bir ajanın bağlam sıkıştırma katmanlarını TionHarness'in
+> `internal/conversation` katlama/bütçe mekanizmasıyla karşılaştıran analiz. En kritik
+> fark tetikleme sinyali: harici ajan sağlayıcının gerçek `prompt_tokens` değerine
+> reaktif bakar, TionHarness karakter tahminiyle proaktif tetikler ve mesaj dışı yükü de
+> bütçeye katar. Çıkarımlardan Ö1 (LLM'siz tur-içi araç sonucu budaması,
+> `conversation/prune.go`) ve Ö2 (fold hatasında turu düşürmeme, `foldfailure.go`)
+> uygulandı; Ö3 (etkisizlik breaker'ı), Ö4 (micro-compaction) ve Ö5 (gerçek
+> `prompt_tokens` kalibrasyonu) açık.
+
+Kaynaklar (bu analizin okunduğu andaki durum; satır numaraları o commit'lere aittir):
 
 | Depo | Yol | HEAD |
 |------|-----|------|
-| external-context-agent | `C:\Users\user\Desktop\Projects\external-context-agent` | `32fe129324` |
-| TionHarness | `C:\Users\user\Desktop\Projects\TionHarness` | `3734f65c` |
+| external-context-agent | `Desktop/Projects/external-context-agent` | `32fe129324` |
+| TionHarness | bu depo | `3734f65c` |
 
 > Not: codebase-memory indeksi `254158f453` üzerinde alınmıştı; yapısal sorgular
 > (satır numaraları, karmaşıklık metrikleri) o commit'e aittir. Alıntılanan kod

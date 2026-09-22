@@ -10,7 +10,7 @@
 > `orchestration.Graph{Start,Nodes[]}` backend'de neredeyse değişmeden kalır (yalnız
 > kozmetik `X,Y`), döngüler motor tarafından bilerek desteklenir (acyclic zorunluluğu
 > yok), her koşu artık kendi oturumunda izlenir. Dayandığı dosyalar:
-> `frontend/src/components/flow/*`, `frontend/src/lib/flowGraph.ts`,
+> `frontend/src/features/flows/*` (ör. `flowGraph.ts`),
 > `internal/orchestration/*`, `internal/agent/flow*.go`.
 > node-graph canvas**'a yükseltildi. Referans: React Flow tabanlı node-graph builder deseni,
 > ComfyUI/LiteGraph bağlantı UX'i. Bkz. `_Docs/arsiv/14-PROVIDER-MIMARISI-INCELEME.md` çizgisi.
@@ -81,16 +81,16 @@ Canvas ile bir kez kaydedilince `x/y` kalıcılaşır; sonraki açılışlarda k
 ## Dosyalar
 
 **Frontend**
-- `src/lib/flowGraph.ts` — adapter (`graphToReactFlow`/`reactFlowToGraph`), `autoLayout`,
+- `src/features/flows/flowGraph.ts` — adapter (`graphToReactFlow`/`reactFlowToGraph`), `autoLayout`,
   `nextNodeId`, `blankNode`.
-- `src/components/flow/FlowCanvas.tsx` — `<ReactFlow>` + `Background`/`MiniMap`/`Controls`,
+- `src/features/flows/FlowCanvas.tsx` — `<ReactFlow>` + `Background`/`MiniMap`/`Controls`,
   `onConnect` bağlantı kuralları, `AgentsContext` sağlayıcı.
-- `src/components/flow/NodeShell.tsx` — ortak node kabuğu (tip-renkli başlık + başlangıç
+- `src/features/flows/NodeShell.tsx` — ortak node kabuğu (tip-renkli başlık + başlangıç
   rozeti + run-status ring).
-- `src/components/flow/{AgentNode,BranchNode,ParallelNode}.tsx` — custom node tipleri (handle'lar).
-- `src/components/flow/NodeInspector.tsx` — seçili node'un alanlarını düzenler.
-- `src/components/flow/nodeStyles.ts` — `AgentsContext`, tip→renk/ikon, `statusRing`.
-- `src/components/panels/FlowsPanel.tsx` — canvas + inspector + çalıştır entegrasyonu
+- `src/features/flows/{AgentNode,BranchNode,ParallelNode}.tsx` — custom node tipleri (handle'lar).
+- `src/features/flows/NodeInspector.tsx` — seçili node'un alanlarını düzenler.
+- `src/features/flows/nodeStyles.ts` — `AgentsContext`, tip→renk/ikon, `statusRing`.
+- `src/features/flows/FlowsPanel.tsx` — canvas + inspector + çalıştır entegrasyonu
   (`useNodesState`/`useEdgesState`).
 - `src/types/flow.ts` — `FlowNode` += opsiyonel `x,y`.
 - `package.json` — `@xyflow/react`.
@@ -359,7 +359,7 @@ decide(branch)`; `decide` → `VERDICT: SHIP` ise `finalize(transform)`, `VERDIC
   (~15 iterasyon) sert backstop.
 
 **Dağıtım:** gömülü gallery şablonu `gan-loop` ("Generator↔Evaluator (GAN)",
-`lib/flowTemplates.ts`) + market paketleri (`flow.gan-generator-evaluator`,
+`features/flows/flowTemplates.ts`) + market paketleri (`flow.gan-generator-evaluator`,
 `agent.skeptical-evaluator`, `mcp.playwright`) + yeni default skill `tionharness-gan-loop`.
 Şablon agent-bağımsız; kurulumdan sonra **iki ayrı ajan** atanır (generator vs evaluator) —
 aynı ajanı iki role atamak deseni bozar. UI/E2E hedeflerinde evaluator `mcp.playwright` ile
@@ -372,7 +372,7 @@ durur. `go build`/`vet` + `tsc -b`/`vite build` yeşil.
 ## Notlar / sıradaki adımlar
 
 - Şablonları **kategorilere** ayırma / arama eklenebilir.
-- Koşu **silme / temizleme (cap)** ve koşudan **yeniden çalıştır** ileride eklenebilir.
+- Koşu silme + saklama (cap) ve yeniden çalıştır sonradan eklendi (aşağıda "Koşu silme, saklama…" ve `FlowsPanel.rerunRun`).
 - Paperclip-tarzı statik "ajan ilişki haritası" (run_subagent kenarları)
   ayrı bir ekran olarak değerlendirilebilir.
 - MiniMap arka planı sabit `#0b0e14` (temaya duyarlı değil) — istenirse tema değişkenine bağlanır.

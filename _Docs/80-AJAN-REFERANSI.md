@@ -1,8 +1,8 @@
 # 80 — Ajan Referansı (CLAUDE.md'den taşınan ayrıntılar)
 
-> **Özet (2026-09-03):** Kök `CLAUDE.md` her Claude Code oturumuna ~10k token yüklediği
-> için (ölçüm: `_Docs/17` "claude-cli prefix anatomisi") yalnız her turda geçerli kurallar
-> orada kaldı; nadiren gereken referans bilgisi buraya taşındı. Bir ajan bu dosyaya yalnız
+> **Özet (2026-09-22):** Kök `CLAUDE.md` her Claude Code oturumuna yüklendiği için yalnız
+> her turda geçerli kurallar orada tutulur (2026-09-03'te ~10k token'dan küçültüldü; ölçüm:
+> `_Docs/17` "claude-cli prefix anatomisi"); nadiren gereken referans bilgisi buradadır. Bir ajan bu dosyaya yalnız
 > ilgili bölüm gerektiğinde bakmalı: `internal/db` dosya haritası, codebase-memory-mcp
 > `project` argümanı, ertelenmiş (deferred) araç yükleme, Playwright MCP çıktı kökü, kısmi
 > commit reçetesi, Go araç zinciri keşfi ve `website/` notları.
@@ -12,8 +12,8 @@
 `mcp__codebase-memory-mcp__*` sorgu araçları (`search_code`, `search_graph`,
 `query_graph`, `trace_path`, `get_code_snippet`, `get_architecture`, `index_status`)
 **`project`** argümanı ister — bu `repo_path` değil, indeksleme çıktısındaki yol-tabanlı
-kimliktir (format: `C-Users-user-Desktop-<repo-yolu>`). Bu depo için:
-`C-Users-user-Desktop-Projects-TionHarness`.
+kimliktir (format: yolun tire'lenmiş hali, `C-Users-<kullanıcı>-Desktop-<repo-yolu>`). Bu
+depo için: `C-Users-Bilal-Desktop-Projects-TionHarness`.
 
 - İlk çağrıdan önce bir kez `list_projects` çalıştır; `project` değerini listeden birebir
   kopyala.
@@ -22,7 +22,7 @@ kimliktir (format: `C-Users-user-Desktop-<repo-yolu>`). Bu depo için:
   değildir. Hata `available_projects` ile gelirse aynı çağrıyı tekrarlama, doğru kimliği
   kopyala. Repo listede yoksa bu MCP'yi kullanma; `Glob`/`Grep`'e düş.
 - TionHarness'in kendi ajan döngüsü eksik `project`'i oturumun cwd'sinden doldurur ve
-  düzeltilebilir kimlik hatasını onarır (`internal/agent/mcpargs.go`, `mcprepair.go`).
+  düzeltilebilir kimlik hatasını onarır (`internal/mcp/repair/args.go`, `repair.go`).
   **claude-cli sağlayıcısında bu koruma yoktur**; orada kuralları elle uygula.
 
 ## 2. Ertelenmiş (deferred) araçlar

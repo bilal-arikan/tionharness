@@ -233,7 +233,7 @@ silindi; tur 3 → yeni `created`, yeni sidecar değişikliği İÇERİYOR; tur 
 `created → stale → refreshed → created`. Yan gözlem (epoch-dışı): izole
 workspace claude-home'unda seed'lenmiş credential ile turlar arasında aralıklı
 `authentication_failed` görüldü (token rotasyonu şüphesi; retry ile geçiyor) —
-`51-CLAUDE-CONFIG-BIRLESIK` alanına ayrı araştırma konusu.
+claude-cli kimlik sağlığı alanına (`71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.5) ayrı araştırma konusu.
 
 ## Dosya Haritası
 

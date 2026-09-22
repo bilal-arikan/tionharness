@@ -9,9 +9,10 @@ description: >
 
 # Documentation update pattern
 
-Documents are Turkish; code and comments English. Every `_Docs/*.md` starts with an H1
-and, right below it, a blockquote `> **Özet (YYYY-MM-DD):** ...` (3–5 sentences: topic,
-status, key decisions, owning packages). Agents read the Özet first, so keep it true.
+Documents are Turkish; code and comments English. Numbered `_Docs/NN-*.md` docs should
+start with an H1 and, right below it, a blockquote `> **Özet (YYYY-MM-DD):** ...` (3–5 sentences: topic,
+status, key decisions, owning packages). Agents read the Özet first, so keep it true;
+add one when you touch a doc that lacks it.
 
 Steps for a change:
 

@@ -9,7 +9,7 @@ access: shared
 # TionHarness — Self-Debug (read your own observability stream)
 
 Every session has a **parallel debug journal** next to its conversation:
-`store/sessions/<id>/debug.jsonl`. Where `session.jsonl` is what the user sees,
+`store/sessions/<id>/debug.jsonl`. Where `messages.jsonl` is what the user sees,
 `debug.jsonl` is structured **observability** the runtime writes for you — so you
 can look at your own behaviour and improve it. You read it with one tool:
 **`read_session_debug`**.
@@ -21,7 +21,7 @@ Each event is one of:
 - **`turn`** — one assistant turn finished: duration (`durMs`), stop reason, error flag.
 - **`llm_call`** — one provider completion: `model`, input/output/cache tokens.
 - **`tool`** — one tool execution: `name`, `durMs`, output size (`outBytes`), error flag.
-- **`hook`** — a PreToolUse/PostToolUse hook ran: which tool, the decision (allow/block/modify).
+- **`hook`** — a hook ran: the event (`PreToolUse`/`PostToolUse` or a lifecycle event such as `Stop`, `SessionStart`), the tool for tool events, and the decision (allow/block/modify).
 - **`error`** — a turn-level / permission / budget error.
 - **`compaction`** — in-flight history was compacted (context pressure).
 - **`recovery`** — a turn recovery fired (output-cap resume, or compact-and-retry).

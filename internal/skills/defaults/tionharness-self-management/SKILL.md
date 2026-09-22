@@ -10,9 +10,10 @@ auto_summary: false
 # TionHarness — Self-Management Tools
 
 These tools let an agent operate TionHarness from the inside: build and edit the same
-entities a user would from the UI. They are **gated** (only present when the
-workspace has the *Self-management* capability on) and **loaded on demand** — they
-do not ship at the start of a turn to keep the prompt lean.
+entities a user would from the UI. They are always built; visibility is set **per
+tool** on the Tools ("Araçlar") screen (full / summary / name-only / hidden), and
+they are **loaded on demand** — they do not ship at the start of a turn to keep the
+prompt lean.
 
 **This skill IS their catalog.** To save context, the self-management tools are NOT
 listed individually in your system prompt's "Available Tools (load on demand)"
@@ -33,12 +34,12 @@ prompt. To use one:
 4. **`deactivate_tools`** drops tools you no longer need.
 
 > You never wait for permission to activate — activation just loads the schema.
-> If `activate_tools` reports a self-management name as unknown, the workspace does
-> not have self-management enabled (ask the user to turn it on in Settings →
-> Capabilities). The vault/session/web tools below (`secret_*`, `list_sessions`,
-> `WebFetch`) are load-on-demand independently of self-management — they appear in
-> the prompt's load-on-demand block (not hidden) when their own capability (secret
-> vault / cross-session context) is on.
+> If `activate_tools` reports a self-management name as unknown, check the spelling
+> against this catalog (or `tool_search`); if it is right, the tool is disabled for
+> this agent on the Tools screen — ask the user to enable it there. There is no
+> workspace-wide self-management switch any more. The vault/session tools below
+> (`secret`, `list_sessions`, `conversation_search`) are load-on-demand too and show
+> in the prompt's load-on-demand block (not hidden).
 
 ## Tool catalog
 
@@ -80,8 +81,10 @@ fields with the compiled defaults.
   conversation does not continue, so finish your current thought first and do not
   promise more work here. Optional `{reason}`.
 
-> Built-in run_subagent profiles: `explore` (read-only search), `coder` (write/edit
-> code), `reviewer` (read-only review), `config` (mini-agent: quick edits to
+> Built-in run_subagent profiles: `explore` (read-only search), `planner` (read-only;
+> turns a task into an ordered implementation plan), `coder` (write/edit code),
+> `reviewer` (read-only review), `validator` (runs builds/tests/git but never edits
+> source; replies with a compact PASS/FAIL verdict), `config` (mini-agent: quick edits to
 > config/ files — prompts/instructions/statuses/labels/permissions — sandboxed to
 > the config tools). Pass an existing agent's name or ID as `target` to use a
 > persistent agent instead of an ephemeral profile.
@@ -106,9 +109,12 @@ tool). `list_tasks` returns active cards by default and archived cards separatel
 with `archived:true`; `get_task` returns one complete card. Read/create/edit/move/
 archive/delete ANY task (including user-created ones) — `delete_task` is irreversible.
 
-**Hooks** — `list_hooks`, `create_hook`, `update_hook`, `delete_hook`. PreToolUse/PostToolUse
-external commands that intercept native tool calls (standard hook contract).
-Read/create any; delete only ones you created.
+**Hooks** — `list_hooks`, `create_hook`, `update_hook`, `delete_hook`. External
+commands speaking the Claude Code hook contract. Tool events `PreToolUse` /
+`PostToolUse` intercept native tool calls (matcher = tool-name glob); lifecycle
+events are `UserPromptSubmit`, `SessionStart`, `Stop`, `SubagentStop`,
+`PreCompact`, `Notification`, `SessionEnd`. Read/create any; delete only ones you
+created.
 
 **Archive (agents, skills, artifacts, automations, goals)** — `set_archived` with
 `{kind, id, archived}` (`kind` = `agent`|`skill`|`artifact`|`automation`|`goal`; for a
@@ -190,8 +196,8 @@ it) is still accepted; the record just keeps refusing to run until the agent is
 restored or retargeted. An
 archived **automation never fires** (ledger reason `archived`). An archived **skill** is
 never advertised in "# Available Skills", never returned by `skill_search`, and
-`use_skill` refuses it with the same explicit error. There is no archive tool yet:
-archive/restore happens in the UI or over REST (`POST /api/{agents|skills|artifacts|
+`use_skill` refuses it with the same explicit error. Archive/restore with the
+`set_archived` tool above, in the UI, or over REST (`POST /api/{agents|skills|artifacts|
 automations|goals}/{id}/archive` and `/unarchive`); list endpoints take
 `?archived=true|false|all`. Tell the user when an archived item blocks the task
 instead of working around it.

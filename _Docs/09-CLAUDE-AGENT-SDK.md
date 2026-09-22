@@ -75,8 +75,8 @@ graph TD
 
 ### Faz P2 — Built-in Araç Seti (SDK'nın en güçlü yanı) ✅ (2026-06-16)
 - [x] `Read` / `Write` / `Edit` / `LS` / `Grep` / `Glob` →
-  `internal/tools/builtin_fs.go` (workspace-scoped kök, path-traversal koruması →
-  `internal/tools/sandbox.go`). (İsimler 2026-06-22'de claude-cli ile hizalandı;
+  `internal/tools/builtin_fs.go` (`internal/tools/sandbox.go`: `Sandbox.Root` yalnız göreli
+  yolların tabanıdır; 2026-06-22'den beri kilit/path-traversal sınırı yok, bkz. `06-WORKSPACES.md`). (İsimler 2026-06-22'de claude-cli ile hizalandı;
   eski `read_file`/`write_file`/… adları.)
 - [x] `Bash` (Windows'ta Git Bash, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
   (timeout + sandbox cwd + 64KB çıktı cap). Windows Bash komutuna
@@ -94,12 +94,10 @@ graph TD
   (açıklama; başlık otomatik), `update_task`, `move_task`, `delete_task`
   (`builtin_taskmgmt.go`, **5 araç** — pano pasif bir durum panosudur, **`run_task` YOK**:
   ajan görevi çalıştırmaz, yalnız durumu okur/günceller; iş flow/schedule/agent oturumunda yapılır).
-- [x] **Provenance:** `db.Agent/Flow/Schedule/Task.CreatedBy` (Artifact/Memory zaten `AgentID`);
-  ajan yalnız agent-created kaynakları siler, kullanıcınınkine dokunamaz. **Görevde sınır
-  gevşek:** oku/oluştur/düzenle/taşı her görevde serbest (ajan panoyu yönetsin
-  diye), yalnız **silme** provenance-kısıtlı.
-- [x] **Varsayılan KAPALI** (`Tunables.SelfManageEnabled`); `TIONHARNESS_ENABLE_SELFMANAGE=1`
-  ile açılır (shell gate deseni — katalog 19→35, token maliyeti opt-in).
+- [x] **Provenance:** `db.Agent/Flow/Schedule/Task.CreatedBy` (Artifact zaten `AgentID`);
+  yalnız köken/görüntü bilgisidir — 2026-08-05'ten beri silme/düzenleme kapısı değildir.
+  Self-management araçları her zaman açıktır (eski `SelfManageEnabled` gate'i 2026-07-01'de
+  kaldırıldı).
 
 > **Yürütme yolu:** Built-in araçlar **native** tool-use döngüsünde (`agent/toolloop.go`
 > + `tools.Registry`) çalışır. claude-cli yolu kendi döngüsünü `--mcp-config` ile sürdüğü
@@ -109,15 +107,16 @@ graph TD
 > her iki ajan türü de bu araçlara erişir. Sandbox kökü her workspace'in `workspace/`
 > alt dizinidir (`Runtime.workDir`). Detay: `05-ILERLEME.md` (Faz P2), `22-SPAWN-SESSION.md` §CLI köprüsü.
 
-### Faz P3 — Permission / Onay Katmanı
-- Araç çalıştırmadan önce risk sınıflandırması (read-only / yazma / shell).
-- Mod: `auto` | `ask` | `read-only`. Ajan başına ayar (`agents` tablosuna kolon).
-- Yazma/shell araçlarında UI onay diyaloğu (ask_user altyapısını yeniden kullanır).
+### Faz P3 — Permission / Onay Katmanı ✅
+- Risk sınıflandırması (`tools/classify.go`), mod `auto` | `ask` | `read-only` (ajan başına
+  `permission_mode`), yazma/shell onay kartı. Kod: `internal/agent/permission.go`,
+  `internal/tools/permission.go`; durum `03-YOL-HARITASI.md` "En Sona Ertelenenler".
 
 ### Faz P4 — Hooks ✅ (TAMAMLANDI 2026-06-18)
 - `PreToolUse` / `PostToolUse` kancaları: `internal/agent/hooks.go` (subprocess JSON I/O, Claude Code sözleşmesi).
 - Kullanım: audit log, araç çağrısını engelleme/değiştirme, otomatik onay kuralları, dış çıktı sıkıştırma (sqz).
-- Yalnız native (anthropic/minimax) yol; claude-cli kendi `~/.claude/settings.json` hook'larını okur.
+- Native döngüde çalışır; claude-cli yolunda aynı Pre/PostToolUse hook'ları her turun ürettiği
+  `--settings` dosyasına yazılır (`internal/climcp/settings.go`).
 - Detay: **`_Docs/18-HOOKS.md`**.
 
 ## Bağlı / İlgili Dokümanlar

@@ -36,7 +36,7 @@ func claudeCLIEnvExempt(name string) bool {
 //
 // Evidence for the exemption: OPENAI_API_KEY is a documented codex login channel
 // (_Docs/69-CODEX-CLI-SAGLAYICI.md), and unlike claude-cli, TionHarness has NO
-// backend channel that injects a codex credential (same doc, and _Docs/70-…:492) —
+// backend channel that injects a codex credential (same doc, §13) —
 // an inherited OPENAI_API_KEY or a prior `codex login` is the ONLY way the child
 // authenticates. Stripping the prefix would therefore break every API-key user.
 func codexCLIEnvExempt(name string) bool {

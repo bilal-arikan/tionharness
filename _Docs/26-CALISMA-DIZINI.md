@@ -91,7 +91,7 @@ AGENTS.md prompt'ta hiç anılmaz; hiçbiri yoksa satır tamamen atlanır.
   bulunduğunda render eder.
 
 ### 4. UX (`frontend`)
-- `components/chat/WorkDirBadge.tsx` — Composer'da klasör rozeti (Thinking/Permission
+- `features/chat/WorkDirBadge.tsx` — Composer'da klasör rozeti (Thinking/Permission
   rozetlerinin yanında). Klasör ikonu + dizin adı + git branch gösterir; tıklayınca
   dizin gezgini popover'ı açılır (alt klasörlere in/çık, "Bu klasörü kullan",
   "Sıfırla"). `sessionId` ile kendi kendine yeter.
@@ -293,7 +293,7 @@ the external agent project paritesi: workspace başına "varsayılan çalışma 
 ## Workspace penceresi + Proje sekmesi (2026-06-22)
 
 Workspace + path ayarları artık Ayarlar'dan ayrı, **sol navbar'daki "Workspace"
-butonuyla** açılan kendi penceresinde (`components/workspace/WorkspaceView.tsx`).
+butonuyla** açılan kendi penceresinde (`features/workspace/WorkspaceView.tsx`).
 Sol alt-navbar (Settings/Logs benzeri) üç sekme:
 - **Genel** — kimlik, sağlayıcı/model, otonomi, session bağlamı (`WorkspacePanel`).
 - **Proje** (`ProjectPanel`) — proje dizini (path) seçici + **git**: depo durumu,

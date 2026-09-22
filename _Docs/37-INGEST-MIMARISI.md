@@ -117,8 +117,8 @@ taşır → yayınla/kur kaybsız.
 
 ## 6. Tek install otoritesi
 
-`internal/api/market.go::installPackInto(r, wsp, pack, req) (InstallResult, error)` —
-kind switch'i (skill/agent/flow/provider/mcp/workspace/memory) **tek** yerde; alt-
+`internal/api/market_install.go::installPackInto(r, wsp, pack, req) (InstallResult, error)` —
+kind switch'i (skill/agent/flow/provider/mcp/workspace/hook) **tek** yerde; alt-
 installer'lar `(InstallResult, error)` döndürür (`httpErr` ile HTTP kodu taşır). **Hem**
 market install endpoint'i **hem** ingest install endpoint'i bunu çağırır → "GitHub'dan
 import" ile "registry'den install" aynı yere düşer.

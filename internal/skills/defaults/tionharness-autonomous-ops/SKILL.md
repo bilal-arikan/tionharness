@@ -26,12 +26,12 @@ TionHarness primitive, not an aspiration.
 | Coding agents (multiple harnesses) | **Agents** over providers: `claude-cli` (keyless), `anthropic`, `minimax`/OpenAI-compat, + custom providers |
 | `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionharness-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
-| Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Hooks** (PreToolUse/PostToolUse) for event triggers |
+| Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Automations** for board/session events; **Hooks** (tool + lifecycle events) for tool-level triggers |
 | Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`spawn_worker`** (background worker, coordinator mode only), and **Flows** (graph engine) — all gated by the per-workspace autonomy brake |
 | Quality gates | **Permission/approval layer** (`auto`/`ask`/`read-only`, arg-patterns) + **Hooks** |
 | Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a flow or schedule |
 | Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers, each call synchronous) |
-| Git worktrees (avoid conflicts) | **Per-workspace `store/` isolation** (the closest analog; see limits below) |
+| Git worktrees (avoid conflicts) | **Card-owned git worktrees** (one branch per kanban card) + per-workspace `store/` isolation; see limits below |
 | Multimodal (model per task) | **Per-agent provider/model** + a **flow** whose nodes use different agents/models |
 | Flywheel: perfect tests/docs/logs | Recurring **schedules** that sweep docs, tests, and `read_logs` nightly |
 
@@ -43,8 +43,15 @@ one vendor:
 - **`claude-cli`** — local Claude CLI, keyless (uses the machine login). Drives its
   own tool loop via MCP delegation.
 - **`anthropic`** — Messages API (native tool-use loop, token streaming, thinking).
-- **`minimax` / OpenAI-compat** — any OpenAI-shaped endpoint via base URL.
-- **Custom providers** — OpenRouter / Gemini / Kimi / Ollama, added in settings.
+- **`codex-cli`** — local Codex CLI (ChatGPT login or API key).
+- **Hosted API kinds** — `minimax`, `openrouter`, `zai`, `deepseek` (plus their
+  Anthropic-shaped variants).
+- **`openai-compat` / `anthropic-compat`** — any OpenAI- or Anthropic-shaped
+  endpoint via base URL (e.g. Gemini, Kimi, Ollama).
+- **`lmstudio`** — a local LM Studio server (free, on your own machine).
+
+Provider instances are created on the Settings → Providers screen; agents read
+them with `list_providers`.
 
 **Why mix them (speed + cost):** you do not need a frontier model for every step.
 Reserve the strongest model for planning/review and use a cheaper, fast model for
@@ -110,7 +117,10 @@ reviewer" or "every 150k tokens, run a maintenance pass" without a clock.
 `PreToolUse` / `PostToolUse` external commands intercept native tool calls (Claude
 Code hook contract) — `create_hook`. Use them to *gate* (block a risky tool before
 it runs) or *react* (lint/format/log after a write). This is your tool-level
-automation + part of your quality gate.
+automation + part of your quality gate. Lifecycle events (`UserPromptSubmit`,
+`SessionStart`, `Stop`, `SubagentStop`, `PreCompact`, `Notification`,
+`SessionEnd`) use the same contract — e.g. a `Stop` hook returning `decision:"block"` forces
+one more (bounded) pass with its reason as guidance.
 
 > The video's "PR opened → wait for review comments → address → push" automation
 > translates to: a **schedule or flow** that triggers a **reviewer agent**, which
@@ -167,15 +177,19 @@ graph LR
   runtime + scheduler. This is TionHarness's "isolated environment" answer to the
   cloud-agent pitch: agents in different workspaces never collide.
 
-**The worktree caveat (be honest):** the expert playbook uses git worktrees so
-parallel agents don't clobber the same files. TionHarness isolates at the
-*workspace* level, not per-agent-within-a-workspace. So multiple agents writing
-the **same files in the same workspace** can still conflict — split them across
-workspaces, or give each a non-overlapping area of the codebase.
+**The worktree caveat (be honest):** worktrees are owned by **kanban cards**, not
+by sessions or agents. When a card enters `todo`, the board lifecycle provisions a
+`task/<card-id>` branch + worktree (under `<repo parent>/.tionharness-worktrees/<ws>`
+unless the workspace's `worktreeRootDir` says otherwise, based on
+`worktreeBaseRef`); moving the card to `done` merges it back, `cancelled`/`failed`
+discards it, and a merge conflict leaves the card's `worktreeState` = `conflict`.
+Work that is not tied to a card (plain chat, `run_subagent`, schedules) runs in
+the shared working dir, so multiple agents writing the **same files** there can
+still conflict — route parallel code changes through cards, or give each worker a
+non-overlapping area of the codebase.
 
-> TionHarness has no built-in git merge/deploy orchestration — the "many agents
-> racing to merge into main" problem from the playbook is out of scope here. If
-> agents touch a real git repo, serialize merges yourself or batch them.
+> Beyond that card merge, TionHarness has no deploy orchestration — if a merge
+> conflicts, resolve it yourself and move the card again.
 
 ## 7. The quality flywheel
 

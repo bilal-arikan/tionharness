@@ -177,7 +177,6 @@ Tam liste handler dosyalarında (`internal/api/server.go` route kayıtları). Ö
 | Tasks | `GET/POST /api/tasks`, `PUT/DELETE /api/tasks/{id}` |
 | Schedules | `GET/POST /api/schedules`, `POST /api/schedules/{id}/run`, `…/toggle` |
 | MCP | `GET/POST /api/mcp-servers`, `…/toggle`, `…/test`, `GET/POST /api/agents/{id}/tools` |
-| Memory | `GET/POST /api/agents/{id}/memories`, `GET/PUT /api/agents/{id}/core`, `…/reflect`, `…/recall` |
 | Skills | `GET/POST /api/skills`, `PUT/DELETE /api/skills/{slug}` |
 | Artifacts | `GET/POST /api/artifacts`, `PUT/DELETE /api/artifacts/{id}` |
 | Settings | `GET/PUT /api/settings`, `GET /api/catalog`, `GET/PUT /api/providers` |
@@ -247,7 +246,7 @@ Hash-tabanlı routing (`app/url.ts`): `#/w/{workspaceId}/{view}[/{entityId}][?k=
 #/w/WS1/settings/providers→ ayarlar kategorisi
 #/w/WS1/flows/FLW1        → flow editörü
 ```
-View'lar: `chat · executions · agents · network · board · schedules · memory · flows ·
+View'lar: `chat · executions · agents · network · board · schedules · flows ·
 artifacts · skills · market · budget · logs · workspace · settings`.
 
 **Hash query (alt-durum).** Şu an hiçbir view alt-durumunu hash query'sinde
@@ -296,9 +295,8 @@ hedefle (ör. `[data-testid="schedule-row"][data-schedule-id="SCH1"]`).
 | **Settings — tools/MCP** | `tools-mcp-servers`, `tools-search-input`, `tool-detail-toggle`, `mcp-server-{name,command,args,url}-input`, `mcp-server-transport-select`, `mcp-server-add` | `tools-group-toggle` (`data-group`), `tools-list-item` (`data-tool-name`), `mcp-server-{test,toggle,delete}` (`data-server-id`) |
 | **Settings — hooks** | `hook-create`, `hook-{event-select,matcher-input,command-input,timeout-input,save}` (`data-hook-id`=düzenlenen) | `hook-toggle`, `hook-delete` (`data-hook-id`) |
 | **Skills** | `skills-create`, `skills-rescan`, `skill-detail-{edit,toggle-access,toggle-summary,reveal,delete}` | `skills-list-item` (`data-skill-slug`) |
-| **Market** | `market-import` (skill içe aktar), `market-memory-agent` (memory hedef ajan), `market-registries` (kaynaklar modalını aç), `registry-url`/`registry-name`/`registry-add` (kaynak ekle), `registry-item` (kayıt satırı) | `market-kind-tab` (`data-kind`; sol menü, 7 tür), `market-pack`, `market-detail-modal` (popup), `market-pack-install` (`data-pack-id`), `market-registries-modal` |
+| **Market** | `market-import` (skill içe aktar), `market-registries` (kaynaklar modalını aç), `registry-url`/`registry-name`/`registry-add` (kaynak ekle), `registry-item` (kayıt satırı) | `market-kind-tab` (`data-kind`; sol menü, 7 tür), `market-pack`, `market-detail-modal` (popup), `market-pack-install` (`data-pack-id`), `market-registries-modal` |
 | **Secrets** | `secret-{name-input,description-input,value-input,save}` | `secret-{reveal,copy,delete}` (`data-secret-name`) |
-| **Memory** | `memory-content-input`, `memory-add-document`, `memory-reflect` | `memory-filter` (`data-filter`), `memory-card-expand`, `memory-delete` (`data-memory-id`) |
 | **Artifacts** | `artifacts-{search-input,create-new}`, `artifact-detail-{edit,copy,reveal,delete}`, `artifact-edit-{title-input,kind-select,content-textarea,save}` | `artifacts-filter` (`data-origin`), `artifacts-list-item` (`data-artifact-id`) |
 | **Flows** | `flow-canvas-auto-layout`, `flow-canvas-root` | — |
 
@@ -366,7 +364,7 @@ turlara bir **açılış (boot) sırası** dayatılır: yönelim → hatırlama 
 
 - **API auth yok:** Ağa açılırsa (`TIONHARNESS_ADDR=0.0.0.0`) öncesinde token/proxy katmanı şart.
 - **UI seçici kapsamı:** Çekirdek akışlar + tüm panel formları (Agents/Tasks/Schedules/Settings/
-  Skills/Market/Secrets/Memory/Artifacts/Flows) testid taşır (Faz 1+2+3, ~183 testid). Yeni panel/
+  Skills/Market/Secrets/Artifacts/Flows) testid taşır (Faz 1+2+3, ~183 testid). Yeni panel/
   form eklenince aynı konvansiyonu uygula (statik=`{panel}-{eylem}`, liste=sabit testid+`data-*-id`).
 - **Tercih:** Yeni ajan-erişimli akış eklerken önce API endpoint'i sağla; UI'a testid eklemeyi
   ikincil tut.
