@@ -58,10 +58,10 @@ describe('thinking options', () => {
         available: true,
         models: [
           {
-            id: 'deepseek-v4-flash',
-            label: 'DeepSeek V4 Flash',
-            thinkingClass: 'non-thinking',
-            thinkingTiers: ['off'],
+            id: 'deepseek-flash',
+            label: 'DeepSeek V4.1 Flash',
+            thinkingClass: 'effort',
+            thinkingTiers: ['off', 'low', 'high', 'max'],
           },
         ],
       },
@@ -88,7 +88,7 @@ describe('thinking options', () => {
     }
   })
 
-  it('disables unsupported upper tiers for legacy and non-thinking catalog models', () => {
+  it('disables unsupported upper tiers for legacy catalog models', () => {
     const catalog: CatalogEntry[] = [
       {
         id: 'claude-cli',
@@ -106,6 +106,18 @@ describe('thinking options', () => {
           },
         ],
       },
+    ]
+
+    for (const options of [agentOptions, chatOptions]) {
+      const filtered = thinkingOptionsForModel(options, catalog, 'claude-cli', 'legacy-model', '')
+      for (const tier of ['xhigh', 'max', 'ultra']) {
+        expect(filtered.find((option) => option.value === tier)?.disabled).toBe(true)
+      }
+    }
+  })
+
+  it('folds in-between tiers on effort-class models and greys off where reasoning cannot stop', () => {
+    const catalog: CatalogEntry[] = [
       {
         id: 'deepseek',
         label: 'DeepSeek',
@@ -115,24 +127,48 @@ describe('thinking options', () => {
         available: true,
         models: [
           {
-            id: 'deepseek-v4-flash',
-            label: 'DeepSeek V4 Flash',
-            thinkingClass: 'non-thinking',
-            thinkingTiers: ['off'],
+            id: 'deepseek-flash',
+            label: 'DeepSeek V4.1 Flash',
+            thinkingClass: 'effort',
+            thinkingTiers: ['off', 'low', 'high', 'max'],
+          },
+        ],
+      },
+      {
+        id: 'zai',
+        label: 'Z.ai GLM',
+        needsKey: true,
+        allowCustomModel: true,
+        appliesToolHooks: true,
+        available: true,
+        models: [
+          {
+            id: 'glm-5.3',
+            label: 'GLM-5.3',
+            thinkingClass: 'effort',
+            thinkingTiers: ['low', 'high', 'max'],
           },
         ],
       },
     ]
 
-    for (const [provider, model, options] of [
-      ['claude-cli', 'legacy-model', agentOptions],
-      ['deepseek', 'deepseek-v4-flash', chatOptions],
-    ] as const) {
-      const filtered = thinkingOptionsForModel(options, catalog, provider, model, '')
-      for (const tier of ['xhigh', 'max', 'ultra']) {
-        expect(filtered.find((option) => option.value === tier)?.disabled).toBe(true)
-      }
+    const flash = thinkingOptionsForModel(agentOptions, catalog, 'deepseek', 'deepseek-flash', '')
+    const tier = (value: string) => flash.find((option) => option.value === value)
+    for (const value of ['off', 'low', 'high', 'max']) {
+      expect(tier(value)?.disabled).not.toBe(true)
     }
+    expect(tier('medium')?.disabled).toBe(true)
+    expect(tier('medium')?.hint).toContain('Yüksek')
+    for (const value of ['xhigh', 'ultra']) {
+      expect(tier(value)?.disabled).toBe(true)
+      expect(tier(value)?.hint).toContain('Maks')
+    }
+
+    const glm = thinkingOptionsForModel(chatOptions, catalog, 'zai', 'glm-5.3', '')
+    const off = glm.find((option) => option.value === 'off')
+    expect(off?.disabled).toBe(true)
+    expect(off?.hint).toContain('kapatılamaz')
+    expect(glm.find((option) => option.value === 'max')?.disabled).not.toBe(true)
   })
 
   it('explains the ultra tier on native-effort providers as a max fallback, not high', () => {

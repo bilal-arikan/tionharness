@@ -43,13 +43,10 @@ func IsValidThinkingLevel(level string) bool {
 // representable stored state even though the picker keeps it greyed out to avoid
 // promising the user that reasoning can be turned off. Legacy rows migrated from
 // a native provider carry "off" (db.LegacyThinkingLevelFor is provider-based, not
-// model-based), and rejecting it would make those agents unsaveable.
+// model-based), and rejecting it would make those agents unsaveable. The effort
+// class widens the stored set the same way (see coarseEffortStorable).
 func StorableThinkingLevels(model string) []string {
-	tiers := ThinkingTiersFor(model)
-	if ThinkingClass(model) != "always-on" {
-		return tiers
-	}
-	return append([]string{"off"}, tiers...)
+	return StorableThinkingLevelsFor("", model)
 }
 
 // StorableThinkingLevelsFor applies provider-aware model classification before
@@ -58,12 +55,17 @@ func StorableThinkingLevels(model string) []string {
 // legacy models to the provider-neutral classifier.
 func StorableThinkingLevelsFor(providerKind, model string) []string {
 	class := ThinkingClassForProvider(providerKind, model)
+	if class == "effort" {
+		// Wider than the offered ramp: the in-between tiers fold onto a real
+		// effort level (see coarseEffortStorable).
+		return coarseEffortStorable()
+	}
 	tiers := ThinkingTiersForProvider(providerKind, model)
 	// The Messages-API transports do not OFFER "ultra" (the effort enum stops at
 	// "max"), but an agent may already store it — it was picked on a CLI provider,
 	// or the provider was switched afterwards. Rejecting it would make those rows
 	// unsaveable, so it stays a legal stored state that maps to the ceiling.
-	if usesNativeEffort(providerKind) && containsTier(thinkingTiersForClass(class), "ultra") {
+	if usesNativeEffort(providerKind) && containsTier(thinkingTiersForClass(class, model), "ultra") {
 		tiers = append(tiers, "ultra")
 	}
 	if class != "always-on" {
@@ -119,6 +121,10 @@ func ValidateThinkingLevelForProvider(providerKind, model, level string) error {
 //     Thinking is requested as {type:"adaptive"} and depth is steered with
 //     output_config.effort. Within this class Fable/Mythos are always-on:
 //     an explicit {type:"disabled"} also 400s, so "off" omits the field.
+//   - Coarse-effort class (DeepSeek V4.x, GLM-5.3 — see thinking_effort.go):
+//     the endpoint ignores budget_tokens, so depth rides output_config.effort
+//     (low/high/max) next to the enabled+budget shape; "off" is an explicit
+//     {type:"disabled"}, or the lowest effort where reasoning cannot stop.
 //   - Everything else (Opus/Sonnet 4.6 and older, Haiku, and non-Claude
 //     endpoints that speak the Anthropic protocol such as MiniMax): the legacy
 //     enabled+budget shape still applies.
@@ -255,11 +261,12 @@ func SupportsProgrammaticTools(model string) bool {
 //     400s and "off" merely omits the field, so "off" is dropped.
 //   - "adaptive": the full effort ramp incl. xhigh/max, reaching the model as
 //     output_config.effort (Opus 4.7/4.8, Sonnet 5).
-//   - "non-thinking": the model does not reason at all, so only "off" is
-//     meaningful (DeepSeek V4 Flash — "düşünmeyen mod").
+//   - "effort": a three-level low/high/max effort enum (DeepSeek V4.x incl.
+//     V4.1 Flash, GLM-5.3 — UsesCoarseEffort); medium/xhigh fold onto the
+//     nearest level, and "off" is dropped where reasoning cannot stop (GLM-5.3).
 //   - "legacy": a concrete model that reasons but has no distinct xhigh/max wire
 //     form, so those clamp down to high (legacy Claude, MiniMax — whose
-//     reasoning_effort tops out at "high" — DeepSeek Pro, …).
+//     reasoning_effort tops out at "high" — GLM-5.2 and older, …).
 //   - "alias": a bare family alias / custom / empty id ("opus", "sonnet",
 //     "Varsayılan") whose concrete model is unknown here; offered the full ramp
 //     and clamped provider-side.
@@ -269,8 +276,10 @@ func ThinkingClass(model string) string {
 		return "always-on"
 	case UsesAdaptiveThinking(model):
 		return "adaptive"
-	case isNonThinking(model):
-		return "non-thinking"
+	case UsesCoarseEffort(model):
+		// Checked before hasConcreteVersion: "deepseek-flash" carries no digit
+		// and would otherwise land in the alias class.
+		return "effort"
 	case hasConcreteVersion(model):
 		return "legacy"
 	default:
@@ -299,21 +308,13 @@ func codexEffortModel(model string) bool {
 	return strings.HasPrefix(m, "gpt-5") || strings.HasPrefix(m, "gpt-6")
 }
 
-// isNonThinking reports whether the model has no extended-reasoning mode at all,
-// so every tier but "off" is a no-op. DeepSeek's V4 Flash tier is the sole
-// current case; its Pro sibling reasons and is left in the "legacy" class.
-func isNonThinking(model string) bool {
-	m := strings.ToLower(model)
-	return strings.Contains(m, "deepseek") && strings.Contains(m, "flash")
-}
-
 // ThinkingTiersFor returns the reasoning tiers a model meaningfully supports, as
 // the stable tokens the UI pickers use: "off","low","medium","high","xhigh",
 // "max","ultra". The set is derived from ThinkingClass so the composer / agent
 // pickers can grey out tiers that would be a silent no-op on the selected model
 // (they are shown disabled with a reason, not hidden).
 func ThinkingTiersFor(model string) []string {
-	return thinkingTiersForClass(ThinkingClass(model))
+	return thinkingTiersForClass(ThinkingClass(model), model)
 }
 
 // ThinkingTiersForProvider returns the effective tier ramp for one provider
@@ -322,7 +323,7 @@ func ThinkingTiersFor(model string) []string {
 // EffortForThinkingBudget), so offering it would promise a depth the wire format
 // cannot carry.
 func ThinkingTiersForProvider(providerKind, model string) []string {
-	tiers := thinkingTiersForClass(ThinkingClassForProvider(providerKind, model))
+	tiers := thinkingTiersForClass(ThinkingClassForProvider(providerKind, model), model)
 	if usesNativeEffort(providerKind) {
 		tiers = withoutTier(tiers, "ultra")
 	}
@@ -353,14 +354,16 @@ func withoutTier(tiers []string, drop string) []string {
 	return out
 }
 
-func thinkingTiersForClass(class string) []string {
+// thinkingTiersForClass returns the offered ramp for a class. model is consulted
+// only by the effort class, whose ramp loses "off" on forced-thinking models.
+func thinkingTiersForClass(class, model string) []string {
 	switch class {
 	case "always-on":
 		return []string{"low", "medium", "high", "xhigh", "max", "ultra"}
 	case "adaptive", "alias":
 		return []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
-	case "non-thinking":
-		return []string{"off"}
+	case "effort":
+		return coarseEffortTiers(model)
 	default: // legacy
 		return []string{"off", "low", "medium", "high"}
 	}

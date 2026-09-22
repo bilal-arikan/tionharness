@@ -261,35 +261,55 @@ var priceTable = map[string]map[string]Price{
 		"~typesafe/jev-latest": {InputPerMTok: 0.042, OutputPerMTok: 0},
 	},
 	// Z.ai GLM family (Anthropic-mode transport). Official Z.ai list prices per 1M
-	// tokens (2026-08; GLM-5.2 = $1.40/$4.40, cached input $0.26 → read mult ~0.19).
-	// Anthropic-protocol endpoint bills cache_control breakpoints, hence the write
-	// mult. IDs evolve → unlisted models fall through to unpriced.
+	// tokens, verified 2026-09-22 against docs.z.ai/guides/overview/pricing:
+	//
+	//	                input   cached input      output
+	//	GLM-5.3         $1.40   $0.26  (~0.19×)   $4.40
+	//	GLM-5.3-Flash   $0.15   $0.03  (0.20×)    $0.50
+	//	GLM-5.3-FlashX  $0.37   $0.075 (~0.20×)   $1.25
+	//	GLM-5.2 / 5.1   $1.40   $0.26  (~0.19×)   $4.40
+	//	GLM-5           $1.00   $0.20  (0.20×)    $3.20
+	//	GLM-4.7         $0.60   $0.11  (~0.18×)   $2.20
+	//	GLM-4.7-Flash   free
+	//
+	// GLM-5.1, GLM-5 and GLM-4.7-Flash were listed lower here before (0.97/3.04,
+	// 0.60/1.92, 0.06/0.40); the published rates above supersede them. Cached-input
+	// storage is "limited-time free". The Anthropic-protocol endpoint bills
+	// cache_control breakpoints, hence the write mult. IDs evolve → unlisted models
+	// fall through to unpriced.
 	"zai": {
-		"glm-5.2":       {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-5.1":       {InputPerMTok: 0.97, OutputPerMTok: 3.04, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-5":         {InputPerMTok: 0.60, OutputPerMTok: 1.92, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-4.7":       {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
-		"glm-4.7-flash": {InputPerMTok: 0.06, OutputPerMTok: 0.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.3":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.3-flash":  {InputPerMTok: 0.15, OutputPerMTok: 0.50, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-5.3-flashx": {InputPerMTok: 0.37, OutputPerMTok: 1.25, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-5.2":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.1":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5":          {InputPerMTok: 1.00, OutputPerMTok: 3.20, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-4.7":        {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
+		"glm-4.7-flash":  {InputPerMTok: 0, OutputPerMTok: 0},
 	},
 	// DeepSeek V4 family (first-party OpenAI-compatible endpoint). DeepSeek's
 	// context caching is automatic with no write premium and a deep read discount,
 	// reported via prompt_cache_hit_tokens (see oaiUsage.toUsage). IDs evolve →
 	// unlisted models fall through to unpriced.
 	//
-	// Prices per 1M tokens, effective 2026-08-16 16:00 UTC (the price hike that
-	// ended the flat rate). Billing is now peak/off-peak: peak is 01:00–04:00 and
-	// 06:00–10:00 UTC (7h/day), off-peak is everything else and costs half.
-	// This table is time-independent, so it tracks the OFF-PEAK (regular) rate —
-	// the majority of the day. Turns that land in a peak window are therefore
+	// Prices per 1M tokens, verified 2026-09-22 against
+	// api-docs.deepseek.com/quick_start/pricing. Billing is peak/off-peak (since
+	// 2026-08-16): peak is 01:00–04:00 and 06:00–10:00 UTC on weekdays (Chinese
+	// public holidays excluded), off-peak is everything else and costs half. This
+	// table is time-independent, so it tracks the OFF-PEAK (regular) rate — the
+	// majority of the week. Turns that land in a peak window are therefore
 	// under-reported by 2×; a time-aware Price would be needed to fix that.
 	//
-	//	          off-peak (this table)   peak (2×)     cache-hit input (off-peak)
-	//	V4 Flash  $0.22 / $0.66           $0.44/$1.32   $0.007   (~0.032× input)
-	//	V4 Pro    $0.66 / $1.98           $1.32/$3.96   $0.022   (~0.033× input)
+	//	               off-peak (this table)   peak (2×)     cache-hit input (off-peak)
+	//	V4.1 Flash     $0.15 / $0.60           $0.30/$1.20   $0.003   (0.02× input)
+	//	V4 Pro (0813)  $0.66 / $1.98           $1.32/$3.96   $0.022   (~0.033× input)
 	//
-	// The deepseek-anthropic kind shares this table via PriceFor.
+	// V4.1 Flash (2026-09-10) replaced V4 Flash; the old "deepseek-v4-flash" name
+	// is routed to it and billed at V4.1 Flash rates, so both ids carry the same
+	// price. The deepseek-anthropic kind shares this table via PriceFor.
 	"deepseek": {
-		"deepseek-v4-flash": {InputPerMTok: 0.22, OutputPerMTok: 0.66, CacheReadMultOverride: 0.032},
+		"deepseek-flash":    {InputPerMTok: 0.15, OutputPerMTok: 0.60, CacheReadMultOverride: 0.02},
+		"deepseek-v4-flash": {InputPerMTok: 0.15, OutputPerMTok: 0.60, CacheReadMultOverride: 0.02},
 		"deepseek-v4-pro":   {InputPerMTok: 0.66, OutputPerMTok: 1.98, CacheReadMultOverride: 0.033},
 	},
 	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to

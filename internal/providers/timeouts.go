@@ -18,18 +18,18 @@ import (
 // concern): a reasoning model on an OpenAI-compatible endpoint — DeepSeek V4 Pro,
 // served via the shared OpenAICompat client — needs the long budget without
 // speaking the adaptive-thinking protocol. Every adaptive-thinking model also
-// qualifies (a single Fable/Opus request can think for minutes).
+// qualifies (a single Fable/Opus request can think for minutes), and so does the
+// coarse-effort class: V4.1 Flash reasons at up to "max" with a 384K output
+// ceiling, and one max-effort GLM-5.3 call has been measured at over three
+// minutes (Z.ai itself recommends a 50-minute client timeout).
 func LongRequestModel(model string) bool {
-	if UsesAdaptiveThinking(model) {
+	if UsesAdaptiveThinking(model) || UsesCoarseEffort(model) {
 		return true
 	}
-	m := strings.ToLower(model)
-	for _, s := range []string{"deepseek-v4-pro", "deepseek-reasoner", "-reasoner"} {
-		if strings.Contains(m, s) {
-			return true
-		}
-	}
-	return false
+	// The DeepSeek V4 ids are covered by UsesCoarseEffort above; "-reasoner"
+	// keeps catching reasoning slugs (deepseek-reasoner and the like) on other
+	// OpenAI-compatible endpoints.
+	return strings.Contains(strings.ToLower(model), "-reasoner")
 }
 
 // RequestTimeoutSecsFor returns the model-class default per-request budget in

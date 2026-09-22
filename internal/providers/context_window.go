@@ -19,7 +19,7 @@ const (
 	windowHaiku            = 200_000   // Haiku 4.5
 	windowClaudeOther      = 200_000   // generic Claude fallback (conservative)
 	windowMiniMax          = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
-	windowDeepSeek         = 1_000_000 // DeepSeek V4 family ("1M context")
+	windowDeepSeek         = 1_000_000 // DeepSeek V4 / V4.1 family ("1M context")
 	windowGemini           = 1_000_000 // Gemini long-context family
 	// The OpenAI GPT-5.6 line is tiered too: Sol and Terra ship ~1.05M
 	// (1_048_576) while Luna stays at 400K. GPT-6 Astra ships the same 1.05M
@@ -32,12 +32,13 @@ const (
 	windowGPTLarge = 1_048_576 // GPT-5.6 Sol / Terra, GPT-6 Astra
 	windowGPTLuna  = 400_000   // GPT-5.6 Luna
 	windowGPTOther = 272_000   // other gpt-5.x / codex slugs (CLI fallback)
-	// The GLM (Z.ai) line is tiered as well: glm-5.2 and glm-5.3 ship a 1M window
-	// while every other GLM slug (glm-5, glm-5.1, glm-5-turbo, glm-4.7, glm-4.6)
-	// stays at 200K. Expressed as 1_000_000 rather than 1_048_576 because docs.z.ai
+	// The GLM (Z.ai) line is tiered as well: glm-5.2 and the glm-5.3 family
+	// (glm-5.3, glm-5.3-flash, glm-5.3-flashx) ship a 1M window while every other
+	// GLM slug (glm-5, glm-5.1, glm-5-turbo, glm-4.7, glm-4.6) stays at 200K.
+	// Expressed as 1_000_000 rather than 1_048_576 because docs.z.ai
 	// quotes a round "1M", exactly like the MiniMax/DeepSeek/Gemini entries above —
 	// only the GPT-5.6 large tier has a documented exact 1_048_576.
-	windowGLMLarge = 1_000_000 // glm-5.2 / glm-5.3
+	windowGLMLarge = 1_000_000 // glm-5.2 / glm-5.3 (+ -flash / -flashx)
 	windowGLMOther = 200_000   // glm-5 / 5.1 / 5-turbo / 4.7 / 4.6
 )
 
@@ -55,7 +56,7 @@ const (
 	maxOutClaudeCapable = 32_768 // Opus / Sonnet 4.x / Fable 5 (real ceiling 64–128K)
 	maxOutClaudeSmall   = 16_384 // Haiku / generic Claude
 	maxOutMiniMax       = 32_768 // MiniMax M-series (M3 ceiling ≈ 512K)
-	maxOutDeepSeek      = 32_768 // DeepSeek V4 family (real ceiling 384K; kept well below)
+	maxOutDeepSeek      = 32_768 // DeepSeek V4 / V4.1 family (real ceiling 384K; kept well below)
 	maxOutGemini        = 8_192  // Gemini family (conservative)
 	// GPT-5.6's real ceiling is 128K output for every tier, so a single family
 	// value is enough; 32_768 keeps the same safety margin as the Claude-capable
@@ -94,7 +95,8 @@ func glmFamily(m string) bool { return strings.Contains(m, "glm") }
 // Matching is on the full "glm-5.2"/"glm-5.3" token, never a "glm-5" prefix: the
 // prefix would swallow 5.2/5.3 into the 200K tier (or, checked the other way,
 // promote plain glm-5 / glm-5.1 to 1M). Both mistakes are silent, so this stays
-// an explicit two-value check.
+// an explicit two-value check. The -flash / -flashx tiers of 5.3 share its 1M
+// window and match through the "glm-5.3" token.
 func glmLargeWindow(m string) bool {
 	return strings.Contains(m, "glm-5.2") || strings.Contains(m, "glm-5.3")
 }

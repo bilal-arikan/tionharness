@@ -33,6 +33,10 @@ type OpenAICompat struct {
 	// request's ThinkingBudget) so reasoning-capable models honour the agent's
 	// thinking level. Off by default: many endpoints 400 on an unknown param.
 	reasoning bool
+	// thinkingToggle, when true, sends an explicit thinking {type} switch on
+	// every request (see WithThinkingToggle) — for endpoints that reason by
+	// default, such as DeepSeek V4.x.
+	thinkingToggle bool
 	// cacheMode is "native" | "auto" | "none" | "". "native" attaches an
 	// Anthropic-style cache_control breakpoint to the system prefix (forwarded by
 	// proxies like OpenRouter to Anthropic/Gemini backends).
@@ -140,9 +144,15 @@ func reasoningEffortFor(budget int) string {
 
 // effortFor returns the reasoning_effort to send for this request: "" unless the
 // provider declared reasoning support AND the request carries a thinking budget.
-func (m *OpenAICompat) effortFor(req Request) string {
+// Coarse-effort models (DeepSeek V4.x, GLM-5.3) only know low/high/max, so their
+// budget is folded onto that enum; forced-thinking models get "low" even at a
+// zero budget, the closest they come to "off".
+func (m *OpenAICompat) effortFor(req Request, model string) string {
 	if !m.reasoning {
 		return ""
+	}
+	if UsesCoarseEffort(model) {
+		return CoarseEffortForBudget(req.ThinkingBudget, ForcedThinking(model))
 	}
 	return reasoningEffortFor(req.ThinkingBudget)
 }
@@ -202,6 +212,7 @@ type oaiReq struct {
 	Stream          bool           `json:"stream,omitempty"`
 	StreamOptions   *oaiStreamOpts `json:"stream_options,omitempty"`
 	ReasoningEffort string         `json:"reasoning_effort,omitempty"`
+	Thinking        *oaiThinking   `json:"thinking,omitempty"`
 }
 
 type oaiStreamOpts struct {
@@ -213,6 +224,9 @@ type oaiStreamChunk struct {
 	Choices []struct {
 		Delta struct {
 			Content string `json:"content"`
+			// ReasoningContent is the separate reasoning channel of thinking-mode
+			// endpoints (DeepSeek, Z.ai) — never part of the visible answer.
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -260,8 +274,9 @@ func (u oaiUsage) toUsage() Usage {
 type oaiResp struct {
 	Choices []struct {
 		Message struct {
-			Content   string        `json:"content"`
-			ToolCalls []oaiToolCall `json:"tool_calls"`
+			Content          string        `json:"content"`
+			ReasoningContent string        `json:"reasoning_content"`
+			ToolCalls        []oaiToolCall `json:"tool_calls"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -299,7 +314,8 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 		Messages:        toOAIMessages(req, m.cachesSystem()),
 		MaxTokens:       req.MaxTokens,
 		Tools:           toOAITools(req.Tools),
-		ReasoningEffort: m.effortFor(req),
+		ReasoningEffort: m.effortFor(req, model),
+		Thinking:        m.thinkingSwitch(req, model),
 	}
 	headers := m.authHeaders()
 
@@ -341,8 +357,10 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 	}
 
 	// Strip any <think>…</think> reasoning out of the visible text into a
-	// thinking trace step (MiniMax and some other OpenAI-compat models embed it).
+	// thinking trace step (MiniMax and some other OpenAI-compat models embed it);
+	// endpoints with a separate reasoning_content channel lead that trace.
 	text, think := splitThink(choice.Message.Content)
+	think = joinNonEmpty(choice.Message.ReasoningContent, think)
 	var trace []TraceStep
 	if think != "" {
 		trace = []TraceStep{{Kind: "thinking", Text: think}}
@@ -380,7 +398,8 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 		MaxTokens:       req.MaxTokens,
 		Stream:          true,
 		StreamOptions:   &oaiStreamOpts{IncludeUsage: true},
-		ReasoningEffort: m.effortFor(req),
+		ReasoningEffort: m.effortFor(req, model),
+		Thinking:        m.thinkingSwitch(req, model),
 	}
 	headers := m.authHeaders()
 
@@ -408,6 +427,9 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 			return true // skip an unparseable chunk rather than abort
 		}
 		if len(ch.Choices) > 0 {
+			if rc := ch.Choices[0].Delta.ReasoningContent; rc != "" {
+				emit("", rc)
+			}
 			if c := ch.Choices[0].Delta.Content; c != "" {
 				// Route <think>…</think> reasoning to a live thinking block.
 				emit(filt.feed(c))

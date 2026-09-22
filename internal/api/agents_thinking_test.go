@@ -86,7 +86,7 @@ func TestCreateAgentRejectsUnsupportedThinkingLevel(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 
 	rec := postAgent(t, s, wsp,
-		`{"name":"Ada","provider":"claude-cli","model":"deepseek-v4-flash","thinkingLevel":"high"}`)
+		`{"name":"Ada","provider":"claude-cli","model":"claude-opus-4-6","thinkingLevel":"xhigh"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -94,9 +94,9 @@ func TestCreateAgentRejectsUnsupportedThinkingLevel(t *testing.T) {
 		t.Fatalf("error should list the supported tiers: %s", rec.Body.String())
 	}
 
-	// The same model with the one tier it does support goes through.
+	// The same model with a tier it does support goes through.
 	ok := postAgent(t, s, wsp,
-		`{"name":"Ada","provider":"claude-cli","model":"deepseek-v4-flash","thinkingLevel":"off"}`)
+		`{"name":"Ada","provider":"claude-cli","model":"claude-opus-4-6","thinkingLevel":"high"}`)
 	if ok.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", ok.Code, ok.Body.String())
 	}

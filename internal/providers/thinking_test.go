@@ -82,10 +82,18 @@ func TestThinkingTiersFor(t *testing.T) {
 			t.Errorf("alias %q should get full ramp %v: %v", m, fullRamp, full)
 		}
 	}
-	// Non-thinking (DeepSeek Flash): only "off".
-	flash := ThinkingTiersFor("deepseek-v4-flash")
-	if len(flash) != 1 || flash[0] != "off" {
-		t.Errorf("deepseek flash should offer only off: %v", flash)
+	// Coarse effort (DeepSeek V4.x): off plus the three real levels.
+	effort := []string{"off", "low", "high", "max"}
+	for _, m := range []string{"deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"} {
+		if got := ThinkingTiersFor(m); !slices.Equal(got, effort) {
+			t.Errorf("%s should offer %v: %v", m, effort, got)
+		}
+	}
+	// Forced thinking (GLM-5.3 family): the same levels without "off".
+	for _, m := range []string{"glm-5.3", "glm-5.3-flash", "glm-5.3-flashx"} {
+		if got := ThinkingTiersFor(m); !slices.Equal(got, []string{"low", "high", "max"}) {
+			t.Errorf("%s should offer low/high/max only: %v", m, got)
+		}
 	}
 }
 
@@ -156,17 +164,23 @@ func TestEffortForThinkingBudgetUltraReportsTheEnumCeiling(t *testing.T) {
 
 func TestThinkingClass(t *testing.T) {
 	cases := map[string]string{
-		"claude-fable-5":             "always-on",
-		"mythos-5":                   "always-on",
-		"claude-opus-4-8":            "adaptive",
-		"claude-sonnet-5":            "adaptive",
-		"deepseek-v4-flash":          "non-thinking",
-		"deepseek/deepseek-v4-flash": "non-thinking",
-		"deepseek-v4-pro":            "legacy", // Pro reasons — not lumped with Flash
-		"claude-haiku-4-5":           "legacy",
-		"MiniMax-M3":                 "legacy",
-		"opus":                       "alias",
-		"":                           "alias",
+		"claude-fable-5":               "always-on",
+		"mythos-5":                     "always-on",
+		"claude-opus-4-8":              "adaptive",
+		"claude-sonnet-5":              "adaptive",
+		"deepseek-flash":               "effort", // no digit, still not an alias
+		"deepseek-v4-flash":            "effort", // routed to V4.1 Flash, which reasons
+		"deepseek/deepseek-v4-flash":   "effort",
+		"deepseek-v4-pro":              "effort",
+		"glm-5.3":                      "effort",
+		"glm-5.3-flash":                "effort",
+		"z-ai/glm-5.3":                 "effort",
+		"glm-5.2":                      "legacy", // can disable reasoning; effort not verified
+		"deepseek-r1-distill-qwen-32b": "legacy", // local distill, not the hosted V4 wire
+		"claude-haiku-4-5":             "legacy",
+		"MiniMax-M3":                   "legacy",
+		"opus":                         "alias",
+		"":                             "alias",
 	}
 	for model, want := range cases {
 		if got := ThinkingClass(model); got != want {

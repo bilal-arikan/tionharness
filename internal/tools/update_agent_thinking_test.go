@@ -101,13 +101,13 @@ func TestUpdateAgentToolRejectsBadThinkingLevel(t *testing.T) {
 		})
 	}
 
-	// deepseek-flash has no extended-reasoning mode at all (non-thinking class),
-	// so every tier but "off" is a silent no-op and must be refused.
+	// deepseek-flash takes a low/high/max effort (effort class); "ultra" is a
+	// CLI-only depth its endpoints cannot carry, so it must be refused.
 	t.Run("model class", func(t *testing.T) {
 		flash := newThinkingAgent(t, d, `{"name":"Flash","provider":"deepseek","model":"deepseek-flash","thinkingLevel":"off"}`)
-		_, err := update.Call(ctx, json.RawMessage(`{"id":"`+flash+`","thinkingLevel":"high"}`))
+		_, err := update.Call(ctx, json.RawMessage(`{"id":"`+flash+`","thinkingLevel":"ultra"}`))
 		if err == nil {
-			t.Fatal("expected an error for high on a non-thinking model")
+			t.Fatal("expected an error for ultra on an effort-class model")
 		}
 		if !strings.Contains(err.Error(), "deepseek-flash") {
 			t.Fatalf("error should name the model, got: %v", err)

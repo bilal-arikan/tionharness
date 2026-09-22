@@ -1,6 +1,6 @@
 # Faz — Zengin Sohbet Arayüzü (Chat UX)
 
-> **Özet (2026-09-06):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
+> **Özet (2026-09-22):** Sohbet ekranının zengin render katmanını anlatır (external-agent-oss'tan ilham): markdown, tool kullanım kartları (`ActivityCard`/`DiffCard`), düşünme adımları, adım-adım SSE streaming (`TurnStep` izi, native + claude-cli iki yol), görsel/galeri/mermaid/HTML-preview render, tur-içi crash kurtarma (`inflight.json`) ve composer üstü yüzen paneller (todo/ask/permission/worker-bekleme). Durum: **uygulandı, canlı ve genişlemeye devam ediyor** — en son eklenenler `compaction` adım türü (2026-08-30), DeepSeek V4.x ve GLM-5.3 için kaba-effort (`effort`) düşünme sınıfı — `low/high/max`, Anthropic-uyumlu uçta `output_config.effort`, GLM-5.3'te kapatılamayan düşünme (2026-09-22), ajan aksiyonu renk kodlaması (2026-09-02), `ultra` düşünme kademesinin native (Messages API) yolda artık sunulmaması — effort enum'u `max`'ta biter (2026-09-06) — başlık yazımının oturumun "son aktivite" damgasına artık dokunmaması (yeniden adlandırma oturumu sidebar'da öne taşımaz, 2026-09-06) ve kuyruk tepsisindeki (`PendingTray`) canlı yönlendirme butonunun gerçek steerability'ye bağlanması — backend `steerable` bayrağını `queue_update` olayıyla yayınlıyor, desteklenmeyen turda buton pasif ve sebebi görünür (2026-09-22, `_Docs/59`) ve composer'da **Ctrl/Cmd+Enter = "turu kes ve hemen gönder"** kısayolu — akış sürerken "Kes" butonuyla aynı yol (ek dosyalar taşınır), boştayken normal gönderim, otomatik-tamamlama açıkken menüyü seçim yapmadan kapatır, IME koruması tüm Enter yollarında; iki sınırı var: sunucu tarafında atomik kesme yok (stop + send iki gidiş-dönüş → boşalan yuvayı kuyruktaki başka mesaj veya otomatik tur kapabilir) ve claude-cli'da stop sıcak süreci yıktığı için kesilen turun yerine koşan tur soğuk başlangıç öder (2026-09-22). En önemli kararlar: canlı adım kartı sözleşmesi (Running/Append/tombstone), sunucu-tarafı iz kırpma + talep üzerine tam iz getirme (token/bant genişliği tasarrufu), transkript satırlarının unmount edilmemesi (virtualizer yerine `content-visibility`). Dayandığı dosyalar: `internal/agent/trace.go`, `internal/agent/toolloop.go`, `internal/api/chat_stream.go`, `frontend/src/components/chat/`.
 
 > Sohbet ekranı, [external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > referans alınarak External Agent benzeri zengin bir render katmanına kavuşturuldu:
@@ -1393,9 +1393,30 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   modele göre değişir. Tek doğruluk kaynağı `providers.ThinkingClass(model)` (→ `ThinkingTiersFor`);
   `Catalog()` build'inde her `ModelInfo.ThinkingTiers` (`off/low/medium/high/xhigh/max`) + `ThinkingClass`
   doldurulup `/api/catalog` ile taşınır. **Beş sınıf:** `always-on` (Fable/Mythos → `off` yok, daima
-  düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `non-thinking` (**DeepSeek V4 Flash** →
-  yalnız `off`); `legacy` (somut eski Claude/MiniMax — reasoning_effort tavanı `high` — DeepSeek Pro →
-  `xhigh/max` yok); `alias` (claude-cli `opus`/boş "claude oturum modeli"/özel → tam rampa, provider kırpar).
+  düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `effort` (**DeepSeek V4.x / V4.1 Flash,
+  GLM-5.3 ailesi** → `off/low/high/max`, GLM-5.3'te `off` yok — 2026-09-22'de `non-thinking`
+  sınıfının yerini aldı, aşağıya bakın); `legacy` (somut eski Claude/MiniMax — reasoning_effort
+  tavanı `high` — GLM-5.2 ve öncesi → `xhigh/max` yok); `alias` (claude-cli `opus`/boş "claude
+  oturum modeli"/özel → tam rampa, provider kırpar).
+  **Kaba-effort sınıfı `effort` (2026-09-22):** DeepSeek V4.x (`deepseek-flash` = V4.1 Flash,
+  `deepseek-v4-pro`, V4.1 Flash'a yönlenen eski `deepseek-v4-flash`) ve Z.ai GLM-5.3 ailesi
+  (`glm-5.3`, `glm-5.3-flash`, `glm-5.3-flashx`) derinliği üç kademeli bir effort enum'uyla
+  (`low|high|max`) alır. Bu satıcıların Anthropic-uyumlu uçları `budget_tokens`'ı **yok sayar** —
+  eski enabled+budget biçimi hiçbir şeyi değiştirmiyordu, her istek sunucu varsayılanında
+  koşuyordu (DeepSeek `high`, GLM-5.3 `max`). Artık `thinkingFor` bu modellerde
+  `output_config.effort` gönderir (`coarseEffortThinking`, `anthropic_effort.go`); OpenAI-uyumlu
+  `deepseek` kind'ı `reasoning_effort` + açık `thinking:{type}` anahtarı gönderir
+  (`openai_compat_thinking.go`). `medium`→`high`, `xhigh`/`ultra`→`max` katlanır
+  (`CoarseEffortForBudget`); picker'da `Orta`/`Çok yüksek` soluk gösterilir. **Kapalı:** iki satıcı
+  da varsayılan olarak düşünür. DeepSeek'e açık `{type:"disabled"}` gider — native tool loop bütçe
+  0 ile koştuğundan her araç turu da düşünmesiz gider; aksi halde DeepSeek sonraki araç
+  çağrısında önceki `reasoning_content`'in geri gönderilmesini ister ve 400 döner. GLM-5.3'te
+  düşünme **kapatılamaz** (`disabled` isteği hata verir) → `off` = düşünme alanı yok +
+  `effort:"low"` (`ForcedThinking`); picker `Kapalı`'yı "her zaman düşünür" sebebiyle soluk
+  gösterir. Saklanabilir küme `off..max` (legacy sınıfta sunulmuş `medium` satırları kaydedilebilir
+  kalır; `ultra` hariç). Bu modeller uzun istek bütçesini (600 sn) alır (`LongRequestModel`).
+  OpenAI-uyumlu yanıtlardaki ayrı `reasoning_content` kanalı artık düşünme izine düşer
+  (Complete + Stream).
   **`ultra` native yolda sunulmaz (2026-09-06):** Messages API'de derinlik
   `output_config.effort` ile taşınır ve enum `low|medium|high|xhigh|max` — `ultra` yok. Bu yüzden
   `ThinkingTiersForProvider` `anthropic`/`anthropic-compat` kind'larında rampadan `ultra`'yı
@@ -1407,7 +1428,8 @@ input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposu
   `ultra`'yı gerçek effort değeri olarak geçirmeye devam eder.
   **Gizleme değil pasifleştirme:** desteklenmeyen tiyer butonu gizlenmez, **soluk+disabled** gösterilir
   ve tooltip sebebini yazar (`thinkingTierDisabledReason(cls, tier)` — "her zaman düşünür — kapatılamaz"
-  / "düşünmez" / akıl yürüten sınıflarda `ultra` için "\"Maks\"a (max) düşer" / legacy klamplamasında
+  / effort sınıfında ara kademeler için "\"Yüksek\"e" ya da "\"Maks\"a düşer" / akıl yürüten
+  sınıflarda `ultra` için "\"Maks\"a (max) düşer" / legacy klamplamasında
   "\"Yüksek\"e düşer"). Composer (`ComposerPicker`) ve ajan formu (`OptionPills`) artık
   `disabled` opsiyonlarını destekler; kaynak `thinkingInfoForModel(catalog, provider, model)`. Model
   kataloğda yoksa (özel id) tüm tiyerler aktif; mevcut seçili seviye ve "Oto" her zaman tıklanabilir

@@ -180,13 +180,16 @@ var marketPrices = map[string]map[string]Price{
 		"qwq-plus":             {InputPerMTok: 0.8, OutputPerMTok: 2.4, CacheReadMultOverride: 0.25},
 	},
 	// Z.ai / Zhipu GLM via the OpenAI-compatible endpoint. Official Z.ai list prices
-	// per 1M tokens (2026-08); cached input ~$0.26 on GLM-5.2 → read mult ~0.19.
+	// per 1M tokens (verified 2026-09-22; same rates as the native "zai" kind table).
 	"zhipu-glm": {
+		"glm-5.3":             {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19},
+		"glm-5.3-flash":       {InputPerMTok: 0.15, OutputPerMTok: 0.50, CacheReadMultOverride: 0.20},
+		"glm-5.3-flashx":      {InputPerMTok: 0.37, OutputPerMTok: 1.25, CacheReadMultOverride: 0.20},
 		"glm-5.2":             {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19},
-		"glm-5.1":             {InputPerMTok: 0.97, OutputPerMTok: 3.04, CacheReadMultOverride: 0.19},
-		"glm-5":               {InputPerMTok: 0.60, OutputPerMTok: 1.92, CacheReadMultOverride: 0.19},
+		"glm-5.1":             {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19},
+		"glm-5":               {InputPerMTok: 1.00, OutputPerMTok: 3.20, CacheReadMultOverride: 0.20},
 		"glm-4.7":             {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18},
-		"glm-4.7-flash":       {InputPerMTok: 0.06, OutputPerMTok: 0.40, CacheReadMultOverride: 0.25},
+		"glm-4.7-flash":       {InputPerMTok: 0, OutputPerMTok: 0},
 		"glm-4.6":             {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.25},
 		"glm-4.6-air":         {InputPerMTok: 0.2, OutputPerMTok: 1.1, CacheReadMultOverride: 0.25},
 		"glm-4.5":             {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.25},
@@ -217,18 +220,21 @@ var marketPrices = map[string]map[string]Price{
 		"kimi-thinking-preview": {InputPerMTok: 0.6, OutputPerMTok: 2.5, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
 	},
 	// Z.ai GLM via the Anthropic-compatible endpoint (https://api.z.ai/api/anthropic).
-	// Official Z.ai list prices per 1M tokens (2026-08). Mirrors the native "zai"
-	// kind table; legacy GLM-4.x kept selectable for existing installs.
+	// Official Z.ai list prices per 1M tokens (verified 2026-09-22). Mirrors the
+	// native "zai" kind table; legacy GLM-4.x kept selectable for existing installs.
 	"glm-anthropic": {
-		"glm-5.2":       {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-5.1":       {InputPerMTok: 0.97, OutputPerMTok: 3.04, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-5":         {InputPerMTok: 0.60, OutputPerMTok: 1.92, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-4.7":       {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
-		"glm-4.7-flash": {InputPerMTok: 0.06, OutputPerMTok: 0.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
-		"glm-4.6":       {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
-		"glm-4.5":       {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
-		"glm-4.5-air":   {InputPerMTok: 0.2, OutputPerMTok: 1.1, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
-		"glm-4.5-x":     {InputPerMTok: 1.2, OutputPerMTok: 4.5, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
+		"glm-5.3":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.3-flash":  {InputPerMTok: 0.15, OutputPerMTok: 0.50, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-5.3-flashx": {InputPerMTok: 0.37, OutputPerMTok: 1.25, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-5.2":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.1":        {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5":          {InputPerMTok: 1.00, OutputPerMTok: 3.20, CacheReadMultOverride: 0.20, CacheWriteMultOverride: 1.25},
+		"glm-4.7":        {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
+		"glm-4.7-flash":  {InputPerMTok: 0, OutputPerMTok: 0},
+		"glm-4.6":        {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
+		"glm-4.5":        {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
+		"glm-4.5-air":    {InputPerMTok: 0.2, OutputPerMTok: 1.1, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
+		"glm-4.5-x":      {InputPerMTok: 1.2, OutputPerMTok: 4.5, CacheReadMultOverride: 0.1, CacheWriteMultOverride: 1.25},
 	},
 }
 

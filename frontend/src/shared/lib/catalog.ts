@@ -52,8 +52,15 @@ function thinkingInfoForModel(
 // is inactive on a model of the given class. Called only for tiers the model
 // does NOT support (absent from thinkingTiers); the class decides the wording.
 function thinkingTierDisabledReason(cls: string, tier: string): string {
-  if (cls === 'always-on' && tier === 'off') return 'Bu model her zaman düşünür — kapatılamaz'
-  if (cls === 'non-thinking') return 'Bu model düşünmez (akıl yürütme yok)'
+  // "off" is only missing on the effort class when reasoning cannot stop (GLM-5.3).
+  if ((cls === 'always-on' || cls === 'effort') && tier === 'off')
+    return 'Bu model her zaman düşünür — kapatılamaz'
+  // The effort class (DeepSeek V4.x, GLM-5.3) has three real levels — low/high/
+  // max — and folds the in-between tiers onto the nearest one.
+  if (cls === 'effort')
+    return tier === 'medium'
+      ? 'Bu modelde "Yüksek"e (high) düşer'
+      : 'Bu modelde "Maks"a (max) düşer'
   // On the reasoning classes the only upper tier a model can be missing is
   // "ultra": the Messages API effort enum stops at "max", so it lands on max
   // rather than on the legacy high clamp.

@@ -362,6 +362,9 @@ func applyTaskBudget(model string, budget int, cfg *outputConfig) (*outputConfig
 // explicit {type:"disabled"}, except always-on models (Fable/Mythos) where
 // disabled also 400s and the field is omitted entirely.
 //
+// Coarse-effort models (DeepSeek V4.x, GLM-5.3) carry their depth in
+// output_config.effort instead — see coarseEffortThinking.
+//
 // Legacy models keep enabled+budget_tokens; max_tokens must be strictly greater
 // than the budget, so it is bumped to leave room for the visible answer.
 func thinkingFor(model string, budget, maxTokens int) (*thinkingParam, *outputConfig, int) {
@@ -378,14 +381,17 @@ func thinkingFor(model string, budget, maxTokens int) (*thinkingParam, *outputCo
 		}
 		return &thinkingParam{Type: "adaptive", Display: "summarized"}, cfg, maxTokens
 	}
+	if UsesCoarseEffort(model) {
+		return coarseEffortThinking(model, budget, maxTokens)
+	}
 	if budget <= 0 {
 		return nil, nil, maxTokens
 	}
 	// The xhigh/max tiers exist only as effort levels on the adaptive class;
 	// clamp legacy budgets so an "xhigh"/"max" agent on an old model neither
 	// blows past family output caps nor sends an absurd budget.
-	if budget > 16384 {
-		budget = 16384
+	if budget > legacyThinkingBudgetCap {
+		budget = legacyThinkingBudgetCap
 	}
 	if maxTokens <= budget {
 		maxTokens = budget + defaultMaxTokens

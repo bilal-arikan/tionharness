@@ -197,7 +197,7 @@ export function AgentSettingsForm({
   // Reasoning tiers + class for the chosen provider+model. Every pill stays
   // visible; no-op levels are shown greyed with a reason (e.g. "Kapalı" on the
   // always-on Fable class, "Çok yüksek"/"Maks" on legacy models that clamp them,
-  // or every level but off on a non-thinking model). tiers null = unknown/custom
+  // or "Orta"/"Çok yüksek" on effort-class models). tiers null = unknown/custom
   // → all enabled. Every pill value is already a backend token; the
   // currently-stored level stays selectable even if outside the set.
   const catalog = useCatalog()

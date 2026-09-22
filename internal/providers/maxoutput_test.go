@@ -18,6 +18,7 @@ func TestMaxOutputFor(t *testing.T) {
 		{"MiniMax-M3", maxOutMiniMax},
 		{"minimax/minimax-m3", maxOutMiniMax},
 		{"deepseek/deepseek-v4-flash", maxOutDeepSeek},
+		{"deepseek-flash", maxOutDeepSeek}, // V4.1 Flash
 		{"google/gemini-3.5-flash", maxOutGemini},
 		{"", 0},                       // claude-cli default → unknown
 		{"openai/gpt-5.5", maxOutGPT}, // gpt/codex family
@@ -28,6 +29,8 @@ func TestMaxOutputFor(t *testing.T) {
 		{"gpt-4o-mini", 0}, // pre-5 GPT slugs are outside the verified gate
 		{"openai/gpt-4o", 0},
 		{"glm-5.3", maxOutGLM},
+		{"glm-5.3-flash", maxOutGLM},
+		{"glm-5.3-flashx", maxOutGLM},
 		{"glm-5.2", maxOutGLM},
 		{"glm-5.1", maxOutGLM},
 		{"glm-5", maxOutGLM},

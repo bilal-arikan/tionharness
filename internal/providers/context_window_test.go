@@ -19,6 +19,8 @@ func TestContextWindowFor(t *testing.T) {
 		{"MiniMax-M3", windowMiniMax},
 		{"minimax/minimax-m3", windowMiniMax},
 		{"deepseek/deepseek-v4-flash", windowDeepSeek},
+		{"deepseek-flash", windowDeepSeek}, // V4.1 Flash
+		{"deepseek/deepseek-v4.1-flash", windowDeepSeek},
 		{"google/gemini-3.5-flash", windowGemini},
 		{"gpt-6-astra", windowGPTLarge},
 		{"gpt-5.6-sol", windowGPTLarge},
@@ -34,6 +36,9 @@ func TestContextWindowFor(t *testing.T) {
 		{"openai/gpt-4o", 0},
 		{"gpt-4.1", 0},
 		{"glm-5.3", windowGLMLarge},
+		{"glm-5.3-flash", windowGLMLarge},
+		{"glm-5.3-flashx", windowGLMLarge},
+		{"z-ai/glm-5.3-flash", windowGLMLarge},
 		{"glm-5.2", windowGLMLarge},
 		{"z-ai/glm-5.2", windowGLMLarge},
 		{"glm-5.1", windowGLMOther},

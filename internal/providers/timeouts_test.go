@@ -8,15 +8,19 @@ import (
 
 // TestLongRequestModel pins which classes get the long per-request budget:
 // adaptive-thinking models AND reasoning models on OpenAI-compatible endpoints
-// (DeepSeek V4 Pro), but not the non-reasoning flash tier.
+// (the DeepSeek V4 family incl. V4.1 Flash, the GLM-5.3 family), but not
+// non-reasoning or legacy models.
 func TestLongRequestModel(t *testing.T) {
-	long := []string{"claude-fable-5", "claude-opus-4-8", "claude-sonnet-5", "deepseek-v4-pro", "deepseek-reasoner"}
+	long := []string{
+		"claude-fable-5", "claude-opus-4-8", "claude-sonnet-5", "deepseek-v4-pro", "deepseek-reasoner",
+		"deepseek-flash", "deepseek-v4-flash", "glm-5.3", "glm-5.3-flash",
+	}
 	for _, m := range long {
 		if !LongRequestModel(m) {
 			t.Errorf("%q should use the long budget", m)
 		}
 	}
-	short := []string{"claude-haiku-4-5", "deepseek-v4-flash", "MiniMax-M2.1", "gpt-4o-mini"}
+	short := []string{"claude-haiku-4-5", "MiniMax-M2.1", "gpt-4o-mini", "glm-5.2"}
 	for _, m := range short {
 		if LongRequestModel(m) {
 			t.Errorf("%q should keep the short budget", m)
@@ -24,22 +28,25 @@ func TestLongRequestModel(t *testing.T) {
 	}
 }
 
-// TestOpenAICompatRequestCtx pins that the OpenAI-compatible client is now
-// model-class aware: DeepSeek V4 Pro gets minutes, the flash tier keeps 120s.
-// This is the direct fix for the SES446 "context deadline exceeded" at 120s.
+// TestOpenAICompatRequestCtx pins that the OpenAI-compatible client is
+// model-class aware: DeepSeek's reasoning models get minutes, a non-reasoning
+// model keeps 120s. This is the direct fix for the SES446 "context deadline
+// exceeded" at 120s.
 func TestOpenAICompatRequestCtx(t *testing.T) {
-	m := NewOpenAICompat("deepseek", "k", "", "deepseek-v4-flash")
+	m := NewOpenAICompat("deepseek", "k", "", "deepseek-flash")
 
-	ctxPro, cancel := m.requestCtx(context.Background(), "deepseek-v4-pro")
-	defer cancel()
-	if dl, ok := ctxPro.Deadline(); !ok || time.Until(dl) < 9*time.Minute {
-		t.Errorf("deepseek-v4-pro should get the long budget, got %v", time.Until(dl))
+	for _, model := range []string{"deepseek-v4-pro", "deepseek-flash"} {
+		ctx, cancel := m.requestCtx(context.Background(), model)
+		if dl, ok := ctx.Deadline(); !ok || time.Until(dl) < 9*time.Minute {
+			t.Errorf("%s should get the long budget, got %v", model, time.Until(dl))
+		}
+		cancel()
 	}
 
-	ctxFlash, cancel2 := m.requestCtx(context.Background(), "deepseek-v4-flash")
+	ctxShort, cancel2 := m.requestCtx(context.Background(), "MiniMax-M2.1")
 	defer cancel2()
-	if dl, _ := ctxFlash.Deadline(); time.Until(dl) > 3*time.Minute {
-		t.Errorf("deepseek-v4-flash should keep the short budget, got %v", time.Until(dl))
+	if dl, _ := ctxShort.Deadline(); time.Until(dl) > 3*time.Minute {
+		t.Errorf("MiniMax-M2.1 should keep the short budget, got %v", time.Until(dl))
 	}
 }
 

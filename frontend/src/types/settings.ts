@@ -257,7 +257,7 @@ export interface CatalogModel {
   // Absent means "unknown" → all tiers enabled (the provider clamps anyway).
   thinkingTiers?: string[]
   // How the model handles extended reasoning ("always-on"/"adaptive"/
-  // "non-thinking"/"legacy"/"alias"), from the backend ThinkingClass. Paired with
+  // "effort"/"legacy"/"alias"), from the backend ThinkingClass. Paired with
   // thinkingTiers so a greyed tier can explain WHY it is inactive.
   thinkingClass?: string
 }
