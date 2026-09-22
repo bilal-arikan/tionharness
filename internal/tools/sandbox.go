@@ -50,9 +50,10 @@ func NewConfinedSandbox(dir string) Sandbox {
 // underRoot check even though it is the very file Root points at. Resolving Root
 // once also keeps this boundary in step with the API-side one (internal/api.underDir).
 //
-// It does NOT resolve links *inside* Root — a symlink or junction below Root still
-// passes the lexical underRoot check and lets the OS open a target outside Root.
-// Confinement remains a lexical boundary; closing that hole is a separate change.
+// It does NOT resolve links *inside* Root; that is Resolve's job: after the lexical
+// underRoot check, checkRealPathUnderRoot resolves both paths through an opened
+// handle (see sandbox_realpath*.go) so a symlink or junction below Root that points
+// outside it is rejected.
 //
 // EvalSymlinks failing is an expected, benign case (Root may not exist yet, e.g. a
 // working dir created later), so the cleaned lexical path is kept as-is rather than
@@ -150,7 +151,9 @@ func (s Sandbox) Ready() bool { return s.Root != "" }
 //
 // Confined: requires a configured Root and keeps every path inside it — a ".."
 // escape or an absolute path outside Root is rejected, while an absolute path that
-// resolves inside Root is honoured. The empty path resolves to Root. On Windows,
+// resolves inside Root is honoured. The path's real location is then checked too,
+// so a symlink or junction inside Root cannot redirect it outside (the lexical
+// path is still what is returned). The empty path resolves to Root. On Windows,
 // NT/device namespace spellings and alternate data streams are rejected outright
 // (see rejectWindowsPathTricks) so the boundary does not depend on how Root is
 // spelled.
@@ -183,6 +186,9 @@ func (s Sandbox) Resolve(rel string) (string, error) {
 		}
 		if !underRoot(abs, s.Root) {
 			return "", fmt.Errorf("path %q escapes the sandbox", rel)
+		}
+		if err := checkRealPathUnderRoot(abs, s.Root, rel); err != nil {
+			return "", err
 		}
 		return abs, nil
 	}

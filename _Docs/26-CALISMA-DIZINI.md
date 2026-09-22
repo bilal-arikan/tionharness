@@ -1,6 +1,6 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
-> **Özet (2026-09-21):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
+> **Özet (2026-09-22):** Her sohbet oturumunun ajan araçlarının çalışacağı kendi
 > çalışma dizinini (`Session.WorkingDir`) seçebilmesini sağlayan mekanik (the external agent project
 > ilhamlı) — Composer'daki klasör rozeti, workspace varsayılan dizini, spawn/handoff
 > seeding'i ve otonom turlar için `autonomousConfine` freni. Durum: uygulanmış ve
@@ -9,13 +9,18 @@
 > confined bir turda bile shell ile sandbox dışına yazılabilir; bu bilinçli olarak
 > "belgelenmiş, kısıtlanmamış" bırakılmıştır (statik komut ayrıştırması güvenilir
 > değil). Ayrıca Windows'a özgü NT/device-namespace yol kaçışları (`\\?\`, ADS)
-> ayrıca reddedilir. Talimat dosyası çözümlemesi (2026-09-21) **`CLAUDE.md` önce,
+> ayrıca reddedilir; kök İÇİNDEKİ bir symlink/junction'ın dışarıyı göstermesi
+> handle tabanlı gerçek-yol kontrolüyle reddedilir (TSK393). Confined shell
+> komutu artık bir **Windows Job Object** içinde koşar: kopmuş alt süreçler dahil
+> tüm ağaç çağrı bitince öldürülür, süreç sayısı sınırlıdır — bu süreç/kaynak
+> sınırıdır, yol sınırı DEĞİLDİR (TSK392). Talimat dosyası çözümlemesi (2026-09-21) **`CLAUDE.md` önce,
 > `AGENTS.md` fallback**: yalnız dosyanın ADI prompta yazılır (içerik asla inline
 > edilmez — CLI'lar zaten natively yüklüyor) ve headless turlar da aynı probe'u
 > alır. Dayandığı dosyalar: `internal/agent/workdir_ctx.go`,
 > `internal/agent/instructionfile.go`, `internal/api/workdir_context.go`,
-> `internal/tools/sandbox.go`, `internal/tools/builtin_shell.go`,
-> `internal/tools/builtin_shell_harden.go`.
+> `internal/tools/sandbox.go`, `internal/tools/sandbox_realpath*.go`,
+> `internal/tools/builtin_shell.go`, `internal/tools/builtin_shell_contain.go`,
+> `internal/tools/builtin_shell_harden.go`, `internal/proc/job*.go`.
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
 > mekaniğinin TionHarness'e uyarlaması.
@@ -120,6 +125,21 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 - Kök içi/dışı karşılaştırması (`underRoot`) Windows'ta **case-insensitive**'dir;
   bu, dosya sistemiyle ve `internal/api/files.go` içindeki `underDir` sınırıyla
   aynı davranışı verir (önceden ikisi farklıydı).
+- **Kök içindeki link kaçışı (TSK393, 2026-09-22):** leksikal kontrol geçtikten
+  sonra `checkRealPathUnderRoot` hem kökün hem hedefin **gerçek** yerini çözer
+  (`internal/tools/sandbox_realpath*.go`). Windows'ta bu `CreateFile`
+  (`FILE_FLAG_BACKUP_SEMANTICS`, erişim 0, tam paylaşım) + `GetFinalPathNameByHandle`
+  ile yapılır — `filepath.EvalSymlinks` junction'ı takip etmediği için yeterli
+  değildi. Var olan en derin ata handle üzerinden çözülür, henüz var olmayan
+  kuyruk leksikal eklenir (var olmayan bir bileşen link olamaz). Hedefi olmayan
+  (dangling) bir link "henüz yok" sayılmaz, **reddedilir**: üzerinden yazmak
+  dosyayı linkin hedefinde, kökün dışında oluştururdu. Kökün kendisi junction
+  ise iki taraf da handle ile çözüldüğü için kökün kendi dosyaları kabul edilir.
+  Kök içinde kalan linkler serbesttir ve `Resolve` yine leksikal yolu döndürür.
+  Kalan boşluk: kontrol ile aracın `open` çağrısı arasında yaratılan bir link
+  (TOCTOU) görülmez; tam kapatmak her fs aracına handle-ile-aç tesisatı
+  gerektirir. Testler: `sandbox_realpath_test.go` (junction ve symlink ayrı
+  vakalar, dangling, kök-içi link, junction kök).
 
 ### Confine, shell'de path kısıtlamaz (2026-08-28)
 
@@ -136,13 +156,16 @@ kapatır, kabuğu kapatmaz.
 kısıtlar. Ancak script gövdesi rastgele ana makine kodu çalıştırdığı için kendi
 dosya erişimini açabilir ve bu argüman kısıtını aşabilir.
 
-Confined bayrağının shell yolunda yaptığı **tek** iki şey
-(`internal/tools/builtin_shell.go`, `builtin_shell_harden.go`):
+Confined bayrağının shell yolunda yaptığı üç şey
+(`internal/tools/builtin_shell.go`, `builtin_shell_harden.go`,
+`builtin_shell_contain.go`):
 
 1. `proc.DisableGitSigningEnv()` env'e eklenir — ajanın koştuğu `git commit`
    GPG pinentry parola istemine takılıp sonsuza kadar beklemesin diye.
 2. `isNetworkMutatingGit` ile `git push` / `git remote add` / `git remote set-url`
    engellenir — substring tabanlı, best-effort fren.
+3. **Ön plan komutu bir süreç işi (job) içinde koşar** (TSK392, 2026-09-22) —
+   aşağıdaki "Süreç sınırı" bölümüne bak.
 
 Gerçek tek sınır **süreç çalışma dizinidir** (`cmd.Dir = sb.Root`). Yani confined
 bir turda `write_file` ile `/c/başka/yer` yazılamaz ama
@@ -156,8 +179,47 @@ Yarım koruma "kısıtlı" etiketiyle sunulduğunda, hiç koruma olmamasından d
 kötüdür: yanlış güven yaratır. Bu yüzden mevcut davranış **belgelenmiştir,
 kısıtlanmamıştır**.
 
-Gerçek sınır için OS-seviyesi izolasyon gerekir (container / Windows job object
-ile dosya sistemi kapsamı). Bu ayrı bir karttır ve v0.1.0 sonrasına bırakılmıştır.
+Gerçek **yol** sınırı için kimlik düzeyinde OS izolasyonu gerekir (aşağıdaki
+seçenekler); o iş TSK392'den ayrılan yeni bir pbi kartındadır.
+
+### Süreç sınırı: confined shell Job Object içinde (TSK392, 2026-09-22)
+
+**Önceki durum:** confined turdaki shell komutu için tek OS mekanizması bağlam
+iptalinde `taskkill /T` idi. `/T` ebeveyn-PID ağacını yürür; ebeveyni çoktan
+ölmüş, kopmuş bir süreç (`start`, `Start-Process`, `nohup … &`) bu ağaçta yoktur.
+Otonom bir tur, araç çağrısı bittikten sonra da çalışan süreç bırakabiliyordu;
+fork bombasına karşı da hiçbir sınır yoktu.
+
+**Şimdi:** `runShellCmd` (`internal/tools/builtin_shell_contain.go`) confined ön
+plan komutunu `proc.Job` (`internal/proc/job_windows.go`) içinde başlatır:
+
+- Süreç `CREATE_SUSPENDED` yaratılır, job'a atanır, **sonra** `NtResumeProcess`
+  ile devam ettirilir — arada job dışında tek bir çocuk bile doğamaz.
+- `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: çağrı dönünce job kapanır ve içindeki
+  her süreç (kopmuşlar dahil) ölür.
+- `JOB_OBJECT_LIMIT_ACTIVE_PROCESS` = 128: aynı anda canlı süreç sınırı (fork
+  bombası freni; git-bash komut başına iki süreç harcar).
+- Job kurulamazsa komut **çalıştırılmaz**, araç hata döner — confined bir komut
+  asla sessizce kapsamsız koşmaz.
+- Windows dışı: job, komutun kendi süreç grubudur (`Setpgid`); `Close` grubu
+  öldürür. `setsid` çağıran süreci tutmaz, süreç sayısı sınırı yoktur.
+- İnteraktif (kilitsiz) shell etkilenmez; kasıtlı arka plan süreci bırakabilir.
+  `run_in_background` shell'leri de bu kapsamda değildir.
+
+**Bu bir yol sınırı DEĞİLDİR:** job içindeki süreçler aynı kullanıcıyla, aynı
+dosya erişimiyle koşar. Testler: `internal/proc/job_windows_test.go` (kopmuş
+torun job kapanınca ölür, job'suz kontrol vakasında yaşar, süreç sınırı çocuğu
+engeller), `internal/tools/builtin_shell_contain_windows_test.go` (confined çağrı
+kopmuş süreci öldürür, kilitsiz çağrı dokunmaz).
+
+**Yol sınırı için seçenekler (analiz, uygulanmadı):**
+
+| Seçenek | Ne verir | Maliyet / risk |
+|---|---|---|
+| Job Object (uygulandı) | Süreç ağacı + kaynak sınırı | Yol sınırı yok |
+| Düşük yetkili ayrı kullanıcı + kökte ACL | Gerçek dosya sistemi sınırı | Hesap yönetimi, `CreateProcessWithLogonW` kimlik bilgisi, git/araç zinciri profili, kök dışındaki araç yollarına (Go, node, git) okuma izni |
+| AppContainer / LPAC | Kullanıcı eklemeden dosya sistemi + ağ sınırı | Git-bash/MSYS ve çoğu CLI AppContainer'da kırılır; erişilecek her dizine capability SID ACL'i gerekir |
+| Container (Docker / WSL) | Tam izolasyon | Windows araç zinciri kaybı, başlatma gecikmesi, dosya senkronu |
 
 > **Not (2026-08-26):** Eski per-session `gitWorktreeIsolation` özelliği kaldırılmış
 > kalır. Yerine kart yaşam döngüsünün tek sahibi olan `internal/worktree` geldi:
