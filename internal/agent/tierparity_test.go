@@ -101,6 +101,7 @@ var goldenTiersAuto = map[string]string{
 	"run_schedule":          "hidden",
 	"run_subagent":          "full",
 	"schedule_wake":         "full",
+	"search_index":          "hidden",
 	"send_message":          "name-only",
 	"skill_search":          "full",
 	"skill_validate":        "name-only",
@@ -202,6 +203,7 @@ var goldenTiersReadOnly = map[string]string{
 	"run_schedule":          "hidden",
 	"run_subagent":          "full",
 	"schedule_wake":         "full",
+	"search_index":          "hidden",
 	"send_message":          "name-only",
 	"skill_search":          "full",
 	"skill_validate":        "name-only",
@@ -267,6 +269,7 @@ var goldenSelfManaged = []string{
 	"read_logs",
 	"run_flow",
 	"run_schedule",
+	"search_index",
 	"send_message", // stamped self-managed AND promoted to the name-only tier
 	"toggle_mcp_server",
 	"update_agent",

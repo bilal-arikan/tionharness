@@ -50,7 +50,7 @@ func TestIsZvecGrepServer(t *testing.T) {
 
 func TestZvecGrepGuidance(t *testing.T) {
 	cwd := filepath.Join(t.TempDir(), "repo")
-	g := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", cwd)
+	g := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", cwd, "anthropic")
 	for _, want := range []string{
 		"zvec_grep__zvec_grep_search",
 		"A zvec-grep MCP server is connected.",
@@ -59,6 +59,10 @@ func TestZvecGrepGuidance(t *testing.T) {
 		"zg index",
 		"Glob/Grep",
 		"`" + cwd + "`",
+		// The block must not merely forbid `zg index` — it has to name the managed
+		// alternative, or an agent facing a missing index has nowhere to go.
+		"`search_index`",
+		"refresh",
 	} {
 		if !strings.Contains(g, want) {
 			t.Errorf("guidance missing %q\n%s", want, g)
@@ -73,7 +77,7 @@ func TestZvecGrepGuidance(t *testing.T) {
 	}
 
 	// Unverified connection, codebase-memory on as well, no cwd.
-	u := zvecGrepGuidance("zvec_grep", mcp.ServerUnknown, "codebase-memory-mcp", "")
+	u := zvecGrepGuidance("zvec_grep", mcp.ServerUnknown, "codebase-memory-mcp", "", "anthropic")
 	if strings.Contains(u, "is connected.") {
 		t.Errorf("unverified state must not assert the connection\n%s", u)
 	}
@@ -88,12 +92,41 @@ func TestZvecGrepGuidance(t *testing.T) {
 
 	// A throwaway worktree is never indexed, so the block must not promise an index.
 	wt := filepath.Join(t.TempDir(), ".tionharness-worktrees", "WS1", "tsk1")
-	if e := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", wt); !strings.Contains(e, "never indexed") || strings.Contains(e, "built in the background") {
+	if e := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", wt, "anthropic"); !strings.Contains(e, "never indexed") || strings.Contains(e, "built in the background") {
 		t.Errorf("worktree cwd line is wrong\n%s", e)
 	}
 
-	if got := zvecGrepGuidance("", mcp.ServerAlive, "", cwd); got != "" {
+	if got := zvecGrepGuidance("", mcp.ServerAlive, "", cwd, "anthropic"); got != "" {
 		t.Errorf("expected no block without a server row, got %q", got)
+	}
+}
+
+// TestZvecGrepGuidanceNamesTheCallableIndexTool pins the per-provider spelling of
+// search_index. A CLI agent reaches TionHarness built-ins through the Interaction
+// MCP server, so a block naming the bare tool there would send it looking for a
+// tool it cannot call by that name — the exact failure mode that made
+// codebaseMemoryGuidance spell out namespaced names in the first place.
+func TestZvecGrepGuidanceNamesTheCallableIndexTool(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "repo")
+
+	cli := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", cwd, "claude-cli")
+	if !strings.Contains(cli, "`mcp__tionharness_extended__search_index`") {
+		t.Errorf("CLI block must name the namespaced tool\n%s", cli)
+	}
+
+	native := zvecGrepGuidance("zvec_grep", mcp.ServerAlive, "", cwd, "anthropic")
+	if strings.Contains(native, "mcp__tionharness_extended__") {
+		t.Errorf("native block must name the bare tool\n%s", native)
+	}
+	if !strings.Contains(native, "`search_index`") {
+		t.Errorf("native block missing the bare tool name\n%s", native)
+	}
+
+	// Both spellings must still forbid the manual path the tool replaces.
+	for _, g := range []string{cli, native} {
+		if !strings.Contains(g, "Never run `zg index`") {
+			t.Errorf("block dropped the shell prohibition\n%s", g)
+		}
 	}
 }
 

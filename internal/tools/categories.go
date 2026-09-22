@@ -118,6 +118,9 @@ var builtinCategory = map[string]string{
 	"insight_scan": CategoryDiagnostics, "insight_list_findings": CategoryDiagnostics,
 	"insight_apply_finding": CategoryDiagnostics,
 	"read_lessons":          CategoryDiagnostics, "delete_lesson": CategoryDiagnostics,
+	// Search-index lifecycle: inspecting and repairing the substrate the code
+	// search tools read from is a diagnostic act, not a config change.
+	"search_index": CategoryDiagnostics,
 }
 
 // GroupPrefix marks an override key as a GROUP key rather than a tool name:

@@ -95,6 +95,19 @@ func TestCodebaseMemoryGuidance(t *testing.T) {
 	if got := codebaseMemoryGuidance(nil, mcp.ServerAlive, "claude-cli"); got != "" {
 		t.Errorf("expected empty guidance when no codebase-memory server, got %q", got)
 	}
+
+	// The block must route a missing/stale index to the managed tool rather than
+	// telling the agent to re-run index_repository itself.
+	if !strings.Contains(g, "`mcp__tionharness_extended__search_index`") {
+		t.Errorf("CLI guidance must name the namespaced search_index tool\n%s", g)
+	}
+	if !strings.Contains(g, "Never run `codebase-memory-mcp__index_repository` yourself") {
+		t.Errorf("guidance must forbid calling the indexer directly\n%s", g)
+	}
+	native := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive, "anthropic")
+	if strings.Contains(native, "mcp__tionharness_extended__search_index") {
+		t.Errorf("native guidance must name the bare search_index tool\n%s", native)
+	}
 }
 
 // The graph tools sit in the name-only tier, so a bare call fails until their

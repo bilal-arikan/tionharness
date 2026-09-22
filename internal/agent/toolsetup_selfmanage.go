@@ -119,6 +119,12 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewListArtifactsTool(r.db, agent.ID),
 		tools.NewReadArtifactTool(r.db, agent.ID),
 		tools.NewReadLogsTool(r.logs),
+		// Search indexes: the agent-facing half of the index lifecycle. The
+		// capability prompts forbid running `zg index` / index_repository by hand,
+		// so an agent that hits [INDEX_MISSING] needs a managed way to ask for a
+		// refresh. Status/refresh/rebuild only; dropping an index stays a
+		// user action behind the Settings confirmation gate.
+		tools.NewSearchIndexTool(searchIndexBridge{rt: r}),
 	}
 	// Secret vault: list/get/set/delete are unified in the single `secret` tool
 	// registered in buildRegistry (always-on when a vault exists) — no separate

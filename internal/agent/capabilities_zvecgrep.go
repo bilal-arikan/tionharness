@@ -155,7 +155,7 @@ var zvecGrepCapability = Capability{
 		if r.CodebaseMemoryEnabled() {
 			cbm = codebaseMemoryServerName(servers)
 		}
-		return zvecGrepGuidance(server.Name, state, cbm, cwd)
+		return zvecGrepGuidance(server.Name, state, cbm, cwd, provider)
 	},
 }
 
@@ -168,7 +168,10 @@ var zvecGrepCapability = Capability{
 // is on as well. Both blocks then sit side by side, so this one states the split
 // between them; the graph tools are named conditionally because this block cannot
 // see whether the agent's denylist leaves them callable.
-func zvecGrepGuidance(server string, state mcp.ServerState, cbmServer, cwd string) string {
+//
+// provider selects the callable spelling of the search_index tool the block
+// sends the agent to when an index is missing — see searchIndexToolFor.
+func zvecGrepGuidance(server string, state mcp.ServerState, cbmServer, cwd, provider string) string {
 	if server == "" {
 		return ""
 	}
@@ -192,13 +195,13 @@ func zvecGrepGuidance(server string, state mcp.ServerState, cbmServer, cwd strin
 	}
 	b.WriteString("Every call needs `root`, an absolute path; a subdirectory resolves to the index of the repository that contains it. " +
 		"Results carry bounded source snippets: treat a sufficient snippet as already read, read `freshness` from the response instead of checking index status, and stop once the evidence is sufficient.\n")
-	b.WriteString("A result that starts with [INDEX_MISSING] means that path has no index: use Glob/Grep for the query. " +
-		"Never create, rebuild or drop an index yourself (no `zg index` through the shell) — TionHarness manages zvec-grep indexes.")
+	b.WriteString("A result that starts with [INDEX_MISSING] means that path has no index: use Glob/Grep for that query. " +
+		searchIndexDirective(provider, "zg index") + "\n")
 	if cwd = strings.TrimSpace(cwd); cwd != "" {
 		if isEphemeralWorkdir(cwd) {
-			b.WriteString("\nYour working directory `" + cwd + "` is a temporary working copy that is never indexed; use Glob/Grep there.")
+			b.WriteString("Your working directory `" + cwd + "` is a temporary working copy that is never indexed; use Glob/Grep there.")
 		} else {
-			b.WriteString("\nYour working directory is `" + cwd + "`: pass it as `root`. If it has no index yet, one is built in the background on first use — until then searches report [INDEX_MISSING].")
+			b.WriteString("Your working directory is `" + cwd + "`: pass it as `root`. If it has no index yet, one is built in the background on first use — until then searches report [INDEX_MISSING].")
 		}
 	}
 	return b.String()

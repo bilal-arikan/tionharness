@@ -12,6 +12,12 @@ import (
 // never drift onto two different spellings of the same tool.
 const exttoolsZvecGrepName = exttools.ZvecGrepToolName
 
+// codebaseMemoryToolName is the key the status report uses for the code graph.
+// It is NOT a ledger key: codebase-memory keeps its store in the user's cache
+// directory under its own naming and is not driven through indexstate yet, so
+// this name only ever labels an observational status row.
+const codebaseMemoryToolName = "codebase-memory"
+
 // exttoolsLocalVersion is the version probe, behind a var so tests can stub it
 // without running a real binary.
 var exttoolsLocalVersion = func(ctx context.Context, path string, args []string) (string, error) {

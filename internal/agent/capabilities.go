@@ -240,8 +240,9 @@ func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState, provi
 		"missing, and it is cheaper than the grep sweep it replaces. " +
 		"Do NOT reach for raw shell greps (PowerShell Select-String, " +
 		"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
-		"only when the index genuinely has no answer for a query. After code changes, re-run " +
-		ns("index_repository") + " (or rely on the background watcher) so results stay fresh."
+		"only when the index genuinely has no answer for a query. After code changes the " +
+		"background watcher keeps results fresh on its own. " +
+		searchIndexDirective(provider, ns("index_repository"))
 }
 
 // projectIDForPath mirrors codebase-memory-mcp's path->project-id rule: path
