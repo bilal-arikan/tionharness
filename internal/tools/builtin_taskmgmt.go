@@ -301,8 +301,12 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", enumErr("priority", in.Priority, "critical", "high", "medium", "low")
 	}
 	if in.OwnerAgentID != "" {
-		if _, err := t.d.db.GetAgent(ctx, in.OwnerAgentID); err != nil {
+		ag, err := t.d.db.GetAgent(ctx, in.OwnerAgentID)
+		if err != nil {
 			return "", fmt.Errorf("no agent with id %q (use list_agents)", in.OwnerAgentID)
+		}
+		if err := ag.AssignableErr(""); err != nil {
+			return "", err
 		}
 	}
 	if in.FlowID != "" {
@@ -449,8 +453,12 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.OwnerAgentID != nil {
 		if *in.OwnerAgentID != "" {
-			if _, err := t.d.db.GetAgent(ctx, *in.OwnerAgentID); err != nil {
+			ag, err := t.d.db.GetAgent(ctx, *in.OwnerAgentID)
+			if err != nil {
 				return "", fmt.Errorf("no agent with id %q", *in.OwnerAgentID)
+			}
+			if err := ag.AssignableErr(oldOwner); err != nil {
+				return "", err
 			}
 		}
 		cur.OwnerAgentID = *in.OwnerAgentID

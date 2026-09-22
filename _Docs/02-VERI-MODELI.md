@@ -1,6 +1,6 @@
 # TionHarness — Veri Modeli
 
-> **Özet (2026-09-06):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz, arşivli skill ajanlara sunulmaz — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
+> **Özet (2026-09-22):** Entity modelini (agents, sessions, session_messages, tasks, schedules, runs, flows, flow_runs, artifacts, trajectories vb.) ve aralarındaki ilişkileri ER diyagramıyla anlatır; kavramsal olarak SQLite döneminden kalma ama artık her entity dosya-tabanlı JSON/JSONL olarak saklanıyor (bkz. `08-DEPOLAMA.md`). Durum: **uygulandı, canlı model**. En önemli kurallar: `state` (görünürlük) ile `run_state` (koşu sonucu) birbirinden tamamen ayrı alanlardır; `created_by` provenance alanı artık çoğu entity'de yalnız köken bilgisi taşır, silme/düzenleme kapısı değildir (istisna: workspace silme); `origin`/`SessionOrigin` oturumun kim tarafından nereden başlatıldığının tek kaynağıdır; `sessions.updated_at` **son aktivitedir** (başlık/etiket yazımı onu bump etmez) ve arşivli bir oturum gerçek bir tur (`user`/`peer`/`worker`/`spawn`) gelince kendiliğinden `active` olur; ajan/skill/artifact/otomasyon/hedef arşivi kanban kartı modelini izler (`internal/archive`, arşivli ajan çalışmaz ve zamanlama/otomasyon/görev sahibi olarak yeni hedef yapılamaz, arşivli skill ajanlara sunulmaz — "Ortak arşiv" bölümü). Dayandığı dosyalar: `internal/db/models*.go`, `store_*.go`.
 
 > ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
 > entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
@@ -310,6 +310,22 @@ artifact / hedef listesi **hepsini** döndürür (UI tarafında ayrılır; ajan 
 geçmiş yazarlarını çözebilmek için tam kalır), otomasyon listesi yalnız **canlıları**.
 **Araçlar:** `list_agents` / `list_artifacts` / `list_automations` `list_tasks`
 geleneğini izler (`archived:true` yalnız arşiv, karışmaz). Arşivleme aracı henüz yok.
+
+**Yazım anında hedef kapısı (TSK1044):** arşivli bir ajan yeni bir **hedef** olarak
+yazılamaz. Zamanlama (`agentId`), otomasyon (`targetAgentId`) ve görev sahibi
+(`ownerAgentId`) oluşturma/güncelleme yolları — REST (`POST/PUT /api/schedules`,
+`/api/automations`, `/api/tasks`) ve self-management araçları (`create_/update_schedule`,
+`create_/update_automation`, `create_/update_task`) — tek kural `db.Agent.AssignableErr`
+(`internal/db/agent_assign.go`) üzerinden `ErrArchived` döner; REST'te mevcut
+`writeDBError` yolu ile **409**. Karar: kaydın **zaten tuttuğu** arşivli ajanı yeniden
+göndermek (ör. yalnız ad/cron/başlık düzenlemesi — düzenleme formu tüm kaydı yollar)
+**kabul edilir**; aksi halde arşivlenmiş ajana bağlı bir kayıt önce başka ajana
+taşınmadan düzenlenemez olurdu. Böyle bir kayıt ajan geri alınana ya da hedef
+değiştirilene kadar çalışmayı reddetmeye devam eder (çalışma anı kapısı değişmedi).
+Frontend'de ortak `AgentPicker` (ve pano toplu "Ajan ata" seçicisi) arşivli ajanları
+yeni seçim olarak sunmaz (`pickableAgents`); kaydın mevcut değeri arşivli bir ajansa
+o ajan seçicide **"(arşivli)"** işaretiyle görünmeye devam eder. İçgörü analiz ajanı
+varsayılanı da arşivli bir ajana düşmez.
 
 ## Güvenlik / Şifreleme
 

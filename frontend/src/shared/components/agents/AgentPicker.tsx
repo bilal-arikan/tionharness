@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import type { Agent } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { AgentIdentity } from './AgentIdentity'
+import { ARCHIVED_AGENT_LABEL, pickableAgents } from './pickableAgents'
 
 interface Props {
   agents: Agent[]
@@ -17,7 +18,9 @@ interface Props {
 
 // AgentPicker is a custom dropdown that, unlike a native <select>, renders each
 // agent's circular avatar (custom emoji or derived initials) next to its name —
-// both in the trigger and the option list. Closes on outside click.
+// both in the trigger and the option list. Closes on outside click. Archived
+// agents are never offered as a new choice; a currently-selected archived agent
+// stays visible, marked "(arşivli)", so editing a record does not drop it.
 export function AgentPicker({
   agents,
   value,
@@ -27,7 +30,14 @@ export function AgentPicker({
 }: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
-  const selected = agents.find((a) => a.id === value)
+  const options = pickableAgents(agents, value)
+  const selected = options.find((a) => a.id === value)
+  const archivedMark = (a: Agent) =>
+    a.archived ? (
+      <span data-testid="agent-picker-archived" className="ml-1 text-[var(--color-text-dim)]">
+        {ARCHIVED_AGENT_LABEL}
+      </span>
+    ) : undefined
 
   const clear = () => {
     onChange('')
@@ -43,7 +53,12 @@ export function AgentPicker({
         className="flex min-w-40 items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none hover:border-[var(--color-accent)]"
       >
         {selected ? (
-          <AgentIdentity agent={selected} size="sm" subtitle="model" />
+          <AgentIdentity
+            agent={selected}
+            size="sm"
+            subtitle="model"
+            nameSuffix={archivedMark(selected)}
+          />
         ) : (
           <span className="text-[var(--color-text-dim)]">{placeholder}</span>
         )}
@@ -86,10 +101,10 @@ export function AgentPicker({
               Seçimi kaldır
             </button>
           )}
-          {agents.length === 0 && (
+          {options.length === 0 && (
             <div className="px-3 py-2 text-sm text-[var(--color-text-dim)]">Ajan yok</div>
           )}
-          {agents.map((a) => (
+          {options.map((a) => (
             <button
               key={a.id}
               type="button"
@@ -103,7 +118,7 @@ export function AgentPicker({
                 a.id === value ? 'bg-[var(--color-accent-soft)]' : ''
               }`}
             >
-              <AgentIdentity agent={a} size="sm" subtitle="model" />
+              <AgentIdentity agent={a} size="sm" subtitle="model" nameSuffix={archivedMark(a)} />
             </button>
           ))}
         </div>

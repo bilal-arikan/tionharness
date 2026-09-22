@@ -125,8 +125,12 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "prompt is required")
 			return
 		}
-		if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
+		ag, err := wsp.DB.GetAgent(r.Context(), req.AgentID)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "unknown agent")
+			return
+		}
+		if writeDBError(w, ag.AssignableErr(""), "") {
 			return
 		}
 	}
@@ -215,8 +219,12 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		cur.AgentID = ""
 	} else if req.AgentID != nil && strings.TrimSpace(*req.AgentID) != "" {
 		agentID := strings.TrimSpace(*req.AgentID)
-		if _, err := wsp.DB.GetAgent(r.Context(), agentID); err != nil {
+		ag, err := wsp.DB.GetAgent(r.Context(), agentID)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "unknown agent")
+			return
+		}
+		if writeDBError(w, ag.AssignableErr(cur.AgentID), "") {
 			return
 		}
 		cur.AgentID = agentID

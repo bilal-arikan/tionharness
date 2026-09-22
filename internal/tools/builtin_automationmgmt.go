@@ -156,8 +156,12 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		if in.TargetAgentID == "" {
 			return "", fmt.Errorf("targetAgentId or flowId is required")
 		}
-		if _, err := t.d.db.GetAgent(ctx, in.TargetAgentID); err != nil {
+		ag, err := t.d.db.GetAgent(ctx, in.TargetAgentID)
+		if err != nil {
 			return "", fmt.Errorf("no agent with id %q (use list_agents)", in.TargetAgentID)
+		}
+		if err := ag.AssignableErr(""); err != nil {
+			return "", err
 		}
 	}
 	maxIter := defaultAutomationMax
@@ -360,8 +364,12 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		cur.FlowID = fid
 		cur.TargetAgentID = ""
 	} else if in.TargetAgentID != nil && strings.TrimSpace(*in.TargetAgentID) != "" {
-		if _, err := t.d.db.GetAgent(ctx, *in.TargetAgentID); err != nil {
+		ag, err := t.d.db.GetAgent(ctx, *in.TargetAgentID)
+		if err != nil {
 			return "", fmt.Errorf("no agent with id %q", *in.TargetAgentID)
+		}
+		if err := ag.AssignableErr(cur.TargetAgentID); err != nil {
+			return "", err
 		}
 		cur.TargetAgentID = *in.TargetAgentID
 		cur.FlowID = ""

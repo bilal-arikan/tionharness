@@ -1,11 +1,14 @@
 import type { Agent, InsightSettings } from '@/types'
+import { pickableAgents } from '@/shared/components/agents/pickableAgents'
 
 export function withDefaultAnalysisAgent(
   settings: InsightSettings,
   agents: Agent[],
 ): InsightSettings {
-  if (settings.autoScanAgentId || agents.length === 0) return settings
-  return { ...settings, autoScanAgentId: agents[0].id }
+  // Never default to an archived agent: it cannot run the analysis.
+  const live = pickableAgents(agents)
+  if (settings.autoScanAgentId || live.length === 0) return settings
+  return { ...settings, autoScanAgentId: live[0].id }
 }
 
 export async function persistAnalysisAgentSelection(
