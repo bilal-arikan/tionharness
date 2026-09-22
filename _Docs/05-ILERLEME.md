@@ -1,11 +1,57 @@
 # TionHarness — İlerleme Takibi
 
 > **Özet (2026-09-22):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
-> kayıtlar `05-ARSIV.md`'dedir. Son girişler: depo temizliği (modernize, staticcheck, ölü kod, frontend lint,
-> deprecated oturum-bilgisi alanları), doküman temizliği (bayat referanslar, arşive
+> kayıtlar `05-ARSIV.md`'dedir. Son girişler: depo temizliği 2. tur (`slices.SortFunc`, coordination/store bölme,
+> `useKeyedReset` ile efektten render-fazına geçiş, ortak biçimlendiriciler) ve 1. tur
+> (modernize, staticcheck, ölü kod, frontend lint, deprecated oturum-bilgisi alanları),
+> doküman temizliği (bayat referanslar, arşive
 > taşınan plan gövdeleri), karar modelleri + karar mercileri (`_Docs/87`), DeepSeek V4.1 Flash
 > ve Z.ai GLM-5.3 ailesi + kaba-effort düşünme sınıfı, ortak arşiv aracı `set_archived`
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
+
+## Depo temizliği 2. tur: slices.SortFunc, dosya bölme, frontend efekt kalıpları (2026-09-22) ✅
+
+- **Ne:** İlk turun "yapılmayan adaylar" listesi ve UI tarafında aynı türden temizlik.
+  Beş commit: Go sıralama + bölme, frontend efektler, biçimlendirici tekilleştirme,
+  test beklentileri, dokümanlar.
+- **Go — `sort.Slice` → `slices.SortFunc`:** 213 site (`sort.Slice`/`SliceStable` 135 +
+  `sort.Strings` 97) tipli AST üzerinden yeniden yazıldı; `if A != B { return A < B }`
+  zincirleri `cmp.Compare` adımlarına indirgendi (88 site), bool anahtar / yardımcı
+  `less` kullananlar (28) `less`'i aynen tutup üç-yönlü sonucu ondan türetir (katı zayıf
+  sıralama için birebir). `tools.SortByField` artık `func(a, b T) int` döner ve dilimi
+  almaz; 20 çağıran `slices.SortStableFunc` kullanır. Yansımalı swapper gitti.
+- **Go — bölme:** `internal/agent/coordination.go` (2.7k) → `coordination_budget`
+  (ağaç bütçesi/kilit), `coordination_worker` (worker yaşam döngüsü, `send_to_worker`,
+  yetim tur kurtarma), `coordination_notify` (task-notification notları, worker
+  olayları), `coordination_drain` (toplu uyandırma penceresi, drain döngüsü,
+  koordinatör turu). `internal/db/store.go` (2k) → `store_agent`, `store_session_cli`,
+  `store_session_coordinator`, `store_message`, `store_load`. Bildirimler yorumlarıyla
+  birebir taşındı (`mvdecl` aracı), davranış değişikliği yok.
+- **Go — skills:** dört `setFrontmatter*` bayrak yazıcısı tek `setFrontmatterMarker`
+  gövdesini paylaşır (ince sarmalayıcılar kaldı).
+- **Frontend — efektler (eslint 80 uyarı → 7):** `shared/lib/useKeyedReset` eklendi:
+  anahtar değişince state'i **render sırasında** sıfırlar (React'in "prop değişince
+  state ayarla" kalıbı); eski `useEffect(() => setX(...), [key])` idiomu önce bayat
+  state'i boyayıp sonra yeniden render ediyordu. 57 site geçirildi: sıfırlama efektleri
+  `useKeyedReset`, yükleyiciler "yalnız callback'te setState yapan `run` + spinner'ı
+  yeniden kuran manuel `load`" çiftine bölündü (`loading` başlangıçta `true`),
+  `async/await` yükleyiciler promise zincirine döndü. `exhaustive-deps`: kararlı
+  setter'lar bağımlılığa eklendi, `FlowsPanel.setTab` için `useStableCallback`,
+  `currentTodos` memo, `agentName` `useCallback`. `CommandPalette` vurgu indeksini,
+  `SystemAgentsPanel` yedek seçimi türetir; `AutomationBoard` deep-link vurgusu her
+  poll'da değil hedef görününce çalışır. Kalan 7 efekt bilinçli (ebeveyn setter'ı,
+  localStorage yazımı, tek seferlik restore, mount'ta nag) — gerekçe `eslint.config.js`.
+- **Frontend — biçimlendiriciler:** `fmtTok`×5, `fmtBytes`×4, `fmtDur`/`fmtDuration`×4,
+  `fmtUSD`×2 yerel kopyaları `shared/lib/format` (`tokens`, `usd`, `formatBytes`) ve
+  `shared/lib/time` (`formatDurationMs`) üzerinden geçer; `formatBytes` (KB/MB/GB) artık
+  `format.ts`'te, `sessionDetailFormat.formatTokens` `tokens`'a delege. Çıktı locale'e
+  duyarlı hâle geldi (tr "3,1k", en "3.1k"); dört test beklentisi buna göre gevşetildi.
+- **Yapılmayan:** 1000+ satırlık tek-fonksiyon bileşenler (`AgentSettingsForm`,
+  `Composer`, `App.tsx`, `SkillsPanel`) bölünmedi — iç state'i parçalamak UI testi
+  olmadan riskli; `OutcomeSummary`/`rotaSegments` süre biçimleri (gün birimi, dakika
+  yuvarlama) farklı semantik olduğundan yerel kaldı.
+- **Doğrulama:** `scripts/test.sh full` yeşil (go test ./... + vitest 1020 + depcheck +
+  diff --check); staticcheck / deadcode / modernize / eslint hata: 0.
 
 ## Depo temizliği: ölü kod, statik analiz, modernize, frontend lint (2026-09-22) ✅
 

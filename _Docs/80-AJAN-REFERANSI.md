@@ -187,3 +187,22 @@ için `FindMessage`, tarama için `StreamMessages` kullan.
 `billing/billing.go` — fiyat hesaplama (`PriceStat`, `NoCacheCost`).
 `internal/billing/model_change_poc_test.go` — model değişiminin geçmiş kayıtları yeniden
 fiyatlamadığına dair regresyon testi (TSK67).
+
+## 10. Kod kalıpları (2026-09-22 temizliğinden)
+
+- **Sıralama:** `sort.Slice`/`sort.Strings` kullanma; `slices.SortFunc` +
+  `cmp.Compare` (çok anahtarlı: `if c := cmp.Compare(a.K, b.K); c != 0 { return c }`).
+  Liste uçları için `tools.SortByField` üç-yönlü karşılaştırıcı döner →
+  `slices.SortStableFunc(items, less)`.
+- **Frontend state sıfırlama:** bir prop/anahtar değişince state'i sıfırlamak için
+  `useKeyedReset(key, reset)` (`src/shared/lib/useKeyedReset.ts`), `useEffect` değil;
+  sıfırlama render sırasında olur, bayat state hiç boyanmaz. Yalnız bileşenin KENDİ
+  setter'ları; ebeveyn setter'ı veya localStorage yazımı efektte kalır.
+- **Frontend yükleyiciler:** efektten çağrılan fetch yalnız `.then/.catch/.finally`
+  içinde setState yapar (`run`); `setLoading(true)` gibi senkron setState'ler buton/manuel
+  girişte (`load`) veya `useKeyedReset` ile anahtar değişiminde. `loading` mount'ta
+  fetch başlıyorsa `useState(true)`. `react-hooks/set-state-in-effect` `await` sonrası
+  setState'i de sayar; `async` yükleyiciyi promise zincirine çevir.
+- **Biçimlendiriciler:** token/byte/süre/USD için `shared/lib/format` (`tokens`, `usd`,
+  `formatBytes`) ve `shared/lib/time` (`formatDuration`, `formatDurationMs`); yerel
+  `fmtX` kopyası yazma — çıktı locale'e duyarlıdır, testte `[.,]` ile eşle.
