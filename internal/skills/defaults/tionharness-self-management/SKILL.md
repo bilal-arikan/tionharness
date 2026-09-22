@@ -166,6 +166,21 @@ FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` 
 `sourcePath` set to the file path — never base64-embed bytes into `content`.
 (Screenshots and exported files are also auto-captured from a tool's saved path.)
 
+**Archive (reversible hide)** — agents, skills, artifacts, automations and goals
+archive like kanban cards: nothing is deleted, the item leaves the default lists and
+the Map ("Harita"), and it can be restored. `list_agents`, `list_artifacts` and
+`list_automations` follow the `list_tasks` convention — live items by default,
+`archived:true` returns ONLY archived ones. An archived **agent cannot run**: spawning,
+delegating, messaging or chatting with it fails with an explicit "is archived" error,
+and an automation targeting it is skipped with ledger reason `agent_archived`. An
+archived **automation never fires** (ledger reason `archived`). An archived **skill** is
+never advertised in "# Available Skills", never returned by `skill_search`, and
+`use_skill` refuses it with the same explicit error. There is no archive tool yet:
+archive/restore happens in the UI or over REST (`POST /api/{agents|skills|artifacts|
+automations|goals}/{id}/archive` and `/unarchive`); list endpoints take
+`?archived=true|false|all`. Tell the user when an archived item blocks the task
+instead of working around it.
+
 **Views (projections)** — `get_view` (`{kind, id, level?, lens?, sub?}`) collapses a
 large piece of state into a context-cheap compact DSL instead of re-listing it. Four
 kinds: `flowrun` (a run tree, optional `sub` for one node), `session`, `board` (the
