@@ -11,6 +11,14 @@
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
 
 
+## Codex CLI güncellemesi ve Sol canlı doğrulaması (2026-09-28)
+
+- CLI 0.157.1 kuruldu; yerel Codex sağlayıcısının `cliPath` ayarı yeni dosyaya
+  yönlendirildi. Giriş ve diğer sağlayıcı ayarları korundu.
+- Aynı TionHarness hesabıyla Astra ve Sol canlı testleri geçti. Aşağıdaki
+  0.153.3 testinde görülen Sol erişim reddi yeni sürümde tekrarlanmadı.
+- Bu kısa yanıt testi model erişimini doğrular; performans benchmark'ı değildir.
+
 ## Codex GPT-6 aile desteği ve Desktop farkları (2026-09-28)
 
 - Sol 6 ve Luna 6 Codex model kataloğuna ve API eşdeğeri fiyat tablosuna eklendi;

@@ -1216,10 +1216,10 @@ Yerel Codex **0.153.3** ve `models_cache.json` üzerinden doğrulanan CLI değer
 | Model | CLI düşünme seçenekleri | CLI bağlamı | Canlı deneme |
 |---|---|---|---|
 | Astra 6 | low, medium, high, xhigh, max, ultra | 272.000 | TionHarness taşıyıcısıyla kısa yanıt başarılı |
-| Sol 6 | low, medium, high, xhigh, max, ultra | 272.000 | Test edilen ChatGPT girişinde servis reddetti |
+| Sol 6 | low, medium, high, xhigh, max, ultra | 272.000 | CLI 0.157.1 ile TionHarness taşıyıcısında başarılı |
 | Luna 6 | low, medium, high, xhigh, max | 272.000 | Model çağrısı yapılmadı |
 
-Sol'un gerçek hata mesajı: `The 'gpt-6-sol' model is not supported when using
+CLI 0.153.3 ile ilk Sol denemesinin hata mesajı: `The 'gpt-6-sol' model is not supported when using
 Codex with a ChatGPT account.` Bu, yerel kataloğun erişim garantisi olmadığını
 gösterir; tüm hesaplar için kalıcı bir yasak olarak yorumlanmamalıdır. Desktop'ta
 listelenmek de ayrı CLI girişinin yetkisini kanıtlamaz. Denemeler `low` seviyesinde,
@@ -1230,6 +1230,14 @@ Kullanıcının yeniden girişinden sonra TionHarness'in kendi
 400 model erişim hatasıyla başarısız. İlk deneme `~/.codex` hesabını kullanmıştı;
 yeni deneme uygulamanın gerçek sağlayıcı evini doğrular. Girişin başarılı olması
 Sol modeline CLI erişimi verildiği anlamına gelmez.
+
+**Güncelleme sonrası sonuç:** CLI 0.157.1 kuruldu ve TionHarness sağlayıcısının
+`cliPath` alanı yeni yürütülebilir dosyaya yönlendirildi. Aynı uygulama hesabıyla
+üretim taşıyıcısında Astra ve Sol canlı testlerinin ikisi de geçti. Önceki Sol
+reddi bu sürümde tekrarlanmadı; bu sonuç bütün hesaplar için erişim garantisi
+değildir. Desktop ile gelen eski CLI dosyası değiştirilmedi. Yukarıdaki bağlam
+ve düşünme metadatası 0.153.3 kataloğu ölçümüdür; bu kısa canlı test 0.157.1
+kapasite sınırlarını veya kodlama başarı oranını ölçmez.
 
 CLI listesindeki `off` kaldırıldı; Luna için `ultra` da sunulmaz ve API doğrulaması
 bu desteklenmeyen kombinasyonları reddeder. Daha önce Astra için `off` kaydedilmiş
