@@ -1,5 +1,9 @@
 # 69 — Codex CLI Sağlayıcı: Fizibilite ve Referans
 
+> **Güncel ek (2026-09-28):** GPT-6 ailesi, gerçek CLI erişim denemesi ve Codex
+> Desktop farkları §14'te. Aşağıdaki tarihli katalog ve fizibilite kayıtları geçmiş
+> sürümleri anlatır; güncel model seçimi için §14 ve kaynak kodunu kullanın.
+
 > **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
@@ -1196,6 +1200,109 @@ merge edildi. Plandan sapan ve hâlâ geçerli noktalar:
   OS-sandbox seviyesinde mi) kanıtlanmadı → Boşluk-1.
 
 ---
+
+## 14. GPT-6 desteği ve Codex Desktop karşılaştırması (2026-09-28)
+
+### Model desteği ile hesap erişimi farklıdır
+
+Katalog artık `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna` sunar. Sol ve Luna eklendi;
+eski 5.6 modelleri korunur. Model kimliği değiştirilmeden `codex exec -m` üzerinden
+iletilir. Mevcut ajanların modeli veya sağlayıcı girişi otomatik değiştirilmez.
+Bu değişiklik Codex CLI taşıyıcısı içindir; `openai-compat` sağlayıcısına yeni
+bir Responses API taşıyıcısı eklemez.
+
+Yerel Codex **0.153.3** ve `models_cache.json` üzerinden doğrulanan CLI değerleri:
+
+| Model | CLI düşünme seçenekleri | CLI bağlamı | Canlı deneme |
+|---|---|---|---|
+| Astra 6 | low, medium, high, xhigh, max, ultra | 272.000 | TionHarness taşıyıcısıyla kısa yanıt başarılı |
+| Sol 6 | low, medium, high, xhigh, max, ultra | 272.000 | Test edilen ChatGPT girişinde servis reddetti |
+| Luna 6 | low, medium, high, xhigh, max | 272.000 | Model çağrısı yapılmadı |
+
+Sol'un gerçek hata mesajı: `The 'gpt-6-sol' model is not supported when using
+Codex with a ChatGPT account.` Bu, yerel kataloğun erişim garantisi olmadığını
+gösterir; tüm hesaplar için kalıcı bir yasak olarak yorumlanmamalıdır. Desktop'ta
+listelenmek de ayrı CLI girişinin yetkisini kanıtlamaz. Denemeler `low` seviyesinde,
+araç çağrısı istemeyen kısa bir promptla yapıldı; kodlama başarı oranı ölçülmedi.
+
+Kullanıcının yeniden girişinden sonra TionHarness'in kendi
+`~/.tionharness/codex-home` hesabıyla tekrar denendi: Astra başarılı, Sol aynı
+400 model erişim hatasıyla başarısız. İlk deneme `~/.codex` hesabını kullanmıştı;
+yeni deneme uygulamanın gerçek sağlayıcı evini doğrular. Girişin başarılı olması
+Sol modeline CLI erişimi verildiği anlamına gelmez.
+
+CLI listesindeki `off` kaldırıldı; Luna için `ultra` da sunulmaz ve API doğrulaması
+bu desteklenmeyen kombinasyonları reddeder. Daha önce Astra için `off` kaydedilmiş
+bir ajan varsa tekrar kaydetmeden/çalıştırmadan önce desteklenen bir seviye seçin.
+
+### API kapasitesini CLI kapasitesiyle karıştırma
+
+Resmi model sayfaları üç GPT-6 modeli için **1.050.000** API bağlamı ve **128.000**
+çıktı tavanı yayımlar. TionHarness API aile tablosu muhafazakâr 1.048.576 değerini
+korur; CLI kataloğu ise doğrulanan 272.000 değerini kullanır. Bu bir CLI ayarı
+zorlaması değildir: uygulamanın kapasite bildirimi/bütçeleme metadatasıdır.
+Örnek başına bağlam override'ları henüz dinamik keşfedilmez; CLI sürümü değiştiğinde
+bu değer yeniden doğrulanmalıdır. Yerel katalog ayrıca %95 etkin bağlam bildirir;
+272.000'in tamamının kullanıcı girdisine ayrıldığı anlamına gelmez.
+
+Standart API eşdeğeri fiyatlar (USD / milyon token):
+
+| Model | Girdi | Cache okuma | Cache yazma | Çıktı |
+|---|---:|---:|---:|---:|
+| Astra 6 | 10 | 1 | 12,50 | 50 |
+| Sol 6 | 2 | 0,20 | 2,50 | 10 |
+| Luna 6 | 0,10 | 0,01 | 0,125 | 0,50 |
+
+272.000 toplam girdi token'ı aşılınca tüm istekte girdi/cache 2×, çıktı 1,5×
+oranlanır. `EstimateFor` bu bilgiyi kullanır; `PriceFor("codex-cli", ...)` hâlâ
+fiyat döndürmez. Bunlar aboneliğin gerçek faturası veya kota tüketim formülü değildir.
+Kaynaklar: [Astra](https://developers.openai.com/api/docs/models/gpt-6-astra),
+[Sol](https://developers.openai.com/api/docs/models/gpt-6-sol),
+[Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+
+### Desktop ile neden aynı sonuç garanti edilmez?
+
+Aynı model kimliği, aynı araçlar, sistem talimatları ve çalışma döngüsü demek değildir.
+TionHarness `codex exec --json` kullanır; kendi sistem talimatlarını, MCP köprüsünü,
+sağlayıcı evini ve oturum yaşam döngüsünü kurar.
+
+| Alan | TionHarness Codex yolunun durumu |
+|---|---|
+| Devam ve cache | Kapsamlanmış kalıcı CLI evi, `exec resume`, delta geçmiş ve native compaction mevcut; her tur sıfırdan tam geçmiş göndermek zorunda değil |
+| Tur sırasında yönlendirme | `steerableForTurn` Codex için false; Desktop'taki çalışma sırasında yönlendirme deneyimi yok |
+| Native alt ajanlar | `[agents] enabled = false`; TionHarness kendi worker/delegasyon katmanını kullanır. `ultra` iletmek Desktop'ın otomatik delegasyon davranışını geri getirmez |
+| Onay | `ask`, native araç başına etkileşimli onay yerine `workspace-write` sandbox seçer; `auto` sandbox/onay bypass eder |
+| Hook ve token optimizasyonu | `AppliesToolHooks: false`; TionHarness'in Pre/PostToolUse hook'ları Codex turunda çalışmaz |
+| MCP şema yükü | Köprü `?full=1` ile katalogları baştan verir; tembel yükleme tasarrufuyla eşdeğer değildir |
+| Desktop araçları | Bu uygulamadaki tarayıcı, uygulama panelleri ve bağlayıcı araçları yalnız model seçerek aktarılmaz; uygun MCP/plugin kurulumu ayrıca gerekir |
+| İş akışı | TionHarness'in pano, flow, schedule, rota ve farklı sağlayıcılı ajan koordinasyonu korunur |
+
+İlgili kod: `codexcli.go` (`buildArgs`, `buildConfig`, `codexSandboxArgs`),
+`codexcli_resume.go`, `codexcli_compact.go`, `internal/agent/codexmcp.go`,
+`internal/api/chat_control.go`. Resmi referans:
+[etkileşimsiz Codex](https://learn.chatgpt.com/docs/non-interactive-mode) ve
+[Desktop yetenekleri](https://learn.chatgpt.com/docs/features).
+
+Pratik başlangıç: Astra 6 + `high` veya `xhigh`, kısa ve tutarlı ajan talimatları,
+yalnız gerekli MCP sunucuları, aynı çalışma dizini ve kalıcı oturum. Bu bir
+performans garantisi değil, karşılaştırmayı kontrol altında tutma önerisidir.
+Eşdeğerliği ölçmek için aynı Git revizyonu, görevler, araçlar ve düşünme seviyesiyle
+iki tarafta tekrarlar yapıp test geçişini, süreyi, input/cache/output token'larını,
+tekrar denemeleri ve kullanıcı müdahalesini karşılaştırmak gerekir. Bu çalışmada
+böyle bir A/B başarı veya verimlilik benchmark'ı yapılmadı.
+
+### Regresyon ve tekrar deneme
+
+`codex_gpt6_test.go` katalog, model/effort iletimi, fiyat ve taşıyıcıya göre bağlamı;
+`agents_codex_gpt6_test.go` ajan oluşturma/güncelleme doğrulamasını kapsar.
+`codex_gpt6_live_test.go` normal testlerde atlanır. Kimliği doğrulanmış bir Codex
+eviyle açıkça etkinleştirilince Astra/Sol için birer kısa istek tüketir:
+
+```bash
+TIONHARNESS_CODEX_GPT6_LIVE_HOME=/path/to/codex-home go test ./internal/providers -run '^TestCodexGPT6Live$' -count=1 -v
+```
+
+Hesap/model erişim reddi başarılı test gibi gizlenmez; canlı test hata döndürür.
 
 ## İlgili dokümanlar
 

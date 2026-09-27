@@ -21,15 +21,12 @@ const (
 	windowMiniMax          = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
 	windowDeepSeek         = 1_000_000 // DeepSeek V4 / V4.1 family ("1M context")
 	windowGemini           = 1_000_000 // Gemini long-context family
-	// The OpenAI GPT-5.6 line is tiered too: Sol and Terra ship ~1.05M
-	// (1_048_576) while Luna stays at 400K. GPT-6 Astra ships the same 1.05M
-	// window (1,050,000 quoted by the API docs; the 1_048_576 constant is within
-	// 0.14% and stays on the safe side). The frequently quoted 272K is NOT a
-	// context limit — it is the long-context *pricing* threshold for Sol/Terra and
-	// Astra alike and, separately, the Codex CLI's own fallback context_window for
-	// slugs it does not recognise. We reuse that fallback for every other gpt-5.x /
-	// codex slug: it is what the CLI itself assumes, so it can never over-promise.
-	windowGPTLarge = 1_048_576 // GPT-5.6 Sol / Terra, GPT-6 Astra
+	// Published API windows: GPT-5.6 Sol/Terra and all verified GPT-6 tiers
+	// have about 1.05M tokens; GPT-5.6 Luna has 400K. Keep the large value
+	// conservatively below the GPT-6 API ceiling of 1,050,000. Codex GPT-6
+	// uses a separate verified CLI window (see codex_gpt6.go), so API capacity
+	// is never advertised as the CLI's effective context.
+	windowGPTLarge = 1_048_576 // GPT-5.6 Sol/Terra and GPT-6 API capacity
 	windowGPTLuna  = 400_000   // GPT-5.6 Luna
 	windowGPTOther = 272_000   // other gpt-5.x / codex slugs (CLI fallback)
 	// The GLM (Z.ai) line is tiered as well: glm-5.2 and the glm-5.3 family
@@ -166,6 +163,12 @@ func ContextWindowFor(provider, model string) int {
 	}
 	switch {
 	case gptFamily(m):
+		if gpt6Tier(m) != "" {
+			if provider == "codex-cli" {
+				return codexGPT6ContextWindow
+			}
+			return windowGPTLarge
+		}
 		// Tier order matters: "gpt-5.6-sol" must hit the large tier, not the
 		// generic gpt fallback.
 		switch {

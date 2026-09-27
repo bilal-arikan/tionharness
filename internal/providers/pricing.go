@@ -215,19 +215,16 @@ var priceTable = map[string]map[string]Price{
 	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
 	// correctly report unpriced for anything absent here).
 	"openai": {
-		// GPT-6 Astra breaks the flat 0.10× cache-read rule the rest of this table
-		// follows: input is $10/MTok but cached input is a published $1/MTok, i.e.
-		// exactly 0.10× — the ratio holds, so the shared override still applies.
-		// Cache writes are $12.50/MTok = 1.25× input, the one OpenAI model here
-		// that does carry a write premium, so it does NOT pin 1.0 like its
-		// siblings.
-		//
-		// All four current tiers carry the same long-context surcharge: past 272K
-		// input tokens the WHOLE request bills at 2× input/cache and 1.5× output.
-		// The published long-context rates confirm the multipliers rather than
-		// assuming Astra's apply to the rest — Sol $5/$30 → $10/$45, Terra
-		// $2/$12 → $4/$18, Luna $0.20/$1.20 → $0.40/$1.80.
+		// GPT-6 Standard API rates verified on 2026-09-28:
+		// https://developers.openai.com/api/docs/models/gpt-6-astra
+		// https://developers.openai.com/api/docs/models/gpt-6-sol
+		// https://developers.openai.com/api/docs/models/gpt-6-luna
+		// All three use 0.10x cache reads and 1.25x cache writes. Above 272K
+		// total input, the whole request uses 2x input/cache and 1.5x output.
+		// Codex subscription calls use these only as equivalent-API estimates.
 		"gpt-6-astra":   {InputPerMTok: 10.00, OutputPerMTok: 50.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
+		"gpt-6-sol":     {InputPerMTok: 2.00, OutputPerMTok: 10.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
+		"gpt-6-luna":    {InputPerMTok: 0.10, OutputPerMTok: 0.50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
 		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
 		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
 		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0, LongContextThresholdTokens: longContextThresholdGPT, LongContextInputMult: 2.0, LongContextOutputMult: 1.5},
@@ -383,9 +380,8 @@ func EstimateFor(provider, model string) (Price, bool) {
 	case "codex-cli":
 		// codex-cli runs via ChatGPT/Codex subscription login; reuse OpenAI's own
 		// first-party list price for the same model id as an informational
-		// estimate. No cache-write premium to strip here (unlike claude-cli/
-		// anthropic) — the "openai" table never set one; caching is automatic on
-		// OpenAI's side, not an opt-in TTL choice.
+		// estimate. Preserve the published cache-write premium: OpenAI's cache
+		// rates are not an Anthropic-style opt-in TTL choice.
 		if p, ok := priceTable["openai"][model]; ok {
 			return p, true
 		}

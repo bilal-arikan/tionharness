@@ -255,9 +255,8 @@ func ThinkingClass(model string) string {
 // ThinkingClassForProvider adds transport knowledge where a model id alone is
 // ambiguous. Codex GPT-5/GPT-6 models expose xhigh/max/ultra as real CLI effort
 // values; other providers keep the existing adaptive/legacy classification.
-// GPT-6 Astra documents low/medium/high/xhigh plus max (Responses API), so it
-// lands in the same ramp as the GPT-5.6 tiers — note Astra drops "none", which
-// this class never emitted for Codex anyway.
+// GPT-6 keeps the adaptive class, while ThinkingTiersForProvider applies its
+// verified CLI-specific tiers rather than inheriting the generic off/ultra list.
 func ThinkingClassForProvider(providerKind, model string) string {
 	if providerKind == "codex-cli" && codexEffortModel(model) {
 		return "adaptive"
@@ -279,6 +278,9 @@ func codexEffortModel(model string) bool {
 // EffortForThinkingBudget), so offering it would promise a depth the wire format
 // cannot carry.
 func ThinkingTiersForProvider(providerKind, model string) []string {
+	if tier := gpt6Tier(model); providerKind == "codex-cli" && tier != "" {
+		return codexGPT6ThinkingTiers(tier)
+	}
 	tiers := thinkingTiersForClass(ThinkingClassForProvider(providerKind, model), model)
 	if usesNativeEffort(providerKind) {
 		tiers = withoutTier(tiers, "ultra")

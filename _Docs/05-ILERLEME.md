@@ -11,6 +11,27 @@
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
 
 
+## Codex GPT-6 aile desteği ve Desktop farkları (2026-09-28)
+
+- Sol 6 ve Luna 6 Codex model kataloğuna ve API eşdeğeri fiyat tablosuna eklendi;
+  Astra 6 açıklaması güncellendi. Önceki model seçimleri korunur.
+- Codex 0.153.3 model kataloğuna göre GPT-6 CLI bağlamı 272K, Astra/Sol düşünmesi
+  low–ultra, Luna low–max. API'nin 1.05M kapasitesi CLI'ya mal edilmez; CLI'da
+  sunulmayan `off` ve Luna `ultra` katalog/API doğrulamasından çıkarıldı.
+- Gerçek TionHarness taşıyıcısıyla Astra kısa yanıt verdi. Sol, test edilen
+  ChatGPT girişinde model erişimi nedeniyle reddedildi; katalogda görünmesi
+  erişim garantisi değildir. Yeniden girişten sonra uygulamanın kendi
+  `~/.tionharness/codex-home` hesabıyla da aynı sonuç doğrulandı (Astra başarılı,
+  Sol 400 model erişim reddi). Luna için canlı istek yapılmadı. Benchmark yok.
+- Ayrıntılar, kaynaklar, Desktop farkları ve isteğe bağlı canlı test komutu:
+  `69-CODEX-CLI-SAGLAYICI.md` §14.
+- Doğrulama: sağlayıcı regresyonları ve backend derlemesi başarılı; tam kapının
+  ikinci koşusu geçti (Go + 143 dosyada 1026 frontend testi + depcheck + diff).
+  İlk tam koşuda mevcut `TestSpawnWorkerIsCancellableAsSoonAsItReturns` düştü;
+  tek başına 20 tekrarda ve ikinci tam koşuda geçti. Bu test/kod değiştirilmedi;
+  ilk hata zamanlamaya bağlı olabilir. İsteğe bağlı canlı testte Sol erişim reddi
+  ayrı bir başarısız sonuçtur, çevrimdışı kapının geçmesi onu ortadan kaldırmaz.
+
 ## Doküman doğrulama ve kullanıcı kılavuzları (2026-09-28) ✅
 
 - README, mimari, veri modeli, teknoloji seçimleri ve ajan referansı kaynak koduyla

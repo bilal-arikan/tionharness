@@ -24,14 +24,13 @@ func TestGPT6AstraFamilyGates(t *testing.T) {
 	}
 }
 
-// TestGPT6AstraWindowAndOutput pins Astra to the large GPT tier rather than the
-// 272K CLI fallback. 272K is Astra's long-context *pricing* threshold, not its
-// window, so landing on windowGPTOther would under-report the window by ~4x and
-// compact far too early.
+// TestGPT6AstraWindowAndOutput pins the effective Codex CLI window, which
+// differs from the published API ceiling. A larger API window must not delay
+// compaction past the CLI catalog's advertised capacity.
 func TestGPT6AstraWindowAndOutput(t *testing.T) {
 	for _, m := range []string{"gpt-6-astra", "GPT-6-Astra", " gpt-6-astra "} {
-		if got := ContextWindowFor("codex-cli", m); got != windowGPTLarge {
-			t.Errorf("window(%q) = %d, want %d", m, got, windowGPTLarge)
+		if got := ContextWindowFor("codex-cli", m); got != codexGPT6ContextWindow {
+			t.Errorf("window(%q) = %d, want %d", m, got, codexGPT6ContextWindow)
 		}
 	}
 	if got := MaxOutputFor("codex-cli", "gpt-6-astra"); got != maxOutGPT {
@@ -46,7 +45,7 @@ func TestGPT6AstraWindowAndOutput(t *testing.T) {
 // high/xhigh plus max, so on the Codex transport it gets the same full ramp as
 // the GPT-5.6 tiers — including "ultra", which is a CLI-only effort value.
 func TestGPT6AstraThinkingRamp(t *testing.T) {
-	want := []string{"off", "low", "medium", "high", "xhigh", "max", "ultra"}
+	want := []string{"low", "medium", "high", "xhigh", "max", "ultra"}
 	if got := ThinkingTiersForProvider("codex-cli", "gpt-6-astra"); !slices.Equal(got, want) {
 		t.Fatalf("tiers = %v, want %v", got, want)
 	}
