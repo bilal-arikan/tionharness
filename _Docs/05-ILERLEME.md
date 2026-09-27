@@ -11,6 +11,22 @@
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
 
 
+## Ayrıntılı Codex araç karşılaştırması (2026-09-28)
+
+- Önceki deneyden ayrı 12 canlı çağrı: 48 araç olayı, sıfır araç hatası; 96 test
+  kontrolü geçti. Astra TionHarness/CLI 12/12, Sol 11/13 adım kullandı.
+- Komut/girdi/çıktı, ölçülebilen süreler ve nihai çözüm kaydedildi; birleşik
+  keşif+okuma çağrıları ile cache temizliği ayrı incelendi. Yama girdisi/süresi
+  eksikse ölçüm varmış gibi sunulmaz.
+- Astra'nın bağımlılık doğrulaması iki yolda da 512 grafiği kapsadı; Sol seçili
+  örnekleri sınadı. Dört nihai çözüm sonradan bağımsız 512'şer grafik kontrolünü
+  geçti (2048 ek kontrol). Bu ek kontrol model sayaçlarına dahil değil.
+- Rapor: `69-CODEX-TOOL-BENCHMARK-2026-09-28.md`; ham izler aynı adlı JSON.
+  `scripts/codexbench` iz ayrıştırma testleri, etiketleme ve ek doğrulama araçları
+  içerir. Üretim sağlayıcı davranışı değiştirilmedi.
+- Tam test kapısı geçti: Go testleri, 143 dosyada 1026 frontend testi, depcheck
+  ve diff kontrolü. İz parser testleri canlı istek gerektirmez.
+
 ## TionHarness–Codex CLI karşılaştırmalı deney (2026-09-28)
 
 - CLI 0.157.1 ve `high` seviyesinde Astra/Sol × iki taşıyıcı × üç Python görevi

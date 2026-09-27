@@ -46,3 +46,38 @@ TIONHARNESS_ENABLE_SHELL=1 go run ./scripts/codexbench \
 kesilen deneyin tamamlanan hücreleri korunur. Başarısız model çağrısı veya test
 `passed: false` olarak kaydedilir; programın tamamlanması tüm görevlerin geçtiği
 anlamına gelmez. Kimlik bilgileri rapora yazılmaz, geçici evler iş sonunda silinir.
+
+## Ayrıntılı araç izi
+
+Her çağrının `trace` alanı araç adı, mevcut girdi/çıktı, hata bayrağı, turdan
+itibaren bitiş zamanı ve ölçülebilen süreyi saklar. Nihai `solution.py` da
+sonuca eklenir. TionHarness için üretim `OnEvent` izi, doğrudan CLI için canlı
+JSONL olay akışı kullanılır. Tamamlanan adımlar sayılır; ara güncellemeler ikinci
+çağrı sayılmaz. Süre testleri başlangıcı olmayan adımları sıfır olarak sunmaz.
+
+- TionHarness'in sıfır `DurMs` değeri gerçek sıfırla eksik başlangıcı ayırt
+  ettirmediği için raporda `null` olur. Native yolda başlangıç varsa ölçülen sıfır
+  korunur; yoksa `null` yazılır. Bu fark süre kapsam tablosunda görünür.
+- `file_change` olayları tam yamayı içermeyebilir. Boş yama girdisi geriye dönük
+  uydurulmaz. Nihai dosya, ara düzenleme geçmişinin yerine geçmez.
+- Komut izleri yerel yolları ve görev çıktılarını içerir.
+- Araç hatası, tur başarısı ve bağımsız değerlendirici sonucu farklı ölçümlerdir.
+- `annotate_tools.py` bilinen komutları muhafazakâr biçimde etiketler; tanınmayan
+  komut `incelenmedi` kalır. Nihai rapordan önce komutları ve bu etiketleri inceleyin.
+  Aynı girdinin yeniden görülmesi otomatik olarak israf veya retry sayılmaz.
+
+```bash
+python scripts/codexbench/annotate_tools.py results.json annotated.json
+python scripts/codexbench/detailed_report.py annotated.json report.md
+```
+
+Ayrıntılı rapordaki sabit bağlantılar 2026-09-28 deney dosyaları içindir; farklı
+bir tarih/konuma çıktı alındığında bu bağlantıları uyarlayın. İz ayrıştırıcısının
+parçalı JSONL, hata, mükerrer tamamlanma ve eksik süre testleri canlı çağrı yapmaz:
+`go test ./scripts/codexbench`.
+
+Kaydedilmiş dört bağımlılık çözümünü bağımsız olarak 512'şer grafikle sınamak için:
+`python scripts/codexbench/verify_solutions.py annotated.json`. Bu sonradan yapılan
+kontrol modelin araç sayısına, süresine veya token kullanımına eklenmez; sonucu
+`supplementalGraphOracle` alanına yazılır. Etiketleme aracını tekrar çalıştırmak
+bu ek alanı yeniden üretmez; sıralama etiketleme → ek kontrol → rapordur.

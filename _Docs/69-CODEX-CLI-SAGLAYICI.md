@@ -1304,6 +1304,12 @@ model ve iki yoldaki 12 deneme/96 kontrol geçti. Ortalama süre Astra'da
 49,07 / 47,70 sn, Sol'da 43,79 / 40,22 sn (TionHarness / CLI). MCP/worker,
 Desktop ve uzun oturum performansı bu küçük deneyin kapsamı dışındadır.
 
+Ayrı [ayrıntılı araç koşusu](69-CODEX-TOOL-BENCHMARK-2026-09-28.md), araç girdilerini,
+çıktılarını ve ölçülebilen sürelerini kaydetti. 48 olayda araç hatası görülmedi;
+çağrı birleştirme ve ek cache temizliği toplam sayıyı etkiledi. Astra'nın kendi
+kontrolleri daha kapsamlı olsa da dört bağımlılık çözümünün tamamı sonradan aynı
+512 grafik doğrulamasını geçti. Bu da küçük örneklemdir; Desktop/MCP ölçümü değildir.
+
 ### Regresyon ve tekrar deneme
 
 `codex_gpt6_test.go` katalog, model/effort iletimi, fiyat ve taşıyıcıya göre bağlamı;

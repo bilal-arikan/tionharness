@@ -25,6 +25,8 @@ type result struct {
 	Passed     bool            `json:"passed"`
 	Error      string          `json:"error,omitempty"`
 	Validation string          `json:"validation"`
+	Trace      []toolRecord    `json:"trace"`
+	Solution   string          `json:"solution"`
 }
 
 func main() {
@@ -74,10 +76,11 @@ func run(bin, home, fixtures, task, model, route string) result {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	start := time.Now()
+	trace := &toolTrace{start: start}
 	if route == "tionharness" {
 		response, callErr := providers.NewCodexCLI(bin, "", home).Complete(ctx, providers.Request{
 			Model: model, CLIEffortLevel: "high", PermissionMode: "auto", WorkDir: dir,
-			System: system, NativeWebSearch: false, Messages: []providers.Message{{Role: "user", Text: prompt}},
+			OnEvent: trace.providerEvent, System: system, NativeWebSearch: false, Messages: []providers.Message{{Role: "user", Text: prompt}},
 		})
 		err = callErr
 		if response != nil {
@@ -89,9 +92,13 @@ func run(bin, home, fixtures, task, model, route string) result {
 			}
 		}
 	} else {
-		r.Usage, r.Tools, err = native(ctx, bin, home, dir, model, system, prompt)
+		r.Usage, r.Tools, err = native(ctx, bin, home, dir, model, system, prompt, trace)
 	}
 	r.Seconds = time.Since(start).Seconds()
+	r.Trace = trace.records
+	if solution, readErr := os.ReadFile(filepath.Join(dir, "solution.py")); readErr == nil {
+		r.Solution = string(solution)
+	}
 	if err != nil {
 		r.Error = err.Error()
 	}

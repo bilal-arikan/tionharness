@@ -1,0 +1,1023 @@
+{
+  "cliVersion": "codex-cli 0.157.1",
+  "effort": "high",
+  "recordedAt": "2026-09-28T02:11:49+03:00",
+  "results": [
+    {
+      "task": "intervals",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 37.8744854,
+      "usage": {
+        "inputTokens": 13097,
+        "outputTokens": 780,
+        "cacheReadTokens": 34816,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-ChildItem -Force'\"",
+          "output": "\r\n    Directory: C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-821324852\r\n\r\nMode                 LastWriteTime         Length Name\r\n----                 -------------         ------ ----\r\n-a---          28.09.2026    02:02             64 solution.py\r\n\r\n",
+          "isError": false,
+          "endMs": 9351,
+          "durationMs": 512,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-Content -LiteralPath solution.py'\"",
+          "output": "def merge_intervals(intervals):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 13391,
+          "durationMs": 285,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-821324852\\solution.py",
+          "isError": false,
+          "endMs": 33528,
+          "durationMs": null,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import merge_intervals\\n\\nassert merge_intervals([]) == []\\nassert merge_intervals(iter(())) == []\\nassert merge_intervals([(2, 2), (-1, -1)]) == []\\nassert merge_intervals([(5, 8), (1, 3), (3, 5), (2, 4)]) == [(1, 8)]\\nassert merge_intervals([(-5, -2), (-3, 0), (2, 4), (7, 9)]) == [(-5, 0), (2, 4), (7, 9)]\\nassert merge_intervals([(1, 10), (2, 3), (1, 10)]) == [(1, 10)]\\nassert merge_intervals((pair for pair in [(4, 6), (-2, 1), (1, 4)])) == [(-2, 6)]\\noriginal = [[5, 8], [1, 4], [4, 5], [2, 2]]\\nsnapshot = [pair[:] for pair in original]\\nresult = merge_intervals(original)\\nassert result == [(1, 8)] and original == snapshot\\nassert all(isinstance(pair, tuple) for pair in result)\\nfor invalid in [[(3, 2)], [(0, 1), (5, 4)], [(0, 0), (-1, -2)]]:\\n    try:\\n        merge_intervals(pair for pair in invalid)\\n    except ValueError:\\n        pass\\n    else:\\n        raise AssertionError('Expected ValueError')\\nprint('All local checks passed.')\\n'@ | python -B -\\\"\"",
+          "output": "All local checks passed.\r\n",
+          "isError": false,
+          "endMs": 34427,
+          "durationMs": 350,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\nassert merge_intervals([]) == []\nassert merge_intervals(iter(())) == []\nassert merge_intervals([(2, 2), (-1, -1)]) == []\nassert merge_intervals([(5, 8), (1, 3), (3, 5), (2, 4)]) == [(1, 8)]\nassert merge_intervals([(-5, -2), (-3, 0), (2, 4), (7, 9)]) == [(-5, 0), (2, 4), (7, 9)]\nassert merge_intervals([(1, 10), (2, 3), (1, 10)]) == [(1, 10)]\nassert merge_intervals((pair for pair in [(4, 6), (-2, 1), (1, 4)])) == [(-2, 6)]\noriginal = [[5, 8], [1, 4], [4, 5], [2, 2]]\nsnapshot = [pair[:] for pair in original]\nresult = merge_intervals(original)\nassert result == [(1, 8)] and original == snapshot\nassert all(isinstance(pair, tuple) for pair in result)\nfor invalid in [[(3, 2)], [(0, 1), (5, 4)], [(0, 0), (-1, -2)]]:\n    try:\n        merge_intervals(pair for pair in invalid)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError('Expected ValueError')\nprint('All local checks passed.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def merge_intervals(intervals):\n    \"\"\"Return sorted, merged nonempty intervals without modifying the input.\"\"\"\n    ordered = []\n    for start, end in intervals:\n        if start > end:\n            raise ValueError(\"interval start must not exceed end\")\n        if start < end:\n            ordered.append((start, end))\n    ordered.sort()\n\n    merged = []\n    for start, end in ordered:\n        if merged and start <= merged[-1][1]:\n            previous_start, previous_end = merged[-1]\n            merged[-1] = (previous_start, max(previous_end, end))\n        else:\n            merged.append((start, end))\n    return merged\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 36.5261584,
+      "usage": {
+        "inputTokens": 13178,
+        "outputTokens": 757,
+        "cacheReadTokens": 34944
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "output": "\r\n    Directory: C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-4211906014\r\n\r\nMode                 LastWriteTime         Length Name\r\n----                 -------------         ------ ----\r\n-a---          28.09.2026    02:02             64 solution.py\r\n\r\n",
+          "isError": false,
+          "endMs": 7252,
+          "durationMs": 286,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "output": "def merge_intervals(intervals):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 10616,
+          "durationMs": 376,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-4211906014\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 31873,
+          "durationMs": 2,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-4211906014\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\ncases = [\n    ([], []),\n    ([(2, 2), (-3, -3)], []),\n    ([(5, 7), (1, 3), (3, 5)], [(1, 7)]),\n    ([(1, 10), (2, 4), (1, 10)], [(1, 10)]),\n    ([(-4, -1), (-8, -4), (2, 3), (-1, 0)], [(-8, 0), (2, 3)]),\n    ([(1, 2), (3, 4), (2, 2)], [(1, 2), (3, 4)]),\n]\nfor intervals, expected in cases:\n    assert merge_intervals(intervals) == expected\n    assert merge_intervals(pair for pair in intervals) == expected\n\noriginal = [[4, 6], [1, 4], [8, 8]]\nsnapshot = [pair[:] for pair in original]\nassert merge_intervals(original) == [(1, 6)]\nassert original == snapshot\n\nfor intervals in [[(3, 2)], [(0, 5), (4, 3)], [(-1, -2)]]:\n    try:\n        merge_intervals(pair for pair in intervals)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError('reversed interval accepted')\n\nprint('All local checks passed.')\n'@ | python -B -\"",
+          "output": "All local checks passed.\r\n",
+          "isError": false,
+          "endMs": 32633,
+          "durationMs": 360,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\ncases = [\n    ([], []),\n    ([(2, 2), (-3, -3)], []),\n    ([(5, 7), (1, 3), (3, 5)], [(1, 7)]),\n    ([(1, 10), (2, 4), (1, 10)], [(1, 10)]),\n    ([(-4, -1), (-8, -4), (2, 3), (-1, 0)], [(-8, 0), (2, 3)]),\n    ([(1, 2), (3, 4), (2, 2)], [(1, 2), (3, 4)]),\n]\nfor intervals, expected in cases:\n    assert merge_intervals(intervals) == expected\n    assert merge_intervals(pair for pair in intervals) == expected\n\noriginal = [[4, 6], [1, 4], [8, 8]]\nsnapshot = [pair[:] for pair in original]\nassert merge_intervals(original) == [(1, 6)]\nassert original == snapshot\n\nfor intervals in [[(3, 2)], [(0, 5), (4, 3)], [(-1, -2)]]:\n    try:\n        merge_intervals(pair for pair in intervals)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError('reversed interval accepted')\n\nprint('All local checks passed.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def merge_intervals(intervals):\n    \"\"\"Return sorted, nonempty intervals with overlaps and touching ends merged.\"\"\"\n    ordered = []\n    for start, end in intervals:\n        if start > end:\n            raise ValueError(\"interval start must not exceed end\")\n        if start < end:\n            ordered.append((start, end))\n    ordered.sort()\n\n    merged = []\n    for start, end in ordered:\n        if merged and start <= merged[-1][1]:\n            previous_start, previous_end = merged[-1]\n            merged[-1] = (previous_start, max(previous_end, end))\n        else:\n            merged.append((start, end))\n    return merged\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 34.4836884,
+      "usage": {
+        "inputTokens": 13046,
+        "outputTokens": 945,
+        "cacheReadTokens": 45056
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"rg --files -g '*'\"",
+          "output": "solution.py\n",
+          "isError": false,
+          "endMs": 11477,
+          "durationMs": 923,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"rg --files -g '*'\"",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "output": "def merge_intervals(intervals):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 14831,
+          "durationMs": 315,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-72729853\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 21989,
+          "durationMs": 3,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-72729853\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\nassert merge_intervals([]) == []\nassert merge_intervals(iter([(5, 7), (-3, -1), (-1, 2), (2, 5), (4, 4)])) == [(-3, 7)]\nassert merge_intervals((pair for pair in [(8, 9), (1, 3), (4, 6)])) == [(1, 3), (4, 6), (8, 9)]\noriginal = [[2, 4], [1, 2]]\nassert merge_intervals(original) == [(1, 4)]\nassert original == [[2, 4], [1, 2]]\ntry:\n    merge_intervals([(1, 1), (3, 2)])\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError('expected ValueError')\nprint('checks passed')\n'@ | python -\"",
+          "output": "checks passed\r\n",
+          "isError": false,
+          "endMs": 30680,
+          "durationMs": 300,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\nassert merge_intervals([]) == []\nassert merge_intervals(iter([(5, 7), (-3, -1), (-1, 2), (2, 5), (4, 4)])) == [(-3, 7)]\nassert merge_intervals((pair for pair in [(8, 9), (1, 3), (4, 6)])) == [(1, 3), (4, 6), (8, 9)]\noriginal = [[2, 4], [1, 2]]\nassert merge_intervals(original) == [(1, 4)]\nassert original == [[2, 4], [1, 2]]\ntry:\n    merge_intervals([(1, 1), (3, 2)])\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError('expected ValueError')\nprint('checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def merge_intervals(intervals):\n    nonempty = []\n    for start, end in intervals:\n        if start > end:\n            raise ValueError(\"interval start must not exceed end\")\n        if start < end:\n            nonempty.append((start, end))\n\n    merged = []\n    for start, end in sorted(nonempty):\n        if merged and start <= merged[-1][1]:\n            merged[-1] = (merged[-1][0], max(merged[-1][1], end))\n        else:\n            merged.append((start, end))\n    return merged\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 31.6137706,
+      "usage": {
+        "inputTokens": 12816,
+        "outputTokens": 906,
+        "cacheReadTokens": 45056,
+        "thinkingTokens": 137,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-ChildItem -Force | Select-Object Name,Length,Mode'\"",
+          "output": "\r\nName        Length Mode\r\n----        ------ ----\r\nsolution.py     64 -a---\r\n\r\n",
+          "isError": false,
+          "endMs": 10640,
+          "durationMs": 554,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Length,Mode'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"Get-Content -LiteralPath .\\\\\\\\solution.py\\\"\"",
+          "output": "def merge_intervals(intervals):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 13998,
+          "durationMs": 323,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-Content -LiteralPath .\\\\solution.py\"",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-4146866464\\solution.py",
+          "isError": false,
+          "endMs": 20296,
+          "durationMs": 1,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import merge_intervals\\n\\nassert merge_intervals([]) == []\\nassert merge_intervals([(1, 3), (3, 5), (2, 4), (8, 8)]) == [(1, 5)]\\nassert merge_intervals((pair for pair in [(-4, -2), (-2, 1), (3, 5)])) == [(-4, 1), (3, 5)]\\noriginal = [[4, 6], [1, 2]]\\nassert merge_intervals(original) == [(1, 2), (4, 6)]\\nassert original == [[4, 6], [1, 2]]\\ntry:\\n    merge_intervals([(1, 1), (2, 1)])\\nexcept ValueError:\\n    pass\\nelse:\\n    raise AssertionError('invalid interval accepted')\\nprint('checks passed')\\n'@ | python -\\\"\"",
+          "output": "checks passed\r\n",
+          "isError": false,
+          "endMs": 28070,
+          "durationMs": 329,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import merge_intervals\n\nassert merge_intervals([]) == []\nassert merge_intervals([(1, 3), (3, 5), (2, 4), (8, 8)]) == [(1, 5)]\nassert merge_intervals((pair for pair in [(-4, -2), (-2, 1), (3, 5)])) == [(-4, 1), (3, 5)]\noriginal = [[4, 6], [1, 2]]\nassert merge_intervals(original) == [(1, 2), (4, 6)]\nassert original == [[4, 6], [1, 2]]\ntry:\n    merge_intervals([(1, 1), (2, 1)])\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError('invalid interval accepted')\nprint('checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def merge_intervals(intervals):\n    nonempty = []\n    for start, end in intervals:\n        if start > end:\n            raise ValueError(\"interval start must not exceed end\")\n        if start < end:\n            nonempty.append((start, end))\n\n    nonempty.sort()\n    merged = []\n    for start, end in nonempty:\n        if merged and start <= merged[-1][1]:\n            previous_start, previous_end = merged[-1]\n            merged[-1] = (previous_start, max(previous_end, end))\n        else:\n            merged.append((start, end))\n    return merged\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 57.6567649,
+      "usage": {
+        "inputTokens": 13928,
+        "outputTokens": 1413,
+        "cacheReadTokens": 35200
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-Location; rg --files -g '\"'!__pycache__/**'\"' -g '\"'! .git/**'\"'\"",
+          "output": "\r\nsolution.py\nPath\r\n----\r\nC:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-3224517109\r\n\r\n",
+          "isError": false,
+          "endMs": 9479,
+          "durationMs": 327,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-Location; rg --files -g '\"'!__pycache__/**'\"' -g '\"'! .git/**'\"'\"",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "output": "class TTLCache:\r\n    def __init__(self, capacity, clock):\r\n        raise NotImplementedError\r\n    def put(self, key, value, ttl):\r\n        raise NotImplementedError\r\n    def get(self, key, default=None):\r\n        raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 12598,
+          "durationMs": 286,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-3224517109\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 50700,
+          "durationMs": 3,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-3224517109\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nclass Clock:\n    now = 0\n    def __call__(self):\n        return self.now\n\nfor capacity in (0, -1, 1.5, '2', None, True, False):\n    try:\n        TTLCache(capacity, Clock())\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('invalid capacity', capacity))\n\nclock = Clock()\ncache = TTLCache(2, clock)\nmissing = object()\nassert cache.get('missing', missing) is missing\ncache.put('a', None, 5)\ncache.put('b', False, 10)\nassert cache.get('a', missing) is None\ncache.put('c', 3, 20)\nassert cache.get('b', missing) is missing\nclock.now = 5\nassert cache.get('a', missing) is missing\nassert cache.get('c') == 3\ncache.put('c', 4, 2)\nclock.now = 7\nassert cache.get('c', missing) is missing\n\nclock.now = 0\ncache = TTLCache(2, clock)\ncache.put('a', 1, 10)\ncache.put('b', 2, 10)\ncache.put('a', 3, 20)\nassert cache.get('b') == 2\ncache.put('a', 4, 20)\ncache.put('c', 5, 10)\nassert cache.get('b', missing) is missing\nassert cache.get('a') == 4\ncache.put('a', 6, 0)\nassert cache.get('a', missing) is missing\ncache.put('c', 6, -1)\nassert cache.get('c', missing) is missing\n\ncache = TTLCache(4, clock)\ncache.put('live-oldest', 1, 100)\ncache.put('expired-one', 2, 1)\ncache.put('live-newer', 3, 100)\ncache.put('expired-two', 4, 1)\nclock.now = 1\ncache.put('new-one', 5, 100)\ncache.put('new-two', 6, 100)\nassert cache.get('live-oldest') == 1\nassert cache.get('live-newer') == 3\nassert cache.get('expired-one', missing) is missing\nassert cache.get('expired-two', missing) is missing\n\ncache = TTLCache(1, clock)\ncache.put('a', 1, 1)\nclock.now = 2\ncache.put('a', False, 2)\nassert cache.get('a', missing) is False\nclock.now = 4\nassert cache.get('a', missing) is missing\nprint('All local TTLCache checks passed.')\n'@ | python -B -\"",
+          "output": "All local TTLCache checks passed.\r\n",
+          "isError": false,
+          "endMs": 51684,
+          "durationMs": 432,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nclass Clock:\n    now = 0\n    def __call__(self):\n        return self.now\n\nfor capacity in (0, -1, 1.5, '2', None, True, False):\n    try:\n        TTLCache(capacity, Clock())\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('invalid capacity', capacity))\n\nclock = Clock()\ncache = TTLCache(2, clock)\nmissing = object()\nassert cache.get('missing', missing) is missing\ncache.put('a', None, 5)\ncache.put('b', False, 10)\nassert cache.get('a', missing) is None\ncache.put('c', 3, 20)\nassert cache.get('b', missing) is missing\nclock.now = 5\nassert cache.get('a', missing) is missing\nassert cache.get('c') == 3\ncache.put('c', 4, 2)\nclock.now = 7\nassert cache.get('c', missing) is missing\n\nclock.now = 0\ncache = TTLCache(2, clock)\ncache.put('a', 1, 10)\ncache.put('b', 2, 10)\ncache.put('a', 3, 20)\nassert cache.get('b') == 2\ncache.put('a', 4, 20)\ncache.put('c', 5, 10)\nassert cache.get('b', missing) is missing\nassert cache.get('a') == 4\ncache.put('a', 6, 0)\nassert cache.get('a', missing) is missing\ncache.put('c', 6, -1)\nassert cache.get('c', missing) is missing\n\ncache = TTLCache(4, clock)\ncache.put('live-oldest', 1, 100)\ncache.put('expired-one', 2, 1)\ncache.put('live-newer', 3, 100)\ncache.put('expired-two', 4, 1)\nclock.now = 1\ncache.put('new-one', 5, 100)\ncache.put('new-two', 6, 100)\nassert cache.get('live-oldest') == 1\nassert cache.get('live-newer') == 3\nassert cache.get('expired-one', missing) is missing\nassert cache.get('expired-two', missing) is missing\n\ncache = TTLCache(1, clock)\ncache.put('a', 1, 1)\nclock.now = 2\ncache.put('a', False, 2)\nassert cache.get('a', missing) is False\nclock.now = 4\nassert cache.get('a', missing) is missing\nprint('All local TTLCache checks passed.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "from collections import OrderedDict\n\n\nclass TTLCache:\n    \"\"\"A bounded LRU cache with expiration measured by an injected clock.\"\"\"\n\n    def __init__(self, capacity, clock):\n        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity <= 0:\n            raise ValueError(\"capacity must be a positive integer\")\n        self._capacity = capacity\n        self._clock = clock\n        self._entries = OrderedDict()\n\n    def put(self, key, value, ttl):\n        if ttl <= 0:\n            self._entries.pop(key, None)\n            return\n\n        now = self._clock()\n        expiry = now + ttl\n        if key not in self._entries and len(self._entries) >= self._capacity:\n            # Expired entries can occur anywhere in the LRU order.\n            expired = [\n                stored_key\n                for stored_key, (_, stored_expiry) in self._entries.items()\n                if now >= stored_expiry\n            ]\n            for stored_key in expired:\n                del self._entries[stored_key]\n            if len(self._entries) >= self._capacity:\n                self._entries.popitem(last=False)\n\n        self._entries[key] = (value, expiry)\n        self._entries.move_to_end(key)\n\n    def get(self, key, default=None):\n        try:\n            value, expiry = self._entries[key]\n        except KeyError:\n            return default\n        if self._clock() >= expiry:\n            del self._entries[key]\n            return default\n        self._entries.move_to_end(key)\n        return value\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 59.4626033,
+      "usage": {
+        "inputTokens": 14163,
+        "outputTokens": 1422,
+        "cacheReadTokens": 47488,
+        "thinkingTokens": 50,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-ChildItem -Force'\"",
+          "output": "\r\n    Directory: C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-1858963975\r\n\r\nMode                 LastWriteTime         Length Name\r\n----                 -------------         ------ ----\r\n-a---          28.09.2026    02:05            240 solution.py\r\n\r\n",
+          "isError": false,
+          "endMs": 7943,
+          "durationMs": 313,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-Content -LiteralPath solution.py'\"",
+          "output": "class TTLCache:\r\n    def __init__(self, capacity, clock):\r\n        raise NotImplementedError\r\n    def put(self, key, value, ttl):\r\n        raise NotImplementedError\r\n    def get(self, key, default=None):\r\n        raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 11102,
+          "durationMs": 396,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-1858963975\\solution.py",
+          "isError": false,
+          "endMs": 29737,
+          "durationMs": 2,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import TTLCache\\n\\nclass Clock:\\n    def __init__(self):\\n        self.now = 0\\n    def __call__(self):\\n        return self.now\\n\\nfor invalid in (0, -1, 1.5, '2', None, True, False):\\n    try:\\n        TTLCache(invalid, Clock())\\n    except ValueError:\\n        pass\\n    else:\\n        raise AssertionError(('invalid capacity accepted', invalid))\\n\\nclock = Clock()\\ncache = TTLCache(2, clock)\\nmissing = object()\\nassert cache.get('missing', missing) is missing\\ncache.put('none', None, 2)\\ncache.put('false', False, 3)\\nassert cache.get('none', missing) is None\\nassert cache.get('false', missing) is False\\nclock.now = 2\\nassert cache.get('none', missing) is missing\\nassert cache.get('false', missing) is False\\nclock.now = 3\\nassert cache.get('false', missing) is missing\\n\\nclock = Clock()\\ncache = TTLCache(2, clock)\\ncache.put('a', 1, 10)\\ncache.put('b', 2, 10)\\nassert cache.get('a') == 1\\ncache.put('c', 3, 10)\\nassert cache.get('b', missing) is missing\\ncache.put('a', 4, 20)\\nassert cache.get('c') == 3  # Updating must not evict another key.\\ncache.put('a', 5, 20)      # Updating makes a most recently used.\\ncache.put('d', 6, 20)\\nassert cache.get('c', missing) is missing\\nclock.now = 10\\nassert cache.get('a') == 5\\nclock.now = 20\\nassert cache.get('a', missing) is missing\\n\\nclock = Clock()\\ncache = TTLCache(4, clock)\\ncache.put('live', 1, 100)\\ncache.put('expired1', 2, 1)\\ncache.put('expired2', 3, 2)\\ncache.put('live2', 4, 100)\\nclock.now = 2\\ncache.put('new', 5, 100)\\nassert list(cache._entries) == ['live', 'live2', 'new']\\ncache.put('new2', 6, 100)\\nassert cache.get('live') == 1\\nfor ttl in (0, -1):\\n    cache.put('live', 7, ttl)\\n    assert cache.get('live', missing) is missing\\n    cache.put('absent', 7, ttl)\\n    assert cache.get('absent', missing) is missing\\n\\nclock = Clock()\\ncache = TTLCache(1, clock)\\ncache.put('a', 1, 1)\\nclock.now = 1\\ncache.put('a', 2, 5)\\nassert cache.get('a') == 2\\nclock.now = 6\\nassert cache.get('a', missing) is missing\\nprint('All fake-clock checks passed.')\\n'@ | python -B -\\\"\"",
+          "output": "All fake-clock checks passed.\r\n",
+          "isError": false,
+          "endMs": 55288,
+          "durationMs": 443,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nclass Clock:\n    def __init__(self):\n        self.now = 0\n    def __call__(self):\n        return self.now\n\nfor invalid in (0, -1, 1.5, '2', None, True, False):\n    try:\n        TTLCache(invalid, Clock())\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('invalid capacity accepted', invalid))\n\nclock = Clock()\ncache = TTLCache(2, clock)\nmissing = object()\nassert cache.get('missing', missing) is missing\ncache.put('none', None, 2)\ncache.put('false', False, 3)\nassert cache.get('none', missing) is None\nassert cache.get('false', missing) is False\nclock.now = 2\nassert cache.get('none', missing) is missing\nassert cache.get('false', missing) is False\nclock.now = 3\nassert cache.get('false', missing) is missing\n\nclock = Clock()\ncache = TTLCache(2, clock)\ncache.put('a', 1, 10)\ncache.put('b', 2, 10)\nassert cache.get('a') == 1\ncache.put('c', 3, 10)\nassert cache.get('b', missing) is missing\ncache.put('a', 4, 20)\nassert cache.get('c') == 3  # Updating must not evict another key.\ncache.put('a', 5, 20)      # Updating makes a most recently used.\ncache.put('d', 6, 20)\nassert cache.get('c', missing) is missing\nclock.now = 10\nassert cache.get('a') == 5\nclock.now = 20\nassert cache.get('a', missing) is missing\n\nclock = Clock()\ncache = TTLCache(4, clock)\ncache.put('live', 1, 100)\ncache.put('expired1', 2, 1)\ncache.put('expired2', 3, 2)\ncache.put('live2', 4, 100)\nclock.now = 2\ncache.put('new', 5, 100)\nassert list(cache._entries) == ['live', 'live2', 'new']\ncache.put('new2', 6, 100)\nassert cache.get('live') == 1\nfor ttl in (0, -1):\n    cache.put('live', 7, ttl)\n    assert cache.get('live', missing) is missing\n    cache.put('absent', 7, ttl)\n    assert cache.get('absent', missing) is missing\n\nclock = Clock()\ncache = TTLCache(1, clock)\ncache.put('a', 1, 1)\nclock.now = 1\ncache.put('a', 2, 5)\nassert cache.get('a') == 2\nclock.now = 6\nassert cache.get('a', missing) is missing\nprint('All fake-clock checks passed.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "from collections import OrderedDict\n\n\nclass TTLCache:\n    \"\"\"A fixed-capacity LRU cache with per-entry expiration.\"\"\"\n\n    def __init__(self, capacity, clock):\n        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity <= 0:\n            raise ValueError(\"capacity must be a positive integer\")\n        self._capacity = capacity\n        self._clock = clock\n        self._entries = OrderedDict()\n\n    def put(self, key, value, ttl):\n        if ttl <= 0:\n            self._entries.pop(key, None)\n            return\n\n        now = self._clock()\n        expiry = now + ttl\n        if key in self._entries:\n            self._entries[key] = (value, expiry)\n            self._entries.move_to_end(key)\n            return\n\n        if len(self._entries) >= self._capacity:\n            expired = [\n                stored_key\n                for stored_key, (_, stored_expiry) in self._entries.items()\n                if now >= stored_expiry\n            ]\n            for stored_key in expired:\n                del self._entries[stored_key]\n            if len(self._entries) >= self._capacity:\n                self._entries.popitem(last=False)\n\n        self._entries[key] = (value, expiry)\n\n    def get(self, key, default=None):\n        if key not in self._entries:\n            return default\n        value, expiry = self._entries[key]\n        if self._clock() >= expiry:\n            del self._entries[key]\n            return default\n        self._entries.move_to_end(key)\n        return value\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 59.029539,
+      "usage": {
+        "inputTokens": 14171,
+        "outputTokens": 2136,
+        "cacheReadTokens": 46976,
+        "thinkingTokens": 431,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 3,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.001s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-ChildItem -Force | Select-Object Name,Length,Mode; if (Test-Path -LiteralPath solution.py) { Get-Content -LiteralPath solution.py }'\"",
+          "output": "\r\nName        Length Mode\r\n----        ------ ----\r\nsolution.py    240 -a---\r\nclass TTLCache:\r\n    def __init__(self, capacity, clock):\r\n        raise NotImplementedError\r\n    def put(self, key, value, ttl):\r\n        raise NotImplementedError\r\n    def get(self, key, default=None):\r\n        raise NotImplementedError\r\n\r\n",
+          "isError": false,
+          "endMs": 11330,
+          "durationMs": 503,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Length,Mode; if (Test-Path -LiteralPath solution.py) { Get-Content -LiteralPath solution.py }'",
+          "purposes": [
+            "keşif",
+            "okuma"
+          ],
+          "purpose": "keşif+okuma",
+          "summary": "Klasör/dosya listeleme + solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-1358218385\\solution.py",
+          "isError": false,
+          "endMs": 36479,
+          "durationMs": 1,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import TTLCache\\n\\nfor capacity in (0, -1, 1.5, True, '2'):\\n    try:\\n        TTLCache(capacity, lambda: 0)\\n    except ValueError:\\n        pass\\n    else:\\n        raise AssertionError(f'accepted {capacity\\\"'!r}'\\\"')\\n\\nnow = [0]\\nc = TTLCache(2, lambda: now[0])\\nc.put('a', None, 10)\\nc.put('b', False, 5)\\nassert c.get('a', 'missing') is None\\nassert c.get('b', 'missing') is False\\nnow[0] = 5\\nassert c.get('b', 'missing') == 'missing'\\nc.put('c', 1, 10)\\nassert c.get('a', 'missing') is None\\nc.put('a', 2, 20)\\nassert c.get('c') == 1\\nc.put('d', 3, 10)\\nassert c.get('a', 'missing') == 'missing'\\nassert c.get('c') == 1\\nc.put('c', 9, 0)\\nassert c.get('c', 'missing') == 'missing'\\n\\nnow[0] = 0\\nc = TTLCache(3, lambda: now[0])\\nc.put('old1', 1, 1)\\nc.put('live', 2, 10)\\nc.put('old2', 3, 2)\\nnow[0] = 2\\nc.put('new', 4, 10)\\nassert list(c._entries) == ['live', 'new']\\nassert c.get('old1') is None and c.get('old2') is None\\nassert c.get('live') == 2\\nprint('checks passed')\\n'@ | python -\\\"\"",
+          "output": "checks passed\r\n",
+          "isError": false,
+          "endMs": 49617,
+          "durationMs": 537,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nfor capacity in (0, -1, 1.5, True, '2'):\n    try:\n        TTLCache(capacity, lambda: 0)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f'accepted {capacity\"'!r}'\"')\n\nnow = [0]\nc = TTLCache(2, lambda: now[0])\nc.put('a', None, 10)\nc.put('b', False, 5)\nassert c.get('a', 'missing') is None\nassert c.get('b', 'missing') is False\nnow[0] = 5\nassert c.get('b', 'missing') == 'missing'\nc.put('c', 1, 10)\nassert c.get('a', 'missing') is None\nc.put('a', 2, 20)\nassert c.get('c') == 1\nc.put('d', 3, 10)\nassert c.get('a', 'missing') == 'missing'\nassert c.get('c') == 1\nc.put('c', 9, 0)\nassert c.get('c', 'missing') == 'missing'\n\nnow[0] = 0\nc = TTLCache(3, lambda: now[0])\nc.put('old1', 1, 1)\nc.put('live', 2, 10)\nc.put('old2', 3, 2)\nnow[0] = 2\nc.put('new', 4, 10)\nassert list(c._entries) == ['live', 'new']\nassert c.get('old1') is None and c.get('old2') is None\nassert c.get('live') == 2\nprint('checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "from collections import OrderedDict\n\n\nclass TTLCache:\n    def __init__(self, capacity, clock):\n        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity <= 0:\n            raise ValueError(\"capacity must be a positive integer\")\n        self.capacity = capacity\n        self.clock = clock\n        self._entries = OrderedDict()\n\n    def put(self, key, value, ttl):\n        if ttl <= 0:\n            self._entries.pop(key, None)\n            return\n\n        now = self.clock()\n        expiry = now + ttl\n        if key in self._entries:\n            self._entries[key] = (value, expiry)\n            self._entries.move_to_end(key)\n            return\n\n        if len(self._entries) >= self.capacity:\n            for existing_key, (_, existing_expiry) in list(self._entries.items()):\n                if now >= existing_expiry:\n                    del self._entries[existing_key]\n\n        if len(self._entries) >= self.capacity:\n            self._entries.popitem(last=False)\n\n        self._entries[key] = (value, expiry)\n\n    def get(self, key, default=None):\n        if key not in self._entries:\n            return default\n\n        value, expiry = self._entries[key]\n        if self.clock() >= expiry:\n            del self._entries[key]\n            return default\n\n        self._entries.move_to_end(key)\n        return value\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 77.9088417,
+      "usage": {
+        "inputTokens": 20660,
+        "outputTokens": 2595,
+        "cacheReadTokens": 83328
+      },
+      "tools": 6,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Mode,Length; if (Test-Path -LiteralPath solution.py) { Get-Content -LiteralPath solution.py }'",
+          "output": "\r\nName        Mode  Length\r\n----        ----  ------\r\nsolution.py -a---    240\r\nclass TTLCache:\r\n    def __init__(self, capacity, clock):\r\n        raise NotImplementedError\r\n    def put(self, key, value, ttl):\r\n        raise NotImplementedError\r\n    def get(self, key, default=None):\r\n        raise NotImplementedError\r\n\r\n",
+          "isError": false,
+          "endMs": 19587,
+          "durationMs": 493,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Mode,Length; if (Test-Path -LiteralPath solution.py) { Get-Content -LiteralPath solution.py }'",
+          "purposes": [
+            "keşif",
+            "okuma"
+          ],
+          "purpose": "keşif+okuma",
+          "summary": "Klasör/dosya listeleme + solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-403520174\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 45537,
+          "durationMs": 7,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-403520174\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nfor capacity in (0, -1, 1.5, True, '2'):\n    try:\n        TTLCache(capacity, lambda: 0)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('accepted capacity', capacity))\n\nnow = [0]\nclock = lambda: now[0]\nc = TTLCache(3, clock)\nc.put('a', None, 2)\nc.put('b', False, 10)\nc.put('c', 3, 10)\nassert c.get('a', 'missing') is None\nassert c.get('b', 'missing') is False\nnow[0] = 2\nassert c.get('a', 'missing') == 'missing'\nc.put('d', 4, 10)\nassert c.get('c') == 3\nc.put('e', 5, 10)\nassert c.get('b', 'missing') == 'missing'\nassert c.get('d') == 4\nassert c.get('e') == 5\nc.put('d', 44, 1)\nassert c.get('c') == 3\nassert c.get('d') == 44\nnow[0] = 3\nassert c.get('d', 'expired') == 'expired'\nc.put('e', 0, 0)\nassert c.get('e', 'deleted') == 'deleted'\n\nnow[0] = 0\nc = TTLCache(2, clock)\nc.put('a', 1, 1)\nc.put('b', 2, 1)\nnow[0] = 1\nc.put('c', 3, 10)\nc.put('d', 4, 10)\nassert c.get('c') == 3\nassert c.get('d') == 4\nprint('TTLCache checks passed')\n'@ | python -\"",
+          "output": "TTLCache checks passed\r\n",
+          "isError": false,
+          "endMs": 58626,
+          "durationMs": 756,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import TTLCache\n\nfor capacity in (0, -1, 1.5, True, '2'):\n    try:\n        TTLCache(capacity, lambda: 0)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(('accepted capacity', capacity))\n\nnow = [0]\nclock = lambda: now[0]\nc = TTLCache(3, clock)\nc.put('a', None, 2)\nc.put('b', False, 10)\nc.put('c', 3, 10)\nassert c.get('a', 'missing') is None\nassert c.get('b', 'missing') is False\nnow[0] = 2\nassert c.get('a', 'missing') == 'missing'\nc.put('d', 4, 10)\nassert c.get('c') == 3\nc.put('e', 5, 10)\nassert c.get('b', 'missing') == 'missing'\nassert c.get('d') == 4\nassert c.get('e') == 5\nc.put('d', 44, 1)\nassert c.get('c') == 3\nassert c.get('d') == 44\nnow[0] = 3\nassert c.get('d', 'expired') == 'expired'\nc.put('e', 0, 0)\nassert c.get('e', 'deleted') == 'deleted'\n\nnow[0] = 0\nc = TTLCache(2, clock)\nc.put('a', 1, 1)\nc.put('b', 2, 1)\nnow[0] = 1\nc.put('c', 3, 10)\nc.put('d', 4, 10)\nassert c.get('c') == 3\nassert c.get('d') == 4\nprint('TTLCache checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Mode,Length'",
+          "output": "\r\nName        Mode  Length\r\n----        ----  ------\r\n__pycache__ d---- \r\nsolution.py -a--- 1238\r\n\r\n",
+          "isError": false,
+          "endMs": 63960,
+          "durationMs": 432,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force | Select-Object Name,Mode,Length'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-ChildItem -LiteralPath .\\\\__pycache__ | Select-Object Name,Length\"",
+          "output": "\r\nName                     Length\r\n----                     ------\r\nsolution.cpython-313.pyc   2325\r\n\r\n",
+          "isError": false,
+          "endMs": 69313,
+          "durationMs": 347,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-ChildItem -LiteralPath .\\\\__pycache__ | Select-Object Name,Length\"",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Remove-Item -LiteralPath .\\\\__pycache__\\\\solution.cpython-313.pyc; Remove-Item -LiteralPath .\\\\__pycache__\"",
+          "output": "",
+          "isError": false,
+          "endMs": 73300,
+          "durationMs": 499,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Remove-Item -LiteralPath .\\\\__pycache__\\\\solution.cpython-313.pyc; Remove-Item -LiteralPath .\\\\__pycache__\"",
+          "purposes": [
+            "temizlik"
+          ],
+          "purpose": "temizlik",
+          "summary": "Üretilen Python cache dosyalarını temizleme",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "from collections import OrderedDict\n\n\nclass TTLCache:\n    def __init__(self, capacity, clock):\n        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity <= 0:\n            raise ValueError(\"capacity must be a positive integer\")\n        self.capacity = capacity\n        self.clock = clock\n        self._entries = OrderedDict()\n\n    def put(self, key, value, ttl):\n        if ttl <= 0:\n            self._entries.pop(key, None)\n            return\n\n        now = self.clock()\n        if key in self._entries:\n            self._entries[key] = (value, now + ttl)\n            self._entries.move_to_end(key)\n            return\n\n        for expired_key, (_, expiry) in list(self._entries.items()):\n            if now >= expiry:\n                del self._entries[expired_key]\n\n        if len(self._entries) >= self.capacity:\n            self._entries.popitem(last=False)\n        self._entries[key] = (value, now + ttl)\n\n    def get(self, key, default=None):\n        if key not in self._entries:\n            return default\n\n        value, expiry = self._entries[key]\n        if self.clock() >= expiry:\n            del self._entries[key]\n            return default\n\n        self._entries.move_to_end(key)\n        return value\n"
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 49.3413728,
+      "usage": {
+        "inputTokens": 13690,
+        "outputTokens": 1098,
+        "cacheReadTokens": 47104,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-ChildItem -Force'\"",
+          "output": "\r\n    Directory: C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-2635459431\r\n\r\nMode                 LastWriteTime         Length Name\r\n----                 -------------         ------ ----\r\n-a---          28.09.2026    02:08             62 solution.py\r\n\r\n",
+          "isError": false,
+          "endMs": 8650,
+          "durationMs": 525,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command 'Get-Content -LiteralPath solution.py'\"",
+          "output": "def dependency_layers(graph):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 12131,
+          "durationMs": 282,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-2635459431\\solution.py",
+          "isError": false,
+          "endMs": 25412,
+          "durationMs": 1,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import dependency_layers\\n\\nassert dependency_layers({}) == []\\nassert dependency_layers({'z': [], 'a': []}) == [['a', 'z']]\\ngraph = {'d': ['b', 'c', 'b'], 'c': ['a'], 'b': ['a'], 'a': [], 'isolated': []}\\noriginal = {node: deps[:] for node, deps in graph.items()}\\nassert dependency_layers(graph) == [['a', 'isolated'], ['b', 'c'], ['d']]\\nassert graph == original\\nassert dependency_layers({'c': iter(['a', 'b', 'a']), 'b': iter(['a']), 'a': iter([])}) == [['a'], ['b'], ['c']]\\nfor invalid in [\\n    {'a': ['missing']},\\n    {'a': ['a']},\\n    {'a': ['b'], 'b': ['a']},\\n    {'free': [], 'a': ['b'], 'b': ['a']},\\n    {'a': [], 'b': ['c'], 'c': ['d'], 'd': ['b']},\\n]:\\n    try:\\n        dependency_layers(invalid)\\n    except ValueError:\\n        pass\\n    else:\\n        raise AssertionError(f'Accepted invalid graph: {invalid}')\\n\\n# Exhaustively compare every directed graph on three nodes with a simple oracle.\\nfrom itertools import product\\nnodes = ('a', 'b', 'c')\\nfor edges in product((False, True), repeat=9):\\n    graph = {node: [dep for j, dep in enumerate(nodes) if edges[i * 3 + j]]\\n             for i, node in enumerate(nodes)}\\n    done = set()\\n    expected = []\\n    while len(done) \\u003c len(nodes):\\n        layer = sorted(node for node in nodes if node not in done and set(graph[node]) \\u003c= done)\\n        if not layer:\\n            break\\n        expected.append(layer)\\n        done.update(layer)\\n    try:\\n        actual = dependency_layers(graph)\\n    except ValueError:\\n        assert len(done) \\u003c len(nodes), graph\\n    else:\\n        assert len(done) == len(nodes) and actual == expected, graph\\nprint('All checks passed, including all 512 directed graphs on three nodes.')\\n'@ | python -B -\\\"\"",
+          "output": "All checks passed, including all 512 directed graphs on three nodes.\r\n",
+          "isError": false,
+          "endMs": 44631,
+          "durationMs": 376,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\nassert dependency_layers({'z': [], 'a': []}) == [['a', 'z']]\ngraph = {'d': ['b', 'c', 'b'], 'c': ['a'], 'b': ['a'], 'a': [], 'isolated': []}\noriginal = {node: deps[:] for node, deps in graph.items()}\nassert dependency_layers(graph) == [['a', 'isolated'], ['b', 'c'], ['d']]\nassert graph == original\nassert dependency_layers({'c': iter(['a', 'b', 'a']), 'b': iter(['a']), 'a': iter([])}) == [['a'], ['b'], ['c']]\nfor invalid in [\n    {'a': ['missing']},\n    {'a': ['a']},\n    {'a': ['b'], 'b': ['a']},\n    {'free': [], 'a': ['b'], 'b': ['a']},\n    {'a': [], 'b': ['c'], 'c': ['d'], 'd': ['b']},\n]:\n    try:\n        dependency_layers(invalid)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f'Accepted invalid graph: {invalid}')\n\n# Exhaustively compare every directed graph on three nodes with a simple oracle.\nfrom itertools import product\nnodes = ('a', 'b', 'c')\nfor edges in product((False, True), repeat=9):\n    graph = {node: [dep for j, dep in enumerate(nodes) if edges[i * 3 + j]]\n             for i, node in enumerate(nodes)}\n    done = set()\n    expected = []\n    while len(done) < len(nodes):\n        layer = sorted(node for node in nodes if node not in done and set(graph[node]) <= done)\n        if not layer:\n            break\n        expected.append(layer)\n        done.update(layer)\n    try:\n        actual = dependency_layers(graph)\n    except ValueError:\n        assert len(done) < len(nodes), graph\n    else:\n        assert len(done) == len(nodes) and actual == expected, graph\nprint('All checks passed, including all 512 directed graphs on three nodes.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def dependency_layers(graph):\n    \"\"\"Return sorted runnable layers, raising ValueError for invalid graphs.\"\"\"\n    dependents = {node: [] for node in graph}\n    remaining = {}\n\n    for node, dependencies in graph.items():\n        prerequisites = set(dependencies)\n        for prerequisite in prerequisites:\n            if prerequisite not in dependents:\n                raise ValueError(f\"Unknown dependency {prerequisite!r} for {node!r}\")\n            if prerequisite == node:\n                raise ValueError(f\"Self-dependency for {node!r}\")\n            dependents[prerequisite].append(node)\n        remaining[node] = len(prerequisites)\n\n    runnable = sorted(node for node, count in remaining.items() if count == 0)\n    layers = []\n    processed = 0\n    while runnable:\n        layers.append(runnable)\n        processed += len(runnable)\n        next_layer = []\n        for node in runnable:\n            for dependent in dependents[node]:\n                remaining[dependent] -= 1\n                if remaining[dependent] == 0:\n                    next_layer.append(dependent)\n        runnable = sorted(next_layer)\n\n    if processed != len(remaining):\n        raise ValueError(\"Dependency graph contains a cycle\")\n    return layers\n",
+      "supplementalGraphOracle": {
+        "passed": true,
+        "cases": 512,
+        "output": "512\n"
+      }
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 46.3963115,
+      "usage": {
+        "inputTokens": 13684,
+        "outputTokens": 1051,
+        "cacheReadTokens": 47360
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "output": "\r\n    Directory: C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-1327305163\r\n\r\nMode                 LastWriteTime         Length Name\r\n----                 -------------         ------ ----\r\n-a---          28.09.2026    02:09             62 solution.py\r\n\r\n",
+          "isError": false,
+          "endMs": 8234,
+          "durationMs": 485,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-ChildItem -Force'",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "output": "def dependency_layers(graph):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 11350,
+          "durationMs": 369,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'Get-Content -LiteralPath solution.py'",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-1327305163\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 25202,
+          "durationMs": 1,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-1327305163\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom copy import deepcopy\nfrom itertools import product\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\ngraph = {'end': ['middle', 'start', 'middle'], 'isolated': [], 'middle': ['start'], 'start': []}\nbefore = deepcopy(graph)\nassert dependency_layers(graph) == [['isolated', 'start'], ['middle'], ['end']]\nassert graph == before\nassert dependency_layers({'b': (x for x in ['a', 'a']), 'a': iter(())}) == [['a'], ['b']]\nassert dependency_layers({'z': [], 'a': [], 'm': []}) == [['a', 'm', 'z']]\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'a': ['b'], 'b': ['a']}, {'ok': [], 'a': ['b'], 'b': ['a']}):\n    try:\n        dependency_layers(graph)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(graph)\n\n# Compare every directed graph on three nodes with an independent round-based oracle.\nnodes = ('a', 'b', 'c')\nfor edges in product((False, True), repeat=9):\n    graph = {node: [dep for j, dep in enumerate(nodes) if edges[i * 3 + j]] for i, node in enumerate(nodes)}\n    completed = set()\n    expected = []\n    while len(completed) < len(nodes):\n        layer = sorted(node for node in nodes if node not in completed and set(graph[node]) <= completed)\n        if not layer:\n            expected = None\n            break\n        expected.append(layer)\n        completed.update(layer)\n    try:\n        actual = dependency_layers(graph)\n    except ValueError:\n        assert expected is None, graph\n    else:\n        assert actual == expected, (graph, actual, expected)\nprint('All checks passed, including all 512 directed graphs on three nodes.')\n'@ | python -B -\"",
+          "output": "All checks passed, including all 512 directed graphs on three nodes.\r\n",
+          "isError": false,
+          "endMs": 42107,
+          "durationMs": 450,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom copy import deepcopy\nfrom itertools import product\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\ngraph = {'end': ['middle', 'start', 'middle'], 'isolated': [], 'middle': ['start'], 'start': []}\nbefore = deepcopy(graph)\nassert dependency_layers(graph) == [['isolated', 'start'], ['middle'], ['end']]\nassert graph == before\nassert dependency_layers({'b': (x for x in ['a', 'a']), 'a': iter(())}) == [['a'], ['b']]\nassert dependency_layers({'z': [], 'a': [], 'm': []}) == [['a', 'm', 'z']]\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'a': ['b'], 'b': ['a']}, {'ok': [], 'a': ['b'], 'b': ['a']}):\n    try:\n        dependency_layers(graph)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(graph)\n\n# Compare every directed graph on three nodes with an independent round-based oracle.\nnodes = ('a', 'b', 'c')\nfor edges in product((False, True), repeat=9):\n    graph = {node: [dep for j, dep in enumerate(nodes) if edges[i * 3 + j]] for i, node in enumerate(nodes)}\n    completed = set()\n    expected = []\n    while len(completed) < len(nodes):\n        layer = sorted(node for node in nodes if node not in completed and set(graph[node]) <= completed)\n        if not layer:\n            expected = None\n            break\n        expected.append(layer)\n        completed.update(layer)\n    try:\n        actual = dependency_layers(graph)\n    except ValueError:\n        assert expected is None, graph\n    else:\n        assert actual == expected, (graph, actual, expected)\nprint('All checks passed, including all 512 directed graphs on three nodes.')\n'@ | python -B -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def dependency_layers(graph):\n    \"\"\"Return sorted layers of nodes whose prerequisites are already complete.\n\n    Each dependency iterable is consumed once. Invalid dependencies and cycles\n    raise ValueError; the mapping and dependency containers are not modified.\n    \"\"\"\n    remaining = {}\n    dependents = {node: [] for node in graph}\n\n    for node, prerequisites in graph.items():\n        dependencies = set(prerequisites)\n        for dependency in dependencies:\n            if dependency not in dependents:\n                raise ValueError(f\"Unknown dependency {dependency!r} for {node!r}\")\n            if dependency == node:\n                raise ValueError(f\"Self-dependency for {node!r}\")\n            dependents[dependency].append(node)\n        remaining[node] = len(dependencies)\n\n    runnable = [node for node, count in remaining.items() if count == 0]\n    layers = []\n    processed = 0\n    while runnable:\n        layer = sorted(runnable)\n        layers.append(layer)\n        processed += len(layer)\n        runnable = []\n        for node in layer:\n            for dependent in dependents[node]:\n                remaining[dependent] -= 1\n                if remaining[dependent] == 0:\n                    runnable.append(dependent)\n\n    if processed != len(remaining):\n        raise ValueError(\"Dependency graph contains a cycle\")\n    return layers\n",
+      "supplementalGraphOracle": {
+        "passed": true,
+        "cases": 512,
+        "output": "512\n"
+      }
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 38.166545,
+      "usage": {
+        "inputTokens": 4344,
+        "outputTokens": 1212,
+        "cacheReadTokens": 42880
+      },
+      "tools": 3,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-ChildItem -Force | Select-Object Name,Length,Mode; if (Test-Path -LiteralPath 'solution.py') { Get-Content -LiteralPath 'solution.py' }\"",
+          "output": "\r\nName        Length Mode\r\n----        ------ ----\r\nsolution.py     62 -a---\r\ndef dependency_layers(graph):\r\n    raise NotImplementedError\r\n\r\n",
+          "isError": false,
+          "endMs": 10974,
+          "durationMs": 495,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-ChildItem -Force | Select-Object Name,Length,Mode; if (Test-Path -LiteralPath 'solution.py') { Get-Content -LiteralPath 'solution.py' }\"",
+          "purposes": [
+            "keşif",
+            "okuma"
+          ],
+          "purpose": "keşif+okuma",
+          "summary": "Klasör/dosya listeleme + solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-2524481361\\\\solution.py\",\"kind\":\"update\"}]",
+          "output": "completed",
+          "isError": false,
+          "endMs": 21424,
+          "durationMs": 2,
+          "timingSource": "native-stream",
+          "commandText": "[{\"path\":\"C:\\\\Users\\\\Bilal\\\\AppData\\\\Local\\\\Temp\\\\tion-codex-bench-2524481361\\\\solution.py\",\"kind\":\"update\"}]",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\nassert dependency_layers({'solo': [], 'a': ['root', 'root'], 'root': [], 'b': (x for x in ['root', 'a'])}) == [['root', 'solo'], ['a'], ['b']]\nassert dependency_layers({'a': [], 'b': ['a'], 'c': ['a'], 'd': ['b', 'c']}) == [['a'], ['b', 'c'], ['d']]\noriginal = {'a': ['b', 'b'], 'b': []}\nassert dependency_layers(original) == [['b'], ['a']]\nassert original == {'a': ['b', 'b'], 'b': []}\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'free': [], 'a': ['b'], 'b': ['a']}):\n    try:\n        dependency_layers(graph)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f'Expected ValueError: {graph}')\nprint('checks passed')\n'@ | python -\"",
+          "output": "checks passed\r\n",
+          "isError": false,
+          "endMs": 30409,
+          "durationMs": 437,
+          "timingSource": "native-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\nassert dependency_layers({'solo': [], 'a': ['root', 'root'], 'root': [], 'b': (x for x in ['root', 'a'])}) == [['root', 'solo'], ['a'], ['b']]\nassert dependency_layers({'a': [], 'b': ['a'], 'c': ['a'], 'd': ['b', 'c']}) == [['a'], ['b', 'c'], ['d']]\noriginal = {'a': ['b', 'b'], 'b': []}\nassert dependency_layers(original) == [['b'], ['a']]\nassert original == {'a': ['b', 'b'], 'b': []}\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'free': [], 'a': ['b'], 'b': ['a']}):\n    try:\n        dependency_layers(graph)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f'Expected ValueError: {graph}')\nprint('checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def dependency_layers(graph):\n    nodes = set(graph)\n    remaining = {node: 0 for node in nodes}\n    dependents = {node: set() for node in nodes}\n\n    for node, prerequisites in graph.items():\n        unique_prerequisites = set(prerequisites)\n        for prerequisite in unique_prerequisites:\n            if prerequisite not in nodes:\n                raise ValueError(f\"Unknown dependency: {prerequisite}\")\n            if prerequisite == node:\n                raise ValueError(f\"Self-dependency: {node}\")\n            dependents[prerequisite].add(node)\n        remaining[node] = len(unique_prerequisites)\n\n    layers = []\n    ready = sorted(node for node in nodes if remaining[node] == 0)\n    processed = 0\n\n    while ready:\n        layers.append(ready)\n        processed += len(ready)\n        next_ready = []\n        for node in ready:\n            for dependent in dependents[node]:\n                remaining[dependent] -= 1\n                if remaining[dependent] == 0:\n                    next_ready.append(dependent)\n        ready = sorted(next_ready)\n\n    if processed != len(nodes):\n        raise ValueError(\"Dependency cycle\")\n    return layers\n",
+      "supplementalGraphOracle": {
+        "passed": true,
+        "cases": 512,
+        "output": "512\n"
+      }
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 39.3252042,
+      "usage": {
+        "inputTokens": 25261,
+        "outputTokens": 1357,
+        "cacheReadTokens": 33408,
+        "thinkingTokens": 363,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n",
+      "trace": [
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"rg --files -g '\\\"'!__pycache__'\\\"'\\\"\"",
+          "output": "solution.py\n",
+          "isError": false,
+          "endMs": 9787,
+          "durationMs": 1089,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"rg --files -g '\"'!__pycache__'\"'\"",
+          "purposes": [
+            "keşif"
+          ],
+          "purpose": "keşif",
+          "summary": "Klasör/dosya listeleme",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"Get-Content -LiteralPath .\\\\\\\\solution.py\\\"\"",
+          "output": "def dependency_layers(graph):\r\n    raise NotImplementedError\r\n",
+          "isError": false,
+          "endMs": 12954,
+          "durationMs": 459,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"Get-Content -LiteralPath .\\\\solution.py\"",
+          "purposes": [
+            "okuma"
+          ],
+          "purpose": "okuma",
+          "summary": "solution.py okuma",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "apply_patch",
+          "input": "",
+          "output": "update C:\\Users\\Bilal\\AppData\\Local\\Temp\\tion-codex-bench-3156316758\\solution.py",
+          "isError": false,
+          "endMs": 24156,
+          "durationMs": null,
+          "timingSource": "provider-stream",
+          "commandText": "",
+          "purposes": [
+            "düzenleme"
+          ],
+          "purpose": "düzenleme",
+          "summary": "Dosya yaması",
+          "identicalInputSeenEarlier": false
+        },
+        {
+          "tool": "shell",
+          "input": "\"\\\"C:\\\\\\\\Users\\\\\\\\Bilal\\\\\\\\.cache\\\\\\\\codex-runtimes\\\\\\\\codex-primary-runtime\\\\\\\\dependencies\\\\\\\\native\\\\\\\\powershell\\\\\\\\pwsh.exe\\\" -Command \\\"@'\\nfrom solution import dependency_layers\\n\\nassert dependency_layers({}) == []\\nassert dependency_layers({'z': [], 'a': [], 'm': []}) == [['a', 'm', 'z']]\\nassert dependency_layers({'d': iter(['b', 'b', 'c']), 'c': iter(['a']), 'b': iter(['a']), 'a': iter([]), 'x': iter([])}) == [['a', 'x'], ['b', 'c'], ['d']]\\noriginal = {'a': [], 'b': ['a', 'a']}\\nassert dependency_layers(original) == [['a'], ['b']]\\nassert original == {'a': [], 'b': ['a', 'a']}\\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'a': [], 'b': ['c'], 'c': ['b']}):\\n    try:\\n        dependency_layers(graph)\\n    except ValueError:\\n        pass\\n    else:\\n        raise AssertionError(f'expected ValueError for {graph}')\\nprint('checks passed')\\n'@ | python -\\\"\"",
+          "output": "checks passed\r\n",
+          "isError": false,
+          "endMs": 34704,
+          "durationMs": 495,
+          "timingSource": "provider-stream",
+          "commandText": "\"C:\\\\Users\\\\Bilal\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command \"@'\nfrom solution import dependency_layers\n\nassert dependency_layers({}) == []\nassert dependency_layers({'z': [], 'a': [], 'm': []}) == [['a', 'm', 'z']]\nassert dependency_layers({'d': iter(['b', 'b', 'c']), 'c': iter(['a']), 'b': iter(['a']), 'a': iter([]), 'x': iter([])}) == [['a', 'x'], ['b', 'c'], ['d']]\noriginal = {'a': [], 'b': ['a', 'a']}\nassert dependency_layers(original) == [['a'], ['b']]\nassert original == {'a': [], 'b': ['a', 'a']}\nfor graph in ({'a': ['missing']}, {'a': ['a']}, {'a': [], 'b': ['c'], 'c': ['b']}):\n    try:\n        dependency_layers(graph)\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(f'expected ValueError for {graph}')\nprint('checks passed')\n'@ | python -\"",
+          "purposes": [
+            "doğrulama"
+          ],
+          "purpose": "doğrulama",
+          "summary": "Yerel Python kontrolleri",
+          "identicalInputSeenEarlier": false
+        }
+      ],
+      "solution": "def dependency_layers(graph):\n    nodes = set(graph)\n    dependents = {node: [] for node in graph}\n    remaining = {}\n\n    for node, prerequisites in graph.items():\n        dependencies = set(prerequisites)\n        if node in dependencies:\n            raise ValueError(f\"self-dependency: {node}\")\n        unknown = dependencies - nodes\n        if unknown:\n            raise ValueError(f\"unknown dependency: {min(unknown)}\")\n\n        remaining[node] = len(dependencies)\n        for dependency in dependencies:\n            dependents[dependency].append(node)\n\n    layers = []\n    ready = sorted(node for node, count in remaining.items() if count == 0)\n    processed = 0\n\n    while ready:\n        layers.append(ready)\n        processed += len(ready)\n        next_ready = []\n        for node in ready:\n            for dependent in dependents[node]:\n                remaining[dependent] -= 1\n                if remaining[dependent] == 0:\n                    next_ready.append(dependent)\n        ready = sorted(next_ready)\n\n    if processed != len(nodes):\n        raise ValueError(\"dependency cycle\")\n    return layers\n",
+      "supplementalGraphOracle": {
+        "passed": true,
+        "cases": 512,
+        "output": "512\n"
+      }
+    }
+  ],
+  "fixturesSHA256": {
+    "dependency_layers.py": "acbd84d1b303c47c35fcddca84606aa6e97c753c19fe65cbbd89c00ded9e058a",
+    "dependency_layers.txt": "7a7bc89fe321cf12e2d92f00afc5e447fbaa09bf0ebdb809149c9261de92d831",
+    "dependency_layers_test.py": "e2f0374e1769f2718d64c844deea0fa3269f25ca3baf6c3d2ad5a6c5f3dcb8bd",
+    "intervals.py": "4ab3651ec741d2a9dc7de9398f65c4c332e769f5f383de53f853a4aca89676cd",
+    "intervals.txt": "10a935ac83f4e4ad8e4869091bc2c546657620b2150013b13fcf58d128af745e",
+    "intervals_test.py": "4b672b4e29dbb39f445a942dea8899b0b3748d6d38c64a7f9eedf671a31f0c87",
+    "ttl_cache.py": "d681f1d7b41fd6d3616dc12a0c81c6039b443bfc5df12cdf7d326a595f102185",
+    "ttl_cache.txt": "442143d148b26e3257b227cb646cc1a858265ed73ebd3b4c7b4082ad47c366bd",
+    "ttl_cache_test.py": "587f8a52095b7d59ba1a51b1249801661824448cdf788a308b952ccf6d892c83"
+  }
+}
