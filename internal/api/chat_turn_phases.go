@@ -135,6 +135,9 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 		t.failPreflight("session_not_found", "session not found")
 		return nil, false
 	}
+	// Process-ledger parentage for this turn's CLI subprocess calls, taken from
+	// the row already loaded here rather than a second lookup (see stampRunSession).
+	t.run.setParentSession(session.ParentSessionID)
 	// Every session runs at most ONE turn at a time: claim the per-session turn slot
 	// (blocking until any in-flight turn finishes) so this turn never overlaps a
 	// concurrent direct /chat/stream call, a queued inbox turn, a scheduler wake, a

@@ -1,7 +1,7 @@
 # 72 — Tanıtım Sitesi (website/)
 
 > **Durum: UYGULANDI (iskelet + içerik, 2026-08-25).** Açık kaynak kullanıcıya yönelik
-> statik tek-sayfa tanıtım sitesi. Kod `website/`, kullanım `website/README.md`.
+> statik tanıtım ve dokümantasyon sitesi. Kod `website/`, kullanım `website/README.md`.
 
 ## Neden
 
@@ -14,20 +14,21 @@ sunar.
 
 | Konu | Karar | Gerekçe |
 |---|---|---|
-| Stack | Astro 5 + Tailwind v4 | Varsayılan sıfır JS, statik çıktı, ileride `/docs` eklenebilir |
+| Stack | Astro 5 + Tailwind v4 | Statik çıktı; `/docs` içerik koleksiyonundan üretilir |
 | Konum | `website/` (repo içinde) | Özellik değişince site metni **aynı commit'te** güncellenir |
-| Dil | EN | Hedef kitle açık kaynak geliştiricisi; TR faz 2 |
+| Dil | Tanıtım metinleri EN, doküman dosyaları TR | Kullanıcı kılavuzları `src/content/docs/` altında Türkçedir; çok dilli rota/seçici henüz yoktur |
 | Kapsam | Tek sayfa + `/releases` + `/404` + `/docs` | Doküman sayfaları içerik koleksiyonundan üretilir (`website/src/pages/docs/[...slug].astro`) |
 | Deploy | **GitHub Pages** (`.github/workflows/pages.yml`) | `main`'e `website/**` push'unda otomatik build+deploy; özel alan adı `tionharness.com`, `latest.json` site köküne kopyalanır |
-| Alan adı | `tionharness.com` | Bir alan adı sağlayıcısında kayıtlı; DNS henüz bir yere yönlendirilmedi |
+| Alan adı | `tionharness.com` | Site yapılandırması ve GitHub Pages özel alan adı (`website/public/CNAME`) |
 | Release verisi | **Build anında** çözülür, tarayıcıda tazelenir | Sürüm ve indirme linki JS'siz görünür; build hiçbir zaman canlı bir host'a bağımlı değil (aşağıya bak) |
 
 Go tarafını etkilemez: `website/` modül dışıdır, `go:embed` ağacına girmez.
 
 ## Placeholder politikası — sitenin omurgası
 
-Projede henüz **olmayan** her şey (release binary'leri, etiketli sürüm, tanıtım videosu,
-DNS) tek dosyada toplanır: `website/src/site.config.ts`. Public repo, lisans, issue
+Site bağlantıları ve henüz olmayan tanıtım videosu gibi alanlar
+`website/src/site.config.ts` içinde tutulur. Sürüm ve indirilebilir artifact
+bilgilerinin kaynağı ise `website/public/latest.json` dosyasıdır. Public repo, lisans, issue
 takibi ve docs sitesi artık var, dolayısıyla o alanlar dolduruldu — `docsUrl` artık
 `null` değil, `/docs/getting-started/introduction`'a bakar.
 
@@ -38,9 +39,9 @@ Kural: **`null` = henüz yok.** Bileşenler bu durumu ölü linke çevirmez.
 - `Screenshot` → build anında `public/` altında dosya var mı diye bakar; yoksa
   dosya adını ve `scripts\shots.ps1` ipucunu taşıyan **placeholder çerçeve** çizer
 
-Böylece site bugün eksiksiz ve dürüst; repo açıldığında tek dosya düzenlenip canlıya
-geçiyor. Yeni bir "henüz yok" alanı eklenirken **mutlaka** `site.config.ts`'e konur,
-bileşenin içine gömülmez.
+Yeni isteğe bağlı bağlantılar `site.config.ts` üzerinden yönetilir; bileşenlere
+sabit adres gömülmez. İndirilebilir sürüm yayımlamak ayrıca release feed ve
+artifact üretimini gerektirir; yalnız config değişikliği yeterli değildir.
 
 ## Release feed — `feedUrl` / `PUBLIC_FEED_URL`
 
@@ -173,7 +174,8 @@ Playwright bilerek `package.json`'a konmadı (Chromium ~150 MB); `-InstallDeps` 
 ## Docs bölümü (`/docs`)
 
 Site içi dokümantasyon, ana sayfadan ayrı bir rota ağacıdır. Şu an **iskelet**:
-7 sayfanın hepsi placeholder, gerçek `_Docs` içeriği bilerek taşınmadı.
+Yedi sayfa 2026-09-28 bakımında gerçek kurulum, yapılandırma ve kavram
+kılavuzlarıyla tamamlandı; derin tasarım kayıtları `_Docs` içinde kalır.
 
 | Dosya | Rolü |
 |---|---|
@@ -206,7 +208,9 @@ Dikkat edilecekler:
   (`frontend/src/features/settings/AboutPanel.tsx`, `PROJECT_LINKS`) siteye,
   docs'a ve depoya link verir. Docs rotası taşınırsa orası da güncellenmelidir.
 
-Arama kutusu, tema seçici ve TR çevirisi kapsam dışı bırakıldı.
+Doküman araması ve çok dilli rota/seçici bu katmanın kapsamı dışındadır.
+2026-09-28 bakımında yedi yer tutucu kullanıcı kılavuzu Türkçe kurulum,
+yapılandırma ve kullanım bilgileriyle tamamlandı.
 
 ## İçerik kaynağı kuralı
 
@@ -234,6 +238,6 @@ ve tekrar bayatlayabilir.
   bu alanın tamamen kaldırılması değerlendirilecek
 - Gerçek screenshot'ları üret (`shots.ps1`)
 - Pages custom domain'i (`tionharness.com`) doğrula ve HTTPS'i zorunlu kıl
-- `/docs` iskeleti kuruldu; sıradaki iş placeholder sayfaları gerçek içerikle
-  doldurmak (kaynak: `00-GENEL-BAKIS.md` + `tionharness-project` skill'i)
-- Faz 2: TR çevirisi, `05-ILERLEME.md`'den türetilen `/changelog`, docs araması
+- `/docs` altındaki yedi temel kılavuz tamamlandı; yeni özelliklerde ilgili
+  kılavuzu kaynak koduyla birlikte güncelle
+- Olası sonraki işler: çok dilli site gezinmesi ve docs araması

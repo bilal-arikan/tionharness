@@ -1,27 +1,28 @@
 ---
-title: Introduction
-description: What TionHarness is and who it is for.
+title: Giriş
+description: TionHarness kapsamı ve temel bileşenleri.
 order: 1
 ---
 
-<!-- PLACEHOLDER: scaffolding for the docs layout. Replace with real content. -->
+TionHarness, kendi makinenizde çalışan çoklu ajan ortamıdır. Tek çalıştırılabilir
+dosya HTTP API ve web arayüzünü sunar; kayıtlar JSON/JSONL dosyalarında tutulur.
+Windows'ta WebView2 kullanan ayrı masaüstü derlemesi de vardır.
 
-TionHarness is a self-hosted multi-agent runtime: a single binary that serves a web
-control plane, keeps its state on your own disk, and drives coding agents through
-whichever provider you have already paid for. This page is a placeholder so the
-documentation shell has something to render.
+## Neler yapabilirsiniz?
 
-## What it does
+Ajanlara sağlayıcı, model, talimat ve araçlar atayabilir; sohbet oturumları açabilir;
+görevleri panoda izleyebilir; akış, zamanlama ve olay tetikli otomasyonlarla işleri
+birleştirebilirsiniz. Koordinatör ajanlar işçi ajanlara görev devredebilir.
 
-An agent gets an identity, a provider and a set of tools, and then runs sessions
-against your repository while you watch every step in the browser.
+CLI sağlayıcıları kendi oturum açma mekanizmalarını kullanır. API sağlayıcılarında
+anahtar gerekir; LM Studio gibi yerel bir sunucu da bağlanabilir. Uygulamayı açmak
+ücretli bir model çağrısı gerektirmez, ajan çalıştırmak uygun sağlayıcı gerektirir.
 
-## What it is not
+## Veri ve erişim
 
-It is not a hosted service and not a model. Nothing leaves the machine except the
-provider calls you configure yourself.
+Geçmiş yerel disktedir; uzak sağlayıcıya veya harici araca gönderilen içerik makineden
+çıkabilir. Workspace, dosya sistemi güvenlik sınırı değildir. Normal HTTP erişimi
+varsayılan olarak loopback üzerindedir ve kimlik doğrulama varsayılan kapalıdır.
 
-## Where to go next
-
-Read [Installation](/docs/getting-started/installation) to get a binary running,
-then [Quickstart](/docs/getting-started/quickstart) for the first session.
+[Kurulum](/docs/getting-started/installation) ile derleyin,
+[hızlı başlangıç](/docs/getting-started/quickstart) ile ilk oturumu açın.

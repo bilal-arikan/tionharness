@@ -19,8 +19,9 @@ Bu repoda geçerli sıralama aşağıdakidir:
 Tipik akış: konum bilinmiyorsa `zvec_grep_search` ile bul, sembol çıkınca
 `codebase-memory-mcp` ile ilişkilendir. Adı zaten biliyorsan doğrudan grep.
 
-zg index'i yalnız bu repoda kuruludur. Başka projede `zvec_grep_search` sonuç
-vermezse index yok demektir; grep'e düş.
+`zvec_grep_search` aracı oturumda yoksa veya sonuçlar yetersizse grep'e düş.
+Boş arama sonucu tek başına indeksin bulunmadığını göstermez; sunucunun
+tazelik/indeks durumunu esas al. Yeni indeks oluşturmak açık kullanıcı onayı ister.
 
 ## Kabuk
 

@@ -136,12 +136,16 @@ func (t *toolLoopTurn) prepare() (func(), error) {
 	// itself, hooks — is attributed to this session and agent from here, because
 	// the ctx built in this phase is the one that reaches all of them. Stamped
 	// unconditionally: an unowned entry is still tracked, it is just harder to
-	// place in the panel.
+	// place in the panel. The parent session comes from the session row
+	// (SessionParentID): a worker's processes have to be groupable under the
+	// coordinator that spawned it, and the turn context carries only its OWN id.
+	turnSessionID := SessionIDFrom(t.ctx)
 	t.ctx = procwatch.WithOwner(t.ctx, procwatch.Owner{
-		WorkspaceID: t.r.wsID,
-		SessionID:   SessionIDFrom(t.ctx),
-		AgentID:     t.agent.ID,
-		AgentName:   t.agent.Name,
+		WorkspaceID:     t.r.wsID,
+		SessionID:       turnSessionID,
+		AgentID:         t.agent.ID,
+		AgentName:       t.agent.Name,
+		ParentSessionID: t.r.SessionParentID(turnSessionID),
 	})
 
 	// Resolve this turn's working directory: the session's WorkingDir override

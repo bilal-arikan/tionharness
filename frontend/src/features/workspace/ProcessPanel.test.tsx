@@ -11,6 +11,7 @@ const apiMock = vi.hoisted(() => ({
   stopProcess: vi.fn(),
   subscribeProcesses: vi.fn(),
   subscribeReconnect: vi.fn(),
+  getSessionsByIds: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({ api: apiMock }))
@@ -27,8 +28,22 @@ const running: ProcessEntry = {
   status: 'running',
   exitCode: 0,
   startedAt: NOW - 42_000,
-  owner: { agentName: 'PM', sessionId: 'ses_1' },
+  owner: { agentName: 'PM', sessionId: 'ses_1', parentSessionId: 'ses_0' },
   stoppable: true,
+}
+
+// Owned by a session that has since been deleted: the panel must still list it,
+// without offering a link into a session that is gone.
+const orphan: ProcessEntry = {
+  id: 'p3',
+  kind: 'mcp',
+  command: 'codebase-memory-mcp serve',
+  status: 'succeeded',
+  exitCode: 0,
+  startedAt: NOW - 90_000,
+  endedAt: NOW - 80_000,
+  owner: { sessionId: 'ses_gone' },
+  stoppable: false,
 }
 
 const finished: ProcessEntry = {
@@ -55,8 +70,11 @@ describe('ProcessPanel', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
-    apiMock.listProcesses.mockResolvedValue([running, finished])
+    apiMock.listProcesses.mockResolvedValue([running, finished, orphan])
     apiMock.stopProcess.mockResolvedValue({ id: 'p1', stopped: true })
+    // ses_gone is absent from the answer: the backend only returns the sessions
+    // that still exist.
+    apiMock.getSessionsByIds.mockResolvedValue([{ id: 'ses_1' }, { id: 'ses_0' }])
     onProcessEvent = () => {}
     apiMock.subscribeProcesses.mockImplementation((cb: () => void) => {
       onProcessEvent = cb
@@ -77,10 +95,10 @@ describe('ProcessPanel', () => {
     vi.useRealTimers()
   })
 
-  const render = async () => {
+  const render = async (onOpenSession?: (id: string) => void) => {
     await act(async () => {
       root = createRoot(container)
-      root.render(<ProcessPanel onError={() => {}} />)
+      root.render(<ProcessPanel onError={() => {}} onOpenSession={onOpenSession} />)
     })
   }
 
@@ -91,7 +109,7 @@ describe('ProcessPanel', () => {
   it('renders one row per entry with its status and duration', async () => {
     await render()
 
-    expect(rows()).toHaveLength(2)
+    expect(rows()).toHaveLength(3)
     expect(cell(0, 'process-status')).toBe('Çalışıyor')
     expect(cell(1, 'process-status')).toBe('Başarısız')
     // Running: measured against "now". Finished: the fixed span it ran for.
@@ -100,6 +118,32 @@ describe('ProcessPanel', () => {
     expect(container.textContent).toContain('go test ./...')
     expect(container.textContent).toContain('4242')
     expect(container.textContent).toContain('PM')
+  })
+
+  it('links the owner session and its parent, but leaves a deleted session as text', async () => {
+    const onOpenSession = vi.fn()
+    await render(onOpenSession)
+
+    expect(apiMock.getSessionsByIds).toHaveBeenCalledWith(['ses_0', 'ses_1', 'ses_gone'])
+
+    // Row 0: both the session and the coordinator that spawned it are live.
+    const links = rows()[0].querySelectorAll<HTMLButtonElement>(
+      '[data-testid="process-session-link"]',
+    )
+    expect(Array.from(links).map((l) => l.textContent)).toEqual(['ses_1', 'üst: ses_0'])
+    act(() => links[0].click())
+    expect(onOpenSession).toHaveBeenCalledWith('ses_1')
+
+    // Row 2: the session is gone — still listed, still readable, not a link.
+    expect(rows()[2].querySelector('[data-testid="process-session-link"]')).toBeNull()
+    expect(rows()[2].textContent).toContain('ses_gone')
+  })
+
+  it('does not link any session without a navigation host', async () => {
+    await render()
+
+    expect(container.querySelector('[data-testid="process-session-link"]')).toBeNull()
+    expect(rows()[0].textContent).toContain('ses_1')
   })
 
   it('refetches exactly once for a burst of process events, after the debounce', async () => {

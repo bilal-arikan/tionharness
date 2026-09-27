@@ -14,7 +14,7 @@ export const quickstartTabs: QuickstartTab[] = [
   {
     id: 'windows',
     label: 'Windows',
-    code: `# Prerequisites: Go 1.26+, Node 20+, and the claude CLI already logged in.
+    code: `# Prerequisites: Go 1.26.4+, Node 20.19+ (20.x) or 22.12+, and a configured provider.
 git clone <REPO_URL> tionharness
 cd tionharness
 
@@ -27,7 +27,7 @@ $env:TIONHARNESS_ADDR="127.0.0.1:8095"
   {
     id: 'linux',
     label: 'Linux',
-    code: `# Prerequisites: Go 1.26+, Node 20+, and the claude CLI already logged in.
+    code: `# Prerequisites: Go 1.26.4+, Node 20.19+ (20.x) or 22.12+, and a configured provider.
 git clone <REPO_URL> tionharness
 cd tionharness
 
@@ -39,7 +39,7 @@ TIONHARNESS_ADDR=127.0.0.1:8095 ./tionharness`,
   {
     id: 'macos',
     label: 'macOS',
-    code: `# Prerequisites: Go 1.26+, Node 20+, and the claude CLI already logged in.
+    code: `# Prerequisites: Go 1.26.4+, Node 20.19+ (20.x) or 22.12+, and a configured provider.
 git clone <REPO_URL> tionharness
 cd tionharness
 

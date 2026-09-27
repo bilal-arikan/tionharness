@@ -590,6 +590,12 @@ func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
 	if c.model != "" {
 		args = append(args, "--model", c.model)
 	}
+	// Ledger entry + stop path: the probe reads the CLI's stdout until the pipe
+	// closes, so a CLI that stalls on a half-finished login holds this call with no
+	// turn behind it to cancel. Registered like the transport itself (watchCLI), so
+	// the panel can end it the same way a user stop would.
+	ctx, stopProbe, watch := watchCLI(ctx, "claude-cli (auth probe)", c.binPath, args)
+	defer stopProbe()
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	proc.TreeKill(cmd)
 	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
@@ -609,11 +615,14 @@ func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
 	cmd.Stderr = &stderr
 	stdout, serr := cmd.StdoutPipe()
 	if serr != nil {
+		watch.Finish(serr)
 		return serr
 	}
 	if serr := cmd.Start(); serr != nil {
+		watch.Finish(serr)
 		return serr
 	}
+	watch.Started(cmd)
 	p := newCLIParser(c.model, nil)
 	rd := bufio.NewReader(stdout)
 	for {
@@ -626,6 +635,8 @@ func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
 		}
 	}
 	runErr := cmd.Wait()
+	watch.AppendOutput(stderr.String())
+	watch.Finish(runErr)
 	if p.notLoggedIn {
 		msg := strings.TrimSpace(p.authMsg)
 		if msg == "" {

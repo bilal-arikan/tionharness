@@ -135,7 +135,12 @@ varlık ayrı bir `store_*.go` dosyasında sahiplenilir. Kesin liste için
 
 | Dosya | Sahiplendiği alan |
 |-------|-------------------|
-| `store.go` | Agents, Sessions, Messages ve boot yüklemesi |
+| `store.go` | Oturum başlığı, CRUD ve oturum durum mutasyonları |
+| `store_agent.go` | Ajan oluşturma, profil güncelleme ve silme |
+| `store_message.go` | Mesaj ekleme, geri bildirim, silme ve JSONL transkript yazımı |
+| `store_load.go` | Oturumların açılışta yüklenmesi ve eski dosya biçiminden göç |
+| `store_session_cli.go` | CLI devam kimliği ve native compaction kayıtları |
+| `store_session_coordinator.go` | Koordinatör modu, soy ağacı ve rapor durumu |
 | `db.go` | `DB` tipi, açılış, dizin sabitleri, kilit/persist yardımcıları |
 | `store_messages_read.go` | Dar transkript okuyucuları: `ListMessagesTail`, `LastMessage`, `FindMessage`, `StreamMessages` |
 | `store_stats.go` | `Stats()`: RAM ayak izi + boot faz süreleri |

@@ -906,6 +906,10 @@ export default function App() {
             onDeleteWorkspace={deleteActiveWorkspace}
             onAppearanceSaved={onAppearanceSaved}
             onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
+            onOpenSession={(sid) => {
+              setView('chat')
+              ctl.selectSession(sid)
+            }}
             tab={links.workspaceTab}
             onTabChange={links.setWorkspaceTab}
             navOpen={workspaceNav.open}

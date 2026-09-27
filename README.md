@@ -16,7 +16,9 @@ gibi zaten giriş yapılmış bir abonelik CLI'ı yeterlidir.
 ## Hızlı Başlangıç
 
 Henüz etiketlenmiş bir sürüm (release) yok; kurulum yolu **kaynaktan derlemektir**.
-Gereksinimler: Go 1.26+, Node 20+ ve giriş yapılmış bir sağlayıcı CLI'ı (ör. `claude`).
+Derleme gereksinimleri: Go 1.26.4+ ve Node.js 20.19+ (20.x) veya 22.12+; yerel
+geliştirmede Node.js 24 kullanılır. Ajan çalıştırmak için giriş yapılmış bir sağlayıcı
+CLI'ı, API sağlayıcısı hesabı veya yerel model sunucusu yapılandırılır.
 
 **Windows**
 
@@ -77,7 +79,8 @@ dokümantasyon sitesi, Astro — Go modülünün dışındadır).
 - **Oturum (session)** — bir ajanla yürütülen çok-turlu konuşma; mesaj geçmişi, araç adımları
   ve token kullanımı burada tutulur, uzun oturumlarda bağlam otomatik sıkıştırılır.
 - **Workspace** — fiziksel izolasyon birimi: kendi store'u, runtime'ı ve scheduler'ı olan ayrı
-  bir çalışma alanı. Tüm `/api/*` uçları `X-Workspace-Id` başlığına göre çalışır.
+  bir çalışma alanı. Workspace kapsamlı API uçları `X-Workspace-Id` başlığıyla seçilir;
+  sağlayıcılar ve genel ayarlar uygulama genelindedir.
 - **Görevler (kanban)** — "Görevler" ekranındaki pano; kart başına ajan, öncelik, etiket ve
   bağımlılık; facet filtreleri, gruplama ekseni ve workspace başına kayıtlı görünümler.
 - **Akış (flow)** — çok-ajanlı graf: agent / branch / parallel / loop / subflow düğümleri,
@@ -100,20 +103,20 @@ dokümantasyon sitesi, Astro — Go modülünün dışındadır).
 
 ## Sağlayıcılar
 
-11 sağlayıcı türü (provider kind) yerleşiktir; her türden birden çok **örnek** tanımlanabilir
+12 sağlayıcı türü (provider kind) yerleşiktir; her türden birden çok **örnek** tanımlanabilir
 ve ajanlar tek tek örneklere bağlanır:
 
 `claude-cli` · `codex-cli` · `anthropic` · `minimax` · `minimax-anthropic` · `openrouter` ·
-`zai` · `deepseek` · `deepseek-anthropic` · `anthropic-compat` · `openai-compat`
+`zai` · `deepseek` · `deepseek-anthropic` · `anthropic-compat` · `openai-compat` · `lmstudio`
 
 `claude-cli` ve `codex-cli` anahtarsızdır — makinede giriş yapılmış CLI'ı kullanır. Yeni CLI
 örnekleri `<dataDir>/provider-homes/<instance-id>` altında kendi izole login evini alır.
 
 ## Arayüz
 
-Panel, Sohbet, Ajanlar, Ağ, Harita, Rota, Görevler, Otomasyon, Akışlar, Artifactlar, Skills,
+Panel, Sohbet, Ajanlar, Harita, Rota, Görevler, Otomasyon, Akışlar, Artifactlar, Skills,
 Araçlar & MCP, Market, Bütçe, Loglar, İçgörü ve Hedefler ekranları. Tema: açık/koyu/sistem +
-6 renk paleti (Violet, Blue, Emerald, Rose, Amber, Nord) — her biri açık ve koyu varyantıyla,
+10 renk paleti (Violet, Blue, Emerald, Rose, Amber, Nord, Cyan, Lime, Orange, Fuchsia) — her biri açık ve koyu varyantıyla,
 hepsi canlı uygulanır. Arayüz dili, ajanın yanıt dilinden bağımsız olarak ayarlanır.
 
 ## Kapsam ve Sınırlar
@@ -121,9 +124,12 @@ hepsi canlı uygulanır. Arayüz dili, ajanın yanıt dilinden bağımsız olara
 Bunlar bilinçli tasarım kararlarıdır; kurmadan önce okuyun.
 
 - **Barındırılan bir SaaS değil.** Hesap, kiracı (tenant) veya faturalandırma yoktur.
-  Binary'yi siz çalıştırırsınız; veriniz çalıştığı makineden çıkmaz.
-- **Kimlik doğrulama katmanı yok.** HTTP API'de auth yoktur ve CORS wildcard'dır. Loopback'e
-  veya bir Tailscale adresine bağlayın; **doğrudan internete açmayın.**
+  Binary'yi siz çalıştırırsınız; kayıtlar yerel diskte tutulur. Yapılandırdığınız
+  uzak model sağlayıcılarına ve harici araçlara istek içeriği gönderilebilir.
+- **Kimlik doğrulama varsayılan olarak kapalıdır.** `TIONHARNESS_API_AUTH_TOKEN`
+  ayarlanırsa bearer doğrulaması etkinleşir; paketlenmiş arayüz token göndermediği için
+  bu seçenek normal UI kullanımını da engeller. Loopback veya güvenilir özel ağ
+  kullanın; ayrıntılar [Harici API](_Docs/79-HARICI-API.md) rehberindedir.
 - **Sandbox değil.** Dosya ve shell araçları tasarım gereği tüm dosya sistemine erişir. Tek
   koruma izin modudur (`auto` / `ask` / `read-only`) — bilinçli seçin.
 - **Model sağlayıcısı değil.** Zaten erişiminiz olan modelleri orkestre eder; kendi CLI
@@ -132,11 +138,14 @@ Bunlar bilinçli tasarım kararlarıdır; kurmadan önce okuyun.
 ## Geliştirme
 
 ```bash
-export TIONHARNESS_ENABLE_SHELL=1  # yoksa shell aracı testleri skip'e düşer
-go test ./... -count=1             # backend
-
-cd frontend && npm test            # vitest
+scripts/test.sh fast  # changed Go packages; Vitest if frontend changed
+scripts/test.sh full  # delivery gate: Go + Vitest + dependency/diff checks
 ```
+
+Windows'ta test script'lerini Git Bash içinde çalıştırın. Script, kabuk testleri için
+`TIONHARNESS_ENABLE_SHELL=1` ayarlar. UI derlemesi ayrıca `cd frontend && npm run build`
+ile doğrulanır; tanıtım sitesi için `website/` içinde `npm run check` ve `npm run build`
+çalıştırılır. `full` bu derleme adımlarını içermez.
 
 Frontend Prettier ile formatlanır (`frontend/.prettierrc.json`): `npm run format` /
 `npm run format:check`. Pre-commit hook stage'lenmiş dosyaları otomatik formatlar; klon başına

@@ -7,6 +7,10 @@ import { Badge, EmptyState, PaneHeader, type BadgeTone } from '@/shared/componen
 
 interface Props {
   onError: (msg: string) => void
+  // Open a session's transcript (App switches to the chat view). Absent when the
+  // panel is rendered without a navigation host — the owner column then stays
+  // plain text.
+  onOpenSession?: (sessionId: string) => void
 }
 
 // How many entries the panel asks for. The backend keeps a bounded history, so
@@ -54,6 +58,10 @@ const KIND_OPTIONS: ProcessKind[] = [
   'external',
 ]
 
+// The "no session is linkable" verdict, shared so render-time fallbacks keep a
+// stable identity.
+const EMPTY_SESSIONS: ReadonlySet<string> = new Set()
+
 // elapsedMs is how long the entry has been running, or how long it ran. `now` is
 // passed in (rather than read here) so every row on one render shares an instant
 // and the running rows re-tick together.
@@ -62,15 +70,53 @@ function elapsedMs(e: ProcessEntry, now: number): number {
   return Math.max(0, end - e.startedAt)
 }
 
-// ownerLabel is the "who started this" column: the agent name when known, with
-// the session id as a secondary hint. A process spawned outside any session (an
-// MCP server for the workspace pool, a startup probe) carries neither.
+// ownerAgent is the agent side of the owner column: the name when the read side
+// resolved one, the raw id otherwise. Empty for a process spawned outside any
+// session (an MCP server for the workspace pool, an external tool update).
+function ownerAgent(e: ProcessEntry): string {
+  return e.owner.agentName || e.owner.agentId || ''
+}
+
+// ownerLabel flattens the owner column into one line, for the cell's tooltip and
+// for the free-text filter.
 function ownerLabel(e: ProcessEntry): string {
   const parts: string[] = []
-  if (e.owner.agentName) parts.push(e.owner.agentName)
-  else if (e.owner.agentId) parts.push(e.owner.agentId)
+  const agent = ownerAgent(e)
+  if (agent) parts.push(agent)
   if (e.owner.sessionId) parts.push(e.owner.sessionId)
+  if (e.owner.parentSessionId) parts.push(`üst: ${e.owner.parentSessionId}`)
   return parts.join(' · ')
+}
+
+// SessionRef renders one session id from the owner column. A process outlives
+// the session that started it, so an id whose session is gone (deleted, or not
+// resolvable right now) stays plain text instead of becoming a dead link.
+function SessionRef({
+  id,
+  liveSessions,
+  prefix,
+  onOpen,
+}: {
+  id?: string
+  liveSessions: ReadonlySet<string>
+  prefix?: string
+  onOpen?: (sessionId: string) => void
+}) {
+  if (!id) return null
+  const text = prefix ? `${prefix} ${id}` : id
+  if (!onOpen || !liveSessions.has(id))
+    return <span className="block truncate font-mono">{text}</span>
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(id)}
+      data-testid="process-session-link"
+      title="Bu oturuma git"
+      className="block max-w-full truncate text-left font-mono text-[var(--color-accent)] hover:underline"
+    >
+      {text}
+    </button>
+  )
 }
 
 // ProcessPanel is the Workspace window's "İşlemler" sub-page: every native
@@ -78,9 +124,9 @@ function ownerLabel(e: ProcessEntry): string {
 // history — with status/kind/text filters, a stop action for the ones the
 // backend can terminate, and per-row output/error detail.
 //
-// The list is SSE-driven: the shared feed's `process` frame is payload-free by
+// The list is SSE-driven: the shared feed's `process` frame carries no entry by
 // design, so the panel refetches on it instead of merging (see api/system.ts).
-export function ProcessPanel({ onError }: Props) {
+export function ProcessPanel({ onError, onOpenSession }: Props) {
   const [entries, setEntries] = useState<ProcessEntry[]>([])
   const [loading, setLoading] = useState(true)
   // The last load failure. Kept in the panel (not only in a toast) so a failed
@@ -96,6 +142,15 @@ export function ProcessPanel({ onError }: Props) {
   // Shared "now" for the duration column, re-read once a second while at least
   // one row is running.
   const [now, setNow] = useState(() => Date.now())
+  // Which of the sessions named by the rows still exist. The ledger keeps a
+  // process after its session is deleted, so the owner column can only link the
+  // ids in here. Kept together with the id set it was resolved for, so a row set
+  // whose answer has not arrived yet falls back to "nothing is linkable" during
+  // render instead of reusing the previous list's verdict.
+  const [resolved, setResolved] = useState<{ key: string; ids: ReadonlySet<string> }>(() => ({
+    key: '',
+    ids: EMPTY_SESSIONS,
+  }))
 
   const load = useCallback(
     () =>
@@ -147,6 +202,38 @@ export function ProcessPanel({ onError }: Props) {
     }
   }, [load])
 
+  // The session ids the rows mention, as a stable key: a refetch that returns the
+  // same owners must not re-run the existence lookup below.
+  const sessionIdKey = useMemo(() => {
+    const ids = new Set<string>()
+    for (const e of entries) {
+      if (e.owner.sessionId) ids.add(e.owner.sessionId)
+      if (e.owner.parentSessionId) ids.add(e.owner.parentSessionId)
+    }
+    return [...ids].sort().join(',')
+  }, [entries])
+
+  const liveSessions = resolved.key === sessionIdKey ? resolved.ids : EMPTY_SESSIONS
+
+  // Resolve which of those sessions are still there. A failure is reported, not
+  // swallowed: the ids then render as plain text, which is also what a deleted
+  // session gets, so a silent failure would look like "all sessions deleted".
+  useEffect(() => {
+    if (!sessionIdKey) return
+    let cancelled = false
+    api
+      .getSessionsByIds(sessionIdKey.split(','))
+      .then((items) => {
+        if (!cancelled) setResolved({ key: sessionIdKey, ids: new Set(items.map((s) => s.id)) })
+      })
+      .catch((e) => {
+        if (!cancelled) onError((e as Error).message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionIdKey, onError])
+
   const hasRunning = useMemo(() => entries.some((e) => e.status === 'running'), [entries])
 
   // Tick the duration column only while something is actually running — a
@@ -164,9 +251,14 @@ export function ProcessPanel({ onError }: Props) {
     const needle = q.trim().toLowerCase()
     if (!needle) return entries
     return entries.filter((e) =>
-      [e.command, e.label, e.owner.agentName, e.owner.agentId, e.owner.sessionId].some((v) =>
-        (v ?? '').toLowerCase().includes(needle),
-      ),
+      [
+        e.command,
+        e.label,
+        e.owner.agentName,
+        e.owner.agentId,
+        e.owner.sessionId,
+        e.owner.parentSessionId,
+      ].some((v) => (v ?? '').toLowerCase().includes(needle)),
     )
   }, [entries, q])
 
@@ -304,6 +396,7 @@ export function ProcessPanel({ onError }: Props) {
                 const open = expanded === e.id
                 const terminal = e.status !== 'running'
                 const owner = ownerLabel(e)
+                const agent = ownerAgent(e)
                 return [
                   <tr
                     key={e.id}
@@ -337,8 +430,25 @@ export function ProcessPanel({ onError }: Props) {
                     <td className="px-2 py-1.5 font-mono text-[var(--color-text-dim)]">
                       {e.pid ? e.pid : '—'}
                     </td>
-                    <td className="truncate px-2 py-1.5 text-[var(--color-text-dim)]" title={owner}>
-                      {owner || '—'}
+                    <td className="px-2 py-1.5 text-[var(--color-text-dim)]" title={owner}>
+                      {owner ? (
+                        <>
+                          {agent && <span className="block truncate">{agent}</span>}
+                          <SessionRef
+                            id={e.owner.sessionId}
+                            liveSessions={liveSessions}
+                            onOpen={onOpenSession}
+                          />
+                          <SessionRef
+                            id={e.owner.parentSessionId}
+                            liveSessions={liveSessions}
+                            prefix="üst:"
+                            onOpen={onOpenSession}
+                          />
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td
                       className="px-2 py-1.5 text-[var(--color-text-dim)]"

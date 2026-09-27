@@ -1,7 +1,7 @@
 # TionHarness — İlerleme Takibi
 
-> **Özet (2026-09-23):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
-> kayıtlar `05-ARSIV.md`'dedir. Son girişler: süreç defteri + Workspace "İşlemler" paneli
+> **Özet (2026-09-28):** Bu bir **günlüktür** — en yeni girişler en üstte; 2026-07-01 öncesi
+> kayıtlar `05-ARSIV.md`'dedir. Son girişler: doküman doğrulama ve kullanıcı kılavuzları; süreç defteri + Workspace "İşlemler" paneli
 > (`_Docs/88`, TSK1040), depo temizliği 2. tur (`slices.SortFunc`, coordination/store bölme,
 > `useKeyedReset` ile efektten render-fazına geçiş, ortak biçimlendiriciler) ve 1. tur
 > (modernize, staticcheck, ölü kod, frontend lint, deprecated oturum-bilgisi alanları),
@@ -9,6 +9,24 @@
 > taşınan plan gövdeleri), karar modelleri + karar mercileri (`_Docs/87`), DeepSeek V4.1 Flash
 > ve Z.ai GLM-5.3 ailesi + kaba-effort düşünme sınıfı, ortak arşiv aracı `set_archived`
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
+
+
+## Doküman doğrulama ve kullanıcı kılavuzları (2026-09-28) ✅
+
+- README, mimari, veri modeli, teknoloji seçimleri ve ajan referansı kaynak koduyla
+  karşılaştırıldı: 12 sağlayıcı, 10 renk ailesi, güncel frontend çıktı yolu, dosya
+  göçleri, WebSocket monitor bağımlılığı ve bölünmüş store dosyaları düzeltildi.
+- HTTP auth varsayılanı, opt-in bearer kapısı ve UI kısıtı açıklandı; etkisiz
+  `ACCESS_KEY`, tüm JSON'un şifreli olduğu iddiası ve workspace'in dosya sistemi
+  sınırı olduğu anlatımı düzeltildi. Arşivlerdeki tarihli kayıtlar korunur.
+- Web sitesindeki yedi yer tutucu kılavuz Türkçe kurulum, ilk kullanım, ajan,
+  oturum, workspace ve yapılandırma rehberleriyle değiştirildi. Site README'si,
+  feed/placeholder açıklamaları ve derleme ön koşulları güncellendi.
+- Doğrulama: `scripts/test.sh full` başarılı (Go testleri + 143 dosyada 1026
+  frontend testi + depcheck + yama kontrolü); frontend build, site check ve site
+  build başarılı. 95 dokümanda 290 yerel bağlantı hedefi mevcut; yedi kılavuzun
+  üretilen HTML çıktısı kontrol edildi. Harici bağlantılar ve görsel UI akışları
+  bu kontrolde doğrulanmadı. Frontend büyük parça boyutu uyarısı hâlâ mevcut.
 
 ## Süreç defteri ve Workspace "İşlemler" paneli (2026-09-23) ✅ (TSK1040)
 

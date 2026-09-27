@@ -1,25 +1,30 @@
 ---
-title: Workspaces
-description: The boundary around agents, data and files.
+title: Workspace'ler
+description: Depolama kapsamı, paylaşılan ayarlar ve çalışma dizini.
 order: 3
 ---
 
-<!-- PLACEHOLDER: scaffolding for the docs layout. Replace with real content. -->
+Workspace; ajanları, oturumları, panoyu, akışları ve zamanlamaları bir araya getirir.
+Her workspace'in ayrı store'u, runtime'ı ve scheduler'ı vardır.
 
-A workspace groups agents, sessions, skills and board state around one root
-directory. This page is a placeholder for the full reference.
+## Ayrı ve ortak veriler
 
-## Isolation
+Workspace verileri kendi dizininde saklanır. Sağlayıcı örnekleri, genel ayarlar ve
+global skill'ler uygulama düzeyinde paylaşılır; dolayısıyla workspace'ler tamamen
+bağımsız kullanıcı hesapları değildir.
 
-Workspaces do not share state. Switching workspaces swaps the entire set of
-agents and history along with the working directory.
+Workspace değiştirmek arayüzdeki veri kapsamını değiştirir. Arka planda çalışan
+diğer workspace işleri sırf bu seçim değişti diye durmaz.
 
-## Shared instructions
+## Çalışma dizini
 
-Workspace-level instructions are prepended to every agent in it, which is where
-project conventions belong.
+Proje klasörü araçların varsayılan çalışma dizinidir; oturum bunu değiştirebilir.
+Bu klasör dosya sistemi erişim sınırı değildir. Özellikle shell komutları yalnız
+workspace altında çalışmak zorunda değildir. İzin modunu ve araçları göreve göre seçin.
 
-## Storage layout
+## Talimatlar ve taşıma
 
-Everything lives in plain files under the workspace store, so it can be inspected,
-backed up or deleted with ordinary tools.
+Workspace talimatlarına ortak proje kurallarını yazabilirsiniz. Şablon dışa aktarımı
+bir tam yedek değildir; sırlar ve CLI oturumları gibi uygulama-geneli verilerin aynı
+paketle taşınacağını varsaymayın. Kalıcı verileri taşırken uygulama veri dizinini,
+workspace konumlarını ve şifreleme anahtarını birlikte değerlendirin.

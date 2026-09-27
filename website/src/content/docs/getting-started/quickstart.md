@@ -1,25 +1,27 @@
 ---
-title: Quickstart
-description: Your first workspace, agent and session.
+title: Hızlı başlangıç
+description: İlk workspace, sağlayıcı, ajan ve sohbet.
 order: 3
 ---
 
-<!-- PLACEHOLDER: scaffolding for the docs layout. Replace with real content. -->
+Önce [kurulumu](/docs/getting-started/installation) tamamlayıp web arayüzünü açın.
 
-The shortest path from a fresh install to an agent editing a real repository is
-three steps. This page is a placeholder for the walkthrough.
+1. Workspace seçicisinden çalışma alanı oluşturun veya mevcut proje klasörünü
+   bağlayın. Proje klasörü, araçların başlangıç çalışma dizinini belirler.
+2. Ayarlar → Sağlayıcılar bölümünde bir sağlayıcı örneği yapılandırın. CLI için
+   ilgili örnekte oturum açın; API sağlayıcısında anahtar ve uç noktayı ayarlayın.
+   Yeni CLI örneklerinin ayrı login dizini vardır; terminaldeki mevcut girişinizin
+   otomatik paylaşılacağını varsaymayın.
+3. Ajanlar bölümünde bir ajan oluşturun veya mevcut ajanı düzenleyin. Sağlayıcı
+   örneğini, modeli, talimatlarını ve araç erişimini seçin.
+4. Ajanla sohbet açın. Composer'daki klasör bilgisinden çalışma dizinini doğrulayın;
+   ilk denemede projeyi inceleme gibi sınırlı bir görev verin.
+5. Araç çağrılarını ve sonucu sohbetten izleyin. İzin isteyen işlemlerde onay kartını
+   yanıtlayın; çalışan turu sohbetin durdurma kontrolünden durdurabilirsiniz.
 
-## Create a workspace
+Başlangıç şablonu hazır ajanlar ve otomasyonlar içerebilir. Uzun süre çalışacak bir
+workspace'te Otomasyon ekranındaki etkin kuralları gözden geçirin.
 
-Point a new workspace at a directory on disk. That directory becomes the root
-every agent in the workspace can reach.
-
-## Configure an agent
-
-Give the agent a provider, a model and a short soul prompt describing the job it
-is expected to do.
-
-## Run a session
-
-Type a task and watch the step stream. Every tool call, its arguments and its
-result stay in the transcript.
+Workspace klasörü dosya erişimini kendiliğinden sınırlamaz. Araç seçimi ve izin modu
+hakkında [ajanlar](/docs/concepts/agents), çalışma alanı kapsamı hakkında
+[workspace'ler](/docs/concepts/workspaces) rehberine bakın.

@@ -37,6 +37,13 @@ type chatRun struct {
 	// "is a turn in flight for session X?" after a page reload (turns are
 	// detached from the client connection and keep running server-side).
 	sessionID string
+	// parentSessionID is the session this one hangs off (the coordinator that
+	// spawned a worker, the delegating session of a subagent), taken from the
+	// session row. It is what stampRunSession puts on the process ledger's owner
+	// so a CLI subprocess's processes group under the fan-out root. Empty for a
+	// top-level session. Installed after register (the session is loaded by the
+	// turn's preflight); guarded by mu.
+	parentSessionID string
 	// workspaceID scopes this run to its owning workspace. chatRuns is a single
 	// SERVER-WIDE registry shared across every workspace, so activeSessionIDs must
 	// be able to filter to one workspace — otherwise an in-flight turn in workspace
@@ -245,6 +252,22 @@ func (r *chatRun) providerOf() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.provider
+}
+
+// setParentSession records the session this turn's session hangs off, for the
+// process-ledger owner stamp (see stampRunSession).
+func (r *chatRun) setParentSession(id string) {
+	r.mu.Lock()
+	r.parentSessionID = id
+	r.mu.Unlock()
+}
+
+// parentSessionOf returns the recorded parent session id (empty for a top-level
+// session, or before the turn's preflight installed it).
+func (r *chatRun) parentSessionOf() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.parentSessionID
 }
 
 // setTierVis installs the responding agent's visibility resolver for the CLI wire

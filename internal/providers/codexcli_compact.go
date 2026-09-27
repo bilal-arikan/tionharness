@@ -188,30 +188,46 @@ func (c *CodexCLI) CompactNative(ctx context.Context, resumeSessionID string, re
 	}
 	defer cleanup()
 
-	cmd := proc.CommandContextNested(ctx, c.binPath, "app-server", "--listen", "stdio://", "--strict-config")
+	// Ledger entry + stop path for the app-server (internal/procwatch). This is the
+	// longest-lived process this file starts: it holds a stdio session for the whole
+	// compaction, and a wedged one is only bounded by the per-step timeouts below.
+	// ctx is SHADOWED by the cancellable child so a stop from the process panel
+	// reaches the command exactly as a cancelled turn does.
+	appArgs := []string{"app-server", "--listen", "stdio://", "--strict-config"}
+	ctx, stopAppServer, watch := watchCLI(ctx, "codex-cli (app-server)", c.binPath, appArgs)
+	defer stopAppServer()
+	cmd := proc.CommandContextNested(ctx, c.binPath, appArgs...)
 	cmd.Env = append(codexBaseEnv(), "CODEX_HOME="+home)
 	if req.WorkDir != "" {
 		cmd.Dir = req.WorkDir
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		watch.Finish(err)
 		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		watch.Finish(err)
 		return nil, err
 	}
 	var stderr syncBuffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
+		watch.Finish(err)
 		return nil, fmt.Errorf("start codex app-server: %w", err)
 	}
+	watch.Started(cmd)
 	defer func() {
 		_ = stdin.Close()
+		// The app-server never exits on its own — every path through this function
+		// kills it — so announce the kill before it lands and the entry reaches the
+		// panel as "killed" instead of as a process that failed (see MarkStopping).
+		watch.MarkStopping()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
-		_ = cmd.Wait()
+		watch.Finish(cmd.Wait())
 	}()
 
 	conn := newCodexRPCConn(stdin, stdout, &stderr)

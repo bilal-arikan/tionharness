@@ -1,94 +1,78 @@
-# TionHarness Tanıtım Sitesi
+# TionHarness Tanıtım ve Dokümantasyon Sitesi
 
-Statik tek-sayfa tanıtım sitesi. **Astro + Tailwind CSS v4**, sıfır runtime framework —
-`npm run build` düz HTML/CSS üretir, herhangi bir statik sunucuda çalışır.
+Astro 5 + Tailwind CSS v4 ile üretilen statik site; ana sayfa, kullanıcı kılavuzu,
+sürüm notları ve sürüm akışını sunar. Uygulamanın Go binary'sine gömülmez.
+Tasarım kararları: [72-TANITIM-SITESI.md](../_Docs/72-TANITIM-SITESI.md).
 
-Tasarım kararları ve içerik kuralları: [`_Docs/72-TANITIM-SITESI.md`](../_Docs/72-TANITIM-SITESI.md).
+## Çalıştırma ve doğrulama
 
-## Çalıştırma
+Depo kökünden:
 
 ```powershell
 cd website
-npm install
+npm ci
 npm run dev      # http://localhost:4321
-npm run build    # -> website/dist/
-npm run preview  # dist/ çıktısını yerelde sun
-npm run check    # TypeScript + Astro tip kontrolü
+npm run check
+npm run build    # website/dist/
+npm run preview
 ```
 
-Go build'i etkilemez: `website/` Go modülünün dışındadır, `go:embed` ile hiçbir ilgisi yoktur.
+`frontend/` ayrı npm projesidir. Siteyi derlemek uygulama arayüzünü derlemez.
 
-## Placeholder'ları doldurma
+## İçerik ve bağlantılar
 
-Projede **henüz var olmayan** her şey tek dosyada toplanmıştır:
-[`src/site.config.ts`](src/site.config.ts).
+`src/site.config.ts` repo, issue, dokümantasyon ve alan adı bağlantılarını içerir.
+`null` değerler `CTAButton` ve `SmartLink` tarafından pasif gösterilir. Repo, lisans
+ve dokümantasyon adresleri zaten tanımlıdır; bunları yeniden doldurmak gerekmez.
 
-Değeri `null` olan bir bağlantı **ölü link üretmez** — `CTAButton` pasif bir kontrol +
-"Coming soon" rozeti, `SmartLink` ise soluk metin + "(soon)" gösterir. Repo yayına
-alındığında yalnızca bu dosyayı doldurmak yeterlidir; başka hiçbir yeri değiştirmeye
-gerek yoktur.
+Sürüm ve indirme adreslerinin kaynağı `public/latest.json` dosyasıdır.
+`src/lib/releaseFeedBuild.ts` bu dosyayı derleme sırasında okur; `PUBLIC_FEED_URL`
+verilirse harici akıştan okur. Kullanılabilir artifact yoksa indirme yerine
+"Coming soon" görünür. Yalnız `site.config.ts` içindeki `downloads` alanlarını
+doldurmak sürüm yayımlamaz. Yayın akışı için
+[75-YAYIN-SURECI.md](../_Docs/75-YAYIN-SURECI.md).
 
-Doldurulacaklar:
-
-| Alan | Ne zaman |
-|---|---|
-| `repoUrl`, `issuesUrl` | Public repo açıldığında |
-| `releasesUrl`, `downloads.*` | İlk release binary'leri yayınlandığında |
-| `docsUrl` | Doküman sitesi (faz 2) yayına girdiğinde |
-| `license`, `version` | Lisans seçildiğinde / ilk sürüm etiketlendiğinde |
-| `astro.config.mjs` → `site` | Alan adı alındığında (canonical + og:url için) |
-
-`quickstart.ts` içindeki `<REPO_URL>` yer tutucusu da repo açılınca gerçek adresle değişir.
-
-## Ekran görüntüleri
-
-Görseller repoda tutulmaz (`.gitignore`), çalışan bir uygulamadan üretilir:
-
-```powershell
-# Önce uygulamayı başlat
-.\scripts\dev.ps1
-
-# Sonra (ilk seferde Chromium indirir, ~150 MB)
-.\scripts\shots.ps1 -InstallDeps
-```
-
-Script `website/public/shots/` altına `coordinator.png`, `flows.png`, `board.png`,
-`agents.png`, `insights.png` yazar. Görsel yoksa `Screenshot.astro` **placeholder çerçeve**
-render eder — site screenshot olmadan da eksiksiz çalışır.
+`src/content/quickstart.ts` içindeki `<REPO_URL>`, sayfa oluşturulurken yapılandırılmış
+repo adresiyle değiştirilir; elle sabit bir adresle değiştirilmesi gerekmez.
 
 ## Klasör yapısı
 
+| Yol | İçerik |
+|---|---|
+| `src/content/docs/` | Markdown kullanıcı kılavuzları; `title`, `description`, `order` ön bilgisi |
+| `src/content.config.ts` | Doküman koleksiyonu ve ön bilgi şeması |
+| `src/content/` | Tanıtım metinleri, tema ve hızlı başlangıç verileri |
+| `src/components/`, `src/layouts/` | Sayfa bileşenleri ve ortak yerleşimler |
+| `src/pages/docs/` | İçerik koleksiyonundan üretilen doküman rotaları |
+| `src/pages/releases.astro`, `src/pages/releases.xml.ts` | Sürüm notları ve akış |
+| `public/` | Favicon, ekran görüntüleri ve `latest.json` |
+| `scripts/shots.mjs` | Playwright ekran görüntüsü sürücüsü |
+
+## Ekran görüntüleri
+
+Aşağıdaki komutları **depo kökünden**, ayrı terminallerde çalıştırın:
+
+```powershell
+.\scripts\dev.ps1
+.\scripts\shots.ps1 -InstallDeps
 ```
-website/
-├── src/
-│   ├── site.config.ts      # TÜM placeholder'lar burada
-│   ├── content/            # metin/veri (features, deepdives, themes, quickstart, scope, stats)
-│   ├── components/         # her bölüm ayrı .astro dosyası
-│   ├── layouts/Base.astro  # <head>, nav, footer
-│   └── pages/              # index.astro, 404.astro
-├── scripts/shots.mjs       # Playwright screenshot sürücüsü
-└── public/                 # favicon + shots/
-```
 
-## Tema
+Görüntüler `public/shots/` altında üretilir ve gitignore kapsamındadır. Dosya yoksa
+`Screenshot.astro` yer tutucu çerçeve gösterir.
 
-`src/styles/theme.css`, uygulamanın `frontend/src/index.css` dosyasındaki token'larını
-(varsayılan "midnight-violet" preset'i) birebir yansıtır. `src/content/themes.ts` ise
-`frontend/src/shared/lib/themePresets.ts`'in kopyasıdır (6 renk ailesi × açık/koyu).
-**Uygulamada palet değişirse bu iki dosya da güncellenmelidir.**
+## Tema ve içerik bakımı
 
-Tailwind, uygulamadaki gibi üç parçalı import ile alınır (utilities cascade layer dışında
-kalsın diye) — gerekçe `theme.css` başındaki yorumda.
+`src/styles/theme.css` uygulamanın `frontend/src/index.css` token'larıyla,
+`src/content/themes.ts` ise `frontend/src/shared/lib/themePresets.ts` ile elle
+senkronlanır. Güncel palet 10 renk ailesi × açık/koyu moddur; varsayılan
+`violet-dark` değeridir.
 
-## İçerik kaynağı
-
-Site metni yazılırken **`README.md` kaynak alınmaz** — bayat bilgiler içerir (kaldırılmış
-"Hafıza" alt sistemi, eksik provider listesi, yanlış tema sayısı). Doğru kaynak:
-`_Docs/00-GENEL-BAKIS.md` + `_Docs/05-ILERLEME.md` + `tionharness-project` skill'i.
+İçerik, ilgili kaynak kodu ve `_Docs` içindeki güncel özellik dokümanlarıyla
+karşılaştırılır. README özet sunar; tarihli ilerleme kayıtları geçmişi anlatır ve
+tek başına güncel davranış kanıtı sayılmaz. Tanıtım metinleri İngilizce,
+doküman dosyaları Türkçe tutulur.
 
 ## Dağıtım
 
-Site **GitHub Pages** ile yayınlanır (`.github/workflows/pages.yml`); `dist/` klasörü
-herhangi bir statik hosting'e de olduğu gibi konulabilir. `deploy/release-host/` yalnızca
-**yerel önizleme** içindir. Statik sitede auth sorunu yoktur — uygulamanın aksine
-internete açmak güvenlidir.
+`.github/workflows/pages.yml` GitHub Pages dağıtımını yapar. `dist/` başka bir statik
+sunucuda da sunulabilir. `deploy/release-host/` yerel önizleme içindir.

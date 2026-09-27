@@ -13,6 +13,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/interaction"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -909,10 +910,24 @@ func toolNameDistance(a, b string) int {
 // every bridged tool used to stamp it itself — three copies that a new tool could
 // silently forget. No-op on a run with no persisted session: what the empty case
 // means stays each tool's own decision (callRunSubagent rejects, callShell warns).
+//
+// It also stamps the process-ledger owner (internal/procwatch). A tool call that
+// arrives here comes from a CLI subprocess over HTTP, NOT down the turn's ctx, so
+// the owner the agent runtime stamped for the turn is not on it: without this a
+// shell run by claude-cli lands in the ledger unattributed. The parent session
+// rides along (installed on the run from the session row, see setParentSession)
+// so a worker's CLI-spawned processes still group under their coordinator. The
+// agent fields stay empty here — the run only knows its session — and
+// handleListProcesses resolves them on read.
 func stampRunSession(ctx context.Context, run *chatRun) context.Context {
 	if run == nil || run.sessionID == "" {
 		return ctx
 	}
+	ctx = procwatch.WithOwner(ctx, procwatch.Owner{
+		WorkspaceID:     run.workspaceID,
+		SessionID:       run.sessionID,
+		ParentSessionID: run.parentSessionOf(),
+	})
 	ctx = tools.WithCurrentSession(ctx, run.sessionID)
 	return agent.WithSessionID(ctx, run.sessionID)
 }

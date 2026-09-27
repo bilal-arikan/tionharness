@@ -6,20 +6,46 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // newStampRun registers a run reachable through Call() by its stable Interaction
-// Bearer token, the way the CLI paths bind it.
+// Bearer token, the way the CLI paths bind it. The run is given a parent session
+// too — the turn paths install one from the session row — so the process-ledger
+// owner stamp is exercised with every field it carries.
 func newStampRun(t *testing.T, runID, sessionID string) (*chatRuns, *chatRun, string) {
 	t.Helper()
 	runs := newChatRuns()
 	run := runs.register(runID, sessionID, "ws1", func() {})
+	run.setParentSession(sessionID + "-coordinator")
 	t.Cleanup(func() { runs.unregister(runID) })
 	tok := runs.interactionToken("ws1", sessionID, "AG1")
 	runs.bindActive(tok, run)
 	return runs, run, tok
+}
+
+// wantLedgerOwner asserts the process-ledger owner a bridged tool sees: a shell
+// (or any other native process) the CLI subprocess starts through this call must
+// be attributable to the run's workspace, its session AND the session that
+// spawned it — dropping the stamp leaves every such process unowned in the panel,
+// and dropping the parent alone ungroups a worker's processes from its
+// coordinator's fan-out.
+func wantLedgerOwner(t *testing.T, ctx context.Context, run *chatRun) {
+	t.Helper()
+	got := procwatch.OwnerFrom(ctx)
+	want := procwatch.Owner{
+		WorkspaceID:     run.workspaceID,
+		SessionID:       run.sessionID,
+		ParentSessionID: run.parentSessionOf(),
+	}
+	if want.ParentSessionID == "" {
+		t.Fatal("the run under test has no parent session, so the stamp's parent field is untested")
+	}
+	if got != want {
+		t.Errorf("procwatch.OwnerFrom(ctx) = %+v, want %+v", got, want)
+	}
 }
 
 // TestCallStampsSessionIDCentrally locks the single stamping point: Call() puts
@@ -31,9 +57,11 @@ func TestCallStampsSessionIDCentrally(t *testing.T) {
 	runs, run, tok := newStampRun(t, "r-stamp", "s-stamp")
 
 	var gotAgentSession, gotToolSession string
+	var gotCtx context.Context
 	run.setRunAgent(func(ctx context.Context, _ json.RawMessage) (string, error) {
 		gotAgentSession = agent.SessionIDFrom(ctx)
 		gotToolSession = tools.CurrentSessionID(ctx)
+		gotCtx = ctx
 		return "subagent done", nil
 	})
 
@@ -51,6 +79,7 @@ func TestCallStampsSessionIDCentrally(t *testing.T) {
 	if gotToolSession != run.sessionID {
 		t.Errorf("tools.CurrentSessionID(ctx) = %q, want %q", gotToolSession, run.sessionID)
 	}
+	wantLedgerOwner(t, gotCtx, run)
 }
 
 // TestCallStampsShellSessionID: the shell runner resolves the command's working
@@ -143,6 +172,7 @@ func TestCallViaSinkRestampsAfterAttach(t *testing.T) {
 	if got := tools.CurrentSessionID(capture.ctx); got != run.sessionID {
 		t.Errorf("tools.CurrentSessionID(ctx) = %q, want %q", got, run.sessionID)
 	}
+	wantLedgerOwner(t, capture.ctx, run)
 }
 
 // TestStampRunSessionEmptyIsNoOp: the empty case must stay a no-op, so each tool
@@ -160,6 +190,9 @@ func TestStampRunSessionEmptyIsNoOp(t *testing.T) {
 	}
 	if got := tools.CurrentSessionID(ctx); got != "" {
 		t.Errorf("tools.CurrentSessionID(ctx) = %q, want empty", got)
+	}
+	if got := procwatch.OwnerFrom(ctx); got != (procwatch.Owner{}) {
+		t.Errorf("procwatch.OwnerFrom(ctx) = %+v, want the zero owner", got)
 	}
 	if stampRunSession(context.Background(), nil) == nil {
 		t.Error("stampRunSession(ctx, nil) must return the ctx, not nil")

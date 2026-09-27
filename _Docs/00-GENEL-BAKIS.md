@@ -1,6 +1,6 @@
 # TionHarness — Genel Bakış
 
-> **Özet (2026-09-22):** TionHarness'in giriş dokümanı — projenin ne olduğunu, teknoloji özetini, temel kavramları (Agent/Swarm/Session/Task/Provider) ve `_Docs` altındaki tüm doküman dizinini (00–87 + `arsiv/`) listeler. Durum: **uygulandı ve canlı** — Faz 0–8 tamamlandı, public yayın yapıldı (repo + tanıtım sitesi, Apache-2.0), en son dalga Rota (workspace çalışma akışı grafiği) F0–F5 ile bitti (2026-09-02/03). En önemli kararlar: SQLite yerine dosya-tabanlı depolama, Wails yerine CGO'suz native WebView2 penceresi, memory alt sisteminin 2026-07-05'te tamamen kaldırılması. Bir ajan için: projeye ilk kez bakan veya hangi dokümanın neyi anlattığını bulmak isteyen herkesin başlangıç noktası.
+> **Özet (2026-09-28):** TionHarness'in giriş dokümanı — projenin ne olduğunu, teknoloji özetini, temel kavramları (Agent/Swarm/Session/Task/Provider) ve `_Docs` altındaki tüm doküman dizinini (00–88 + `arsiv/`) listeler. Durum: **uygulandı ve canlı** — Faz 0–8 tamamlandı, public yayın yapıldı (repo + tanıtım sitesi, Apache-2.0), Rota F0–F5 sonrasında monitor, karar katmanı ve süreç izleme de eklendi; güncel değişiklikler `05-ILERLEME.md` içinde izlenir. En önemli kararlar: SQLite yerine dosya-tabanlı depolama, Wails yerine CGO'suz native WebView2 penceresi, memory alt sisteminin 2026-07-05'te tamamen kaldırılması. Bir ajan için: projeye ilk kez bakan veya hangi dokümanın neyi anlattığını bulmak isteyen herkesin başlangıç noktası.
 
 > **TionHarness**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
 
@@ -26,7 +26,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 | Bileşen | TionHarness |
 |---------|---------|
-| Dil | Go 1.26+ |
+| Dil | Go 1.26.4+ |
 | Masaüstü kabuk | Native WebView2 penceresi (`cmd/tionharness-desktop`, CGO'suz — Wails gereksizleşti; bkz. `32-NATIVE-PENCERE.md`) |
 | Web framework | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
 | Depolama | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
@@ -47,7 +47,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 |---------|--------|
 | [00-GENEL-BAKIS.md](00-GENEL-BAKIS.md) | Bu dosya — projenin amacı ve özeti |
 | [01-MIMARI.md](01-MIMARI.md) | Sistem mimarisi, katmanlar, modüller |
-| [02-VERI-MODELI.md](02-VERI-MODELI.md) | Veritabanı tabloları ve veri modeli |
+| [02-VERI-MODELI.md](02-VERI-MODELI.md) | Dosya-tabanlı varlık modeli ve ilişkileri |
 | [03-YOL-HARITASI.md](03-YOL-HARITASI.md) | Aşama aşama (faz) geliştirme planı |
 | [04-TEKNOLOJI-SECIMLERI.md](04-TEKNOLOJI-SECIMLERI.md) | Kütüphane seçimleri ve gerekçeleri |
 | [05-ILERLEME.md](05-ILERLEME.md) | Yapılanlar / sıradaki adımlar takibi (**canlı durum** — 2026-07-01'den bugüne; en yeni kayıt üstte) |
@@ -109,7 +109,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [68-OZET-HARITASI.md](68-OZET-HARITASI.md) | **Faz 1-3 + TSK66 canlı** — Özet Haritası / Workspace Explorer: View katmanı üstünde kök düğümden tıkladıkça bir katman açılan semantic-zoom drill-down. Backend: `agent`/`budget`/`tools`/`category` + TSK66'da `artifact`/`automation`/`skill`/`insight`/`logs` Kind'leri + deterministik projeksiyonlar (LLM yok), `Children(ref)` + `GET /children`, ajan **`expand` aracı**, `Sources` (skills/findings/logs) + `WithSources`. Frontend: NavRail "Harita" ekranı (`features/explorer`), **2026-09-04'ten beri vis-network tek fizik ağı** (`GET /api/views/graph` tüm haritayı tek çağrıda verir; merkezde workspace, halkada 11 grup, üyeler gruba bağlı; tek tık = odak + gömülü özet paneli), canlı SSE, URL deep-link + harita-içi arama. Opsiyonel/ertelendi: MCP resource tree + sigma.js (büyük-workspace) |
 | [69-CODEX-CLI-SAGLAYICI.md](69-CODEX-CLI-SAGLAYICI.md) | **Araştırma / fizibilite; uygulama notları §13 (eski 70 §8)** — OpenAI Codex CLI'yi claude-cli gibi arka planda sürme fizibilitesi. `codex exec` bayrak yüzeyi, `--json` JSONL olay şeması (`thread.*`/`turn.*`/`item.*`), `CODEX_HOME` config izolasyonu, `-c` TOML override'ları, MCP köprüsü uyumu (Streamable HTTP + Bearer, `mcp__srv__tool` namespace'i), `developer_instructions` sistem-prompt kanalı ve **27 maddelik parite matrisi**. İki gerçek boşluk: exec'te per-tool onay yok + native araç bastırma sınırlı. Doğrulama: `codex-cli 0.147.0` canlı + `openai/codex` kaynak kodu |
 | [71-SAGLAYICI-ORNEKLERI-PLANI.md](71-SAGLAYICI-ORNEKLERI-PLANI.md) | **Faz 0-5 BİTTİ (2026-08-18)**; §4.5 claude-cli kimlik sağlığı + yedek dışlama (eski 51'den) — Sağlayıcı taslak→örnek modeli; uygulama-geneli `providers.json`; ajanların örnek seçimi; yeni CLI örneklerinde otomatik `<dataDir>/provider-homes/<instance-id>` izolasyonu ve örnek-bazlı auth rotaları; legacy workspace auth fallback'i; `InstanceCatalog()` ile aynı kind'ın örneklerini ayrı gösterme. **§12 (2026-09-04):** yerel sağlayıcılar — LM Studio kind'ı, host tabanlı anahtarsız çalışma, yüklenen bağlam boyutuna göre muhafazakâr pencere, sıfır maliyet |
-| [72-TANITIM-SITESI.md](72-TANITIM-SITESI.md) | **UYGULANDI (2026-08-25)** — `website/` altındaki statik tanıtım sitesi (Astro 5 + Tailwind v4, EN, tek sayfa). Placeholder politikası (`site.config.ts`'te `null` = henüz yok → ölü link yerine "Coming soon"), bölüm akışı, uygulamadan elle senkronlanan tema dosyaları, `scripts\shots.ps1` Playwright screenshot hattı ve "README'yi kaynak alma" içerik kuralı |
+| [72-TANITIM-SITESI.md](72-TANITIM-SITESI.md) | **UYGULANDI (2026-08-25)** — `website/` altındaki statik tanıtım ve dokümantasyon sitesi (Astro 5 + Tailwind v4). Placeholder politikası (`site.config.ts`'te `null` = henüz yok → ölü link yerine "Coming soon"), bölüm akışı, uygulamadan elle senkronlanan tema dosyaları, `scripts\shots.ps1` Playwright screenshot hattı ve koda karşı doğrulanan içerik kaynakları |
 | [73-LOKALIZASYON.md](73-LOKALIZASYON.md) | **Altyapı UYGULANDI (2026-08-25)** — UI i18n: `Settings.UILanguage` (ajan yanıt dilinden ayrı eksen, `""` = onu izle), i18next + feature-bazlı JSON katalogları, `Intl` biçimlendirme katmanı (`shared/lib/intl.ts`), dil değişiminde ağaç remount'u, katalog parite/çoğul guard testleri, migre klasörler için ESLint hardcoded-metin kapısı ve `npm run i18n:extract`. Kelime çevirileri kademeli |
 | [74-SISTEM-AJANLARI.md](74-SISTEM-AJANLARI.md) | Sistem ajanları: canonical registry, kilitli yerleşik satır + özelleştirme çocuğu modeli (2026-09-03), çözümleme ve fallback, restore/disable semantiği, API/UI, özyineleme koruması ve usage taksonomisi |
 | [75-YAYIN-SURECI.md](75-YAYIN-SURECI.md) | **Yayın hattı UYGULANDI (2026-08-27)** — Etiket→test→derleme→GitHub Release + GitHub Pages akışı (`.github/workflows/release.yml`), `latest.json` şeması ve `deploy/release-host/` ile yerel Docker önizlemesi. VPS deploy hattı kaldırıldı |
@@ -160,7 +160,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Kurulu Ortam
 
-- ✅ Go 1.26+
+- ✅ Go 1.26.4+
 - ✅ Node.js v24 + npm 11
 - ✅ WebView2 runtime (native masaüstü penceresi; Wails planı iptal — `32-NATIVE-PENCERE.md`)
 

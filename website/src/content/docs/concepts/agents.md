@@ -1,25 +1,31 @@
 ---
-title: Agents
-description: The unit of identity and capability.
+title: Ajanlar
+description: Kimlik, sağlayıcı, araç erişimi ve delegasyon.
 order: 1
 ---
 
-<!-- PLACEHOLDER: scaffolding for the docs layout. Replace with real content. -->
+Ajan; adı, talimatları, sağlayıcı örneği, modeli, düşünme seviyesi ve araç
+politikası olan kalıcı bir yapılandırmadır. Aynı ajanla birden çok oturum açılabilir.
 
-An agent is a named configuration: a prompt, a provider instance, a model, a
-thinking level and a tool set. This page is a placeholder for the full reference.
+## Sağlayıcı ve talimatlar
 
-## Identity
+Sağlayıcı örnekleri uygulama genelinde tanımlanır; ajan hangi örneği kullanacağını
+seçer. Soul alanı davranış talimatlarını taşır. Workspace talimatları ve oturumun
+çalışma dizini de yürütme bağlamına katılır.
 
-The soul prompt travels with the agent across every session it runs, so behaviour
-stays consistent without repeating instructions.
+Yerleşik sistem ajanları kilitlidir. Özelleştirme için türetilmiş ajan kullanılır;
+devralınan alanlar ile açıkça değiştirilmiş alanlar ayrı tutulur.
 
-## Tools
+## Araçlar ve izinler
 
-Tools are granted per agent. An agent that must not touch the shell simply never
-receives the shell tool.
+Yerleşik araçlar ve harici MCP sunucuları ayrı ayrı etkinleştirilebilir. Bazı araç
+şemaları talep üzerine yüklenir. `auto`, `ask` ve `read-only` izin modları işlem
+politikasını belirler; işletim sistemi sandbox'ı oluşturmaz. CLI sağlayıcılarının
+native araç/onay davranışları ayrıca kendi taşıyıcısına bağlıdır.
 
-## Coordination
+## Delegasyon ve arşiv
 
-An agent can spawn workers, collect their results and synthesise an answer,
-forming a tree rather than a single conversation.
+Koordinatör işçi oturumları başlatıp sonuçlarını toplayabilir. Bu oturumlar aynı
+sohbetin mesajları olmak yerine kendi geçmişi ve köken bilgisi olan kayıtlardır.
+Arşivli ajan çalıştırılamaz ve yeni görev, zamanlama veya otomasyon hedefi olarak
+atanamaz; yeniden kullanmak için arşivden çıkarılmalıdır.

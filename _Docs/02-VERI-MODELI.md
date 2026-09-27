@@ -7,7 +7,10 @@ Entity modeli başta SQLite tabloları olarak tasarlandı, sonra dosya-store'a t
 `SKILL.md` dosyasıdır (`internal/skills`); sağlayıcı örnekleri uygulama-geneli
 `providers.json`'da (`SecretsEnc`) tutulur (`71-SAGLAYICI-ORNEKLERI-PLANI.md`).
 
-## Tablolar (ER Diyagramı)
+## Varlıklar (Kavramsal ER Diyagramı)
+
+Diyagramdaki SQL tarzı adlar kavramsaldır; güncel JSON alan adları ve tipleri için
+`internal/db/models*.go` esas alınır. Bu diyagram eksiksiz bir API şeması değildir.
 
 ```mermaid
 erDiagram
@@ -306,7 +309,7 @@ varsayılanı da arşivli bir ajana düşmez.
 
 ## Güvenlik / Şifreleme
 
-- Sağlayıcı sırları (`providers.json` → `SecretsEnc`) ve `settings.json` **AES-GCM** ile şifrelenir.
+- Sağlayıcı sırları (`providers.json` → `SecretsEnc`) ve ayarlardaki hassas anahtar alanları **AES-GCM** ile şifrelenir; `settings.json` dosyasının tamamı şifreli değildir.
 - Şifre anahtarı çözümü: `CREDENTIAL_SECRET` env → `DATA_DIR/credential-secret` dosyası → otomatik üretim.
 - Sırlar asla düz metin loglanmaz veya workspace manifestlerine yazılmaz.
 
@@ -314,20 +317,23 @@ varsayılanı da arşivli bir ajana düşmez.
 
 | Değişken | Açıklama |
 |----------|----------|
-| `TIONHARNESS_ADDR` | HTTP dinleme adresi (varsayılan loopback `127.0.0.1:8080`; geliştirmede `127.0.0.1:8090`; ağa açmak için `0.0.0.0:8090`). Loopback, Windows Güvenlik Duvarı'nın izin sormasını önler |
+| `TIONHARNESS_ADDR` | HTTP dinleme adresi (varsayılan loopback `127.0.0.1:8080`; `dev.ps1` varsayılanında `0.0.0.0:8090`, `-Loopback` ile `127.0.0.1:8090`; ağa açmak için `0.0.0.0:8090`). Loopback, Windows Güvenlik Duvarı'nın izin sormasını önler |
 | `TIONHARNESS_DATA_DIR` | Kalıcı durum dizini (varsayılan `~/.tionharness`) |
 | `TIONHARNESS_WORKSPACE_DIR` | Görev workspace kökü |
 | `TIONHARNESS_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği (varsayılan 12000) |
 | `TIONHARNESS_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı (varsayılan 8) |
 | `CREDENTIAL_SECRET` | Şifreleme anahtarı |
-| `ACCESS_KEY` | Dashboard auth token (hosted dağıtım) |
+| `TIONHARNESS_API_AUTH_TOKEN` | İsteğe bağlı bearer doğrulaması; varsayılan kapalı. UI token göndermez; bkz. [79-HARICI-API.md](79-HARICI-API.md) |
+| `ACCESS_KEY` | Eski, etkisiz ayar; `Config.AccessKey` alanına okunur fakat auth sağlamaz |
 | `ANTHROPIC_API_KEY` | `anthropic` sağlayıcı anahtarı (claude-cli'da gerekmez) |
 
-## Şema Evrimi (Migration yok)
+## Şema Evrimi ve Dosya Göçleri
 
-> Dosya-tabanlı depolamada **SQL migration kavramı yoktur** — şema yoktur, her kayıt
-> bir JSON dosyasıdır. Yeni alanlar Go model struct'ına eklenir; eski JSON dosyaları
-> okunurken eksik alanlar Go'nun sıfır değerleriyle doldurulur (geriye dönük uyumlu).
+> SQL migration aracı yoktur; JSON/JSONL şeması Go modelleriyle tanımlanır. Yeni
+> alanlarda sıfır değerler veya açık varsayılanlar kullanılır. Biçim değişiklikleri
+> ayrıca göç gerektirir: `store_load.go` eski `session.jsonl` dosyasını header ve
+> transkripte ayırır; `artifact_migrate.go` ve `settings/provider_migrate.go` diğer
+> dönüşümleri yürütür. Alan eklemek tek başına her değişikliği uyumlu yapmaz.
 > Geçmişte (SQLite döneminde) `0001_init` … `0007_message_steps` migration'larıyla
 > eklenen alanlar bugün ilgili model struct'larında yaşar:
 

@@ -46,6 +46,10 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// extended tier without the activate_tools meta-tools, so leaving the provider
 		// empty here made every extended call answer "is not activated" with no fix.
 		run.setProvider(ag.Provider)
+		// Process-ledger parentage: an autonomous turn is usually the spawned/worker
+		// side of a fan-out, so its CLI subprocess's processes must group under the
+		// session that spawned it (see stampRunSession). Empty for a top-level session.
+		run.setParentSession(rt.SessionParentID(sessionID))
 		// Record steer deliverability for this turn, exactly like the chat path. An
 		// autonomous turn has no request-level override, so the effective mode is the
 		// agent's own. Without this the field stayed false and a steer aimed at an

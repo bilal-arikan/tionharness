@@ -29,7 +29,7 @@ graph TD
 ### 1. Sunum Katmanı (Frontend)
 - Bağımsız geliştirilen web UI (React + Vite + TS + Tailwind v4, kendi bileşenlerimiz).
 - Backend ile yalnızca **JSON API + SSE** üzerinden konuşur.
-- Frontend `dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
+- Frontend'in `internal/web/dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
 - Native masaüstü kabuğu: `cmd/tionharness-desktop` (WebView2, CGO'suz). Wails planı iptal edildi — bkz. `32-NATIVE-PENCERE.md`.
 - UI/UX tamamen kendi tasarım dilimizdir.
 
@@ -47,7 +47,7 @@ graph LR
     CTX --> CALL[Provider Call<br/>LLM cagrisi]
     CALL --> TOOL[Tool Loop<br/>arac calistirma]
     TOOL --> OUT[Outcome Classification<br/>basari/hata + backoff]
-    OUT --> PERSIST[Message Persist<br/>session.jsonl]
+    OUT --> PERSIST[Message Persist<br/>messages.jsonl]
     PERSIST --> COMPACT[Compaction<br/>butceli rolling summary]
     COMPACT --> DISPATCH[Task Dispatch<br/>delege gorevler]
 ```
@@ -55,7 +55,7 @@ graph LR
 **Anahtar mekanizmalar:**
 - Her ajan = goroutine; ajanlar arası mesaj = channel.
 - Zamanlama = `robfig/cron` (cron + tek seferlik wake timer'ları).
-- Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; `go.mod`'daki doğrudan bağımlılıklar `google/uuid` + `robfig/cron/v3` + `jchv/go-webview2` (native masaüstü pencere, Faz 9) — DB ve runtime saf stdlib.
+- Paralel yürütme = düz goroutine + `sync` (orchestration parallel node). `errgroup` planlanmıştı ama gerekmedi; bağımlılıkların güncel listesi `go.mod` içindedir. `coder/websocket` monitor kaynaklarında, `golang.org/x/sys` Windows süreç ve dosya işlemlerinde kullanılır.
 - **Skill sistemi:** `internal/skills` — 2 katmanlı (global + workspace), frontmatter-only katalog sistem promptuna girer, `use_skill` ile lazy body yüklenir, `subskills` ile aşamalı yükleme. **Ölçek (SK-2):** `paths:` taşıyan **koşullu skill** katalogda görünmez (prompt şişmez), `skill_search` aracıyla bulunur. **Çok-dosyalı (SK-1):** gövdede `${SKILL_DIR}` ikamesi + skill klasöründeki ek dosyalar "Bundled files" footer'ıyla ilan edilir (`fs` ile on-demand). **SK-3:** `use_skill` skill'in `always_allow` desenlerini oturum grant'larına ekler. **SK-4:** `version`/`source_url`/`license`/`user_invocable` provenance. (CLI köprüsü: `skill_search`/use_skill auto-grant `mcp_interaction.go`'da.)
 - **Lazy tool loading:** Self-management suite + MCP araçları şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `activate_tools` ile istenince tam şema gelir (`internal/tools/activetools.go`, `builtin_activate.go`).
 
@@ -97,7 +97,7 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 - **Görevler (ayrı paket yok):** Kanban/pano + atama + yürütme mantığı `internal/db` (model+store) + `internal/api` + `internal/agent/executor.go` (`invokeTraced`/`complete`) içinde yaşar — ayrı bir `internal/tasks` paketi yoktur.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
-- **Web (`internal/web`):** `embed.go` — `//go:embed all:dist` ile derleme anında `frontend/dist/` SPA'sini binary'ye gömer; `Handler()` ile SPA + fallback to `index.html` sunar. Ayrı statik sunum/CDN gerekmez.
+- **Web (`internal/web`):** `embed.go` — `//go:embed all:dist` ile derleme anında `internal/web/dist/` SPA'sini binary'ye gömer; `Handler()` ile SPA + fallback to `index.html` sunar. Ayrı statik sunum/CDN gerekmez.
 - **Prefix'li ID'ler (`internal/workspace/id.go`):** Workspace'ler `WS<n>`, ajan ve oturum kayıtları `AGT<n>`/`SES<n>` biçiminde monoton insan-okunabilir ID'ler alır; `ws-counter.json` ile yeniden başlamada sayaç korunur. (UUID'li eski depoların tek seferlik migrasyon aracı 2026-09-06'da kaldırıldı.)
 
 ## Dizin Yapısı

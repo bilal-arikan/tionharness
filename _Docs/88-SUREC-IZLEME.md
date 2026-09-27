@@ -4,8 +4,8 @@
 > sistemi süreçleri** artık tek bir defterde toplanıyor: `internal/procwatch`.
 > Kabuk aracı çağrıları (ön plan + arka plan), `run_code`/`transform_data`
 > yorumlayıcıları, ajansal CLI taşıyıcıları (claude-cli/codex-cli), stdio MCP
-> sunucuları, hook komutları ve harici araç koşuları (indeks derlemeleri, sürüm
-> yoklamaları) her biri bir kayıt açar; kayıt komut satırını, PID'i, sahibini
+> sunucuları, hook komutları ve harici araç koşuları (ripgrep, indeks derlemeleri,
+> araç güncellemeleri) her biri bir kayıt açar; kayıt komut satırını, PID'i, sahibini
 > (workspace + oturum + ajan), durumunu, çıkış kodunu ve kısa bir çıktı kuyruğunu
 > taşır. Okuma yüzeyleri: `GET /api/workspace/processes`, `list_processes` ajan
 > aracı ve Workspace ekranının **İşlemler** sekmesi (canlı, SSE ile tazelenir).
@@ -72,9 +72,19 @@ yorumlayıcıları, CLI taşıyıcısının kendisi, hook'lar. Daha derindeki bi
 yalnız kendi alanlarını ezer (`mergeOwner`), böylece bir worker turu workspace'i
 kaybetmeden oturumu daraltabilir.
 
-Oturum dışında doğan süreçler (workspace havuzunun MCP sunucusu, açılıştaki sürüm
-yoklaması) sahipsizdir ve **bilerek** öyle listelenir: API bunları her workspace'e
+Oturum dışında doğan süreçler (workspace havuzunun MCP sunucusu, ayarlar
+ekranından tetiklenen harici araç güncellemesi ya da `rtk gain` raporu)
+sahipsizdir ve **bilerek** öyle listelenir: API bunları her workspace'e
 gösterir, çünkü gösterilemeyen süreç tam da bu özelliğin önlemek istediği şeydir.
+
+**İkinci damga yeri — Interaction MCP köprüsü.** Ajansal bir CLI (claude-cli,
+codex-cli) araçlarını turun ctx'i üzerinden değil, **HTTP üzerinden** çağırır; o
+istek turun damgasını taşımaz. Bu yüzden `internal/api/mcp_interaction.go`
+içindeki `stampRunSession` — zaten her köprülenmiş araç çağrısının tek damga
+noktası — owner'ı da basar. Koşu yalnız kendi oturumunu bilir, ajan alanları boş
+kalır; onları **okuma tarafında** `handleListProcesses` çözer (oturum → ajan,
+istek başına her ayrı oturum için bir kez). Oturumu silinmiş bir süreç ajansız
+listelenir, listeden düşmez.
 
 ## 4. Enstrümante edilen yerler
 
@@ -89,8 +99,10 @@ gösterir, çünkü gösterilemeyen süreç tam da bu özelliğin önlemek isted
 | `external` | `grep_rg.go`, `builtin_codebase_search.go`, `capabilities.go`, `zvecgrep_index.go`, `exttools/update.go`, `api/external_tools_maint.go` | hayır (kısa yoklamalar) |
 
 **Enstrümante edilmeyenler** (bilinçli): `rtk`/`sqz` token-optimizer koşuları — her
-kabuk çağrısına bir tane düşer ve defteri kendi gürültüsüyle doldururlar — ve
-API'nin kendi git plumbing okumaları (`git rev-parse`, commit aktivitesi). Defterde
+kabuk çağrısına bir tane düşer ve defteri kendi gürültüsüyle doldururlar —,
+`exttools.LocalVersion` sürüm yoklamaları (`--version`; her araç kartı açılışında
+koşan, milisaniyelik ve yan etkisiz bir okuma) ve API'nin kendi git plumbing
+okumaları (`git rev-parse`, commit aktivitesi). Defterde
 görünmemek "süreç yok" demek **değildir**.
 
 ## 5. Okuma ve durdurma yüzeyleri
@@ -109,14 +121,21 @@ görünmemek "süreç yok" demek **değildir**.
   Duruma/türe göre filtre, komut+etiket+ajan+oturum üzerinde metin araması,
   çalışan satırlar için saniyede bir işleyen süre, satır detayında çıktı kuyruğu ve
   hata, `stoppable` satırlarda iki adımlı onaylı **Durdur**.
+- **Sahip sütunundaki oturum bağlantısı.** Oturum kimliği (ve varsa `üst:` ile
+  koordinatör oturumu) sohbet ekranına götüren bir bağlantıdır. Panel hangi
+  oturumların hâlâ var olduğunu `GET /api/sessions?ids=…` ile doğrular: silinmiş
+  bir oturumun kimliği düz metin kalır — satır listeden düşmez, bağlantı ölü olmaz.
 
 ## 6. Canlılık (SSE)
 
 Defter her durum değişiminde (`start`, durdurma isteği, `finish`) olay yayınlar:
 `internal/app/app.go` içindeki `SetNotify`, `events.TypeProcess` ("process")
-frame'ini ortak `/api/events` akışına basar. Frame **yüksüzdür** — yalnız
-`processId` + `status` hedefi taşır — ve panel onu gördüğünde listeyi yeniden
-okur (300 ms debounce). On kabuk komutu koşan bir tur panele on birleştirme
+frame'ini ortak `/api/events` akışına basar. Frame **kaydı taşımaz**: tek içeriği
+`target: {processId, status}` — yani "hangi kayıt kımıldadı" ipucu — ve panel bunu
+bilerek okumaz, gördüğünde listeyi baştan çeker (300 ms debounce). Kodda geçen
+"payload-free" nitelemesi (`internal/events/types.go`, `frontend/src/api/system.ts`)
+bunu kasteder: birleştirilebilir bir **kayıt gövdesi** yoktur, `target` alanı
+vardır. On kabuk komutu koşan bir tur panele on birleştirme
 değil, bir okuma maliyeti çıkarır. Toast üretmez: bir kabuk süreci kimsenin
 bildirim olarak görmek isteyeceği haber değildir.
 

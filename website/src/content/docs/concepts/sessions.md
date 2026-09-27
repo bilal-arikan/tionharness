@@ -1,25 +1,30 @@
 ---
-title: Sessions
-description: One conversation, fully recorded.
+title: Oturumlar
+description: Konuşma geçmişi, çalışma dizini ve devam davranışı.
 order: 2
 ---
 
-<!-- PLACEHOLDER: scaffolding for the docs layout. Replace with real content. -->
+Oturum, bir ajanla yürütülen çok turlu konuşmadır. Bir tur bittiğinde oturum sona
+ermez; aynı geçmiş üzerinden yeni mesaj gönderilebilir.
 
-A session is a single run of an agent against a task, stored as an append-only
-transcript on disk. This page is a placeholder for the full reference.
+## Kayıtlar
 
-## The transcript
+Workspace store'unda her oturumun `session.json` başlığı ve `messages.jsonl`
+transkripti vardır. Başlık, etiket ve çalışma dizini gibi metadata transkriptten
+ayrı yazılır. Mesaj ekleme JSONL kullanır; silme ve geri sarma gibi işlemler geçmişi
+değiştirebildiğinden dosya değişmez bir günlük değildir.
 
-Every message, tool call and result is written as it happens, so a crashed or
-closed session can be resumed rather than restarted.
+Geçmiş kalıcıdır. Devam etme ve çökme kurtarması, tur durumu ve sağlayıcıya bağlıdır;
+uygulamayı yeniden açmak yarım kalmış her harici işlemi otomatik tekrar çalıştırmaz.
 
-## Permission modes
+## Çalışma dizini ve bağlam
 
-A session runs read-only, ask-first or fully autonomous. The mode is the safety
-boundary around whatever tools the agent holds.
+Oturumun çalışma dizini Composer'dan seçilebilir; belirtilmezse workspace
+varsayılanı kullanılır. Uzun geçmiş bağlam bütçesine göre sıkıştırılabilir.
+CLI sağlayıcılarında devam kimliği ve native sıkıştırma ayrıca izlenir.
 
-## Cost tracking
+## Görünürlük ve kullanım
 
-Token usage and price are rolled up per session and per agent, so an expensive
-run is visible while it is still running.
+Arşiv durumu ile turun çalışma sonucu ayrı alanlardır. Arşivlemek, çalışan bir işi
+durdurma komutunun yerine geçmez. Token kullanımı ve maliyet tahminleri oturum ve
+ajan düzeyinde izlenir; bunlar sağlayıcının faturasının yerine geçen kayıtlar değildir.

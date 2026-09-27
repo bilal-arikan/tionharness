@@ -51,6 +51,9 @@ interface Props {
   // Re-trigger the post-create recommendation toast on demand (bumps recsTrigger in
   // App) — used by the Öneriler tab's "show cards" button.
   onShowRecommendations?: () => void
+  // Open a session's transcript — used by the İşlemler tab's owner column to jump
+  // to the session that started a process.
+  onOpenSession?: (sessionId: string) => void
   // Active sub-tab, URL-synced by the parent (#/w/{ws}/workspace/{tab}).
   tab?: string | null
   onTabChange?: (t: string) => void
@@ -78,6 +81,7 @@ export function WorkspaceView({
   onDeleteWorkspace,
   onAppearanceSaved,
   onShowRecommendations,
+  onOpenSession,
   tab: tabProp,
   onTabChange,
   navOpen,
@@ -253,7 +257,7 @@ export function WorkspaceView({
           ) : tab === 'logs' ? (
             <LogsPanel onError={onError} />
           ) : tab === 'processes' ? (
-            <ProcessPanel onError={onError} />
+            <ProcessPanel onError={onError} onOpenSession={onOpenSession} />
           ) : (
             <div />
           )}

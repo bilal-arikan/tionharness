@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
@@ -44,7 +45,22 @@ func runCLIPreflight(ctx context.Context, kind, binPath, configDir, providerConf
 	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	if output, err := cmd.Output(); err != nil {
+	// Ledger entry (internal/procwatch): the preflight is short, but a CLI whose
+	// `--version` hangs on a node launcher or an update check blocks the first turn
+	// with nothing on screen — exactly the invisible process the panel exists for.
+	// Not stoppable: ctx is the caller's, and it already bounds this run.
+	watch := procwatch.Begin(ctx, procwatch.Meta{
+		Kind:    procwatch.KindProvider,
+		Label:   kind + " CLI (preflight)",
+		Command: strings.TrimSpace(binPath + " --version"),
+	})
+	output, err := cmd.Output()
+	watch.Started(cmd)
+	// cmd.Stderr is already bound to the buffer above, so Output leaves
+	// ExitError.Stderr empty — hand the diagnostic over explicitly.
+	watch.AppendOutput(stderr.String())
+	watch.Finish(err)
+	if err != nil {
 		detail := truncateCLIDiagnostic(stderr.String(), string(output))
 		return fmt.Errorf("%s CLI preflight failed: %v%s", kind, err, detail)
 	}

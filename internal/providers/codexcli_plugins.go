@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/procwatch"
 )
 
 // Codex plugin installation.
@@ -101,7 +102,21 @@ func (c *CodexCLI) runCodexPluginCmd(ctx context.Context, home string, args []st
 
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	cmd.Env = append(codexBaseEnv(), "CODEX_HOME="+home)
+	// Ledger entry (internal/procwatch): provisioning runs once per changed
+	// fingerprint but on the turn's critical path, and a marketplace fetch that
+	// stalls until codexPluginInstallTimeout is a minutes-long invisible wait.
+	// Stop cancels the timeout context, which is how this run is already bounded.
+	watch := procwatch.Begin(ctx, procwatch.Meta{
+		Kind:    procwatch.KindProvider,
+		Label:   "codex-cli (plugins)",
+		Command: strings.TrimSpace(c.binPath + " " + strings.Join(args, " ")),
+		Dir:     home,
+		Stop:    cancel,
+	})
 	out, err := cmd.CombinedOutput()
+	watch.Started(cmd)
+	watch.AppendOutput(string(out))
+	watch.Finish(err)
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}
