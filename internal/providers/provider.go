@@ -486,6 +486,10 @@ type Streamer interface {
 // fields relevant to the chosen Transport are populated; the renderer on each
 // side decides what it can express.
 type CLIMCPServer struct {
+	// Codex MCP filters use exact, unqualified tool names. Nil EnabledTools means
+	// unrestricted; an explicitly empty slice means no tools.
+	EnabledTools  []string
+	DisabledTools []string
 	// Command and Args launch a stdio server; Env is added to its environment.
 	Command string
 	Args    []string
@@ -507,6 +511,9 @@ type CLIMCPServer struct {
 // dialect (codex) renders Servers itself. Fields a dialect cannot express are
 // simply unused by it — see each field's comment.
 type CLIMCPSpec struct {
+	// DisableNativeShell routes shell execution through the permissioned bridge.
+	// Codex renders this as features.shell_tool = false.
+	DisableNativeShell bool
 	// ConfigPath is the already-written claude --mcp-config file.
 	ConfigPath string
 	// Servers is the structured server set, for dialects that render their own

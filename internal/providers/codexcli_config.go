@@ -29,6 +29,7 @@ const (
 
 // codexConfig is one turn's rendered codex configuration.
 type codexConfig struct {
+	DisableNativeShell bool
 	// DeveloperInstructions becomes `developer_instructions`, an additive
 	// developer-role message. It is the codex analogue of claude-cli's
 	// --append-system-prompt and is rendered as a multi-line basic string.
@@ -114,7 +115,7 @@ func renderCodexConfig(cfg codexConfig) string {
 		fmt.Fprintf(&b, "web_search = %s\n", tomlString(cfg.WebSearchMode))
 	}
 
-	if cfg.DisableNativeMultiAgent {
+	if cfg.DisableNativeMultiAgent || cfg.DisableNativeShell {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
@@ -123,8 +124,13 @@ func renderCodexConfig(cfg codexConfig) string {
 		// collaboration.spawn_agent remains available and can still spawn an agent.
 		// The actual enforcement is `[agents] enabled = false` below.
 		b.WriteString("[features]\n")
-		b.WriteString("multi_agent = false\n")
-		b.WriteString("multi_agent_v2 = false\n")
+		if cfg.DisableNativeShell {
+			b.WriteString("shell_tool = false\n")
+		}
+		if cfg.DisableNativeMultiAgent {
+			b.WriteString("multi_agent = false\n")
+			b.WriteString("multi_agent_v2 = false\n")
+		}
 	}
 
 	if cfg.DisableSubAgents {
@@ -227,6 +233,12 @@ func sortedStrings(items []string) []string {
 func renderCodexServer(key string, s CLIMCPServer) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[mcp_servers.%s]\n", tomlKey(key))
+	if s.EnabledTools != nil {
+		fmt.Fprintf(&b, "enabled_tools = %s\n", tomlStringArray(sortedStrings(s.EnabledTools)))
+	}
+	if len(s.DisabledTools) > 0 {
+		fmt.Fprintf(&b, "disabled_tools = %s\n", tomlStringArray(sortedStrings(s.DisabledTools)))
+	}
 
 	remote := s.Transport == "sse" || s.Transport == "http" || s.URL != ""
 	if remote {

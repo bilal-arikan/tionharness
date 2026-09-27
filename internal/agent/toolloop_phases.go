@@ -358,9 +358,10 @@ func (t *toolLoopTurn) configureCLIMCP() func() {
 		spec, err := t.r.codexMCPSpec(t.ctx, t.agent.MCPEnabled, t.agent, t.inter)
 		if err != nil {
 			t.r.logger.Warn("codex mcp spec failed", "error", err)
-		} else if len(spec.Servers) > 0 {
-			t.cli.ConfigureCLIMCP(spec)
 		}
+		// Always replace the previous turn's policy, including empty/error specs.
+		spec.DisableNativeShell = t.inter.URL != "" && t.r.tun.ShellEnabled() && !t.agent.NativeShellEnabled()
+		t.cli.ConfigureCLIMCP(spec)
 		return noop
 	}
 	if t.aux {

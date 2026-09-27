@@ -1,0 +1,194 @@
+{
+  "version": "codex-cli 0.157.1",
+  "synthetic_model": true,
+  "results": [
+    {
+      "model": "gpt-6-astra",
+      "case": "baseline",
+      "native_shell": true,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "bridged_shell",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "exact_allow",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "exact_deny",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other"
+      ],
+      "executed_mcp_tools": [
+        "read_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "deny_wins",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "empty_allow",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "allow_glob_is_literal",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "deny_glob_is_literal",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "baseline",
+      "native_shell": true,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "bridged_shell",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "exact_allow",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "exact_deny",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other"
+      ],
+      "executed_mcp_tools": [
+        "read_item"
+      ],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "deny_wins",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "empty_allow",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "allow_glob_is_literal",
+      "native_shell": false,
+      "visible_mcp_tools": [],
+      "executed_mcp_tools": [],
+      "passed": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "deny_glob_is_literal",
+      "native_shell": false,
+      "visible_mcp_tools": [
+        "read_item",
+        "read_other",
+        "write_item"
+      ],
+      "executed_mcp_tools": [
+        "read_item",
+        "write_item"
+      ],
+      "passed": true
+    }
+  ]
+}

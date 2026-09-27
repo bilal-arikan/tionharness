@@ -877,7 +877,7 @@ export function AgentSettingsForm({
             araçlarından geçer (izleme ve kullanım sayacı bunlarda çalışır).
           </p>
 
-          <OptionField label="Claude Code'un kendi shell'i" trailing={badge('nativeShell')}>
+          <OptionField label="Provider-native shell" trailing={badge('nativeShell')}>
             <OptionPills
               value={nativeShell ? 'on' : 'off'}
               onChange={(value) => {
@@ -885,7 +885,7 @@ export function AgentSettingsForm({
                 mark('nativeShell')
               }}
               options={BOOLEAN_OPTIONS}
-              ariaLabel="Claude Code'un kendi shell'i"
+              ariaLabel="Provider-native shell"
               ariaDescribedBy={`${descriptionId}-native-shell`}
               testid="agent-native-shell"
             />
@@ -894,11 +894,10 @@ export function AgentSettingsForm({
             id={`${descriptionId}-native-shell`}
             className="-mt-2 text-xs text-[var(--color-text-dim)]"
           >
-            Varsayılan kapalı: claude-cli ajanı komutları TionHarness'in köprülenen sandbox
-            shell'inden geçirir. Açıkken Claude Code'un yerleşik <code>Bash</code> ailesi de menüde
-            kalır; her çağrı komut ve çıktısıyla aktivite izinde görünür ama TionHarness sandbox'ı
-            ve arka-plan shell yönetimi dışında koşar (köprü gidiş-dönüşü yok, CLI hook'ları
-            uygulanır). Yalnız claude-cli sağlayıcısında anlamlıdır.
+            Off by default: Claude Code and Codex use the TionHarness shell when the shell bridge is
+            enabled. Turn this on to also allow the provider&apos;s own shell. Native commands use
+            the provider&apos;s permissions and run outside TionHarness shell approval and
+            background process management.
           </p>
 
           <OptionField label="Koordinatör" trailing={badge('coordinatorMode')}>

@@ -56,9 +56,9 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		if err != nil {
 			return providers.CLIMCPSpec{}, err
 		}
-		// Codex has no --disallowedTools, so NOT mounting the server is the only
-		// enforceable per-agent restriction on this path (see mcpservergate.go).
-		gate, gateErr := mcpServerGate(ag, r.allowlistExemptServers(ctx)...)
+		// First gate whole servers, then apply exact per-tool Codex filters.
+		exemptServers := r.allowlistExemptServers(ctx)
+		gate, gateErr := mcpServerGate(ag, exemptServers...)
 		if gateErr != nil {
 			// Fail CLOSED (see writeCLIMCPConfig): an unreadable restriction means the
 			// only enforceable limit on this path cannot be computed, so nothing is
@@ -83,7 +83,14 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 					"server", key, "agent", ag.ID)
 				continue
 			}
-			entry := providers.CLIMCPServer{}
+			entry, policyErr := codexServerToolPolicy(ag, key, isExemptServer(key, exemptServers))
+			if policyErr != nil {
+				r.logger.Warn("codex MCP server withheld: unsupported tool policy", "server", key, "error", policyErr)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: ag.ID,
+					Name: "codex_mcp_tool_policy", Detail: "MCP server withheld; use exact tool names for Codex",
+					Error: policyErr.Error(), Err: true})
+				continue
+			}
 			switch sc.Transport {
 			case db.MCPTransportSSE, db.MCPTransportHTTP:
 				entry.Transport = sc.Transport
@@ -130,12 +137,8 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 	r.logger.Info("codex mcp spec built",
 		"servers", len(servers), "interaction", inter.URL != "")
 
-	// AllowedTools / DisallowedTools travel unchanged even though codex has no
-	// per-tool allow flags and renderCodexConfig ignores both fields today. They
-	// are carried rather than dropped so (a) the spec stays one shape across CLI
-	// dialects and (b) a future codex renderer can map them onto the per-server
-	// enabled_tools / disabled_tools keys codex does support. Dropping them here
-	// would hide that mapping opportunity behind a silent data loss.
+	// Legacy lists retain the delegation intent; the actual Codex enforcement
+	// uses each server's EnabledTools/DisabledTools and native feature settings.
 	return providers.CLIMCPSpec{
 		Servers:         servers,
 		AllowedTools:    allowed,
@@ -183,15 +186,17 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 	authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
 	return map[string]providers.CLIMCPServer{
 		climcp.InteractionCoreKey: {
-			Transport:  db.MCPTransportHTTP,
-			URL:        base + "/core?full=1",
-			Headers:    authHeader,
-			AlwaysLoad: true,
+			EnabledTools: append([]string{}, inter.CoreToolNames...),
+			Transport:    db.MCPTransportHTTP,
+			URL:          base + "/core?full=1",
+			Headers:      authHeader,
+			AlwaysLoad:   true,
 		},
 		climcp.InteractionExtendedKey: {
-			Transport: db.MCPTransportHTTP,
-			URL:       base + "/extended?full=1",
-			Headers:   authHeader,
+			EnabledTools: append([]string{}, inter.ExtendedToolNames...),
+			Transport:    db.MCPTransportHTTP,
+			URL:          base + "/extended?full=1",
+			Headers:      authHeader,
 		},
 	}
 }

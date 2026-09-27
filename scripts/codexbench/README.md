@@ -1,5 +1,22 @@
 # Codex taşıyıcı karşılaştırması
 
+## Kotayı kullanmadan araç izinlerini doğrulama
+
+`probe_policy.py`, gerçek Codex çalıştırıcısını yerel sahte model ve MCP
+sunucularıyla sınar. Giriş veya model API çağrısı yapmaz. Astra/Sol kimlikleriyle
+sekizer senaryoda gerçek araç kataloğunu ve izinli/yasaklı çağrıların dispatch
+sonucunu denetler; bu bir model başarı karşılaştırması değildir.
+
+```bash
+python scripts/codexbench/probe_policy.py --codex 'C:/path/to/codex.exe' --output .scratch/codex-policy/results.json
+```
+
+Test izole geçici ev ve çalışma dizini kullanır. Yalnız zararsız taklit araçlar
+çağrılır; yerel model sağlayıcısına geçiş ve CLI araç keşfi gerçek çalıştırıcıda
+gerçekleşir. Codex 0.157.1 ile doğrulanmıştır.
+
+## Gerçek model karşılaştırması
+
 Bu isteğe bağlı deney gerçek hesap kotası tüketir. `TionHarness CodexCLI.Complete`
 ile doğrudan `codex exec` yolunu aynı CLI, hesap, model ve `high` düşünme seviyesiyle
 karşılaştırır. **Codex Desktop veya TionHarness'in tam uygulama testi değildir.**

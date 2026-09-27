@@ -4,6 +4,14 @@
 > Desktop farkları §14'te. Aşağıdaki tarihli katalog ve fizibilite kayıtları geçmiş
 > sürümleri anlatır; güncel model seçimi için §14 ve kaynak kodunu kullanın.
 
+> **Araç izinleri güncellemesi (2026-09-28, CLI 0.157.1):** Genel
+> `--allowedTools` / `--disallowedTools` bayrakları hâlâ yok. Ancak MCP araçları
+> `enabled_tools` / `disabled_tools`, native kabuk ise `features.shell_tool`
+> üzerinden sınırlandırılıyor ve artık TionHarness bu ayarları aktarıyor.
+> Aşağıdaki eski “native shell bastırılmaz” değerlendirmeleri bu güncellemeyle
+> geçersizdir. Güncel davranış ve doğrulama:
+> [Araç izinleri raporu](69-CODEX-ARAC-IZINLERI-2026-09-28.md).
+
 > **Özet (2026-09-10):** OpenAI Codex CLI'yi TionHarness'e ikinci bir CLI sağlayıcı (claude-cli'nin kardeşi) olarak entegre etmenin fizibilite + referans dokümanıdır; sonradan uygulamaya geçmiştir (uygulama notları §13; plan `arsiv/70-CODEX-CLI-UYGULAMA-PLANI.md`). **2026-09-10:** native `web_search` anahtarı üst-düzey `web_search = "live"|"disabled"` moduna taşındı (`[tools] web_search = <bool>` codex yükleyicisi tarafından sessizce atılıyordu; 0.153.3'te canlı doğrulandı), `update_plan` artık açık ve `todo_list` item'ı progress dosyasına aynalanıyor; `spawn_agent` `codex exec`'te alt-ajan sonucu çözülemediği için (openai/codex#33267) kapalı kaldı. Sonuç: ana akış (headless tur, MCP köprüsü, JSONL trace, resume, token muhasebesi) birebir kurulabiliyor, ama iki gerçek boşluk var — Codex `exec` modunda per-tool onay yok ve native araçları genel olarak bastıramıyoruz. Kritik canlı bulunan iki blocker: `default_tools_approval_mode = "approve"` olmadan MCP araç çağrıları reddediliyor, `required = true` olmadan sunucu "optional" sayılıp 1 saniyelik grace süresinde araçları sessizce kayboluyor — ikisi de artık koda gömülü zorunlu alanlar. Ana referans dosyalar: `internal/providers/codexcli*.go`, kaynak `codex-rs`.
 
 > **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
@@ -537,6 +545,13 @@ ile **aynı** namespace deseni. TionHarness'in mevcut isim ayrıştırması
 
 `enabled_tools` (izin listesi) ve `disabled_tools` (red listesi) **sunucu
 başına** ayarlanabilir. `--allowedTools` kadar esnek değil ama gerekeni verir:
+
+**Uygulandı (2026-09-28):** Ajanın tam araç adları sunucu namespace'i çıkarılarak
+bu alanlara aktarılır. Red listesi önceliklidir. Sunucu düzeyindeki jokerler
+mevcut kapıda çözülür; `server__read*` gibi sunucu içi jokerler Codex tarafından
+genişletilmez. Böyle bir kural gereken sunucu bağlanmaz ve debug hatası üretilir;
+tam araç adları kullanın. Interaction katmanları da o turun filtrelenmiş araç
+adlarını açık izin listesi olarak alır. Köprünün çağrı anındaki kontrolü korunur.
 
 ```toml
 [mcp_servers.tionharness_extended]
