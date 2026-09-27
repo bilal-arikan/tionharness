@@ -1297,7 +1297,12 @@ performans garantisi değil, karşılaştırmayı kontrol altında tutma öneris
 Eşdeğerliği ölçmek için aynı Git revizyonu, görevler, araçlar ve düşünme seviyesiyle
 iki tarafta tekrarlar yapıp test geçişini, süreyi, input/cache/output token'larını,
 tekrar denemeleri ve kullanıcı müdahalesini karşılaştırmak gerekir. Bu çalışmada
-böyle bir A/B başarı veya verimlilik benchmark'ı yapılmadı.
+Desktop ile böyle bir A/B başarı veya verimlilik benchmark'ı yapılmadı.
+Sonraki [taşıyıcı deneyi](69-CODEX-BENCHMARK-2026-09-28.md), CLI 0.157.1 üzerinde
+TionHarness `Complete` ile doğrudan CLI'ı üç küçük görevde karşılaştırdı: iki
+model ve iki yoldaki 12 deneme/96 kontrol geçti. Ortalama süre Astra'da
+49,07 / 47,70 sn, Sol'da 43,79 / 40,22 sn (TionHarness / CLI). MCP/worker,
+Desktop ve uzun oturum performansı bu küçük deneyin kapsamı dışındadır.
 
 ### Regresyon ve tekrar deneme
 

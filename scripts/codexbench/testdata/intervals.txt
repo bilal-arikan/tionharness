@@ -1,0 +1,1 @@
+Implement merge_intervals(intervals). Input is an iterable of pairs of integers representing half-open intervals [start, end). Reject start > end with ValueError. Ignore empty intervals. Return a sorted list of tuples, merging overlaps AND touching intervals. Do not mutate caller-owned input. Support negative endpoints and a one-shot generator. Empty input returns [].

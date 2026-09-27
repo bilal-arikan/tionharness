@@ -11,6 +11,19 @@
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
 
 
+## TionHarness–Codex CLI karşılaştırmalı deney (2026-09-28)
+
+- CLI 0.157.1 ve `high` seviyesinde Astra/Sol × iki taşıyıcı × üç Python görevi
+  çalıştırıldı. 12 deneme ve toplam 96 değerlendirici kontrolü geçti.
+- Ortalama süre (TionHarness / doğrudan CLI): Astra 49,07 / 47,70 sn;
+  Sol 43,79 / 40,22 sn. Her hücre yalnız üç görevdir; genelleme yapılmaz.
+- Tekrar üretilebilir araç `scripts/codexbench`, rapor ve ham JSON
+  `69-CODEX-BENCHMARK-2026-09-28` dosyalarında. Desktop ve tam uygulama
+  akışları ölçülmedi; araç gerçek hesap kotası kullanır.
+- Doğrulama: tam Go testleri, 143 dosyada 1026 frontend testi, depcheck ve
+  diff kontrolü geçti. İlk kapının bulduğu Windows konsol politikası ihlali,
+  benchmark başlatıcısında ortak `proc` yardımcıları kullanılarak giderildi.
+
 ## Codex CLI güncellemesi ve Sol canlı doğrulaması (2026-09-28)
 
 - CLI 0.157.1 kuruldu; yerel Codex sağlayıcısının `cliPath` ayarı yeni dosyaya

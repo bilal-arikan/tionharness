@@ -1,0 +1,196 @@
+{
+  "cliVersion": "codex-cli 0.157.1",
+  "effort": "high",
+  "results": [
+    {
+      "task": "intervals",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 37.0882947,
+      "usage": {
+        "inputTokens": 13094,
+        "outputTokens": 761,
+        "cacheReadTokens": 34816,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 40.4703879,
+      "usage": {
+        "inputTokens": 13332,
+        "outputTokens": 798,
+        "cacheReadTokens": 46976
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 32.3550235,
+      "usage": {
+        "inputTokens": 24366,
+        "outputTokens": 934,
+        "cacheReadTokens": 22272
+      },
+      "tools": 3,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "intervals",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 38.3641251,
+      "usage": {
+        "inputTokens": 13032,
+        "outputTokens": 1062,
+        "cacheReadTokens": 45056,
+        "thinkingTokens": 186,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 55.5693782,
+      "usage": {
+        "inputTokens": 14162,
+        "outputTokens": 1324,
+        "cacheReadTokens": 47616
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 62.7507922,
+      "usage": {
+        "inputTokens": 14044,
+        "outputTokens": 1560,
+        "cacheReadTokens": 35072,
+        "thinkingTokens": 126,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 50.6158894,
+      "usage": {
+        "inputTokens": 24901,
+        "outputTokens": 1964,
+        "cacheReadTokens": 34944,
+        "thinkingTokens": 688,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "ttl_cache",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 47.3750207,
+      "usage": {
+        "inputTokens": 25378,
+        "outputTokens": 1810,
+        "cacheReadTokens": 34688
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-astra",
+      "route": "tionharness",
+      "seconds": 47.3621534,
+      "usage": {
+        "inputTokens": 13647,
+        "outputTokens": 1053,
+        "cacheReadTokens": 47104,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-astra",
+      "route": "codex-cli",
+      "seconds": 47.0597161,
+      "usage": {
+        "inputTokens": 13728,
+        "outputTokens": 1089,
+        "cacheReadTokens": 47360
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-sol",
+      "route": "codex-cli",
+      "seconds": 40.918446,
+      "usage": {
+        "inputTokens": 24624,
+        "outputTokens": 1331,
+        "cacheReadTokens": 34304
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.000s\r\n\r\nOK\r\n"
+    },
+    {
+      "task": "dependency_layers",
+      "model": "gpt-6-sol",
+      "route": "tionharness",
+      "seconds": 42.4013665,
+      "usage": {
+        "inputTokens": 25586,
+        "outputTokens": 1542,
+        "cacheReadTokens": 33664,
+        "thinkingTokens": 574,
+        "thinkingTokensMeasured": true
+      },
+      "tools": 4,
+      "passed": true,
+      "validation": "........\r\n----------------------------------------------------------------------\r\nRan 8 tests in 0.001s\r\n\r\nOK\r\n"
+    }
+  ],
+  "recordedAt": "2026-09-28T01:50:23+03:00",
+  "fixturesSHA256": {
+    "dependency_layers.py": "acbd84d1b303c47c35fcddca84606aa6e97c753c19fe65cbbd89c00ded9e058a",
+    "dependency_layers.txt": "7a7bc89fe321cf12e2d92f00afc5e447fbaa09bf0ebdb809149c9261de92d831",
+    "dependency_layers_test.py": "e2f0374e1769f2718d64c844deea0fa3269f25ca3baf6c3d2ad5a6c5f3dcb8bd",
+    "intervals.py": "4ab3651ec741d2a9dc7de9398f65c4c332e769f5f383de53f853a4aca89676cd",
+    "intervals.txt": "10a935ac83f4e4ad8e4869091bc2c546657620b2150013b13fcf58d128af745e",
+    "intervals_test.py": "4b672b4e29dbb39f445a942dea8899b0b3748d6d38c64a7f9eedf671a31f0c87",
+    "ttl_cache.py": "d681f1d7b41fd6d3616dc12a0c81c6039b443bfc5df12cdf7d326a595f102185",
+    "ttl_cache.txt": "442143d148b26e3257b227cb646cc1a858265ed73ebd3b4c7b4082ad47c366bd",
+    "ttl_cache_test.py": "587f8a52095b7d59ba1a51b1249801661824448cdf788a308b952ccf6d892c83"
+  }
+}
