@@ -8,9 +8,11 @@ import { useMemo, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import type { Message } from '@/types'
 import { Button, ModalOverlay } from '@/shared/components'
+import { TranscriptPaging, type TranscriptPagingState } from './TranscriptPaging'
 
 interface Props {
   messages: Message[]
+  paging?: TranscriptPagingState
   // Rewind to the given message (remove it + everything after). Returns the
   // removed prompt text, which the caller restores into the composer.
   onRewind: (messageId: string) => Promise<string>
@@ -23,7 +25,7 @@ function clip(s: string, n = 140): string {
   return oneLine.length > n ? oneLine.slice(0, n) + '…' : oneLine
 }
 
-export function RewindDialog({ messages, onRewind, onClose }: Props) {
+export function RewindDialog({ messages, paging, onRewind, onClose }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -38,15 +40,15 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
       out.push({
         id: messages[i].id,
         text: messages[i].text,
-        removed: messages.length - i,
-        n: userSeen,
+        removed: (paging?.total ?? messages.length) - (paging?.offset ?? 0) - i,
+        n: paging ? paging.offset + i + 1 : userSeen,
       })
     }
     return out.reverse()
-  }, [messages])
+  }, [messages, paging?.total, paging?.offset])
 
   const confirm = async () => {
-    if (!selected || busy) return
+    if (!selected || busy || !checkpoints.some((checkpoint) => checkpoint.id === selected)) return
     setBusy(true)
     try {
       await onRewind(selected)
@@ -73,6 +75,7 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
           düzenleyip yeniden göndermen için mesaj kutusuna geri konur.
         </p>
 
+        <TranscriptPaging state={paging} edge="newer" />
         {checkpoints.length === 0 ? (
           <div className="rounded-lg border border-[var(--color-border)] p-4 text-sm text-[var(--color-text-dim)]">
             Bu oturumda geri sarılacak bir kullanıcı mesajı yok.
@@ -92,7 +95,7 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
               >
                 <div className="mb-0.5 flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-[var(--color-text-dim)]">
-                    Prompt #{c.n}
+                    {paging ? 'Message' : 'Prompt'} #{c.n}
                   </span>
                   <span className="text-xs text-[var(--color-text-dim)]">
                     {c.removed} mesaj silinir
@@ -104,11 +107,16 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
           </div>
         )}
 
+        <TranscriptPaging state={paging} edge="older" />
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             İptal
           </Button>
-          <Button variant="danger" onClick={confirm} disabled={!selected || busy}>
+          <Button
+            variant="danger"
+            onClick={confirm}
+            disabled={busy || !checkpoints.some((checkpoint) => checkpoint.id === selected)}
+          >
             {busy ? 'Geri sarılıyor…' : 'Geri sar'}
           </Button>
         </div>

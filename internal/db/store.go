@@ -593,6 +593,8 @@ func (d *DB) deleteSessionLocked(ctx context.Context, sessionID string, removeAl
 	delete(d.sessions, sessionID)
 	d.markMutatedLocked()
 	delete(d.messages, sessionID)
+	delete(d.transcriptCache, sessionID)
+	delete(d.transcriptCheckpoints, sessionID)
 	d.deleteSessionFilesLocked(sessionID)
 	d.dropTranscriptLock(sessionID)
 	return removed, nil

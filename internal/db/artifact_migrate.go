@@ -87,7 +87,11 @@ func (d *DB) migrateUnifiedLayout() {
 
 	// 3) Chat attachments in messages: move files under uploads/<sid>/ → per-session
 	// folder, update the message relPath, and back each with a "chat" artifact.
-	for sid, msgs := range d.messages {
+	for sid := range d.sessions {
+		msgs, err := d.attachmentMigrationMessages(sid)
+		if err != nil {
+			continue
+		}
 		dirty := false
 		for mi := range msgs {
 			for ai := range msgs[mi].Attachments {
@@ -105,7 +109,12 @@ func (d *DB) migrateUnifiedLayout() {
 		}
 		if dirty {
 			if s, ok := d.sessions[sid]; ok {
+				_, loaded := d.messages[sid]
+				d.messages[sid] = msgs
 				_ = d.writeSessionFileLocked(s)
+				if !loaded {
+					delete(d.messages, sid)
+				}
 			}
 		}
 	}
@@ -136,7 +145,12 @@ func (d *DB) cleanupOrphanUploads() {
 		mark(a.SourcePath)
 		mark(a.ContentFile)
 	}
-	for _, msgs := range d.messages {
+	for sid := range d.sessions {
+		msgs, err := d.attachmentMigrationMessages(sid)
+		// Incomplete reference discovery must never authorize deleting uploads.
+		if err != nil {
+			return
+		}
 		for _, m := range msgs {
 			for _, at := range m.Attachments {
 				mark(at.RelPath)
@@ -170,4 +184,16 @@ func (d *DB) cleanupOrphanUploads() {
 	for _, dir := range dirs {
 		_ = os.Remove(dir)
 	}
+}
+
+// Boot-only reader: migration needs attachment-bearing sessions, not a resident
+// copy of every transcript. The checkpoint is validated by loadSessions first.
+func (d *DB) attachmentMigrationMessages(sid string) ([]Message, error) {
+	if msgs, loaded := d.messages[sid]; loaded {
+		return msgs, nil
+	}
+	if cache, ok := d.transcriptCheckpoints[sid]; ok && !cache.HasAttachments {
+		return nil, nil
+	}
+	return readMessagesFile(d.dir(dirSessions, sid, sessionMsgsFile))
 }

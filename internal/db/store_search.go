@@ -35,16 +35,9 @@ type SearchOpts struct {
 	Limit     int      // max hits; <=0 = 20
 }
 
-// SearchMessages scans every loaded session's messages for ones containing all
-// query terms. Because the store keeps all sessions in memory (loaded at boot),
-// this is a pure in-RAM scan — no index, no disk I/O, no external tool. Results
-// are ranked by match density and recency, newest/most-relevant first.
-//
-// The scan runs under the store's read lock, so it is kept allocation-free:
-// terms are matched with a rune-folding substring search instead of lowering a
-// copy of every message, and only the top `limit` candidates are retained (a
-// bounded heap) so a broad query over a large workspace never materialises
-// thousands of hits — nor cuts a snippet for any of them — before truncating.
+// SearchMessages scans eligible transcripts one session at a time, loading cold
+// ones through the bounded cache. Only the best candidates retain their text;
+// unrelated entities are not locked while a transcript is read from disk.
 func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, error) {
 	terms := strings.Fields(textutil.FoldLower(o.Query))
 	if len(terms) == 0 {
@@ -71,7 +64,6 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 	}
 
 	d.mu.RLock()
-	defer d.mu.RUnlock()
 
 	// newest session first so equal-score hits keep a stable, recent-leaning order
 	sessions := make([]Session, 0, len(d.sessions))
@@ -84,6 +76,7 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 		}
 		sessions = append(sessions, s)
 	}
+	d.mu.RUnlock()
 	slices.SortStableFunc(sessions, func(a, b Session) int {
 		return cmp.Compare(b.UpdatedAt, a.UpdatedAt)
 	})
@@ -93,27 +86,35 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 	seq := 0
 	for si := range sessions {
 		s := &sessions[si]
-		msgs := d.messages[s.ID]
-		for mi := range msgs {
-			m := &msgs[mi]
+		err := d.StreamMessages(ctx, s.ID, func(message Message) bool {
+			m := &message
 			if roleOK != nil && !roleOK[m.Role] {
-				continue
+				return true
 			}
 			if o.SinceUnix > 0 && m.CreatedAt < o.SinceUnix {
-				continue
+				return true
 			}
 			matches, hadAll := countTerms(m.Text, terms)
 			if !hadAll {
-				continue
+				return true
 			}
+			// Retain just searchable fields, not entire tool traces or their slice.
+			candidate := Message{ID: m.ID, Role: m.Role, AgentID: m.AgentID, Text: m.Text, CreatedAt: m.CreatedAt}
 			top.offer(searchCandidate{
 				session:   s,
-				message:   m,
+				message:   &candidate,
 				score:     score(matches, now-m.CreatedAt),
 				createdAt: m.CreatedAt,
 				seq:       seq,
 			})
 			seq++
+			return true
+		})
+		if err != nil && err != ErrNotFound {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -141,6 +142,14 @@ func (d *DB) SearchMessages(ctx context.Context, o SearchOpts) ([]SearchHit, err
 // (e.g. the user's first question) back out of the raw transcript. Returns nil
 // when the session or message is unknown.
 func (d *DB) MessagesAround(ctx context.Context, sid, mid string, before, after int) []Message {
+	tl := d.transcriptLock(sid)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sid)
+	if err != nil {
+		return nil
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	msgs := d.messages[sid]

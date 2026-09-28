@@ -79,7 +79,8 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
     // an out-of-band change), so a panel shows outdated data until a hard reload.
     // A caller may still override via init.cache.
     res = await fetch(path, { cache: 'no-store', headers: wsHeaders(), ...init })
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted) throw error
     // fetch rejects (no response at all) when the dev server / network is down.
     throw new Error(
       "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et.",

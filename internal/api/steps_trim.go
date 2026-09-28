@@ -34,7 +34,7 @@ const stepsTrimFloor = stepFieldCap
 // stepFieldCap. On ANY problem (unparseable trace, marshal failure) it returns
 // the input unchanged — a transcript is never dropped just because it could not
 // be shrunk.
-func trimStepsJSON(raw string) string {
+func trimStepsJSONUncached(raw string) string {
 	if len(raw) <= stepsTrimFloor {
 		return raw
 	}

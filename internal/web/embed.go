@@ -13,7 +13,6 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
-	"strings"
 )
 
 // all: includes dotfiles (e.g. the .gitkeep placeholder) so this compiles even
@@ -34,18 +33,5 @@ func Handler() (http.Handler, bool) {
 	if err != nil {
 		return nil, false // placeholder only — build not bundled
 	}
-	fileServer := http.FileServer(http.FS(sub))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := strings.TrimPrefix(r.URL.Path, "/")
-		if p != "" {
-			if f, statErr := fs.Stat(sub, p); statErr == nil && !f.IsDir() {
-				fileServer.ServeHTTP(w, r)
-				return
-			}
-		}
-		// Root or unknown path → serve the SPA shell for client-side routing.
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(index)
-	}), true
+	return staticHandler(sub, index), true
 }

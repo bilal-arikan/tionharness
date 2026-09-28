@@ -52,6 +52,7 @@ export interface ChatViewProps {
   bootstrapping: boolean
   // True while the open session's transcript is being fetched.
   messagesLoading: boolean
+  transcriptPaging?: ComponentProps<typeof MessageList>['transcriptPaging']
   // When true the session is a read-only run log (task / flow / schedule): the
   // composer and its ask/todo/pending/wake stack are hidden and a thin banner is
   // shown instead. The transcript, context preview, debug and info panels stay
@@ -114,6 +115,7 @@ export function ChatView({
   activeAgentId,
   bootstrapping,
   messagesLoading,
+  transcriptPaging,
   readOnly,
   sessionCoordination,
   onSelectSession,
@@ -155,11 +157,17 @@ export function ChatView({
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [activeSessionId])
+  }, [activeSessionId, bootstrapping, readOnly])
 
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
-  const currentTodo = useMemo(() => latestTodos(messages), [messages])
+  const currentTodo = useMemo(
+    () =>
+      transcriptPaging?.hasNewer
+        ? (transcriptPaging.summary?.todo ?? null)
+        : (latestTodos(messages) ?? transcriptPaging?.summary?.todo ?? null),
+    [messages, transcriptPaging?.hasNewer, transcriptPaging?.summary],
+  )
 
   // The rendered transcript hides the runtime's <coordination-guard> corrective
   // notes unless the app setting turns them on. Display-only: the note stays in
@@ -225,7 +233,7 @@ export function ChatView({
     readOnly,
     activeSessionId,
     dismissedSessionId: startPanelDismissed,
-    messageCount: messages.length,
+    messageCount: transcriptPaging?.total ?? messages.length,
     messagesLoading,
     streaming: chat.activeStreaming,
     pending: chat.activePending,
@@ -290,6 +298,7 @@ export function ChatView({
         <ChatSkeleton />
       ) : (
         <MessageList
+          transcriptPaging={transcriptPaging}
           messages={shownMessages}
           sessionId={activeSessionId ?? undefined}
           pending={chat.activePending}
@@ -330,7 +339,9 @@ export function ChatView({
               on an ask/permission (below) is answered as a suspend-point resolve,
               and that reply reads the still-warm prefix — so the countdown is
               actionable here too. Same gate as the writable stack. */}
-          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
+          {!chat.activeStreaming && (
+            <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
+          )}
           {/* NAVIGATION (B): the upward coordinator chain, so a worker log links
               back to where the work came from. Self-hides for a root/ordinary
               session (empty ancestor chain). */}
@@ -417,7 +428,9 @@ export function ChatView({
               tray, ask/permission prompts). Hidden while a turn streams (the
               countdown is about to reset anyway) and on an empty session (nothing
               is cached yet). */}
-          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
+          {!chat.activeStreaming && (
+            <CacheWarmthStrip messages={messages} summary={transcriptPaging?.summary} />
+          )}
           {/* Pre-first-message setup: coordinator mode + recipe, decided here
               instead of hidden in the session info panel. Self-closes on send
               (showStartPanel). */}
@@ -515,7 +528,12 @@ export function ChatView({
         </div>
       )}
       {chat.rewindOpen && rewind && (
-        <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={rewind} />
+        <RewindDialog
+          messages={messages}
+          paging={transcriptPaging}
+          onClose={chat.closeRewind}
+          onRewind={rewind}
+        />
       )}
     </div>
   )

@@ -3,6 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { precompressAssets } from './build/precompress'
 
 // internal/web/dist/.gitkeep is a tracked file (.gitignore ignores the dist
 // contents but whitelists this one) because //go:embed all:dist in
@@ -38,7 +39,7 @@ function keepDistPlaceholder(): Plugin {
 // During dev, proxy API calls to the Go backend on :8090 (TIONHARNESS_ADDR default
 // in the run docs — :8080 collides with unity-mcp's HTTP backend).
 export default defineConfig({
-  plugins: [react(), tailwindcss(), keepDistPlaceholder()],
+  plugins: [react(), tailwindcss(), keepDistPlaceholder(), precompressAssets()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

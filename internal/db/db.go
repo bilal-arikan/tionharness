@@ -3,10 +3,9 @@
 // each conversation is a JSONL file (header line + one message per line), so a
 // workspace's data is portable, git-friendly and inspectable on disk.
 //
-// All data is loaded into memory at Open() and served from there; every
-// mutation writes the affected entity back to disk atomically (tmp file +
-// rename). A single RWMutex guards the in-memory state, which is safe for the
-// concurrent agent runtime (per-agent goroutines, scheduler, flow runners).
+// Headers and small entities load at Open; transcripts load on demand into a
+// bounded cache. Mutations persist canonical JSON/JSONL files, with a per-session
+// transcript lock and a durable recovery journal for message commits.
 package db
 
 import (
@@ -182,8 +181,12 @@ type DB struct {
 	// transcriptMus holds one mutex per session, serialising writes to that
 	// session's messages.jsonl so the file write no longer needs the global lock.
 	// See transcript_lock.go for the mandatory lock order (transcript then mu).
-	transcriptMusMu sync.Mutex
-	transcriptMus   map[string]*sync.Mutex
+	transcriptMusMu       sync.Mutex
+	transcriptMus         map[string]*sync.Mutex
+	transcriptCache       map[string]*transcriptCacheEntry
+	transcriptClock       uint64
+	transcriptCacheLimit  int64
+	transcriptCheckpoints map[string]transcriptCheckpoint
 
 	// counters holds the per-entity id RESERVATION high-water mark (prefix -> the
 	// highest n that has been persisted as claimed). It is written to

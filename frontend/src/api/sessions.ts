@@ -3,6 +3,7 @@
 import type {
   Session,
   Message,
+  MessagePage,
   SessionInfo,
   WorkerInfo,
   CoordinatorTree,
@@ -123,6 +124,25 @@ export const sessionApi = {
       },
     ),
   listMessages: (sessionId: string) => req<Message[]>(`/api/sessions/${sessionId}/messages`),
+  listMessagePage: (
+    sessionId: string,
+    options: {
+      limit?: number
+      before?: string
+      after?: string
+      around?: string
+      start?: string
+    } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 50) })
+    for (const key of ['before', 'after', 'around', 'start'] as const) {
+      if (options[key]) query.set(key, options[key])
+    }
+    return req<MessagePage>(`/api/sessions/${encodeURIComponent(sessionId)}/messages?${query}`, {
+      signal,
+    })
+  },
   // One turn's activity trace, UNTRIMMED. listMessages ships tool payloads cut
   // to a server-side cap (marked with the step's `*Truncated` flags) so opening
   // a long session stays cheap; this refetches the full trace for a single turn

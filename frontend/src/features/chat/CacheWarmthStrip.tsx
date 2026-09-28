@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Flame, Snowflake } from 'lucide-react'
-import type { Message } from '@/types'
+import type { Message, TranscriptSummary } from '@/types'
 import { serverNow } from '@/shared/lib/serverClock'
 import { cacheRemaining, formatCountdown } from '@/features/sessions/sessionDetailFormat'
 
 interface Props {
   messages: Message[]
+  summary?: TranscriptSummary
 }
 
 // Warn (amber) once the warm window is this short: still usable, but a reply
@@ -23,10 +24,10 @@ const SOON_SEC = 5 * 60
 // runs on (providers.cacheTTL), so no backend field is needed; it is a
 // approximation only in that the LLM call happens slightly before the reply is
 // persisted, which shortens the shown window by seconds, never lengthens it.
-export function CacheWarmthStrip({ messages }: Props) {
+export function CacheWarmthStrip({ messages, summary }: Props) {
   const [now, setNow] = useState(() => serverNow())
   const last = messages[messages.length - 1]
-  const lastAt = last?.createdAt ?? 0
+  const lastAt = Math.max(last?.createdAt ?? 0, summary?.lastMessageAt ?? 0)
   const remaining = cacheRemaining(lastAt, now)
   const warm = remaining > 0
 
@@ -42,7 +43,7 @@ export function CacheWarmthStrip({ messages }: Props) {
   // without reading it. The FIRST assistant turn is skipped — its cold prefix is
   // the unavoidable price of starting a session, not a lost cache. Mirrors the
   // backend detector, which likewise only flags a break after the cache was warm.
-  const coldTurns = countColdTurns(messages)
+  const coldTurns = summary?.coldTurns ?? countColdTurns(messages)
 
   if (!lastAt) return null
 

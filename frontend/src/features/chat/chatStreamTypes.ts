@@ -29,6 +29,7 @@ export interface ChatStreamDeps {
   // off the chat view, so 20Hz transcript churn only starves whatever screen
   // IS mounted (an agent form's Save appearing to hang, for instance).
   transcriptVisible?: RefObject<boolean>
+  refreshMessages?: (sid: string) => Promise<Message[] | undefined>
   setMessages: Dispatch<SetStateAction<Message[]>>
   setError: (msg: string | null) => void
   selectSession: (id: string) => void

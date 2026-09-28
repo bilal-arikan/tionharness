@@ -311,6 +311,10 @@ func titleSourceFromMessages(msgs []db.Message) string {
 }
 
 func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("limit") {
+		s.handleMessagePage(w, r)
+		return
+	}
 	sessionID := r.PathValue("id")
 	// ?tail=N returns only the last N messages plus the envelope describing where
 	// they sit. Opt-in, because the default MUST stay the full transcript: the

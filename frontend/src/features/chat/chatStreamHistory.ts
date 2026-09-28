@@ -2,7 +2,7 @@
 // rewind to a checkpoint. Plain functions extracted from useChatStream; the
 // hook's callbacks build the context and delegate here.
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { api } from '@/api'
+import { api, getActiveWorkspace } from '@/api'
 import type { Message } from '@/types'
 import type { SendFn } from './chatStreamTypes'
 
@@ -37,8 +37,16 @@ export async function performRetry(
   const { activeSessionIdRef, messagesRef, setMessages, sendMessageRef } = ctx
   const sid = activeSessionIdRef.current
   if (!sid) return
-  const msgs = messagesRef.current ?? []
-  const failedIdx = msgs.findIndex((m) => m.id === failedId)
+  const workspace = getActiveWorkspace()
+  const stillCurrent = () =>
+    activeSessionIdRef.current === sid && getActiveWorkspace() === workspace
+  let msgs = messagesRef.current ?? []
+  let failedIdx = msgs.findIndex((m) => m.id === failedId)
+  if (failedIdx < 0) {
+    msgs = (await api.listMessagePage(sid, { around: failedId })).items
+    if (!stillCurrent()) return
+    failedIdx = msgs.findIndex((m) => m.id === failedId)
+  }
   if (failedIdx < 0) return
   // Walk back from the failed assistant bubble to its triggering user message.
   let userIdx = -1
@@ -48,8 +56,17 @@ export async function performRetry(
       break
     }
   }
-  if (userIdx < 0) return
-  const userMsg = msgs[userIdx]
+  let userMsg = userIdx >= 0 ? msgs[userIdx] : undefined
+  // The triggering prompt can precede the loaded window (including a turn with
+  // several consecutive assistant messages). Walk back in bounded pages.
+  let before: string | undefined = msgs[0]?.id
+  while (!userMsg && before) {
+    const page = await api.listMessagePage(sid, { before })
+    if (!stillCurrent()) return
+    userMsg = page.items.findLast((m) => m.role === 'user')
+    before = page.hasMore ? page.items[0]?.id : undefined
+  }
+  if (!userMsg) return
   const text = userMsg.text
   const attachments = userMsg.attachments ?? []
 
@@ -59,12 +76,14 @@ export async function performRetry(
     const isLocal = (id: string) =>
       id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
     const removeIds = [failedId, userMsg.id]
-    setMessages((prev) => prev.filter((m) => !removeIds.includes(m.id)))
     for (const id of removeIds) {
-      if (!isLocal(id)) await api.deleteMessage(sid, id).catch(() => {})
+      if (!stillCurrent()) return
+      if (!isLocal(id)) await api.deleteMessage(sid, id)
+      if (stillCurrent()) setMessages((prev) => prev.filter((m) => m.id !== id))
     }
   }
 
+  if (!stillCurrent()) return
   await sendMessageRef.current(text, sid, attachments)
 }
 
@@ -79,10 +98,12 @@ export async function performRerunLast(
   ctx: Omit<HistoryContext, 'setMessages'>,
   retry: (failedId: string) => Promise<void>,
 ): Promise<void> {
-  const { activeSessionIdRef, messagesRef, sendMessageRef } = ctx
+  const { activeSessionIdRef, sendMessageRef } = ctx
   const sid = activeSessionIdRef.current
   if (!sid) return
-  const msgs = messagesRef.current ?? []
+  const workspace = getActiveWorkspace()
+  const msgs = (await api.listMessagePage(sid)).items
+  if (activeSessionIdRef.current !== sid || getActiveWorkspace() !== workspace) return
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i].role === 'assistant') {
       await retry(msgs[i].id)
@@ -113,15 +134,17 @@ export async function performRewindTo(
   const idx = msgs.findIndex((m) => m.id === messageId)
   if (idx < 0) return ''
   const promptText = msgs[idx].role === 'user' ? msgs[idx].text : ''
+  const workspace = getActiveWorkspace()
+  const isLocal = (id: string) =>
+    id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
+  if (!isLocal(messageId)) {
+    await api.rewindSession(sid, messageId)
+  }
+  if (activeSessionIdRef.current !== sid || getActiveWorkspace() !== workspace) return ''
   setMessages((prev) => {
     const i = prev.findIndex((m) => m.id === messageId)
     return i < 0 ? prev : prev.slice(0, i)
   })
-  const isLocal = (id: string) =>
-    id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
-  if (!isLocal(messageId)) {
-    await api.rewindSession(sid, messageId).catch(() => {})
-  }
   setRewindOpen(false)
   return promptText
 }

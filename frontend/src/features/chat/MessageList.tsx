@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react'
 import type { Agent, Artifact, Message } from '@/types'
@@ -21,10 +20,13 @@ import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
 import { AssistantTurn } from './AssistantTurn'
 import { agentName, resolveAgent } from '@/shared/lib/agentLookup'
+import { useTranscriptWindow } from './useTranscriptWindow'
+import { TranscriptPaging, type TranscriptPagingState } from './TranscriptPaging'
 import { CACHE_TTL_SEC } from '@/features/sessions/sessionDetailFormat'
 
 interface Props {
   messages: Message[]
+  transcriptPaging?: TranscriptPagingState
   // Session these messages belong to — enables the per-message debug panel.
   sessionId?: string
   pending: boolean
@@ -73,37 +75,13 @@ interface Props {
   scrollBottomSignal?: number
 }
 
-// SKIPPED_ROW lets the browser skip layout/paint/style for a row that is
-// scrolled out of view — a worker session's transcript is hundreds of tool
-// cards, markdown blocks and diffs, and rendering all of them is what made
-// opening one feel like it "reloads everything from scratch".
-//
-// This is deliberately NOT a virtualizer: the transcript's scroll logic
-// (scrollRowIntoView, updateActivePinned, the search deep-link) queries real
-// DOM nodes by data-msg-id, and unmounting off-screen rows would break all of
-// it. content-visibility keeps every row in the DOM — only its subtree render
-// is skipped — so the queries keep working. `contain-intrinsic-size: auto <h>`
-// makes the browser remember each row's real height once painted, so scrollbar
-// geometry converges instead of jumping.
-const SKIPPED_ROW: CSSProperties = {
-  contentVisibility: 'auto',
-  containIntrinsicSize: 'auto 320px',
-}
-// How many trailing rows stay eagerly rendered. The live/most recent turns are
-// in view anyway, and skipping them would fight the scroll-to-bottom pinning
-// (which reads scrollHeight right after a streaming delta).
-const EAGER_TAIL_ROWS = 3
-// Below this many rows the whole transcript renders eagerly. Short sessions have
-// no render problem to solve, and skipping rows there would only trade a
-// non-issue for estimated-height scroll imprecision.
-const SKIP_OFFSCREEN_MIN_ROWS = 30
-
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
 // tool-trace collapse, then delegates each row to UserTurn / AutoPromptNote /
 // AssistantTurn. The standalone pending bubble covers polled views with no live
 // streaming placeholder.
 export function MessageList({
   messages,
+  transcriptPaging,
   sessionId,
   pending,
   pendingAgentId,
@@ -135,6 +113,26 @@ export function MessageList({
   const onFeedback = useStableCallback(onFeedbackProp)
   const onOpenAgent = useStableCallback(onOpenAgentProp)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const virtual = useTranscriptWindow(messages, scrollRef)
+  const paging = transcriptPaging
+    ? {
+        ...transcriptPaging,
+        loadOlder: () => {
+          virtual.captureAnchor()
+          transcriptPaging.loadOlder()
+        },
+        loadNewer: () => {
+          virtual.captureAnchor()
+          transcriptPaging.loadNewer()
+        },
+        loadLatest: () => {
+          virtual.clearAnchor()
+          pinnedRef.current = true
+          transcriptPaging.loadLatest()
+        },
+      }
+    : undefined
+  const previousSession = useRef(sessionId)
   // Transiently highlighted message (from a search deep-link); cleared after the
   // flash animation so the highlight doesn't stick.
   const [flashId, setFlashId] = useState<string | null>(null)
@@ -159,7 +157,7 @@ export function MessageList({
   // 2+ agents take part do we surface the "→ <recipient>" direction cue — a 1:1
   // chat stays clean (every user turn is trivially "→ the one agent").
   const multiParticipant = useMemo(() => {
-    const ids = new Set<string>()
+    const ids = new Set<string>(transcriptPaging?.participants)
     for (const m of messages) {
       if (m.role === 'assistant' && m.agentId) ids.add(m.agentId)
       // A peer message (agent-authored, stored role "user") contributes its SENDER
@@ -170,7 +168,7 @@ export function MessageList({
       if (ids.size > 1) return true
     }
     return false
-  }, [messages])
+  }, [messages, transcriptPaging?.participants])
   // A message authored by ANOTHER agent but stored with role "user" (a peer/inbox
   // delivery). It renders as an incoming LEFT bubble (PeerTurn), not the human's
   // own right-aligned turn.
@@ -213,12 +211,23 @@ export function MessageList({
   // over the moment it reaches the top; -1 means nothing has scrolled past yet.
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1)
 
-  // updateActivePinned scans every typed user row and picks the last (largest
+  // updateActivePinned scans mounted user rows and picks the last (largest
   // index) one whose top has reached/passed the viewport top — that becomes the
   // pinned header. Rows are in DOM order, so the last qualifying wins.
-  function updateActivePinned(el: HTMLDivElement) {
+  const updateActivePinned = useStableCallback((el: HTMLDivElement) => {
+    if (el.scrollTop <= 1) {
+      setActivePinnedIndex(-1)
+      return
+    }
     const cTop = el.getBoundingClientRect().top
     let active = -1
+    for (let i = virtual.start - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.role === 'user' && !m.origin && !isPeer(m)) {
+        active = i
+        break
+      }
+    }
     el.querySelectorAll<HTMLElement>('[data-user-row]').forEach((r) => {
       if (r.getBoundingClientRect().top - cTop <= 1) {
         const idx = Number(r.dataset.idx)
@@ -226,17 +235,18 @@ export function MessageList({
       }
     })
     setActivePinnedIndex((prev) => (prev === active ? prev : active))
-  }
+  })!
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el) updateActivePinned(el)
+  }, [virtual.start, virtual.end, messages, updateActivePinned])
 
   // Pending rAF handle for the scroll-driven pinned-header measurement.
   const pinnedFrameRef = useRef<number | null>(null)
 
-  // updateActivePinned reads the rect of EVERY user row, which forces a layout.
-  // A single flick of the wheel fires scroll dozens of times per second, so doing
-  // that measurement per event is the transcript's worst layout thrash. Coalesce
-  // to at most one measurement per animation frame: the result is identical (the
-  // last event in a frame is the one whose geometry the user sees painted), the
-  // pinned header just stops being recomputed for positions that never paint.
+  // Coalesce geometry reads for the mounted rows to one animation frame, even
+  // when a wheel gesture emits several scroll events before the next paint.
   function schedulePinnedUpdate() {
     if (pinnedFrameRef.current !== null) return
     pinnedFrameRef.current = requestAnimationFrame(() => {
@@ -260,6 +270,7 @@ export function MessageList({
     // pinnedRef on the very next commit, so it must reflect the latest scroll.
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     pinnedRef.current = distance < 80
+    virtual.onScroll()
     schedulePinnedUpdate()
   }
 
@@ -269,8 +280,15 @@ export function MessageList({
   // would sit right on top of the very message we jumped to.
   function scrollRowIntoView(id: string) {
     const el = scrollRef.current
+    const index = messages.findIndex((m) => m.id === id)
+    if (index >= 0) virtual.scrollToIndex(index)
     const row = el?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`)
-    if (!el || !row) return
+    if (!el) return
+    if (!row) {
+      pinnedRef.current = false
+      setFlashId(id)
+      return
+    }
     el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - 8
     pinnedRef.current = false // a deliberate jump must not be yanked back down
     updateActivePinned(el)
@@ -298,18 +316,27 @@ export function MessageList({
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    if (prevFirstId.current !== firstId) {
+    if (
+      previousSession.current !== sessionId ||
+      (prevFirstId.current === undefined && firstId !== undefined)
+    ) {
+      previousSession.current = sessionId
       // Session changed: always land at the bottom of the new transcript.
       prevFirstId.current = firstId
       pinnedRef.current = true
     }
+    prevFirstId.current = firstId
     // A newly-appended human turn (we just sent a message) always re-pins to the
     // bottom, even if the user had scrolled up — so the sent message is visible.
     // Peer/inbox deliveries (agent-authored role "user") and streaming assistant
     // deltas don't force this; they respect the existing pin state.
     const lastMsg = messages[messages.length - 1]
     if (lastMsg && lastMsg.id !== prevLastId.current) {
-      if (lastMsg.role === 'user' && lastMsg.authorKind !== 'agent') {
+      if (
+        lastMsg.role === 'user' &&
+        lastMsg.authorKind !== 'agent' &&
+        !transcriptPaging?.hasNewer
+      ) {
         pinnedRef.current = true
       }
     }
@@ -323,28 +350,29 @@ export function MessageList({
     // every token, and a smooth animation restarted each delta never settles —
     // the symptom where the live reply seems to vanish until the turn finishes.
     el.scrollTop = el.scrollHeight
+    virtual.updateViewport()
     updateActivePinned(el)
-  }, [messages, pending, firstId])
+  }, [messages, pending, firstId, sessionId, virtual.total, virtual.height, bottomInset])
 
   // Deep-link: when a search result is opened, scroll to the target message once
   // it is present in the loaded transcript, flash it, then clear the request.
   const consumeHighlight = useStableCallback(onHighlightConsumed)
   useEffect(() => {
     if (!highlightMessageId) return
-    const el = scrollRef.current?.querySelector<HTMLElement>(
-      `[data-msg-id="${CSS.escape(highlightMessageId)}"]`,
-    )
-    if (!el) return // transcript not loaded yet; a later messages update re-runs this
-    el.scrollIntoView({ block: 'center' })
-    pinnedRef.current = false // don't yank back to bottom after the jump
+    const index = messages.findIndex((m) => m.id === highlightMessageId)
+    if (index < 0) return
+    pinnedRef.current = false
+    virtual.scrollToIndex(index)
     setFlashId(highlightMessageId)
-    // Second pass after paint: the rows we scrolled past were skipped
-    // (SKIPPED_ROW) and measured at estimated heights, so the first jump is
-    // approximate. Setting flashId also makes the target itself render eagerly.
     requestAnimationFrame(() => {
-      scrollRef.current
-        ?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(highlightMessageId)}"]`)
-        ?.scrollIntoView({ block: 'center' })
+      const container = scrollRef.current
+      const row = container?.querySelector<HTMLElement>(
+        `[data-msg-id="${CSS.escape(highlightMessageId)}"]`,
+      )
+      if (container && row)
+        container.scrollTop +=
+          row.getBoundingClientRect().top - container.getBoundingClientRect().top - 8
+      virtual.updateViewport()
     })
     consumeHighlight?.()
   }, [highlightMessageId, messages, consumeHighlight])
@@ -366,7 +394,9 @@ export function MessageList({
     const el = scrollRef.current
     if (!el) return
     pinnedRef.current = true
+    if (transcriptPaging?.hasNewer) transcriptPaging.loadLatest()
     el.scrollTop = el.scrollHeight
+    virtual.updateViewport()
     updateActivePinned(el)
   }, [scrollBottomSignal])
 
@@ -430,15 +460,22 @@ export function MessageList({
       <div
         ref={scrollRef}
         onScroll={onScroll}
+        onWheel={virtual.clearAnchor}
+        onPointerDown={virtual.clearAnchor}
+        onTouchStart={virtual.clearAnchor}
+        onKeyDown={virtual.clearAnchor}
         data-testid="chat-transcript"
         role="log"
         aria-live="polite"
         aria-label="Sohbet geçmişi"
         className="th-measure h-full overflow-y-auto pb-6 pt-2"
-        style={bottomInset ? { paddingBottom: bottomInset } : undefined}
+        style={{ paddingBottom: bottomInset || undefined, overflowAnchor: 'none' }}
       >
-        <div className="flex w-full flex-col gap-4">
-          {messages.map((m, i) => {
+        <div className="w-full">
+          <TranscriptPaging state={paging} edge="older" />
+          <div aria-hidden style={{ height: virtual.top }} />
+          {messages.slice(virtual.start, virtual.end).map((m, localIndex) => {
+            const i = virtual.start + localIndex
             let row: ReactNode
             // Cold boundary: the gap to the previous message outran the prompt
             // cache's 1h TTL, so this turn started from a fully cold prefix. Drawn
@@ -536,12 +573,6 @@ export function MessageList({
                 ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
                 : ''
             const wrapperCls = flashCls || undefined
-            // The flashed (deep-linked) row must render eagerly: it is scrolled to
-            // and highlighted, and a skipped subtree has no measurable height yet.
-            const skipOffscreen =
-              messages.length >= SKIP_OFFSCREEN_MIN_ROWS &&
-              i < messages.length - EAGER_TAIL_ROWS &&
-              flashId !== m.id
             const rowEl = (
               <div
                 key={m.id}
@@ -552,7 +583,6 @@ export function MessageList({
                 data-user-row={isTypedUser ? 'true' : undefined}
                 data-idx={isTypedUser ? i : undefined}
                 className={wrapperCls}
-                style={skipOffscreen ? SKIPPED_ROW : undefined}
               >
                 {row}
               </div>
@@ -561,9 +591,13 @@ export function MessageList({
             // underlying CLI conversation restarted here even though no long gap
             // preceded it. Both can land on the same turn (a day-long pause makes
             // the CLI thread unresumable too), so they stack rather than compete.
-            if (!coldBoundary && !m.cliColdStart) return rowEl
             return (
-              <div key={`cold-${m.id}`} className="flex flex-col gap-4">
+              <div
+                key={m.id}
+                ref={virtual.measure}
+                data-virtual-id={m.id}
+                className="flex flex-col gap-4 pb-4"
+              >
                 {coldBoundary && <ColdCacheDivider gapSec={gapSec} />}
                 {m.cliColdStart && <CLIColdStartDivider />}
                 {rowEl}
@@ -571,7 +605,9 @@ export function MessageList({
             )
           })}
 
-          {showStandalonePending && (
+          <div aria-hidden style={{ height: virtual.bottom }} />
+          <TranscriptPaging state={paging} edge="newer" />
+          {showStandalonePending && !transcriptPaging?.hasNewer && (
             <div className="group flex flex-col gap-1">
               <div className="flex w-full justify-start">
                 <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">

@@ -13,10 +13,8 @@ import (
 // almost nothing. A long-running session is megabytes of Steps/ToolCalls JSON,
 // so the copy is the dominant cost of endpoints that then throw ~all of it away.
 //
-// These readers answer those questions without the full copy. They are also the
-// seam the lazy/paged store needs later (see the Madde 5 plan): once transcripts
-// load on demand, THESE signatures are the ones that can be served from a file
-// tail without materialising the whole session — ListMessages cannot.
+// These readers copy only the requested window from a pinned cache entry. Cold
+// transcripts are loaded outside the global lock, then evicted under its budget.
 
 // ErrMessageNotFound is returned when a session exists but holds no message with
 // the requested id. Deliberately distinct from ErrNotFound (unknown session) so a
@@ -33,6 +31,14 @@ var ErrMessageNotFound = errors.New("message not found")
 // slice: a caller asking for a tail has a specific session in mind, and silently
 // handing back "no messages" is how a wrong session id reads as an empty chat.
 func (d *DB) ListMessagesTail(ctx context.Context, sessionID string, n int) ([]Message, int, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	if _, ok := d.sessions[sessionID]; !ok {
@@ -52,6 +58,14 @@ func (d *DB) ListMessagesTail(ctx context.Context, sessionID string, n int) ([]M
 // LastMessage returns a session's final message. ok is false when the session
 // exists but has no messages yet; an unknown session is ErrNotFound.
 func (d *DB) LastMessage(ctx context.Context, sessionID string) (Message, bool, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		return Message{}, false, err
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	if _, ok := d.sessions[sessionID]; !ok {
@@ -67,6 +81,14 @@ func (d *DB) LastMessage(ctx context.Context, sessionID string) (Message, bool, 
 // FindMessage returns one message by id. ErrNotFound when the session is
 // unknown, ErrMessageNotFound when the session has no such message.
 func (d *DB) FindMessage(ctx context.Context, sessionID, messageID string) (Message, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		return Message{}, err
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	if _, ok := d.sessions[sessionID]; !ok {
@@ -97,6 +119,14 @@ func (d *DB) FindMessage(ctx context.Context, sessionID, messageID string) (Mess
 //
 // The Message handed to fn is a copy, so retaining it after the callback is safe.
 func (d *DB) StreamMessages(ctx context.Context, sessionID string, fn func(Message) bool) error {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		return err
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	if _, ok := d.sessions[sessionID]; !ok {

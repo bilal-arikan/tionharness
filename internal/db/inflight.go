@@ -179,8 +179,17 @@ func (d *DB) recoverInflight() error {
 			continue
 		}
 		// Already persisted? (crash between append and clear) → just drop it.
+		msgs, loaded := d.messages[sessionID]
+		if !loaded {
+			var err error
+			msgs, err = readMessagesFile(d.dir(dirSessions, sessionID, sessionMsgsFile))
+			if err != nil {
+				slog.Warn("inflight transcript unreadable", "session", sessionID, "error", err)
+				continue
+			}
+		}
 		alreadyPersisted := false
-		for _, m := range d.messages[sessionID] {
+		for _, m := range msgs {
 			if m.ID == t.MessageID {
 				alreadyPersisted = true
 				break
@@ -201,16 +210,22 @@ func (d *DB) recoverInflight() error {
 			if m.Steps == "" {
 				m.Steps = "[]"
 			}
-			d.messages[sessionID] = append(d.messages[sessionID], m)
+			m.NormalizeParticipants()
+			// Retire recovery data only after the append succeeds.
+			if err := d.appendMessageLine(sessionID, m); err != nil {
+				slog.Warn("inflight recovery append failed", "session", sessionID, "error", err)
+				continue
+			}
+			if loaded {
+				d.messages[sessionID] = append(msgs, m)
+			}
 			s.MessageCount++
+			s.ToolCallCount += countToolSteps(m.Steps)
+			s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
 			s.UpdatedAt = m.CreatedAt
 			s.Unread = true
 			d.sessions[sessionID] = s
 			d.markMutatedLocked()
-			// Append the recovered line; tolerate write failure (the sidecar stays
-			// and we retry next boot). No transcript lock: recovery runs inside
-			// load(), single-threaded, before the DB is published.
-			_ = d.appendMessageLine(sessionID, m)
 		}
 		_ = os.Remove(d.inflightPath(sessionID))
 	}

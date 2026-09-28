@@ -26,7 +26,13 @@ func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string
 		tl.Unlock()
 		return err
 	}
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
 	defer func() {
+		release(true)
 		tl.Unlock()
 		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
 	}()
@@ -47,13 +53,13 @@ func (d *DB) SetMessageFeedback(ctx context.Context, sessionID, messageID string
 	if idx < 0 {
 		return ErrNotFound
 	}
+	msgs = append([]Message(nil), msgs...)
 	if rating == 0 && note == "" {
 		msgs[idx].Feedback = nil
 	} else {
 		msgs[idx].Feedback = &MessageFeedback{Rating: rating, Note: note, At: now()}
 	}
-	d.messages[sessionID] = msgs
-	return d.writeSessionFileLocked(s)
+	return d.persistTranscriptEditLocked(s, msgs)
 }
 
 // AddMessage appends a message to a session and bumps the session counter.
@@ -87,18 +93,32 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		return m, err
 	}
 
-	d.mu.RLock()
-	s, ok := d.sessions[m.SessionID]
-	msgs := append([]Message(nil), d.messages[m.SessionID]...)
-	d.mu.RUnlock()
-	if !ok {
-		tl.Unlock()
-		return m, ErrNotFound
-	}
-	target, _, _, err := prepareCLIReplyTarget(s, msgs, m, CLIReplyState{})
+	release, err := d.pinTranscript(m.SessionID)
 	if err != nil {
 		tl.Unlock()
 		return m, err
+	}
+	unlock := func() {
+		release(true)
+		tl.Unlock()
+	}
+	d.mu.RLock()
+	s, ok := d.sessions[m.SessionID]
+	msgs := d.messages[m.SessionID] // pinned and protected by the transcript lock
+	d.mu.RUnlock()
+	if !ok {
+		unlock()
+		return m, ErrNotFound
+	}
+	target, appended, err := currentAppendTarget(s, msgs, m)
+	if err != nil {
+		unlock()
+		return m, err
+	}
+	if !appended {
+		unlock()
+		d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
+		return m, nil
 	}
 	dir := d.dir(dirSessions, m.SessionID)
 	walPath := filepath.Join(dir, cliReplyWALFile)
@@ -106,7 +126,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	wal := cliReplyWAL{Version: cliReplyWALVersion, TxnID: m.ID, Message: m}
 	wal, err = d.reserveActivitySequence(dir, wal, 1, int64(toolDelta))
 	if err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("prepare message recovery: %w", err)
 	}
 
@@ -130,19 +150,19 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		// on this session replay a message the caller was already told did not
 		// persist, and a permanently unwritable transcript would keep failing there.
 		if removeErr := durableRemove(walPath); removeErr != nil {
-			tl.Unlock()
+			unlock()
 			return m, errors.Join(appendErr, fmt.Errorf("retire message recovery: %w", removeErr))
 		}
-		tl.Unlock()
+		unlock()
 		return m, appendErr
 	}
 	sig := cliReplyActivitySignal(wal, target)
 	if err := persistCLIReplyActivity(dir, sig); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("persist message activity: %w", err)
 	}
 	if err := durableRemove(walPath); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("retire message recovery: %w", err)
 	}
 
@@ -152,7 +172,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 		// Unreachable while the transcript lock is held (DeleteSession takes it
 		// too), but a session that disappeared must not be resurrected in memory.
 		d.mu.Unlock()
-		tl.Unlock()
+		unlock()
 		return m, ErrNotFound
 	}
 	d.messages[m.SessionID] = append(d.messages[m.SessionID], m)
@@ -162,7 +182,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// messages carry tool steps; a user/system append contributes 0.
 	committedToolDelta := 0
 	if m.Role == "assistant" {
-		committedToolDelta = countToolSteps(m.Steps)
+		committedToolDelta = toolDelta
 		s.ToolCallCount += committedToolDelta
 	}
 	s.UpdatedAt = m.CreatedAt
@@ -180,7 +200,7 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	d.sessions[s.ID] = s
 	d.markMutatedLocked()
 	d.mu.Unlock()
-	tl.Unlock()
+	unlock()
 	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
 	if err := d.deliverPendingCLIReplyActivities(); err != nil {
 		slog.Error("durable message activity delivery deferred", "component", "db", "session", m.SessionID, "event", sig.EventID, "error", err)
@@ -223,83 +243,97 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 		tl.Unlock()
 		return m, err
 	}
+	release, err := d.pinTranscript(m.SessionID)
+	if err != nil {
+		tl.Unlock()
+		return m, err
+	}
+	unlock := func() {
+		release(true)
+		tl.Unlock()
+	}
 	d.mu.RLock()
 	s, ok := d.sessions[m.SessionID]
-	msgs := append([]Message(nil), d.messages[m.SessionID]...)
+	msgs := d.messages[m.SessionID] // pinned and protected by the transcript lock
 	d.mu.RUnlock()
 	if !ok {
-		tl.Unlock()
+		unlock()
 		return m, ErrNotFound
 	}
 	if err := validateCLIReplyState(state); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, err
 	}
 	dir := d.dir(dirSessions, m.SessionID)
 	walPath := filepath.Join(dir, cliReplyWALFile)
 	if _, err := os.Stat(walPath); err == nil {
-		tl.Unlock()
+		unlock()
 		return m, errors.New("CLI reply recovery transaction remains pending")
 	} else if !os.IsNotExist(err) {
-		tl.Unlock()
+		unlock()
 		return m, err
 	}
-	target, targetMsgs, _, err := prepareCLIReplyTarget(s, msgs, m, state)
+	target, appended, err := currentAppendTarget(s, msgs, m)
 	if err != nil {
-		tl.Unlock()
+		unlock()
 		return m, err
 	}
+	targetMsgs := msgs
+	if appended {
+		targetMsgs = append(append([]Message(nil), msgs...), m)
+	}
+	applyCLIReplyState(&target, state)
 	toolDelta := target.ToolCallCount - s.ToolCallCount
 	wal := cliReplyWAL{Version: cliReplyWALVersion, TxnID: m.ID, Message: m, State: state}
 	wal, err = d.reserveActivitySequence(dir, wal, 1, int64(toolDelta))
 	if err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("prepare CLI reply recovery: %w", err)
 	}
 	if d.cliReplyTxnHook != nil {
 		if err := d.cliReplyTxnHook(cliReplyTxnPrepared); err != nil {
-			tl.Unlock()
+			unlock()
 			return m, err
 		}
 	}
 	if err := writeDurableMessages(dir, targetMsgs); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("persist CLI reply transcript: %w", err)
 	}
 	if d.cliReplyTxnHook != nil {
 		if err := d.cliReplyTxnHook(cliReplyTxnMessage); err != nil {
-			tl.Unlock()
+			unlock()
 			return m, err
 		}
 	}
 	if err := writeDurableSessionHeader(dir, target); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("persist CLI reply state: %w", err)
 	}
 	if d.cliReplyTxnHook != nil {
 		if err := d.cliReplyTxnHook(cliReplyTxnHeader); err != nil {
-			tl.Unlock()
+			unlock()
 			return m, err
 		}
 	}
 	sig := cliReplyActivitySignal(wal, target)
 	if err := persistCLIReplyActivity(dir, sig); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("persist CLI reply activity: %w", err)
 	}
 	if d.cliReplyTxnHook != nil {
 		if err := d.cliReplyTxnHook(cliReplyTxnActivity); err != nil {
-			tl.Unlock()
+			unlock()
 			return m, err
 		}
 	}
 	if err := durableRemove(walPath); err != nil {
-		tl.Unlock()
+		unlock()
 		return m, fmt.Errorf("retire CLI reply recovery: %w", err)
 	}
 	if d.cliReplyTxnHook != nil {
 		if err := d.cliReplyTxnHook(cliReplyTxnRetired); err != nil {
-			tl.Unlock()
+			unlock()
 			return m, err
 		}
 	}
@@ -308,7 +342,7 @@ func (d *DB) AddMessageWithCLIState(ctx context.Context, m Message, state CLIRep
 	d.sessions[target.ID] = target
 	d.markMutatedLocked()
 	d.mu.Unlock()
-	tl.Unlock()
+	unlock()
 	d.deliverRecoveredCLIReplyActivity(recovered, m.SessionID)
 	if err := d.deliverPendingCLIReplyActivities(); err != nil {
 		slog.Error("durable CLI reply activity delivery deferred", "component", "db", "session", m.SessionID, "event", sig.EventID, "error", err)
@@ -365,7 +399,13 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 		tl.Unlock()
 		return err
 	}
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return err
+	}
 	defer func() {
+		release(true)
 		tl.Unlock()
 		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
 	}()
@@ -386,13 +426,19 @@ func (d *DB) DeleteMessage(ctx context.Context, sessionID, messageID string) err
 	if idx < 0 {
 		return ErrNotFound
 	}
-	d.messages[sessionID] = append(msgs[:idx:idx], msgs[idx+1:]...)
+	remaining := append(append([]Message(nil), msgs[:idx]...), msgs[idx+1:]...)
+	if msgs[idx].Role == "assistant" {
+		s.ToolCallCount = max(0, s.ToolCallCount-countToolSteps(msgs[idx].Steps))
+	}
+	if idx < s.SummaryMsgCount {
+		s.Summary = ""
+		s.SummaryMsgCount = 0
+		s.CompactionCount = 0
+	}
 	if s.MessageCount > 0 {
 		s.MessageCount--
 	}
-	d.sessions[s.ID] = s
-	d.markMutatedLocked()
-	return d.writeSessionFileLocked(s)
+	return d.persistTranscriptEditLocked(s, remaining)
 }
 
 // DeleteMessagesFrom removes the message with the given id and every message
@@ -408,7 +454,13 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 		tl.Unlock()
 		return 0, err
 	}
+	release, err := d.pinTranscript(sessionID)
+	if err != nil {
+		tl.Unlock()
+		return 0, err
+	}
 	defer func() {
+		release(true)
 		tl.Unlock()
 		d.deliverRecoveredCLIReplyActivity(recovered, sessionID)
 	}()
@@ -430,9 +482,8 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 		return 0, ErrNotFound
 	}
 	removed := len(msgs) - idx
-	// Truncate in place; the three-index slice caps cap so the dropped tail is
-	// not aliased and can be GC'd.
-	d.messages[sessionID] = msgs[:idx:idx]
+	// A capacity fence alone still retains removed payloads.
+	remaining := append([]Message(nil), msgs[:idx]...)
 	s.MessageCount = idx
 	// Recompute the lifetime tool counter over the retained messages so a truncate
 	// (rewind) rolls it back in step with MessageCount.
@@ -453,13 +504,25 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 		// starts a fresh one, so its ordinal must start over too.
 		s.CompactionCount = 0
 	}
-	d.sessions[s.ID] = s
-	d.markMutatedLocked()
-	return removed, d.writeSessionFileLocked(s)
+	if err := d.persistTranscriptEditLocked(s, remaining); err != nil {
+		return 0, err
+	}
+	return removed, nil
 }
 
 // ListMessages returns messages for a session in chronological order.
 func (d *DB) ListMessages(ctx context.Context, sessionID string) ([]Message, error) {
+	tl := d.transcriptLock(sessionID)
+	tl.Lock()
+	defer tl.Unlock()
+	release, err := d.pinTranscript(sessionID)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer release(false)
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	msgs := d.messages[sessionID]

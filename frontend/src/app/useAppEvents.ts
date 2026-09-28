@@ -30,6 +30,7 @@ export interface AppEventDeps {
   refreshSessions: () => void
   // Coalesced variant for the per-event live refresh (see useSessionsController).
   refreshSessionsSoon: () => void
+  refreshMessages?: (sid: string) => Promise<Message[] | undefined>
   setMessages: Dispatch<SetStateAction<Message[]>>
   setMeterRefresh: Dispatch<SetStateAction<number>>
   setSettingsNonce: Dispatch<SetStateAction<number>>
@@ -52,7 +53,7 @@ export function workerBusKeys(e: AppEvent): string[] {
 }
 
 export function handleAutonomousCompletion(
-  d: Pick<AppEventDeps, 'chat' | 'activeSessionId' | 'setMessages'>,
+  d: Pick<AppEventDeps, 'chat' | 'activeSessionId' | 'setMessages' | 'refreshMessages'>,
   e: AppEvent,
 ) {
   const sid = e.target?.sessionId
@@ -72,11 +73,24 @@ export function handleAutonomousCompletion(
   d.chat.clearPending(sid)
   if (sid === d.activeSessionId) {
     d.chat.clearAutoLive(sid)
-    api
-      .listMessages(sid)
-      .then(d.setMessages)
-      .catch(() => {})
+    void refreshEventTranscript(d, sid)
   }
+}
+
+function refreshEventTranscript(
+  d: Pick<AppEventDeps, 'refreshMessages' | 'setMessages' | 'activeSessionId'>,
+  sid: string,
+) {
+  if (d.refreshMessages) return d.refreshMessages(sid)
+  const workspace = getActiveWorkspace()
+  return api
+    .listMessages(sid)
+    .then((msgs) => {
+      if (d.activeSessionId !== sid || workspace !== getActiveWorkspace()) return undefined
+      d.setMessages(msgs)
+      return msgs
+    })
+    .catch(() => undefined)
 }
 
 // Autonomous-event handler: raise a desktop notification whose click deep-links
@@ -139,10 +153,7 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         op === 'handoff' ||
         op === 'message_added'
       if (transcriptOp && sid) {
-        api
-          .listMessages(sid)
-          .then(d.setMessages)
-          .catch(() => {})
+        void refreshEventTranscript(d, sid)
       }
     }
     return
@@ -207,11 +218,9 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         // A real completion (not a wake armed/start/cancelled phase) can be read
         // aloud once the reloaded transcript carries the final reply text.
         const isCompletion = !phase || phase === 'done'
-        api
-          .listMessages(sid)
+        refreshEventTranscript(d, sid)
           .then((msgs) => {
-            d.setMessages(msgs)
-            if (isCompletion) speakLatestReply(msgs)
+            if (isCompletion && msgs) speakLatestReply(msgs)
           })
           .catch(() => {})
       }
@@ -372,10 +381,7 @@ function onReconnect(d: AppEventDeps) {
   const sid = d.activeSessionId
   if (sid) {
     d.chat.clearAutoLive(sid)
-    api
-      .listMessages(sid)
-      .then(d.setMessages)
-      .catch(() => {})
+    void refreshEventTranscript(d, sid)
   }
 }
 

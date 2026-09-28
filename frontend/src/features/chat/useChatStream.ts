@@ -39,6 +39,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     messagesRef,
     notifyEnabled,
     setMessages,
+    refreshMessages,
     setError,
     selectSession,
     refreshSessions,
@@ -189,9 +190,16 @@ export function useChatStream(deps: ChatStreamDeps) {
   // chat: it deletes the failed pair before re-sending so history stays clean.
   const retryMessage = useCallback(
     async (failedId: string) => {
-      await performRetry({ activeSessionIdRef, messagesRef, setMessages, sendMessageRef }, failedId)
+      try {
+        await performRetry(
+          { activeSessionIdRef, messagesRef, setMessages, sendMessageRef },
+          failedId,
+        )
+      } catch (error) {
+        setError((error as Error).message)
+      }
     },
-    [activeSessionIdRef, messagesRef, setMessages],
+    [activeSessionIdRef, messagesRef, setMessages, setError],
   )
 
   // retryMessagePreserve is the read-only run-log variant: it re-runs the failed
@@ -200,20 +208,28 @@ export function useChatStream(deps: ChatStreamDeps) {
   // there can still be retried from its error card without rewriting history.
   const retryMessagePreserve = useCallback(
     async (failedId: string) => {
-      await performRetry(
-        { activeSessionIdRef, messagesRef, setMessages, sendMessageRef },
-        failedId,
-        true,
-      )
+      try {
+        await performRetry(
+          { activeSessionIdRef, messagesRef, setMessages, sendMessageRef },
+          failedId,
+          true,
+        )
+      } catch (error) {
+        setError((error as Error).message)
+      }
     },
-    [activeSessionIdRef, messagesRef, setMessages],
+    [activeSessionIdRef, messagesRef, setMessages, setError],
   )
 
   // rerunLast re-runs the most recent turn of the active session — the "restart"
   // action in the Session Info panel (see performRerunLast).
   const rerunLast = useCallback(async () => {
-    await performRerunLast({ activeSessionIdRef, messagesRef, sendMessageRef }, retryMessage)
-  }, [activeSessionIdRef, messagesRef, retryMessage])
+    try {
+      await performRerunLast({ activeSessionIdRef, messagesRef, sendMessageRef }, retryMessage)
+    } catch (error) {
+      setError((error as Error).message)
+    }
+  }, [activeSessionIdRef, messagesRef, retryMessage, setError])
 
   // Rewind ("/rewind"): conversation-only checkpoint restore. The command opens a
   // picker (rewindOpen) listing the session's user prompts; choosing one truncates
@@ -413,10 +429,18 @@ export function useChatStream(deps: ChatStreamDeps) {
     // No workspace → no identifiable session (ids repeat across stores), so there
     // is nothing to subscribe to yet.
     if (!sid || !activeWorkspaceId) return
+    let disposed = false
     const reload = () => {
+      if (disposed) return
+      if (refreshMessages) {
+        void refreshMessages(sid)
+        return
+      }
       api
         .listMessages(sid)
-        .then(setMessages)
+        .then((msgs) => {
+          if (!disposed && activeSessionIdRef.current === sid) setMessages(msgs)
+        })
         .catch(() => {})
     }
     const handlers = makeHubHandlers({
@@ -435,8 +459,13 @@ export function useChatStream(deps: ChatStreamDeps) {
       bumpMeter,
       transcriptVisible,
     })
-    return subscribeSessionStream(sid, handlers)
+    const unsubscribe = subscribeSessionStream(sid, handlers)
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
   }, [
+    refreshMessages,
     activeWorkspaceId,
     activeSessionId,
     activeSessionIdRef,

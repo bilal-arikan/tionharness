@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 )
 
-// loadSessions reads every sessions/<id>/ directory: the header from
-// session.json and the transcript from messages.jsonl, migrating a legacy
-// combined session.jsonl on the way.
+// loadSessions loads session headers and validates disposable counter checkpoints.
+// Changed transcripts are decoded once to reconcile stale headers, then released;
+// legacy combined session.jsonl files are migrated before checkpointing.
 func (d *DB) loadSessions() error {
 	entries, err := os.ReadDir(d.dir(dirSessions))
 	if os.IsNotExist(err) {
@@ -32,10 +32,12 @@ func (d *DB) loadSessions() error {
 	// messages.jsonl), each taxed ~15 ms by the AV filter driver on Windows. Read
 	// them concurrently (see loadpar.go) and populate the maps serially after.
 	type loadedSession struct {
-		s    Session
-		msgs []Message
-		skip bool // absent or headerless directory — not an error
+		s     Session
+		cache transcriptCheckpoint
+		skip  bool // absent or headerless directory — not an error
 	}
+	checkpoints := d.readTranscriptCheckpoints()
+	d.transcriptCheckpoints = make(map[string]transcriptCheckpoint)
 	loaded, err := parallelLoad(dirs, func(dir string) (loadedSession, error) {
 		if err := d.recoverCLIReplyTransaction(dir); err != nil {
 			if !errors.Is(err, ErrCLIReplyRecoveryDegraded) {
@@ -43,7 +45,7 @@ func (d *DB) loadSessions() error {
 			}
 			slog.Error("session CLI reply recovery degraded", "component", "db", "session_dir", dir, "error", err)
 		}
-		s, msgs, err := readSessionDir(dir)
+		s, cache, err := readSessionCheckpoint(dir, checkpoints[filepath.Base(dir)])
 		if err != nil {
 			// A directory that vanished between ReadDir and the open is skipped, as
 			// before; any other read/parse failure stays fatal.
@@ -55,7 +57,7 @@ func (d *DB) loadSessions() error {
 		if s.ID == "" { // empty/headerless session — nothing usable
 			return loadedSession{skip: true}, nil
 		}
-		return loadedSession{s: s, msgs: msgs}, nil
+		return loadedSession{s: s, cache: cache}, nil
 	})
 	if err != nil {
 		return err
@@ -66,8 +68,10 @@ func (d *DB) loadSessions() error {
 		}
 		d.sessions[l.s.ID] = l.s
 		d.markMutatedLocked()
-		d.messages[l.s.ID] = l.msgs
+		d.transcriptCheckpoints[l.s.ID] = l.cache
 	}
+	// A cache write failure is harmless: canonical files are still intact.
+	_ = atomicWriteJSON(d.dir("transcripts-cache.json"), transcriptCheckpoints{Version: 1, Entries: d.transcriptCheckpoints})
 	return nil
 }
 
@@ -142,14 +146,39 @@ func migrateLegacySession(dir string) (Session, []Message, error) {
 // readMessagesFile reads a transcript file. A session with no messages yet has
 // no file at all, which is not an error.
 func readMessagesFile(path string) ([]Message, error) {
-	lines, err := readJSONLines(path)
+	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return decodeMessages(lines)
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	var msgs []Message
+	var trailingError error
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		// Only the last non-empty line may be torn.
+		if trailingError != nil {
+			return nil, trailingError
+		}
+		var m Message
+		if err := json.Unmarshal(line, &m); err != nil {
+			trailingError = err
+			continue
+		}
+		m.NormalizeParticipants()
+		msgs = append(msgs, m)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return msgs, nil
 }
 
 // readJSONLines returns the file's non-empty lines, copied out of the scanner's

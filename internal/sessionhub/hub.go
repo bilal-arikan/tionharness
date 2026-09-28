@@ -160,20 +160,7 @@ func (h *Hub) publish(key string, ev Event, ephemeral bool, ringCap int, autoCom
 		if autoCommit {
 			st.committed = st.seq
 		}
-		if len(st.ring) > ringCap {
-			// Trim the oldest to bound the window, but NEVER evict an uncommitted
-			// (in-flight) event — a fresh subscriber replays exactly those. So only
-			// committed events (seq <= committed) are dropped; a single turn emitting
-			// more than ringCap events keeps them all until it commits.
-			excess := len(st.ring) - ringCap
-			drop := 0
-			for drop < excess && st.ring[drop].Seq <= st.committed {
-				drop++
-			}
-			if drop > 0 {
-				st.ring = st.ring[drop:]
-			}
-		}
+		st.trimCommitted(ringCap)
 	}
 	// Non-blocking fan-out: a slow subscriber drops the frame rather than stalling
 	// the publisher. The client detects the resulting seq gap and reconnects with
@@ -280,7 +267,7 @@ func (h *Hub) Replay(wsID, sessionID string, since int64) ([]Event, bool) {
 	if !fresh && since+1 < oldest {
 		return nil, false // reconnect gap fell out of the ring → reset
 	}
-	out := make([]Event, 0, len(st.ring))
+	var out []Event
 	for _, e := range st.ring {
 		if e.Seq > floor {
 			out = append(out, e)
@@ -301,6 +288,7 @@ func (h *Hub) Commit(wsID, sessionID string) {
 	defer h.mu.Unlock()
 	if st := h.states[scopeKey(wsID, sessionID)]; st != nil {
 		st.committed = st.seq
+		st.trimCommitted(h.ringCap)
 	}
 }
 

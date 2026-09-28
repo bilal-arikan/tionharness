@@ -1,0 +1,4713 @@
+{
+  "date": "2026-09-28",
+  "baselineFile": "kaynak-kullanimi-2026-09-28.json",
+  "scope": "Windows native backend, production browser build, copied real stores",
+  "browserEnvironment": {
+    "hostname": "DESKTOP-OBBV4NM",
+    "platform": "win32",
+    "release": "10.0.26200",
+    "arch": "x64",
+    "node": "v24.18.1",
+    "playwright": "1.62.1",
+    "browser": "151.0.7922.34",
+    "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "headless": true
+  },
+  "browserMethodology": {
+    "repetitions": 3,
+    "retentionCycles": 10,
+    "initialPageSize": 50,
+    "maximumLoadedWindow": 150,
+    "readiness": "50-item API response plus visible last message plus 300 ms settle",
+    "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+    "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+  },
+  "initialOptimizedColdSummary": [
+    {
+      "scenario": "messages-2000-after",
+      "repetitions": 3,
+      "readyMedianMs": 1789.8512999999984,
+      "jsHeapMedianBytes": 7688344,
+      "domNodesMedian": 2073,
+      "transferMedianBytes": 940249,
+      "browserErrors": 0
+    },
+    {
+      "scenario": "messages-50-after",
+      "repetitions": 3,
+      "readyMedianMs": 1923.137499999999,
+      "jsHeapMedianBytes": 7536500,
+      "domNodesMedian": 2070,
+      "transferMedianBytes": 905169,
+      "browserErrors": 0
+    },
+    {
+      "scenario": "messages-500-after",
+      "repetitions": 3,
+      "readyMedianMs": 1972.5297000000028,
+      "jsHeapMedianBytes": 7788044,
+      "domNodesMedian": 2073,
+      "transferMedianBytes": 928805,
+      "browserErrors": 0
+    }
+  ],
+  "initialOptimizedColdRuns": [
+    {
+      "repetition": 1,
+      "scenario": "messages-50-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES50/messages?limit=50",
+        "page": {
+          "offset": 0,
+          "total": 50,
+          "hasMore": false,
+          "hasNewer": false,
+          "truncated": false,
+          "itemCount": 50
+        },
+        "firstId": "SES50-MSG0",
+        "lastId": "SES50-MSG49",
+        "wall": {
+          "domContentLoadedMs": 584.7962000000002,
+          "transcriptReadyMs": 2362.9467,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 576.6999999880791,
+          "domInteractive": 506.5,
+          "domContentLoadedEventEnd": 575.8999999761581,
+          "loadEventEnd": 576.6999999880791,
+          "responseStart": 441.59999999403954,
+          "responseEnd": 442.5,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 708,
+          "first-contentful-paint": 708
+        },
+        "resourceTotals": {
+          "transferSize": 898936,
+          "encodedBodySize": 884536,
+          "decodedBodySize": 2069287
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:35.272Z",
+        "cdp": {
+          "jsHeapUsedSize": 7720672,
+          "jsHeapTotalSize": 8970240,
+          "nodes": 2070,
+          "documents": 1,
+          "layoutCount": 13,
+          "recalcStyleCount": 43,
+          "layoutDuration": 0.139934,
+          "recalcStyleDuration": 0.019713,
+          "taskDuration": 0.918031
+        },
+        "runtimeHeap": {
+          "usedSize": 7720672,
+          "totalSize": 8970240,
+          "embedderHeapUsedSize": 4469584,
+          "backingStorageSize": 1577206
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2070,
+          "jsEventListeners": 353
+        },
+        "page": {
+          "allElements": 1391,
+          "transcriptElements": 379,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES50-MSG45",
+            "SES50-MSG46",
+            "SES50-MSG47",
+            "SES50-MSG48",
+            "SES50-MSG49"
+          ],
+          "transcriptScrollHeight": 15791,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 14948,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10547577,
+            "usedJSHeapSize": 9317113
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 49,
+          "encodedDataLength": 905169,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 2,
+      "scenario": "messages-50-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES50/messages?limit=50",
+        "page": {
+          "offset": 0,
+          "total": 50,
+          "hasMore": false,
+          "hasNewer": false,
+          "truncated": false,
+          "itemCount": 50
+        },
+        "firstId": "SES50-MSG0",
+        "lastId": "SES50-MSG49",
+        "wall": {
+          "domContentLoadedMs": 135.8696,
+          "transcriptReadyMs": 1906.621000000001,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 130.5,
+          "domInteractive": 71.40000000596046,
+          "domContentLoadedEventEnd": 129.40000000596046,
+          "loadEventEnd": 130.5,
+          "responseStart": 2.2999999821186066,
+          "responseEnd": 2.5999999940395355,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 72,
+          "first-contentful-paint": 72
+        },
+        "resourceTotals": {
+          "transferSize": 898936,
+          "encodedBodySize": 884536,
+          "decodedBodySize": 2069287
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:39.489Z",
+        "cdp": {
+          "jsHeapUsedSize": 7451736,
+          "jsHeapTotalSize": 8183808,
+          "nodes": 2070,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 54,
+          "layoutDuration": 0.100121,
+          "recalcStyleDuration": 0.016169,
+          "taskDuration": 0.448011
+        },
+        "runtimeHeap": {
+          "usedSize": 7451736,
+          "totalSize": 8183808,
+          "embedderHeapUsedSize": 3888656,
+          "backingStorageSize": 1577355
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2070,
+          "jsEventListeners": 353
+        },
+        "page": {
+          "allElements": 1391,
+          "transcriptElements": 379,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES50-MSG45",
+            "SES50-MSG46",
+            "SES50-MSG47",
+            "SES50-MSG48",
+            "SES50-MSG49"
+          ],
+          "transcriptScrollHeight": 15791,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 14948,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10023438,
+            "usedJSHeapSize": 9048574
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 49,
+          "encodedDataLength": 905169,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 3,
+      "scenario": "messages-50-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES50/messages?limit=50",
+        "page": {
+          "offset": 0,
+          "total": 50,
+          "hasMore": false,
+          "hasNewer": false,
+          "truncated": false,
+          "itemCount": 50
+        },
+        "firstId": "SES50-MSG0",
+        "lastId": "SES50-MSG49",
+        "wall": {
+          "domContentLoadedMs": 208.08329999999842,
+          "transcriptReadyMs": 1923.137499999999,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 202.80000001192093,
+          "domInteractive": 165.30000001192093,
+          "domContentLoadedEventEnd": 202.10000002384186,
+          "loadEventEnd": 202.80000001192093,
+          "responseStart": 130.2000000178814,
+          "responseEnd": 130.40000000596046,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 172,
+          "first-contentful-paint": 172
+        },
+        "resourceTotals": {
+          "transferSize": 922326,
+          "encodedBodySize": 907626,
+          "decodedBodySize": 2092377
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:41.754Z",
+        "cdp": {
+          "jsHeapUsedSize": 7536500,
+          "jsHeapTotalSize": 8183808,
+          "nodes": 2070,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 55,
+          "layoutDuration": 0.094858,
+          "recalcStyleDuration": 0.01533,
+          "taskDuration": 0.382733
+        },
+        "runtimeHeap": {
+          "usedSize": 7536500,
+          "totalSize": 8183808,
+          "embedderHeapUsedSize": 3904064,
+          "backingStorageSize": 1577356
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2070,
+          "jsEventListeners": 353
+        },
+        "page": {
+          "allElements": 1391,
+          "transcriptElements": 379,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES50-MSG45",
+            "SES50-MSG46",
+            "SES50-MSG47",
+            "SES50-MSG48",
+            "SES50-MSG49"
+          ],
+          "transcriptScrollHeight": 15791,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 14948,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10023439,
+            "usedJSHeapSize": 9133339
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 50,
+          "encodedDataLength": 928579,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 1,
+      "scenario": "messages-500-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES500/messages?limit=50",
+        "page": {
+          "offset": 450,
+          "total": 500,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES500-MSG450",
+        "lastId": "SES500-MSG499",
+        "wall": {
+          "domContentLoadedMs": 134.02930000000015,
+          "transcriptReadyMs": 1992.2952000000005,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 128.5,
+          "domInteractive": 89.69999998807907,
+          "domContentLoadedEventEnd": 127.59999999403954,
+          "loadEventEnd": 128.5,
+          "responseStart": 42.19999998807907,
+          "responseEnd": 42.5,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 92,
+          "first-contentful-paint": 92
+        },
+        "resourceTotals": {
+          "transferSize": 922552,
+          "encodedBodySize": 907852,
+          "decodedBodySize": 2092603
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:44.236Z",
+        "cdp": {
+          "jsHeapUsedSize": 7788044,
+          "jsHeapTotalSize": 8445952,
+          "nodes": 2073,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 52,
+          "layoutDuration": 0.091493,
+          "recalcStyleDuration": 0.015773,
+          "taskDuration": 0.370374
+        },
+        "runtimeHeap": {
+          "usedSize": 7788044,
+          "totalSize": 8445952,
+          "embedderHeapUsedSize": 3888736,
+          "backingStorageSize": 1577529
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2073,
+          "jsEventListeners": 354
+        },
+        "page": {
+          "allElements": 1393,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES500-MSG495",
+            "SES500-MSG496",
+            "SES500-MSG497",
+            "SES500-MSG498",
+            "SES500-MSG499"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10285766,
+            "usedJSHeapSize": 9385074
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 50,
+          "encodedDataLength": 928805,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 2,
+      "scenario": "messages-500-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES500/messages?limit=50",
+        "page": {
+          "offset": 450,
+          "total": 500,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES500-MSG450",
+        "lastId": "SES500-MSG499",
+        "wall": {
+          "domContentLoadedMs": 97.0064999999995,
+          "transcriptReadyMs": 1861.9469999999983,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 92.19999998807907,
+          "domInteractive": 47.599999994039536,
+          "domContentLoadedEventEnd": 91.19999998807907,
+          "loadEventEnd": 92.19999998807907,
+          "responseStart": 2.399999976158142,
+          "responseEnd": 2.7999999821186066,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 52,
+          "first-contentful-paint": 52
+        },
+        "resourceTotals": {
+          "transferSize": 922552,
+          "encodedBodySize": 907852,
+          "decodedBodySize": 2092603
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:46.467Z",
+        "cdp": {
+          "jsHeapUsedSize": 7815336,
+          "jsHeapTotalSize": 8445952,
+          "nodes": 2073,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 53,
+          "layoutDuration": 0.100922,
+          "recalcStyleDuration": 0.019066,
+          "taskDuration": 0.430326
+        },
+        "runtimeHeap": {
+          "usedSize": 7815336,
+          "totalSize": 8445952,
+          "embedderHeapUsedSize": 3887648,
+          "backingStorageSize": 1577529
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2073,
+          "jsEventListeners": 354
+        },
+        "page": {
+          "allElements": 1393,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES500-MSG495",
+            "SES500-MSG496",
+            "SES500-MSG497",
+            "SES500-MSG498",
+            "SES500-MSG499"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10285766,
+            "usedJSHeapSize": 9412422
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 50,
+          "encodedDataLength": 928805,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 3,
+      "scenario": "messages-500-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES500/messages?limit=50",
+        "page": {
+          "offset": 450,
+          "total": 500,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES500-MSG450",
+        "lastId": "SES500-MSG499",
+        "wall": {
+          "domContentLoadedMs": 268.84170000000086,
+          "transcriptReadyMs": 1972.5297000000028,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 265,
+          "domInteractive": 225.40000000596046,
+          "domContentLoadedEventEnd": 264.09999999403954,
+          "loadEventEnd": 265,
+          "responseStart": 177.30000001192093,
+          "responseEnd": 177.69999998807907,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 232,
+          "first-contentful-paint": 232
+        },
+        "resourceTotals": {
+          "transferSize": 922552,
+          "encodedBodySize": 907852,
+          "decodedBodySize": 2092603
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:48.734Z",
+        "cdp": {
+          "jsHeapUsedSize": 7539624,
+          "jsHeapTotalSize": 8445952,
+          "nodes": 2073,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 51,
+          "layoutDuration": 0.089219,
+          "recalcStyleDuration": 0.015041,
+          "taskDuration": 0.351079
+        },
+        "runtimeHeap": {
+          "usedSize": 7539624,
+          "totalSize": 8445952,
+          "embedderHeapUsedSize": 3887648,
+          "backingStorageSize": 1577528
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2073,
+          "jsEventListeners": 354
+        },
+        "page": {
+          "allElements": 1393,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES500-MSG495",
+            "SES500-MSG496",
+            "SES500-MSG497",
+            "SES500-MSG498",
+            "SES500-MSG499"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10285765,
+            "usedJSHeapSize": 9136653
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 50,
+          "encodedDataLength": 928805,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 1,
+      "scenario": "messages-2000-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+        "page": {
+          "offset": 1950,
+          "total": 2000,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES2000-MSG1950",
+        "lastId": "SES2000-MSG1999",
+        "wall": {
+          "domContentLoadedMs": 81.5118999999977,
+          "transcriptReadyMs": 1783.9137999999984,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 78.69999998807907,
+          "domInteractive": 46.599999994039536,
+          "domContentLoadedEventEnd": 77.90000000596046,
+          "loadEventEnd": 78.69999998807907,
+          "responseStart": 15.599999994039536,
+          "responseEnd": 15.900000005960464,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 52,
+          "first-contentful-paint": 52
+        },
+        "resourceTotals": {
+          "transferSize": 922759,
+          "encodedBodySize": 908059,
+          "decodedBodySize": 2092810
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:50.803Z",
+        "cdp": {
+          "jsHeapUsedSize": 7561064,
+          "jsHeapTotalSize": 8708096,
+          "nodes": 2073,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 56,
+          "layoutDuration": 0.082648,
+          "recalcStyleDuration": 0.015907,
+          "taskDuration": 0.340571
+        },
+        "runtimeHeap": {
+          "usedSize": 7561064,
+          "totalSize": 8708096,
+          "embedderHeapUsedSize": 4273776,
+          "backingStorageSize": 1588019
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2073,
+          "jsEventListeners": 354
+        },
+        "page": {
+          "allElements": 1393,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES2000-MSG1995",
+            "SES2000-MSG1996",
+            "SES2000-MSG1997",
+            "SES2000-MSG1998",
+            "SES2000-MSG1999"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10296266,
+            "usedJSHeapSize": 9168594
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 51,
+          "encodedDataLength": 940249,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 2,
+      "scenario": "messages-2000-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+        "page": {
+          "offset": 1950,
+          "total": 2000,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES2000-MSG1950",
+        "lastId": "SES2000-MSG1999",
+        "wall": {
+          "domContentLoadedMs": 77.64749999999913,
+          "transcriptReadyMs": 1789.8512999999984,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 73.80000001192093,
+          "domInteractive": 42.400000005960464,
+          "domContentLoadedEventEnd": 73,
+          "loadEventEnd": 73.80000001192093,
+          "responseStart": 11.099999994039536,
+          "responseEnd": 11.400000005960464,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 48,
+          "first-contentful-paint": 48
+        },
+        "resourceTotals": {
+          "transferSize": 922759,
+          "encodedBodySize": 908059,
+          "decodedBodySize": 2092810
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:52.882Z",
+        "cdp": {
+          "jsHeapUsedSize": 7688344,
+          "jsHeapTotalSize": 8708096,
+          "nodes": 2257,
+          "documents": 1,
+          "layoutCount": 12,
+          "recalcStyleCount": 55,
+          "layoutDuration": 0.087177,
+          "recalcStyleDuration": 0.015057,
+          "taskDuration": 0.334818
+        },
+        "runtimeHeap": {
+          "usedSize": 7688344,
+          "totalSize": 8708096,
+          "embedderHeapUsedSize": 4981400,
+          "backingStorageSize": 1593452
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2257,
+          "jsEventListeners": 372
+        },
+        "page": {
+          "allElements": 1550,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES2000-MSG1995",
+            "SES2000-MSG1996",
+            "SES2000-MSG1997",
+            "SES2000-MSG1998",
+            "SES2000-MSG1999"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10301699,
+            "usedJSHeapSize": 9299643
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 52,
+          "encodedDataLength": 943070,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    },
+    {
+      "repetition": 3,
+      "scenario": "messages-2000-after",
+      "ready": {
+        "documentStatus": 200,
+        "messageStatus": 200,
+        "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+        "page": {
+          "offset": 1950,
+          "total": 2000,
+          "hasMore": true,
+          "hasNewer": false,
+          "truncated": true,
+          "itemCount": 50
+        },
+        "firstId": "SES2000-MSG1950",
+        "lastId": "SES2000-MSG1999",
+        "wall": {
+          "domContentLoadedMs": 80.17770000000019,
+          "transcriptReadyMs": 1790.5375000000022,
+          "settleMs": 300
+        }
+      },
+      "timing": {
+        "navigation": {
+          "duration": 76.5,
+          "domInteractive": 44.599999994039536,
+          "domContentLoadedEventEnd": 75.80000001192093,
+          "loadEventEnd": 76.5,
+          "responseStart": 13.200000017881393,
+          "responseEnd": 13.400000005960464,
+          "transferSize": 1986,
+          "encodedBodySize": 1686,
+          "decodedBodySize": 4114
+        },
+        "paints": {
+          "first-paint": 52,
+          "first-contentful-paint": 52
+        },
+        "resourceTotals": {
+          "transferSize": 922759,
+          "encodedBodySize": 908059,
+          "decodedBodySize": 2092810
+        }
+      },
+      "memory": {
+        "label": "cold-ready",
+        "capturedAt": "2026-09-28T00:34:54.957Z",
+        "cdp": {
+          "jsHeapUsedSize": 7796500,
+          "jsHeapTotalSize": 8708096,
+          "nodes": 2073,
+          "documents": 1,
+          "layoutCount": 11,
+          "recalcStyleCount": 52,
+          "layoutDuration": 0.076437,
+          "recalcStyleDuration": 0.012959,
+          "taskDuration": 0.314765
+        },
+        "runtimeHeap": {
+          "usedSize": 7796500,
+          "totalSize": 8708096,
+          "embedderHeapUsedSize": 4275840,
+          "backingStorageSize": 1588298
+        },
+        "domCounters": {
+          "documents": 1,
+          "nodes": 2073,
+          "jsEventListeners": 354
+        },
+        "page": {
+          "allElements": 1393,
+          "transcriptElements": 381,
+          "mountedMessages": 5,
+          "mountedVirtualRows": 5,
+          "mountedMessageIds": [
+            "SES2000-MSG1995",
+            "SES2000-MSG1996",
+            "SES2000-MSG1997",
+            "SES2000-MSG1998",
+            "SES2000-MSG1999"
+          ],
+          "transcriptScrollHeight": 15853,
+          "transcriptClientHeight": 843,
+          "transcriptScrollTop": 15010,
+          "performanceMemory": {
+            "jsHeapSizeLimit": 4395630592,
+            "totalJSHeapSize": 10296545,
+            "usedJSHeapSize": 9403185
+          }
+        }
+      },
+      "network": {
+        "failures": [],
+        "totals": {
+          "requestCount": 55,
+          "completedRequestCount": 51,
+          "encodedDataLength": 940249,
+          "cacheHits": 0
+        }
+      },
+      "errors": []
+    }
+  ],
+  "initialOptimizedScroll": {
+    "schemaVersion": 1,
+    "phase": "scroll",
+    "startedAt": "2026-09-28T00:41:41.830Z",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "initialPageSize": 50,
+      "maximumLoadedWindow": 150,
+      "readiness": "50-item API response plus visible last message plus 300 ms settle",
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+      "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+    },
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T00:41:44.586Z",
+          "cdp": {
+            "jsHeapUsedSize": 9661748,
+            "jsHeapTotalSize": 10338304,
+            "nodes": 2624,
+            "documents": 1,
+            "layoutCount": 23,
+            "recalcStyleCount": 65,
+            "layoutDuration": 0.240368,
+            "recalcStyleDuration": 0.029078,
+            "taskDuration": 0.750727
+          },
+          "runtimeHeap": {
+            "usedSize": 9661748,
+            "totalSize": 10338304,
+            "embedderHeapUsedSize": 5417264,
+            "backingStorageSize": 1578981
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2624,
+            "jsEventListeners": 412
+          },
+          "page": {
+            "allElements": 1798,
+            "transcriptElements": 786,
+            "mountedMessages": 11,
+            "mountedVirtualRows": 11,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906",
+              "SES2000-MSG1907"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 16116,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12441814,
+              "usedJSHeapSize": 11261982
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2409.300000011921,
+          "frames": 525,
+          "framesPerSecond": 217.90561573793315,
+          "meanFrameInterval": 4.572380952403659,
+          "p95FrameInterval": 8.300000000000182,
+          "maxFrameInterval": 16.699999999999818,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T00:41:47.217Z",
+          "cdp": {
+            "jsHeapUsedSize": 10124552,
+            "jsHeapTotalSize": 11649024,
+            "nodes": 2072,
+            "documents": 1,
+            "layoutCount": 333,
+            "recalcStyleCount": 313,
+            "layoutDuration": 0.354669,
+            "recalcStyleDuration": 0.095327,
+            "taskDuration": 2.785767
+          },
+          "runtimeHeap": {
+            "usedSize": 10124552,
+            "totalSize": 11649024,
+            "embedderHeapUsedSize": 4281536,
+            "backingStorageSize": 1583934
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2072,
+            "jsEventListeners": 364
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 13495253,
+              "usedJSHeapSize": 11726533
+            }
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 2,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T00:41:49.630Z",
+          "cdp": {
+            "jsHeapUsedSize": 9825768,
+            "jsHeapTotalSize": 10862592,
+            "nodes": 2808,
+            "documents": 1,
+            "layoutCount": 24,
+            "recalcStyleCount": 68,
+            "layoutDuration": 0.1499,
+            "recalcStyleDuration": 0.031888,
+            "taskDuration": 0.667777
+          },
+          "runtimeHeap": {
+            "usedSize": 9825768,
+            "totalSize": 10862592,
+            "embedderHeapUsedSize": 6365008,
+            "backingStorageSize": 1594875
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2808,
+            "jsEventListeners": 430
+          },
+          "page": {
+            "allElements": 1955,
+            "transcriptElements": 786,
+            "mountedMessages": 11,
+            "mountedVirtualRows": 11,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906",
+              "SES2000-MSG1907"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 16116,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12457708,
+              "usedJSHeapSize": 11439992
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2412,
+          "frames": 568,
+          "framesPerSecond": 235.48922056384743,
+          "meanFrameInterval": 4.230985915513945,
+          "p95FrameInterval": 4.300000000000182,
+          "maxFrameInterval": 8.400000000000091,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T00:41:52.247Z",
+          "cdp": {
+            "jsHeapUsedSize": 10175668,
+            "jsHeapTotalSize": 11649024,
+            "nodes": 2256,
+            "documents": 1,
+            "layoutCount": 350,
+            "recalcStyleCount": 330,
+            "layoutDuration": 0.250897,
+            "recalcStyleDuration": 0.091827,
+            "taskDuration": 2.646882
+          },
+          "runtimeHeap": {
+            "usedSize": 10175668,
+            "totalSize": 11649024,
+            "embedderHeapUsedSize": 4649984,
+            "backingStorageSize": 1586556
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2256,
+            "jsEventListeners": 382
+          },
+          "page": {
+            "allElements": 1550,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 13497875,
+              "usedJSHeapSize": 11780279
+            }
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 3,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T00:41:54.591Z",
+          "cdp": {
+            "jsHeapUsedSize": 9821692,
+            "jsHeapTotalSize": 10862592,
+            "nodes": 2808,
+            "documents": 1,
+            "layoutCount": 24,
+            "recalcStyleCount": 68,
+            "layoutDuration": 0.105232,
+            "recalcStyleDuration": 0.027453,
+            "taskDuration": 0.582076
+          },
+          "runtimeHeap": {
+            "usedSize": 9821692,
+            "totalSize": 10862592,
+            "embedderHeapUsedSize": 6340400,
+            "backingStorageSize": 1594875
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2808,
+            "jsEventListeners": 430
+          },
+          "page": {
+            "allElements": 1955,
+            "transcriptElements": 786,
+            "mountedMessages": 11,
+            "mountedVirtualRows": 11,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906",
+              "SES2000-MSG1907"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 16116,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12457708,
+              "usedJSHeapSize": 11435916
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2410.800000011921,
+          "frames": 575,
+          "framesPerSecond": 238.51003816042675,
+          "meanFrameInterval": 4.1772173913250805,
+          "p95FrameInterval": 4.299999999999727,
+          "maxFrameInterval": 8.300000000000182,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T00:41:57.203Z",
+          "cdp": {
+            "jsHeapUsedSize": 10178124,
+            "jsHeapTotalSize": 11386880,
+            "nodes": 2256,
+            "documents": 1,
+            "layoutCount": 359,
+            "recalcStyleCount": 336,
+            "layoutDuration": 0.201213,
+            "recalcStyleDuration": 0.083465,
+            "taskDuration": 2.448308
+          },
+          "runtimeHeap": {
+            "usedSize": 10178124,
+            "totalSize": 11386880,
+            "embedderHeapUsedSize": 4645376,
+            "backingStorageSize": 1586556
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2256,
+            "jsEventListeners": 382
+          },
+          "page": {
+            "allElements": 1550,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 13235731,
+              "usedJSHeapSize": 11782735
+            }
+          }
+        },
+        "errors": []
+      }
+    ],
+    "finishedAt": "2026-09-28T00:41:57.211Z"
+  },
+  "httpInitialOptimized": {
+    "measuredAt": "2026-09-28T00:36:06.046Z",
+    "runtime": "v24.18.1",
+    "platform": "win32",
+    "rows": [
+      {
+        "sid": "SES50",
+        "query": "",
+        "bytes": 80432,
+        "repetitions": 11,
+        "medianMs": 14.388999999999953,
+        "p95Ms": 16.76310000000001,
+        "minMs": 1.640100000000018,
+        "samplesMs": [
+          8.473500000000001,
+          14.388999999999953,
+          16.76310000000001,
+          1.810699999999997,
+          12.905299999999954,
+          1.640100000000018,
+          13.345300000000009,
+          16.46169999999995,
+          15.522600000000011,
+          16.576400000000035,
+          14.982900000000086
+        ]
+      },
+      {
+        "sid": "SES50",
+        "query": "?tail=50",
+        "bytes": 80498,
+        "repetitions": 11,
+        "medianMs": 15.139400000000023,
+        "p95Ms": 16.15530000000001,
+        "minMs": 1.4495999999999185,
+        "samplesMs": [
+          15.233999999999924,
+          15.825199999999995,
+          15.875699999999938,
+          16.04099999999994,
+          14.971599999999967,
+          4.706600000000094,
+          1.5102000000000544,
+          9.159199999999942,
+          15.139400000000023,
+          16.15530000000001,
+          1.4495999999999185
+        ]
+      },
+      {
+        "sid": "SES50",
+        "query": "?limit=50",
+        "bytes": 80515,
+        "repetitions": 11,
+        "medianMs": 15.724500000000035,
+        "p95Ms": 17.704200000000014,
+        "minMs": 1.4299000000000888,
+        "samplesMs": [
+          15.304300000000012,
+          16.349500000000035,
+          1.4299000000000888,
+          13.970199999999977,
+          15.724500000000035,
+          15.250600000000077,
+          15.996499999999969,
+          16.22670000000005,
+          17.704200000000014,
+          14.172199999999975,
+          16.430399999999963
+        ]
+      },
+      {
+        "sid": "SES500",
+        "query": "",
+        "bytes": 806282,
+        "repetitions": 11,
+        "medianMs": 8.383199999999988,
+        "p95Ms": 17.32669999999996,
+        "minMs": 5.100500000000011,
+        "samplesMs": [
+          7.651499999999942,
+          5.100500000000011,
+          11.055900000000065,
+          8.383199999999988,
+          6.007600000000025,
+          17.32669999999996,
+          14.086999999999989,
+          5.532500000000027,
+          10.269699999999943,
+          15.450800000000072,
+          7.267900000000054
+        ]
+      },
+      {
+        "sid": "SES500",
+        "query": "?tail=50",
+        "bytes": 80719,
+        "repetitions": 11,
+        "medianMs": 15.267500000000155,
+        "p95Ms": 17.784800000000132,
+        "minMs": 13.25630000000001,
+        "samplesMs": [
+          14.919800000000123,
+          15.267500000000155,
+          14.555299999999988,
+          15.897199999999884,
+          15.663999999999987,
+          15.48519999999985,
+          17.784800000000132,
+          13.25630000000001,
+          14.72420000000011,
+          14.815599999999904,
+          16.208699999999908
+        ]
+      },
+      {
+        "sid": "SES500",
+        "query": "?limit=50",
+        "bytes": 80736,
+        "repetitions": 11,
+        "medianMs": 12.468699999999899,
+        "p95Ms": 16.613200000000006,
+        "minMs": 1.7471000000000458,
+        "samplesMs": [
+          15.811999999999898,
+          1.8695999999999913,
+          12.468699999999899,
+          16.613200000000006,
+          15.668499999999995,
+          15.58829999999989,
+          2.4525000000001,
+          3.7849999999998545,
+          9.16210000000001,
+          15.412399999999934,
+          1.7471000000000458
+        ]
+      },
+      {
+        "sid": "SES2000",
+        "query": "",
+        "bytes": 3231782,
+        "repetitions": 11,
+        "medianMs": 28.00409999999988,
+        "p95Ms": 50.49889999999982,
+        "minMs": 15.86999999999989,
+        "samplesMs": [
+          29.099300000000085,
+          24.801999999999907,
+          36.077,
+          28.00409999999988,
+          26.913699999999835,
+          29.832599999999957,
+          15.86999999999989,
+          19.28650000000016,
+          50.49889999999982,
+          27.285499999999956,
+          30.058300000000145
+        ]
+      },
+      {
+        "sid": "SES2000",
+        "query": "?tail=50",
+        "bytes": 80921,
+        "repetitions": 11,
+        "medianMs": 15.3733000000002,
+        "p95Ms": 16.034599999999955,
+        "minMs": 14.633800000000065,
+        "samplesMs": [
+          15.863700000000108,
+          15.516100000000051,
+          14.769000000000005,
+          15.115500000000111,
+          15.3733000000002,
+          16.034599999999955,
+          15.538700000000063,
+          15.56450000000018,
+          15.236599999999953,
+          14.656400000000076,
+          14.633800000000065
+        ]
+      },
+      {
+        "sid": "SES2000",
+        "query": "?limit=50",
+        "bytes": 80938,
+        "repetitions": 11,
+        "medianMs": 14.52150000000006,
+        "p95Ms": 15.848000000000184,
+        "minMs": 1.1727000000000771,
+        "samplesMs": [
+          1.2983999999999014,
+          14.538999999999987,
+          14.52150000000006,
+          15.848000000000184,
+          15.223799999999983,
+          15.272199999999884,
+          2.167899999999918,
+          12.315299999999752,
+          1.1727000000000771,
+          14.245699999999943,
+          14.70699999999988
+        ]
+      }
+    ],
+    "cpuLoad": {
+      "seconds": 14.5,
+      "requests": 692
+    },
+    "assetHeaders": [
+      {
+        "asset": "/assets/index-OEqY7urT.js",
+        "bytes": 702359,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"462dc28b5fd4775dba0e8592089c25304121ce55feb021d3351d6c28fc94580e\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/rolldown-runtime-QTnfLwEv.js",
+        "bytes": 694,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-length": "422",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"c29d92a968891d131e540216656a16cd917e65b16a9ad408e0b463b3578acfa7\"",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/preload-helper-zJ_50EbN.js",
+        "bytes": 1193,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-length": "681",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"2b414d0d07732e0757d19402bc59480310e1f31f0f4c88ec4473dcfd5e0e4d4d\"",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-markdown-CigAEBRM.js",
+        "bytes": 161520,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"7fbc10c38c811513147c33fb61a8677217a7d350ec4f678361e8cc4c52b4be40\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-react-EEYhWXuh.js",
+        "bytes": 359635,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"810c8dfd2882ae55ccf6813ed5e82cf9e5e4081635924ad0d20a5c7065761644\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-highlight-BLvS2CjZ.js",
+        "bytes": 152288,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"03a493a7c63595a2c589c54a44d46f01d917dd1d1b173c0e3ad07e0fb0ff81b0\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/components-2EEaXMjg.js",
+        "bytes": 180201,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"adcd4f018456f5e94a185a3875c1569f2cb87dacab0070df5e304a91e83061df\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/CopyPathButton-Baz6-GBY.js",
+        "bytes": 786,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-length": "522",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"ed98813e3ab8510e0d41c99df0df3e6e5ca98ec86a039cc07e7b2610954d0615\"",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/avatar-DptHtNbl.js",
+        "bytes": 1216,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-length": "716",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:05 GMT",
+          "etag": "\"05fef01645d1b125a96b83b28afda9df13ae4524e2028d18febe04b21e65a857\"",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/modelLabel-CzaqBR9Y.js",
+        "bytes": 684,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-length": "420",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:06 GMT",
+          "etag": "\"4b413b9347a45cfecf128ff6c9da9b0c3253743ab21081908a5dd04d8b694d22\"",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-react-DtxX27Jz.css",
+        "bytes": 15413,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/css; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:06 GMT",
+          "etag": "\"90a59abc777a1e9b42c3af67a59bc11363770671342758e5d6691278e48594e8\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/index-Dn9CRHlt.css",
+        "bytes": 117092,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "cache-control": "public, max-age=31536000, immutable",
+          "content-encoding": "gzip",
+          "content-type": "text/css; charset=utf-8",
+          "date": "Mon, 28 Sep 2026 00:36:06 GMT",
+          "etag": "\"61afebe604c174fdb68d694de30b7151f36bf7b030a83032d6b245462338c68d\"",
+          "transfer-encoding": "chunked",
+          "vary": "Accept-Encoding",
+          "x-workspace-id": "WS1"
+        }
+      }
+    ]
+  },
+  "hubAndSyntheticStore": [
+    {
+      "afterCommitHeapBytes": 1894832,
+      "afterDropHeapBytes": 679208,
+      "afterNextPublishHeapBytes": 1892576,
+      "baseHeapBytes": 663456,
+      "beforeCommitHeapBytes": 12587968,
+      "kind": "hub",
+      "payloadTextBytes": 2048,
+      "published": 5000,
+      "replaySince1CountAfterCommit": 0,
+      "replaySince1OK": false,
+      "ringCap": 512
+    },
+    {
+      "baseHeapBytes": 687512,
+      "kind": "store",
+      "openMs": 25.937,
+      "path": ".scratch/resource-audit-20260928/data/workspaces/WS1/store",
+      "residentHeapBytes": 966008,
+      "stats": {
+        "sessions": 43,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 16,
+        "tasks": 0,
+        "artifacts": 0,
+        "flows": 1,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 1,
+          "cleanupRenders": 0,
+          "counters": 0,
+          "entities": 2,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 15,
+          "recoverInflight": 0,
+          "sessionUsage": 0,
+          "sessions": 6,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 0
+        }
+      }
+    },
+    {
+      "allocsPerOp": 3,
+      "bytesPerOp": 16458,
+      "iterations": 288898,
+      "kind": "read",
+      "nsPerOp": 4173,
+      "session": "SES50",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 3,
+      "bytesPerOp": 16456,
+      "iterations": 286699,
+      "kind": "read",
+      "nsPerOp": 4597,
+      "session": "SES50",
+      "tail50": true
+    },
+    {
+      "allocsPerOp": 3,
+      "bytesPerOp": 147685,
+      "iterations": 36465,
+      "kind": "read",
+      "nsPerOp": 32138,
+      "session": "SES500",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 3,
+      "bytesPerOp": 16456,
+      "iterations": 417333,
+      "kind": "read",
+      "nsPerOp": 4856,
+      "session": "SES500",
+      "tail50": true
+    },
+    {
+      "allocsPerOp": 6,
+      "bytesPerOp": 585040,
+      "iterations": 6854,
+      "kind": "read",
+      "nsPerOp": 149435,
+      "session": "SES2000",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 3,
+      "bytesPerOp": 16456,
+      "iterations": 277706,
+      "kind": "read",
+      "nsPerOp": 4049,
+      "session": "SES2000",
+      "tail50": true
+    }
+  ],
+  "realStoresFirstOpen": [
+    {
+      "baseHeapBytes": 663776,
+      "kind": "store",
+      "openMs": 1177.688,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS1",
+      "residentHeapBytes": 1886248,
+      "stats": {
+        "sessions": 101,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 24,
+        "tasks": 18,
+        "artifacts": 145,
+        "flows": 19,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 12,
+          "cleanupRenders": 0,
+          "counters": 9,
+          "entities": 293,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 52,
+          "reconcileActivitySequence": 3,
+          "recoverInflight": 0,
+          "sessionUsage": 82,
+          "sessions": 633,
+          "tokenCalibrations": 9,
+          "toolConfig": 9,
+          "trajectoryIndex": 0,
+          "usage": 70
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 1787776,
+      "kind": "store",
+      "openMs": 2591.825,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS5",
+      "residentHeapBytes": 8170688,
+      "stats": {
+        "sessions": 56,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 29,
+        "tasks": 331,
+        "artifacts": 7,
+        "flows": 5,
+        "automations": 5,
+        "loadPhaseMs": {
+          "activitySequence": 9,
+          "cleanupRenders": 0,
+          "counters": 9,
+          "entities": 513,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 25,
+          "modelResolutions": 9,
+          "reconcileActivitySequence": 7,
+          "recoverInflight": 0,
+          "sessionUsage": 1380,
+          "sessions": 438,
+          "tokenCalibrations": 9,
+          "toolConfig": 11,
+          "trajectoryIndex": 11,
+          "usage": 165
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8151696,
+      "kind": "store",
+      "openMs": 631.042,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS10",
+      "residentHeapBytes": 8670008,
+      "stats": {
+        "sessions": 80,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 2,
+        "artifacts": 25,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 11,
+          "cleanupRenders": 0,
+          "counters": 8,
+          "entities": 173,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 14,
+          "modelResolutions": 7,
+          "reconcileActivitySequence": 5,
+          "recoverInflight": 1,
+          "sessionUsage": 69,
+          "sessions": 265,
+          "tokenCalibrations": 10,
+          "toolConfig": 8,
+          "trajectoryIndex": 10,
+          "usage": 45
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8674208,
+      "kind": "store",
+      "openMs": 191.138,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS14",
+      "residentHeapBytes": 9113408,
+      "stats": {
+        "sessions": 6,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 12,
+          "cleanupRenders": 0,
+          "counters": 8,
+          "entities": 96,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 5,
+          "recoverInflight": 0,
+          "sessionUsage": 13,
+          "sessions": 30,
+          "tokenCalibrations": 0,
+          "toolConfig": 9,
+          "trajectoryIndex": 0,
+          "usage": 12
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8775304,
+      "kind": "store",
+      "openMs": 628.704,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS15",
+      "residentHeapBytes": 9253392,
+      "stats": {
+        "sessions": 87,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 9,
+          "cleanupRenders": 0,
+          "counters": 8,
+          "entities": 105,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 11,
+          "modelResolutions": 8,
+          "reconcileActivitySequence": 5,
+          "recoverInflight": 0,
+          "sessionUsage": 71,
+          "sessions": 375,
+          "tokenCalibrations": 6,
+          "toolConfig": 1,
+          "trajectoryIndex": 0,
+          "usage": 23
+        }
+      }
+    },
+    {
+      "heapBytes": 9250272,
+      "kind": "all-stores"
+    }
+  ],
+  "realStoresWarmOpen": [
+    {
+      "baseHeapBytes": 663776,
+      "kind": "store",
+      "openMs": 93.91,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS1",
+      "residentHeapBytes": 1837464,
+      "stats": {
+        "sessions": 101,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 24,
+        "tasks": 18,
+        "artifacts": 145,
+        "flows": 19,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 0,
+          "cleanupRenders": 0,
+          "counters": 0,
+          "entities": 16,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 51,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 6,
+          "sessions": 7,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 4
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 1781688,
+      "kind": "store",
+      "openMs": 87.924,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS5",
+      "residentHeapBytes": 10325464,
+      "stats": {
+        "sessions": 56,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 29,
+        "tasks": 331,
+        "artifacts": 7,
+        "flows": 5,
+        "automations": 5,
+        "loadPhaseMs": {
+          "activitySequence": 0,
+          "cleanupRenders": 0,
+          "counters": 0,
+          "entities": 23,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 6,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 3,
+          "recoverInflight": 1,
+          "sessionUsage": 39,
+          "sessions": 5,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 6
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8156320,
+      "kind": "store",
+      "openMs": 32.692,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS10",
+      "residentHeapBytes": 8722248,
+      "stats": {
+        "sessions": 80,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 2,
+        "artifacts": 25,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 0,
+          "cleanupRenders": 0,
+          "counters": 0,
+          "entities": 5,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 10,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 1,
+          "sessionUsage": 3,
+          "sessions": 6,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 1
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8686152,
+      "kind": "store",
+      "openMs": 12.309,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS14",
+      "residentHeapBytes": 9188912,
+      "stats": {
+        "sessions": 6,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 0,
+          "cleanupRenders": 0,
+          "counters": 1,
+          "entities": 2,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 2,
+          "sessions": 1,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 0
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 8783072,
+      "kind": "store",
+      "openMs": 32.991,
+      "path": ".scratch/resource-audit-20260928/real-store-after/WS15",
+      "residentHeapBytes": 9220584,
+      "stats": {
+        "sessions": 87,
+        "loadedSessions": 0,
+        "messages": 0,
+        "messageBytes": 0,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 1,
+          "cleanupRenders": 0,
+          "counters": 0,
+          "entities": 3,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 11,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 3,
+          "recoverInflight": 1,
+          "sessionUsage": 4,
+          "sessions": 6,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 0
+        }
+      }
+    },
+    {
+      "heapBytes": 9225136,
+      "kind": "all-stores"
+    }
+  ],
+  "legacyArchives": [
+    {
+      "workspace": "WS10",
+      "source": "C:\\Users\\Bilal\\.tionharness\\workspaces\\WS10\\cbm-store",
+      "archive": "C:\\Users\\Bilal\\.tionharness\\workspaces\\WS10\\.legacy-archives\\cbm-store-2026-09-28.zip",
+      "originalBytes": 224505856,
+      "archiveBytes": 38641641,
+      "savedBytes": 185864215,
+      "verifiedFiles": 6
+    },
+    {
+      "workspace": "WS15",
+      "source": "C:\\Users\\Bilal\\.tionharness\\workspaces\\WS15\\cbm-store",
+      "archive": "C:\\Users\\Bilal\\.tionharness\\workspaces\\WS15\\.legacy-archives\\cbm-store-2026-09-28.zip",
+      "originalBytes": 19410944,
+      "archiveBytes": 3598246,
+      "savedBytes": 15812698,
+      "verifiedFiles": 2
+    }
+  ],
+  "validation": {
+    "targetedFrontendFiles": 4,
+    "targetedFrontendTests": 20,
+    "integrityTests": "passed",
+    "fullGate": "passed",
+    "fullGateExitCode": 0,
+    "frontendTestFiles": 147,
+    "frontendTests": 1041,
+    "goTests": "all packages passed",
+    "depcheck": "passed",
+    "gitDiffCheck": "passed",
+    "productionBuild": "passed",
+    "raceDetector": "not run; native CGO disabled and no gcc available"
+  },
+  "after-qa-final3-results": {
+    "schemaVersion": 1,
+    "startedAt": "2026-09-28T01:15:25.856Z",
+    "browser": "151.0.7922.34",
+    "checks": [
+      {
+        "name": "five older pages preserve anchor and bound the logical window",
+        "pass": true,
+        "durationMs": 9439,
+        "evidence": {
+          "iterations": [
+            {
+              "index": 1,
+              "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+              "responseCount": 50,
+              "responseOffset": 1900,
+              "responseTotal": 2000,
+              "logicalWindowCount": 100,
+              "anchorId": "SES2000-MSG1950",
+              "anchorViewportOffsetBefore": 70,
+              "anchorViewportOffsetAfter": 70.15625,
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15913,
+                "scrollHeight": 31709,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1947",
+                  "SES2000-MSG1948",
+                  "SES2000-MSG1949",
+                  "SES2000-MSG1950",
+                  "SES2000-MSG1951",
+                  "SES2000-MSG1952",
+                  "SES2000-MSG1953",
+                  "SES2000-MSG1954",
+                  "SES2000-MSG1955",
+                  "SES2000-MSG1956"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 10,
+                "allElements": 1693
+              }
+            },
+            {
+              "index": 2,
+              "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+              "responseCount": 50,
+              "responseOffset": 1850,
+              "responseTotal": 2000,
+              "logicalWindowCount": 150,
+              "anchorId": "SES2000-MSG1900",
+              "anchorViewportOffsetBefore": 70,
+              "anchorViewportOffsetAfter": 70.15625,
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15913,
+                "scrollHeight": 47565,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1897",
+                  "SES2000-MSG1898",
+                  "SES2000-MSG1899",
+                  "SES2000-MSG1900",
+                  "SES2000-MSG1901",
+                  "SES2000-MSG1902",
+                  "SES2000-MSG1903",
+                  "SES2000-MSG1904",
+                  "SES2000-MSG1905",
+                  "SES2000-MSG1906"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 10,
+                "allElements": 1693
+              }
+            },
+            {
+              "index": 3,
+              "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1850",
+              "responseCount": 50,
+              "responseOffset": 1800,
+              "responseTotal": 2000,
+              "logicalWindowCount": 150,
+              "anchorId": "SES2000-MSG1850",
+              "anchorViewportOffsetBefore": 70,
+              "anchorViewportOffsetAfter": 70.15625,
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15913,
+                "scrollHeight": 47883,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1847",
+                  "SES2000-MSG1848",
+                  "SES2000-MSG1849",
+                  "SES2000-MSG1850",
+                  "SES2000-MSG1851",
+                  "SES2000-MSG1852",
+                  "SES2000-MSG1853",
+                  "SES2000-MSG1854",
+                  "SES2000-MSG1855",
+                  "SES2000-MSG1856"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 10,
+                "allElements": 1696
+              }
+            },
+            {
+              "index": 4,
+              "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1800",
+              "responseCount": 50,
+              "responseOffset": 1750,
+              "responseTotal": 2000,
+              "logicalWindowCount": 150,
+              "anchorId": "SES2000-MSG1800",
+              "anchorViewportOffsetBefore": 70,
+              "anchorViewportOffsetAfter": 70.15625,
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15913,
+                "scrollHeight": 47883,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1797",
+                  "SES2000-MSG1798",
+                  "SES2000-MSG1799",
+                  "SES2000-MSG1800",
+                  "SES2000-MSG1801",
+                  "SES2000-MSG1802",
+                  "SES2000-MSG1803",
+                  "SES2000-MSG1804",
+                  "SES2000-MSG1805",
+                  "SES2000-MSG1806"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 10,
+                "allElements": 1696
+              }
+            },
+            {
+              "index": 5,
+              "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1750",
+              "responseCount": 50,
+              "responseOffset": 1700,
+              "responseTotal": 2000,
+              "logicalWindowCount": 150,
+              "anchorId": "SES2000-MSG1750",
+              "anchorViewportOffsetBefore": 70,
+              "anchorViewportOffsetAfter": 70.15625,
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15913,
+                "scrollHeight": 47883,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1747",
+                  "SES2000-MSG1748",
+                  "SES2000-MSG1749",
+                  "SES2000-MSG1750",
+                  "SES2000-MSG1751",
+                  "SES2000-MSG1752",
+                  "SES2000-MSG1753",
+                  "SES2000-MSG1754",
+                  "SES2000-MSG1755",
+                  "SES2000-MSG1756"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 10,
+                "allElements": 1696
+              }
+            }
+          ],
+          "finalState": {
+            "hash": "#/w/WS1/chat/SES2000",
+            "scrollTop": 15913,
+            "scrollHeight": 47883,
+            "clientHeight": 843,
+            "mountedIds": [
+              "SES2000-MSG1747",
+              "SES2000-MSG1748",
+              "SES2000-MSG1749",
+              "SES2000-MSG1750",
+              "SES2000-MSG1751",
+              "SES2000-MSG1752",
+              "SES2000-MSG1753",
+              "SES2000-MSG1754",
+              "SES2000-MSG1755",
+              "SES2000-MSG1756"
+            ],
+            "duplicateMountedIds": [],
+            "virtualRows": 10,
+            "allElements": 1696
+          },
+          "logicalFirst": "SES2000-MSG1700",
+          "logicalLast": "SES2000-MSG1849"
+        }
+      },
+      {
+        "name": "jump to latest restores the live edge",
+        "pass": true,
+        "durationMs": 716,
+        "evidence": {
+          "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+          "lastId": "SES2000-MSG1999",
+          "dismissedRecommendations": 0,
+          "state": {
+            "hash": "#/w/WS1/chat/SES2000",
+            "scrollTop": 15412,
+            "scrollHeight": 16255,
+            "clientHeight": 843,
+            "mountedIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "duplicateMountedIds": [],
+            "virtualRows": 5,
+            "allElements": 1393
+          }
+        }
+      },
+      {
+        "name": "tool trace collapse updates variable row height",
+        "pass": true,
+        "durationMs": 417,
+        "evidence": {
+          "expandedHeight": 462.03125,
+          "collapsedHeight": 430.03125
+        }
+      },
+      {
+        "name": "viewport resize keeps the latest row and bounded mounts",
+        "pass": true,
+        "durationMs": 2167,
+        "evidence": {
+          "latestId": "SES2000-MSG1999",
+          "samples": [
+            {
+              "viewport": {
+                "width": 1024,
+                "height": 700
+              },
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15662,
+                "scrollHeight": 16305,
+                "clientHeight": 643,
+                "mountedIds": [
+                  "SES2000-MSG1995",
+                  "SES2000-MSG1996",
+                  "SES2000-MSG1997",
+                  "SES2000-MSG1998",
+                  "SES2000-MSG1999"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 5,
+                "allElements": 1365
+              }
+            },
+            {
+              "viewport": {
+                "width": 1600,
+                "height": 1000
+              },
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15312,
+                "scrollHeight": 16255,
+                "clientHeight": 943,
+                "mountedIds": [
+                  "SES2000-MSG1995",
+                  "SES2000-MSG1996",
+                  "SES2000-MSG1997",
+                  "SES2000-MSG1998",
+                  "SES2000-MSG1999"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 5,
+                "allElements": 1393
+              }
+            },
+            {
+              "viewport": {
+                "width": 1440,
+                "height": 900
+              },
+              "state": {
+                "hash": "#/w/WS1/chat/SES2000",
+                "scrollTop": 15412,
+                "scrollHeight": 16255,
+                "clientHeight": 843,
+                "mountedIds": [
+                  "SES2000-MSG1995",
+                  "SES2000-MSG1996",
+                  "SES2000-MSG1997",
+                  "SES2000-MSG1998",
+                  "SES2000-MSG1999"
+                ],
+                "duplicateMountedIds": [],
+                "virtualRows": 5,
+                "allElements": 1393
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "search deep-link loads an early message around the target",
+        "pass": true,
+        "durationMs": 3688,
+        "evidence": {
+          "requestUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&around=SES2000-MSG1000",
+          "count": 50,
+          "targetId": "SES2000-MSG1000",
+          "targetClass": "rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow",
+          "state": {
+            "hash": "#/w/WS1/chat/SES2000",
+            "scrollTop": 7979,
+            "scrollHeight": 15490,
+            "clientHeight": 843,
+            "mountedIds": [
+              "SES2000-MSG997",
+              "SES2000-MSG998",
+              "SES2000-MSG999",
+              "SES2000-MSG1000",
+              "SES2000-MSG1001",
+              "SES2000-MSG1002",
+              "SES2000-MSG1003",
+              "SES2000-MSG1004",
+              "SES2000-MSG1005",
+              "SES2000-MSG1006"
+            ],
+            "duplicateMountedIds": [],
+            "virtualRows": 10,
+            "allElements": 1195
+          }
+        }
+      },
+      {
+        "name": "sticky question click returns to the pinned row",
+        "pass": true,
+        "durationMs": 968,
+        "evidence": {
+          "pinnedText": "Inspect sample 1004 and explain the resource usage.",
+          "scrollTopBefore": 9665,
+          "scrollTopAfter": 9144
+        }
+      },
+      {
+        "name": "functional flow emits no console or page errors",
+        "pass": true,
+        "durationMs": 300,
+        "evidence": {
+          "errors": [],
+          "finalMemory": {
+            "label": "qa-final",
+            "capturedAt": "2026-09-28T01:15:47.131Z",
+            "cdp": {
+              "jsHeapUsedSize": 9718716,
+              "jsHeapTotalSize": 11386880,
+              "nodes": 1606,
+              "documents": 1,
+              "layoutCount": 89,
+              "recalcStyleCount": 145,
+              "layoutDuration": 0.277184,
+              "recalcStyleDuration": 0.119677,
+              "taskDuration": 1.792646
+            },
+            "runtimeHeap": {
+              "usedSize": 9718716,
+              "totalSize": 11386880,
+              "embedderHeapUsedSize": 3569368,
+              "backingStorageSize": 1583411
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 1606,
+              "jsEventListeners": 360
+            },
+            "page": {
+              "allElements": 1195,
+              "transcriptElements": 684,
+              "mountedMessages": 10,
+              "mountedVirtualRows": 10,
+              "mountedMessageIds": [
+                "SES2000-MSG1001",
+                "SES2000-MSG1002",
+                "SES2000-MSG1003",
+                "SES2000-MSG1004",
+                "SES2000-MSG1005",
+                "SES2000-MSG1006",
+                "SES2000-MSG1007",
+                "SES2000-MSG1008",
+                "SES2000-MSG1009",
+                "SES2000-MSG1010"
+              ],
+              "transcriptScrollHeight": 15318,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 9144,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 13232661,
+                "usedJSHeapSize": 11321905
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "rapid session switching commits only the final session",
+        "pass": true,
+        "durationMs": 4146,
+        "evidence": {
+          "finalResponse": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+          "lastId": "SES2000-MSG1999",
+          "state": {
+            "hash": "#/w/WS1/chat/SES2000",
+            "scrollTop": 15209,
+            "scrollHeight": 16052,
+            "clientHeight": 843,
+            "mountedIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "duplicateMountedIds": [],
+            "virtualRows": 5,
+            "allElements": 1393
+          },
+          "errors": []
+        }
+      },
+      {
+        "name": "immutable assets are reused by browser cache",
+        "pass": true,
+        "durationMs": 2715,
+        "evidence": {
+          "staticAssetRequests": 15,
+          "cachedAssetRequests": 15
+        }
+      }
+    ],
+    "finishedAt": "2026-09-28T01:15:54.153Z"
+  },
+  "after-cold2000-final-results": {
+    "schemaVersion": 1,
+    "phase": "cold2000",
+    "startedAt": "2026-09-28T01:17:20.748Z",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "initialPageSize": 50,
+      "maximumLoadedWindow": 150,
+      "readiness": "50-item API response plus visible last message plus 300 ms settle",
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+      "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+    },
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "messages-2000-after",
+        "ready": {
+          "documentStatus": 200,
+          "messageStatus": 200,
+          "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+          "page": {
+            "offset": 1950,
+            "total": 2000,
+            "hasMore": true,
+            "hasNewer": false,
+            "truncated": true,
+            "summary": {
+              "lastMessageAt": 1790555205590,
+              "coldTurns": 0,
+              "todo": null
+            },
+            "participants": [
+              "AGT1"
+            ],
+            "itemCount": 50
+          },
+          "firstId": "SES2000-MSG1950",
+          "lastId": "SES2000-MSG1999",
+          "wall": {
+            "domContentLoadedMs": 578.1115,
+            "transcriptReadyMs": 2296.1432999999997,
+            "settleMs": 300
+          }
+        },
+        "timing": {
+          "navigation": {
+            "duration": 574,
+            "domInteractive": 537,
+            "domContentLoadedEventEnd": 573.0999999940395,
+            "loadEventEnd": 574,
+            "responseStart": 491.40000000596046,
+            "responseEnd": 491.80000001192093,
+            "transferSize": 1984,
+            "encodedBodySize": 1684,
+            "decodedBodySize": 4114
+          },
+          "paints": {
+            "first-paint": 556,
+            "first-contentful-paint": 556
+          },
+          "resourceTotals": {
+            "transferSize": 924036,
+            "encodedBodySize": 909336,
+            "decodedBodySize": 2096077
+          }
+        },
+        "memory": {
+          "label": "cold-ready",
+          "capturedAt": "2026-09-28T01:17:23.453Z",
+          "cdp": {
+            "jsHeapUsedSize": 7543404,
+            "jsHeapTotalSize": 8445952,
+            "nodes": 2073,
+            "documents": 1,
+            "layoutCount": 11,
+            "recalcStyleCount": 55,
+            "layoutDuration": 0.109774,
+            "recalcStyleDuration": 0.016263,
+            "taskDuration": 0.398262
+          },
+          "runtimeHeap": {
+            "usedSize": 7543404,
+            "totalSize": 8445952,
+            "embedderHeapUsedSize": 3887752,
+            "backingStorageSize": 1580412
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2073,
+            "jsEventListeners": 354
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 15853,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15010,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 10288659,
+              "usedJSHeapSize": 9143319
+            }
+          }
+        },
+        "network": {
+          "failures": [],
+          "totals": {
+            "requestCount": 55,
+            "completedRequestCount": 50,
+            "encodedDataLength": 930287,
+            "cacheHits": 0
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 2,
+        "scenario": "messages-2000-after",
+        "ready": {
+          "documentStatus": 200,
+          "messageStatus": 200,
+          "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+          "page": {
+            "offset": 1950,
+            "total": 2000,
+            "hasMore": true,
+            "hasNewer": false,
+            "truncated": true,
+            "summary": {
+              "lastMessageAt": 1790555205590,
+              "coldTurns": 0,
+              "todo": null
+            },
+            "participants": [
+              "AGT1"
+            ],
+            "itemCount": 50
+          },
+          "firstId": "SES2000-MSG1950",
+          "lastId": "SES2000-MSG1999",
+          "wall": {
+            "domContentLoadedMs": 447.7407000000003,
+            "transcriptReadyMs": 2154.0469000000003,
+            "settleMs": 300
+          }
+        },
+        "timing": {
+          "navigation": {
+            "duration": 472.40000000596046,
+            "domInteractive": 401.2999999821186,
+            "domContentLoadedEventEnd": 440.69999998807907,
+            "loadEventEnd": 472.40000000596046,
+            "responseStart": 363.69999998807907,
+            "responseEnd": 364,
+            "transferSize": 1984,
+            "encodedBodySize": 1684,
+            "decodedBodySize": 4114
+          },
+          "paints": {
+            "first-paint": 408,
+            "first-contentful-paint": 408
+          },
+          "resourceTotals": {
+            "transferSize": 923377,
+            "encodedBodySize": 908977,
+            "decodedBodySize": 2095374
+          }
+        },
+        "memory": {
+          "label": "cold-ready",
+          "capturedAt": "2026-09-28T01:17:25.999Z",
+          "cdp": {
+            "jsHeapUsedSize": 7546056,
+            "jsHeapTotalSize": 8183808,
+            "nodes": 2073,
+            "documents": 1,
+            "layoutCount": 11,
+            "recalcStyleCount": 45,
+            "layoutDuration": 0.107868,
+            "recalcStyleDuration": 0.017828,
+            "taskDuration": 0.433909
+          },
+          "runtimeHeap": {
+            "usedSize": 7546056,
+            "totalSize": 8183808,
+            "embedderHeapUsedSize": 3885936,
+            "backingStorageSize": 1580483
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2073,
+            "jsEventListeners": 354
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 15853,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15010,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 10026586,
+              "usedJSHeapSize": 9146042
+            }
+          }
+        },
+        "network": {
+          "failures": [],
+          "totals": {
+            "requestCount": 54,
+            "completedRequestCount": 49,
+            "encodedDataLength": 929463,
+            "cacheHits": 0
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 3,
+        "scenario": "messages-2000-after",
+        "ready": {
+          "documentStatus": 200,
+          "messageStatus": 200,
+          "messageUrl": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50",
+          "page": {
+            "offset": 1950,
+            "total": 2000,
+            "hasMore": true,
+            "hasNewer": false,
+            "truncated": true,
+            "summary": {
+              "lastMessageAt": 1790555205590,
+              "coldTurns": 0,
+              "todo": null
+            },
+            "participants": [
+              "AGT1"
+            ],
+            "itemCount": 50
+          },
+          "firstId": "SES2000-MSG1950",
+          "lastId": "SES2000-MSG1999",
+          "wall": {
+            "domContentLoadedMs": 164.22929999999997,
+            "transcriptReadyMs": 1899.8259000000007,
+            "settleMs": 300
+          }
+        },
+        "timing": {
+          "navigation": {
+            "duration": 158.69999998807907,
+            "domInteractive": 117.59999999403954,
+            "domContentLoadedEventEnd": 157.90000000596046,
+            "loadEventEnd": 158.69999998807907,
+            "responseStart": 76,
+            "responseEnd": 76.30000001192093,
+            "transferSize": 1984,
+            "encodedBodySize": 1684,
+            "decodedBodySize": 4114
+          },
+          "paints": {
+            "first-paint": 120,
+            "first-contentful-paint": 120
+          },
+          "resourceTotals": {
+            "transferSize": 924036,
+            "encodedBodySize": 909336,
+            "decodedBodySize": 2096077
+          }
+        },
+        "memory": {
+          "label": "cold-ready",
+          "capturedAt": "2026-09-28T01:17:28.409Z",
+          "cdp": {
+            "jsHeapUsedSize": 7814968,
+            "jsHeapTotalSize": 8445952,
+            "nodes": 2073,
+            "documents": 1,
+            "layoutCount": 11,
+            "recalcStyleCount": 45,
+            "layoutDuration": 0.12346,
+            "recalcStyleDuration": 0.019493,
+            "taskDuration": 0.483737
+          },
+          "runtimeHeap": {
+            "usedSize": 7814968,
+            "totalSize": 8445952,
+            "embedderHeapUsedSize": 3888280,
+            "backingStorageSize": 1580415
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2073,
+            "jsEventListeners": 354
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 15853,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15010,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 10288662,
+              "usedJSHeapSize": 9414926
+            }
+          }
+        },
+        "network": {
+          "failures": [],
+          "totals": {
+            "requestCount": 55,
+            "completedRequestCount": 50,
+            "encodedDataLength": 930287,
+            "cacheHits": 0
+          }
+        },
+        "errors": []
+      }
+    ],
+    "finishedAt": "2026-09-28T01:17:28.420Z"
+  },
+  "after-scroll-final-results": {
+    "schemaVersion": 1,
+    "phase": "scroll",
+    "startedAt": "2026-09-28T01:17:40.633Z",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "initialPageSize": 50,
+      "maximumLoadedWindow": 150,
+      "readiness": "50-item API response plus visible last message plus 300 ms settle",
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+      "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+    },
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T01:17:43.329Z",
+          "cdp": {
+            "jsHeapUsedSize": 9635688,
+            "jsHeapTotalSize": 10600448,
+            "nodes": 2475,
+            "documents": 1,
+            "layoutCount": 21,
+            "recalcStyleCount": 70,
+            "layoutDuration": 0.12797,
+            "recalcStyleDuration": 0.033208,
+            "taskDuration": 0.719582
+          },
+          "runtimeHeap": {
+            "usedSize": 9635688,
+            "totalSize": 10600448,
+            "embedderHeapUsedSize": 5333632,
+            "backingStorageSize": 1581854
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2475,
+            "jsEventListeners": 399
+          },
+          "page": {
+            "allElements": 1693,
+            "transcriptElements": 681,
+            "mountedMessages": 10,
+            "mountedVirtualRows": 10,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15913,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12444657,
+              "usedJSHeapSize": 11238729
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2410.9000000059605,
+          "frames": 270,
+          "framesPerSecond": 111.99137251621075,
+          "meanFrameInterval": 8.896666666688741,
+          "p95FrameInterval": 20.90000000000009,
+          "maxFrameInterval": 25.100000000000364,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T01:17:46.003Z",
+          "cdp": {
+            "jsHeapUsedSize": 9945556,
+            "jsHeapTotalSize": 11649024,
+            "nodes": 2072,
+            "documents": 1,
+            "layoutCount": 252,
+            "recalcStyleCount": 268,
+            "layoutDuration": 0.303927,
+            "recalcStyleDuration": 0.139033,
+            "taskDuration": 3.062297
+          },
+          "runtimeHeap": {
+            "usedSize": 9945556,
+            "totalSize": 11649024,
+            "embedderHeapUsedSize": 4429792,
+            "backingStorageSize": 1586792
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2072,
+            "jsEventListeners": 364
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 13498111,
+              "usedJSHeapSize": 11550403
+            }
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 2,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T01:17:48.536Z",
+          "cdp": {
+            "jsHeapUsedSize": 9629320,
+            "jsHeapTotalSize": 10600448,
+            "nodes": 2475,
+            "documents": 1,
+            "layoutCount": 21,
+            "recalcStyleCount": 64,
+            "layoutDuration": 0.13657,
+            "recalcStyleDuration": 0.032558,
+            "taskDuration": 0.718794
+          },
+          "runtimeHeap": {
+            "usedSize": 9629320,
+            "totalSize": 10600448,
+            "embedderHeapUsedSize": 4968232,
+            "backingStorageSize": 1581853
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2475,
+            "jsEventListeners": 399
+          },
+          "page": {
+            "allElements": 1693,
+            "transcriptElements": 681,
+            "mountedMessages": 10,
+            "mountedVirtualRows": 10,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15913,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12444656,
+              "usedJSHeapSize": 11232360
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2410,
+          "frames": 327,
+          "framesPerSecond": 135.68464730290455,
+          "meanFrameInterval": 7.343119266055045,
+          "p95FrameInterval": 16.699999999999818,
+          "maxFrameInterval": 29.200000000000273,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T01:17:51.186Z",
+          "cdp": {
+            "jsHeapUsedSize": 10063108,
+            "jsHeapTotalSize": 11386880,
+            "nodes": 2072,
+            "documents": 1,
+            "layoutCount": 276,
+            "recalcStyleCount": 281,
+            "layoutDuration": 0.258022,
+            "recalcStyleDuration": 0.106362,
+            "taskDuration": 2.550621
+          },
+          "runtimeHeap": {
+            "usedSize": 10063108,
+            "totalSize": 11386880,
+            "embedderHeapUsedSize": 4430856,
+            "backingStorageSize": 1586791
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2072,
+            "jsEventListeners": 364
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 13235966,
+              "usedJSHeapSize": 11667954
+            }
+          }
+        },
+        "errors": []
+      },
+      {
+        "repetition": 3,
+        "scenario": "messages-2000-after",
+        "loadedPages": [
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1950",
+            "count": 50,
+            "offset": 1900,
+            "total": 2000
+          },
+          {
+            "url": "http://127.0.0.1:18090/api/sessions/SES2000/messages?limit=50&before=SES2000-MSG1900",
+            "count": 50,
+            "offset": 1850,
+            "total": 2000
+          }
+        ],
+        "memoryBefore": {
+          "label": "scroll-before",
+          "capturedAt": "2026-09-28T01:17:54.591Z",
+          "cdp": {
+            "jsHeapUsedSize": 9634480,
+            "jsHeapTotalSize": 10862592,
+            "nodes": 2475,
+            "documents": 1,
+            "layoutCount": 21,
+            "recalcStyleCount": 58,
+            "layoutDuration": 0.120428,
+            "recalcStyleDuration": 0.036433,
+            "taskDuration": 0.71068
+          },
+          "runtimeHeap": {
+            "usedSize": 9634480,
+            "totalSize": 10862592,
+            "embedderHeapUsedSize": 5367712,
+            "backingStorageSize": 1581855
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2475,
+            "jsEventListeners": 399
+          },
+          "page": {
+            "allElements": 1693,
+            "transcriptElements": 681,
+            "mountedMessages": 10,
+            "mountedVirtualRows": 10,
+            "mountedMessageIds": [
+              "SES2000-MSG1897",
+              "SES2000-MSG1898",
+              "SES2000-MSG1899",
+              "SES2000-MSG1900",
+              "SES2000-MSG1901",
+              "SES2000-MSG1902",
+              "SES2000-MSG1903",
+              "SES2000-MSG1904",
+              "SES2000-MSG1905",
+              "SES2000-MSG1906"
+            ],
+            "transcriptScrollHeight": 47565,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 15913,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12706802,
+              "usedJSHeapSize": 11237522
+            }
+          }
+        },
+        "scroll": {
+          "maxScroll": 46522,
+          "elapsed": 2412.300000011921,
+          "frames": 284,
+          "framesPerSecond": 117.7299672505893,
+          "meanFrameInterval": 8.46302816905606,
+          "p95FrameInterval": 20.800000000000182,
+          "maxFrameInterval": 41.600000000000364,
+          "framesOver50ms": 0,
+          "longTaskCount": 0,
+          "longTaskTotalDuration": 0,
+          "longTaskMaxDuration": 0
+        },
+        "memoryAfter": {
+          "label": "scroll-after",
+          "capturedAt": "2026-09-28T01:17:57.224Z",
+          "cdp": {
+            "jsHeapUsedSize": 9946616,
+            "jsHeapTotalSize": 10862592,
+            "nodes": 2072,
+            "documents": 1,
+            "layoutCount": 255,
+            "recalcStyleCount": 261,
+            "layoutDuration": 0.285148,
+            "recalcStyleDuration": 0.136023,
+            "taskDuration": 2.912122
+          },
+          "runtimeHeap": {
+            "usedSize": 9946616,
+            "totalSize": 10862592,
+            "embedderHeapUsedSize": 4437112,
+            "backingStorageSize": 1586793
+          },
+          "domCounters": {
+            "documents": 1,
+            "nodes": 2072,
+            "jsEventListeners": 364
+          },
+          "page": {
+            "allElements": 1393,
+            "transcriptElements": 381,
+            "mountedMessages": 5,
+            "mountedVirtualRows": 5,
+            "mountedMessageIds": [
+              "SES2000-MSG1995",
+              "SES2000-MSG1996",
+              "SES2000-MSG1997",
+              "SES2000-MSG1998",
+              "SES2000-MSG1999"
+            ],
+            "transcriptScrollHeight": 43905,
+            "transcriptClientHeight": 843,
+            "transcriptScrollTop": 43062,
+            "performanceMemory": {
+              "jsHeapSizeLimit": 4395630592,
+              "totalJSHeapSize": 12711680,
+              "usedJSHeapSize": 11551464
+            }
+          }
+        },
+        "errors": []
+      }
+    ],
+    "finishedAt": "2026-09-28T01:17:57.235Z"
+  },
+  "after-retention-final-results": {
+    "schemaVersion": 1,
+    "phase": "retention",
+    "startedAt": "2026-09-28T01:18:10.054Z",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "initialPageSize": 50,
+      "maximumLoadedWindow": 150,
+      "readiness": "50-item API response plus visible last message plus 300 ms settle",
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+      "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+    },
+    "results": [
+      {
+        "scenario": "messages-2000-after",
+        "cycles": 10,
+        "samples": [
+          {
+            "cycle": 0,
+            "state": "open",
+            "label": "open-0",
+            "capturedAt": "2026-09-28T01:18:13.299Z",
+            "cdp": {
+              "jsHeapUsedSize": 7520460,
+              "jsHeapTotalSize": 8183808,
+              "nodes": 2073,
+              "documents": 1,
+              "layoutCount": 11,
+              "recalcStyleCount": 53,
+              "layoutDuration": 0.114756,
+              "recalcStyleDuration": 0.015408,
+              "taskDuration": 0.468604
+            },
+            "runtimeHeap": {
+              "usedSize": 7520460,
+              "totalSize": 8183808,
+              "embedderHeapUsedSize": 3888568,
+              "backingStorageSize": 1580405
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2073,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1393,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 10026508,
+                "usedJSHeapSize": 9145496
+              }
+            }
+          },
+          {
+            "cycle": 1,
+            "state": "closed",
+            "routeDurationMs": 410.2966000000006,
+            "label": "closed-1",
+            "capturedAt": "2026-09-28T01:18:13.984Z",
+            "cdp": {
+              "jsHeapUsedSize": 8313672,
+              "jsHeapTotalSize": 9232384,
+              "nodes": 1453,
+              "documents": 1,
+              "layoutCount": 18,
+              "recalcStyleCount": 116,
+              "layoutDuration": 0.27014,
+              "recalcStyleDuration": 0.047403,
+              "taskDuration": 0.928483
+            },
+            "runtimeHeap": {
+              "usedSize": 8313672,
+              "totalSize": 9232384,
+              "embedderHeapUsedSize": 4750720,
+              "backingStorageSize": 1679812
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 1453,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 10912272,
+                "usedJSHeapSize": 10021980
+              }
+            }
+          },
+          {
+            "cycle": 1,
+            "state": "open",
+            "routeDurationMs": 471.41669999999976,
+            "label": "open-1",
+            "capturedAt": "2026-09-28T01:18:14.642Z",
+            "cdp": {
+              "jsHeapUsedSize": 8815756,
+              "jsHeapTotalSize": 9494528,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 23,
+              "recalcStyleCount": 161,
+              "layoutDuration": 0.296049,
+              "recalcStyleDuration": 0.074774,
+              "taskDuration": 1.167207
+            },
+            "runtimeHeap": {
+              "usedSize": 8815756,
+              "totalSize": 9494528,
+              "embedderHeapUsedSize": 4303408,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 11436172,
+                "usedJSHeapSize": 10513360
+              }
+            }
+          },
+          {
+            "cycle": 2,
+            "state": "closed",
+            "routeDurationMs": 52.20300000000043,
+            "label": "closed-2",
+            "capturedAt": "2026-09-28T01:18:14.889Z",
+            "cdp": {
+              "jsHeapUsedSize": 8752960,
+              "jsHeapTotalSize": 9494528,
+              "nodes": 1473,
+              "documents": 2,
+              "layoutCount": 29,
+              "recalcStyleCount": 199,
+              "layoutDuration": 0.308299,
+              "recalcStyleDuration": 0.098722,
+              "taskDuration": 1.327494
+            },
+            "runtimeHeap": {
+              "usedSize": 8752960,
+              "totalSize": 9494528,
+              "embedderHeapUsedSize": 5684008,
+              "backingStorageSize": 1802514
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1473,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 11297118,
+                "usedJSHeapSize": 10570890
+              }
+            }
+          },
+          {
+            "cycle": 2,
+            "state": "open",
+            "routeDurationMs": 441.3753000000006,
+            "label": "open-2",
+            "capturedAt": "2026-09-28T01:18:15.520Z",
+            "cdp": {
+              "jsHeapUsedSize": 9230700,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 34,
+              "recalcStyleCount": 247,
+              "layoutDuration": 0.320457,
+              "recalcStyleDuration": 0.126679,
+              "taskDuration": 1.53533
+            },
+            "runtimeHeap": {
+              "usedSize": 9230700,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 4293536,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12222604,
+                "usedJSHeapSize": 10928096
+              }
+            }
+          },
+          {
+            "cycle": 3,
+            "state": "closed",
+            "routeDurationMs": 49.91899999999987,
+            "label": "closed-3",
+            "capturedAt": "2026-09-28T01:18:15.766Z",
+            "cdp": {
+              "jsHeapUsedSize": 9133064,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 1473,
+              "documents": 2,
+              "layoutCount": 40,
+              "recalcStyleCount": 285,
+              "layoutDuration": 0.334063,
+              "recalcStyleDuration": 0.146328,
+              "taskDuration": 1.682933
+            },
+            "runtimeHeap": {
+              "usedSize": 9133064,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 5607712,
+              "backingStorageSize": 1681027
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1473,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 11962063,
+                "usedJSHeapSize": 10830651
+              }
+            }
+          },
+          {
+            "cycle": 3,
+            "state": "open",
+            "routeDurationMs": 391.0809999999992,
+            "label": "open-3",
+            "capturedAt": "2026-09-28T01:18:16.379Z",
+            "cdp": {
+              "jsHeapUsedSize": 9388272,
+              "jsHeapTotalSize": 10018816,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 45,
+              "recalcStyleCount": 337,
+              "layoutDuration": 0.342108,
+              "recalcStyleDuration": 0.162858,
+              "taskDuration": 1.84684
+            },
+            "runtimeHeap": {
+              "usedSize": 9388272,
+              "totalSize": 10018816,
+              "embedderHeapUsedSize": 4315712,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 11960460,
+                "usedJSHeapSize": 11085852
+              }
+            }
+          },
+          {
+            "cycle": 4,
+            "state": "closed",
+            "routeDurationMs": 70.17649999999958,
+            "label": "closed-4",
+            "capturedAt": "2026-09-28T01:18:16.669Z",
+            "cdp": {
+              "jsHeapUsedSize": 9352832,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 1473,
+              "documents": 2,
+              "layoutCount": 51,
+              "recalcStyleCount": 347,
+              "layoutDuration": 0.351142,
+              "recalcStyleDuration": 0.168824,
+              "taskDuration": 1.987225
+            },
+            "runtimeHeap": {
+              "usedSize": 9352832,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 4050928,
+              "backingStorageSize": 1802508
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1473,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12083544,
+                "usedJSHeapSize": 11184004
+              }
+            }
+          },
+          {
+            "cycle": 4,
+            "state": "open",
+            "routeDurationMs": 478.45769999999993,
+            "label": "open-4",
+            "capturedAt": "2026-09-28T01:18:17.338Z",
+            "cdp": {
+              "jsHeapUsedSize": 9531508,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 2071,
+              "documents": 1,
+              "layoutCount": 56,
+              "recalcStyleCount": 365,
+              "layoutDuration": 0.366643,
+              "recalcStyleDuration": 0.177622,
+              "taskDuration": 2.156783
+            },
+            "runtimeHeap": {
+              "usedSize": 9531508,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 4234072,
+              "backingStorageSize": 1679364
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2071,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1392,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12222619,
+                "usedJSHeapSize": 11228959
+              }
+            }
+          },
+          {
+            "cycle": 5,
+            "state": "closed",
+            "routeDurationMs": 52.023699999999735,
+            "label": "closed-5",
+            "capturedAt": "2026-09-28T01:18:17.585Z",
+            "cdp": {
+              "jsHeapUsedSize": 9519452,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 1501,
+              "documents": 5,
+              "layoutCount": 63,
+              "recalcStyleCount": 408,
+              "layoutDuration": 0.394682,
+              "recalcStyleDuration": 0.195427,
+              "taskDuration": 2.288436
+            },
+            "runtimeHeap": {
+              "usedSize": 9519452,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 6188824,
+              "backingStorageSize": 1835519
+            },
+            "domCounters": {
+              "documents": 5,
+              "nodes": 1501,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12378699,
+                "usedJSHeapSize": 11370395
+              }
+            }
+          },
+          {
+            "cycle": 5,
+            "state": "open",
+            "routeDurationMs": 532.125,
+            "label": "open-5",
+            "capturedAt": "2026-09-28T01:18:18.305Z",
+            "cdp": {
+              "jsHeapUsedSize": 9579372,
+              "jsHeapTotalSize": 10018816,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 68,
+              "recalcStyleCount": 454,
+              "layoutDuration": 0.407445,
+              "recalcStyleDuration": 0.215752,
+              "taskDuration": 2.469057
+            },
+            "runtimeHeap": {
+              "usedSize": 9579372,
+              "totalSize": 10018816,
+              "embedderHeapUsedSize": 4354408,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 11960460,
+                "usedJSHeapSize": 11276816
+              }
+            }
+          },
+          {
+            "cycle": 6,
+            "state": "closed",
+            "routeDurationMs": 59.75430000000051,
+            "label": "closed-6",
+            "capturedAt": "2026-09-28T01:18:18.590Z",
+            "cdp": {
+              "jsHeapUsedSize": 9409752,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 1447,
+              "documents": 1,
+              "layoutCount": 74,
+              "recalcStyleCount": 485,
+              "layoutDuration": 0.415169,
+              "recalcStyleDuration": 0.231236,
+              "taskDuration": 2.629714
+            },
+            "runtimeHeap": {
+              "usedSize": 9409752,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 4826904,
+              "backingStorageSize": 1680232
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 1447,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12223412,
+                "usedJSHeapSize": 11108204
+              }
+            }
+          },
+          {
+            "cycle": 6,
+            "state": "open",
+            "routeDurationMs": 460.22050000000127,
+            "label": "open-6",
+            "capturedAt": "2026-09-28T01:18:19.257Z",
+            "cdp": {
+              "jsHeapUsedSize": 9631000,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 79,
+              "recalcStyleCount": 524,
+              "layoutDuration": 0.426269,
+              "recalcStyleDuration": 0.251312,
+              "taskDuration": 2.847775
+            },
+            "runtimeHeap": {
+              "usedSize": 9631000,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 4323024,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12222604,
+                "usedJSHeapSize": 11328452
+              }
+            }
+          },
+          {
+            "cycle": 7,
+            "state": "closed",
+            "routeDurationMs": 42.19540000000052,
+            "label": "closed-7",
+            "capturedAt": "2026-09-28T01:18:19.577Z",
+            "cdp": {
+              "jsHeapUsedSize": 9502136,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 1493,
+              "documents": 4,
+              "layoutCount": 86,
+              "recalcStyleCount": 555,
+              "layoutDuration": 0.435468,
+              "recalcStyleDuration": 0.264361,
+              "taskDuration": 2.966608
+            },
+            "runtimeHeap": {
+              "usedSize": 9502136,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 5043960,
+              "backingStorageSize": 1801789
+            },
+            "domCounters": {
+              "documents": 4,
+              "nodes": 1493,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12344969,
+                "usedJSHeapSize": 11319349
+              }
+            }
+          },
+          {
+            "cycle": 7,
+            "state": "open",
+            "routeDurationMs": 424.3847999999998,
+            "label": "open-7",
+            "capturedAt": "2026-09-28T01:18:20.223Z",
+            "cdp": {
+              "jsHeapUsedSize": 9656644,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 91,
+              "recalcStyleCount": 600,
+              "layoutDuration": 0.446178,
+              "recalcStyleDuration": 0.285411,
+              "taskDuration": 3.153117
+            },
+            "runtimeHeap": {
+              "usedSize": 9656644,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 4364592,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12222604,
+                "usedJSHeapSize": 11354096
+              }
+            }
+          },
+          {
+            "cycle": 8,
+            "state": "closed",
+            "routeDurationMs": 48.96150000000125,
+            "label": "closed-8",
+            "capturedAt": "2026-09-28T01:18:20.479Z",
+            "cdp": {
+              "jsHeapUsedSize": 9741796,
+              "jsHeapTotalSize": 10280960,
+              "nodes": 1449,
+              "documents": 1,
+              "layoutCount": 98,
+              "recalcStyleCount": 639,
+              "layoutDuration": 0.457611,
+              "recalcStyleDuration": 0.307819,
+              "taskDuration": 3.294079
+            },
+            "runtimeHeap": {
+              "usedSize": 9741796,
+              "totalSize": 10280960,
+              "embedderHeapUsedSize": 5325168,
+              "backingStorageSize": 1801774
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 1449,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12082810,
+                "usedJSHeapSize": 11558994
+              }
+            }
+          },
+          {
+            "cycle": 8,
+            "state": "open",
+            "routeDurationMs": 426.3672999999999,
+            "label": "open-8",
+            "capturedAt": "2026-09-28T01:18:21.093Z",
+            "cdp": {
+              "jsHeapUsedSize": 9922504,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 103,
+              "recalcStyleCount": 688,
+              "layoutDuration": 0.467613,
+              "recalcStyleDuration": 0.332113,
+              "taskDuration": 3.480095
+            },
+            "runtimeHeap": {
+              "usedSize": 9922504,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 4335496,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12484748,
+                "usedJSHeapSize": 11619956
+              }
+            }
+          },
+          {
+            "cycle": 9,
+            "state": "closed",
+            "routeDurationMs": 37.07650000000103,
+            "label": "closed-9",
+            "capturedAt": "2026-09-28T01:18:21.327Z",
+            "cdp": {
+              "jsHeapUsedSize": 9810040,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 1469,
+              "documents": 2,
+              "layoutCount": 110,
+              "recalcStyleCount": 724,
+              "layoutDuration": 0.476613,
+              "recalcStyleDuration": 0.351429,
+              "taskDuration": 3.608183
+            },
+            "runtimeHeap": {
+              "usedSize": 9810040,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 5324984,
+              "backingStorageSize": 1801789
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1469,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12344969,
+                "usedJSHeapSize": 11627253
+              }
+            }
+          },
+          {
+            "cycle": 9,
+            "state": "open",
+            "routeDurationMs": 423.9305000000004,
+            "label": "open-9",
+            "capturedAt": "2026-09-28T01:18:21.927Z",
+            "cdp": {
+              "jsHeapUsedSize": 9968944,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 115,
+              "recalcStyleCount": 771,
+              "layoutDuration": 0.486736,
+              "recalcStyleDuration": 0.373188,
+              "taskDuration": 3.785206
+            },
+            "runtimeHeap": {
+              "usedSize": 9968944,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 4395592,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12746892,
+                "usedJSHeapSize": 11666420
+              }
+            }
+          },
+          {
+            "cycle": 10,
+            "state": "closed",
+            "routeDurationMs": 36.16159999999945,
+            "label": "closed-10",
+            "capturedAt": "2026-09-28T01:18:22.158Z",
+            "cdp": {
+              "jsHeapUsedSize": 9894048,
+              "jsHeapTotalSize": 10805248,
+              "nodes": 1473,
+              "documents": 2,
+              "layoutCount": 122,
+              "recalcStyleCount": 799,
+              "layoutDuration": 0.495313,
+              "recalcStyleDuration": 0.38935,
+              "taskDuration": 3.900286
+            },
+            "runtimeHeap": {
+              "usedSize": 9894048,
+              "totalSize": 10805248,
+              "embedderHeapUsedSize": 5059448,
+              "backingStorageSize": 1819014
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1473,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 994,
+              "transcriptElements": 0,
+              "mountedMessages": 0,
+              "mountedVirtualRows": 0,
+              "mountedMessageIds": [],
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "transcriptScrollTop": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12624338,
+                "usedJSHeapSize": 11728486
+              }
+            }
+          },
+          {
+            "cycle": 10,
+            "state": "open",
+            "routeDurationMs": 440.46749999999884,
+            "label": "open-10",
+            "capturedAt": "2026-09-28T01:18:22.790Z",
+            "cdp": {
+              "jsHeapUsedSize": 9988720,
+              "jsHeapTotalSize": 10543104,
+              "nodes": 2078,
+              "documents": 1,
+              "layoutCount": 127,
+              "recalcStyleCount": 845,
+              "layoutDuration": 0.510053,
+              "recalcStyleDuration": 0.417207,
+              "taskDuration": 4.130791
+            },
+            "runtimeHeap": {
+              "usedSize": 9988720,
+              "totalSize": 10543104,
+              "embedderHeapUsedSize": 4355608,
+              "backingStorageSize": 1679349
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 2078,
+              "jsEventListeners": 354
+            },
+            "page": {
+              "allElements": 1398,
+              "transcriptElements": 381,
+              "mountedMessages": 5,
+              "mountedVirtualRows": 5,
+              "mountedMessageIds": [
+                "SES2000-MSG1995",
+                "SES2000-MSG1996",
+                "SES2000-MSG1997",
+                "SES2000-MSG1998",
+                "SES2000-MSG1999"
+              ],
+              "transcriptScrollHeight": 15853,
+              "transcriptClientHeight": 843,
+              "transcriptScrollTop": 15010,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 12484748,
+                "usedJSHeapSize": 11686260
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "finishedAt": "2026-09-28T01:18:22.959Z"
+  },
+  "finalBrowserSummary": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-09-28T01:21:09.244Z",
+    "scope": "Synthetic SES2000 worst-case transcript on localhost production build",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "initialPageSize": 50,
+      "maximumLoadedWindow": 150,
+      "readiness": "50-item API response plus visible last message plus 300 ms settle",
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before memory snapshots",
+      "scroll": "2400 ms requestAnimationFrame sweep over a 150-message loaded window"
+    },
+    "final": {
+      "coldMedian": {
+        "readyMs": 2154.0469000000003,
+        "transferBytes": 930287,
+        "heapBytes": 7546056,
+        "domNodes": 2073,
+        "mountedRows": 5
+      },
+      "scrollMedian": {
+        "p95Ms": 20.800000000000182,
+        "maxMsMedian": 29.200000000000273,
+        "maxMsObserved": 41.600000000000364,
+        "meanMs": 8.46302816905606,
+        "syntheticFps": 117.7299672505893,
+        "framesOver50Ms": 0,
+        "longTasks": 0,
+        "heapAfterBytes": 9946616,
+        "domNodesAfter": 2072
+      },
+      "retention": {
+        "cycles": 10,
+        "openHeapStartBytes": 7520460,
+        "openHeapEndBytes": 9988720,
+        "openHeapDeltaBytes": 2468260,
+        "openHeapCycle8To10DeltaBytes": 66216,
+        "openDomStart": 2073,
+        "openDomEnd": 2078,
+        "closedHeapStartBytes": 8313672,
+        "closedHeapEndBytes": 9894048,
+        "closedDomStart": 1453,
+        "closedDomEnd": 1473
+      },
+      "qa": {
+        "passed": 9,
+        "total": 9,
+        "errors": []
+      }
+    },
+    "baseline": {
+      "coldMedian": {
+        "readyMs": 3474.1177999999927,
+        "transferBytes": 5998185,
+        "heapBytes": 85843048,
+        "domNodes": 185713,
+        "scrollP95Ms": 325,
+        "scrollMaxMs": 325
+      }
+    },
+    "improvementPercent": {
+      "ready": 37.99729819178829,
+      "transfer": 84.49052505049444,
+      "heap": 91.20947336352735,
+      "domNodes": 98.88376150296425,
+      "scrollP95": 93.59999999999994
+    },
+    "limitations": [
+      "Local loopback, headless Chromium, one Windows 11 host",
+      "Cold readiness includes a fixed 300 ms settle after a 50-item API page and visible last row",
+      "Scroll is a synthetic 2400 ms full-range requestAnimationFrame sweep over 150 loaded messages, not user-perceived display FPS",
+      "Memory is forced-GC renderer JavaScript heap and DOM counters; process RSS/GPU memory are not measured",
+      "SES2000 is a synthetic worst-case growth scenario, not a typical real session",
+      "Retention uses handle-free locators and forced GC; heap warming is not by itself proof of a product leak"
+    ],
+    "artifacts": {
+      "cold": ".scratch/resource-audit-20260928/browser/after-cold2000-final-results.json",
+      "scroll": ".scratch/resource-audit-20260928/browser/after-scroll-final-results.json",
+      "retention": ".scratch/resource-audit-20260928/browser/after-retention-final-results.json",
+      "qa": ".scratch/resource-audit-20260928/browser/after-qa-final3-results.json",
+      "diagnostic": ".scratch/resource-audit-20260928/browser/after-pinned-diagnostic.json"
+    }
+  },
+  "cleanup": {
+    "auditServer": "stopped",
+    "syntheticData": "removed",
+    "realStoreCopies": "removed",
+    "auditExecutable": "removed",
+    "metricsAndReproductionScripts": "retained"
+  }
+}

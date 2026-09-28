@@ -42,7 +42,7 @@ func (u SessionUsage) TotalTokens() int64 {
 func sessionUsageFile(sessionID string) string { return sessionID + ".json" }
 
 func (d *DB) loadSessionUsage() error {
-	rows, err := loadJSONDir[SessionUsage](d.dir(dirSessionUsage))
+	rows, err := loadCachedJSONDir[SessionUsage](d.dir(dirSessionUsage), d.dir("session-usage-cache.json"))
 	if err != nil {
 		return err
 	}

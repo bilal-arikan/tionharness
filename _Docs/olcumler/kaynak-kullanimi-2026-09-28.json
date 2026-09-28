@@ -1,0 +1,4372 @@
+{
+  "date": "2026-09-28",
+  "gitHead": "46228b8b4cb4e5c49c693785966c6b632ed9714b",
+  "scope": "Windows native backend, isolated synthetic browser workload, copied real stores",
+  "goVersion": "go1.26.4 windows/amd64",
+  "realDiskInventory": {
+    "workspaces": [
+      {
+        "workspace": "WS1",
+        "files": 1167,
+        "bytes": 12213516,
+        "transcriptCount": 99,
+        "transcriptBytes": 5646295,
+        "largestTranscriptBytes": 789254,
+        "groups": {
+          "installed.json": [
+            1,
+            96
+          ],
+          "tionharness.db": [
+            1,
+            188416
+          ],
+          "tionharness.db-shm": [
+            1,
+            32768
+          ],
+          "tionharness.db-wal": [
+            1,
+            0
+          ],
+          "ws-settings.json": [
+            1,
+            2186
+          ],
+          "cbm-store": [
+            1,
+            12288
+          ],
+          "config": [
+            3,
+            2661
+          ],
+          "market": [
+            1,
+            34
+          ],
+          "obsidian": [
+            36,
+            24596
+          ],
+          "store/.seeded-automations.json": [
+            1,
+            110
+          ],
+          "store/.seeded-flows.json": [
+            1,
+            49
+          ],
+          "store/.seeded-goals.json": [
+            1,
+            109
+          ],
+          "store/activity-sequence.json": [
+            1,
+            49
+          ],
+          "store/counters.json": [
+            1,
+            173
+          ],
+          "store/lessons.jsonl": [
+            1,
+            2306
+          ],
+          "store/model-resolutions.json": [
+            1,
+            500
+          ],
+          "store/secrets.json": [
+            1,
+            2439
+          ],
+          "store/secrets.json.bak": [
+            1,
+            2085
+          ],
+          "store/token-calibrations.json": [
+            1,
+            344
+          ],
+          "store/tools-config.json": [
+            1,
+            3234
+          ],
+          "workspace": [
+            188,
+            3776662
+          ],
+          "skills": [
+            45,
+            148508
+          ],
+          "store/activity-inbox": [
+            2,
+            623
+          ],
+          "store/agents": [
+            31,
+            63792
+          ],
+          "store/artifacts": [
+            145,
+            51617
+          ],
+          "store/automations": [
+            3,
+            2084
+          ],
+          "store/curator": [
+            1,
+            846
+          ],
+          "store/flow-runs": [
+            24,
+            38269
+          ],
+          "store/flows": [
+            19,
+            12680
+          ],
+          "store/goals": [
+            3,
+            3628
+          ],
+          "store/hooks": [
+            2,
+            749
+          ],
+          "store/insight": [
+            11,
+            110383
+          ],
+          "store/mcp-servers": [
+            3,
+            1451
+          ],
+          "store/schedules": [
+            5,
+            2849
+          ],
+          "store/session-usage": [
+            129,
+            70372
+          ],
+          "store/tasks": [
+            18,
+            27838
+          ],
+          "store/usage": [
+            108,
+            66109
+          ],
+          "store/evolution": [
+            4,
+            19936
+          ],
+          "store/progress": [
+            8,
+            10771
+          ],
+          "store/sessions": [
+            361,
+            7529906
+          ]
+        }
+      },
+      {
+        "workspace": "WS5",
+        "files": 5743,
+        "bytes": 40571771,
+        "transcriptCount": 56,
+        "transcriptBytes": 9894710,
+        "largestTranscriptBytes": 899589,
+        "groups": {
+          "installed.json": [
+            1,
+            79
+          ],
+          "tionharness.db": [
+            1,
+            0
+          ],
+          "ws-settings.json": [
+            1,
+            3916
+          ],
+          ".obsidian": [
+            9,
+            269228
+          ],
+          "backups": [
+            10,
+            316559
+          ],
+          "cbm-store": [
+            1,
+            12288
+          ],
+          "config": [
+            2,
+            3172
+          ],
+          "obsidian": [
+            62,
+            167015
+          ],
+          "store/.seeded-automations.json": [
+            1,
+            110
+          ],
+          "store/.seeded-flows.json": [
+            1,
+            49
+          ],
+          "store/.seeded-goals.json": [
+            1,
+            109
+          ],
+          "store/activity-sequence.json": [
+            1,
+            51
+          ],
+          "store/counters.json": [
+            1,
+            205
+          ],
+          "store/lessons.jsonl": [
+            1,
+            4400
+          ],
+          "store/model-resolutions.json": [
+            1,
+            1074
+          ],
+          "store/secrets.json": [
+            1,
+            1117
+          ],
+          "store/token-calibrations.json": [
+            1,
+            1025
+          ],
+          "store/tools-config.json": [
+            1,
+            5957
+          ],
+          "scratchpad": [
+            3,
+            329909
+          ],
+          "skills": [
+            13,
+            63193
+          ],
+          "store/activity-inbox": [
+            333,
+            105042
+          ],
+          "store/agent-messages": [
+            227,
+            392698
+          ],
+          "store/agents": [
+            44,
+            92724
+          ],
+          "store/artifacts": [
+            7,
+            2444
+          ],
+          "store/automations": [
+            5,
+            7081
+          ],
+          "store/curator": [
+            1,
+            651
+          ],
+          "store/flow-runs": [
+            9,
+            22310
+          ],
+          "store/flows": [
+            5,
+            10368
+          ],
+          "store/goals": [
+            3,
+            3628
+          ],
+          "store/hooks": [
+            2,
+            748
+          ],
+          "store/insight": [
+            14,
+            109838
+          ],
+          "store/mcp-servers": [
+            3,
+            1010
+          ],
+          "store/schedules": [
+            2,
+            1391
+          ],
+          "store/session-usage": [
+            2165,
+            1194597
+          ],
+          "store/tasks": [
+            331,
+            1427368
+          ],
+          "store/trajectories": [
+            1,
+            1149
+          ],
+          "store/usage": [
+            251,
+            187346
+          ],
+          "store/_archive-backup-20260827": [
+            28,
+            16971
+          ],
+          "store/evolution": [
+            8,
+            72028
+          ],
+          "store/flow_runs": [
+            2,
+            10576
+          ],
+          "store/progress": [
+            83,
+            107906
+          ],
+          "store/sessions": [
+            2099,
+            34711344
+          ],
+          "workspace": [
+            7,
+            913097
+          ]
+        }
+      },
+      {
+        "workspace": "WS10",
+        "files": 692,
+        "bytes": 264193329,
+        "transcriptCount": 79,
+        "transcriptBytes": 17614933,
+        "largestTranscriptBytes": 1147224,
+        "groups": {
+          "tionharness.db": [
+            1,
+            0
+          ],
+          "ws-settings.json": [
+            1,
+            12005
+          ],
+          "cbm-store": [
+            6,
+            224505856
+          ],
+          "config": [
+            2,
+            10504
+          ],
+          "store/.seeded-automations.json": [
+            1,
+            110
+          ],
+          "store/.seeded-flows.json": [
+            1,
+            49
+          ],
+          "store/.seeded-goals.json": [
+            1,
+            109
+          ],
+          "store/activity-sequence.json": [
+            1,
+            49
+          ],
+          "store/counters.json": [
+            1,
+            165
+          ],
+          "store/lessons.jsonl": [
+            1,
+            571
+          ],
+          "store/model-resolutions.json": [
+            1,
+            719
+          ],
+          "store/secrets.json": [
+            1,
+            346
+          ],
+          "store/token-calibrations.json": [
+            1,
+            686
+          ],
+          "store/tools-config.json": [
+            1,
+            883
+          ],
+          "skills": [
+            36,
+            522567
+          ],
+          "store/activity-inbox": [
+            6,
+            1851
+          ],
+          "store/agent-messages": [
+            2,
+            2939
+          ],
+          "store/agents": [
+            28,
+            56812
+          ],
+          "store/artifacts": [
+            25,
+            8974
+          ],
+          "store/automations": [
+            4,
+            4225
+          ],
+          "store/curator": [
+            1,
+            422
+          ],
+          "store/flow-runs": [
+            1,
+            9234
+          ],
+          "store/flows": [
+            1,
+            856
+          ],
+          "store/goals": [
+            3,
+            3628
+          ],
+          "store/hooks": [
+            1,
+            370
+          ],
+          "store/insight": [
+            11,
+            43063
+          ],
+          "store/mcp-servers": [
+            5,
+            1594
+          ],
+          "store/schedules": [
+            2,
+            1145
+          ],
+          "store/session-usage": [
+            98,
+            56966
+          ],
+          "store/tasks": [
+            2,
+            1838
+          ],
+          "store/trajectories": [
+            1,
+            190
+          ],
+          "store/usage": [
+            58,
+            39476
+          ],
+          "store/evolution": [
+            4,
+            12281
+          ],
+          "store/progress": [
+            11,
+            17292
+          ],
+          "store/sessions": [
+            345,
+            20968972
+          ],
+          "workspace": [
+            27,
+            17906582
+          ]
+        }
+      },
+      {
+        "workspace": "WS14",
+        "files": 104,
+        "bytes": 921740,
+        "transcriptCount": 6,
+        "transcriptBytes": 641863,
+        "largestTranscriptBytes": 190753,
+        "groups": {
+          "tionharness.db": [
+            1,
+            0
+          ],
+          "ws-settings.json": [
+            1,
+            11042
+          ],
+          "config": [
+            3,
+            21527
+          ],
+          "store/.seeded-automations.json": [
+            1,
+            110
+          ],
+          "store/.seeded-flows.json": [
+            1,
+            49
+          ],
+          "store/.seeded-goals.json": [
+            1,
+            109
+          ],
+          "store/activity-sequence.json": [
+            1,
+            47
+          ],
+          "store/counters.json": [
+            1,
+            101
+          ],
+          "store/lessons.jsonl": [
+            1,
+            565
+          ],
+          "store/tools-config.json": [
+            1,
+            74
+          ],
+          "workspace": [
+            6,
+            14241
+          ],
+          "store/agents": [
+            28,
+            59531
+          ],
+          "store/artifacts": [
+            5,
+            1860
+          ],
+          "store/automations": [
+            3,
+            2083
+          ],
+          "store/curator": [
+            1,
+            115
+          ],
+          "store/flows": [
+            1,
+            838
+          ],
+          "store/goals": [
+            3,
+            3628
+          ],
+          "store/insight": [
+            10,
+            16697
+          ],
+          "store/mcp-servers": [
+            1,
+            425
+          ],
+          "store/schedules": [
+            2,
+            1145
+          ],
+          "store/session-usage": [
+            5,
+            2849
+          ],
+          "store/usage": [
+            3,
+            2630
+          ],
+          "store/sessions": [
+            24,
+            782074
+          ]
+        }
+      },
+      {
+        "workspace": "WS15",
+        "files": 691,
+        "bytes": 50216185,
+        "transcriptCount": 87,
+        "transcriptBytes": 25978944,
+        "largestTranscriptBytes": 2546025,
+        "groups": {
+          "tionharness.db": [
+            1,
+            0
+          ],
+          "ws-settings.json": [
+            1,
+            11968
+          ],
+          "cbm-store": [
+            2,
+            19410944
+          ],
+          "config": [
+            3,
+            22614
+          ],
+          "store/.seeded-automations.json": [
+            1,
+            110
+          ],
+          "store/.seeded-flows.json": [
+            1,
+            49
+          ],
+          "store/.seeded-goals.json": [
+            1,
+            109
+          ],
+          "store/activity-sequence.json": [
+            1,
+            49
+          ],
+          "store/counters.json": [
+            1,
+            127
+          ],
+          "store/lessons.jsonl": [
+            1,
+            628
+          ],
+          "store/model-resolutions.json": [
+            1,
+            719
+          ],
+          "store/secrets.json": [
+            1,
+            727
+          ],
+          "store/token-calibrations.json": [
+            1,
+            344
+          ],
+          "store/tools-config.json": [
+            1,
+            74
+          ],
+          "workspace": [
+            6,
+            117972
+          ],
+          "skills": [
+            4,
+            31699
+          ],
+          "store/agents": [
+            28,
+            64674
+          ],
+          "store/artifacts": [
+            5,
+            1901
+          ],
+          "store/automations": [
+            4,
+            2873
+          ],
+          "store/curator": [
+            1,
+            346
+          ],
+          "store/flows": [
+            1,
+            838
+          ],
+          "store/goals": [
+            3,
+            3628
+          ],
+          "store/hooks": [
+            1,
+            194
+          ],
+          "store/insight": [
+            14,
+            104383
+          ],
+          "store/mcp-servers": [
+            3,
+            962
+          ],
+          "store/schedules": [
+            2,
+            1145
+          ],
+          "store/session-usage": [
+            85,
+            49389
+          ],
+          "store/usage": [
+            21,
+            15296
+          ],
+          "store/evolution": [
+            3,
+            5144
+          ],
+          "store/progress": [
+            42,
+            85986
+          ],
+          "store/sessions": [
+            451,
+            30281293
+          ]
+        }
+      }
+    ],
+    "totals": {
+      "files": 8397,
+      "bytes": 368116541,
+      "transcriptCount": 327,
+      "transcriptBytes": 59776745
+    }
+  },
+  "realStoreProbe": [
+    {
+      "baseHeapBytes": 663760,
+      "kind": "store",
+      "openMs": 1381.923,
+      "path": ".scratch/resource-audit-20260928/real-store-copies/WS1",
+      "residentHeapBytes": 7460720,
+      "stats": {
+        "sessions": 101,
+        "loadedSessions": 99,
+        "messages": 621,
+        "messageBytes": 5448707,
+        "agents": 24,
+        "tasks": 18,
+        "artifacts": 145,
+        "flows": 19,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 11,
+          "cleanupRenders": 0,
+          "counters": 11,
+          "entities": 320,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 61,
+          "reconcileActivitySequence": 3,
+          "recoverInflight": 1,
+          "sessionUsage": 92,
+          "sessions": 780,
+          "tokenCalibrations": 8,
+          "toolConfig": 13,
+          "trajectoryIndex": 0,
+          "usage": 76
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 7404944,
+      "kind": "store",
+      "openMs": 2705.767,
+      "path": ".scratch/resource-audit-20260928/real-store-copies/WS5",
+      "residentHeapBytes": 23594216,
+      "stats": {
+        "sessions": 56,
+        "loadedSessions": 56,
+        "messages": 668,
+        "messageBytes": 9513253,
+        "agents": 29,
+        "tasks": 331,
+        "artifacts": 7,
+        "flows": 5,
+        "automations": 5,
+        "loadPhaseMs": {
+          "activitySequence": 3,
+          "cleanupRenders": 0,
+          "counters": 11,
+          "entities": 572,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 9,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 1391,
+          "sessions": 501,
+          "tokenCalibrations": 9,
+          "toolConfig": 10,
+          "trajectoryIndex": 11,
+          "usage": 177
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 23594984,
+      "kind": "store",
+      "openMs": 727.198,
+      "path": ".scratch/resource-audit-20260928/real-store-copies/WS10",
+      "residentHeapBytes": 41338336,
+      "stats": {
+        "sessions": 80,
+        "loadedSessions": 79,
+        "messages": 551,
+        "messageBytes": 16669435,
+        "agents": 21,
+        "tasks": 2,
+        "artifacts": 25,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 11,
+          "cleanupRenders": 0,
+          "counters": 11,
+          "entities": 182,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 12,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 96,
+          "sessions": 318,
+          "tokenCalibrations": 8,
+          "toolConfig": 10,
+          "trajectoryIndex": 10,
+          "usage": 59
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 41338592,
+      "kind": "store",
+      "openMs": 186.507,
+      "path": ".scratch/resource-audit-20260928/real-store-copies/WS14",
+      "residentHeapBytes": 42444256,
+      "stats": {
+        "sessions": 6,
+        "loadedSessions": 6,
+        "messages": 22,
+        "messageBytes": 602863,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 10,
+          "cleanupRenders": 0,
+          "counters": 8,
+          "entities": 99,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 10,
+          "sessions": 25,
+          "tokenCalibrations": 0,
+          "toolConfig": 10,
+          "trajectoryIndex": 0,
+          "usage": 14
+        }
+      }
+    },
+    {
+      "baseHeapBytes": 42048080,
+      "kind": "store",
+      "openMs": 654.658,
+      "path": ".scratch/resource-audit-20260928/real-store-copies/WS15",
+      "residentHeapBytes": 67371136,
+      "stats": {
+        "sessions": 87,
+        "loadedSessions": 87,
+        "messages": 495,
+        "messageBytes": 24382304,
+        "agents": 21,
+        "tasks": 0,
+        "artifacts": 5,
+        "flows": 1,
+        "automations": 4,
+        "loadPhaseMs": {
+          "activitySequence": 11,
+          "cleanupRenders": 0,
+          "counters": 9,
+          "entities": 105,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 8,
+          "reconcileActivitySequence": 3,
+          "recoverInflight": 1,
+          "sessionUsage": 78,
+          "sessions": 402,
+          "tokenCalibrations": 8,
+          "toolConfig": 1,
+          "trajectoryIndex": 0,
+          "usage": 24
+        }
+      }
+    },
+    {
+      "heapBytes": 67372288,
+      "kind": "all-stores"
+    }
+  ],
+  "syntheticStoreProbe": [
+    {
+      "afterCommitHeapBytes": 12587520,
+      "afterDropHeapBytes": 674176,
+      "afterNextPublishHeapBytes": 12587568,
+      "baseHeapBytes": 663648,
+      "beforeCommitHeapBytes": 12595768,
+      "kind": "hub",
+      "payloadTextBytes": 2048,
+      "published": 5000,
+      "replaySince1CountAfterCommit": 4999,
+      "replaySince1OK": true,
+      "ringCap": 512
+    },
+    {
+      "baseHeapBytes": 682160,
+      "kind": "store",
+      "openMs": 277.72,
+      "path": ".scratch/resource-audit-20260928/synthetic-store-copy",
+      "residentHeapBytes": 25163536,
+      "stats": {
+        "sessions": 43,
+        "loadedSessions": 43,
+        "messages": 4550,
+        "messageBytes": 23999140,
+        "agents": 16,
+        "tasks": 0,
+        "artifacts": 0,
+        "flows": 1,
+        "automations": 3,
+        "loadPhaseMs": {
+          "activitySequence": 10,
+          "cleanupRenders": 0,
+          "counters": 12,
+          "entities": 64,
+          "migrateLegacyInboxSessions": 0,
+          "migrateUnifiedLayout": 0,
+          "modelResolutions": 0,
+          "reconcileActivitySequence": 4,
+          "recoverInflight": 0,
+          "sessionUsage": 0,
+          "sessions": 185,
+          "tokenCalibrations": 0,
+          "toolConfig": 0,
+          "trajectoryIndex": 0,
+          "usage": 0
+        }
+      }
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 16408,
+      "iterations": 454760,
+      "kind": "read",
+      "nsPerOp": 2713,
+      "session": "SES50",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 16408,
+      "iterations": 440931,
+      "kind": "read",
+      "nsPerOp": 2766,
+      "session": "SES50",
+      "tail50": true
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 147480,
+      "iterations": 53802,
+      "kind": "read",
+      "nsPerOp": 23403,
+      "session": "SES500",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 16408,
+      "iterations": 353192,
+      "kind": "read",
+      "nsPerOp": 3468,
+      "session": "SES500",
+      "tail50": true
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 581656,
+      "iterations": 11923,
+      "kind": "read",
+      "nsPerOp": 96381,
+      "session": "SES2000",
+      "tail50": false
+    },
+    {
+      "allocsPerOp": 2,
+      "bytesPerOp": 16408,
+      "iterations": 366582,
+      "kind": "read",
+      "nsPerOp": 3187,
+      "session": "SES2000",
+      "tail50": true
+    }
+  ],
+  "idleProcess": {
+    "pid": 182956,
+    "elapsedSeconds": 30.882952999999997,
+    "cpuSeconds": 0.015625,
+    "oneCoreCpuPercent": 0.05059425502477047,
+    "samples": [
+      {
+        "elapsedSeconds": 0.0681638,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 2.1363493,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 4.1739428,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 6.2083011,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 8.2599836,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 10.3093988,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 12.3702296,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 14.4717459,
+        "cpuSeconds": 0,
+        "workingSetBytes": 55480320,
+        "privateBytes": 92377088,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 16.5213551,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 18.5623135,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 20.6061437,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 22.6563824,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 24.697205699999998,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 26.742625999999998,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 28.829127099999997,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      },
+      {
+        "elapsedSeconds": 30.882952999999997,
+        "cpuSeconds": 0.015625,
+        "workingSetBytes": 53432320,
+        "privateBytes": 90550272,
+        "threads": 25,
+        "handles": 262
+      }
+    ]
+  },
+  "http": {
+    "measuredAt": "2026-09-27T23:42:24.785Z",
+    "runtime": "v24.18.1",
+    "platform": "win32",
+    "rows": [
+      {
+        "sid": "SES50",
+        "query": "",
+        "bytes": 80432,
+        "repetitions": 11,
+        "medianMs": 16.289800000000014,
+        "p95Ms": 21.998599999999996,
+        "minMs": 3.256399999999985,
+        "samplesMs": [
+          21.998599999999996,
+          18.7307,
+          3.7778999999999883,
+          4.380300000000005,
+          17.47229999999999,
+          15.98490000000001,
+          16.289800000000014,
+          14.230699999999985,
+          18.516100000000023,
+          21.456399999999974,
+          3.256399999999985
+        ]
+      },
+      {
+        "sid": "SES50",
+        "query": "?tail=50",
+        "bytes": 80498,
+        "repetitions": 11,
+        "medianMs": 15.608000000000004,
+        "p95Ms": 16.85480000000001,
+        "minMs": 2.1603999999999814,
+        "samplesMs": [
+          16.11140000000003,
+          16.447699999999998,
+          15.608000000000004,
+          2.1603999999999814,
+          13.39730000000003,
+          4.851100000000031,
+          11.321699999999964,
+          15.991399999999999,
+          16.507900000000006,
+          14.355500000000006,
+          16.85480000000001
+        ]
+      },
+      {
+        "sid": "SES500",
+        "query": "",
+        "bytes": 806282,
+        "repetitions": 11,
+        "medianMs": 29.27140000000003,
+        "p95Ms": 50.547199999999975,
+        "minMs": 14.65790000000004,
+        "samplesMs": [
+          20.993499999999983,
+          29.27140000000003,
+          14.65790000000004,
+          50.547199999999975,
+          25.962099999999964,
+          34.97720000000004,
+          30.240499999999997,
+          15.38250000000005,
+          28.738699999999994,
+          32.96370000000002,
+          29.95429999999999
+        ]
+      },
+      {
+        "sid": "SES500",
+        "query": "?tail=50",
+        "bytes": 80719,
+        "repetitions": 11,
+        "medianMs": 15.072499999999991,
+        "p95Ms": 16.557199999999966,
+        "minMs": 2.494799999999941,
+        "samplesMs": [
+          15.896100000000047,
+          14.751099999999951,
+          15.437700000000063,
+          15.591999999999985,
+          14.923299999999927,
+          15.144199999999955,
+          16.557199999999966,
+          2.494799999999941,
+          10.813400000000001,
+          14.827099999999973,
+          15.072499999999991
+        ]
+      },
+      {
+        "sid": "SES2000",
+        "query": "",
+        "bytes": 3231782,
+        "repetitions": 11,
+        "medianMs": 84.46059999999989,
+        "p95Ms": 93.84269999999992,
+        "minMs": 71.67489999999998,
+        "samplesMs": [
+          81.8896000000002,
+          84.46059999999989,
+          93.84269999999992,
+          82.08529999999996,
+          85.31360000000018,
+          85.64380000000006,
+          86.05309999999986,
+          77.13540000000012,
+          86.91120000000001,
+          77.64949999999999,
+          71.67489999999998
+        ]
+      },
+      {
+        "sid": "SES2000",
+        "query": "?tail=50",
+        "bytes": 80921,
+        "repetitions": 11,
+        "medianMs": 14.720200000000204,
+        "p95Ms": 15.872600000000148,
+        "minMs": 2.457300000000032,
+        "samplesMs": [
+          12.862800000000107,
+          14.871800000000121,
+          15.825700000000097,
+          15.872600000000148,
+          14.720200000000204,
+          15.474500000000262,
+          15.65020000000004,
+          2.675000000000182,
+          12.381800000000112,
+          2.457300000000032,
+          12.800499999999829
+        ]
+      }
+    ],
+    "cpuLoad": {
+      "seconds": 14.5,
+      "requests": 177
+    },
+    "assetHeaders": [
+      {
+        "asset": "/assets/index-Bc1XB0WF.js",
+        "bytes": 1609068,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "1609068",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/rolldown-runtime-QTnfLwEv.js",
+        "bytes": 694,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "694",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-markdown-CigAEBRM.js",
+        "bytes": 161520,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "161520",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-react-EEYhWXuh.js",
+        "bytes": 359635,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "359635",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-highlight-BLvS2CjZ.js",
+        "bytes": 152288,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "152288",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/vendor-react-DtxX27Jz.css",
+        "bytes": 15413,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "15413",
+          "content-type": "text/css; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      },
+      {
+        "asset": "/assets/index-Dn9CRHlt.css",
+        "bytes": 117092,
+        "headers": {
+          "accept-ranges": "bytes",
+          "access-control-allow-headers": "Content-Type, Authorization, X-Workspace-Id",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "access-control-allow-origin": "*",
+          "content-length": "117092",
+          "content-type": "text/css; charset=utf-8",
+          "date": "Sun, 27 Sep 2026 23:42:24 GMT",
+          "x-workspace-id": "WS1"
+        }
+      }
+    ]
+  },
+  "initialAssets": [
+    {
+      "asset": "/assets/index-Bc1XB0WF.js",
+      "rawBytes": 1609068,
+      "offlineGzipBytes": 445619
+    },
+    {
+      "asset": "/assets/rolldown-runtime-QTnfLwEv.js",
+      "rawBytes": 694,
+      "offlineGzipBytes": 423
+    },
+    {
+      "asset": "/assets/vendor-markdown-CigAEBRM.js",
+      "rawBytes": 161520,
+      "offlineGzipBytes": 47787
+    },
+    {
+      "asset": "/assets/vendor-react-EEYhWXuh.js",
+      "rawBytes": 359635,
+      "offlineGzipBytes": 112508
+    },
+    {
+      "asset": "/assets/vendor-highlight-BLvS2CjZ.js",
+      "rawBytes": 152288,
+      "offlineGzipBytes": 51242
+    },
+    {
+      "asset": "/assets/vendor-react-DtxX27Jz.css",
+      "rawBytes": 15413,
+      "offlineGzipBytes": 2534
+    },
+    {
+      "asset": "/assets/index-Dn9CRHlt.css",
+      "rawBytes": 117092,
+      "offlineGzipBytes": 19795
+    }
+  ],
+  "browser": {
+    "source": ".scratch/resource-audit-20260928/browser/results.json",
+    "environment": {
+      "hostname": "DESKTOP-OBBV4NM",
+      "platform": "win32",
+      "release": "10.0.26200",
+      "arch": "x64",
+      "node": "v24.18.1",
+      "playwright": "1.62.1",
+      "browser": "151.0.7922.34",
+      "executablePath": "C:\\Users\\Bilal\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "headless": true,
+      "cachePolicy": "new context per cold repetition; CDP cache disabled; service workers blocked"
+    },
+    "methodology": {
+      "repetitions": 3,
+      "retentionCycles": 10,
+      "garbageCollection": "CDP HeapProfiler.collectGarbage before every memory snapshot",
+      "scroll": "2400 ms requestAnimationFrame sweep over the full transcript range",
+      "retention": "SPA route chat -> agents -> same chat, with forced-GC snapshots after each route"
+    },
+    "scenarios": [
+      {
+        "name": "messages-50",
+        "expectedMessages": 50,
+        "validation": {
+          "coldRuns": 3,
+          "messageCounts": [
+            50,
+            50,
+            50
+          ],
+          "errorCounts": [
+            0,
+            0,
+            0
+          ]
+        },
+        "cold": {
+          "domContentLoadedWallMs": {
+            "samples": [
+              460.4771999999998,
+              104.70110000000022,
+              107.48329999999987
+            ],
+            "median": 107.48329999999987,
+            "p95": 460.4771999999998,
+            "min": 104.70110000000022,
+            "max": 460.4771999999998
+          },
+          "transcriptReadyWallMs": {
+            "samples": [
+              2270.7916999999998,
+              1804.3827999999994,
+              1883.9624000000003
+            ],
+            "median": 1883.9624000000003,
+            "p95": 2270.7916999999998,
+            "min": 1804.3827999999994,
+            "max": 2270.7916999999998
+          },
+          "firstContentfulPaintMs": {
+            "samples": [
+              544,
+              40,
+              52
+            ],
+            "median": 52,
+            "p95": 544,
+            "min": 40,
+            "max": 544
+          },
+          "networkEncodedBytes": {
+            "samples": [
+              2832766,
+              2846824,
+              2846824
+            ],
+            "median": 2846824,
+            "p95": 2846824,
+            "min": 2832766,
+            "max": 2846824
+          },
+          "resourceDecodedBytes": {
+            "samples": [
+              2791833,
+              2814923,
+              2814923
+            ],
+            "median": 2814923,
+            "p95": 2814923,
+            "min": 2791833,
+            "max": 2814923
+          },
+          "transcriptResponseBytes": {
+            "samples": [
+              80753,
+              80753,
+              80753
+            ],
+            "median": 80753,
+            "p95": 80753,
+            "min": 80753,
+            "max": 80753
+          },
+          "heapUsedBytes": {
+            "samples": [
+              10032720,
+              10169864,
+              10257816
+            ],
+            "median": 10169864,
+            "p95": 10257816,
+            "min": 10032720,
+            "max": 10257816
+          },
+          "browserDomNodes": {
+            "samples": [
+              6129,
+              6313,
+              6129
+            ],
+            "median": 6129,
+            "p95": 6313,
+            "min": 6129,
+            "max": 6313
+          },
+          "documentElements": {
+            "samples": [
+              4379,
+              4536,
+              4379
+            ],
+            "median": 4379,
+            "p95": 4536,
+            "min": 4379,
+            "max": 4536
+          },
+          "transcriptElements": {
+            "samples": [
+              3372,
+              3372,
+              3372
+            ],
+            "median": 3372,
+            "p95": 3372,
+            "min": 3372,
+            "max": 3372
+          }
+        },
+        "scroll": {
+          "framesPerSecond": {
+            "samples": [
+              238.74658045321354,
+              230.78200232271016,
+              211.0194436388449
+            ],
+            "median": 230.78200232271016,
+            "p95": 238.74658045321354,
+            "min": 211.0194436388449,
+            "max": 238.74658045321354
+          },
+          "meanFrameIntervalMs": {
+            "samples": [
+              4.172222222242918,
+              4.317446043186908,
+              4.7212180746796095
+            ],
+            "median": 4.317446043186908,
+            "p95": 4.7212180746796095,
+            "min": 4.172222222242918,
+            "max": 4.7212180746796095
+          },
+          "p95FrameIntervalMs": {
+            "samples": [
+              4.299999999999727,
+              4.300000000000182,
+              8.400000000000091
+            ],
+            "median": 4.300000000000182,
+            "p95": 8.400000000000091,
+            "min": 4.299999999999727,
+            "max": 8.400000000000091
+          },
+          "maxFrameIntervalMs": {
+            "samples": [
+              8.400000000000091,
+              12.5,
+              12.600000000000364
+            ],
+            "median": 12.5,
+            "p95": 12.600000000000364,
+            "min": 8.400000000000091,
+            "max": 12.600000000000364
+          },
+          "framesOver50Ms": {
+            "samples": [
+              0,
+              0,
+              0
+            ],
+            "median": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "cdpTaskDurationMs": {
+            "samples": [
+              1140.395,
+              1516.154,
+              1664.9560000000001
+            ],
+            "median": 1516.154,
+            "p95": 1664.9560000000001,
+            "min": 1140.395,
+            "max": 1664.9560000000001
+          },
+          "cdpLayoutDurationMs": {
+            "samples": [
+              25.591,
+              37.459,
+              43.645999999999994
+            ],
+            "median": 37.459,
+            "p95": 43.645999999999994,
+            "min": 25.591,
+            "max": 43.645999999999994
+          },
+          "cdpRecalcStyleDurationMs": {
+            "samples": [
+              16.979,
+              21.248000000000005,
+              24.366
+            ],
+            "median": 21.248000000000005,
+            "p95": 24.366,
+            "min": 16.979,
+            "max": 24.366
+          }
+        },
+        "retentionInvalidated": {
+          "valid": false,
+          "reason": "The first harness leaked one transcript ElementHandle per open cycle; its monotonic retention is measurement-induced.",
+          "cycles": 10,
+          "openHeapBytes": {
+            "first": 10245776,
+            "last": 18535164,
+            "slopePerCycle": 779027.1272727273
+          },
+          "closedHeapBytes": {
+            "first": 9684508,
+            "last": 16690376,
+            "slopePerCycle": 758671.8787878788
+          },
+          "openDomNodes": {
+            "first": 6129,
+            "last": 53403,
+            "slopePerCycle": 4717.363636363636
+          },
+          "closedDomNodes": {
+            "first": 6198,
+            "last": 48735,
+            "slopePerCycle": 4717.509090909091
+          },
+          "openEventListeners": {
+            "first": 721,
+            "last": 4629,
+            "slopePerCycle": 389.8181818181818
+          },
+          "documentElements": {
+            "first": 4379,
+            "last": 4536
+          },
+          "reopenWallMs": {
+            "samples": [
+              473.45200000000114,
+              593.5933000000005,
+              577.339899999999,
+              570.3796999999977,
+              600.9357999999993,
+              492.0002999999997,
+              581.5450000000019,
+              570.1006000000016,
+              534.4285999999993,
+              565.589899999999
+            ],
+            "median": 570.2401499999996,
+            "p95": 600.9357999999993,
+            "min": 473.45200000000114,
+            "max": 600.9357999999993
+          }
+        }
+      },
+      {
+        "name": "messages-500",
+        "expectedMessages": 500,
+        "validation": {
+          "coldRuns": 3,
+          "messageCounts": [
+            500,
+            500,
+            500
+          ],
+          "errorCounts": [
+            0,
+            0,
+            0
+          ]
+        },
+        "cold": {
+          "domContentLoadedWallMs": {
+            "samples": [
+              126.93209999999817,
+              121.1646000000037,
+              111.6981999999989
+            ],
+            "median": 121.1646000000037,
+            "p95": 126.93209999999817,
+            "min": 111.6981999999989,
+            "max": 126.93209999999817
+          },
+          "transcriptReadyWallMs": {
+            "samples": [
+              2250.971099999995,
+              2194.410800000005,
+              2179.4640999999974
+            ],
+            "median": 2194.410800000005,
+            "p95": 2250.971099999995,
+            "min": 2179.4640999999974,
+            "max": 2250.971099999995
+          },
+          "firstContentfulPaintMs": {
+            "samples": [
+              56,
+              56,
+              48
+            ],
+            "median": 56,
+            "p95": 56,
+            "min": 48,
+            "max": 56
+          },
+          "networkEncodedBytes": {
+            "samples": [
+              3572679,
+              3572679,
+              3572679
+            ],
+            "median": 3572679,
+            "p95": 3572679,
+            "min": 3572679,
+            "max": 3572679
+          },
+          "resourceDecodedBytes": {
+            "samples": [
+              3540778,
+              3540778,
+              3540778
+            ],
+            "median": 3540778,
+            "p95": 3540778,
+            "min": 3540778,
+            "max": 3540778
+          },
+          "transcriptResponseBytes": {
+            "samples": [
+              806603,
+              806603,
+              806603
+            ],
+            "median": 806603,
+            "p95": 806603,
+            "min": 806603,
+            "max": 806603
+          },
+          "heapUsedBytes": {
+            "samples": [
+              28343136,
+              28082900,
+              28302652
+            ],
+            "median": 28302652,
+            "p95": 28343136,
+            "min": 28082900,
+            "max": 28343136
+          },
+          "browserDomNodes": {
+            "samples": [
+              47529,
+              47529,
+              47529
+            ],
+            "median": 47529,
+            "p95": 47529,
+            "min": 47529,
+            "max": 47529
+          },
+          "documentElements": {
+            "samples": [
+              34754,
+              34754,
+              34754
+            ],
+            "median": 34754,
+            "p95": 34754,
+            "min": 34754,
+            "max": 34754
+          },
+          "transcriptElements": {
+            "samples": [
+              33747,
+              33747,
+              33747
+            ],
+            "median": 33747,
+            "p95": 33747,
+            "min": 33747,
+            "max": 33747
+          }
+        },
+        "scroll": {
+          "framesPerSecond": {
+            "samples": [
+              22.798872492067694,
+              30.691385674664232,
+              26.128069011086925
+            ],
+            "median": 26.128069011086925,
+            "p95": 30.691385674664232,
+            "min": 22.798872492067694,
+            "max": 30.691385674664232
+          },
+          "meanFrameIntervalMs": {
+            "samples": [
+              43.699999999891624,
+              32.46486486462323,
+              38.13333333352256
+            ],
+            "median": 38.13333333352256,
+            "p95": 43.699999999891624,
+            "min": 32.46486486462323,
+            "max": 43.699999999891624
+          },
+          "p95FrameIntervalMs": {
+            "samples": [
+              95.90000000000009,
+              79.19999999999982,
+              79.20000000000027
+            ],
+            "median": 79.20000000000027,
+            "p95": 95.90000000000009,
+            "min": 79.19999999999982,
+            "max": 95.90000000000009
+          },
+          "maxFrameIntervalMs": {
+            "samples": [
+              99.89999999999964,
+              83.30000000000018,
+              104.09999999999945
+            ],
+            "median": 99.89999999999964,
+            "p95": 104.09999999999945,
+            "min": 83.30000000000018,
+            "max": 104.09999999999945
+          },
+          "framesOver50Ms": {
+            "samples": [
+              25,
+              25,
+              26
+            ],
+            "median": 25,
+            "p95": 26,
+            "min": 25,
+            "max": 26
+          },
+          "cdpTaskDurationMs": {
+            "samples": [
+              2631.3459999999995,
+              2577.888,
+              2571.662
+            ],
+            "median": 2577.888,
+            "p95": 2631.3459999999995,
+            "min": 2571.662,
+            "max": 2631.3459999999995
+          },
+          "cdpLayoutDurationMs": {
+            "samples": [
+              171.59599999999998,
+              182.466,
+              183.45299999999997
+            ],
+            "median": 182.466,
+            "p95": 183.45299999999997,
+            "min": 171.59599999999998,
+            "max": 183.45299999999997
+          },
+          "cdpRecalcStyleDurationMs": {
+            "samples": [
+              114.36500000000001,
+              116.61300000000001,
+              120.91100000000002
+            ],
+            "median": 116.61300000000001,
+            "p95": 120.91100000000002,
+            "min": 114.36500000000001,
+            "max": 120.91100000000002
+          }
+        },
+        "retentionInvalidated": {
+          "valid": false,
+          "reason": "The first harness leaked one transcript ElementHandle per open cycle; its monotonic retention is measurement-induced.",
+          "cycles": 10,
+          "openHeapBytes": {
+            "first": 28306700,
+            "last": 87269400,
+            "slopePerCycle": 5926561.381818182
+          },
+          "closedHeapBytes": {
+            "first": 15920324,
+            "last": 67800860,
+            "slopePerCycle": 5719172.8969696965
+          },
+          "openDomNodes": {
+            "first": 47529,
+            "last": 508803,
+            "slopePerCycle": 46117.36363636365
+          },
+          "closedDomNodes": {
+            "first": 47754,
+            "last": 462755,
+            "slopePerCycle": 46109.00000000001
+          },
+          "openEventListeners": {
+            "first": 4321,
+            "last": 41979,
+            "slopePerCycle": 3851.4
+          },
+          "documentElements": {
+            "first": 34754,
+            "last": 34911
+          },
+          "reopenWallMs": {
+            "samples": [
+              1490.8224999999948,
+              1579.6039000000019,
+              1518.3021000000008,
+              1503.7230999999956,
+              1421.405899999998,
+              1497.9781000000003,
+              1482.9801000000007,
+              1484.584400000007,
+              1546.5902999999962,
+              1563.042300000001
+            ],
+            "median": 1500.850599999998,
+            "p95": 1579.6039000000019,
+            "min": 1421.405899999998,
+            "max": 1579.6039000000019
+          }
+        }
+      },
+      {
+        "name": "messages-2000",
+        "expectedMessages": 2000,
+        "validation": {
+          "coldRuns": 3,
+          "messageCounts": [
+            2000,
+            2000,
+            2000
+          ],
+          "errorCounts": [
+            0,
+            0,
+            0
+          ]
+        },
+        "cold": {
+          "domContentLoadedWallMs": {
+            "samples": [
+              124.6313999999984,
+              127.79359999998996,
+              115.20059999999648
+            ],
+            "median": 124.6313999999984,
+            "p95": 127.79359999998996,
+            "min": 115.20059999999648,
+            "max": 127.79359999998996
+          },
+          "transcriptReadyWallMs": {
+            "samples": [
+              3705.641499999998,
+              3474.1177999999927,
+              3401.342000000004
+            ],
+            "median": 3474.1177999999927,
+            "p95": 3705.641499999998,
+            "min": 3401.342000000004,
+            "max": 3705.641499999998
+          },
+          "firstContentfulPaintMs": {
+            "samples": [
+              52,
+              44,
+              56
+            ],
+            "median": 52,
+            "p95": 56,
+            "min": 44,
+            "max": 56
+          },
+          "networkEncodedBytes": {
+            "samples": [
+              5998185,
+              5998185,
+              5998185
+            ],
+            "median": 5998185,
+            "p95": 5998185,
+            "min": 5998185,
+            "max": 5998185
+          },
+          "resourceDecodedBytes": {
+            "samples": [
+              5977200,
+              5979702,
+              5979702
+            ],
+            "median": 5979702,
+            "p95": 5979702,
+            "min": 5977200,
+            "max": 5979702
+          },
+          "transcriptResponseBytes": {
+            "samples": [
+              3232104,
+              3232104,
+              3232104
+            ],
+            "median": 3232104,
+            "p95": 3232104,
+            "min": 3232104,
+            "max": 3232104
+          },
+          "heapUsedBytes": {
+            "samples": [
+              86377724,
+              85843048,
+              85740088
+            ],
+            "median": 85843048,
+            "p95": 86377724,
+            "min": 85740088,
+            "max": 86377724
+          },
+          "browserDomNodes": {
+            "samples": [
+              185713,
+              185713,
+              185713
+            ],
+            "median": 185713,
+            "p95": 185713,
+            "min": 185713,
+            "max": 185713
+          },
+          "documentElements": {
+            "samples": [
+              136161,
+              136161,
+              136161
+            ],
+            "median": 136161,
+            "p95": 136161,
+            "min": 136161,
+            "max": 136161
+          },
+          "transcriptElements": {
+            "samples": [
+              134997,
+              134997,
+              134997
+            ],
+            "median": 134997,
+            "p95": 134997,
+            "min": 134997,
+            "max": 134997
+          }
+        },
+        "scroll": {
+          "framesPerSecond": {
+            "samples": [
+              4.060089321973272,
+              3.7012113055181697,
+              3.8588931408322353
+            ],
+            "median": 3.8588931408322353,
+            "p95": 4.060089321973272,
+            "min": 3.7012113055181697,
+            "max": 4.060089321973272
+          },
+          "meanFrameIntervalMs": {
+            "samples": [
+              221.07499999999996,
+              222.7454545459964,
+              217.5083333323399
+            ],
+            "median": 221.07499999999996,
+            "p95": 222.7454545459964,
+            "min": 217.5083333323399,
+            "max": 222.7454545459964
+          },
+          "p95FrameIntervalMs": {
+            "samples": [
+              316.6999999999998,
+              337.5,
+              325
+            ],
+            "median": 325,
+            "p95": 337.5,
+            "min": 316.6999999999998,
+            "max": 337.5
+          },
+          "maxFrameIntervalMs": {
+            "samples": [
+              316.6999999999998,
+              337.5,
+              325
+            ],
+            "median": 325,
+            "p95": 337.5,
+            "min": 316.6999999999998,
+            "max": 337.5
+          },
+          "framesOver50Ms": {
+            "samples": [
+              12,
+              9,
+              10
+            ],
+            "median": 10,
+            "p95": 12,
+            "min": 9,
+            "max": 12
+          },
+          "cdpTaskDurationMs": {
+            "samples": [
+              3751.2930000000006,
+              3754.767,
+              3942.392
+            ],
+            "median": 3754.767,
+            "p95": 3942.392,
+            "min": 3751.2930000000006,
+            "max": 3942.392
+          },
+          "cdpLayoutDurationMs": {
+            "samples": [
+              100.275,
+              95.34399999999998,
+              107.16199999999998
+            ],
+            "median": 100.275,
+            "p95": 107.16199999999998,
+            "min": 95.34399999999998,
+            "max": 107.16199999999998
+          },
+          "cdpRecalcStyleDurationMs": {
+            "samples": [
+              48.8,
+              51.059999999999995,
+              57.983
+            ],
+            "median": 51.059999999999995,
+            "p95": 57.983,
+            "min": 48.8,
+            "max": 57.983
+          }
+        },
+        "retentionInvalidated": {
+          "valid": false,
+          "reason": "The first harness leaked one transcript ElementHandle per open cycle; its monotonic retention is measurement-induced.",
+          "cycles": 10,
+          "openHeapBytes": {
+            "first": 87204400,
+            "last": 310049696,
+            "slopePerCycle": 21925682.072727274
+          },
+          "closedHeapBytes": {
+            "first": 35749956,
+            "last": 235082668,
+            "slopePerCycle": 21861094.157575756
+          },
+          "openDomNodes": {
+            "first": 185713,
+            "last": 2026803,
+            "slopePerCycle": 184109
+          },
+          "closedDomNodes": {
+            "first": 185754,
+            "last": 1842735,
+            "slopePerCycle": 184108.87878787876
+          },
+          "openEventListeners": {
+            "first": 16339,
+            "last": 166479,
+            "slopePerCycle": 15014.000000000002
+          },
+          "documentElements": {
+            "first": 136161,
+            "last": 136161
+          },
+          "reopenWallMs": {
+            "samples": [
+              4352.786200000002,
+              4406.797600000005,
+              4425.674899999998,
+              4132.3891999999905,
+              4242.7532000000065,
+              4969.858000000007,
+              4649.695000000007,
+              4936.841399999976,
+              4607.577900000004,
+              4987.4336000000185
+            ],
+            "median": 4516.626400000001,
+            "p95": 4987.4336000000185,
+            "min": 4132.3891999999905,
+            "max": 4987.4336000000185
+          }
+        }
+      }
+    ],
+    "retentionControl": [
+      {
+        "name": "messages-500-handle-free",
+        "valid": true,
+        "instrumentation": "handle-free locator waits; CDP forced GC snapshots",
+        "cycles": 10,
+        "openHeapBytes": {
+          "first": 27802488,
+          "last": 29939952,
+          "slopePerCycle": 165265.16363636364,
+          "samples": [
+            27802488,
+            28872740,
+            29207592,
+            29440456,
+            29488640,
+            29612660,
+            29614212,
+            30307776,
+            29696468,
+            29913992,
+            29939952
+          ]
+        },
+        "closedHeapBytes": {
+          "first": 9582224,
+          "last": 11712636,
+          "slopePerCycle": 180010.27878787878,
+          "samples": [
+            9582224,
+            9919500,
+            10444632,
+            10591576,
+            10686060,
+            10756024,
+            10757912,
+            10825360,
+            11070268,
+            11712636
+          ]
+        },
+        "openDomNodes": {
+          "first": 47529,
+          "last": 47713,
+          "slopePerCycle": 15.054545454545455,
+          "samples": [
+            47529,
+            47529,
+            47713,
+            47713,
+            47713,
+            47713,
+            47713,
+            47713,
+            47713,
+            47713,
+            47713
+          ]
+        },
+        "openEventListeners": {
+          "first": 4308,
+          "last": 4326,
+          "slopePerCycle": 1.4727272727272727,
+          "samples": [
+            4308,
+            4308,
+            4326,
+            4326,
+            4326,
+            4326,
+            4326,
+            4326,
+            4326,
+            4326,
+            4326
+          ]
+        },
+        "documentElements": {
+          "first": 34754,
+          "last": 34911,
+          "samples": [
+            34754,
+            34754,
+            34911,
+            34911,
+            34911,
+            34911,
+            34911,
+            34911,
+            34911,
+            34911,
+            34911
+          ]
+        },
+        "reopenWallMs": {
+          "samples": [
+            1279.2421999999997,
+            1391.010799999999,
+            1280.6001000000015,
+            1325.1414999999997,
+            1389.0661999999993,
+            1383.83,
+            1379.737000000001,
+            1287.4516000000003,
+            1362.896499999999,
+            1411.3205000000016
+          ],
+          "median": 1371.31675,
+          "p95": 1411.3205000000016,
+          "min": 1279.2421999999997,
+          "max": 1411.3205000000016
+        }
+      },
+      {
+        "name": "messages-2000-handle-free",
+        "valid": true,
+        "instrumentation": "handle-free locator waits; CDP forced GC snapshots",
+        "cycles": 10,
+        "openHeapBytes": {
+          "first": 87125012,
+          "last": 89337424,
+          "slopePerCycle": 276322.2545454545,
+          "samples": [
+            87125012,
+            88230512,
+            90613896,
+            88728268,
+            90973800,
+            89016308,
+            89237000,
+            91386408,
+            91488868,
+            91512760,
+            89337424
+          ]
+        },
+        "closedHeapBytes": {
+          "first": 12142272,
+          "last": 13404976,
+          "slopePerCycle": 531765.9151515153,
+          "samples": [
+            12142272,
+            12320880,
+            12666876,
+            12872428,
+            13107348,
+            13166260,
+            35103168,
+            13167132,
+            13338684,
+            13404976
+          ]
+        },
+        "openDomNodes": {
+          "first": 185713,
+          "last": 185713,
+          "slopePerCycle": 18.936363636363637,
+          "samples": [
+            185713,
+            185713,
+            185713,
+            185713,
+            185713,
+            185706,
+            187796,
+            185713,
+            185713,
+            185713,
+            185713
+          ]
+        },
+        "openEventListeners": {
+          "first": 16326,
+          "last": 16326,
+          "slopePerCycle": 1.3727272727272728,
+          "samples": [
+            16326,
+            16326,
+            16326,
+            16326,
+            16326,
+            16326,
+            16477,
+            16326,
+            16326,
+            16326,
+            16326
+          ]
+        },
+        "documentElements": {
+          "first": 136161,
+          "last": 136161,
+          "samples": [
+            136161,
+            136161,
+            136161,
+            136161,
+            136161,
+            136155,
+            136161,
+            136161,
+            136161,
+            136161,
+            136161
+          ]
+        },
+        "reopenWallMs": {
+          "samples": [
+            4108.0265,
+            2507.386999999995,
+            2884.804400000001,
+            2064.5144,
+            23120.079900000004,
+            2684.855800000005,
+            3864.881800000003,
+            2312.2685000000056,
+            2005.7434999999969,
+            2157.4437000000034
+          ],
+          "median": 2596.1214,
+          "p95": 23120.079900000004,
+          "min": 2005.7434999999969,
+          "max": 23120.079900000004
+        }
+      }
+    ],
+    "initialRetentionExcluded": "The first retention experiment retained transcript ElementHandles in the test harness. Those retention values are invalid and excluded. Use browserRetentionControl for handle-free measurements."
+  },
+  "profileSummary": {
+    "baselineLiveHeapKiB": 27751.67,
+    "baselineDecodeMessagesCumulativeKiB": 19002.91,
+    "bootAllocatedMiB": 104.4,
+    "bootReadJSONLinesAllocatedMiB": 24.37,
+    "bootCountToolStepsAllocatedMiB": 21.69,
+    "apiCPUSampleSeconds": 14.16,
+    "apiTrimStepsCumulativeCPUPercent": 67.66,
+    "apiAllocationSampleMiB": 1110.88,
+    "apiTrimStepsCumulativeAllocatedMiB": 936.01
+  },
+  "validation": {
+    "fullTestExitCode": 0,
+    "frontendTestFiles": 143,
+    "frontendTests": 1026,
+    "depcheck": "passed",
+    "frontendProductionBuild": "passed"
+  },
+  "browserRetentionControl": {
+    "startedAt": "2026-09-27T23:55:09.010Z",
+    "browser": "151.0.7922.34",
+    "instrumentation": "handle-free locator waits; CDP forced GC snapshots",
+    "results": [
+      {
+        "scenario": "messages-500-handle-free",
+        "url": "http://127.0.0.1:18090/#/w/WS1/chat/SES500",
+        "expectedMessages": 500,
+        "cycles": 10,
+        "samples": [
+          {
+            "cycle": 0,
+            "state": "open",
+            "label": "open-0",
+            "capturedAt": "2026-09-27T23:53:45.689Z",
+            "cdp": {
+              "jsHeapUsedSize": 27802488,
+              "jsHeapTotalSize": 29155328,
+              "nodes": 47529,
+              "documents": 1,
+              "layoutCount": 11,
+              "recalcStyleCount": 46,
+              "layoutDuration": 0.166401,
+              "recalcStyleDuration": 0.023958,
+              "taskDuration": 1.097209
+            },
+            "runtimeHeap": {
+              "usedSize": 27802488,
+              "totalSize": 29155328,
+              "embedderHeapUsedSize": 24585240,
+              "backingStorageSize": 2308060
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47529,
+              "jsEventListeners": 4308
+            },
+            "page": {
+              "allElements": 34754,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 31725563,
+                "usedJSHeapSize": 30152139
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 1,
+            "state": "closed",
+            "routeDurationMs": 190.0032000000001,
+            "label": "closed-1",
+            "capturedAt": "2026-09-27T23:53:46.179Z",
+            "cdp": {
+              "jsHeapUsedSize": 9582224,
+              "jsHeapTotalSize": 11853824,
+              "nodes": 1489,
+              "documents": 5,
+              "layoutCount": 18,
+              "recalcStyleCount": 76,
+              "layoutDuration": 0.317033,
+              "recalcStyleDuration": 0.04264,
+              "taskDuration": 1.511196
+            },
+            "runtimeHeap": {
+              "usedSize": 9582224,
+              "totalSize": 11853824,
+              "embedderHeapUsedSize": 7213288,
+              "backingStorageSize": 2459459
+            },
+            "domCounters": {
+              "documents": 5,
+              "nodes": 1489,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 985,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 14313314,
+                "usedJSHeapSize": 12054498
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 1,
+            "state": "open",
+            "routeDurationMs": 1279.2421999999997,
+            "label": "open-1",
+            "capturedAt": "2026-09-27T23:53:47.733Z",
+            "cdp": {
+              "jsHeapUsedSize": 28872740,
+              "jsHeapTotalSize": 30203904,
+              "nodes": 47529,
+              "documents": 1,
+              "layoutCount": 23,
+              "recalcStyleCount": 98,
+              "layoutDuration": 0.348528,
+              "recalcStyleDuration": 0.065024,
+              "taskDuration": 2.648259
+            },
+            "runtimeHeap": {
+              "usedSize": 28872740,
+              "totalSize": 30203904,
+              "embedderHeapUsedSize": 23160584,
+              "backingStorageSize": 2320846
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47529,
+              "jsEventListeners": 4308
+            },
+            "page": {
+              "allElements": 34754,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 32786925,
+                "usedJSHeapSize": 31208689
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 2,
+            "state": "closed",
+            "routeDurationMs": 76.9398999999994,
+            "label": "closed-2",
+            "capturedAt": "2026-09-27T23:53:48.024Z",
+            "cdp": {
+              "jsHeapUsedSize": 9919500,
+              "jsHeapTotalSize": 13164544,
+              "nodes": 1461,
+              "documents": 2,
+              "layoutCount": 29,
+              "recalcStyleCount": 135,
+              "layoutDuration": 0.359953,
+              "recalcStyleDuration": 0.084673,
+              "taskDuration": 2.855723
+            },
+            "runtimeHeap": {
+              "usedSize": 9919500,
+              "totalSize": 13164544,
+              "embedderHeapUsedSize": 6086536,
+              "backingStorageSize": 2322543
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1461,
+              "jsEventListeners": 315
+            },
+            "page": {
+              "allElements": 985,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 15487118,
+                "usedJSHeapSize": 12256062
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 2,
+            "state": "open",
+            "routeDurationMs": 1391.010799999999,
+            "label": "open-2",
+            "capturedAt": "2026-09-27T23:53:49.672Z",
+            "cdp": {
+              "jsHeapUsedSize": 29207592,
+              "jsHeapTotalSize": 30203904,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 35,
+              "recalcStyleCount": 166,
+              "layoutDuration": 0.389379,
+              "recalcStyleDuration": 0.112851,
+              "taskDuration": 4.105078
+            },
+            "runtimeHeap": {
+              "usedSize": 29207592,
+              "totalSize": 30203904,
+              "embedderHeapUsedSize": 25308672,
+              "backingStorageSize": 2323673
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 32789752,
+                "usedJSHeapSize": 31546188
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 3,
+            "state": "closed",
+            "routeDurationMs": 87.01890000000094,
+            "label": "closed-3",
+            "capturedAt": "2026-09-27T23:53:49.983Z",
+            "cdp": {
+              "jsHeapUsedSize": 10444632,
+              "jsHeapTotalSize": 12902400,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 41,
+              "recalcStyleCount": 207,
+              "layoutDuration": 0.401193,
+              "recalcStyleDuration": 0.135602,
+              "taskDuration": 4.320371
+            },
+            "runtimeHeap": {
+              "usedSize": 10444632,
+              "totalSize": 12902400,
+              "embedderHeapUsedSize": 5883896,
+              "backingStorageSize": 2325163
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 15227594,
+                "usedJSHeapSize": 12783670
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 3,
+            "state": "open",
+            "routeDurationMs": 1280.6001000000015,
+            "label": "open-3",
+            "capturedAt": "2026-09-27T23:53:51.535Z",
+            "cdp": {
+              "jsHeapUsedSize": 29440456,
+              "jsHeapTotalSize": 30990336,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 46,
+              "recalcStyleCount": 231,
+              "layoutDuration": 0.438205,
+              "recalcStyleDuration": 0.16648,
+              "taskDuration": 5.454015
+            },
+            "runtimeHeap": {
+              "usedSize": 29440456,
+              "totalSize": 30990336,
+              "embedderHeapUsedSize": 25191792,
+              "backingStorageSize": 2323691
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33576202,
+                "usedJSHeapSize": 31779058
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 4,
+            "state": "closed",
+            "routeDurationMs": 88.09429999999884,
+            "label": "closed-4",
+            "capturedAt": "2026-09-27T23:53:51.852Z",
+            "cdp": {
+              "jsHeapUsedSize": 10591576,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1665,
+              "documents": 3,
+              "layoutCount": 52,
+              "recalcStyleCount": 271,
+              "layoutDuration": 0.450538,
+              "recalcStyleDuration": 0.189696,
+              "taskDuration": 5.67399
+            },
+            "runtimeHeap": {
+              "usedSize": 10591576,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 6067456,
+              "backingStorageSize": 2325163
+            },
+            "domCounters": {
+              "documents": 3,
+              "nodes": 1665,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16538314,
+                "usedJSHeapSize": 12930614
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 4,
+            "state": "open",
+            "routeDurationMs": 1325.1414999999997,
+            "label": "open-4",
+            "capturedAt": "2026-09-27T23:53:53.453Z",
+            "cdp": {
+              "jsHeapUsedSize": 29488640,
+              "jsHeapTotalSize": 30728192,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 57,
+              "recalcStyleCount": 292,
+              "layoutDuration": 0.486642,
+              "recalcStyleDuration": 0.221217,
+              "taskDuration": 6.875294
+            },
+            "runtimeHeap": {
+              "usedSize": 29488640,
+              "totalSize": 30728192,
+              "embedderHeapUsedSize": 25203504,
+              "backingStorageSize": 2324365
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33314732,
+                "usedJSHeapSize": 31827940
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 5,
+            "state": "closed",
+            "routeDurationMs": 73.1247000000003,
+            "label": "closed-5",
+            "capturedAt": "2026-09-27T23:53:53.734Z",
+            "cdp": {
+              "jsHeapUsedSize": 10686060,
+              "jsHeapTotalSize": 13688832,
+              "nodes": 1643,
+              "documents": 2,
+              "layoutCount": 64,
+              "recalcStyleCount": 329,
+              "layoutDuration": 0.495325,
+              "recalcStyleDuration": 0.240857,
+              "taskDuration": 7.07418
+            },
+            "runtimeHeap": {
+              "usedSize": 10686060,
+              "totalSize": 13688832,
+              "embedderHeapUsedSize": 6336024,
+              "backingStorageSize": 2445910
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1643,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16134773,
+                "usedJSHeapSize": 13145105
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 5,
+            "state": "open",
+            "routeDurationMs": 1389.0661999999993,
+            "label": "open-5",
+            "capturedAt": "2026-09-27T23:53:55.409Z",
+            "cdp": {
+              "jsHeapUsedSize": 29612660,
+              "jsHeapTotalSize": 30728192,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 69,
+              "recalcStyleCount": 353,
+              "layoutDuration": 0.527481,
+              "recalcStyleDuration": 0.268498,
+              "taskDuration": 8.348838
+            },
+            "runtimeHeap": {
+              "usedSize": 29612660,
+              "totalSize": 30728192,
+              "embedderHeapUsedSize": 25280000,
+              "backingStorageSize": 2377148
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33367515,
+                "usedJSHeapSize": 32004751
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 6,
+            "state": "closed",
+            "routeDurationMs": 84.39649999999892,
+            "label": "closed-6",
+            "capturedAt": "2026-09-27T23:53:55.719Z",
+            "cdp": {
+              "jsHeapUsedSize": 10756024,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1665,
+              "documents": 3,
+              "layoutCount": 75,
+              "recalcStyleCount": 394,
+              "layoutDuration": 0.538984,
+              "recalcStyleDuration": 0.292064,
+              "taskDuration": 8.567776
+            },
+            "runtimeHeap": {
+              "usedSize": 10756024,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 6092512,
+              "backingStorageSize": 2325163
+            },
+            "domCounters": {
+              "documents": 3,
+              "nodes": 1665,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16538314,
+                "usedJSHeapSize": 13095086
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 6,
+            "state": "open",
+            "routeDurationMs": 1383.83,
+            "label": "open-6",
+            "capturedAt": "2026-09-27T23:53:57.377Z",
+            "cdp": {
+              "jsHeapUsedSize": 29614212,
+              "jsHeapTotalSize": 30990336,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 80,
+              "recalcStyleCount": 420,
+              "layoutDuration": 0.57508,
+              "recalcStyleDuration": 0.325376,
+              "taskDuration": 9.808952
+            },
+            "runtimeHeap": {
+              "usedSize": 29614212,
+              "totalSize": 30990336,
+              "embedderHeapUsedSize": 25316472,
+              "backingStorageSize": 2376941
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33629452,
+                "usedJSHeapSize": 32006096
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 7,
+            "state": "closed",
+            "routeDurationMs": 83.25610000000233,
+            "label": "closed-7",
+            "capturedAt": "2026-09-27T23:53:57.687Z",
+            "cdp": {
+              "jsHeapUsedSize": 10757912,
+              "jsHeapTotalSize": 13950976,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 86,
+              "recalcStyleCount": 459,
+              "layoutDuration": 0.586626,
+              "recalcStyleDuration": 0.347905,
+              "taskDuration": 10.019044
+            },
+            "runtimeHeap": {
+              "usedSize": 10757912,
+              "totalSize": 13950976,
+              "embedderHeapUsedSize": 5934864,
+              "backingStorageSize": 2325163
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16276170,
+                "usedJSHeapSize": 13096974
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 7,
+            "state": "open",
+            "routeDurationMs": 1379.737000000001,
+            "label": "open-7",
+            "capturedAt": "2026-09-27T23:53:59.371Z",
+            "cdp": {
+              "jsHeapUsedSize": 30307776,
+              "jsHeapTotalSize": 32038912,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 91,
+              "recalcStyleCount": 469,
+              "layoutDuration": 0.622998,
+              "recalcStyleDuration": 0.37948,
+              "taskDuration": 11.327981
+            },
+            "runtimeHeap": {
+              "usedSize": 30307776,
+              "totalSize": 32038912,
+              "embedderHeapUsedSize": 25327440,
+              "backingStorageSize": 2376923
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 34678010,
+                "usedJSHeapSize": 32699642
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 8,
+            "state": "closed",
+            "routeDurationMs": 88.54610000000321,
+            "label": "closed-8",
+            "capturedAt": "2026-09-27T23:53:59.675Z",
+            "cdp": {
+              "jsHeapUsedSize": 10825360,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1673,
+              "documents": 5,
+              "layoutCount": 97,
+              "recalcStyleCount": 504,
+              "layoutDuration": 0.636754,
+              "recalcStyleDuration": 0.399317,
+              "taskDuration": 11.548785
+            },
+            "runtimeHeap": {
+              "usedSize": 10825360,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 8204952,
+              "backingStorageSize": 2462615
+            },
+            "domCounters": {
+              "documents": 5,
+              "nodes": 1673,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16675766,
+                "usedJSHeapSize": 13300798
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 8,
+            "state": "open",
+            "routeDurationMs": 1287.4516000000003,
+            "label": "open-8",
+            "capturedAt": "2026-09-27T23:54:01.237Z",
+            "cdp": {
+              "jsHeapUsedSize": 29696468,
+              "jsHeapTotalSize": 30990336,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 102,
+              "recalcStyleCount": 532,
+              "layoutDuration": 0.666579,
+              "recalcStyleDuration": 0.430872,
+              "taskDuration": 12.704201
+            },
+            "runtimeHeap": {
+              "usedSize": 29696468,
+              "totalSize": 30990336,
+              "embedderHeapUsedSize": 25355968,
+              "backingStorageSize": 2377189
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33629700,
+                "usedJSHeapSize": 32088600
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 9,
+            "state": "closed",
+            "routeDurationMs": 85.34530000000086,
+            "label": "closed-9",
+            "capturedAt": "2026-09-27T23:54:01.544Z",
+            "cdp": {
+              "jsHeapUsedSize": 11070268,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 108,
+              "recalcStyleCount": 571,
+              "layoutDuration": 0.679867,
+              "recalcStyleDuration": 0.453545,
+              "taskDuration": 12.931773
+            },
+            "runtimeHeap": {
+              "usedSize": 11070268,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 6060944,
+              "backingStorageSize": 2446650
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16659801,
+                "usedJSHeapSize": 13529741
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 9,
+            "state": "open",
+            "routeDurationMs": 1362.896499999999,
+            "label": "open-9",
+            "capturedAt": "2026-09-27T23:54:03.183Z",
+            "cdp": {
+              "jsHeapUsedSize": 29913992,
+              "jsHeapTotalSize": 31252480,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 113,
+              "recalcStyleCount": 597,
+              "layoutDuration": 0.716518,
+              "recalcStyleDuration": 0.486074,
+              "taskDuration": 14.165308
+            },
+            "runtimeHeap": {
+              "usedSize": 29913992,
+              "totalSize": 31252480,
+              "embedderHeapUsedSize": 25379512,
+              "backingStorageSize": 2376941
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33891596,
+                "usedJSHeapSize": 32305876
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 10,
+            "state": "closed",
+            "routeDurationMs": 88.03299999999945,
+            "label": "closed-10",
+            "capturedAt": "2026-09-27T23:54:03.503Z",
+            "cdp": {
+              "jsHeapUsedSize": 11712636,
+              "jsHeapTotalSize": 14475264,
+              "nodes": 1663,
+              "documents": 3,
+              "layoutCount": 120,
+              "recalcStyleCount": 634,
+              "layoutDuration": 0.730761,
+              "recalcStyleDuration": 0.507809,
+              "taskDuration": 14.389559
+            },
+            "runtimeHeap": {
+              "usedSize": 11712636,
+              "totalSize": 14475264,
+              "embedderHeapUsedSize": 6052344,
+              "backingStorageSize": 2445936
+            },
+            "domCounters": {
+              "documents": 3,
+              "nodes": 1663,
+              "jsEventListeners": 471
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16921231,
+                "usedJSHeapSize": 14171395
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 10,
+            "state": "open",
+            "routeDurationMs": 1411.3205000000016,
+            "label": "open-10",
+            "capturedAt": "2026-09-27T23:54:05.206Z",
+            "cdp": {
+              "jsHeapUsedSize": 29939952,
+              "jsHeapTotalSize": 31252480,
+              "nodes": 47713,
+              "documents": 1,
+              "layoutCount": 125,
+              "recalcStyleCount": 656,
+              "layoutDuration": 0.766728,
+              "recalcStyleDuration": 0.540296,
+              "taskDuration": 15.678708
+            },
+            "runtimeHeap": {
+              "usedSize": 29939952,
+              "totalSize": 31252480,
+              "embedderHeapUsedSize": 25381984,
+              "backingStorageSize": 2377148
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 47713,
+              "jsEventListeners": 4326
+            },
+            "page": {
+              "allElements": 34911,
+              "transcriptElements": 33747,
+              "messageElements": 500,
+              "transcriptScrollHeight": 183275,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 33891803,
+                "usedJSHeapSize": 32332115
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          }
+        ]
+      },
+      {
+        "scenario": "messages-2000-handle-free",
+        "url": "http://127.0.0.1:18090/#/w/WS1/chat/SES2000",
+        "expectedMessages": 2000,
+        "cycles": 10,
+        "samples": [
+          {
+            "cycle": 0,
+            "state": "open",
+            "label": "open-0",
+            "capturedAt": "2026-09-27T23:54:09.299Z",
+            "cdp": {
+              "jsHeapUsedSize": 87125012,
+              "jsHeapTotalSize": 90759168,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 13,
+              "recalcStyleCount": 45,
+              "layoutDuration": 0.16816,
+              "recalcStyleDuration": 0.039927,
+              "taskDuration": 2.269722
+            },
+            "runtimeHeap": {
+              "usedSize": 87125012,
+              "totalSize": 90759168,
+              "embedderHeapUsedSize": 88143944,
+              "backingStorageSize": 2715936
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 93475135,
+                "usedJSHeapSize": 89880531
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 1,
+            "state": "closed",
+            "routeDurationMs": 306.0116999999991,
+            "label": "closed-1",
+            "capturedAt": "2026-09-27T23:54:10.000Z",
+            "cdp": {
+              "jsHeapUsedSize": 12142272,
+              "jsHeapTotalSize": 13426688,
+              "nodes": 1669,
+              "documents": 4,
+              "layoutCount": 19,
+              "recalcStyleCount": 61,
+              "layoutDuration": 0.285177,
+              "recalcStyleDuration": 0.049985,
+              "taskDuration": 2.859901
+            },
+            "runtimeHeap": {
+              "usedSize": 12142272,
+              "totalSize": 13426688,
+              "embedderHeapUsedSize": 13473512,
+              "backingStorageSize": 2540142
+            },
+            "domCounters": {
+              "documents": 4,
+              "nodes": 1669,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 15966861,
+                "usedJSHeapSize": 14695229
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 1,
+            "state": "open",
+            "routeDurationMs": 4108.0265,
+            "label": "open-1",
+            "capturedAt": "2026-09-27T23:54:14.642Z",
+            "cdp": {
+              "jsHeapUsedSize": 88230512,
+              "jsHeapTotalSize": 96264192,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 25,
+              "recalcStyleCount": 69,
+              "layoutDuration": 0.373392,
+              "recalcStyleDuration": 0.107425,
+              "taskDuration": 7.051059
+            },
+            "runtimeHeap": {
+              "usedSize": 88230512,
+              "totalSize": 96264192,
+              "embedderHeapUsedSize": 87477232,
+              "backingStorageSize": 2384175
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 98910542,
+                "usedJSHeapSize": 90629798
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 2,
+            "state": "closed",
+            "routeDurationMs": 221.0523999999932,
+            "label": "closed-2",
+            "capturedAt": "2026-09-27T23:54:15.356Z",
+            "cdp": {
+              "jsHeapUsedSize": 12320880,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 31,
+              "recalcStyleCount": 83,
+              "layoutDuration": 0.386984,
+              "recalcStyleDuration": 0.119109,
+              "taskDuration": 7.640919
+            },
+            "runtimeHeap": {
+              "usedSize": 12320880,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 4890680,
+              "backingStorageSize": 2510394
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16723545,
+                "usedJSHeapSize": 14844257
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 2,
+            "state": "open",
+            "routeDurationMs": 2507.386999999995,
+            "label": "open-2",
+            "capturedAt": "2026-09-27T23:54:18.366Z",
+            "cdp": {
+              "jsHeapUsedSize": 90613896,
+              "jsHeapTotalSize": 97050624,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 37,
+              "recalcStyleCount": 92,
+              "layoutDuration": 0.430978,
+              "recalcStyleDuration": 0.150872,
+              "taskDuration": 10.171484
+            },
+            "runtimeHeap": {
+              "usedSize": 90613896,
+              "totalSize": 97050624,
+              "embedderHeapUsedSize": 88381464,
+              "backingStorageSize": 2490717
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 99541372,
+                "usedJSHeapSize": 93118292
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 3,
+            "state": "closed",
+            "routeDurationMs": 145.03579999999783,
+            "label": "closed-3",
+            "capturedAt": "2026-09-27T23:54:18.958Z",
+            "cdp": {
+              "jsHeapUsedSize": 12666876,
+              "jsHeapTotalSize": 14475264,
+              "nodes": 1623,
+              "documents": 1,
+              "layoutCount": 44,
+              "recalcStyleCount": 105,
+              "layoutDuration": 0.437121,
+              "recalcStyleDuration": 0.157333,
+              "taskDuration": 10.646585
+            },
+            "runtimeHeap": {
+              "usedSize": 12666876,
+              "totalSize": 14475264,
+              "embedderHeapUsedSize": 13252384,
+              "backingStorageSize": 2506412
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 1623,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16981707,
+                "usedJSHeapSize": 15186111
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 3,
+            "state": "open",
+            "routeDurationMs": 2884.804400000001,
+            "label": "open-3",
+            "capturedAt": "2026-09-27T23:54:22.319Z",
+            "cdp": {
+              "jsHeapUsedSize": 88728268,
+              "jsHeapTotalSize": 95215616,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 50,
+              "recalcStyleCount": 113,
+              "layoutDuration": 0.478954,
+              "recalcStyleDuration": 0.187841,
+              "taskDuration": 13.640106
+            },
+            "runtimeHeap": {
+              "usedSize": 88728268,
+              "totalSize": 95215616,
+              "embedderHeapUsedSize": 87823520,
+              "backingStorageSize": 2384382
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 97862173,
+                "usedJSHeapSize": 91127585
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 4,
+            "state": "closed",
+            "routeDurationMs": 170.36139999999432,
+            "label": "closed-4",
+            "capturedAt": "2026-09-27T23:54:23.113Z",
+            "cdp": {
+              "jsHeapUsedSize": 12872428,
+              "jsHeapTotalSize": 14213120,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 56,
+              "recalcStyleCount": 139,
+              "layoutDuration": 0.48634,
+              "recalcStyleDuration": 0.197429,
+              "taskDuration": 13.959691
+            },
+            "runtimeHeap": {
+              "usedSize": 12872428,
+              "totalSize": 14213120,
+              "embedderHeapUsedSize": 5437624,
+              "backingStorageSize": 2507152
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 16720303,
+                "usedJSHeapSize": 15392623
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 4,
+            "state": "open",
+            "routeDurationMs": 2064.5144,
+            "label": "open-4",
+            "capturedAt": "2026-09-27T23:54:25.976Z",
+            "cdp": {
+              "jsHeapUsedSize": 90973800,
+              "jsHeapTotalSize": 97574912,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 62,
+              "recalcStyleCount": 148,
+              "layoutDuration": 0.529836,
+              "recalcStyleDuration": 0.227187,
+              "taskDuration": 16.073011
+            },
+            "runtimeHeap": {
+              "usedSize": 90973800,
+              "totalSize": 97574912,
+              "embedderHeapUsedSize": 88604472,
+              "backingStorageSize": 2576799
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 100151742,
+                "usedJSHeapSize": 93564266
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 5,
+            "state": "closed",
+            "routeDurationMs": 172.86109999999462,
+            "label": "closed-5",
+            "capturedAt": "2026-09-27T23:54:26.435Z",
+            "cdp": {
+              "jsHeapUsedSize": 13107348,
+              "jsHeapTotalSize": 16310272,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 68,
+              "recalcStyleCount": 159,
+              "layoutDuration": 0.534998,
+              "recalcStyleDuration": 0.232185,
+              "taskDuration": 16.665334
+            },
+            "runtimeHeap": {
+              "usedSize": 13107348,
+              "totalSize": 16310272,
+              "embedderHeapUsedSize": 13210040,
+              "backingStorageSize": 2507108
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 18817411,
+                "usedJSHeapSize": 15627335
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 5,
+            "state": "open",
+            "routeDurationMs": 23120.079900000004,
+            "label": "open-5",
+            "capturedAt": "2026-09-27T23:54:49.979Z",
+            "cdp": {
+              "jsHeapUsedSize": 89016308,
+              "jsHeapTotalSize": 97050624,
+              "nodes": 185706,
+              "documents": 1,
+              "layoutCount": 74,
+              "recalcStyleCount": 167,
+              "layoutDuration": 0.583481,
+              "recalcStyleDuration": 0.272231,
+              "taskDuration": 19.779875
+            },
+            "runtimeHeap": {
+              "usedSize": 89016308,
+              "totalSize": 97050624,
+              "embedderHeapUsedSize": 88312800,
+              "backingStorageSize": 2596652
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185706,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136155,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 99647307,
+                "usedJSHeapSize": 91626635
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 6,
+            "state": "closed",
+            "routeDurationMs": 154.19490000000224,
+            "label": "closed-6",
+            "capturedAt": "2026-09-27T23:54:50.389Z",
+            "cdp": {
+              "jsHeapUsedSize": 13166260,
+              "jsHeapTotalSize": 14999552,
+              "nodes": 2659,
+              "documents": 2,
+              "layoutCount": 81,
+              "recalcStyleCount": 177,
+              "layoutDuration": 0.603232,
+              "recalcStyleDuration": 0.277574,
+              "taskDuration": 20.052435
+            },
+            "runtimeHeap": {
+              "usedSize": 13166260,
+              "totalSize": 14999552,
+              "embedderHeapUsedSize": 5642264,
+              "backingStorageSize": 2509829
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 2659,
+              "jsEventListeners": 394
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 17509412,
+                "usedJSHeapSize": 15688912
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 6,
+            "state": "open",
+            "routeDurationMs": 2684.855800000005,
+            "label": "open-6",
+            "capturedAt": "2026-09-27T23:54:53.596Z",
+            "cdp": {
+              "jsHeapUsedSize": 89237000,
+              "jsHeapTotalSize": 94429184,
+              "nodes": 187796,
+              "documents": 1,
+              "layoutCount": 84,
+              "recalcStyleCount": 182,
+              "layoutDuration": 0.704634,
+              "recalcStyleDuration": 0.3118,
+              "taskDuration": 23.000426
+            },
+            "runtimeHeap": {
+              "usedSize": 89237000,
+              "totalSize": 94429184,
+              "embedderHeapUsedSize": 86095152,
+              "backingStorageSize": 2597435
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 187796,
+              "jsEventListeners": 16477
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 734078,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 97288794,
+                "usedJSHeapSize": 91849378
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 7,
+            "state": "closed",
+            "routeDurationMs": 174.18439999999828,
+            "label": "closed-7",
+            "capturedAt": "2026-09-27T23:54:54.284Z",
+            "cdp": {
+              "jsHeapUsedSize": 35103168,
+              "jsHeapTotalSize": 37019648,
+              "nodes": 188851,
+              "documents": 2,
+              "layoutCount": 91,
+              "recalcStyleCount": 192,
+              "layoutDuration": 0.71231,
+              "recalcStyleDuration": 0.31716,
+              "taskDuration": 23.454017
+            },
+            "runtimeHeap": {
+              "usedSize": 35103168,
+              "totalSize": 37019648,
+              "embedderHeapUsedSize": 67104744,
+              "backingStorageSize": 2509815
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 188851,
+              "jsEventListeners": 15559
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 39529494,
+                "usedJSHeapSize": 37630458
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 7,
+            "state": "open",
+            "routeDurationMs": 3864.881800000003,
+            "label": "open-7",
+            "capturedAt": "2026-09-27T23:54:58.791Z",
+            "cdp": {
+              "jsHeapUsedSize": 91386408,
+              "jsHeapTotalSize": 97312768,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 97,
+              "recalcStyleCount": 201,
+              "layoutDuration": 0.813304,
+              "recalcStyleDuration": 0.382006,
+              "taskDuration": 27.495807
+            },
+            "runtimeHeap": {
+              "usedSize": 91386408,
+              "totalSize": 97312768,
+              "embedderHeapUsedSize": 88413944,
+              "backingStorageSize": 2596820
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 100171763,
+                "usedJSHeapSize": 93998171
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 8,
+            "state": "closed",
+            "routeDurationMs": 176.61689999999362,
+            "label": "closed-8",
+            "capturedAt": "2026-09-27T23:54:59.374Z",
+            "cdp": {
+              "jsHeapUsedSize": 13167132,
+              "jsHeapTotalSize": 15523840,
+              "nodes": 1663,
+              "documents": 3,
+              "layoutCount": 103,
+              "recalcStyleCount": 210,
+              "layoutDuration": 0.821872,
+              "recalcStyleDuration": 0.38852,
+              "taskDuration": 27.940893
+            },
+            "runtimeHeap": {
+              "usedSize": 13167132,
+              "totalSize": 15523840,
+              "embedderHeapUsedSize": 13232376,
+              "backingStorageSize": 2387541
+            },
+            "domCounters": {
+              "documents": 3,
+              "nodes": 1663,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 17911412,
+                "usedJSHeapSize": 15569944
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 8,
+            "state": "open",
+            "routeDurationMs": 2312.2685000000056,
+            "label": "open-8",
+            "capturedAt": "2026-09-27T23:55:02.194Z",
+            "cdp": {
+              "jsHeapUsedSize": 91488868,
+              "jsHeapTotalSize": 97312768,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 109,
+              "recalcStyleCount": 219,
+              "layoutDuration": 0.865306,
+              "recalcStyleDuration": 0.420534,
+              "taskDuration": 30.27061
+            },
+            "runtimeHeap": {
+              "usedSize": 91488868,
+              "totalSize": 97312768,
+              "embedderHeapUsedSize": 88666624,
+              "backingStorageSize": 2596900
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 99909699,
+                "usedJSHeapSize": 94099459
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 9,
+            "state": "closed",
+            "routeDurationMs": 110.73990000000049,
+            "label": "closed-9",
+            "capturedAt": "2026-09-27T23:55:02.620Z",
+            "cdp": {
+              "jsHeapUsedSize": 13338684,
+              "jsHeapTotalSize": 14737408,
+              "nodes": 1661,
+              "documents": 3,
+              "layoutCount": 116,
+              "recalcStyleCount": 241,
+              "layoutDuration": 0.870194,
+              "recalcStyleDuration": 0.425609,
+              "taskDuration": 30.566478
+            },
+            "runtimeHeap": {
+              "usedSize": 13338684,
+              "totalSize": 14737408,
+              "embedderHeapUsedSize": 13460632,
+              "backingStorageSize": 2509080
+            },
+            "domCounters": {
+              "documents": 3,
+              "nodes": 1661,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 17246519,
+                "usedJSHeapSize": 15860587
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 9,
+            "state": "open",
+            "routeDurationMs": 2005.7434999999969,
+            "label": "open-9",
+            "capturedAt": "2026-09-27T23:55:05.130Z",
+            "cdp": {
+              "jsHeapUsedSize": 91512760,
+              "jsHeapTotalSize": 98361344,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 122,
+              "recalcStyleCount": 250,
+              "layoutDuration": 0.918115,
+              "recalcStyleDuration": 0.45869,
+              "taskDuration": 32.58968
+            },
+            "runtimeHeap": {
+              "usedSize": 91512760,
+              "totalSize": 98361344,
+              "embedderHeapUsedSize": 88638184,
+              "backingStorageSize": 2596862
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 100958237,
+                "usedJSHeapSize": 94123353
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 10,
+            "state": "closed",
+            "routeDurationMs": 119.18030000000726,
+            "label": "closed-10",
+            "capturedAt": "2026-09-27T23:55:05.559Z",
+            "cdp": {
+              "jsHeapUsedSize": 13404976,
+              "jsHeapTotalSize": 14999552,
+              "nodes": 1645,
+              "documents": 2,
+              "layoutCount": 129,
+              "recalcStyleCount": 272,
+              "layoutDuration": 0.924593,
+              "recalcStyleDuration": 0.464882,
+              "taskDuration": 32.904131
+            },
+            "runtimeHeap": {
+              "usedSize": 13404976,
+              "totalSize": 14999552,
+              "embedderHeapUsedSize": 13607752,
+              "backingStorageSize": 2508460
+            },
+            "domCounters": {
+              "documents": 2,
+              "nodes": 1645,
+              "jsEventListeners": 333
+            },
+            "page": {
+              "allElements": 1142,
+              "transcriptElements": 0,
+              "messageElements": 0,
+              "transcriptScrollHeight": 0,
+              "transcriptClientHeight": 0,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 17508043,
+                "usedJSHeapSize": 15926259
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          },
+          {
+            "cycle": 10,
+            "state": "open",
+            "routeDurationMs": 2157.4437000000034,
+            "label": "open-10",
+            "capturedAt": "2026-09-27T23:55:08.192Z",
+            "cdp": {
+              "jsHeapUsedSize": 89337424,
+              "jsHeapTotalSize": 96264192,
+              "nodes": 185713,
+              "documents": 1,
+              "layoutCount": 135,
+              "recalcStyleCount": 281,
+              "layoutDuration": 0.969071,
+              "recalcStyleDuration": 0.498267,
+              "taskDuration": 35.200079
+            },
+            "runtimeHeap": {
+              "usedSize": 89337424,
+              "totalSize": 96264192,
+              "embedderHeapUsedSize": 88712672,
+              "backingStorageSize": 2596637
+            },
+            "domCounters": {
+              "documents": 1,
+              "nodes": 185713,
+              "jsEventListeners": 16326
+            },
+            "page": {
+              "allElements": 136161,
+              "transcriptElements": 134997,
+              "messageElements": 2000,
+              "transcriptScrollHeight": 733775,
+              "transcriptClientHeight": 843,
+              "performanceMemory": {
+                "jsHeapSizeLimit": 4395630592,
+                "totalJSHeapSize": 98860860,
+                "usedJSHeapSize": 91947792
+              }
+            },
+            "uaSpecificMemory": null,
+            "uaSpecificMemoryError": null
+          }
+        ]
+      }
+    ]
+  }
+}

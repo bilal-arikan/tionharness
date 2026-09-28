@@ -2,23 +2,15 @@ package db
 
 // Store footprint measurement.
 //
-// The whole store is loaded into RAM at Open (see db.load), and the transcripts
-// dominate that: every session's messages.jsonl is parsed into []Message and
-// kept for the process's lifetime, whether or not anything ever reads it. This
-// file exposes that footprint so the lazy-loading work (Madde 5) has a
-// before/after number instead of an opinion.
-//
-// LoadedSessions is deliberately part of the shape TODAY, when it is always
-// equal to Sessions: it is the metric that will actually move once transcripts
-// load on demand, and having it in place now means the same endpoint answers
-// "how much did this help?" without changing its contract.
+// Headers stay resident; transcript rows are loaded on demand and evicted under
+// a byte budget. These diagnostics count only currently resident message data.
 
 // StoreStats is a snapshot of one workspace store's in-memory footprint.
 type StoreStats struct {
 	// Sessions is how many sessions the store knows about.
 	Sessions int `json:"sessions"`
 	// LoadedSessions is how many of them currently hold a materialised
-	// transcript in memory. Equal to Sessions while loading is eager.
+	// transcript in memory; unopened or evicted sessions do not contribute.
 	LoadedSessions int `json:"loadedSessions"`
 	// Messages is the total number of messages resident in memory.
 	Messages int `json:"messages"`

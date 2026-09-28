@@ -4,6 +4,7 @@
 // lives in the app/use*.ts hooks; the view metadata in viewRegistry.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { api } from '@/api'
+
 import {
   Backdrop,
   CollapsibleListShell,
@@ -18,7 +19,25 @@ import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { UpdateBanner } from './UpdateBanner'
-import { FlowsPanel, RotaPanel, ExplorerView } from './lazyPanels'
+import {
+  FlowsPanel,
+  RotaPanel,
+  ExplorerView,
+  AgentsView,
+  TaskBoard,
+  AutomationBoard,
+  ArtifactsPanel,
+  SkillsPanel,
+  ToolCatalogPanel,
+  MarketPanel,
+  BudgetPanel,
+  DashboardPanel,
+  InsightPanel,
+  GoalsPanel,
+  SettingsPanel,
+  WorkspaceView,
+  PromptsView,
+} from './lazyPanels'
 import { useWorkspaceSignals } from './useWorkspaceSignals'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
@@ -42,21 +61,9 @@ import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
 import { CoordinatorPanel } from '@/features/sessions/CoordinatorPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
 import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
-import { AgentsView } from '@/features/agents/AgentsView'
-import { TaskBoard } from '@/features/tasks/TaskBoard'
-import { AutomationBoard } from '@/features/schedules/AutomationBoard'
-import { ArtifactsPanel } from '@/features/artifacts/ArtifactsPanel'
+
 import { ArtifactPreviewModal } from '@/features/artifacts/ArtifactPreviewModal'
-import { SkillsPanel } from '@/features/skills/SkillsPanel'
-import { ToolsPanel as ToolCatalogPanel } from '@/features/tools/ToolsPanel'
-import { MarketPanel } from '@/features/market/MarketPanel'
-import { BudgetPanel } from '@/features/budget/BudgetPanel'
-import { DashboardPanel } from '@/features/dashboard/DashboardPanel'
-import { InsightPanel } from '@/features/insight/InsightPanel'
-import { GoalsPanel } from '@/features/goals/GoalsPanel'
-import { SettingsPanel } from '@/features/settings/SettingsPanel'
-import { WorkspaceView } from '@/features/workspace/WorkspaceView'
-import { PromptsView } from '@/features/settings/PromptsView'
+
 import { useTranslation } from 'react-i18next'
 import { OnboardingScreen } from '@/features/workspace/OnboardingScreen'
 import { ClaudeAuthGate } from '@/features/workspace/ClaudeAuthGate'
@@ -342,6 +349,7 @@ export default function App() {
     messagesRef: ctl.messagesRef,
     notifyEnabled,
     setMessages: ctl.setMessages,
+    refreshMessages: ctl.refreshMessages,
     setError,
     selectSession: ctl.selectSession,
     refreshSessions: ctl.refreshSessions,
@@ -372,7 +380,13 @@ export default function App() {
   // removed prompt back into the composer (draft write + remount) for a re-try.
   const handleRewind = useCallback(
     async (id: string) => {
-      const text = await chat.rewindTo(id)
+      let text: string
+      try {
+        text = await chat.rewindTo(id)
+      } catch (error) {
+        setError((error as Error).message)
+        return ''
+      }
       if (text) {
         writeSessionDraft(ctl.activeSessionId ?? undefined, text)
         ctl.setComposerKey((k) => k + 1)
@@ -466,6 +480,7 @@ export default function App() {
     refreshSessions: ctl.refreshSessions,
     refreshSessionsSoon: ctl.refreshSessionsSoon,
     setMessages: ctl.setMessages,
+    refreshMessages: ctl.refreshMessages,
     setMeterRefresh: ctl.setMeterRefresh,
     setSettingsNonce,
     markWorkspaceUnread,
@@ -697,237 +712,244 @@ export default function App() {
           />
         )}
 
-        {view === 'chat' && (
-          <ChatView
-            chat={chat}
-            messages={ctl.messages}
-            agents={ctl.agents}
-            sessionStartAgents={ctl.sessionStartAgents}
-            artifacts={ctl.sessionArtifacts}
-            activeSessionId={ctl.activeSessionId}
-            activeAgentId={ctl.activeAgentId}
-            bootstrapping={ctl.bootstrapping}
-            messagesLoading={ctl.messagesLoading}
-            readOnly={!ctl.activeSessionWritable}
-            sessionCoordination={activeSession}
-            onCoordinationChanged={ctl.refreshSessions}
-            onOpenSkill={openSkill}
-            onError={setError}
-            onOpenRunHistory={openRunHistory}
-            onSelectSession={ctl.selectSession}
-            defaultAgentId={ctl.defaultAgentId}
-            defaultAgentDeleted={ctl.defaultAgentDeleted}
-            allAgents={ctl.allAgents}
-            onNewSession={ctl.newSession}
-            onSelectDefaultAgent={ctl.pickDefaultAgent}
-            onGoToAgents={() => selectView('agents')}
-            composerKey={ctl.composerKey}
-            focusSessionId={ctl.focusSessionId}
-            scrollToMsgId={ctl.scrollToMsgId}
-            onHighlightConsumed={() => ctl.setScrollToMsgId(null)}
-            onOpenFile={openFile}
-            onOpenArtifact={links.openArtifact}
-            onDeleteMessage={ctl.deleteMessage}
-            onRewind={handleRewind}
-            onFeedback={ctl.rateMessage}
-            onOpenAgent={ctl.openAgentSettings}
-            onAgentChange={ctl.changeChatAgent}
-          />
-        )}
-        {view === 'agents' && (
-          <AgentsView
-            agents={ctl.agents}
-            defaultAgentId={ctl.defaultAgentId}
-            defaultAgentSaveState={ctl.defaultAgentSaveState}
-            selectedId={ctl.activeAgentId}
-            onSelectAgent={ctl.focusAgent}
-            onSetDefault={ctl.pickAgent}
-            onCreateAgent={ctl.createAgent}
-            onUpdateAgent={ctl.updateAgent}
-            onDuplicateAgent={ctl.duplicateAgent}
-            onDeriveAgent={ctl.deriveAgent}
-            onDeleteAgent={ctl.deleteAgent}
-            onRefresh={() =>
-              api
-                .listAgents()
-                .then(ctl.setAgents)
-                .catch((e) => setError((e as Error).message))
-            }
-            onError={setError}
-            onOpenExecution={(sid) => {
-              // The agent activity rail links each run to its transcript; the
-              // Executions screen is gone, so every kind opens in the unified
-              // chat transcript view instead.
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-          />
-        )}
-        {view === 'rota' && activeWorkspaceId !== null && (
-          <Suspense fallback={<LoadingState label="Rota yükleniyor…" className="flex-1" />}>
-            <RotaPanel
-              workspaceId={activeWorkspaceId}
-              onError={setError}
-              onOpenSession={(sid) => {
-                setView('chat')
-                ctl.selectSession(sid)
-              }}
-              onOpenFlowRun={links.openFlowRun}
-              trajectoryId={links.rotaTrajectory}
-              onTrajectory={links.setRotaTrajectory}
-            />
-          </Suspense>
-        )}
-        {view === 'explorer' && activeWorkspaceId !== null && (
-          <Suspense fallback={<LoadingState label="Harita yükleniyor…" className="flex-1" />}>
-            <ExplorerView
-              workspaceId={activeWorkspaceId}
-              onError={setError}
-              onOpenSession={(sid) => {
-                setView('chat')
-                ctl.selectSession(sid)
-              }}
-              focusNode={links.explorerNode}
-              onFocusNode={links.setExplorerNode}
-              onOpenTarget={(target) =>
-                applyRoute({ workspaceId: activeWorkspaceId, view: target.view, id: target.id })
-              }
-            />
-          </Suspense>
-        )}
-        {view === 'board' && (
-          <TaskBoard
-            agents={ctl.agents}
-            onError={setError}
-            focusTaskId={links.boardTarget}
-            onFocusTask={links.setBoardTarget}
-          />
-        )}
-        {view === 'schedules' && (
-          <AutomationBoard agents={ctl.agents} focusId={links.scheduleTarget} onError={setError} />
-        )}
-        {view === 'flows' && (
-          <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
-            <FlowsPanel
+        <Suspense fallback={<LoadingState label="Loading…" className="flex-1" />}>
+          {view === 'chat' && (
+            <ChatView
+              chat={chat}
+              messages={ctl.messages}
               agents={ctl.agents}
+              sessionStartAgents={ctl.sessionStartAgents}
+              artifacts={ctl.sessionArtifacts}
+              activeSessionId={ctl.activeSessionId}
+              activeAgentId={ctl.activeAgentId}
+              bootstrapping={ctl.bootstrapping}
+              messagesLoading={ctl.messagesLoading}
+              transcriptPaging={ctl.transcriptPaging}
+              readOnly={!ctl.activeSessionWritable}
+              sessionCoordination={activeSession}
+              onCoordinationChanged={ctl.refreshSessions}
+              onOpenSkill={openSkill}
               onError={setError}
-              openFlowId={links.flowTarget}
-              tab={links.flowsTab}
-              onTabChange={links.setFlowsTab}
+              onOpenRunHistory={openRunHistory}
+              onSelectSession={ctl.selectSession}
+              defaultAgentId={ctl.defaultAgentId}
+              defaultAgentDeleted={ctl.defaultAgentDeleted}
+              allAgents={ctl.allAgents}
+              onNewSession={ctl.newSession}
+              onSelectDefaultAgent={ctl.pickDefaultAgent}
+              onGoToAgents={() => selectView('agents')}
+              composerKey={ctl.composerKey}
+              focusSessionId={ctl.focusSessionId}
+              scrollToMsgId={ctl.scrollToMsgId}
+              onHighlightConsumed={() => ctl.setScrollToMsgId(null)}
+              onOpenFile={openFile}
+              onOpenArtifact={links.openArtifact}
+              onDeleteMessage={ctl.deleteMessage}
+              onRewind={handleRewind}
+              onFeedback={ctl.rateMessage}
+              onOpenAgent={ctl.openAgentSettings}
+              onAgentChange={ctl.changeChatAgent}
             />
-          </Suspense>
-        )}
-        {view === 'artifacts' && (
-          <ArtifactsPanel
-            onError={setError}
-            agents={ctl.agents}
-            selectedId={links.artifactTarget}
-            onOpenSession={(sid) => {
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-          />
-        )}
-        {view === 'skills' && (
-          <SkillsPanel
-            onError={setError}
-            onOpenTrajectory={links.openTrajectory}
-            onOpenSession={(sid) => {
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-          />
-        )}
-        {view === 'tools' && (
-          <ToolCatalogPanel
-            onError={setError}
-            group={links.toolsGroup}
-            onGroupChange={links.setToolsGroup}
-          />
-        )}
-        {view === 'market' && (
-          <MarketPanel
-            onError={setError}
-            onManageSecrets={links.openSecrets}
-            onInstalled={(kind) => {
-              // Refresh the App-level agents list so a freshly installed agent
-              // shows on the Agents screen without a manual reload. Flows/skills/
-              // providers panels reload on their own mount.
-              if (kind === 'agent')
+          )}
+          {view === 'agents' && (
+            <AgentsView
+              agents={ctl.agents}
+              defaultAgentId={ctl.defaultAgentId}
+              defaultAgentSaveState={ctl.defaultAgentSaveState}
+              selectedId={ctl.activeAgentId}
+              onSelectAgent={ctl.focusAgent}
+              onSetDefault={ctl.pickAgent}
+              onCreateAgent={ctl.createAgent}
+              onUpdateAgent={ctl.updateAgent}
+              onDuplicateAgent={ctl.duplicateAgent}
+              onDeriveAgent={ctl.deriveAgent}
+              onDeleteAgent={ctl.deleteAgent}
+              onRefresh={() =>
                 api
                   .listAgents()
                   .then(ctl.setAgents)
-                  .catch(() => {})
-            }}
-          />
-        )}
-        {view === 'dashboard' && (
-          <DashboardPanel
-            onError={setError}
-            nav={{
-              openSession: (id) => {
+                  .catch((e) => setError((e as Error).message))
+              }
+              onError={setError}
+              onOpenExecution={(sid) => {
+                // The agent activity rail links each run to its transcript; the
+                // Executions screen is gone, so every kind opens in the unified
+                // chat transcript view instead.
                 setView('chat')
-                ctl.selectSession(id)
-              },
-              openView: (v) => setView(v),
-            }}
-          />
-        )}
-        {view === 'budget' && <BudgetPanel onError={setError} />}
-        {view === 'prompts' && (
-          <PromptsView onError={setError} onGoToAgents={() => selectView('agents')} />
-        )}
-        {view === 'insights' && (
-          <InsightPanel
-            onError={setError}
-            tab={links.insightTab}
-            onTabChange={links.setInsightTab}
-            onOpenSession={(sid) => {
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-          />
-        )}
-        {view === 'goals' && (
-          <GoalsPanel
-            onError={setError}
-            goalId={links.goalTarget}
-            onSelectGoal={links.setGoalTarget}
-            onOpenSession={(sid) => {
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-          />
-        )}
-        {view === 'workspace' && (
-          <WorkspaceView
-            onError={setError}
-            onWorkspaceChanged={refreshWorkspaces}
-            onDeleteWorkspace={deleteActiveWorkspace}
-            onAppearanceSaved={onAppearanceSaved}
-            onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
-            onOpenSession={(sid) => {
-              setView('chat')
-              ctl.selectSession(sid)
-            }}
-            tab={links.workspaceTab}
-            onTabChange={links.setWorkspaceTab}
-            navOpen={workspaceNav.open}
-            onToggleNav={workspaceNav.toggle}
-          />
-        )}
-        {view === 'settings' && (
-          <SettingsPanel
-            onError={setError}
-            onSaved={applyClientPrefs}
-            commands={chat.chatCommands}
-            cat={links.settingsCat}
-            onCatChange={links.setSettingsCat}
-            reloadNonce={settingsNonce}
-            navOpen={settingsNav.open}
-            onToggleNav={settingsNav.toggle}
-          />
-        )}
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'rota' && activeWorkspaceId !== null && (
+            <Suspense fallback={<LoadingState label="Rota yükleniyor…" className="flex-1" />}>
+              <RotaPanel
+                workspaceId={activeWorkspaceId}
+                onError={setError}
+                onOpenSession={(sid) => {
+                  setView('chat')
+                  ctl.selectSession(sid)
+                }}
+                onOpenFlowRun={links.openFlowRun}
+                trajectoryId={links.rotaTrajectory}
+                onTrajectory={links.setRotaTrajectory}
+              />
+            </Suspense>
+          )}
+          {view === 'explorer' && activeWorkspaceId !== null && (
+            <Suspense fallback={<LoadingState label="Harita yükleniyor…" className="flex-1" />}>
+              <ExplorerView
+                workspaceId={activeWorkspaceId}
+                onError={setError}
+                onOpenSession={(sid) => {
+                  setView('chat')
+                  ctl.selectSession(sid)
+                }}
+                focusNode={links.explorerNode}
+                onFocusNode={links.setExplorerNode}
+                onOpenTarget={(target) =>
+                  applyRoute({ workspaceId: activeWorkspaceId, view: target.view, id: target.id })
+                }
+              />
+            </Suspense>
+          )}
+          {view === 'board' && (
+            <TaskBoard
+              agents={ctl.agents}
+              onError={setError}
+              focusTaskId={links.boardTarget}
+              onFocusTask={links.setBoardTarget}
+            />
+          )}
+          {view === 'schedules' && (
+            <AutomationBoard
+              agents={ctl.agents}
+              focusId={links.scheduleTarget}
+              onError={setError}
+            />
+          )}
+          {view === 'flows' && (
+            <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
+              <FlowsPanel
+                agents={ctl.agents}
+                onError={setError}
+                openFlowId={links.flowTarget}
+                tab={links.flowsTab}
+                onTabChange={links.setFlowsTab}
+              />
+            </Suspense>
+          )}
+          {view === 'artifacts' && (
+            <ArtifactsPanel
+              onError={setError}
+              agents={ctl.agents}
+              selectedId={links.artifactTarget}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'skills' && (
+            <SkillsPanel
+              onError={setError}
+              onOpenTrajectory={links.openTrajectory}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'tools' && (
+            <ToolCatalogPanel
+              onError={setError}
+              group={links.toolsGroup}
+              onGroupChange={links.setToolsGroup}
+            />
+          )}
+          {view === 'market' && (
+            <MarketPanel
+              onError={setError}
+              onManageSecrets={links.openSecrets}
+              onInstalled={(kind) => {
+                // Refresh the App-level agents list so a freshly installed agent
+                // shows on the Agents screen without a manual reload. Flows/skills/
+                // providers panels reload on their own mount.
+                if (kind === 'agent')
+                  api
+                    .listAgents()
+                    .then(ctl.setAgents)
+                    .catch(() => {})
+              }}
+            />
+          )}
+          {view === 'dashboard' && (
+            <DashboardPanel
+              onError={setError}
+              nav={{
+                openSession: (id) => {
+                  setView('chat')
+                  ctl.selectSession(id)
+                },
+                openView: (v) => setView(v),
+              }}
+            />
+          )}
+          {view === 'budget' && <BudgetPanel onError={setError} />}
+          {view === 'prompts' && (
+            <PromptsView onError={setError} onGoToAgents={() => selectView('agents')} />
+          )}
+          {view === 'insights' && (
+            <InsightPanel
+              onError={setError}
+              tab={links.insightTab}
+              onTabChange={links.setInsightTab}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'goals' && (
+            <GoalsPanel
+              onError={setError}
+              goalId={links.goalTarget}
+              onSelectGoal={links.setGoalTarget}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
+          )}
+          {view === 'workspace' && (
+            <WorkspaceView
+              onError={setError}
+              onWorkspaceChanged={refreshWorkspaces}
+              onDeleteWorkspace={deleteActiveWorkspace}
+              onAppearanceSaved={onAppearanceSaved}
+              onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+              tab={links.workspaceTab}
+              onTabChange={links.setWorkspaceTab}
+              navOpen={workspaceNav.open}
+              onToggleNav={workspaceNav.toggle}
+            />
+          )}
+          {view === 'settings' && (
+            <SettingsPanel
+              onError={setError}
+              onSaved={applyClientPrefs}
+              commands={chat.chatCommands}
+              cat={links.settingsCat}
+              onCatChange={links.setSettingsCat}
+              reloadNonce={settingsNonce}
+              navOpen={settingsNav.open}
+              onToggleNav={settingsNav.toggle}
+            />
+          )}
+        </Suspense>
       </main>
 
       {view === 'chat' && detailOpen && ctl.activeSessionId && (

@@ -17,3 +17,59 @@ export const RotaPanel = lazy(() =>
 export const ExplorerView = lazy(() =>
   import('@/features/explorer/ExplorerView').then((m) => ({ default: m.ExplorerView })),
 )
+
+export const AgentsView = lazy(() =>
+  import('@/features/agents/AgentsView').then((m) => ({ default: m.AgentsView })),
+)
+
+export const TaskBoard = lazy(() =>
+  import('@/features/tasks/TaskBoard').then((m) => ({ default: m.TaskBoard })),
+)
+
+export const AutomationBoard = lazy(() =>
+  import('@/features/schedules/AutomationBoard').then((m) => ({ default: m.AutomationBoard })),
+)
+
+export const ArtifactsPanel = lazy(() =>
+  import('@/features/artifacts/ArtifactsPanel').then((m) => ({ default: m.ArtifactsPanel })),
+)
+
+export const SkillsPanel = lazy(() =>
+  import('@/features/skills/SkillsPanel').then((m) => ({ default: m.SkillsPanel })),
+)
+
+export const ToolCatalogPanel = lazy(() =>
+  import('@/features/tools/ToolsPanel').then((m) => ({ default: m.ToolsPanel })),
+)
+
+export const MarketPanel = lazy(() =>
+  import('@/features/market/MarketPanel').then((m) => ({ default: m.MarketPanel })),
+)
+
+export const BudgetPanel = lazy(() =>
+  import('@/features/budget/BudgetPanel').then((m) => ({ default: m.BudgetPanel })),
+)
+
+export const DashboardPanel = lazy(() =>
+  import('@/features/dashboard/DashboardPanel').then((m) => ({ default: m.DashboardPanel })),
+)
+
+export const InsightPanel = lazy(() =>
+  import('@/features/insight/InsightPanel').then((m) => ({ default: m.InsightPanel })),
+)
+
+export const GoalsPanel = lazy(() =>
+  import('@/features/goals/GoalsPanel').then((m) => ({ default: m.GoalsPanel })),
+)
+
+export const SettingsPanel = lazy(() =>
+  import('@/features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
+)
+
+export const WorkspaceView = lazy(() =>
+  import('@/features/workspace/WorkspaceView').then((m) => ({ default: m.WorkspaceView })),
+)
+
+export const PromptsView = lazy(() =>
+  import('@/features/settings/PromptsView').then((m) => ({ default: m.PromptsView })),
+)
