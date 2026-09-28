@@ -3,7 +3,7 @@ import { DEFAULT_ROTA_PREFS, parseRotaPrefs, serializeRotaPrefs } from './rotaPr
 
 describe('rotaPrefs', () => {
   it('round-trips a full preference set', () => {
-    const prefs = { cutoff: 86400 as const, collapseGaps: false, normalizeBars: false }
+    const prefs = { cutoff: 259200 as const, collapseGaps: false, normalizeBars: false }
     expect(parseRotaPrefs(serializeRotaPrefs(prefs))).toEqual(prefs)
   })
 

@@ -150,7 +150,8 @@ export function AgentSettingsForm({
   // to clone. Those actions are gated on this rather than on `locked`, which now
   // only means "this screen is inspecting, not editing".
   const isBuiltin = !!agent.locked
-  const isChild = !!agent.parentId
+  const isChild = !!(agent.parentId || agent.catalogParentId)
+  const libraryParent = !!agent.catalogParentId && !agent.parentId
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
   // open and persisted clean when the form is saved.
@@ -698,7 +699,13 @@ export function AgentSettingsForm({
             )}
           </Field>
 
-          {!agent.system && (parentOptions.length > 0 || isChild) && (
+          {libraryParent && (
+            <p className="text-xs text-[var(--color-text-dim)]">
+              This profile inherits from an agent in the library. Manage its parent in Agent
+              library.
+            </p>
+          )}
+          {!agent.system && !libraryParent && (parentOptions.length > 0 || isChild) && (
             <Field label="Kalıtım (ebeveyn ajan)">
               <select
                 data-testid="agent-parent-select"

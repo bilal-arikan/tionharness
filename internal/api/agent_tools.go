@@ -216,6 +216,9 @@ type setAgentToolsReq struct {
 // switch plus the per-agent override map. An invalid tier is rejected so a typo
 // cannot silently leave a tool at its default.
 func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
+	if !s.confirmSharedAgentEdit(w, r, r.PathValue("id")) {
+		return
+	}
 	id := r.PathValue("id")
 	req, ok := bindJSON[setAgentToolsReq](w, r)
 	if !ok {
@@ -257,4 +260,5 @@ func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
 		s.workspaces.PropagateSystemAgentEdit(r.Context(), ws(r).ID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"mcpEnabled": req.MCPEnabled, "toolOverrides": overrides})
+	s.publishAgentCatalogChanged()
 }

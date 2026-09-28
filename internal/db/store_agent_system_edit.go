@@ -138,6 +138,12 @@ func pinnedDiffering(keys []string, edited, base Agent) []string {
 // ClearBuiltinSystemAgentOverrides drops a built-in's customisation, so the role
 // follows the compiled definition again in every workspace.
 func (d *DB) ClearBuiltinSystemAgentOverrides(ctx context.Context, agentID string) (Agent, error) {
+	if catalog, target := d.catalogTarget(agentID); catalog != nil && target != "" {
+		if _, err := catalog.ClearBuiltinSystemAgentOverrides(ctx, target); err != nil {
+			return Agent{}, err
+		}
+		return d.GetAgent(ctx, agentID)
+	}
 	locked, ok := d.lockedSystemAgent(agentID)
 	if !ok {
 		return Agent{}, ErrNotFound

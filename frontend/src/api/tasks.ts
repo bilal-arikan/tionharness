@@ -19,8 +19,11 @@ import { req } from './client'
 export const taskApi = {
   // The active board (archived cards excluded). Pass includeArchived to also get
   // archived cards (the "Arşivlenenler" view).
-  listTasks: (includeArchived = false) =>
-    req<Task[]>(`/api/tasks${includeArchived ? '?archived=1' : ''}`),
+  listTasks: (includeArchived: boolean | 'only' = false) =>
+    req<Task[]>(
+      `/api/tasks${includeArchived ? `?archived=${includeArchived === 'only' ? 'only' : '1'}` : ''}`,
+    ),
+  getTask: (id: string) => req<Task>(`/api/tasks/${encodeURIComponent(id)}`),
   createTask: (data: {
     title?: string
     description?: string

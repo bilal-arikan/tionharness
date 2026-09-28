@@ -111,7 +111,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		if executionType != "" && s.ExecutionType != executionType {
 			continue
 		}
-		if state != "" && s.State != state {
+		if state != "" && state != "all" && s.State != state {
 			continue
 		}
 		if ids != nil && !ids[s.ID] {
@@ -129,6 +129,10 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	chipCounts := sessionChipCounts(scope, live)
 	matches := make([]db.Session, 0, len(scope))
 	for _, s := range scope {
+		// Exact IDs and explicit state/chip requests may open archived history.
+		if !chipFilter && state == "" && ids == nil && s.State == "archived" {
+			continue
+		}
 		if chipFilter && !sessionMatchesChips(s, chipSel, live) {
 			continue
 		}

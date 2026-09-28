@@ -35,4 +35,10 @@ describe('session chip persistence', () => {
 
     expect(browserSessionChipStorage(scope)).toBeNull()
   })
+
+  it('ignores the former archive chip setting from persisted chat filters', () => {
+    expect(readSessionChipsOff({ getItem: () => '["chat","archived"]', setItem: vi.fn() })).toEqual(
+      ['chat'],
+    )
+  })
 })

@@ -140,6 +140,7 @@ type Manager struct {
 	// edit to a built-in apply everywhere instead of deriving a per-workspace
 	// copy; without it the built-ins stay read-only.
 	globalSysAgents *db.GlobalSystemAgentOverrides
+	agentCatalog    *db.DB
 
 	// settingsBridge is the application-wide settings store + live-apply hook,
 	// wired in after the api server is constructed. Stored so it can be applied
@@ -294,6 +295,18 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 		return nil, fmt.Errorf("read system agent customisations: %w", err)
 	}
 	m.globalSysAgents = globalSysAgents
+	catalog, err := db.Open(filepath.Join(rootDir, "agent-catalog"))
+	if err != nil {
+		return nil, fmt.Errorf("open agent catalog: %w", err)
+	}
+	catalog.MarkAgentCatalog()
+	catalog.SetGlobalSystemAgentOverrides(globalSysAgents)
+	if err := catalog.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
+		catalog.Close()
+		return nil, fmt.Errorf("seed agent catalog: %w", err)
+	}
+	m.agentCatalog = catalog
+	catalog.SetCatalogRoleCheck(m.checkCatalogRole)
 
 	metas, err := m.loadMetas()
 	if err != nil {
@@ -398,6 +411,7 @@ func (m *Manager) open(meta Meta) error {
 	// compiled definitions, so the built-ins this workspace seeds and re-imposes
 	// are the edited ones.
 	database.SetGlobalSystemAgentOverrides(m.globalSysAgents)
+	database.PrepareAgentCatalog(meta.ID)
 	// Seed the small core system-agent set for new workspaces, migrate renamed
 	// roles, and backfill older workspaces. Existing customisations are preserved.
 	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
@@ -411,6 +425,10 @@ func (m *Manager) open(meta Meta) error {
 		return fmt.Errorf("backfill thinking levels: %w", err)
 	} else if migrated > 0 {
 		m.logger.Info("thinking levels backfilled", "workspace", meta.ID, "agents", migrated)
+	}
+	if err := database.AttachAgentCatalog(m.agentCatalog, meta.ID); err != nil {
+		database.Close()
+		return fmt.Errorf("attach agent catalog: %w", err)
 	}
 	// Boot cost of THIS workspace's store, attributed per workspace so a slow
 	// startup points at the workspace responsible instead of a single total. It is
@@ -1121,6 +1139,9 @@ func (m *Manager) goBackground(fn func()) {
 // still open: a drain that ran against an already-closed DB would only log a
 // failure for work it could no longer finish.
 func (m *Manager) Close() {
+	if m.agentCatalog != nil {
+		defer m.agentCatalog.Close()
+	}
 	m.bgMu.Lock()
 	m.bgClosed = true
 	m.bgMu.Unlock()

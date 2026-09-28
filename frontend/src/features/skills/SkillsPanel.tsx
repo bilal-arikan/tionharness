@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import {
@@ -225,8 +225,13 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.skillsListOpen')
   // Archive view (the kanban board's pattern): the list shows only archived
   // skills — never advertised to agents — with a restore action, instead of
-  // the live catalog. The backend returns both sides; the view picks one.
+  // the live catalog. The backend returns only the requested side.
   const [showArchived, setShowArchived] = useState(false)
+  const listRequest = useRef(0)
+  useKeyedReset(showArchived, () => {
+    setList([])
+    setActive(null)
+  })
   const [archiveBusy, setArchiveBusy] = useState(false)
   const sideList = useMemo(() => archiveSide(list, showArchived), [list, showArchived])
 
@@ -258,9 +263,11 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
   )
 
   const reload = useCallback(() => {
+    const request = ++listRequest.current
     api
-      .listSkills()
+      .listSkills(showArchived)
       .then((rows) => {
+        if (request !== listRequest.current) return
         setList(rows)
         setActiveSlug((cur) =>
           cur && rows.some((skill) => skill.slug === cur) ? cur : (rows[0]?.slug ?? null),
@@ -269,10 +276,17 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
         // concurrent request for a selected slug that the catalog just deleted.
         setCatalogRevision((revision) => revision + 1)
       })
-      .catch((e) => onError((e as Error).message))
-  }, [onError, setActiveSlug])
+      .catch((e) => {
+        if (request === listRequest.current) onError((e as Error).message)
+      })
+  }, [onError, setActiveSlug, showArchived])
 
-  useEffect(() => reload(), [reload, skillsTick])
+  useEffect(() => {
+    reload()
+    return () => {
+      listRequest.current++
+    }
+  }, [reload, skillsTick])
 
   // Keep the selection on the shown side: switching views (or archiving the
   // selected skill) moves it to the first skill of that side.
@@ -291,11 +305,21 @@ export function SkillsPanel({ onError, onOpenTrajectory, onOpenSession }: Props)
   })
   useEffect(() => {
     if (catalogRevision === 0 || !activeSlug) return
+    let cancelled = false
     api
       .getSkill(activeSlug)
-      .then(setActive)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoadingBody(false))
+      .then((detail) => {
+        if (!cancelled) setActive(detail)
+      })
+      .catch((e) => {
+        if (!cancelled) onError((e as Error).message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingBody(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [activeSlug, catalogRevision, onError])
 
   // Flip the selected skill between shared (on-demand) and restricted; rewrites

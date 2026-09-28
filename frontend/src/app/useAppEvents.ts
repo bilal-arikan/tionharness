@@ -120,6 +120,10 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     d.refreshWorkspaces()
     return
   }
+  if (e.type === 'agent-catalog') {
+    bumpSignalsForEvent(e)
+    return
+  }
   // An agent drove the UI here (focus_view). Apply the navigation immediately
   // — set the hash so the URL→state machinery switches workspace/view and
   // selects the entity — rather than waiting for a notification click. No

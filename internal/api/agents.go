@@ -45,9 +45,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Optional filters (none by default → legacy full roster).
-	// archived: absent/all keeps the full roster (history rendering needs
-	// archived authors too); true lists only archived agents, false only live.
-	archived, ok := archiveFilterQuery(w, q, archive.All)
+	// Archived authors are fetched by ID when a conversation needs them.
+	// The default roster excludes archives; true selects archives, all selects both.
+	archived, ok := archiveFilterQuery(w, q, archive.Active)
 	if !ok {
 		return
 	}
@@ -203,6 +203,10 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	// unresolvable slug is dropped): this is a direct, interactive edit, so a typo
 	// must come back as an error rather than silently becoming free coordination.
 	if req.CoordinatorWorkflow != "" {
+		if ws(r).Runtime == nil {
+			writeError(w, http.StatusBadRequest, "Select a workspace to validate the coordinator workflow")
+			return
+		}
 		if _, err := ResolveCoordinatorRecipe(ws(r).Runtime.Skills(), req.CoordinatorWorkflow); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -245,6 +249,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("agent created", "agent", newAgent.Name, "id", newAgent.ID,
 		"provider", newAgent.Provider, "model", newAgent.Model)
 	writeJSON(w, http.StatusCreated, newAgent)
+	s.publishAgentCatalogChanged()
 }
 
 // handleDuplicateAgent creates a full copy of an existing agent: every profile
@@ -286,6 +291,7 @@ func (s *Server) handleDuplicateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("agent duplicated", "source", src.ID, "clone", agent.ID, "name", agent.Name)
+	s.publishAgentCatalogChanged()
 	writeJSON(w, http.StatusCreated, agent)
 }
 
@@ -393,6 +399,9 @@ type updateAgentReq struct {
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	if !s.confirmSharedAgentEdit(w, r, r.PathValue("id")) {
+		return
+	}
 	req, ok := bindJSONStrict[updateAgentReq](w, r)
 	if !ok {
 		return
@@ -408,6 +417,10 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// Same rule as create: an interactive edit naming an unknown recipe is an
 	// error, not a silent downgrade to free coordination. Clearing it ("") is fine.
 	if req.CoordinatorWorkflow != nil && *req.CoordinatorWorkflow != "" {
+		if wsp.Runtime == nil {
+			writeError(w, http.StatusBadRequest, "Select a workspace to validate the coordinator workflow")
+			return
+		}
 		if _, err := ResolveCoordinatorRecipe(wsp.Runtime.Skills(), *req.CoordinatorWorkflow); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -509,6 +522,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if req.Model != nil && *req.Model != prev.Model {
 		s.publishAgentModelChange(wsp, tools.AgentModelChange{AgentID: agent.ID, AgentName: agent.Name, OldModel: prev.Model, NewModel: *req.Model})
 	}
+	s.publishAgentCatalogChanged()
 
 	// --- P1.3: unknown model warning ---
 	resp := map[string]any{"agent": agent}

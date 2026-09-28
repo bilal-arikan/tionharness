@@ -12,9 +12,7 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { SessionStartPanel } from './SessionStartPanel'
 import { shouldShowStartPanel } from './sessionStartGate'
 import { RewindDialog } from './RewindDialog'
-import { AskPrompt } from './AskPrompt'
-import { PermissionPrompt } from './PermissionPrompt'
-import { PlanPrompt } from './PlanPrompt'
+import { InteractionPrompts } from './InteractionPrompts'
 import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
 import { CacheWarmthStrip } from './CacheWarmthStrip'
@@ -356,14 +354,7 @@ export function ChatView({
               on. Hidden here before, this made a worker silently block on input
               with no on-screen cue. Answering resolves a suspend point (not a new
               user turn), so it is legitimate even in a read-only log. */}
-          {chat.activeAsk &&
-            (chat.activeAsk.kind === 'permission' ? (
-              <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ) : chat.activeAsk.kind === 'plan' ? (
-              <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ) : (
-              <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ))}
+          <InteractionPrompts asks={chat.activeAsks} onAnswer={chat.answerAsk} />
           {/* Read-only status surfaces the transcript can't replace: the LIVE
               checklist (always the latest todo_write, updating as items tick) and
               the running sub-worker roster. Both are display-only — no user input —
@@ -464,14 +455,7 @@ export function ChatView({
               </span>
             </div>
           )}
-          {chat.activeAsk &&
-            (chat.activeAsk.kind === 'permission' ? (
-              <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ) : chat.activeAsk.kind === 'plan' ? (
-              <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ) : (
-              <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-            ))}
+          <InteractionPrompts asks={chat.activeAsks} onAnswer={chat.answerAsk} />
           <TodoPanel todos={currentTodos} dismissed={todoDismissed} onDismiss={dismissTodo} />
           <PendingTray
             items={chat.activeQueued}

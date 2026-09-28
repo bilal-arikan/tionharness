@@ -4,8 +4,14 @@ import { req } from './client'
 import type { Goal, GoalCatalog, GoalIntakeResult, GoalStatus } from '@/types/goal'
 
 export const goalApi = {
-  listGoals: (status?: GoalStatus): Promise<Goal[]> =>
-    req<Goal[]>(status ? `/api/goals?status=${encodeURIComponent(status)}` : '/api/goals'),
+  listGoals: (
+    status?: GoalStatus,
+    archived: boolean | 'all' = status === 'archived',
+  ): Promise<Goal[]> => {
+    const query = new URLSearchParams({ archived: String(archived) })
+    if (status) query.set('status', status)
+    return req<Goal[]>(`/api/goals?${query}`)
+  },
   getGoal: (id: string): Promise<Goal> => req<Goal>(`/api/goals/${encodeURIComponent(id)}`),
   goalCatalog: (): Promise<GoalCatalog> => req<GoalCatalog>('/api/goals/catalog'),
   // The user creates a goal directly in the editor (server validates).

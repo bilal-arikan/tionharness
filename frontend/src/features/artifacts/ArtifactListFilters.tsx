@@ -74,9 +74,8 @@ export function ArtifactListFilters({
           </button>
         ))}
       </div>
-      {/* Archived view toggle: flips the list between active and archived
-          artifacts. Hidden until at least one artifact has been archived. */}
-      {(archivedCount > 0 || showArchived) && (
+      {/* Keep the archive accessible without prefetching archived records. */}
+      {
         <button
           data-testid="artifacts-archived-toggle"
           data-active={showArchived}
@@ -89,9 +88,13 @@ export function ArtifactListFilters({
           }`}
         >
           <Archive size={12} />
-          {showArchived ? 'Arşiv görünümü' : `Arşiv (${archivedCount})`}
+          {showArchived
+            ? 'Arşiv görünümü'
+            : archivedCount > 0
+              ? `Arşiv (${archivedCount})`
+              : 'Archive'}
         </button>
-      )}
+      }
     </div>
   )
 }

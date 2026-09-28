@@ -68,7 +68,17 @@ func (d *DB) mutateAgentLockedErr(id string, fn func(*Agent) error) (Agent, erro
 
 // CreateAgent inserts a new agent and returns the stored row.
 func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
+	// Copies receive their own catalog identity; import provenance is set separately.
+	a.CatalogID, a.CatalogOrigin, a.CatalogDetached = "", "", false
+	a.CatalogParentID = ""
+	return d.createAgent(ctx, a)
+}
+
+func (d *DB) createAgent(ctx context.Context, a Agent) (Agent, error) {
 	a.ID = d.nextID(idAgent)
+	if d.isAgentCatalog {
+		a.ID = "AGC-" + newID()
+	}
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	if a.PermissionMode == "" {
@@ -128,6 +138,12 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	}
 	if err := d.persistAgentLocked(a); err != nil {
 		return Agent{}, err
+	}
+	if d.agentCatalog != nil {
+		if _, err := d.importCatalogAgentLocked(a.ID, map[string]bool{}); err != nil {
+			return Agent{}, err
+		}
+		a = d.agents[a.ID]
 	}
 	return d.resolveAgentLocked(a), nil
 }
@@ -214,6 +230,9 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 // no agent keeps a dangling reference to a skill that no longer exists. Returns
 // the number of agents that were updated.
 func (d *DB) RemoveSkillFromAgents(ctx context.Context, slug string) (int, error) {
+	if d.agentCatalog != nil {
+		return d.agentCatalog.RemoveSkillFromAgents(ctx, slug)
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	updated := 0
@@ -274,10 +293,11 @@ func (d *DB) listAgents(includeDeleted bool) ([]Agent, error) {
 	defer d.mu.RUnlock()
 	out := make([]Agent, 0, len(d.agents))
 	for _, a := range d.agents {
+		a = d.resolveAgentLocked(a)
 		if a.Deleted && !includeDeleted {
 			continue
 		}
-		out = append(out, d.resolveAgentLocked(a))
+		out = append(out, a)
 	}
 	slices.SortStableFunc(out, func(a, b Agent) int {
 		return cmp.Compare(b.CreatedAt, a.CreatedAt)
@@ -350,6 +370,18 @@ type AgentProfilePatch struct {
 //     X → "" materialises the effective values into a root; X → Y keeps the
 //     override set and re-resolves the rest against Y.
 func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatch) (Agent, error) {
+	if d.isAgentCatalog {
+		d.catalogProfileMu.Lock()
+		defer d.catalogProfileMu.Unlock()
+		if p.Disabled != nil && !*p.Disabled && d.catalogRoleCheck != nil {
+			if err := d.catalogRoleCheck(agentID); err != nil {
+				return Agent{}, err
+			}
+		}
+	}
+	if catalog, target := d.catalogTarget(agentID); catalog != nil && target != "" {
+		return d.updateCatalogAgent(ctx, agentID, p)
+	}
 	if err := ValidateOverrideKeys(p.ResetFields); err != nil {
 		return Agent{}, err
 	}
@@ -434,6 +466,12 @@ func (d *DB) resetOverridesLocked(a *Agent, keys []string) {
 // ClearAgentOverrides makes a child inherit every field again. A root agent is
 // returned unchanged; a locked built-in refuses with ErrAgentLocked.
 func (d *DB) ClearAgentOverrides(ctx context.Context, agentID string) (Agent, error) {
+	if catalog, target := d.catalogTarget(agentID); catalog != nil && target != "" {
+		if _, err := catalog.ClearAgentOverrides(ctx, target); err != nil {
+			return Agent{}, err
+		}
+		return d.GetAgent(ctx, agentID)
+	}
 	return d.mutateAgentLockedErr(agentID, func(a *Agent) error {
 		if a.Locked {
 			return ErrAgentLocked

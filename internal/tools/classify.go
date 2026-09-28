@@ -17,6 +17,7 @@ const (
 var toolRisk = map[string]Risk{
 	// TionHarness-specific built-ins (no claude-cli analog).
 	"ask_user":             RiskRead,
+	"ask_user_async":       RiskRead,
 	"request_confirmation": RiskRead,
 	"todo_write":           RiskRead,
 	"create_artifact":      RiskRead,

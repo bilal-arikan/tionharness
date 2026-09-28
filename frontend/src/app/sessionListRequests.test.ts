@@ -34,6 +34,9 @@ describe('session list request guard', () => {
     const request = guard.begin(oldQuery)
     expect(guard.isCurrent(request, sessionListQueryIdentity('WS2', 'chat'))).toBe(false)
     expect(guard.isCurrent(request, sessionListQueryIdentity('WS1', 'flow'))).toBe(false)
+    expect(guard.isCurrent(request, sessionListQueryIdentity('WS1', 'chat', 'archived'))).toBe(
+      false,
+    )
   })
 })
 

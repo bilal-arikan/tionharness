@@ -77,7 +77,7 @@ export const sessionApi = {
   // {items,total,offset,limit,hasMore} envelope (TSK68); a parameter-less call
   // still receives the legacy unwrapped array and is normalized here so every
   // caller can rely on the paged shape.
-  listSessions: (params?: SessionListParams): Promise<SessionPage> => {
+  listSessions: (params?: SessionListParams, signal?: AbortSignal): Promise<SessionPage> => {
     const p = new URLSearchParams()
     if (params?.agentId) p.set('agentId', params.agentId)
     if (params?.ids?.length) p.set('ids', params.ids.join(','))
@@ -89,9 +89,9 @@ export const sessionApi = {
     if (params?.q) p.set('q', params.q)
     if (params?.chips !== undefined) p.set('chips', params.chips)
     const qs = p.toString()
-    return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions').then(
-      asSessionPage,
-    )
+    return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions', {
+      signal,
+    }).then(asSessionPage)
   },
   getSessionsByIds: (ids: string[]): Promise<Session[]> => {
     if (ids.length === 0) return Promise.resolve([])
@@ -378,10 +378,11 @@ export const sessionApi = {
   // Rota canvas splits a session bar along (_Docs/78 §16). Batched because the
   // canvas asks for every visible lane at once; gapSec overrides the idle
   // stretch that separates two bouts (server default: 600).
-  sessionActivity: (ids: readonly string[], gapSec?: number) =>
+  sessionActivity: (ids: readonly string[], gapSec?: number, signal?: AbortSignal) =>
     req<SessionActivity>(
       `/api/sessions/activity?ids=${encodeURIComponent(ids.join(','))}` +
         (gapSec ? `&gap=${gapSec}` : ''),
+      { signal },
     ),
 
   // Git state of a project path (repo?, branch, remote, identity).

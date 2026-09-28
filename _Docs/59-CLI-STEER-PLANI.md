@@ -1,19 +1,61 @@
-# TionHarness — claude-cli Canlı Steer (Yönlendirme) Planı
+# TionHarness — Native ve CLI Canlı Yönlendirme
 
-> **Özet (2026-09-06):** Bu doküman claude-cli sağlayıcısında turu durdurmadan yönlendirme (mid-turn steer) yapabilmenin tasarımını ve durumunu anlatır. Uygulandı ama sınırlıyla: steer yalnız "ask" izin modunda çalışır, "read-only" ve "auto" modlarda yapısal olarak desteklenmediği için backend `"unsupported"` döner ve mesaj tur bitince kuyruğa alınır. Ana mekanizma external-agent'tan esinlenerek permission-prompt (`callPermission`) yanıtına `additionalContext` enjekte etmektir; ilgili kod `chat_control.go`, `inbox.go`, `mcp_interaction_tools.go` ve `steer_cli_test.go` dosyalarındadır. TSK762 araştırması (2026-09-06) taşıyıcı × izin modu destek matrisini kod kanıtıyla doğruladı: aşağıdaki **"Doğrulanmış durum"** bölümü gerçek davranıştır; ilk plan/tasarım metni `arsiv/59-CLI-STEER-PLANI-TASARIM.md`'dedir. TSK899 (2026-09-06) native yoldaki iki sessiz kayıp yolunu kapattı: araçsız tur da `foldSteer()` ile steer'i drain ediyor, tur sonu fallback `run.steer` kanalını kurtarıyor ve dolu steer buffer'ı artık sessizce düşürülmek yerine `503` döndürüyor. TSK900 (2026-09-06) `read-only` yanlış raporlamasını kapattı: canlı steer artık yalnız claude-cli + **`ask`** modunda destekli; `read-only` ve `auto` dürüstçe `"unsupported"` döner. TSK901 (2026-09-06) kuyrukta bekleyen bir mesajı çalışan tura canlı yönlendirme olarak taşıyan `POST /api/sessions/{id}/queue/{msgId}/steer` ucunu ekledi: dönüşüm tek `withInbox` kilidi altında atomiktir, red hâlinde mesaj kuyrukta kalır. 2026-09-22'de destek durumu arayüze taşındı: backend `steerable` bayrağını mevcut `queue_update` hub olayıyla yayınlıyor (`inbox.go` `publishQueue`) ve tur sınırında `republishQueue` ile tazeliyor (`chat_turn_phases.go`); `PendingTray` desteklenmeyen turda butonu pasifleştirip sebebini gösteriyor. Aynı tarihte kapsam da gerçeklendi: `steerableForTurn` testi kendi beklentisini üretmek yerine sabit (sağlayıcı, izin modu) tablosuna bakıyor ve `foldSteer()` doğrudan test ediliyor (`internal/agent/steer_fold_test.go` — sıraya ekleme, tek kez drain, `pendingProgrammatic` ertelemesi, `steerRoleFor` kanal seçimi).
+> **Özet (2026-09-28):** Native sağlayıcılarda sonraki model isteğinde; Claude ve
+> Codex CLI'de sonraki TionHarness Interaction MCP araç yanıtında canlı yönlendirme
+> desteklenir. CLI desteği `auto`, `ask` ve `read-only` izin modlarından bağımsızdır;
+> köprü adresi bulunmalıdır. Claude izin onaylarının `additionalContext` yolu da
+> korunur. Mesajlar ortak FIFO ile sırayla, bir kez tüketilir. Teslim noktası olmadan
+> tur biterse kalanlar sonraki turun başına alınır; açık durdurma yeniden tur başlatmaz.
+> Bu, Codex App Server `turn/steer` protokolüne geçiş değildir.
+
+## Güncel kullanım ve teslim (2026-09-28)
+
+- Çalışan oturumda mesajı yazıp **Yönlendir** seçin. **Sıraya** ayrı tur başlatmak
+  için mevcut davranışını korur; Enter kısayolunun davranışı değişmedi.
+- Kuyruğa gönderilmiş bir mesaj **Şimdi yönlendir** ile mevcut tura aktarılabilir.
+  Dönüşüm atomiktir; reddedilirse mesaj kuyrukta kalır.
+- Soru kartına verilen asenkron cevaplar da aynı MCP sınırından taşınabilir.
+  Genel yönlendirme ve soru cevabı birbirini silmez; soru kimliği korunur.
+- CLI'lerde araç çıktısı ilk içerik bloğunda kalır; yönlendirme ayrı metin
+  bloklarına eklenir. İzin callback'lerinde yalnız geçerli JSON `additionalContext`
+  kullanılır; genel metin bloğu eklenmez.
+- Arka arkaya mesajlar birbirinin üzerine yazılmaz. Dolu tampon `503`, finalizasyon
+  veya durdurma sonrası gönderim `409` döner; arayüz taslağı korur.
+- Native/CLI tur sonu toparlaması kabul kapısını aynı kilitle kapatır. Böylece tam
+  tur biterken gelen mesaj ya toparlamaya dahil olur ya açıkça reddedilir.
+- Otonom CLI turlarında da köprü üzerinden yönlendirme ve teslim edilemeyen mesajı
+  sonraki tura aktarma uygulanır. Bu özellik başsız ajanlara soru sorma izni vermez.
+
+**Sınır:** TionHarness dışındaki araçlara veya uzun süren tek bir CLI/model çağrısına
+anında müdahale edilmez. Sonraki TionHarness MCP yanıtı gelmezse yönlendirme ancak
+sonraki turda işlenir. `Kes` mevcut turu durdurup yeni mesajı başlatan ayrı eylemdir.
+Steering tamponu bellektedir; sunucu çökmesine dayanıklı teslim garantisi vermez.
+
+Kod: `steer_run.go`, `steer_delivery.go`, `steer_recovery.go`, `mcp_interaction.go`,
+`mcp_interaction_tools.go`, `inbox_steer.go`. Testler iki CLI'de sırayla/tek tüketim,
+soru cevabıyla ortak teslim, kuyruktan dönüşüm, tampon doluluğu, tur sonu yarışı,
+durdurma ve arayüzün kuyruk/kesme yerine yönlendirme seçmesini kapsar.
+Bu testler TionHarness köprüsünü doğrular; canlı CLI/model uçtan uca deneyi değildir.
+
+Doğrulama: tam test kapısında tüm Go paketleri ve 147 dosyada 1044 frontend testi
+geçti. TypeScript, değişen yönlendirme arayüzü dosyalarının ESLint kontrolü ve
+depcheck başarılıdır.
+
+Aşağıdaki kayıtlar önceki uygulamanın tarihçesidir. İzin moduna bağlı eski destek
+matrisi, 28 Eylül'de eklenen genel MCP teslim yolu için geçerli değildir.
 
 > **Tarihçe (kısa):** İlk uygulama (2026-07-11) steer'i claude-cli'de permission-prompt
 > (`callPermission`) yanıtına `additionalContext` enjekte ederek taşıdı (`chatRun.pendingSteer`,
 > `setSteer`/`takeSteer` — `chat_control.go`). 2026-07-13'te bu aracın `auto` modda hiç
 > bağlanmadığı görüldü; karar (C) "dürüst UX" oldu: teslim edilemeyecek steer için
 > backend `"unsupported"` döner, mesaj kuyruğa alınır (`steerableForTurn`,
-> `TestSteerableForTurn`). Güncel davranış aşağıdaki matristir. `additionalContext`'in
+> `TestSteerableForTurn`). Bu kayıt eski permission-prompt uygulamasını anlatır. `additionalContext`'in
 > modele gerçekten bağlam olarak girdiği CLI sürümüne bağlıdır; teslim olmazsa mesaj
 > kuyruğa düşer, kaybolmaz.
 
-## Doğrulanmış durum — TSK762 araştırması (2026-09-06)
+## Tarihsel durum — TSK762 araştırması (2026-09-06)
 
-> Bu bölüm **doğrulanmış** gerçek davranıştır (kod okuması, `74399ffb`; yol/satır
+> Bu bölüm 6 Eylül tarihinde doğrulanmış eski davranıştır (kod okuması, `74399ffb`; yol/satır
 > referansları o commit'e göredir). İlk plan/tasarım metni
 > `arsiv/59-CLI-STEER-PLANI-TASARIM.md`'ye taşındı.
 

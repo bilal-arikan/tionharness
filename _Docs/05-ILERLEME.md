@@ -11,6 +11,38 @@
 > (TSK1045). Konu ayrıntısı için ilgili başlığa ve konunun kendi dokümanına bakın.
 
 
+## CLI oturumlarında kuyruk yerine canlı yönlendirme (2026-09-28)
+
+- **Yönlendir** ve kuyruktaki **Şimdi yönlendir**, Interaction MCP bağlı Claude ve
+  Codex CLI turlarında tüm izin modlarında açıldı. Native teslim yolu korundu.
+- Genel MCP araç yanıtları kullanıcı yönlendirmesini ayrı içerik blokları olarak
+  taşır; soru cevabı aynı anda gelebilir. Claude izin yanıtlarının JSON biçimi korunur.
+- Tek mesajlık CLI tamponu ortak FIFO ile değiştirildi. Mesajlar birbirini silmez;
+  tur sonu yarışı, dolu tampon, durmuş tura gönderim ve kuyruktan dönüşüm korunur.
+- Yanlış `ask` moduna geçme önerileri kaldırıldı. Ret halinde taslak/queued mesaj
+  korunur. Kullanıcı durdurduğunda bekleyen yönlendirme oturumu yeniden başlatmaz.
+- Teslim sonraki model/TionHarness araç sınırındadır; uzun CLI çağrısını anında
+  kesmez. Güncel sözleşme ve sınırlar: [59-CLI-STEER-PLANI.md](59-CLI-STEER-PLANI.md).
+- Doğrulama: tüm Go paketleri, 1044 frontend testi, TypeScript, değişen yönlendirme
+  dosyalarında ESLint ve depcheck geçti. Canlı CLI/model deneyi yapılmadı.
+
+## Akışı durdurmadan kullanıcıya soru sorma (2026-09-28)
+
+- Resmi OpenAI/Codex ve Claude belgeleri incelendi; protokol düzeyinde asenkron araç
+  çalıştırma ile soru/arka plan ajanı akışları ayrıştırıldı. Kaynaklar ve sınırlar:
+  [89-ASENKRON-KULLANICI-SORULARI.md](89-ASENKRON-KULLANICI-SORULARI.md).
+- `ask_user_async` soruyu kalıcı kaydedip hemen döner. Native döngü cevapları sonraki
+  model isteğine, CLI köprüsü sonraki MCP aracının ayrı içerik bloğuna taşır.
+  Tur bittiyse cevap mevcut seri oturum kuyruğundan devam eder.
+- Birden fazla soru kartı kimlikle yönetilir; normal tur sonu kartları kapatmaz,
+  ağ hatasında cevap taslağı kaybolmaz. İzin/plan ve `ask_user` bekleme davranışı korunur.
+- Cevap/tur-sonu yarışı, tek tüketim, yanlış oturum, çift cevap, durdurma ve
+  native/CLI devamı için regresyon testleri eklendi.
+- Tam test kapısı geçti: Go paketleri, 147 dosyada 1042 frontend testi, depcheck
+  ve diff kontrolü. Tarayıcıda gerçek bileşenlerle iki kart, taslak koruma ve dar
+  ekran doğrulandı. Ek ESLint kontrolünde `ChatView.tsx` içindeki mevcut
+  `currentTodo` memoization hatası kaldı; yeni soru akışından bağımsızdır.
+
 ## Ayrıntılı Codex araç karşılaştırması (2026-09-28)
 
 - Önceki deneyden ayrı 12 canlı çağrı: 48 araç olayı, sıfır araç hatası; 96 test

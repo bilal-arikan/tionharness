@@ -9,6 +9,10 @@
 
 ## Durum
 
+**2026-09-28 eklemesi:** Akışı durdurmadan soru sormak için `ask_user_async` eklendi.
+Aynı kalıcı soru deposunu kullanır; cevap snapshot resume yerine canlı girdiye veya
+oturum kuyruğuna gider. Ayrıntılar: [89 — Asenkron kullanıcı soruları](89-ASENKRON-KULLANICI-SORULARI.md).
+
 - **Faz 1 — DB katmanı ✅** (`internal/db`, canlı+test): `SessionAsk` entity'si
   (`models_session_ask.go`) + store (`store_session_ask.go`): `CreateSessionAsk` /
   `GetSessionAsk` / `ListWaitingSessionAsks` / **`ClaimSessionAsk`** (waiting→resolved

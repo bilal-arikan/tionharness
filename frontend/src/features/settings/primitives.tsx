@@ -11,6 +11,10 @@ import type { NumberValidity } from './numberValidity'
 // Category keys: the app-global sections plus the per-workspace section.
 export type Cat =
   | 'profile'
+  | 'general'
+  | 'execution'
+  | 'diagnostics'
+  | 'reference'
   | 'appearance'
   | 'providers'
   | 'secrets'

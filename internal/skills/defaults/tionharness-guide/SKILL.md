@@ -92,6 +92,12 @@ before the broken block reaches the user.
 These tools surface in the TionHarness UI on every interactive chat turn (both native
 and claude-cli agents). They are always available — no `activate_tools` needed.
 
+- **`ask_user_async`** — ask clarifying questions with optional choices and
+  continue independent work. Returns a request id, not an answer. Replies arrive
+  at a later model/tool boundary or as a continuation in this session. End the
+  turn once further work needs the answer; do not repeat or poll the question,
+  assume an answer, or treat silence as consent. Action approvals must still use
+  `request_confirmation` or the permission flow.
 - **`ask_user`** — pause and ask a clarifying question with optional clickable
   options; **blocks** until the user answers. Use when you genuinely cannot
   proceed without their input.

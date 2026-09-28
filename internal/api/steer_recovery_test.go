@@ -97,7 +97,7 @@ func TestChatControlSteerReportsFullQueue(t *testing.T) {
 // the second loss path: a steer that arrives after the turn's last drain point
 // (every steer sent during a tool-less turn's single completion) sat unread on
 // the channel and died with the run — the turn-end fallback only rescued the
-// claude-cli stash. Both sources must now land back in the queue, oldest first.
+// CLI stash. Every unconsumed message must land in the queue, oldest first.
 func TestRecoverUndeliveredSteerRequeuesChannelMessages(t *testing.T) {
 	s, wsp := newWorkspaceServer(t)
 	sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: "chat", Title: "t"})
@@ -112,7 +112,7 @@ func TestRecoverUndeliveredSteerRequeuesChannelMessages(t *testing.T) {
 	defer s.runs.unregister("r-rec")
 	run.steer <- "first guidance"
 	run.steer <- "second guidance"
-	run.setSteer("cli stash")
+	run.steer <- "third guidance"
 
 	s.recoverUndeliveredSteer(run, wsp.ID, chatReq{SessionID: sess.ID})
 
@@ -126,7 +126,7 @@ func TestRecoverUndeliveredSteerRequeuesChannelMessages(t *testing.T) {
 	}
 	s.inbox.unlock()
 
-	want := []string{"first guidance", "second guidance", "cli stash"}
+	want := []string{"first guidance", "second guidance", "third guidance"}
 	if len(queued) != len(want) {
 		t.Fatalf("requeued %v, want %v", queued, want)
 	}

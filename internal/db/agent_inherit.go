@@ -255,6 +255,9 @@ func applyInheritance(parent Agent, child Agent) Agent {
 // the last row that could be found, so a read never fails — the child simply
 // resolves against what exists.
 func (d *DB) resolveAgentLocked(a Agent) Agent {
+	if shared, ok := d.catalogAgentLocked(a); ok {
+		return shared
+	}
 	if a.ParentID == "" {
 		return a.backfillProviderInstance()
 	}
@@ -380,10 +383,14 @@ func (d *DB) reparentChildrenLocked(removed Agent) error {
 // systemRoleTakenLocked reports whether an ENABLED, non-locked agent other than
 // excludeID already serves the system role `key`. Caller holds d.mu.
 func (d *DB) systemRoleTakenLocked(key, excludeID string) bool {
+	if d.isAgentCatalog {
+		return false
+	}
 	if key == "" {
 		return false
 	}
 	for _, a := range d.agents {
+		a = d.resolveAgentLocked(a)
 		if a.ID == excludeID || a.Deleted || a.Locked || a.Disabled {
 			continue
 		}

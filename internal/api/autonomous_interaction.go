@@ -50,12 +50,9 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// side of a fan-out, so its CLI subprocess's processes must group under the
 		// session that spawned it (see stampRunSession). Empty for a top-level session.
 		run.setParentSession(rt.SessionParentID(sessionID))
-		// Record steer deliverability for this turn, exactly like the chat path. An
-		// autonomous turn has no request-level override, so the effective mode is the
-		// agent's own. Without this the field stayed false and a steer aimed at an
-		// autonomous claude-cli turn in ask/read-only mode — where the permission-prompt
-		// boundary DOES exist and can carry it — was reported "unsupported".
-		run.setSteerable(steerableForTurn(ag.Provider, ag.PermissionMode))
+		// The endpoint is available, so ordinary MCP results can carry guidance
+		// even when this autonomous turn has no permission prompts.
+		run.setSteerable(steerableForTurn(ag.Provider, true))
 
 		// A turn with no session id is a degraded turn: every session-scoped sink
 		// below is skipped, so artifacts/notify/focus_view/update_session/
@@ -171,7 +168,11 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		tok := s.runs.interactionToken(rt.WorkspaceID(), sessionID, ag.ID)
 		s.runs.bindActive(tok, run)
 		ctx = tools.WithInteractionEndpoint(ctx, url, tok, coreNames, extNames)
-		return ctx, func() { cancel(); s.runs.unregister(runID) }
+		return ctx, func() {
+			cancel()
+			s.recoverUndeliveredSteer(run, rt.WorkspaceID(), chatReq{SessionID: sessionID, AgentIDs: []string{ag.ID}})
+			s.runs.unregister(runID)
+		}
 	}
 }
 

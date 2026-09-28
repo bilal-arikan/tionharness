@@ -153,7 +153,7 @@ func (AskUserTool) Def() providers.ToolDef {
 			"when you genuinely cannot proceed without input (ambiguous requirement, a risky choice, missing " +
 			"detail). One question: set \"question\" (+ optional \"options\"). Several at once — one card, " +
 			"answered together: pass \"questions\" instead. Options are suggestions; the user may also type " +
-			"a free-text reply.",
+			"a free-text reply. If independent work can continue while waiting, use ask_user_async instead.",
 		// Schema mirrors claude-cli's native AskUserQuestion where it overlaps so a
 		// model trained on that tool calls this one without a shape mismatch: an
 		// option may be a plain string OR an object with a "label" (the native form).

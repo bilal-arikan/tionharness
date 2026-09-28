@@ -185,18 +185,9 @@ func (t *chatTurn) preflight() (release func(), ok bool) {
 	// Label the run with the responding agent's provider so the Session Info panel
 	// can show which kind of background process is running (e.g. "claude-cli").
 	t.run.setProvider(agents[0].Provider)
-	// Record whether "Yönlendir" (mid-turn steer) can actually reach this turn, so
-	// the control endpoint can tell the client to queue instead of silently
-	// dropping it. claude-cli delivers a steer only at a permission-prompt tool
-	// boundary, which exists solely in "ask"/"read-only" modes; "auto" runs the CLI
-	// with --dangerously-skip-permissions (no such boundary). Native providers drain
-	// the steer channel in the tool loop regardless of mode. Effective mode = the
-	// request override when set, else the agent's own mode.
-	effMode := agents[0].PermissionMode
-	if t.req.PermissionMode != "" {
-		effMode = t.req.PermissionMode
-	}
-	t.run.setSteerable(steerableForTurn(agents[0].Provider, effMode))
+	// CLI delivery needs the Interaction MCP endpoint; it does not need a
+	// permission prompt. Native providers drain guidance before model calls.
+	t.run.setSteerable(steerableForTurn(agents[0].Provider, t.s.interactionURL() != ""))
 	// The admission-queue observer already published a queue_update when this turn
 	// took the session slot (BeginSessionUserTurn, above) — but that happened BEFORE
 	// the line above, so its "steerable" read the not-yet-set zero value. Re-publish
@@ -577,6 +568,10 @@ func (t *chatTurn) prepareAgentRequest(agentRow db.Agent, provider providers.Pro
 // context.
 func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 	session := t.session
+	// A multi-agent turn may switch transports between passes.
+	t.run.setProvider(agentRow.Provider)
+	t.run.setSteerable(steerableForTurn(agentRow.Provider, t.s.interactionURL() != ""))
+	t.s.republishQueue(t.wsp.ID, session.ID)
 	// Attach a per-agent artifact sink so create_artifact / update_artifact
 	// persist content stamped with this session + agent — both on the native
 	// tool path (via context) and the CLI path (via the run, used by the
@@ -626,6 +621,9 @@ func (t *chatTurn) installAgentSinks(agentRow db.Agent) context.Context {
 	// one-shot schedule that re-delivers a prompt into this session as a fresh
 	// turn, so the conversation continues on its own.
 	respondingID := agentRow.ID
+	asyncInput := t.asyncInputForAgent(respondingID)
+	turnCtx = tools.WithAsyncInput(turnCtx, asyncInput)
+	t.run.setAsyncInput(asyncInput)
 	wakeFn := func(wctx context.Context, delaySeconds int, prompt, reason string) (string, error) {
 		return t.wsp.Runtime.ScheduleWake(wctx, session.ID, respondingID, prompt, reason, delaySeconds)
 	}

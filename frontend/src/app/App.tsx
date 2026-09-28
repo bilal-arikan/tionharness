@@ -300,6 +300,7 @@ export default function App() {
   // session list request carries it: the server applies the chip filter before
   // paging, so the same selection drives the fetch and the rendered rows.
   const sessionChips = useSessionChips()
+  const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   // The sidebar's title/id search (debounced there); the controller sends it to
   // the server so the filter reaches unloaded pages.
   const [sessionSearch, setSessionSearch] = useState('')
@@ -307,6 +308,7 @@ export default function App() {
   const ctl = useSessionsController({
     activeWorkspaceId,
     chipsParam: sessionChips.chipsParam,
+    showArchived: showArchivedSessions,
     searchQuery: sessionSearch,
     setError,
     setView,
@@ -654,6 +656,8 @@ export default function App() {
               chipsOff={sessionChips.chipsOff}
               chipSet={sessionChips.chipSet}
               onClickChip={sessionChips.clickChip}
+              showArchived={showArchivedSessions}
+              onToggleArchived={() => setShowArchivedSessions((value) => !value)}
               chipCountsFromServer={ctl.sessionChipCounts}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
@@ -764,6 +768,10 @@ export default function App() {
               onDuplicateAgent={ctl.duplicateAgent}
               onDeriveAgent={ctl.deriveAgent}
               onDeleteAgent={ctl.deleteAgent}
+              onOpenAgentLibrary={() => {
+                links.setSettingsCat('sysagents')
+                selectView('settings')
+              }}
               onRefresh={() =>
                 api
                   .listAgents()

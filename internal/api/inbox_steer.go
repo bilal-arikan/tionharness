@@ -31,6 +31,8 @@ const (
 	queuedSteerUnsupported
 	// queuedSteerBufferFull: the turn is not consuming guidance.
 	queuedSteerBufferFull
+	// queuedSteerFinished: recovery already closed the run to new guidance.
+	queuedSteerFinished
 	// queuedSteerConverted: the guidance reached the run AND the message left the
 	// queue — the only outcome that mutates anything.
 	queuedSteerConverted
@@ -71,6 +73,9 @@ func (s *Server) steerQueuedMessage(wsID, sessionID, clientMsgID string, run *ch
 				return false
 			}
 			switch deliverSteer(run, text) {
+			case steerFinished:
+				outcome = queuedSteerFinished
+				return false
 			case steerUnsupported:
 				outcome = queuedSteerUnsupported
 				return false
@@ -119,6 +124,8 @@ func (s *Server) handleSteerQueued(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
 	case queuedSteerBufferFull:
 		writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
+	case queuedSteerFinished:
+		writeError(w, http.StatusConflict, steerFinishedMsg)
 	case queuedSteerConverted:
 		writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 	}

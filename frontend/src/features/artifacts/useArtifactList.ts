@@ -81,8 +81,7 @@ export function useArtifactList(
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  // Count of archived artifacts across the whole store — drives the archived
-  // toggle's badge and hides the toggle entirely until something is archived.
+  // Last archive total, learned only when the user opens the archive.
   const [archivedTotal, setArchivedTotal] = useState(0)
   const archivedCount = archivedTotal
   const debouncedQuery = useDebouncedValue(query, 300)
@@ -110,6 +109,7 @@ export function useArtifactList(
           if (seq !== listReq.current) return
           setList((prev) => (append ? [...prev, ...r.items] : r.items))
           setTotal(r.total)
+          if (showArchived) setArchivedTotal(r.total)
           setHasMore(r.hasMore)
           if (!append) setActiveId((cur) => cur ?? r.items[0]?.id ?? null)
         })
@@ -117,22 +117,14 @@ export function useArtifactList(
     [originFilter, debouncedQuery, showArchived, setActiveId],
   )
 
-  // run replaces the first page and refreshes the archive badge, landing both
-  // through callbacks (so the filter effect may call it); reload is the manual
+  // run replaces the first page through callbacks (so the filter effect may
+  // call it); reload is the manual
   // entry point that also re-arms the loading state.
   const run = useCallback(() => {
     fetchPage(0, false)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
-    // Archive badge count — only meaningful from the active view (the archived
-    // view already knows its own total).
-    if (!showArchived) {
-      api
-        .listArtifacts({ archived: true, limit: 1 })
-        .then((r) => setArchivedTotal(r.total))
-        .catch(() => {})
-    }
-  }, [fetchPage, showArchived, onError])
+  }, [fetchPage, onError])
   const reload = useCallback(() => {
     setLoading(true)
     run()
@@ -159,13 +151,6 @@ export function useArtifactList(
       listReq.current += 1
     }
   }, [run, artifactsTick])
-
-  // Once nothing is archived any more (e.g. the last archived artifact was
-  // restored), fall back to the active view so the archived view can't strand
-  // the user on a permanently empty list.
-  useEffect(() => {
-    if (showArchived && archivedCount === 0) setShowArchived(false)
-  }, [showArchived, archivedCount, setShowArchived])
 
   // Honour an incoming deep-link selection (e.g. clicking an artifact card).
   useEffect(() => {

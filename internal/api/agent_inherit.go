@@ -74,6 +74,7 @@ func (s *Server) handleDeriveAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logger.Info("agent derived", "parent", parent.ID, "child", child.ID, "name", child.Name, "bindRole", req.BindRole)
+	s.publishAgentCatalogChanged()
 	writeJSON(w, http.StatusCreated, child)
 }
 
@@ -82,6 +83,9 @@ func (s *Server) handleDeriveAgent(w http.ResponseWriter, r *http.Request) {
 // role follows the compiled registry again in every workspace. A root agent has
 // no parent to restore from (404).
 func (s *Server) handleRestoreAgentDefaults(w http.ResponseWriter, r *http.Request) {
+	if !s.confirmSharedAgentEdit(w, r, r.PathValue("id")) {
+		return
+	}
 	wsp := ws(r)
 	current, err := wsp.DB.GetAgent(r.Context(), r.PathValue("id"))
 	if writeDBError(w, err, "agent not found") {
@@ -94,6 +98,7 @@ func (s *Server) handleRestoreAgentDefaults(w http.ResponseWriter, r *http.Reque
 		}
 		s.workspaces.PropagateSystemAgentEdit(r.Context(), wsp.ID)
 		s.logger.Info("built-in system agent restored", "agent", restored.ID, "systemKey", restored.SystemKey)
+		s.publishAgentCatalogChanged()
 		writeJSON(w, http.StatusOK, restored)
 		return
 	}
@@ -106,6 +111,7 @@ func (s *Server) handleRestoreAgentDefaults(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.logger.Info("agent overrides cleared", "agent", restored.Name, "id", restored.ID)
+	s.publishAgentCatalogChanged()
 	writeJSON(w, http.StatusOK, restored)
 }
 
@@ -143,5 +149,6 @@ func (s *Server) createDerivedAgent(w http.ResponseWriter, r *http.Request, req 
 		}
 	}
 	s.logger.Info("agent created (derived)", "agent", child.Name, "id", child.ID, "parent", req.ParentID)
+	s.publishAgentCatalogChanged()
 	writeJSON(w, http.StatusCreated, child)
 }

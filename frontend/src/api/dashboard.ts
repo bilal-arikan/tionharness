@@ -6,10 +6,10 @@ import { req } from './client'
 export const dashboardApi = {
   // getDashboard fetches the overview for a trailing window of `days`
   // (backend clamps to 1..90).
-  getDashboard(days = 14): Promise<Dashboard> {
-    return req<Dashboard>(`/api/dashboard?days=${days}`)
+  getDashboard(days = 14, signal?: AbortSignal): Promise<Dashboard> {
+    return req<Dashboard>(`/api/dashboard?days=${days}`, { signal })
   },
-  getCommitActivity(weeks = 52): Promise<CommitActivity> {
-    return req<CommitActivity>(`/api/dashboard/commit-activity?weeks=${weeks}`)
+  getCommitActivity(weeks = 52, signal?: AbortSignal): Promise<CommitActivity> {
+    return req<CommitActivity>(`/api/dashboard/commit-activity?weeks=${weeks}`, { signal })
   },
 }

@@ -21,7 +21,8 @@ export const workspaceApi = {
   listWorkspacesActivity: () => req<{ id: string; running: boolean }[]>('/api/workspaces/activity'),
   // The active workspace's composed liveness picture (running / queued / waiting
   // sessions with reasons + spawn capacity) — _Docs/77 R2.
-  workspaceLiveness: () => req<LivenessSnapshot>('/api/workspace/liveness'),
+  workspaceLiveness: (signal?: AbortSignal) =>
+    req<LivenessSnapshot>('/api/workspace/liveness', { signal }),
   // Available workspace templates (agents/flow blueprints) for the create dialog.
   listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
   createWorkspace: (data: {

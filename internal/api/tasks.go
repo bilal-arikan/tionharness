@@ -16,7 +16,7 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	// By default the board shows only active cards; archived cards are hidden but
 	// kept. ?archived=1 (or true) returns everything, for an "archived" view.
 	list := ws(r).DB.ListActiveTasks
-	if v := r.URL.Query().Get("archived"); v == "1" || v == "true" {
+	if v := r.URL.Query().Get("archived"); v == "1" || v == "true" || v == "all" || v == "only" {
 		list = ws(r).DB.ListTasks
 	}
 	tasks, err := list(r.Context())
@@ -39,6 +39,9 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	wantTags := tools.SplitTags(q.Get("tags"))
 	matches := make([]db.Task, 0, len(tasks))
 	for _, tk := range tasks {
+		if q.Get("archived") == "only" && !tk.Archived {
+			continue
+		}
 		if boardState != "" && tk.BoardState != boardState {
 			continue
 		}

@@ -63,12 +63,14 @@ describe('useActivitySpans', () => {
     const sessions = [lane('SES1', 10)]
     await render(sessions, 900)
     expect(apiMock.sessionActivity).toHaveBeenCalledTimes(1)
-    expect(apiMock.sessionActivity).toHaveBeenLastCalledWith(['SES1'], 900)
+    expect(apiMock.sessionActivity).toHaveBeenLastCalledWith(['SES1'], 900, expect.any(AbortSignal))
+    const firstSignal = apiMock.sessionActivity.mock.calls[0][2] as AbortSignal
 
     // Same transcript, different rung: the cached answer no longer applies.
     await render(sessions, 300)
     expect(apiMock.sessionActivity).toHaveBeenCalledTimes(2)
-    expect(apiMock.sessionActivity).toHaveBeenLastCalledWith(['SES1'], 300)
+    expect(apiMock.sessionActivity).toHaveBeenLastCalledWith(['SES1'], 300, expect.any(AbortSignal))
+    expect(firstSignal.aborted).toBe(true)
   })
 
   it('does not re-ask when neither the transcript nor the threshold moved', async () => {

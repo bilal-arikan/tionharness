@@ -21,10 +21,9 @@ type skillDetail struct {
 
 // handleListSkills returns the resolved skill catalog (frontmatter only) for the
 // workspace, newest tier winning on slug collisions. ?archived=true lists only
-// archived skills, false only live ones; absent/all keeps both (the Skills
-// screen splits them into its active and archive views client-side).
+// archived skills, false/absent only live ones, and all keeps both.
 func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
-	archived, ok := archiveFilterQuery(w, r.URL.Query(), archive.All)
+	archived, ok := archiveFilterQuery(w, r.URL.Query(), archive.Active)
 	if !ok {
 		return
 	}

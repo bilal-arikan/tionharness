@@ -180,7 +180,9 @@ func permissionModeArgs(mode string) []string {
 // sink (the native call is mirrored from the stream), only the newer TaskCreate
 // family is invisible. This is the codex wording and the claude wording when the
 // native Agent launcher is off the menu; see interactionNote.
-const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
+const asyncInteractionNote = "For clarification while independent work remains, use ask_user_async. Continue independent work while the question is pending; replies arrive at a later tool boundary or as a continuation. End the turn when only answer-dependent work remains. Never treat silence as consent. Use ask_user when you must wait immediately, and request_confirmation for action approval. "
+
+const interactionSystemNote = asyncInteractionNote +
 	"To create, show, or update a task checklist, call the todo_write tool (or the built-in TodoWrite when present) — both persist to the session's progress file. " +
 	"Do NOT use AskUserQuestion or the TaskCreate/TaskUpdate/TaskList/TaskGet tools: they do not reach TionHarness and the progress view stays empty. " +
 	"To delegate a focused sub-task to another agent, use the run_subagent tool when it is available; never use the built-in Task or Agent subagent launcher, which runs invisibly to TionHarness."
@@ -190,7 +192,7 @@ const interactionSystemNote = "To ask the user a clarifying question, call the a
 // Explore/Plan run in-process (no fresh CLI start, no bridge round-trip) and their
 // transcript is folded into the trace, while anything that writes or targets a
 // TionHarness agent still goes through run_subagent.
-const interactionSystemNoteNativeSubagents = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
+const interactionSystemNoteNativeSubagents = asyncInteractionNote +
 	"To create, show, or update a task checklist, call the todo_write tool (or the built-in TodoWrite when present) — both persist to the session's progress file. " +
 	"Do NOT use AskUserQuestion or the TaskCreate/TaskUpdate/TaskList/TaskGet tools: they do not reach TionHarness and the progress view stays empty. " +
 	"For read-only research (finding files, tracing code, gathering facts) you may use the built-in Agent tool with subagent_type Explore or Plan; its activity is recorded in TionHarness. " +

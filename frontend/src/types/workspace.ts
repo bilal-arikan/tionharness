@@ -112,6 +112,8 @@ export interface WorkspaceTemplate {
 export interface WorkspaceSettings {
   id: string
   name: string
+  // Absolute workspace data folder, supplied by the server and never patched.
+  dataDir: string
   instructions: string
   icon: string
   color: string

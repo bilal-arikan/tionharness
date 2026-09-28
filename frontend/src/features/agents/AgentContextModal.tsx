@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '@/types'
-import { api } from '@/api'
+import { useAgentEditorApi } from './AgentEditorContext'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
@@ -36,6 +36,7 @@ interface Props {
 // simulates the message-dependent dynamic suffix (cross-session block);
 // session-only parts (summary/artifacts/todos) need a live session.
 export function AgentContextModal({ agentId, agentName, onClose }: Props) {
+  const api = useAgentEditorApi()
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [raw, setRaw] = useState(false)
@@ -54,7 +55,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         .then(setData)
         .catch((e) => setErr((e as Error).message))
         .finally(() => setLoading(false)),
-    [agentId],
+    [agentId, api],
   )
   const load = useCallback(
     (msg: string) => {

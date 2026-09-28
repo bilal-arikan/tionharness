@@ -128,14 +128,14 @@ func TestInteractionAdvertisedNames(t *testing.T) {
 		t.Fatalf("spawn_session must be advertised (self-management always on); got %s", names)
 	}
 	// Interactive (chat) turn advertises ask_user / request_confirmation.
-	if !contains(got, "ask_user") || !contains(got, "request_confirmation") {
+	if !contains(got, "ask_user") || !contains(got, "ask_user_async") || !contains(got, "request_confirmation") {
 		t.Fatalf("interactive turn must advertise ask_user + request_confirmation; got %s", names)
 	}
 
 	// Autonomous turn must DROP the interactive tools (no live user to answer) so a
 	// claude-cli flow child never calls them and crashes on the is_error result.
 	auto := interactionAdvertisedNames(nil, true)
-	if contains(auto, "ask_user") || contains(auto, "request_confirmation") {
+	if contains(auto, "ask_user") || contains(auto, "ask_user_async") || contains(auto, "request_confirmation") {
 		t.Fatalf("autonomous turn must NOT advertise ask_user/request_confirmation; got %s", strings.Join(auto, ","))
 	}
 	// Non-interactive bridged tools stay available autonomously (e.g. use_skill).

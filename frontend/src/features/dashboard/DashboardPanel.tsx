@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
@@ -43,28 +43,36 @@ export function DashboardPanel({
   const [data, setData] = useState<Dashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const request = useRef<AbortController | null>(null)
 
   // run lands results through callbacks only (so the effect may call it); load
   // is the retry entry point that re-arms the spinner. A window change re-arms
   // it too, before the refetch lands.
-  const run = useCallback(
-    () =>
-      api
-        .getDashboard(days)
-        .then((d) => {
-          setData(d)
-          setError(null)
-        })
-        .catch((e) => {
-          // Keep the previous data on screen but say it failed: silently showing a
-          // stale workspace as if current is worse than showing nothing.
-          const msg = e instanceof Error ? e.message : String(e)
-          setError(msg)
-          onError?.(msg)
-        })
-        .finally(() => setLoading(false)),
-    [days, onError],
-  )
+  const run = useCallback(() => {
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
+    return api
+      .getDashboard(days, controller.signal)
+      .then((d) => {
+        if (controller.signal.aborted) return
+        setData(d)
+        setError(null)
+      })
+      .catch((e) => {
+        if (controller.signal.aborted) return
+        // Keep the previous data on screen but say it failed: silently showing a
+        // stale workspace as if current is worse than showing nothing.
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(msg)
+        onError?.(msg)
+      })
+      .finally(() => {
+        if (request.current !== controller) return
+        request.current = null
+        if (!controller.signal.aborted) setLoading(false)
+      })
+  }, [days, onError])
   const load = useCallback(() => {
     setLoading(true)
     return run()
@@ -73,6 +81,10 @@ export function DashboardPanel({
   useKeyedReset(days, () => setLoading(true))
   useEffect(() => {
     void run()
+    return () => {
+      request.current?.abort()
+      request.current = null
+    }
   }, [run])
 
   // Route an action-queue click to the screen that owns the entity.

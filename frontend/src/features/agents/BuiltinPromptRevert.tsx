@@ -9,7 +9,7 @@
 // reviewable and only lands on Save.
 import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { api } from '@/api'
+import { useAgentEditorApi } from './AgentEditorContext'
 
 interface Props {
   /** Agent whose system role supplies the built-in prompt. */
@@ -24,6 +24,7 @@ interface Props {
 }
 
 export function BuiltinPromptRevert({ agentId, current, onRevert, onError, disabled }: Props) {
+  const api = useAgentEditorApi()
   const [loading, setLoading] = useState(false)
   // Cached so repeated clicks (and the "already at default" check after a
   // revert) do not re-hit the endpoint.

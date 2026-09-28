@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppSettings } from '@/types'
-import { ToolsPanel } from './AppToolsPanel'
+import { ExecutionPanel } from './ExecutionPanel'
 
 const reactTestEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT: boolean
@@ -18,7 +18,7 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-describe('ToolsPanel spawn limits', () => {
+describe('ExecutionPanel spawn limits', () => {
   it('renders no wall-clock hard-cap controls', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -26,9 +26,9 @@ describe('ToolsPanel spawn limits', () => {
     roots.push(root)
     const draft = {} as AppSettings
 
-    act(() => root.render(<ToolsPanel draft={draft} set={vi.fn()} setDraft={vi.fn()} />))
+    act(() => root.render(<ExecutionPanel draft={draft} set={vi.fn()} setDraft={vi.fn()} />))
 
-    expect(container.textContent).toContain('semantic boşta penceresiyle')
+    expect(container.textContent).toContain('Productive work has no total duration cap.')
     expect(container.textContent).not.toContain('spawnTimeoutMin')
     expect(container.textContent).not.toContain('Spawn süresi — üst sınır')
     expect(container.textContent).not.toContain('Zamanlama süresi (dk)')

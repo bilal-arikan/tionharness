@@ -84,9 +84,36 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
     // fetch rejects (no response at all) when the dev server / network is down.
     throw new Error(
       "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et.",
+      { cause: error },
     )
   }
   if (!res.ok) {
+    if (res.status === 409) {
+      const body = await res
+        .clone()
+        .json()
+        .catch(() => null)
+      if (body?.confirmationRequired === true) {
+        const names = (body.workspaces as { workspaceName: string }[])
+          .map((workspace) => `• ${workspace.workspaceName}`)
+          .join('\n')
+        if (
+          !window.confirm(
+            `Save changes to "${body.agentName}"?\n\nThis shared agent affects these workspaces:\n${names}\n\nThe central profile will be updated for all of them.`,
+          )
+        ) {
+          throw new Error('Changes were not saved. Shared-agent update cancelled.')
+        }
+        return req<T>(path, {
+          ...init,
+          headers: {
+            ...wsHeaders(),
+            ...Object.fromEntries(new Headers(init?.headers)),
+            'X-Confirm-Shared-Agent': 'true',
+          },
+        })
+      }
+    }
     const err = new Error(await errorFromResponse(res)) as Error & { status?: number }
     err.status = res.status
     throw err

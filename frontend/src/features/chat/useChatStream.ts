@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import type { Attachment, Message, SlashCommand, TurnStep } from '@/types'
-import type { PendingAsk } from './AskPrompt'
+import { removeInteraction, type PendingInteractions } from './pendingInteractions'
 import type { PendingItem } from './PendingTray'
 import { intersectWith, withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
 import type { AutoLiveEntry, ChatStreamDeps, WakeWait } from './chatStreamTypes'
@@ -141,7 +141,7 @@ export function useChatStream(deps: ChatStreamDeps) {
   }, [activeSessionId])
   // ask_user pauses are held PER SESSION so a turn paused in one session does
   // not show its prompt while the user is viewing another.
-  const [pendingAsks, setPendingAsks] = useState<Record<string, PendingAsk>>({})
+  const [pendingAsks, setPendingAsks] = useState<PendingInteractions>({})
 
   // Pending self-wakes: schedule_wake armed a turn to auto-resume after a delay.
   // Tracked PER SESSION (with the agent's reason + fire time) so the "waiting to
@@ -268,16 +268,25 @@ export function useChatStream(deps: ChatStreamDeps) {
   // card here; the server broadcasts interaction_resolved so every OTHER window
   // closes it too. A 409 (another window answered first) is expected and benign.
   const answerAsk = useCallback(
-    (text: string) => {
+    (text: string, interactionId?: string) => {
       const sid = activeSessionId
       if (!sid) return
-      const ask = pendingAsks[sid]
-      setPendingAsks((p) => withoutKey(p, sid))
+      const ask = interactionId
+        ? pendingAsks[sid]?.find((item) => item.interactionId === interactionId)
+        : pendingAsks[sid]?.[0]
       if (ask?.interactionId) {
-        api.answerInteraction(sid, ask.interactionId, { answer: text }).catch(() => {})
+        const id = ask.interactionId
+        const close = () => setPendingAsks((p) => removeInteraction(p, sid, id))
+        api
+          .answerInteraction(sid, id, { answer: text })
+          .then(close)
+          .catch((error: Error & { status?: number }) => {
+            if (error.status === 409) close()
+            else setError(error.message)
+          })
       }
     },
-    [activeSessionId, pendingAsks],
+    [activeSessionId, pendingAsks, setError],
   )
 
   // Interrupt: stop the session's turn AND take its next turn slot in one atomic
@@ -512,17 +521,9 @@ export function useChatStream(deps: ChatStreamDeps) {
     [sendMessage],
   )
 
-  // Steer: inject live guidance into the ACTIVE session's running turn
-  // (session-scoped; the worker owns the run). Native providers fold it in via the
-  // steer channel; claude-cli stashes it and delivers it at the next tool boundary
-  // (server reports "steered"). If that turn ends with no tool call, the backend
-  // itself enqueues the message as the next turn (steer_undelivered fallback), so
-  // the client needs no fallback here anymore. The server reports "unsupported" when
-  // a steer cannot reach the turn — a claude-cli agent in "auto" mode (no permission-
-  // prompt boundary), or an older backend — in which case we queue the message and
-  // tell the user, instead of silently dropping their guidance.
-  // Resolves to true when the guidance was delivered (or, on "unsupported", was
-  // successfully queued as a normal turn instead) — the composer clears only then.
+  // Send live guidance through the native model loop or the CLI tool bridge.
+  // The backend recovers unread guidance at turn end. Only an unavailable
+  // delivery channel falls back to a normal queued turn; failures keep the draft.
   const steerTurn = useCallback(
     async (text: string): Promise<boolean> => {
       const sid = activeSessionId
@@ -531,9 +532,8 @@ export function useChatStream(deps: ChatStreamDeps) {
         const r = await api.sessionControl(sid, 'steer', text)
         if (r?.result === 'unsupported') {
           const queued = await sendMessage(text)
-          setError(
-            'Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.',
-          )
+          if (queued)
+            setError('Live guidance is unavailable for this turn. Your message was queued.')
           return queued
         }
         return true
@@ -597,9 +597,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       try {
         const r = await api.steerQueued(sid, id)
         if (r?.result === 'unsupported') {
-          setError(
-            'Bu tur canlı yönlendirmeyi taşıyamıyor (claude-cli "auto"/"read-only" veya codex-cli) — mesaj sırada kaldı ve tur bitince çalışacak. Canlı yönlendirme için ajanı "ask" moduna al.',
-          )
+          setError('Live guidance is unavailable for this turn. Your message remains queued.')
         }
       } catch (e) {
         setError((e as Error).message)
@@ -655,15 +653,13 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Derive the active session's view of the per-session streaming state.
   const activeStreaming = activeSessionId ? streamingSessions.has(activeSessionId) : false
   const activePending = activeSessionId ? pendingSessions.has(activeSessionId) : false
-  const activeAsk = activeSessionId ? (pendingAsks[activeSessionId] ?? null) : null
+  const activeAsks = activeSessionId ? (pendingAsks[activeSessionId] ?? []) : []
+  const activeAsk = activeAsks[0] ?? null
   const activeWakeWait = activeSessionId ? (wakeWaits[activeSessionId] ?? null) : null
   // The active session's WAITING backend queue is already session-scoped (the hub
   // subscription is per active session), so it maps straight through.
   const activeQueued = queued
-  // A steer needs BOTH: a turn actually streaming here (the local, instant signal)
-  // and a turn the server says can carry guidance. Streaming alone used to gate the
-  // tray's steer action, which offered it on turns — claude-cli in auto/read-only,
-  // any codex-cli turn — where the backend could only answer "unsupported".
+  // Both an active turn and a server-confirmed delivery channel are required.
   const activeSteerable = activeStreaming && steerable
   // "open in N windows" — >1 means another window is also viewing this session.
   const activePresence = presence
@@ -709,6 +705,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     activeStreaming,
     activePending,
     activeAsk,
+    activeAsks,
     activeWakeWait,
     activeQueued,
     activeSteerable,

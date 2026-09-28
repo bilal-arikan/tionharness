@@ -74,6 +74,18 @@ func TestUpdateWorkspaceSettings_WorktreeLifecycleAppliesAndReturns(t *testing.T
 	}
 }
 
+func TestWorkspaceSettingsIncludesReadOnlyDataDir(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	var got workspaceSettingsDTO
+	rec := doJSON(t, s.Routes(), http.MethodGet, "/api/workspace-settings", nil, &got)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got.DataDir != wsp.DataDir {
+		t.Fatalf("dataDir = %q, want %q", got.DataDir, wsp.DataDir)
+	}
+}
+
 // TestTestProvider_UnknownFieldRejected verifies POST /api/settings/test-provider
 // rejects a body carrying a field testProviderReq does not declare.
 func TestTestProvider_UnknownFieldRejected(t *testing.T) {

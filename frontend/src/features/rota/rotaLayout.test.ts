@@ -178,6 +178,17 @@ describe('layoutRota', () => {
     expect(l.t0).toBe(NOW - 90_000)
   })
 
+  it('shows sessions from two days ago in the three-day window', () => {
+    const lanes = seedSessions(emptyLanes(), [
+      header({ id: 'TWO_DAYS', createdAt: NOW - 180_000, updatedAt: NOW - 172_800 }),
+      header({ id: 'FOUR_DAYS', createdAt: NOW - 350_000, updatedAt: NOW - 345_600 }),
+    ])
+    expect(layoutRota(lanes, { now: NOW, idleCutoffSec: 86_400 }).rows).toEqual([])
+    expect(
+      layoutRota(lanes, { now: NOW, idleCutoffSec: 259_200 }).rows.map((row) => row.id),
+    ).toEqual(['TWO_DAYS'])
+  })
+
   it('splits a bar along its activity bouts, leaving the others whole', () => {
     const activity = new Map([
       [

@@ -46,10 +46,14 @@ func (a Agent) ProviderRef() string {
 
 // Agent is an autonomous AI entity bound to a provider/model.
 type Agent struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Soul     string `json:"soul"`
-	Identity string `json:"identity"`
+	CatalogID       string `json:"catalogId,omitempty"`
+	CatalogParentID string `json:"catalogParentId,omitempty"`
+	CatalogOrigin   string `json:"catalogOrigin,omitempty"`
+	CatalogDetached bool   `json:"catalogDetached,omitempty"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Soul            string `json:"soul"`
+	Identity        string `json:"identity"`
 	// System agents back built-in AI jobs. Their stable SystemKey identifies the
 	// role across workspaces; they may be edited or disabled, but not deleted.
 	System    bool   `json:"system,omitempty"`
@@ -240,6 +244,9 @@ type Agent struct {
 // RunnableErr reports why the agent may not run a turn, or nil when it may.
 // Today the only such state is Archived; the error wraps archive.ErrArchived.
 func (a Agent) RunnableErr() error {
+	if a.CatalogDetached {
+		return ErrNotFound
+	}
 	if a.Archived {
 		return archive.Error("agent", a.ID, a.Name)
 	}

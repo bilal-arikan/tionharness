@@ -43,6 +43,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Doküman Dizini
 
+- [89 — Asenkron kullanıcı soruları](89-ASENKRON-KULLANICI-SORULARI.md): soru cevabı
+  beklenirken bağımsız çalışma, native/CLI cevap teslimi ve çoklu soru kartları.
+
 | Doküman | İçerik |
 |---------|--------|
 | [00-GENEL-BAKIS.md](00-GENEL-BAKIS.md) | Bu dosya — projenin amacı ve özeti |

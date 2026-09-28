@@ -110,7 +110,7 @@ const nodeSchemaCheat = `Node fields: agent={type:"agent",agentId,prompt,next}; 
 // back to the field cheat-sheet. Keeps tool errors self-correcting.
 func graphSchemaHint(msg string) string {
 	switch {
-	case strings.Contains(msg, "Node.nodes.branches"):
+	case graphBranchesErrorPath.MatchString(msg):
 		// Tried to use branches:["id"] (strings) — usually a parallel fan-out.
 		return `Fix: parallel fan-out uses "parallel":["id1","id2"],"joinNext":"id" — not "branches"/"next". ` + nodeSchemaCheat
 	case strings.Contains(msg, "has no children"):

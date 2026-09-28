@@ -52,7 +52,7 @@ export function useActivitySpans(
       .map(([id]) => id)
     if (stale.length === 0) return
 
-    let cancelled = false
+    const controller = new AbortController()
     const timer = setTimeout(() => {
       const asked = new Map(
         want.map((w) => {
@@ -61,9 +61,9 @@ export function useActivitySpans(
         }),
       )
       api
-        .sessionActivity(stale, gapSec)
+        .sessionActivity(stale, gapSec, controller.signal)
         .then((resp) => {
-          if (cancelled) return
+          if (controller.signal.aborted) return
           for (const id of stale) {
             // Record the version we asked about, so an empty answer (a session
             // with no transcript) is remembered rather than re-requested.
@@ -86,7 +86,7 @@ export function useActivitySpans(
     }, DEBOUNCE_MS)
 
     return () => {
-      cancelled = true
+      controller.abort()
       clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

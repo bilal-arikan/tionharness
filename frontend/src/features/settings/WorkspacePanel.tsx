@@ -6,6 +6,7 @@ import { Field, Toggle, inputCls, type WsSet } from './primitives'
 import { CodexPluginsSection } from './CodexPluginsSection'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { formatDate } from '@/shared/lib/intl'
+import { WorkspaceDataFolder } from '@/features/workspace/WorkspaceDataFolder'
 
 interface Props {
   ws: WorkspaceSettings
@@ -44,6 +45,8 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
           </div>
         ))}
       </div>
+
+      <WorkspaceDataFolder path={ws.dataDir} />
 
       <div className="flex items-end gap-3">
         <Field label="Workspace adı">

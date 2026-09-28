@@ -240,7 +240,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 	kind := strings.TrimSpace(q.Get("kind"))
 	origin := strings.TrimSpace(q.Get("origin"))
 	search := textutil.FoldLower(strings.TrimSpace(q.Get("q")))
-	archived, ok := archiveFilterQuery(w, q, archive.All)
+	archived, ok := archiveFilterQuery(w, q, archive.Active)
 	if !ok {
 		return
 	}

@@ -85,6 +85,7 @@ func (d *DB) FindAgentBySystemKey(key string) (*Agent, bool) {
 	defer d.mu.RUnlock()
 	var locked, enabledChild, anyChild *Agent
 	for _, a := range d.agents {
+		a = d.resolveAgentLocked(a)
 		if !a.System || a.SystemKey != key || a.Deleted {
 			continue
 		}
@@ -338,6 +339,9 @@ func (d *DB) findLiveAgentByName(name string) (Agent, bool) {
 // (it is not a fresh migration artifact then) or when the tree is ambiguous.
 // Caller holds d.mu for writing. Reports whether a collapse was performed.
 func (d *DB) collapseLegacyChildLocked(locked Agent, canonical Agent) (bool, error) {
+	if d.catalogWorkspaceID != "" || d.isAgentCatalog {
+		return false, nil
+	}
 	var older []Agent
 	for _, a := range d.agents {
 		if a.Deleted || a.Locked || a.ParentID != locked.ID || !a.System || a.SystemKey != locked.SystemKey {

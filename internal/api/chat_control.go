@@ -66,24 +66,18 @@ type chatRun struct {
 	teardownCtx    context.Context
 	teardownCancel context.CancelFunc
 
-	// pendingSteer holds a mid-turn steer message for a claude-cli run. Native
-	// providers drain the steer CHANNEL between tool-loop iterations (drainSteer);
-	// claude-cli runs its own subprocess loop with no such drain point here, so the
-	// guidance is stashed and delivered at the next tool boundary as the Interaction
-	// MCP permission tool's additionalContext (see callPermission). If the turn ends
-	// with no tool call, the leftover message is enqueued as the next message
-	// (steer_undelivered fallback). Guarded by mu (declared below).
-	pendingSteer string
+	// steerFinalized closes admission before turn-end recovery drains the shared
+	// native/CLI steer channel. Guarded by mu, together with steerable.
+	steerFinalized bool
+	// Async questions outlive a turn. These fields are guarded by mu; finalization
+	// hands replies not consumed by a model boundary to the serial session inbox.
+	asyncInput     *tools.AsyncInput
+	asyncFinalized bool
+	asyncStopped   bool
 
-	// steerable reports whether a mid-turn steer ("Yönlendir") can actually reach
-	// this turn. Native providers always can (the tool loop drains the steer
-	// channel). claude-cli can ONLY in "ask", the one mode whose tool calls reach
-	// callPermission's allow paths (where the steer rides as additionalContext);
-	// "auto" bypasses permissions entirely and "read-only" runs in plan mode, whose
-	// sole prompt call (ExitPlanMode) never delivers a steer — in both a steer would
-	// be silently re-queued at turn end. handleSessionControl reads this to answer
-	// "unsupported" (client queues the message + shows a hint) instead of pretending
-	// the steer landed. Set once per turn at register-time; guarded by mu.
+	// steerable reports whether this provider has a delivery boundary: the native
+	// model loop or the CLI Interaction MCP bridge, regardless of permission mode.
+	// Updated for each responding agent; guarded by mu.
 	steerable bool
 
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
@@ -130,113 +124,6 @@ type chatRun struct {
 	// it only on the claude-cli path. nil → no restriction (all tools allowed),
 	// used when no per-agent registry is available.
 	toolAllowed func(name string) bool
-}
-
-// setSteer stashes a mid-turn steer message for a claude-cli run, to be delivered
-// as additionalContext at the next tool boundary. The latest guidance wins: a new
-// message overwrites any prior one that has not been delivered yet.
-func (r *chatRun) setSteer(msg string) {
-	r.mu.Lock()
-	r.pendingSteer = msg
-	r.mu.Unlock()
-}
-
-// takeSteer atomically returns and clears the pending steer message (empty when
-// none). Callers consume it ONLY on a delivery path (an allow decision / the
-// turn-end fallback) so a message that could not be injected is not silently lost.
-func (r *chatRun) takeSteer() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	msg := r.pendingSteer
-	r.pendingSteer = ""
-	return msg
-}
-
-// steerBufferFullMsg is the answer to a steer that could not be handed to the
-// turn. The client keeps the text (the composer clears only on success), so the
-// user can retry once the turn reaches its next drain point.
-const steerBufferFullMsg = "steer queue is full: the turn has not consumed the earlier guidance yet"
-
-// trySteer hands a mid-turn steer message to the native tool loop's steer
-// channel. It reports false when the buffer is full — the turn is not consuming
-// guidance — so the caller answers with an explicit error instead of dropping
-// the message on the floor. Never blocks: this runs on an HTTP handler goroutine
-// and the turn may be stalled inside a long provider call.
-func (r *chatRun) trySteer(msg string) bool {
-	select {
-	case r.steer <- msg:
-		return true
-	default:
-		return false
-	}
-}
-
-// takeSteerQueue drains every steer message the turn never picked up, oldest
-// first, and leaves the channel empty. Called once at turn end so guidance that
-// arrived after the loop's last drain point (or during a tool-less turn's single
-// completion) is recovered instead of dying with the run.
-func (r *chatRun) takeSteerQueue() []string {
-	var out []string
-	for {
-		select {
-		case m := <-r.steer:
-			if m != "" {
-				out = append(out, m)
-			}
-		default:
-			return out
-		}
-	}
-}
-
-// steerableForTurn reports whether a mid-turn steer ("Yönlendir") can actually
-// reach a turn for the given responding-agent provider + effective permission
-// mode. Native (non-claude-cli) providers drain the steer channel in the tool loop
-// in every mode. claude-cli delivers a steer only where callPermission answers a
-// prompt, which is "ask" alone. Kept as a pure function so the rule is
-// unit-testable and lives next to the field it feeds.
-func steerableForTurn(provider, mode string) bool {
-	// codex-cli runs its own subprocess tool loop too, so it shares claude-cli's lack
-	// of a mid-turn steer drain point — but unlike claude it is NEVER steerable: codex
-	// exec has no permission-prompt-tool boundary in any mode (codexMCPSpec carries no
-	// PermissionPrompt; codex rejects every approval request outright, see the codex
-	// contract §1.2/§2.1), so there is no boundary a steer could ride even in
-	// ask/read-only. Always false here, not "mode == ask || read-only", so a steer on
-	// a codex turn is honestly reported unsupported instead of silently discarded.
-	if provider == "codex-cli" {
-		return false
-	}
-	if providers.TransportOf(provider) != providers.TransportCLI {
-		return true
-	}
-	// claude-cli: "ask" only. The permission-prompt tool IS wired in "read-only" too
-	// (PromptToolForMode), but read-only additionally runs the CLI under
-	// --permission-mode plan (claudecli.go permissionArgs), where the CLI blocks
-	// mutations itself and every bridged/external MCP tool is on --allowedTools — so
-	// the ONLY call that reaches the prompt is ExitPlanMode, and callPermission routes
-	// that to callExitPlan BEFORE any steerContext() call. steerContext is reached
-	// solely from callPermission's allow paths, which read-only never takes: the mode
-	// has no boundary a steer can ride. Reporting true here made the backend answer
-	// "steered" for a message that could only resurface at turn end via the
-	// steer_undelivered re-queue; false routes it to the caller's existing
-	// "unsupported" path, which queues it and tells the user. "auto" is false for the
-	// older reason: it runs with --dangerously-skip-permissions and never prompts.
-	return mode == "ask"
-}
-
-// setSteerable records whether a mid-turn steer can reach this turn (see the
-// steerable field). Set once at turn setup, before any steer request can arrive.
-func (r *chatRun) setSteerable(v bool) {
-	r.mu.Lock()
-	r.steerable = v
-	r.mu.Unlock()
-}
-
-// steerableFor reports the recorded steer deliverability (false until set).
-func (r *chatRun) steerableFor() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.steerable
 }
 
 // setProvider records the responding agent's provider id so the Session Info
@@ -1190,14 +1077,27 @@ func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.Action {
 	case "stop":
+		run.mu.Lock()
+		run.asyncStopped = true
+		run.mu.Unlock()
 		run.cancel()
 	case "steer":
 		if req.Text == "" {
 			writeError(w, http.StatusBadRequest, "steer text is required")
 			return
 		}
-		if !run.trySteer(req.Text) {
+		switch deliverSteer(run, req.Text) {
+		case steerUnsupported:
+			writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
+			return
+		case steerFinished:
+			writeError(w, http.StatusConflict, steerFinishedMsg)
+			return
+		case steerBufferFull:
 			writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
+			return
+		case steerStashed:
+			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return
 		}
 	default:

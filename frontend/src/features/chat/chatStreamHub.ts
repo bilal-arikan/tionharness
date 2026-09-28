@@ -11,9 +11,15 @@ import { HubKind, windowClientId } from '@/api/sessionStream'
 import { noteServerTime, serverNow } from '@/shared/lib/serverClock'
 import { emitToast } from '@/shared/lib/notifyBus'
 import type { PendingAsk } from './AskPrompt'
+import {
+  putInteraction,
+  removeInteraction,
+  retainAsyncInteractions,
+  type PendingInteractions,
+} from './pendingInteractions'
 import type { PendingItem } from './PendingTray'
 
-import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
+import { withAdded, withRemoved } from './chatStreamHelpers'
 
 // TurnEntry mirrors internal/turnqueue.Entry: one turn holding (or queued for) the
 // session's admission slot. `kind` names the entry path, so the tray can say WHAT a
@@ -73,7 +79,7 @@ export interface HubApplyCtx {
   setMessages: Dispatch<SetStateAction<Message[]>>
   setStreamingSessions: Dispatch<SetStateAction<ReadonlySet<string>>>
   setPendingSessions: Dispatch<SetStateAction<ReadonlySet<string>>>
-  setPendingAsks: Dispatch<SetStateAction<Record<string, PendingAsk>>>
+  setPendingAsks: Dispatch<SetStateAction<PendingInteractions>>
   // setQueued renders this session's WAITING backend queue (queue_update) in the
   // composer tray; setPresence surfaces "open in N windows" (Faz 4); setTyping
   // surfaces "another window is typing…".
@@ -262,6 +268,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     const p = (ev.payload ?? {}) as Record<string, unknown>
     const kind = (p.kind as PendingAsk['kind']) || 'ask'
     const ask: PendingAsk = {
+      async: p.async === true,
       question: (p.question as string) || '',
       options: p.options as string[] | undefined,
       questions: p.questions as PendingAsk['questions'],
@@ -271,7 +278,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       cmd: p.text as string | undefined,
       interactionId: p.id as string | undefined,
     }
-    setPendingAsks((prev) => ({ ...prev, [sid]: ask }))
+    setPendingAsks((prev) => putInteraction(prev, sid, ask))
     // The turn is now BLOCKED on the user, so pull their attention: a distinct
     // chime (audible even with the window focused — they may be looking
     // elsewhere) plus, when this window is backgrounded, an OS toast. notify()
@@ -305,12 +312,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     if (id) cuedInteractions.delete(id)
     // Close the card in EVERY window. Match the id so a stale resolve for an
     // already-replaced prompt doesn't drop a newer one.
-    setPendingAsks((prev) => {
-      const cur = prev[sid]
-      if (!cur) return prev
-      if (id && cur.interactionId && cur.interactionId !== id) return prev
-      return withoutKey(prev, sid)
-    })
+    setPendingAsks((prev) => removeInteraction(prev, sid, id))
   }
 
   return {
@@ -406,7 +408,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
         }
         case HubKind.Reply: {
           const m = ev.payload as Message
-          setPendingAsks((p) => withoutKey(p, sid))
+          setPendingAsks((p) => retainAsyncInteractions(p, sid))
           dropGhost()
           if (m?.id) {
             // Map in place when the reply is already in the transcript (a since=0
@@ -529,7 +531,7 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           }
           setStreamingSessions((p) => withRemoved(p, sid))
           setPendingSessions((p) => withRemoved(p, sid))
-          setPendingAsks((p) => withoutKey(p, sid))
+          setPendingAsks((p) => retainAsyncInteractions(p, sid))
           // The turn is over, so there is no longer anything a steer could reach.
           // Cleared here rather than waiting for the next queue_update: that event
           // only fires when the queue changes, which a turn ending need not do.

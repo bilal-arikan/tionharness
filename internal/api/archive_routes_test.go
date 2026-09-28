@@ -48,20 +48,20 @@ func TestEntityArchiveRoutesRoundTrip(t *testing.T) {
 
 	byID := func(item map[string]any) string { s, _ := item["id"].(string); return s }
 	cases := []archiveCase{
-		{name: "agent", base: "/api/agents/" + agent.ID, list: "/api/agents", id: agent.ID, idOf: byID, defaultOn: true,
+		{name: "agent", base: "/api/agents/" + agent.ID, list: "/api/agents", id: agent.ID, idOf: byID, defaultOn: false,
 			archived: func(t *testing.T) bool { a, _ := wsp.DB.GetAgent(ctx, agent.ID); return a.Archived }},
-		{name: "artifact", base: "/api/artifacts/" + art.ID, list: "/api/artifacts", id: art.ID, idOf: byID, defaultOn: true,
+		{name: "artifact", base: "/api/artifacts/" + art.ID, list: "/api/artifacts", id: art.ID, idOf: byID, defaultOn: false,
 			archived: func(t *testing.T) bool { a, _ := wsp.DB.GetArtifact(ctx, art.ID); return a.Archived }},
 		{name: "automation", base: "/api/automations/" + auto.ID, list: "/api/automations", id: auto.ID, idOf: byID,
 			archived: func(t *testing.T) bool { a, _ := wsp.DB.GetAutomation(ctx, auto.ID); return a.Archived }},
-		{name: "goal", base: "/api/goals/" + goal.ID, list: "/api/goals", id: goal.ID, idOf: byID, defaultOn: true,
+		{name: "goal", base: "/api/goals/" + goal.ID, list: "/api/goals", id: goal.ID, idOf: byID, defaultOn: false,
 			archived: func(t *testing.T) bool {
 				g, _ := wsp.DB.GetGoal(ctx, goal.ID)
 				return g.Status == db.GoalStatusArchived
 			}},
 		{name: "skill", base: "/api/skills/arch-skill", list: "/api/skills", id: "arch-skill",
 			idOf:      func(item map[string]any) string { s, _ := item["slug"].(string); return s },
-			defaultOn: true,
+			defaultOn: false,
 			archived: func(t *testing.T) bool {
 				sk, _ := wsp.Runtime.Skills().Get("arch-skill")
 				return sk.Archived
@@ -95,6 +95,12 @@ func TestEntityArchiveRoutesRoundTrip(t *testing.T) {
 			}
 			if !listed(t, c, "?archived=true") {
 				t.Fatal("archived entity missing from ?archived=true")
+			}
+			if !listed(t, c, "?archived=all") {
+				t.Fatal("archived entity missing from explicit full list")
+			}
+			if rec := doJSON(t, h, http.MethodGet, c.base, nil, nil); rec.Code != http.StatusOK {
+				t.Fatalf("archived detail: status %d: %s", rec.Code, rec.Body.String())
 			}
 			if listed(t, c, "?archived=false") {
 				t.Fatal("archived entity listed under ?archived=false")

@@ -28,6 +28,10 @@ type SessionAsk struct {
 	State string `json:"state"`
 	// Answer is the winning reply, stamped atomically by ClaimSessionAsk.
 	Answer string `json:"answer,omitempty"`
+	// Async questions leave the current turn running; their replies are delivered
+	// at a model boundary or through the session inbox, never by snapshot replay.
+	Async           bool `json:"async,omitempty"`
+	AnswerDelivered bool `json:"answerDelivered,omitempty"`
 	// TimeoutSec bounds the wait (0 = no timeout) for the sweeper.
 	TimeoutSec int   `json:"timeoutSec,omitempty"`
 	CreatedAt  int64 `json:"createdAt"`

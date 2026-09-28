@@ -63,14 +63,13 @@ describe('PendingTray steer-now action', () => {
 
     const button = steerButton(container, 'm-1')
     expect(button?.disabled).toBe(true)
-    expect(button?.title).toContain('mesaj sırada kalır')
+    expect(button?.title).toContain('remains queued')
     act(() => button?.click())
     expect(onSteerNow).not.toHaveBeenCalled()
   })
 
   // The gap this closes: the action used to be gated on "a turn is streaming"
-  // alone, so on a turn whose provider/mode has no steer boundary (claude-cli in
-  // auto/read-only, any codex-cli turn) it stayed enabled and the backend could
+  // alone, so on a turn without a delivery channel it stayed enabled and the backend could
   // only answer "unsupported". canSteer now carries the server's verdict.
   it('disables the action when a turn runs but cannot carry a steer', () => {
     const onSteerNow = vi.fn()
@@ -86,8 +85,8 @@ describe('PendingTray steer-now action', () => {
     expect(button?.disabled).toBe(true)
     // The reason must name the real cause, not the absent-turn one: a user who
     // sees "no running turn" while a turn is plainly streaming learns nothing.
-    expect(button?.title).toContain('desteklemiyor')
-    expect(button?.title).not.toContain('çalışan bir tur yok')
+    expect(button?.title).toContain('unavailable')
+    expect(button?.title).not.toContain('No running turn')
     act(() => button?.click())
     expect(onSteerNow).not.toHaveBeenCalled()
   })

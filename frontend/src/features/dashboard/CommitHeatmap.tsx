@@ -42,18 +42,31 @@ export function CommitHeatmap() {
   const [focused, setFocused] = useState(0)
   const [tooltip, dispatchTooltip] = useReducer(heatmapTooltipReducer, initialHeatmapTooltipState)
   const cells = useRef<Array<HTMLButtonElement | null>>([])
+  const request = useRef<AbortController | null>(null)
 
   // run lands results through callbacks only (so the mount effect may call it;
   // loading starts true); load is the retry entry point that re-arms the spinner.
-  const run = useCallback(
-    () =>
-      api
-        .getCommitActivity(WEEKS)
-        .then(setData)
-        .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
-        .finally(() => setLoading(false)),
-    [],
-  )
+  const run = useCallback(() => {
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
+    return api
+      .getCommitActivity(WEEKS, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        setData(result)
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : String(reason))
+        }
+      })
+      .finally(() => {
+        if (request.current !== controller) return
+        request.current = null
+        if (!controller.signal.aborted) setLoading(false)
+      })
+  }, [])
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
@@ -62,6 +75,10 @@ export function CommitHeatmap() {
 
   useEffect(() => {
     void run()
+    return () => {
+      request.current?.abort()
+      request.current = null
+    }
   }, [run])
 
   const points = data?.commitsByDay.slice(-CELL_COUNT) ?? []

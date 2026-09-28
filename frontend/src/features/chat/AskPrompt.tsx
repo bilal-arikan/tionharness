@@ -4,6 +4,7 @@ import { Button, ScrollableCard } from '@/shared/components'
 import { ComposerCard } from './ComposerCard'
 
 export interface PendingAsk {
+  async?: boolean
   question: string
   options?: string[]
   // Multi-question ask: each entry is its own question with optional suggested
@@ -53,7 +54,8 @@ function askOptionClass(option: string) {
 // SEVERAL questions at once (ask.questions), a combined multi-field form is shown
 // instead and every answer is submitted together.
 export function AskPrompt({ ask, onAnswer }: Props) {
-  if (ask.questions?.length) return <MultiAskPrompt questions={ask.questions} onAnswer={onAnswer} />
+  if (ask.questions?.length)
+    return <MultiAskPrompt questions={ask.questions} onAnswer={onAnswer} autoFocus={!ask.async} />
   return <SingleAskPrompt ask={ask} onAnswer={onAnswer} />
 }
 
@@ -98,7 +100,7 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
         className="flex gap-2"
       >
         <input
-          autoFocus
+          autoFocus={!ask.async}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Yanıtını yaz…"
@@ -119,9 +121,11 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
 function MultiAskPrompt({
   questions,
   onAnswer,
+  autoFocus,
 }: {
   questions: { question: string; options?: string[] }[]
   onAnswer: (text: string) => void
+  autoFocus: boolean
 }) {
   const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''))
   const setAt = (i: number, v: string) =>
@@ -176,7 +180,7 @@ function MultiAskPrompt({
                 </div>
               )}
               <input
-                autoFocus={i === 0}
+                autoFocus={autoFocus && i === 0}
                 value={answers[i]}
                 onChange={(e) => setAt(i, e.target.value)}
                 placeholder="Yanıtını yaz…"

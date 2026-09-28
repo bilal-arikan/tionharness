@@ -161,6 +161,10 @@ func TestListSessionsChipCountsRespectNonChipScope(t *testing.T) {
 	if got := page.ChipCounts["archived"]; got != 0 {
 		t.Fatalf("chipCounts[archived] = %d, want 0 outside active state scope", got)
 	}
+	archivedPage := listSessionsPage(t, server, wsp.DB, "state=archived&chips=chat,archived&limit=50")
+	if archivedPage.Total != 1 || archivedPage.Items[0].Title != "archived chat" {
+		t.Fatalf("archived side = %+v, want only archived chat", archivedPage.Items)
+	}
 
 	kindPage := listSessionsPage(t, server, wsp.DB, "kind=flow&chips=flow&limit=50")
 	if got := kindPage.ChipCounts["chat"]; got != 0 {

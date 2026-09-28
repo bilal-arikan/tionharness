@@ -690,21 +690,25 @@ func (s *Server) stopSessionTurn(wsp *workspace.Workspace, sessionID string) boo
 	// turn's process running after the user pressed stop.
 	runs := s.runs.sessionRuns(wsp.ID, sessionID)
 	for _, run := range runs {
+		run.mu.Lock()
+		run.asyncStopped = true
+		run.mu.Unlock()
 		run.cancel()
 	}
+	stoppedAsk := s.cancelAsyncAsks(wsp, sessionID)
 	if len(runs) > 0 {
 		return true
 	}
 	// No chat run: the turn may still be an AUTONOMOUS one (schedule / wake /
 	// spawn / coordination), which the runtime tracks separately and which never
 	// enters chatRuns.
-	if wsp.Runtime.CancelSession(sessionID) {
+	if wsp.Runtime != nil && wsp.Runtime.CancelSession(sessionID) {
 		// A cancelled autonomous turn leaves no trace of WHY it stopped — the
 		// context just dies. Record the cause in the transcript.
 		s.recordAutonomousStop(wsp, sessionID)
 		return true
 	}
-	return false
+	return stoppedAsk
 }
 
 // handleSessionControl stops or steers a session's in-flight turn WITHOUT the
@@ -747,12 +751,14 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "steer text is required")
 			return
 		}
-		// The provider-specific delivery rules (native steer channel vs the
-		// claude-cli tool-boundary stash) live in deliverSteer, shared with the
+		// The provider-specific delivery rules live in deliverSteer, shared with the
 		// queue-conversion endpoint. If the turn ends with the guidance still
 		// undelivered, runChatTurn enqueues it as the next message
 		// (steer_undelivered fallback).
 		switch deliverSteer(run, req.Text) {
+		case steerFinished:
+			writeError(w, http.StatusConflict, steerFinishedMsg)
+			return
 		case steerUnsupported:
 			// No boundary can carry this steer — tell the client instead of
 			// pretending it landed; it queues the message and shows a hint.
@@ -762,7 +768,7 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusServiceUnavailable, steerBufferFullMsg)
 			return
 		case steerStashed:
-			// Accepted, but only reaches the model at the next claude-cli tool
+			// Accepted, but only reaches the model at the next CLI tool
 			// boundary — reported as "steered" rather than a plain "ok".
 			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return

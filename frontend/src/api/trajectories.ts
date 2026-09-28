@@ -20,7 +20,10 @@ export interface TrajectoryListParams {
 }
 
 export const trajectoryApi = {
-  listTrajectories: (params?: TrajectoryListParams): Promise<TrajectoryIndexEntry[]> => {
+  listTrajectories: (
+    params?: TrajectoryListParams,
+    signal?: AbortSignal,
+  ): Promise<TrajectoryIndexEntry[]> => {
     const p = new URLSearchParams()
     if (params?.root) p.set('root', params.root)
     if (params?.template) p.set('template', params.template)
@@ -28,7 +31,7 @@ export const trajectoryApi = {
     if (params?.terminal !== undefined) p.set('terminal', params.terminal ? 'true' : 'false')
     if (params?.limit) p.set('limit', String(params.limit))
     const qs = p.toString()
-    return req<TrajectoryIndexEntry[]>(`/api/trajectories${qs ? `?${qs}` : ''}`)
+    return req<TrajectoryIndexEntry[]>(`/api/trajectories${qs ? `?${qs}` : ''}`, { signal })
   },
   getTrajectory: (id: string): Promise<Trajectory> =>
     req<Trajectory>(`/api/trajectories/${encodeURIComponent(id)}`),

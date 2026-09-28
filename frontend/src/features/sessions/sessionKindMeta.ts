@@ -43,15 +43,15 @@ const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   insight: { label: 'İçgörü', icon: Telescope },
 }
 
-// Sidebar chips (multi-select, display order). The kind chips cover EVERY
+// Session filter chips (multi-select, display order). The kind chips cover EVERY
 // Session.Kind the backend can produce — including the ones the old filter tabs
 // left out (flow-coordinator, inbox) plus an "Diğer" catch-all for a kind this
 // build does not know — so nothing can be invisible in the list. The four
 // trailing scope chips widen the list instead of narrowing it by kind: sessions
 // with a live turn of their own, sessions idle but waiting on live workers below
 // them, worker sessions (coordinator-spawned) and archived ones. Every chip is
-// selected by default, so the sidebar shows everything and the user unticks what
-// they don't want to see.
+// selected by default. The chat list presents archived sessions through its
+// separate archive view, while Rota still exposes the archived scope as a chip.
 export const WORKER_CHIP = 'worker'
 export const SUBAGENT_CHIP = 'subagent'
 export const ARCHIVED_CHIP = 'archived'
@@ -88,6 +88,9 @@ export const SESSION_CHIPS: { key: string; label: string }[] = [
 ]
 
 export const ALL_SESSION_CHIPS: string[] = SESSION_CHIPS.map((c) => c.key)
+// The chat list uses a separate archive view. Rota still exposes the archived
+// scope as a chip, so its filter vocabulary remains unchanged.
+export const SESSION_LIST_CHIPS = SESSION_CHIPS.filter((chip) => chip.key !== ARCHIVED_CHIP)
 
 // Persisted chip state — the sidebar lists every session kind, so the choice is
 // worth remembering across reloads (same rationale as the width). Storage holds

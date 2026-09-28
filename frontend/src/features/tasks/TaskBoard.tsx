@@ -94,6 +94,8 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   // the consumed id keeps a later reload from re-opening an editor the user
   // closed; the URL id itself is cleared when that editor closes.
   const focusConsumedRef = useRef<string | null>(null)
+  const [focusedTask, setFocusedTask] = useState<Task | null>(null)
+  useKeyedReset(focusTaskId, () => setFocusedTask(null))
   useEffect(() => {
     if (!focusTaskId) {
       focusConsumedRef.current = null
@@ -116,10 +118,34 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
   // True until the first task list lands, so the board shows a loading state
   // instead of empty columns. Later reloads (SSE ticks) keep the board on screen.
   const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (
+      !focusTaskId ||
+      loading ||
+      focusConsumedRef.current === focusTaskId ||
+      tasks.some((task) => task.id === focusTaskId)
+    )
+      return
+    let cancelled = false
+    api
+      .getTask(focusTaskId)
+      .then((task) => {
+        if (cancelled) return
+        focusConsumedRef.current = focusTaskId
+        setFocusedTask(task)
+        setModal({ mode: 'edit', taskId: task.id })
+      })
+      .catch((error) => {
+        if (!cancelled) onError((error as Error).message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [focusTaskId, loading, tasks, onError])
   // Archived view: shows only archived cards (with a restore action) instead of
-  // the active board. The backend excludes archived from the default list, so the
-  // archived view asks for the full list (?archived=1) and keeps just the archived.
+  // the active board. Each request fetches only the selected archive side.
   const [showArchived, setShowArchived] = useState(false)
+  const taskRequest = useRef(0)
   // Cards changed by SSE while Boards was closed — glow until this TaskBoard
   // instance unmounts (view switch), never on a timer.
   const [recentlyChangedIds, setRecentlyChangedIds] = useState<Set<string>>(new Set())
@@ -138,15 +164,22 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
         // non-fatal: cards simply render without their image preview
       })
 
-  const reload = () =>
-    api
-      .listTasks(showArchived)
+  const reload = () => {
+    const request = ++taskRequest.current
+    return api
+      .listTasks(showArchived ? 'only' : false)
       .then((list) => {
-        setTasks(showArchived ? list.filter((t) => t.archived) : list)
+        if (request !== taskRequest.current) return
+        setTasks(list)
         setLoadedSuccessfully(true)
       })
-      .catch((e) => onError(e.message))
-      .finally(() => setLoading(false))
+      .catch((e) => {
+        if (request === taskRequest.current) onError(e.message)
+      })
+      .finally(() => {
+        if (request === taskRequest.current) setLoading(false)
+      })
+  }
 
   // Columns and saved views live in the same settings document, so one GET
   // serves both.
@@ -164,9 +197,6 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
       })
 
   useEffect(() => {
-    reload()
-    loadColumns()
-    loadImages()
     api
       .listFlows()
       .then(setFlows)
@@ -186,8 +216,11 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
     // A card's artifact refs can change in another window too, and a ref to an
     // image we have not fetched yet would leave that card without its preview.
     loadImages()
+    return () => {
+      taskRequest.current++
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardTick])
+  }, [boardTick, showArchived])
 
   // Consume pending SSE task ids after the first successful list load. The ref
   // also prevents React StrictMode's repeated effect setup from consuming twice
@@ -205,11 +238,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
 
   // Reload when switching between the active board and the archived view; the
   // switch re-arms the spinner before the refetch lands.
-  useKeyedReset(showArchived, () => setLoading(true))
-  useEffect(() => {
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showArchived])
+  useKeyedReset(showArchived, () => {
+    setLoading(true)
+    setTasks([])
+  })
 
   const saveColumns = async (cols: BoardColumnDef[]) => {
     const updated = await api.updateWorkspaceSettings({ boardColumns: cols })
@@ -286,10 +318,13 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
 
   // Upsert: a created task is prepended, an edited task replaced in place.
   const onSaved = (saved: Task) => {
+    if (focusedTask?.id === saved.id) setFocusedTask(saved)
     setTasks((prev) =>
-      prev.some((t) => t.id === saved.id)
-        ? prev.map((t) => (t.id === saved.id ? saved : t))
-        : [saved, ...prev],
+      !!saved.archived !== showArchived
+        ? prev.filter((task) => task.id !== saved.id)
+        : prev.some((t) => t.id === saved.id)
+          ? prev.map((t) => (t.id === saved.id ? saved : t))
+          : [saved, ...prev],
     )
   }
 
@@ -311,7 +346,10 @@ export function TaskBoard({ agents, onError, focusTaskId, onFocusTask }: Props) 
     })
   }
 
-  const modalTask = modal?.taskId ? (tasks.find((t) => t.id === modal.taskId) ?? null) : null
+  const modalTask = modal?.taskId
+    ? (tasks.find((t) => t.id === modal.taskId) ??
+      (focusedTask?.id === modal.taskId ? focusedTask : null))
+    : null
 
   // ---- View layer: filter → derive columns → sort ------------------------
 

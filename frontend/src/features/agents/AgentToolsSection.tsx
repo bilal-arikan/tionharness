@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { api } from '@/api'
+import { useAgentEditorApi } from './AgentEditorContext'
 import type { AgentTools, AgentToolEntry, AgentToolTier } from '@/types'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton } from '@/shared/components'
@@ -28,6 +28,7 @@ interface Props {
 // and picking a tier equal to the default deletes the override instead of
 // storing a redundant one.
 export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
+  const api = useAgentEditorApi()
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
@@ -43,7 +44,7 @@ export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
       .agentTools(agentId)
       .then(setData)
       .catch((e) => onError?.(e.message))
-  }, [agentId, onError])
+  }, [agentId, onError, api])
 
   useEffect(() => load(), [load])
 

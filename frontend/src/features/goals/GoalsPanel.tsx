@@ -4,7 +4,8 @@
 // the user then edits, activates, pauses or archives it here. The detail pane
 // is sectioned so fitness, proposals and the evolution ledger attach under the
 // same header.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { Archive, Pencil, RefreshCw, Sparkles, Target, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { Badge, Button, EmptyState, ListPane, PaneHeader } from '@/shared/components'
@@ -40,6 +41,12 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
   const [catalog, setCatalog] = useState<GoalCatalog | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('open')
+  const listRequest = useRef(0)
+  const [linkedGoal, setLinkedGoal] = useState<Goal | null>(null)
+  useKeyedReset(filter, () => {
+    setGoals([])
+    setLoading(true)
+  })
   const [localId, setLocalId] = useState<string | null>(null)
   const [intake, setIntake] = useState<{ goal?: Goal | null } | null>(null)
   const [editing, setEditing] = useState(false)
@@ -63,15 +70,20 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
 
   // run fetches through callbacks only (so the mount effect may call it; loading
   // starts true); load is the manual entry point that re-arms the spinner.
-  const run = useCallback(
-    () =>
-      api
-        .listGoals()
-        .then(setGoals)
-        .catch((e) => onError((e as Error).message))
-        .finally(() => setLoading(false)),
-    [onError],
-  )
+  const run = useCallback(() => {
+    const request = ++listRequest.current
+    return api
+      .listGoals(undefined, filter === 'all' ? 'all' : filter === 'archived')
+      .then((rows) => {
+        if (request === listRequest.current) setGoals(rows)
+      })
+      .catch((e) => {
+        if (request === listRequest.current) onError((e as Error).message)
+      })
+      .finally(() => {
+        if (request === listRequest.current) setLoading(false)
+      })
+  }, [onError, filter])
   const load = useCallback(() => {
     setLoading(true)
     void run()
@@ -79,7 +91,25 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
 
   useEffect(() => {
     void run()
+    return () => {
+      listRequest.current++
+    }
   }, [run])
+  useEffect(() => {
+    if (!goalId || loading || goals.some((goal) => goal.id === goalId)) return
+    let cancelled = false
+    api
+      .getGoal(goalId)
+      .then((goal) => {
+        if (!cancelled) setLinkedGoal(goal)
+      })
+      .catch((error) => {
+        if (!cancelled) onError((error as Error).message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [goalId, loading, goals, onError])
   useEffect(() => {
     api
       .goalCatalog()
@@ -98,7 +128,8 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
       ),
     [goals, filter],
   )
-  const active = goals.find((g) => g.id === selectedId) ?? null
+  const active =
+    goals.find((g) => g.id === selectedId) ?? (linkedGoal?.id === selectedId ? linkedGoal : null)
   const counts = useMemo(() => {
     const c: Record<GoalStatus, number> = { draft: 0, active: 0, paused: 0, archived: 0 }
     for (const g of goals) c[g.status] = (c[g.status] ?? 0) + 1
@@ -200,8 +231,13 @@ export function GoalsPanel({ onError, goalId, onSelectGoal, onOpenSession }: Pro
         <div className="flex gap-1 px-3 pb-2 text-xs">
           {(
             [
-              ['open', `Açık · ${counts.draft + counts.active + counts.paused}`],
-              ['archived', `Arşiv · ${counts.archived}`],
+              [
+                'open',
+                filter === 'archived'
+                  ? 'Open'
+                  : `Açık · ${counts.draft + counts.active + counts.paused}`,
+              ],
+              ['archived', filter === 'open' ? 'Archive' : `Arşiv · ${counts.archived}`],
               ['all', 'Tümü'],
             ] as [Filter, string][]
           ).map(([k, label]) => (

@@ -49,25 +49,7 @@ func activeRun(t *testing.T, s *Server) *chatRun {
 	return nil
 }
 
-// TestAutonomousInteractionRecordsSteerable verifies the autonomous turn writes
-// the same steer deliverability the chat path does. Before this, the field stayed
-// false and a steer aimed at an autonomous claude-cli turn in "ask" mode was
-// rejected as "unsupported" even though the permission-prompt boundary that
-// carries it exists there.
-//
-// Each want below is the literal expectation for that (provider, mode), spelled
-// out here rather than derived from steerableForTurn: deriving it would make the
-// assertion restate the production logic instead of checking it, and the test
-// would keep passing if that logic regressed. The reasons, per chat_control.go:
-//   - claude-cli "ask": the permission-prompt tool is wired AND callPermission's
-//     allow path reaches steerContext, so a steer has a boundary to ride.
-//   - claude-cli "read-only": prompt tool is wired, but the CLI runs under
-//     --permission-mode plan, where the only call reaching the prompt is
-//     ExitPlanMode, routed away before steerContext. No boundary.
-//   - claude-cli "auto": --dangerously-skip-permissions, never prompts.
-//   - codex-cli: no permission-prompt-tool boundary in ANY mode, so false even
-//     in "ask" (unlike claude-cli).
-//   - anthropic: an API-transport provider, steerable in every mode.
+// The autonomous bridge carries steering in every permission mode.
 func TestAutonomousInteractionRecordsSteerable(t *testing.T) {
 	cases := []struct {
 		provider string
@@ -75,9 +57,11 @@ func TestAutonomousInteractionRecordsSteerable(t *testing.T) {
 		want     bool
 	}{
 		{"claude-cli", "ask", true},
-		{"claude-cli", "read-only", false},
-		{"claude-cli", "auto", false},
-		{"codex-cli", "ask", false},
+		{"claude-cli", "read-only", true},
+		{"claude-cli", "auto", true},
+		{"codex-cli", "ask", true},
+		{"codex-cli", "auto", true},
+		{"codex-cli", "read-only", true},
 		{"anthropic", "auto", true},
 	}
 	for _, tc := range cases {

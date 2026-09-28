@@ -25,6 +25,7 @@ import { HubKind } from '@/api/sessionStream'
 import { emitToast } from '@/shared/lib/notifyBus'
 import { makeHubHandlers, type HubApplyCtx } from './chatStreamHub'
 import type { PendingItem } from './PendingTray'
+import type { PendingInteractions } from './pendingInteractions'
 
 const SID = 'SES1'
 const GHOST = `live-hub-${SID}`
@@ -33,6 +34,7 @@ const GHOST = `live-hub-${SID}`
 // hub events and read back exactly what the transcript would render.
 function harness() {
   let messages: Message[] = []
+  let asks: PendingInteractions = {}
   const ctx: HubApplyCtx = {
     sid: SID,
     activeSessionIdRef: { current: SID },
@@ -41,7 +43,9 @@ function harness() {
     },
     setStreamingSessions: () => {},
     setPendingSessions: () => {},
-    setPendingAsks: () => {},
+    setPendingAsks: (update) => {
+      asks = typeof update === 'function' ? update(asks) : update
+    },
     setQueued: () => {},
     setSteerable: () => {},
     setPresence: () => {},
@@ -59,10 +63,31 @@ function harness() {
     send,
     ghost: () => messages.find((m) => m.id === GHOST),
     all: () => messages,
+    asks: () => asks[SID] ?? [],
   }
 }
 
 const delta = (text: string) => ({ kind: 'text', text })
+
+describe('asynchronous questions', () => {
+  it('keeps concurrent questions across replies, errors, completion and replay', () => {
+    const { send, asks } = harness()
+    send(HubKind.InteractionOpen, { id: 'q1', kind: 'ask', question: 'Audience?', async: true })
+    send(HubKind.InteractionOpen, { id: 'q2', kind: 'ask', question: 'Format?', async: true })
+    send(HubKind.InteractionOpen, { id: 'q1', kind: 'ask', question: 'Audience?', async: true })
+    expect(asks().map((ask) => ask.interactionId)).toEqual(['q1', 'q2'])
+    send(HubKind.Reply, { id: 'reply', role: 'assistant', text: 'Independent work done' })
+    send(HubKind.TurnDone, {})
+    send(HubKind.TurnError, {})
+    expect(asks()).toHaveLength(2)
+    send(HubKind.InteractionResolved, { id: 'q2', answer: 'Summary' })
+    expect(asks().map((ask) => ask.interactionId)).toEqual(['q1'])
+    send(HubKind.InteractionResolved, { id: 'stale' })
+    expect(asks()).toHaveLength(1)
+    send(HubKind.InteractionResolved, { id: 'q1', cancelled: true })
+    expect(asks()).toHaveLength(0)
+  })
+})
 
 describe('chatStreamHub streaming coalescer', () => {
   beforeEach(() => vi.useFakeTimers())

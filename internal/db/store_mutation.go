@@ -8,7 +8,13 @@ package db
 //
 // The counter only ever grows; it is not persisted and restarts from zero on
 // every Open, so it must never be compared across processes.
-func (d *DB) MutationGen() uint64 { return d.mutGen.Load() }
+func (d *DB) MutationGen() uint64 {
+	gen := d.mutGen.Load()
+	if d.agentCatalog != nil {
+		gen += d.agentCatalog.mutGen.Load()
+	}
+	return gen
+}
 
 // markMutatedLocked advances MutationGen. Called at every site that writes an
 // entity map; the caller holds d.mu (write) so the bump is ordered with the

@@ -82,7 +82,7 @@ var builtinCategory = map[string]string{
 	"update_automation": CategoryAutomation, "delete_automation": CategoryAutomation,
 
 	// Interaction
-	"ask_user": CategoryInteraction, "request_confirmation": CategoryInteraction,
+	"ask_user": CategoryInteraction, "ask_user_async": CategoryInteraction, "request_confirmation": CategoryInteraction,
 	"notify": CategoryInteraction,
 
 	// Artifacts

@@ -23,6 +23,10 @@ import "context"
 // nothing left to adopt, and a role that already has a stored customisation is
 // never overwritten by a second workspace's copy.
 func (d *DB) adoptWorkspaceCustomisation(ctx context.Context, def SystemAgentDefinition) error {
+	// Catalog profiles retain their own role and identity instead of being merged.
+	if d.catalogWorkspaceID != "" || d.isAgentCatalog {
+		return nil
+	}
 	g := d.GlobalSystemAgentOverrideLayer()
 	if g == nil {
 		return nil

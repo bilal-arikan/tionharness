@@ -27,17 +27,22 @@ import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime, bucketOf, bucketLabel, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
-import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
+import {
+  ArchiveViewBanner,
+  ArchiveViewToggle,
+  SelectionBar,
+  SelectionBarButton,
+  Skeleton,
+} from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
 import { CollapseListButton, ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useDraftSessionIds } from '@/shared/hooks/useDraftSessionIds'
 import { useStableCallback } from '@/shared/lib/useStableCallback'
 import {
-  ARCHIVED_CHIP,
   kindMeta,
   type ChipClickMode,
-  SESSION_CHIPS,
+  SESSION_LIST_CHIPS,
   sessionMatchesChips,
   sessionLiveScope,
   WORKER_CHIP,
@@ -76,7 +81,8 @@ interface Props {
   // callback that appends the next page. When hasMore is true the list renders a
   // "Daha fazla yükle" row at the bottom. total counts the CHIP-FILTERED set:
   // the server applies the same chip predicate before paging, so the footer
-  // count and the button both describe rows this list can actually show.
+  // count and the button both describe rows on the selected archive side that
+  // this list can actually show.
   totalSessions?: number
   hasMoreSessions?: boolean
   onLoadMore?: () => void
@@ -85,9 +91,11 @@ interface Props {
   chipsOff: string[]
   chipSet: ReadonlySet<string>
   onClickChip: (key: string, mode: ChipClickMode) => void
-  // chipKey → workspace-wide count from the list response. Used for every chip
-  // the server can classify; the two live chips stay counted over loaded rows
-  // because liveness is client state.
+  showArchived: boolean
+  onToggleArchived: () => void
+  // chipKey → count within the selected archive side from the list response.
+  // The two live chips stay counted over loaded rows because liveness is
+  // client state.
   chipCountsFromServer?: Record<string, number>
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
@@ -99,7 +107,7 @@ interface Props {
   onCollapse?: () => void
   onGenerateTitle: (id: string) => void
   onDeleteSession: (id: string) => void
-  // Archive (true) or restore (false) a session — drives the Active/Archived filter.
+  // Archive (true) or restore (false) a session.
   onSetArchived: (id: string, archived: boolean) => void
   // Pin (true) or unpin (false) a session — pinned rows float to the top.
   onSetPinned: (id: string, pinned: boolean) => void
@@ -128,6 +136,8 @@ export function SessionsSidebar({
   chipsOff,
   chipSet,
   onClickChip,
+  showArchived,
+  onToggleArchived,
   chipCountsFromServer,
   onSelectSession,
   onNewSession,
@@ -139,9 +149,9 @@ export function SessionsSidebar({
   onSetPinned,
   onQueryChange,
 }: Props) {
-  // One flat list filtered by multi-select chips: the kind chips plus a Worker
-  // and an Arşiv chip. The selection itself lives in useSessionChips (above this
-  // component) because the session list REQUEST carries it — the server pages
+  // One flat list filtered by multi-select kind, worker and live chips. The
+  // archive view is selected separately. The chip selection lives above this
+  // component because the session list request carries it — the server pages
   // the filtered set, so paging and the chips have to share one source of truth.
   //
   // Plain click toggles one chip; Ctrl/Cmd-click solos it (everything else off),
@@ -195,7 +205,7 @@ export function SessionsSidebar({
   )
 
   // Chip badges. The server counts every chip it can classify over the WHOLE
-  // workspace (before the chips filter), which is the only source that still
+  // archive side (before the chips filter), which is the only source that still
   // knows what an unticked chip hides now that its rows never reach this list.
   // The two live chips are client state, so they stay counted over loaded rows.
   const chipCounts = useMemo(() => {
@@ -215,6 +225,7 @@ export function SessionsSidebar({
   const groups = useMemo(() => {
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
+      if ((s.state === 'archived') !== showArchived) continue
       if (!sessionMatchesChips(chipShapeOf(s), chipSet)) continue
       if (!sessionMatchesQuery(s, query)) continue
       // Pinned rows leave the recency buckets entirely and form their own group,
@@ -226,7 +237,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, chipSet, chipShapeOf])
+  }, [sessions, query, chipSet, chipShapeOf, showArchived])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -235,7 +246,6 @@ export function SessionsSidebar({
   // Membership lookups below run once per selected id; over an array both would
   // be O(selected × sessions), which is the whole list on every render.
   const orderedIdSet = useMemo(() => new Set(orderedIds), [orderedIds])
-  const sessionById = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions])
   // Selected sessions that are currently filtered out of view — bulk actions
   // still apply to them, so we surface the count.
   const hiddenSelected = useMemo(
@@ -243,13 +253,6 @@ export function SessionsSidebar({
     [sel.selected, orderedIdSet],
   )
   const selectedIds = () => [...sel.selected]
-  // With one flat list a selection can mix archived and live rows; the bulk
-  // button only flips to "restore" when every selected session is archived.
-  const allSelectedArchived = useMemo(
-    () =>
-      sel.count > 0 && [...sel.selected].every((id) => sessionById.get(id)?.state === 'archived'),
-    [sel.count, sel.selected, sessionById],
-  )
   // Bulk actions reuse the existing per-id handlers in a loop (no new API).
   const bulkArchive = (archived: boolean) => {
     selectedIds().forEach((id) => onSetArchived(id, archived))
@@ -327,11 +330,20 @@ export function SessionsSidebar({
       style={{ width }}
       className="th-col relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"
     >
-      <div className="flex items-center justify-between px-4 pt-4 pb-1">
+      <div className="flex items-center justify-between px-3 pt-4 pb-1">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Oturumlar
+          {showArchived ? 'Arşiv' : 'Oturumlar'}
         </span>
         <div className="flex shrink-0 items-center gap-1">
+          <ArchiveViewToggle
+            testId="sessions-archived-toggle"
+            active={showArchived}
+            onToggle={() => {
+              sel.clear()
+              onToggleArchived()
+            }}
+            backLabel="Liste"
+          />
           <button
             onClick={onRefresh}
             className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
@@ -343,17 +355,25 @@ export function SessionsSidebar({
         </div>
       </div>
 
-      {/* Prominent new-chat button, above the search. */}
-      <div className="px-3 pb-1 pt-1">
-        <button
-          onClick={onNewSession}
-          disabled={newDisabled}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
-          title="Yeni oturum (varsayılan ajanla)"
-        >
-          <Plus size={15} /> Yeni Sohbet
-        </button>
-      </div>
+      {showArchived ? (
+        <ArchiveViewBanner
+          testId="sessions-archive-banner"
+          count={totalSessions ?? 0}
+          noun="oturum"
+          restoreHint="seçip “Arşivden çıkar”a bas."
+        />
+      ) : (
+        <div className="px-3 pb-1 pt-1">
+          <button
+            onClick={onNewSession}
+            disabled={newDisabled}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+            title="Yeni oturum (varsayılan ajanla)"
+          >
+            <Plus size={15} /> Yeni Sohbet
+          </button>
+        </div>
+      )}
 
       {/* Local title/session ID filter plus debounced message search. */}
       <div className="relative px-3 pb-2 pt-1">
@@ -378,20 +398,13 @@ export function SessionsSidebar({
         )}
       </div>
 
-      {/* Multi-select chips: every session kind plus the Worker and Arşiv scopes.
+      {/* Multi-select chips: every session kind plus the Worker and live scopes.
           All start selected — unticking a chip hides that slice. */}
       <div className="px-3 pb-1 text-[10px] text-[var(--color-text-dim)] opacity-70">Filtreler</div>
       <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
-        {SESSION_CHIPS.map((f) => {
+        {SESSION_LIST_CHIPS.map((f) => {
           const on = chipSet.has(f.key)
-          const Icon =
-            f.key === WORKER_CHIP
-              ? Users
-              : f.key === ARCHIVED_CHIP
-                ? Archive
-                : f.key === SUBAGENT_CHIP
-                  ? Sparkles
-                  : null
+          const Icon = f.key === WORKER_CHIP ? Users : f.key === SUBAGENT_CHIP ? Sparkles : null
           return (
             <button
               key={f.key}
@@ -582,7 +595,7 @@ export function SessionsSidebar({
               })}
             </div>
           ))}
-        {!loading && groups.length === 0 && query.trim().length < 2 && (
+        {!loading && !showArchived && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
             {chipsOff.length === 0 ? 'Oturum yok. + ile başlat.' : 'Seçili çiplerde oturum yok.'}
           </p>
@@ -660,7 +673,7 @@ export function SessionsSidebar({
         <SelectionBarButton icon={<Pin size={13} />} onClick={() => bulkPin(true)}>
           Sabitle
         </SelectionBarButton>
-        {allSelectedArchived ? (
+        {showArchived ? (
           <SelectionBarButton
             icon={<ArchiveRestore size={13} />}
             onClick={() => bulkArchive(false)}

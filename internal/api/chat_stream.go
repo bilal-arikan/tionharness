@@ -66,6 +66,7 @@ func (s *Server) runChatTurnCaptured(clientGone context.Context, wsp *workspace.
 	// steer_undelivered fallback (Doc 59): guidance that never reached the model is
 	// enqueued as the next message instead of dying with the run.
 	defer func() { s.recoverUndeliveredSteer(run, wsp.ID, req) }()
+	defer func() { s.finishAsyncAnswers(run, wsp, req.SessionID) }()
 	ctx = agent.WithSteer(ctx, run.steer)
 	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP
 	// endpoint for this turn, carrying the per-run token. No-op when unknown.

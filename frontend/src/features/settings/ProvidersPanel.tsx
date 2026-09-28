@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Boxes } from 'lucide-react'
 import { api } from '@/api'
 import type { ProviderInstance } from '@/api/providers'
-import type { AppSettings, ProviderTestResult } from '@/types'
 import { toast } from '@/shared/components'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 import { CodexAuthDialog } from './CodexAuthDialog'
@@ -12,12 +11,6 @@ import { useProviderInstances } from './providers/useProviderInstances'
 import { DeciderProviders } from '@/features/decider'
 
 interface Props {
-  draft: AppSettings
-  setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
-  test: Record<string, ProviderTestResult | 'pending'>
-  runTest: (provider: string, model?: string) => void
-  workspaceClaudeHome?: string
-  workspaceCodexHome?: string
   // onOpenDecider switches to the Decision authorities screen.
   onOpenDecider?: () => void
 }

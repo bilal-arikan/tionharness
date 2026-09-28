@@ -49,6 +49,8 @@ type ToolSpec struct {
 type CallResult struct {
 	Text    string
 	IsError bool
+	// UserInput carries asynchronous user replies separately from tool output.
+	UserInput []string
 }
 
 // Backend resolves Bearer tokens to live turns and dispatches tool calls. The
@@ -203,7 +205,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.writeRPC(w, req.ID, toolContent(err.Error(), true), nil)
 			return
 		}
-		h.writeRPC(w, req.ID, toolContent(res.Text, res.IsError), nil)
+		h.writeRPC(w, req.ID, toolContent(res.Text, res.IsError, res.UserInput...), nil)
 	default:
 		h.writeRPC(w, req.ID, nil, &rpcError{Code: -32601, Message: "method not found: " + req.Method})
 	}
@@ -382,9 +384,13 @@ func (h *Server) HasStream(token string) bool {
 }
 
 // toolContent builds the MCP tools/call result envelope.
-func toolContent(text string, isError bool) map[string]any {
+func toolContent(text string, isError bool, userInput ...string) map[string]any {
+	content := []map[string]string{{"type": "text", "text": text}}
+	for _, input := range userInput {
+		content = append(content, map[string]string{"type": "text", "text": input})
+	}
 	return map[string]any{
-		"content": []map[string]string{{"type": "text", "text": text}},
+		"content": content,
 		"isError": isError,
 	}
 }

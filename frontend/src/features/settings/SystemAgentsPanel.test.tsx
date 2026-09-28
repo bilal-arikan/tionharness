@@ -9,6 +9,30 @@ import { i18next } from '@/i18n'
 const listAgents = vi.fn()
 const getWorkspaceSettings = vi.fn()
 const updateAgent = vi.fn()
+const assignCatalogAgent = vi.fn().mockResolvedValue({})
+const detachCatalogAgent = vi.fn().mockResolvedValue({})
+
+vi.mock('@/api/agentCatalog', () => ({
+  catalogEditorApi: {},
+  agentCatalogApi: {
+    listAgentCatalog: () =>
+      listAgents().then((agents: Agent[]) => ({
+        agents: agents.map((agent) => ({
+          agent,
+          assignments: [{ workspaceId: 'WS1', workspaceName: 'Studio', agentId: agent.id }],
+        })),
+        workspaces: [
+          { id: 'WS1', name: 'Studio' },
+          { id: 'WS2', name: 'Research' },
+        ],
+      })),
+    updateCatalogAgent: (id: string, patch: AgentPatch) => updateAgent(id, patch),
+    assignCatalogAgent: (id: string, workspaceId: string) => assignCatalogAgent(id, workspaceId),
+    detachCatalogAgent: (id: string, workspaceId: string) => detachCatalogAgent(id, workspaceId),
+    deriveCatalogAgent: vi.fn(),
+    restoreCatalogAgent: vi.fn(),
+  },
+}))
 
 vi.mock('@/api', () => ({
   api: {
@@ -38,6 +62,7 @@ vi.mock('@/shared/components/agents/AgentIdentity', () => ({
 vi.mock('@/shared/lib/catalog', () => ({
   useCatalog: () => [],
   resolveModelLabel: () => 'model',
+  thinkingOptionsForModel: () => [],
 }))
 // The bulk bar and edit panel render for real; only the provider picker (which
 // fetches provider instances) is stubbed to a button that picks a fixed pair.
@@ -78,12 +103,15 @@ const agent = (over: Partial<Agent> & Pick<Agent, 'id' | 'name'>): Agent =>
 async function renderPanel(onError = vi.fn()) {
   const container = document.createElement('div')
   document.body.appendChild(container)
-  const root = createRoot(container)
+  const header = document.createElement('div')
+  const content = document.createElement('div')
+  container.append(header, content)
+  const root = createRoot(content)
   roots.push(root)
   await act(async () => {
-    root.render(<SystemAgentsPanel onError={onError} />)
+    root.render(<SystemAgentsPanel onError={onError} headerTarget={header} />)
   })
-  return { container, onError }
+  return { container, header, onError }
 }
 
 afterEach(() => {
@@ -99,7 +127,26 @@ function rosterIds(container: HTMLElement) {
 }
 
 describe('SystemAgentsPanel', () => {
-  it('lists only system agents, split into services and workers', async () => {
+  it('assigns a central profile to another workspace without switching workspace', async () => {
+    listAgents.mockResolvedValue([agent({ id: 'CAT1', name: 'Reviewer' })])
+    const { container } = await renderPanel()
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Assign to Research"]')!
+    await act(async () => button.click())
+    expect(assignCatalogAgent).toHaveBeenCalledWith('CAT1', 'WS2')
+    expect(listAgents).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves an assignment when its removal is cancelled', async () => {
+    listAgents.mockResolvedValue([agent({ id: 'CAT1', name: 'Reviewer' })])
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { container } = await renderPanel()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Remove from Studio"]')!.click(),
+    )
+    expect(detachCatalogAgent).not.toHaveBeenCalled()
+    confirm.mockRestore()
+  })
+  it('lists custom and system profiles together with category filters', async () => {
     listAgents.mockResolvedValue([
       agent({ id: 'AGT1', name: 'Ada' }),
       agent({ id: 'SYS1', name: 'Titler', system: true, locked: true, systemKey: 'titler' }),
@@ -113,9 +160,9 @@ describe('SystemAgentsPanel', () => {
     ])
     const { container } = await renderPanel()
 
-    expect(rosterIds(container)).toEqual(['SYS1', 'SYS2'])
-    expect(container.textContent).toContain('Servisler')
-    expect(container.textContent).toContain("Worker'lar")
+    expect(rosterIds(container)).toEqual(['AGT1', 'SYS1', 'SYS2'])
+    expect(container.textContent).toContain('Services')
+    expect(container.textContent).toContain('Workers')
   })
 
   it('selects the first system agent and switches on click', async () => {
@@ -136,17 +183,27 @@ describe('SystemAgentsPanel', () => {
     expect(container.querySelector('[data-testid="settings-form"]')?.textContent).toBe('SYS2')
   })
 
-  // Built-ins are edited in place and the edit applies installation-wide, so the
-  // scope note must say that rather than promising a workspace-local copy.
-  it('says an edit applies to every workspace and makes no copy', async () => {
+  it('places the count and working library controls in the page header', async () => {
     listAgents.mockResolvedValue([
       agent({ id: 'SYS1', name: 'Titler', system: true, locked: true, systemKey: 'titler' }),
     ])
-    const { container } = await renderPanel()
+    const { container, header } = await renderPanel()
 
-    const note = container.querySelector('[data-testid="system-agents-scope-note"]')?.textContent
-    expect(note).toContain('tüm workspace')
-    expect(note).toContain('kopya oluşmaz')
+    expect(header.textContent).toContain('1 agents')
+    expect(container.textContent).not.toContain('One central profile.')
+    const refresh = header.querySelector<HTMLButtonElement>('[aria-label="Refresh library"]')!
+    await act(async () => refresh.click())
+    expect(listAgents).toHaveBeenCalledTimes(2)
+
+    const create = header.querySelector<HTMLButtonElement>('[aria-expanded]')!
+    expect(create.textContent).toContain('New agent')
+    expect(container.querySelector('form')).toBeNull()
+    await act(async () => create.click())
+    expect(create.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('form')).not.toBeNull()
+    expect(header.querySelector('form')).toBeNull()
+    await act(async () => create.click())
+    expect(container.querySelector('form')).toBeNull()
   })
 
   it('reports a load failure to the caller', async () => {
@@ -158,7 +215,6 @@ describe('SystemAgentsPanel', () => {
 
 describe('SystemAgentsPanel bulk edit', () => {
   const roster = () => [
-    agent({ id: 'AGT1', name: 'Ada' }),
     agent({ id: 'SYS1', name: 'Titler', system: true, locked: true, systemKey: 'titler' }),
     agent({ id: 'SYS2', name: 'Compactor', system: true, locked: true, systemKey: 'compaction' }),
     agent({
@@ -168,6 +224,7 @@ describe('SystemAgentsPanel bulk edit', () => {
       locked: true,
       systemKey: 'subagent-coder',
     }),
+    agent({ id: 'AGT1', name: 'Ada' }),
   ]
 
   const row = (container: HTMLElement, id: string) => {
@@ -271,11 +328,11 @@ describe('SystemAgentsPanel bulk edit', () => {
     expect(container.querySelector('[data-testid="agent-bulk-edit-panel"]')).toBeNull()
   })
 
-  it('selects every system agent from the bar, never a regular agent', async () => {
+  it('selects every visible agent from the bar, including custom profiles', async () => {
     const { container } = await renderPanel()
     await clickRow(container, 'SYS2', { ctrlKey: true })
     await click(buttonByText(container, 'Tümü'))
 
-    expect(container.textContent).toContain('3 seçili')
+    expect(container.textContent).toContain('4 seçili')
   })
 })

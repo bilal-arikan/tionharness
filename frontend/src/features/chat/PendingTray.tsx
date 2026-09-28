@@ -39,10 +39,7 @@ interface Props {
   // disabled (with the reason) rather than hidden — the button must not appear and
   // vanish as turns come and go.
   canSteer?: boolean
-  // Whether a turn is streaming at all, used only to pick the DISABLED reason:
-  // "no turn to steer" and "this turn's provider/mode cannot carry a steer" are
-  // different problems and the user can act on the second one (switch the agent to
-  // "ask" mode). Without it both cases would show the same misleading message.
+  // Distinguishes an idle session from a running turn without a delivery channel.
   turnRunning?: boolean
   // Clear the whole waiting queue. Optional; shown when 2+ queue items wait.
   onClear?: () => void
@@ -173,10 +170,10 @@ export function PendingTray({
                 disabled={!canSteer}
                 title={
                   canSteer
-                    ? 'Şimdi yönlendir (bu mesajı sıradan alıp çalışan tura ilet)'
+                    ? 'Guide the current task with this queued message'
                     : turnRunning
-                      ? 'Bu tur canlı yönlendirmeyi desteklemiyor (sağlayıcı/izin modu uygun değil) — mesaj sırada kalır. Canlı yönlendirme için ajanı "ask" moduna al.'
-                      : 'Yönlendirilecek çalışan bir tur yok — mesaj sırada kalır'
+                      ? 'Live guidance is unavailable for this turn. Your message remains queued.'
+                      : 'No running turn to guide. Your message remains queued.'
                 }
                 data-testid={`pending-steer-${it.id}`}
                 className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-warning)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[var(--color-text-dim)]"

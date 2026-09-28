@@ -649,6 +649,38 @@ describe('Composer steer availability', () => {
     return container.querySelector<HTMLButtonElement>('[data-testid="composer-steer"]')
   }
 
+  it('sends live guidance without queueing or interrupting the turn', async () => {
+    const onSteer = vi.fn().mockResolvedValue(true)
+    const onQueue = vi.fn()
+    const onInterrupt = vi.fn()
+    const { container } = renderComposerWith({
+      streaming: true,
+      canSteer: true,
+      onSteer,
+      onQueue,
+      onInterrupt,
+    })
+    type(container, 'Focus on the login bug')
+    act(() => steerBtn(container)?.click())
+    await flush()
+
+    expect(onSteer).toHaveBeenCalledWith('Focus on the login bug')
+    expect(onQueue).not.toHaveBeenCalled()
+    expect(onInterrupt).not.toHaveBeenCalled()
+    expect(container.querySelector('textarea')!.value).toBe('')
+  })
+
+  it('keeps guidance in the composer when the turn rejects it', async () => {
+    const onSteer = vi.fn().mockResolvedValue(false)
+    const { container } = renderComposerWith({ streaming: true, canSteer: true, onSteer })
+    type(container, 'Preserve the API')
+    act(() => steerBtn(container)?.click())
+    await flush()
+
+    expect(onSteer).toHaveBeenCalledWith('Preserve the API')
+    expect(container.querySelector('textarea')!.value).toBe('Preserve the API')
+  })
+
   it('enables the steer action when the server reports the turn is steerable', () => {
     const { container } = renderComposerWith({ streaming: true, onSteer: vi.fn(), canSteer: true })
     type(container, 'yönlendir beni')
@@ -664,7 +696,7 @@ describe('Composer steer availability', () => {
     const btn = steerBtn(container)
     expect(btn?.disabled).toBe(true)
     // Disabled WITH a reason the user can act on, not silently inert.
-    expect(btn?.title).toContain('desteklemiyor')
+    expect(btn?.title).toContain('unavailable')
 
     act(() => btn?.click())
     await flush()

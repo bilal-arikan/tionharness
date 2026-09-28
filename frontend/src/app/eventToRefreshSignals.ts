@@ -74,6 +74,7 @@ export function signalsForEvent(e: AppEvent): string[] {
       // task run starting or finishing adds/removes the live avatar node.
       return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_EXPLORER]
     case 'agent':
+    case 'agent-catalog':
     case 'agent-model-changed':
       return [SIGNAL_AGENTS, SIGNAL_EXPLORER]
     case 'artifact':

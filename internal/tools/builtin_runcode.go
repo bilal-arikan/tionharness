@@ -92,7 +92,7 @@ func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, bu
 // gets a binding — so code mode grants no capability the agent lacks directly.
 var codeModeExcludedBuiltins = map[string]bool{
 	// Interactive — block for a human.
-	"ask_user": true, "request_confirmation": true,
+	"ask_user": true, "ask_user_async": true, "request_confirmation": true,
 	// UI-sink fire-and-forget; meaningless when scripted.
 	"notify": true, "focus_view": true,
 	// Other execution engines / code-in-code.

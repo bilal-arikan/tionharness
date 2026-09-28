@@ -19,7 +19,7 @@ export const DEFAULT_ROTA_PREFS: RotaPrefs = {
   normalizeBars: true,
 }
 
-const CUTOFFS: readonly IdleCutoff[] = [3600, 21600, 86400, 0]
+const CUTOFFS: readonly IdleCutoff[] = [3600, 21600, 86400, 259200, 0]
 
 export function parseRotaPrefs(raw: string | null | undefined): RotaPrefs {
   if (!raw) return DEFAULT_ROTA_PREFS

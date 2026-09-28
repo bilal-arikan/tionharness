@@ -100,8 +100,7 @@ func TestSteerQueuedConvertsWaitingMessage(t *testing.T) {
 // turn instead of disappearing.
 func TestSteerQueuedKeepsMessageWhenUnsupported(t *testing.T) {
 	s, wsp, sessionID, run := steerQueuedFixture(t, "check the other file first")
-	// claude-cli in "auto"/"read-only": no permission-prompt boundary, so
-	// steerableFor() stays false.
+	// A CLI run without the Interaction MCP bridge cannot carry guidance.
 	run.setProvider("claude-cli")
 	run.setSteerable(false)
 
@@ -115,8 +114,46 @@ func TestSteerQueuedKeepsMessageWhenUnsupported(t *testing.T) {
 	if got := queuedMessages(s, wsp.ID, sessionID); len(got) != 1 || got[0] != "check the other file first" {
 		t.Fatalf("queue = %v, want the message still waiting — a refused steer must not consume it", got)
 	}
-	if run.takeSteer() != "" {
+	if len(run.takeCLISteer()) != 0 {
 		t.Fatal("an unsupported turn must not be handed the guidance")
+	}
+}
+
+func TestSteerQueuedCLIReachesCurrentTurn(t *testing.T) {
+	for _, provider := range []string{"claude-cli", "codex-cli"} {
+		t.Run(provider, func(t *testing.T) {
+			s, wsp, sessionID, run := steerQueuedFixture(t, "check the other file first")
+			run.setProvider(provider)
+			run.setSteerable(true)
+			s.republishQueue(wsp.ID, sessionID)
+			if !lastQueueUpdateSteerable(t, s, wsp.ID, sessionID) {
+				t.Fatal("CLI steering not offered to the composer")
+			}
+			rec := postSteerQueued(t, s, wsp, sessionID, "m-1")
+			if rec.Code != http.StatusOK || steerResult(t, rec) != "steered" {
+				t.Fatalf("conversion=%d %s", rec.Code, rec.Body.String())
+			}
+			b := &interactionBackend{runs: s.runs, apiSrv: s, tun: s.tun}
+			res, err := b.Call(context.Background(), run.token, "active_tools", json.RawMessage(`{}`))
+			if err != nil || len(res.UserInput) != 1 || res.UserInput[0] != steerInjectPreamble+"check the other file first" {
+				t.Fatalf("delivery=%+v err=%v", res, err)
+			}
+			if got := queuedMessages(s, wsp.ID, sessionID); len(got) != 0 {
+				t.Fatalf("converted guidance still queued: %v", got)
+			}
+		})
+	}
+}
+
+func TestSteerQueuedKeepsMessageAfterFinalization(t *testing.T) {
+	s, wsp, sessionID, run := steerQueuedFixture(t, "keep this queued")
+	run.finishSteer()
+	rec := postSteerQueued(t, s, wsp, sessionID, "m-1")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("finalized conversion=%d %s", rec.Code, rec.Body.String())
+	}
+	if got := queuedMessages(s, wsp.ID, sessionID); len(got) != 1 || got[0] != "keep this queued" {
+		t.Fatalf("queued message lost: %v", got)
 	}
 }
 

@@ -159,7 +159,9 @@ describe('SkillsPanel archive view', () => {
   }
 
   it('lists only live skills by default and only archived ones in the archive view', async () => {
-    apiMock.listSkills.mockResolvedValue([liveSkill, shelvedSkill])
+    apiMock.listSkills.mockImplementation((archived: boolean) =>
+      Promise.resolve(archived ? [shelvedSkill] : [liveSkill]),
+    )
     apiMock.getSkill.mockImplementation((slug: string) =>
       Promise.resolve(slug === 'shelved-skill' ? shelvedSkill : liveSkill),
     )
@@ -168,6 +170,7 @@ describe('SkillsPanel archive view', () => {
 
     expect(names(container)).toContain('Live Skill')
     expect(names(container)).not.toContain('Shelved Skill')
+    expect(apiMock.listSkills).toHaveBeenCalledExactlyOnceWith(false)
 
     const toggle = container.querySelector<HTMLButtonElement>(
       '[data-testid="skills-archived-toggle"]',
@@ -178,6 +181,7 @@ describe('SkillsPanel archive view', () => {
     expect(container.querySelector('[data-testid="skills-archive-banner"]')).toBeTruthy()
     expect(names(container)).toContain('Shelved Skill')
     expect(apiMock.getSkill).toHaveBeenLastCalledWith('shelved-skill')
+    expect(apiMock.listSkills).toHaveBeenLastCalledWith(true)
   })
 
   it('restores the selected archived skill through the shared archive API', async () => {

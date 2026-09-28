@@ -62,7 +62,7 @@ func TestQueueUpdateReportsSteerableTurn(t *testing.T) {
 
 // TestQueueUpdateReportsUnsteerableTurn is the case the card is about: a turn IS
 // running (so the old "is it streaming?" gate said yes) but it has no boundary a
-// steer could ride — claude-cli outside "ask", any codex-cli turn. The published
+// steer could ride, such as a CLI turn without the bridge. The published
 // flag must be false so the tray disables the action instead of offering an
 // operation the backend can only refuse as "unsupported".
 func TestQueueUpdateReportsUnsteerableTurn(t *testing.T) {

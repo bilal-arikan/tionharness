@@ -1,11 +1,12 @@
 // Rota toolbar: the idle-lane window. Live lanes always stay; idle ones drop
 // out of the canvas once their last activity is older than the window.
-export type IdleCutoff = 3600 | 21600 | 86400 | 0
+export type IdleCutoff = 3600 | 21600 | 86400 | 259200 | 0
 
 const OPTIONS: { value: IdleCutoff; label: string }[] = [
   { value: 3600, label: '1 sa' },
   { value: 21600, label: '6 sa' },
   { value: 86400, label: '24 sa' },
+  { value: 259200, label: '3 gün' },
   { value: 0, label: 'tümü' },
 ]
 

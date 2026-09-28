@@ -35,6 +35,12 @@ func newID() string { return uuid.NewString() }
 // DB is the in-memory + on-disk store for a single workspace.
 type DB struct {
 	root string // store root directory
+	// agentCatalog is immutable after startup. Lock order is workspace -> catalog.
+	agentCatalog       *DB
+	catalogWorkspaceID string
+	isAgentCatalog     bool
+	catalogProfileMu   sync.Mutex
+	catalogRoleCheck   func(string) error
 
 	mu       sync.RWMutex
 	agents   map[string]Agent

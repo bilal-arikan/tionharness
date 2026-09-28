@@ -528,6 +528,7 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 // registerAgentRoutes registers agent CRUD.
 func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/agents", s.handleListAgents)
+	s.registerAgentCatalogRoutes(mux)
 	mux.HandleFunc("GET /api/agents/{id}", s.handleGetAgent)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
@@ -1059,6 +1060,8 @@ func (s *Server) withWorkspace(next http.Handler) http.Handler {
 // exists, rather than dereferencing a nil workspace.
 func workspaceOptionalPath(path string) bool {
 	switch {
+	case path == "/api/agent-catalog" || strings.HasPrefix(path, "/api/agent-catalog/"):
+		return true
 	case path == "/api/workspaces" || strings.HasPrefix(path, "/api/workspaces/"):
 		return true
 	case path == "/api/workspace-templates":

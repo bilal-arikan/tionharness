@@ -148,6 +148,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
 
   // ask / confirm / notify
   ask_user: MessageCircleQuestion,
+  ask_user_async: MessageCircleQuestion,
   request_confirmation: ShieldQuestion,
   notify: Bell,
 

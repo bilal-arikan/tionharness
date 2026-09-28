@@ -79,24 +79,34 @@ export function RotaPanel({
   const pendingScroll = useRef<number | null>(null)
   const chips = useRotaChips()
   const seeding = useRef(false)
+  const seedController = useRef<AbortController | null>(null)
   const hostRef = useRef<HTMLDivElement>(null)
 
   const seed = useCallback(async () => {
     if (seeding.current) return
     seeding.current = true
+    const controller = new AbortController()
+    seedController.current = controller
     try {
       const [page, live, trajectories] = await Promise.all([
-        api.listSessions({ limit: SEED_LIMIT, sort: 'updated_desc', state: 'active' }),
-        api.workspaceLiveness(),
-        api.listTrajectories({ limit: SEED_LIMIT }),
+        api.listSessions(
+          { limit: SEED_LIMIT, sort: 'updated_desc', state: 'active' },
+          controller.signal,
+        ),
+        api.workspaceLiveness(controller.signal),
+        api.listTrajectories({ limit: SEED_LIMIT }, controller.signal),
       ])
+      if (controller.signal.aborted) return
       seedLanes((s) =>
         seedTrajectories(seedLiveness(seedSessions(s, page.items), live), trajectories),
       )
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e))
+      if (!controller.signal.aborted) onError(e instanceof Error ? e.message : String(e))
     } finally {
-      seeding.current = false
+      if (seedController.current === controller) {
+        seedController.current = null
+        seeding.current = false
+      }
     }
   }, [onError])
 
@@ -105,7 +115,12 @@ export function RotaPanel({
     resetLanes()
     const release = connectLanes()
     void seed()
-    return release
+    return () => {
+      seedController.current?.abort()
+      seedController.current = null
+      seeding.current = false
+      release()
+    }
   }, [workspaceId, seed])
 
   useEffect(() => {

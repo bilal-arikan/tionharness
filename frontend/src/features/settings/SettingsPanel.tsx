@@ -1,32 +1,34 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Bell, Tag, type LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
-import type {
-  AppSettings,
-  PromptInfo,
-  ProviderTestResult,
-  SettingsPatch,
-  SlashCommand,
-} from '@/types'
+import type { AppSettings, SettingsPatch, SlashCommand } from '@/types'
 import { LoadingState, toast } from '@/shared/components'
 import { CatButton, NumberValidityProvider, type Cat } from './primitives'
 import { useNumberValidity } from './numberValidity'
-import { APP_CATS } from './settingsCats'
+import { APP_CATS, HELP_CATS, resolveSettingsCat } from './settingsCats'
+import {
+  CATEGORY_FIELDS,
+  categoryPatch,
+  dirtyCategories,
+  rebaseSettingsDraft,
+} from './settingsFields'
+import { SettingsSaveBar } from './SettingsSaveBar'
+import { GeneralPanel } from './GeneralPanel'
+import { DiagnosticsPanel } from './DiagnosticsPanel'
+import { ExecutionPanel } from './ExecutionPanel'
+import { ProviderOptionsPanel } from './ProviderOptionsPanel'
+import { ReferencePanel } from './ReferencePanel'
 import {
   ProfilePanel,
   NotificationsPanel,
   SoundPanel,
   ContextPanel,
-  AutoTitlePanel,
   ToolsPanel,
   BackupPanel,
   AboutPanel,
 } from './appPanels'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
-import { Button, CollapsibleListShell } from '@/shared/components'
+import { CollapsibleListShell } from '@/shared/components'
 import { ProvidersPanel } from './ProvidersPanel'
-import { CommandsPanel } from './CommandsPanel'
-import { StepKindsPanel } from './StepKindsPanel'
 import { HooksPanel } from './HooksPanel'
 import { ExternalToolsPanel } from './ExternalToolsPanel'
 import { SecretsPanel } from './SecretsPanel'
@@ -55,21 +57,6 @@ interface Props {
   onToggleNav?: () => void
 }
 
-const ALL_CATS: Cat[] = APP_CATS.map((c) => c.key)
-
-// Categories whose panel owns its own persistence entirely: they save through
-// their own API on each edit, so the header's app-settings draft indicator and
-// Save button would be misleading noise.
-const SELF_MANAGED_CATS = new Set<Cat>(['secrets', 'exttools', 'sysagents', 'decider'])
-
-// Categories that only READ app settings (no editable field): the draft state is
-// still meaningful, but there is nothing here to save.
-const READ_ONLY_CATS = new Set<Cat>(['about', 'commands', 'stepkinds', 'hooks'])
-
-function isCat(v: string | null | undefined): v is Cat {
-  return !!v && (ALL_CATS as string[]).includes(v)
-}
-
 // SettingsPanel is the two-pane configuration screen: a category rail on the
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
@@ -87,29 +74,18 @@ export function SettingsPanel({
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
+  const [agentHeaderTarget, setAgentHeaderTarget] = useState<HTMLDivElement | null>(null)
   const controlled = onCatChange !== undefined
-  const cat: Cat = controlled ? (isCat(catProp) ? catProp : 'profile') : catState
+  const rawCat = controlled ? catProp : catState
+  const cat = resolveSettingsCat(rawCat)
   const setCat = (c: Cat) => (onCatChange ? onCatChange(c) : setCatState(c))
 
   // App-global settings scope.
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [original, setOriginal] = useState<AppSettings | null>(null)
-  const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
-  // Active workspace's resolved claude-cli config home (<workspace>/claude-home),
-  // shown read-only in the Providers panel. Fetched from the workspace-settings
-  // endpoint.
-  const [wsClaudeHome, setWsClaudeHome] = useState('')
-  // Active workspace's resolved codex-cli config home (<workspace>/codex-home),
-  // same reasoning as wsClaudeHome above.
-  const [wsCodexHome, setWsCodexHome] = useState('')
-
   const [saving, setSaving] = useState(false)
 
-  // Built-in runtime prompts (read-only) shown in the Komutlar category.
-  const [prompts, setPrompts] = useState<PromptInfo[]>([])
-  const [promptsDir, setPromptsDir] = useState('')
-  // Which command/prompt cards are expanded (name → open) in the Komutlar list.
-  const [openCmds, setOpenCmds] = useState<Record<string, boolean>>({})
+  const savingRef = useRef(false)
 
   useEffect(() => {
     api
@@ -119,21 +95,6 @@ export function SettingsPanel({
         setOriginal(s)
       })
       .catch((e) => onError((e as Error).message))
-    api
-      .getPrompts()
-      .then((p) => {
-        setPrompts(p.prompts)
-        setPromptsDir(p.dir)
-      })
-      .catch(() => {})
-    // Active workspace's real claude-home path for the read-only Providers field.
-    api
-      .getWorkspaceSettings()
-      .then((w) => {
-        setWsClaudeHome(w.claudeHomeDir)
-        setWsCodexHome(w.codexHomeDir)
-      })
-      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -142,20 +103,19 @@ export function SettingsPanel({
   // value can't be persisted as 0 or null.
   const numberValidity = useNumberValidity()
 
-  const dirtyApp = useMemo(
-    () => !!(draft && original && JSON.stringify(draft) !== JSON.stringify(original)),
-    [draft, original],
-  )
-  const dirty = dirtyApp
+  const changedCategories = useMemo(() => dirtyCategories(draft, original), [draft, original])
+  const dirtyApp = changedCategories.size > 0
+  const dirty = changedCategories.has(cat)
+  const hasHeaderSave = !!CATEGORY_FIELDS[cat] && cat !== 'providers'
   // Surface unsaved settings on the nav "Ayarlar" item + workspace label.
-  useRegisterDirty('settings', dirty)
+  useRegisterDirty('settings', dirtyApp)
 
   // Live reload: when an agent changes app settings (parent bumps reloadNonce),
   // re-fetch and refresh the form — but skip while the user has unsaved edits so
   // their in-progress changes are never clobbered. reloadNonce starts at 0; the
   // first bump (>0) is the first real signal.
   useEffect(() => {
-    if (reloadNonce === 0 || dirtyApp) return
+    if (reloadNonce === 0 || dirtyApp || savingRef.current) return
     api
       .getSettings()
       .then((s) => {
@@ -169,122 +129,33 @@ export function SettingsPanel({
   const set = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) =>
     setDraft((d) => (d ? { ...d, [key]: val } : d))
 
-  const saveApp = async () => {
-    if (!draft) return
-    const patch: SettingsPatch = {
-      theme: draft.theme,
-      accent: draft.accent,
-      themePreset: draft.themePreset,
-      language: draft.language,
-      uiLanguage: draft.uiLanguage,
-      defaultPermissionMode: draft.defaultPermissionMode,
-      extendedPromptCache: draft.extendedPromptCache,
-      anthropicContextEditing: draft.anthropicContextEditing,
-      anthropicNativeToolSearch: draft.anthropicNativeToolSearch,
-      anthropicProgrammaticTools: draft.anthropicProgrammaticTools,
-      anthropicWebTools: draft.anthropicWebTools,
-      anthropicServerCompaction: draft.anthropicServerCompaction,
-      anthropicRefusalFallback: draft.anthropicRefusalFallback,
-      autonomousTaskBudgetTokens: draft.autonomousTaskBudgetTokens,
-      desktopNotifications: draft.desktopNotifications,
-      keepAwake: draft.keepAwake,
-      userName: draft.userName,
-      userTimezone: draft.userTimezone,
-      userCity: draft.userCity,
-      userCountry: draft.userCountry,
-      userNotes: draft.userNotes,
-      maxContextTokens: draft.maxContextTokens,
-      keepRecentMsgs: draft.keepRecentMsgs,
-      contextBudgetCeil: draft.contextBudgetCeil,
-      contextBudgetFraction: draft.contextBudgetFraction,
-      autoCompactMode: draft.autoCompactMode,
-      reactiveCompact: draft.reactiveCompact,
-      maxTokenRetries: draft.maxTokenRetries,
-      reactiveKeepRecent: draft.reactiveKeepRecent,
-      maxOutputTokens: draft.maxOutputTokens,
-      maxProviderRetries: draft.maxProviderRetries,
-      // Self-healing (guardrails + stuck threshold + lessonReflect) moved to
-      // İçgörü ▸ Öz-iyileşme; NOT patched here so a Settings save can't clobber a
-      // change made there with this panel's stale draft.
-      handoffAuto: draft.handoffAuto,
-      handoffMaxChain: draft.handoffMaxChain,
-      handoffWriteFile: draft.handoffWriteFile,
-      progressPersist: draft.progressPersist,
-      progressResume: draft.progressResume,
-      autoTagSessions: draft.autoTagSessions,
-      debugJournalEnabled: draft.debugJournalEnabled,
-      debugJournalCap: draft.debugJournalCap,
-      autoTitleEnabled: draft.autoTitleEnabled,
-      enableShell: draft.enableShell,
-      enableCliHooks: draft.enableCliHooks,
-      enableCodeMode: draft.enableCodeMode,
-      claudeResume: draft.claudeResume,
-      claudePersistentSession: draft.claudePersistentSession,
-      claudeSysPromptFile: draft.claudeSysPromptFile,
-      claudeCliToolAllowlist: draft.claudeCliToolAllowlist,
-      claudeCliNativeSubagents: draft.claudeCliNativeSubagents,
-      auxNativeRouting: draft.auxNativeRouting,
-      delegationMaxDepth: draft.delegationMaxDepth,
-      delegationMaxCalls: draft.delegationMaxCalls,
-      spawnMaxConcurrent: draft.spawnMaxConcurrent,
-      spawnQueueMax: draft.spawnQueueMax,
-      spawnMaxPerTurn: draft.spawnMaxPerTurn,
-      spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
-      flowRunRetention: draft.flowRunRetention,
-      chatTurnIdleTimeoutMin: draft.chatTurnIdleTimeoutMin,
-      codexStdoutIdleSec: draft.codexStdoutIdleSec,
-      idleResumeMax: draft.idleResumeMax,
-      turnIdleWatchdogMin: draft.turnIdleWatchdogMin,
-      shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec,
-      shellMaxTimeoutSec: draft.shellMaxTimeoutSec,
-      maxToolOutputKB: draft.maxToolOutputKB,
-      coordinatorMaxWorkers: draft.coordinatorMaxWorkers,
-      coordinatorMaxTurns: draft.coordinatorMaxTurns,
-      coordinatorMaxDepth: draft.coordinatorMaxDepth,
-      coordinatorMaxSubtreeSessions: draft.coordinatorMaxSubtreeSessions,
-      coordinatorSettleGraceSec: draft.coordinatorSettleGraceSec,
-      coordinatorStallGuard: draft.coordinatorStallGuard,
-      coordinatorStallSweepMin: draft.coordinatorStallSweepMin,
-      coordinatorStallMaxNudges: draft.coordinatorStallMaxNudges,
-      coordinatorStallNoteVisible: draft.coordinatorStallNoteVisible,
-      autonomousConfine: draft.autonomousConfine,
-      autonomousBootSeq: draft.autonomousBootSeq,
-      autonomousAutoContinue: draft.autonomousAutoContinue,
-      autonomousAutoContinueMax: draft.autonomousAutoContinueMax,
-      backupEnabled: draft.backupEnabled,
-      backupIntervalHours: draft.backupIntervalHours,
-      backupRetain: draft.backupRetain,
-      backupDir: draft.backupDir,
-    }
-    const updated = await api.updateSettings(patch)
-    setDraft(updated)
-    setOriginal(updated)
-    onSaved(updated)
-  }
-
-  const save = async () => {
+  const persist = async (patch: SettingsPatch) => {
+    if (!original || savingRef.current || Object.keys(patch).length === 0) return
+    savingRef.current = true
     setSaving(true)
     try {
-      await saveApp()
-      toast.success('Kaydedildi')
-    } catch (e) {
-      onError((e as Error).message)
+      const updated = await api.updateSettings(patch)
+      setDraft((current) =>
+        current ? rebaseSettingsDraft(current, original, patch, updated) : updated,
+      )
+      setOriginal(updated)
+      onSaved(updated)
+      toast.success('Saved')
+    } catch (error) {
+      onError((error as Error).message)
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
 
-  const runTest = async (provider: string, model?: string) => {
-    setTest((t) => ({ ...t, [provider]: 'pending' }))
-    try {
-      const r = await api.testProvider(provider, model)
-      setTest((t) => ({ ...t, [provider]: r }))
-    } catch (e) {
-      setTest((t) => ({ ...t, [provider]: { ok: false, error: (e as Error).message } }))
-    }
+  const save = () => {
+    if (!draft || !original || numberValidity.hasInvalid) return
+    void persist(categoryPatch(cat, draft, original))
   }
+  const saveProps = { dirty, saving, invalid: numberValidity.hasInvalid, onSave: save }
 
-  const catMeta = APP_CATS.find((c) => c.key === cat)
+  const catMeta = [...APP_CATS, ...HELP_CATS].find((c) => c.key === cat)
   const CatIcon = catMeta?.icon
 
   return (
@@ -297,7 +168,7 @@ export function SettingsPanel({
       >
         <aside className="th-col flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm square:w-48">
           <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Uygulama
+            Settings
           </div>
           {APP_CATS.map((c) => (
             <CatButton
@@ -305,7 +176,19 @@ export function SettingsPanel({
               c={c}
               active={cat === c.key}
               onClick={() => setCat(c.key)}
-              dirty={c.key !== 'about' && !SELF_MANAGED_CATS.has(c.key) && !!dirtyApp}
+              dirty={changedCategories.has(c.key)}
+            />
+          ))}
+          <div className="px-2 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Help
+          </div>
+          {HELP_CATS.map((c) => (
+            <CatButton
+              key={c.key}
+              c={c}
+              active={cat === c.key}
+              onClick={() => setCat(c.key)}
+              dirty={false}
             />
           ))}
         </aside>
@@ -315,7 +198,7 @@ export function SettingsPanel({
           shrink below its content's intrinsic width on narrow screens (otherwise
           a wide child — e.g. a Hooks/ExternalTools code sample — forces overflow). */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-6 py-3">
           <span className="flex items-center gap-2 text-sm font-semibold">
             {CatIcon && (
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
@@ -325,26 +208,10 @@ export function SettingsPanel({
             {catMeta?.label ?? ''}
           </span>
           <div className="flex items-center gap-3">
-            {!SELF_MANAGED_CATS.has(cat) && (
-              <span
-                className={`text-xs ${
-                  numberValidity.hasInvalid
-                    ? 'text-[var(--color-danger)]'
-                    : 'text-[var(--color-text-dim)]'
-                }`}
-              >
-                {numberValidity.hasInvalid
-                  ? 'Geçersiz sayı değeri — düzeltmeden kaydedilemez'
-                  : dirty
-                    ? 'Kaydedilmemiş değişiklik'
-                    : 'Kayıtlı'}
-              </span>
+            {cat === 'sysagents' && (
+              <div ref={setAgentHeaderTarget} className="flex items-center gap-3" />
             )}
-            {!READ_ONLY_CATS.has(cat) && !SELF_MANAGED_CATS.has(cat) && (
-              <Button onClick={save} disabled={!dirty || saving || numberValidity.hasInvalid}>
-                {saving ? 'Kaydediliyor…' : 'Kaydet'}
-              </Button>
-            )}
+            {hasHeaderSave && <SettingsSaveBar {...saveProps} />}
           </div>
         </div>
 
@@ -354,7 +221,7 @@ export function SettingsPanel({
           <SecretsPanel onError={onError} />
         ) : cat === 'sysagents' ? (
           // Two-pane roster + settings form of its own; render full-bleed.
-          <SystemAgentsPanel onError={onError} />
+          <SystemAgentsPanel onError={onError} headerTarget={agentHeaderTarget} />
         ) : (
           <div className="th-column mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-4 sm:p-6 3xl:max-w-4xl">
             {!draft ? (
@@ -362,16 +229,23 @@ export function SettingsPanel({
             ) : (
               <NumberValidityProvider value={numberValidity}>
                 {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'general' && <GeneralPanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'execution' && (
+                  <ExecutionPanel draft={draft} set={set} setDraft={setDraft} />
+                )}
+                {cat === 'diagnostics' && (
+                  <DiagnosticsPanel draft={draft} set={set} setDraft={setDraft} />
+                )}
                 {cat === 'providers' && (
-                  <ProvidersPanel
-                    draft={draft}
-                    setDraft={setDraft}
-                    test={test}
-                    runTest={runTest}
-                    workspaceClaudeHome={wsClaudeHome}
-                    workspaceCodexHome={wsCodexHome}
-                    onOpenDecider={() => setCat('decider')}
-                  />
+                  <>
+                    <ProvidersPanel onOpenDecider={() => setCat('decider')} />
+                    <ProviderOptionsPanel
+                      draft={draft}
+                      set={set}
+                      setDraft={setDraft}
+                      save={saveProps}
+                    />
+                  </>
                 )}
                 {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
                 {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
@@ -381,27 +255,25 @@ export function SettingsPanel({
                 {cat === 'decider' && (
                   <DeciderPanel onError={onError} onOpenProviders={() => setCat('providers')} />
                 )}
-                {cat === 'sound' && <SoundPanel />}
-                {cat === 'advanced' && (
+                {cat === 'sound' && (
                   <>
-                    <AdvSection title="Bildirimler & Ekran" icon={Bell}>
-                      <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />
-                    </AdvSection>
-                    <AdvSection title="Otomatik Başlık" icon={Tag}>
-                      <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />
-                    </AdvSection>
+                    <NotificationsPanel
+                      enabled={original?.desktopNotifications ?? false}
+                      saving={saving}
+                      onChange={(enabled) => {
+                        void persist({ desktopNotifications: enabled })
+                      }}
+                    />
+                    <SoundPanel />
                   </>
                 )}
-                {cat === 'commands' && (
-                  <CommandsPanel
+                {cat === 'reference' && (
+                  <ReferencePanel
+                    key={rawCat}
                     commands={commands}
-                    prompts={prompts}
-                    promptsDir={promptsDir}
-                    openCmds={openCmds}
-                    setOpenCmds={setOpenCmds}
+                    initialTab={rawCat === 'stepkinds' ? 'stepkinds' : 'commands'}
                   />
                 )}
-                {cat === 'stepkinds' && <StepKindsPanel />}
                 {cat === 'about' && <AboutPanel />}
               </NumberValidityProvider>
             )}
@@ -409,30 +281,5 @@ export function SettingsPanel({
         )}
       </div>
     </div>
-  )
-}
-
-// AdvSection groups one former settings category under a labelled sub-header on
-// the combined "Gelişmiş" screen, with an accent icon badge and a divider
-// between groups.
-function AdvSection({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string
-  icon: LucideIcon
-  children: ReactNode
-}) {
-  return (
-    <section className="space-y-4 border-b border-[var(--color-border)] pb-6 last:border-b-0 last:pb-0">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-          <Icon size={14} />
-        </span>
-        {title}
-      </h3>
-      {children}
-    </section>
   )
 }

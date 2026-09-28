@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, Trash2, Activity, Pencil, Archive, ArchiveRestore } from 'lucide-react'
+import { RefreshCw, Trash2, Activity, Pencil, Archive, ArchiveRestore, Library } from 'lucide-react'
 import type { Agent, AgentPatch } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
@@ -12,7 +13,8 @@ import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { AgentBulkEditPanel } from './AgentBulkEditPanel'
 import { AgentLineageStripes } from './AgentLineageStripes'
 import { groupSystemAgents } from './agentRoster'
-import { api } from '@/api'
+import { api, getActiveWorkspace } from '@/api'
+import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import {
@@ -71,11 +73,12 @@ interface Props {
   onError?: (msg: string) => void
   /** Open a run on the Activity screen with it pre-selected. */
   onOpenExecution?: (sessionId: string) => void
+  onOpenAgentLibrary?: () => void
 }
 
 const rosterSectionHeading = (label: string, hint: string) => (
   <h3
-    className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
+    className="mb-1 mt-3 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]"
     title={hint}
   >
     {label}
@@ -99,8 +102,10 @@ export function AgentsView({
   onRefresh,
   onError,
   onOpenExecution,
+  onOpenAgentLibrary,
 }: Props) {
   const { t } = useTranslation('common')
+  const referencedAgents = useReferencedAgents(agents, [controlledId], getActiveWorkspace())
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -110,6 +115,28 @@ export function AgentsView({
   // instead of the live ones — the kanban board's archive pattern. System agents
   // cannot be archived, so they only ever appear in the live view.
   const [showArchived, setShowArchived] = useState(false)
+  const [archivedAgents, setArchivedAgents] = useState<Agent[]>([])
+  const archiveRequest = useRef(0)
+  const reloadArchived = useCallback(() => {
+    if (!showArchived) return Promise.resolve()
+    const request = ++archiveRequest.current
+    return api
+      .listAgents(true)
+      .then((rows) => {
+        if (request === archiveRequest.current)
+          setArchivedAgents(rows.filter((agent) => !agent.deleted))
+      })
+      .catch((error) => {
+        if (request === archiveRequest.current) onError?.((error as Error).message)
+      })
+  }, [showArchived, onError])
+  useKeyedReset(showArchived, () => setArchivedAgents([]))
+  useEffect(() => {
+    void reloadArchived()
+    return () => {
+      archiveRequest.current++
+    }
+  }, [reloadArchived, agents])
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
@@ -169,23 +196,33 @@ export function AgentsView({
   }
 
   // The roster side currently shown (live or archived).
-  const visibleAgents = useMemo(() => archiveSide(agents, showArchived), [agents, showArchived])
+  const visibleAgents = useMemo(
+    () => archiveSide(showArchived ? archivedAgents : agents, showArchived),
+    [agents, archivedAgents, showArchived],
+  )
 
   // Keep a valid selection within the shown side: prefer the current one, else
   // the default, else first.
   useEffect(() => {
+    // A deep link may target an archived author outside either loaded roster.
+    if (
+      controlledId &&
+      !agents.some((a) => a.id === controlledId) &&
+      !archivedAgents.some((a) => a.id === controlledId)
+    )
+      return
     if (selectedId && visibleAgents.some((a) => a.id === selectedId)) return
     const defaultVisible = !!defaultAgentId && visibleAgents.some((a) => a.id === defaultAgentId)
     const fallback = (defaultVisible ? defaultAgentId : null) ?? visibleAgents[0]?.id ?? null
     if (fallback) select(fallback)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleAgents, defaultAgentId, selectedId])
+  }, [visibleAgents, defaultAgentId, selectedId, controlledId, agents, archivedAgents])
 
-  const selected = agents.find((a) => a.id === selectedId) ?? null
+  const selected = [...archivedAgents, ...referencedAgents].find((a) => a.id === selectedId) ?? null
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
-  const byId = useMemo(() => indexAgents(agents), [agents])
+  const byId = useMemo(() => indexAgents([...agents, ...archivedAgents]), [agents, archivedAgents])
   const regularAgents = useMemo(() => visibleAgents.filter((a) => !a.system), [visibleAgents])
   // System section, split into services vs worker profiles and GROUPED: each
   // locked built-in first, then the workspace customisations bound to its role
@@ -279,7 +316,7 @@ export function AgentsView({
         data-testid="agent-roster-item"
         data-agent-id={a.id}
         data-lineage-depth={lineage.length}
-        className={`group mb-1 flex w-full items-stretch rounded-lg pr-1 text-sm transition ${
+        className={`group mb-0.5 flex w-full items-stretch rounded-lg pr-1 text-sm transition ${
           a.disabled ? 'opacity-50' : ''
         } ${
           sel.isSelected(a.id)
@@ -300,10 +337,10 @@ export function AgentsView({
         >
           {/* Inheritance marker: one colour bar per ancestor, root outermost. */}
           <AgentLineageStripes lineage={lineage} className="my-0.5" />
-          <span className="flex min-w-0 flex-1 items-center py-1">
+          <span className="flex min-w-0 flex-1 items-center py-0.5">
             <AgentIdentity
               agent={a}
-              size="md"
+              size="sm"
               active={defaultAgentId === a.id}
               nameSuffix={
                 <>
@@ -374,6 +411,10 @@ export function AgentsView({
             active={showArchived}
             onToggle={() => {
               sel.clear()
+              if (showArchived) {
+                const next = agents.find((agent) => agent.id === defaultAgentId) ?? agents[0]
+                if (next) select(next.id)
+              }
               setShowArchived((v) => !v)
             }}
             backLabel="Ajanlar"
@@ -592,6 +633,18 @@ export function AgentsView({
           subtitle={selected ? `· ${selected.name}` : '· Ajan seçilmedi'}
           right={
             <>
+              {onOpenAgentLibrary && (
+                <button
+                  type="button"
+                  onClick={onOpenAgentLibrary}
+                  title="Open Agent library"
+                  aria-label="Open Agent library"
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                >
+                  <Library size={15} className="shrink-0" />
+                  <span className="hidden sm:inline">Agent library</span>
+                </button>
+              )}
               {selected && (
                 <>
                   <CopyPathButton

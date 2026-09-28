@@ -32,6 +32,7 @@ func (s *Server) openDurableAskCard(wsID, sessionID string, ask db.SessionAsk, e
 	payload["id"] = ask.ID
 	payload["kind"] = ask.Kind // "ask" | "permission"
 	payload["durable"] = true
+	payload["async"] = ask.Async
 	// The initial suspend + re-suspend publish durably (seq'd on the ring) so the
 	// submitting window renders it and a reconnect gap-fills it. Boot restore
 	// re-publishes ephemerally per-subscribe (the disk row is the source of truth),
@@ -49,9 +50,22 @@ func (s *Server) answerDurableAsk(r *http.Request, sessionID, askID, answer, by 
 	if wsp == nil || wsp.DB == nil {
 		return false
 	}
+	// Validate ownership before claiming: ids are scoped to a workspace, but an
+	// answer must also belong to the session in the URL.
+	stored, err := wsp.DB.GetSessionAsk(r.Context(), askID)
+	if err != nil || stored.SessionID != sessionID {
+		return false
+	}
 	ask, err := wsp.DB.ClaimSessionAsk(r.Context(), askID, answer)
 	if err != nil {
 		return false // not a waiting durable ask, or lost the answer race
+	}
+	if ask.Async {
+		s.publishHub(wsp.ID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
+			"id": askID, "answer": answer, "resolvedBy": by,
+		}, false)
+		s.deliverAsyncAnswer(wsp, sessionID)
+		return true
 	}
 	// A phase gate (Rota F5) is a durable ask with no suspended turn behind it:
 	// its answer moves the trajectory instead of resuming a turn.

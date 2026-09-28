@@ -123,7 +123,7 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		}
 		if !flagged {
 			// Auto-allow path — still a tool BOUNDARY, so deliver any pending mid-turn
-			// steer here as additionalContext (claude-cli has no steer channel).
+			// steer here inside the permission callback's JSON contract.
 			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 		}
 		riskLabel = agent.RiskFlagged
@@ -210,21 +210,15 @@ func (b *interactionBackend) capturePlanArtifact(run *chatRun, plan string) {
 	}
 }
 
-// steerInjectPreamble prefixes a mid-turn steer message injected as the permission
-// tool's additionalContext, telling the model to redirect. Mirrors external-agent'
-// canUseTool/PreToolUse additionalContext delivery (Doc 59).
-const steerInjectPreamble = "The user just sent a new message while you were working. Stop what you are currently doing and address their message instead:\n\n"
+// steerInjectPreamble distinguishes live user guidance from the tool's own output.
+const steerInjectPreamble = "The user sent live guidance for the current task. Apply it at the next appropriate step, preserving prior requirements unless the user changes them:\n\n"
 
 // steerContext consumes any pending mid-turn steer message on the run and returns
 // it wrapped in the redirect preamble, or "" when none is pending. Called ONLY on
 // an allow (delivery) path so an undelivered message stays stashed for the next
 // tool boundary or the turn-end fallback.
 func (b *interactionBackend) steerContext(run *chatRun) string {
-	msg := run.takeSteer()
-	if msg == "" {
-		return ""
-	}
-	return steerInjectPreamble + msg
+	return strings.Join(run.takeCLISteer(), "\n\n")
 }
 
 // permDecision builds the JSON result the claude CLI permission-prompt tool must

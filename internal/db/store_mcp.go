@@ -129,6 +129,9 @@ const TierBlocked = "blocked"
 // described by its overrides (the allowlist remains for subagent profiles,
 // which never go through this endpoint).
 func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bool, toolOverrides string) error {
+	if catalog, target := d.catalogTarget(agentID); catalog != nil && target != "" {
+		return catalog.UpdateAgentTools(ctx, target, mcpEnabled, toolOverrides)
+	}
 	if toolOverrides == "" {
 		toolOverrides = "{}"
 	}
@@ -179,6 +182,9 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 // UpdateAgentAllowedTools updates only a profile-managed legacy allowlist.
 // Callers must first prove the stored value matches a known profile contract.
 func (d *DB) UpdateAgentAllowedTools(ctx context.Context, agentID, allowedTools string) error {
+	if catalog, target := d.catalogTarget(agentID); catalog != nil && target != "" {
+		return catalog.UpdateAgentAllowedTools(ctx, target, allowedTools)
+	}
 	var allowed []string
 	if err := json.Unmarshal([]byte(allowedTools), &allowed); err != nil {
 		return fmt.Errorf("allowed tools must be a JSON array: %w", err)

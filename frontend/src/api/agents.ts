@@ -11,11 +11,11 @@ import type {
 import { req } from './client'
 
 export const agentApi = {
-  // Returns the roster INCLUDING agents marked deleted (flagged), because a past
-  // conversation must still resolve its author. Callers that offer a choice must
-  // filter on `deleted` — useSessionsController does this once, exposing `agents`
-  // (live) alongside `allAgents`.
-  listAgents: () => req<Agent[]>('/api/agents'),
+  // Default roster excludes archives. Deleted authors remain flagged; callers
+  // offering a choice filter them out. Archived authors are resolved by ID.
+  listAgents: (archived: boolean | 'all' = false) =>
+    req<Agent[]>(`/api/agents?archived=${archived}`),
+  getAgent: (id: string) => req<Agent>(`/api/agents/${encodeURIComponent(id)}`),
   createAgent: (data: {
     name: string
     soul?: string

@@ -4,6 +4,9 @@ import type { CLIOverhead } from './session'
 import type { AgentToolTier, ToolVisibility } from './workspace'
 
 export interface Agent {
+  catalogId?: string
+  catalogParentId?: string
+  catalogDetached?: boolean
   id: string
   name: string
   soul: string

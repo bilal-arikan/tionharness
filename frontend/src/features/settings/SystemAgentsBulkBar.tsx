@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent } from '@/types'
+import type { Agent, AgentPatch } from '@/types'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton } from '@/shared/components'
 import { AgentBulkEditPanel } from '@/features/agents/AgentBulkEditPanel'
 
 interface Props {
+  onUpdateAgent?: (id: string, patch: AgentPatch) => Promise<{ agent: Agent; warning?: string }>
   sel: MultiSelect
   /** System agents in roster render order. */
   agents: Agent[]
@@ -24,7 +25,14 @@ interface Props {
 // through the ordinary per-agent update, so a built-in lands in the
 // installation-wide override layer and a customisation pins its own override,
 // exactly as a single edit from the form would.
-export function SystemAgentsBulkBar({ sel, agents, orderedIds, onSettled, onError }: Props) {
+export function SystemAgentsBulkBar({
+  sel,
+  agents,
+  orderedIds,
+  onSettled,
+  onError,
+  onUpdateAgent,
+}: Props) {
   const { selected, replace } = sel
 
   // A row can leave the roster while selected (a customisation deleted from the
@@ -44,13 +52,21 @@ export function SystemAgentsBulkBar({ sel, agents, orderedIds, onSettled, onErro
       orderedIds={orderedIds}
       onSettled={onSettled}
       onError={onError}
+      onUpdateAgent={onUpdateAgent}
     />
   )
 }
 
 type BulkActionsProps = Omit<Props, 'agents'> & { selectedAgents: Agent[] }
 
-function BulkActions({ sel, selectedAgents, orderedIds, onSettled, onError }: BulkActionsProps) {
+function BulkActions({
+  sel,
+  selectedAgents,
+  orderedIds,
+  onSettled,
+  onError,
+  onUpdateAgent,
+}: BulkActionsProps) {
   const { t } = useTranslation('common')
   const [editOpen, setEditOpen] = useState(false)
 
@@ -60,7 +76,7 @@ function BulkActions({ sel, selectedAgents, orderedIds, onSettled, onError }: Bu
         <AgentBulkEditPanel
           scope="system"
           agents={selectedAgents}
-          onUpdateAgent={api.updateAgent}
+          onUpdateAgent={onUpdateAgent ?? api.updateAgent}
           onApplied={() => {
             sel.clear()
             onSettled()

@@ -218,6 +218,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// yes/no on a risky action (all no-ops outside interactive chat).
 		tools.NewTodoWriteTool(),
 		tools.NewAskUserTool(),
+		tools.NewAskUserAsyncTool(),
 		tools.NewRequestConfirmationTool(),
 		// schedule_wake: pause and have the agent re-invoked after a delay to
 		// continue the conversation (no-op outside interactive chat — the wake

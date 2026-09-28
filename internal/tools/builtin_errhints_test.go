@@ -18,7 +18,7 @@ func TestGraphSchemaHint_ParallelMisuse(t *testing.T) {
 	}
 	hint := graphSchemaHint(err.Error())
 	if !strings.Contains(hint, `"parallel":["id1","id2"],"joinNext"`) {
-		t.Fatalf("hint should steer to parallel/joinNext, got: %s", hint)
+		t.Fatalf("hint should steer to parallel/joinNext, got: %s (parse error: %v)", hint, err)
 	}
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ALL_SESSION_CHIPS,
+  ARCHIVED_CHIP,
   SESSION_CHIPS_OFF_KEY,
   normalizeChipsOff,
   nextChipsOff,
@@ -36,7 +37,9 @@ export function browserSessionChipStorage(
 export function readSessionChipsOff(storage: SessionChipStorage | null): string[] {
   if (!storage) return []
   try {
-    return normalizeChipsOff(storage.getItem(SESSION_CHIPS_OFF_KEY))
+    return normalizeChipsOff(storage.getItem(SESSION_CHIPS_OFF_KEY)).filter(
+      (key) => key !== ARCHIVED_CHIP,
+    )
   } catch {
     return []
   }
@@ -62,12 +65,14 @@ export function useSessionChips(): SessionChipsState {
     writeSessionChipsOff(browserSessionChipStorage(), chipsOff)
   }, [chipsOff])
 
+  // Keep the archived scope enabled in the request; the explicit state query
+  // selects which archive side the server pages.
   const selected = useMemo(() => ALL_SESSION_CHIPS.filter((k) => !chipsOff.includes(k)), [chipsOff])
   const chipSet = useMemo(() => new Set(selected), [selected])
   const chipsParam = useMemo(() => selected.join(','), [selected])
 
   const clickChip = useCallback((key: string, mode: ChipClickMode) => {
-    setChipsOff((prev) => nextChipsOff(prev, key, mode))
+    setChipsOff((prev) => nextChipsOff(prev, key, mode).filter((k) => k !== ARCHIVED_CHIP))
   }, [])
 
   return { chipsOff, chipSet, chipsParam, clickChip }

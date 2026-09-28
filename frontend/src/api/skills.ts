@@ -26,7 +26,8 @@ export interface SkillImportInput {
 }
 
 export const skillApi = {
-  listSkills: () => req<Skill[]>('/api/skills'),
+  listSkills: (archived: boolean | 'all' = false) =>
+    req<Skill[]>(`/api/skills?archived=${archived}`),
   importSkill: (input: SkillImportInput) =>
     req<SkillImportResponse>('/api/skills/import', { method: 'POST', body: JSON.stringify(input) }),
   getSkill: (slug: string) => req<SkillDetail>(`/api/skills/${encodeURIComponent(slug)}`),

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // steerCtxKey keys the live steering channel on a request context.
@@ -42,7 +43,7 @@ func steerRoleFor(provider providers.Provider, model string) string {
 // turn paths so neither can silently swallow guidance: the native loop calls it
 // before every provider call, the plain (no-tools) path before its single one.
 func (t *toolLoopTurn) foldSteer() {
-	for _, m := range drainSteer(t.ctx) {
+	for _, m := range append(drainSteer(t.ctx), tools.DrainAsyncInput(t.ctx)...) {
 		t.req.Messages = append(t.req.Messages, providers.Message{Role: t.steerRole, Text: steerPrefix + m})
 		st := TurnStep{Kind: StepSteer, Text: m}
 		t.steps = append(t.steps, st)

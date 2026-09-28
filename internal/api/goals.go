@@ -35,8 +35,12 @@ func (s *Server) handleListGoals(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	// A goal's archive state is its status; absent keeps every goal.
-	archived, ok := archiveFilterQuery(w, r.URL.Query(), archive.All)
+	// An explicit archived status is also an archive request.
+	def := archive.Active
+	if r.URL.Query().Get("status") == db.GoalStatusArchived {
+		def = archive.Only
+	}
+	archived, ok := archiveFilterQuery(w, r.URL.Query(), def)
 	if !ok {
 		return
 	}

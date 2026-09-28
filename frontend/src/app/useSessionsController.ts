@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { api } from '@/api'
 import { useTranscript } from './useTranscript'
+import { useReferencedAgents } from '@/shared/hooks/useReferencedAgents'
 import type { Agent, AgentPatch, Artifact, Message, Session } from '@/types'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -45,6 +46,7 @@ export interface SessionsControllerParams {
   // client-side meant a page of 100 could hold three visible chats and the
   // "Daha fazla yükle" button looked broken.
   chipsParam: string
+  showArchived: boolean
   // The sidebar's free-text title / id search, already debounced by the sidebar.
   // Sent as ?q= so the server filters BEFORE paging: without it a search only
   // saw the rows already loaded and silently missed every older session.
@@ -56,16 +58,18 @@ export interface SessionsControllerParams {
 export function useSessionsController({
   activeWorkspaceId,
   chipsParam,
+  showArchived,
   searchQuery = '',
   setError,
   setView,
 }: SessionsControllerParams) {
-  // allAgents is what the roster endpoint returns: live agents PLUS the ones
-  // marked deleted, which history needs to render a past conversation's author.
-  // `agents` is the live subset and stays the default everything else consumes,
-  // so no picker, roster or default-agent path can ever offer a deleted agent.
-  const [allAgents, setAllAgents] = useState<Agent[]>([])
-  const agents = useMemo(() => allAgents.filter((a) => !a.deleted), [allAgents])
+  // Keep the default roster separate from archived authors resolved on demand.
+  // Pickers only receive live agents; history receives its referenced authors.
+  const [listedAgents, setAllAgents] = useState<Agent[]>([])
+  const agents = useMemo(
+    () => listedAgents.filter((a) => !a.deleted && !a.archived),
+    [listedAgents],
+  )
   // The subset a NEW session may be opened with: service system agents (titler,
   // compaction, …) serve the runtime and the backend refuses them as the default
   // agent, so a session-start surface must not offer them. Worker profiles stay.
@@ -84,6 +88,8 @@ export function useSessionsController({
   // The chip selection the in-flight/last request used, kept in a ref so the
   // refresh and load-more callbacks stay stable across chip changes.
   const chipsParamRef = useRef(chipsParam)
+  const listState = showArchived ? 'archived' : 'active'
+  const listStateRef = useRef<'active' | 'archived'>(listState)
   // The search the in-flight/last request used; undefined when blank so the
   // request line stays identical to the pre-search one. Synced in an effect
   // (declared before the effect that re-queries on it, so it runs first).
@@ -92,16 +98,23 @@ export function useSessionsController({
     searchQueryRef.current = searchQuery.trim() || undefined
   }, [searchQuery])
   const activeWorkspaceIdRef = useRef(activeWorkspaceId)
-  const listQueryIdentityRef = useRef(sessionListQueryIdentity(activeWorkspaceId, chipsParam))
+  const listQueryIdentityRef = useRef(
+    sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState),
+  )
   // Latest-value mirrors for the stable callbacks below. Synced in a layout
   // effect rather than during render (which the compiler lint rejects): it runs
   // synchronously inside the commit, before any passive effect or promise
   // continuation can observe a stale identity.
   useLayoutEffect(() => {
     chipsParamRef.current = chipsParam
+    listStateRef.current = listState
     activeWorkspaceIdRef.current = activeWorkspaceId
-    listQueryIdentityRef.current = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
-  }, [activeWorkspaceId, chipsParam])
+    listQueryIdentityRef.current = sessionListQueryIdentity(
+      activeWorkspaceId,
+      chipsParam,
+      listState,
+    )
+  }, [activeWorkspaceId, chipsParam, listState])
   const listRequestGuardRef = useRef(createSessionListRequestGuard())
   const listReplacePendingRef = useRef(false)
   const listRefreshQueuedRef = useRef(false)
@@ -129,6 +142,18 @@ export function useSessionsController({
   const [scrollToMsgId, setScrollToMsgId] = useState<string | null>(null)
   const { messages, setMessages, messagesLoading, refreshMessages, transcriptPaging } =
     useTranscript(activeWorkspaceId, activeSessionId, scrollToMsgId, setError)
+  const allAgents = useReferencedAgents(
+    listedAgents,
+    [
+      sessions.find((session) => session.id === activeSessionId)?.agentId,
+      ...messages.flatMap((message) => [
+        message.agentId,
+        message.authorKind === 'agent' ? message.authorId : null,
+        message.recipientId,
+      ]),
+    ],
+    activeWorkspaceId,
+  )
   // True from the moment a workspace becomes active until its agents+sessions
   // have landed. While it holds, the chat screen shows a skeleton instead of the
   // "start a new chat" empty state, which would otherwise flash for a returning
@@ -248,13 +273,13 @@ export function useSessionsController({
   // one and does not require loading the whole workspace.
   // A new list identity (workspace or chip set) is bootstrapping again from the
   // first paint; the fetch below lands its page through callbacks.
-  useKeyedReset(sessionListQueryIdentity(activeWorkspaceId, chipsParam), () => {
+  useKeyedReset(sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState), () => {
     if (activeWorkspaceId) setBootstrapping(true)
   })
   useEffect(() => {
     if (!activeWorkspaceId) return
     listReplacePendingRef.current = true
-    const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam)
+    const identity = sessionListQueryIdentity(activeWorkspaceId, chipsParam, listState)
     const token = listRequestGuardRef.current.begin(identity)
     const want = pendingRouteRef.current
     const drafted = draftSessionIds()
@@ -277,7 +302,12 @@ export function useSessionsController({
         : Promise.resolve({ ok: true as const, items: [] as Agent[] })
 
     Promise.all([
-      api.listSessions({ limit: SESSIONS_PAGE_SIZE, chips: chipsParam, q: searchQueryRef.current }),
+      api.listSessions({
+        limit: SESSIONS_PAGE_SIZE,
+        chips: chipsParam,
+        state: listState,
+        q: searchQueryRef.current,
+      }),
       exactLookup,
       agentLookup,
     ])
@@ -326,7 +356,7 @@ export function useSessionsController({
           runQueuedSessionRefresh()
         }
       })
-  }, [activeWorkspaceId, chipsParam, runQueuedSessionRefresh, setError])
+  }, [activeWorkspaceId, chipsParam, listState, runQueuedSessionRefresh, setError])
 
   // Agent CRUD events refresh only the roster. Re-running the workspace bootstrap
   // would unnecessarily clear the active session and transcript.
@@ -428,6 +458,7 @@ export function useSessionsController({
       const page = await api.listSessions({
         limit: sessionsLimitRef.current,
         chips: chipsParamRef.current,
+        state: listStateRef.current,
         q: searchQueryRef.current,
       })
       if (!listRequestGuardRef.current.isCurrent(token, listQueryIdentityRef.current)) return false
@@ -498,6 +529,7 @@ export function useSessionsController({
         limit: SESSIONS_PAGE_SIZE,
         offset,
         chips: chipsParamRef.current,
+        state: listStateRef.current,
         q: searchQueryRef.current,
       })
       .then((page) => {
@@ -634,16 +666,16 @@ export function useSessionsController({
     [setError],
   )
 
-  // Archive / restore a session (the sidebar Active/Archived filter). Archiving
+  // Archive / restore a session (the sidebar's separate archive view). Archiving
   // changes membership and ordering in the server-filtered set, so refetch the
   // whole currently loaded window instead of shifting its offset locally.
   const setSessionArchived = useCallback(
     async (id: string, archived: boolean) => {
       try {
         await api.setSessionState(id, archived ? 'archived' : 'active')
-        if (archived && activeSessionIdRef.current === id) {
+        if (archived !== showArchived && activeSessionIdRef.current === id) {
           const fallback = sessionsRef.current.find(
-            (session) => session.id !== id && session.state !== 'archived',
+            (session) => session.id !== id && (session.state === 'archived') === showArchived,
           )
           const fallbackID = fallback?.id ?? null
           activeSessionIdRef.current = fallbackID
@@ -655,7 +687,7 @@ export function useSessionsController({
         setError((e as Error).message)
       }
     },
-    [refreshSessions, setError],
+    [refreshSessions, setError, showArchived],
   )
 
   // Pin / unpin a session (sidebar). Optimistic; ListSessions floats pinned to top.

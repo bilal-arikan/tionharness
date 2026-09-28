@@ -6,8 +6,12 @@ export interface SessionListRequestToken {
   queryIdentity: string
 }
 
-export function sessionListQueryIdentity(workspaceId: string | null, chips: string): string {
-  return `${workspaceId ?? ''}\u0000${chips}`
+export function sessionListQueryIdentity(
+  workspaceId: string | null,
+  chips: string,
+  state: 'active' | 'archived' = 'active',
+): string {
+  return `${workspaceId ?? ''}\u0000${chips}\u0000${state}`
 }
 
 // One epoch owns every session-list request: bootstrap, chip replacement,

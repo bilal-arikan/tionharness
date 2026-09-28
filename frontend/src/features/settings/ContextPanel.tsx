@@ -1,5 +1,9 @@
-import { Layers, LifeBuoy, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
-import { NumberField, Segmented, Toggle } from './primitives'
+import { SettingsDisclosure } from './SettingsDisclosure'
+import { ContextRecovery } from './ContextRecovery'
+import { ContextProgress } from './ContextProgress'
+import { ContextHandoff } from './ContextHandoff'
+import { Layers } from 'lucide-react'
+import { NumberField, Segmented } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -44,7 +48,7 @@ const boundLabel: Record<'ceil' | 'floor' | 'fraction', string> = {
   fraction: 'pencere × oran',
 }
 
-export function ContextPanel({ draft, set }: PanelProps) {
+export function ContextPanel({ draft, set, setDraft }: PanelProps) {
   // Two representative windows so the clamp is tangible: a 1M model (Opus/Sonnet/
   // Fable, auto-fraction 0.45) and a 200K model (Haiku, 0.40). Computed live from
   // the current draft values.
@@ -156,198 +160,15 @@ export function ContextPanel({ draft, set }: PanelProps) {
         ]}
       />
 
-      <SubHead icon={FlaskConical}>Anthropic beta</SubHead>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Yalnız anthropic sağlayıcıda etkili; claude-cli'da etkisizdir. (1M bağlam artık GA — ayar
-        gerekmez.)
-      </p>
-      <Toggle
-        label="Uzatılmış prompt cache (1 saat)"
-        hint="Sistem promptunu 1 saatlik cache_control ile önbelleğe alır — tekrar eden büyük persona/bağlam ucuzlar."
-        checked={draft.extendedPromptCache}
-        onChange={(v) => set('extendedPromptCache', v)}
-      />
-      <Toggle
-        label="API-native bağlam düzenleme (clear_tool_uses)"
-        hint="Sunucu, cache'li önekteki eski tool sonuçlarını yerinde budar (microcompact muadili) — önek soğumadan küçülür. İstemci-tarafı compaction'ı tamamlar, değiştirmez."
-        checked={draft.anthropicContextEditing}
-        onChange={(v) => set('anthropicContextEditing', v)}
-      />
-      <Toggle
-        label="API-native araç arama (tool search)"
-        hint="Tüm araç kataloğu defer_loading ile gönderilir + sunucu-tarafı regex arama aracı eklenir: model, activate_tools tur-gidiş-dönüşü olmadan araç keşfeder; bulunan şemalar cache'i BOZMADAN eklenir. Yalnız birinci-parti anthropic sağlayıcı; mevcut activate_tools/tool_search akışı yanında çalışmaya devam eder."
-        checked={draft.anthropicNativeToolSearch}
-        onChange={(v) => set('anthropicNativeToolSearch', v)}
-      />
-      <Toggle
-        label="Programatik araç çağrısı (code execution)"
-        hint="Model, Anthropic'in sunucu container'ında Python yazarak araçları KOD İÇİNDEN çağırır (allowed_callers): ara sonuçlar bağlama hiç girmez — çok adımlı araç zincirlerinde token+tur tasarrufu. Yerel run_code'dan farkı: yerel Python gerekmez. MCP ve etkileşimli araçlar hariç; izin kapısı her çağrıda yine çalışır. Yalnız birinci-parti anthropic + Claude 4.5+ modeller."
-        checked={draft.anthropicProgrammaticTools}
-        onChange={(v) => set('anthropicProgrammaticTools', v)}
-      />
-      <Toggle
-        label="Sunucu-tarafı web arama + sayfa çekme"
-        hint="web_search/web_fetch sunucu araçları isteğe eklenir: aramayı Anthropic kendi altyapısında yürütür, alıntılı (citation) sonuçlar aynı yanıtta döner — makinede tarayıcı/servis çalışmaz. 4.6+ modellerde dinamik filtreli sürüm (sonuçlar bağlama girmeden süzülür), eskilerde temel sürüm. Arama başına ücretlendirilir; tur başına kullanım tavanı uygulanır (arama 8, çekme 12). Yalnız birinci-parti anthropic + araçları açık ajanlar."
-        checked={draft.anthropicWebTools}
-        onChange={(v) => set('anthropicWebTools', v)}
-      />
-      <Toggle
-        label="API-native compaction (sunucu özetleme)"
-        hint="Prompt ~150K token eşiğine yaklaşınca geçmişi SUNUCU özetler (compaction blokları); tur içinde bloklar aynen geri gönderilir. İstemci-tarafı compaction turlar-arası transkripti yönetmeye devam eder — bu, uzun TEK turların (araç döngüleri) taşma sigortasıdır ve compaction LLM çağrısının maliyetini sunucuya taşır. Beta; yalnız anthropic sağlayıcı."
-        checked={draft.anthropicServerCompaction}
-        onChange={(v) => set('anthropicServerCompaction', v)}
-      />
-      <Toggle
-        label="Fable 5 red-fallback (Opus 4.8)"
-        hint="Fable 5'in güvenlik sınıflandırıcıları bir isteği reddederse (masum güvenlik/biyoloji-bitişiği işlerde yanlış-pozitif olabilir) istek AYNI çağrı içinde Opus 4.8 tarafından yanıtlanır — tur boş düşmez. Red öncesi kısım faturalanmaz; kurtarma Opus fiyatından. Yalnız Fable/Mythos isteklerine eklenir; Anthropic'in önerisiyle varsayılan açık. Not: Fable 5 ayrıca 30 günlük veri saklama gerektirir (ZDR organizasyonlarda her istek 400 döner)."
-        checked={draft.anthropicRefusalFallback}
-        onChange={(v) => set('anthropicRefusalFallback', v)}
-      />
-      <NumberField
-        label="Otonom görev bütçesi (token)"
-        hint="0 = kapalı. Pozitifken her OTONOM tura API-native task_budget bildirilir: model tüm araç döngüsü için geri sayımı görür ve kendini ona göre ayarlar (kesilmek yerine düzgün toparlar). API minimumu 20000'dir — altı otomatik yükseltilir. Yalnız adaptive-sınıf anthropic modeller (Opus 4.7/4.8, Sonnet 5, Fable 5)."
-        min={0}
-        step={1000}
-        value={draft.autonomousTaskBudgetTokens}
-        onChange={(v) => set('autonomousTaskBudgetTokens', v)}
-      />
-
-      <SubHead icon={RotateCcw}>Context reset (handoff)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Anthropic "harness design" deseni: uzun otonom görevlerde yerinde sıkıştırma tek başına
-        "context anxiety"yi (modelin limite yaklaşınca işi erken toparlaması) çözmez. Açıkken,
-        bağlam sınırına çarpan otonom bir tur özetlenmek yerine bir{' '}
-        <span className="font-medium text-[var(--color-text)]">handoff dosyası</span> yazar ve işi{' '}
-        <span className="font-medium text-[var(--color-text)]">temiz bir pencerede</span> sürdürmek
-        için yeni bir oturum başlatır. Manuel <code>/handoff</code> komutu ve{' '}
-        <code>handoff_session</code> aracı bu ayardan bağımsız her zaman çalışır.
-      </div>
-      <Toggle
-        label="Otomatik context reset"
-        hint="Bağlam sınırına çarpan (reactive compaction tetikleyen) otonom tur, handoff yazıp temiz oturumda devam eder. Yalnız otonom turlar; manuel sohbet etkilenmez."
-        checked={draft.handoffAuto}
-        onChange={(v) => set('handoffAuto', v)}
-      />
-      <NumberField
-        label="Maks. reset zinciri"
-        hint="Art arda kaç context reset'e izin verilir; aşılınca normal sıkıştırmaya düşer (sonsuz zincir freni)."
-        min={1}
-        max={100}
-        value={draft.handoffMaxChain || 20}
-        onChange={(v) => set('handoffMaxChain', v)}
-      />
-      <Toggle
-        label="Handoff'u dosyaya da yaz"
-        hint="Artifact'ın yanı sıra çalışma dizinine <workdir>/.tionharness/handoff.md olarak yazar (disk üstü progress dosyası deseni)."
-        checked={draft.handoffWriteFile}
-        onChange={(v) => set('handoffWriteFile', v)}
-      />
-
-      <SubHead icon={ListChecks}>Kalıcı ilerleme (progress)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Anthropic'in <span className="font-medium text-[var(--color-text)]">claude-progress</span>{' '}
-        konvansiyonu: <code>todo_write</code> kontrol listesi proje çalışma dizinine
-        <code> &lt;cwd&gt;/.tionharness/progress.json</code> olarak yazılır (cwd yoksa ajan-başına
-        depo dosyasına). Böylece liste oturumlar arası kaybolmaz; yeni bir oturum açıldığında
-        kaldığı yerden devralınır. Dosya git-commit'lenebilir ve ajan dosya araçlarıyla okunabilir.
-      </div>
-      <Toggle
-        label="İlerlemeyi diske yaz"
-        hint="todo_write çağrıldığında kontrol listesi proje progress dosyasına kalıcılaşır. Kapalıyken bugünkü (oturum-içi efemeral) davranışa dönülür."
-        checked={draft.progressPersist}
-        onChange={(v) => set('progressPersist', v)}
-      />
-      <Toggle
-        label="Yeni oturumda geri yükle"
-        hint="Kendi listesi olmayan yeni bir oturuma, önceki oturumun progress dosyasındaki tamamlanmamış liste bağlam olarak enjekte edilir."
-        checked={draft.progressResume}
-        onChange={(v) => set('progressResume', v)}
-      />
-
-      <SubHead icon={Tags}>Otomatik etiketleme (olay → etiket)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Tur olaylarına ve oturum durumuna göre oturuma well-known etiketler otomatik atanır:
-        <code> tool-error</code> (gerçek araç hatası; claude-cli izin-verilmeyen araç reddi hariç),
-        <code> error</code> (tur hatası), <code> goal</code>/<code>goal-done</code>/
-        <code>archived</code>. Etiketler ekleme-yönlü kalır (bir onarıcı silene kadar) — bir
-        otomasyonla hataları tarayıp otomatik onarmak için idealdir.
-      </div>
-      <Toggle
-        label="Olaylara göre otomatik etiketle"
-        hint="tool-error / error / goal / goal-done / archived etiketlerini turlarda ve arşivlemede otomatik atar. Kapalıyken hiçbir otomatik etiket yazılmaz (elle + ajan etiketleme çalışmaya devam eder)."
-        checked={draft.autoTagSessions}
-        onChange={(v) => set('autoTagSessions', v)}
-      />
-
-      <SubHead icon={Bug}>Debug günlüğü (gözlemlenebilirlik)</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Her oturum için <code>session.jsonl</code>'in yanına paralel bir <code>debug.jsonl</code>{' '}
-        akışı yazılır: tur süreleri, çağrı-başına token tüketimi, araç gecikme/boyut/hataları, hook
-        kararları, sıkıştırma ve kurtarma olayları. Ajan bunu <code>read_session_debug</code>{' '}
-        aracıyla okuyup kendini optimize edebilir; UI'da oturum detayında "Debug" kartı gösterir.
-      </div>
-      <Toggle
-        label="Debug günlüğünü yaz"
-        hint="Yapılandırılmış gözlemlenebilirlik olaylarını oturum-başına debug.jsonl'e ekler. Kapalıyken hiçbir debug olayı yazılmaz."
-        checked={draft.debugJournalEnabled}
-        onChange={(v) => set('debugJournalEnabled', v)}
-      />
-      <NumberField
-        label="Olay limiti"
-        hint="Oturum başına saklanan en yeni debug olayı sayısı; aşıldığında en eskiler budanır (0 = varsayılan 5000)."
-        min={0}
-        value={draft.debugJournalCap}
-        onChange={(v) => set('debugJournalCap', v)}
-      />
-
-      <SubHead icon={LifeBuoy}>Tur kurtarma & sıkıştırma</SubHead>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        <span className="font-medium text-[var(--color-text)]">Tur kurtarma (A1).</span> Ajanın araç
-        döngüsü "mutlu yol" dışına çıktığında turu yapısal olarak kurtarır: modelin cevabı
-        çıktı-token limitine takılırsa kaldığı yerden <em>sürdürür</em> (parçalar tek cevapta
-        birleştirilir), bağlam penceresi taşarsa eski mesajları özetleyip turu{' '}
-        <em>yeniden dener</em>. Her kurtarma tek-atımlıktır, sonsuz döngü olmaz. Yalnız native
-        (Anthropic/MiniMax) yolunda etkilidir; claude-cli kendi döngüsünü sürdürür.
-      </div>
-      <Toggle
-        label="Reaktif sıkıştırma"
-        hint="Bağlam taşması hatasında eski tur geçmişi özetlenip tur yeniden denenir. Kapalıyken taşma turu sonlandırır."
-        checked={draft.reactiveCompact}
-        onChange={(v) => set('reactiveCompact', v)}
-      />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <NumberField
-          label="Maks. token resume denemesi"
-          hint="Çıktı limiti aşılınca tur kaç kez sürdürülür (0 = kapalı; kısmi cevap olduğu gibi gösterilir)."
-          min={0}
-          value={draft.maxTokenRetries}
-          onChange={(v) => set('maxTokenRetries', v)}
-        />
-        <NumberField
-          label="Sıkıştırmada korunan mesaj"
-          hint="Reaktif sıkıştırmada aynen tutulan en yeni mesaj sayısı (2–50; backend bu aralığa kırpar)."
-          min={2}
-          max={50}
-          value={draft.reactiveKeepRecent}
-          onChange={(v) => set('reactiveKeepRecent', v)}
-        />
-        <NumberField
-          label="Çıktı token tavanı"
-          hint="Tur başına maks. çıktı tokeni (max_tokens). 0 = otomatik: modele göre aile-bazlı (opus/sonnet/fable+minimax/deepseek/gpt/glm 32K, haiku 16K, gemini 8K). Pozitif değer tüm modeller için sabit tavanı zorlar. Düşük tavan resume döngüsünü daha sık tetikler."
-          min={0}
-          value={draft.maxOutputTokens}
-          onChange={(v) => set('maxOutputTokens', v)}
-        />
-        <NumberField
-          label="Sağlayıcı retry bütçesi"
-          hint="Geçici sağlayıcı hatasında (429 / 5xx / zaman aşımı) tur içinde kaç kez jitter'lı backoff'la yeniden denenir (0 = kapalı, maks 5). Kalıcı hatalar (auth/kota) asla yeniden denenmez."
-          min={0}
-          max={5}
-          value={draft.maxProviderRetries}
-          onChange={(v) => set('maxProviderRetries', v)}
-        />
-      </div>
-
+      <SettingsDisclosure title="Context handoff">
+        <ContextHandoff draft={draft} set={set} setDraft={setDraft} />
+      </SettingsDisclosure>
+      <SettingsDisclosure title="Persistent progress">
+        <ContextProgress draft={draft} set={set} setDraft={setDraft} />
+      </SettingsDisclosure>
+      <SettingsDisclosure title="Recovery and output limits">
+        <ContextRecovery draft={draft} set={set} setDraft={setDraft} />
+      </SettingsDisclosure>
       {/* Self-healing (döngü koruması & ders çıkarma) moved to İçgörü ▸ Dersler. */}
     </>
   )

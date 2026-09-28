@@ -258,6 +258,7 @@ var coreInteractionTools = map[string]bool{
 	"Bash":                 true,
 	"PowerShell":           true, // Windows-native shell (OS-default bridged shell)
 	"ask_user":             true,
+	"ask_user_async":       true,
 	"request_confirmation": true,
 	"todo_write":           true,
 	"create_artifact":      true,
@@ -526,6 +527,7 @@ func interactionAdvertisedNames(tun *agent.Tunables, autonomous bool) []string {
 // autonomous turns: the agent never sees them and simply proceeds on its own.
 var interactiveOnlyTools = map[string]bool{
 	"ask_user":             true,
+	"ask_user_async":       true,
 	"request_confirmation": true,
 }
 
@@ -567,6 +569,7 @@ func splitInteractionTiers(static []string, bridge []providers.ToolDef, visOf fu
 func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.ToolSpec {
 	defs := []providers.ToolDef{
 		tools.NewAskUserTool().Def(),
+		tools.NewAskUserAsyncTool().Def(),
 		tools.NewTodoWriteTool().Def(),
 		tools.NewRequestConfirmationTool().Def(),
 		tools.NewCreateArtifactTool().Def(),
@@ -933,7 +936,7 @@ func stampRunSession(ctx context.Context, run *chatRun) context.Context {
 }
 
 // Call implements interaction.Backend.
-func (b *interactionBackend) Call(ctx context.Context, token, name string, args json.RawMessage) (interaction.CallResult, error) {
+func (b *interactionBackend) Call(ctx context.Context, token, name string, args json.RawMessage) (result interaction.CallResult, callErr error) {
 	run, callCtx, endCall, err := b.runs.beginCall(ctx, token)
 	if err != nil {
 		return interaction.CallResult{}, err
@@ -943,6 +946,16 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	// cancellable, so without this the session id is missing on every branch below.
 	ctx = stampRunSession(callCtx, run)
 	bare := bareToolName(name)
+	// Deliver user replies as separate MCP content blocks, preserving structured
+	// tool results. Permission callbacks have a strict JSON contract and are skipped.
+	defer func() {
+		if callErr == nil && bare != "permission_prompt" && ctx.Err() == nil {
+			result.UserInput = append(result.UserInput, run.takeCLISteer()...)
+			if input := run.asyncInputFor(); input != nil && input.Drain != nil {
+				result.UserInput = append(result.UserInput, input.Drain()...)
+			}
+		}
+	}()
 	if text := b.toolCallError(token, name, run); text != "" {
 		return interaction.CallResult{Text: text, IsError: true}, nil
 	}
@@ -954,6 +967,19 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return b.callViaSink(ctx, run, st, args)
 	}
 	switch bare {
+	case "ask_user_async":
+		if run.autonomous {
+			return interaction.CallResult{Text: "no interactive session is available", IsError: true}, nil
+		}
+		input := run.asyncInputFor()
+		if input == nil {
+			return interaction.CallResult{Text: "interactive input is unavailable", IsError: true}, nil
+		}
+		text, err := tools.NewAskUserAsyncTool().Call(tools.WithAsyncInput(ctx, input), args)
+		if err != nil {
+			return interaction.CallResult{Text: err.Error(), IsError: true}, nil
+		}
+		return interaction.CallResult{Text: text}, nil
 	case "ask_user":
 		return b.callAsk(ctx, run, args)
 	case "request_confirmation":

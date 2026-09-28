@@ -101,6 +101,8 @@ describe('useArtifactList request race guard', () => {
   it('drops a stale page that resolves after a newer request was issued', async () => {
     await mount()
     expect(pages).toHaveLength(1)
+    expect(apiMock.listArtifacts).toHaveBeenCalledTimes(1)
+    expect(apiMock.listArtifacts).toHaveBeenCalledWith(expect.objectContaining({ archived: false }))
 
     // Second request supersedes the first while it is still in flight.
     await act(async () => hook.reload())
