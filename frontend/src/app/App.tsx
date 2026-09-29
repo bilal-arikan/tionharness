@@ -33,7 +33,6 @@ import {
   BudgetPanel,
   DashboardPanel,
   InsightPanel,
-  GoalsPanel,
   SettingsPanel,
   WorkspaceView,
   PromptsView,
@@ -52,17 +51,18 @@ import { useWorkspaceActivity } from './useWorkspaceActivity'
 import { useUnreadViews } from './useUnreadViews'
 import { useUnreadBadge } from './useUnreadBadge'
 import { setSessionState } from '@/shared/hooks/useSessionState'
-import { ChatView } from '@/features/chat/ChatView'
+import {
+  ChatView,
+  SessionDetailPanel,
+  CoordinatorPanel,
+  SessionContextModal,
+  SessionDebugModal,
+  ArtifactPreviewModal,
+} from './lazyChatPanels'
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
 import { useSessionChips } from '@/features/sessions/useSessionChips'
-import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
-import { CoordinatorPanel } from '@/features/sessions/CoordinatorPanel'
-import { SessionContextModal } from '@/features/sessions/SessionContextModal'
-import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
-
-import { ArtifactPreviewModal } from '@/features/artifacts/ArtifactPreviewModal'
 
 import { useTranslation } from 'react-i18next'
 import { OnboardingScreen } from '@/features/workspace/OnboardingScreen'
@@ -578,7 +578,6 @@ export default function App() {
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
     insightTab: links.insightTab,
-    goalTarget: links.goalTarget,
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
     rotaTrajectory: links.rotaTrajectory,
@@ -593,7 +592,6 @@ export default function App() {
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
     setInsightTab: links.setInsightTab,
-    setGoalTarget: links.setGoalTarget,
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
     setRotaTrajectory: links.setRotaTrajectory,
@@ -917,17 +915,6 @@ export default function App() {
               }}
             />
           )}
-          {view === 'goals' && (
-            <GoalsPanel
-              onError={setError}
-              goalId={links.goalTarget}
-              onSelectGoal={links.setGoalTarget}
-              onOpenSession={(sid) => {
-                setView('chat')
-                ctl.selectSession(sid)
-              }}
-            />
-          )}
           {view === 'workspace' && (
             <WorkspaceView
               onError={setError}
@@ -976,33 +963,37 @@ export default function App() {
                 : 'th-drawer-from-right fixed inset-y-0 right-0 z-40 shrink-0 shadow-xl max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]'
             }
           >
-            <SessionDetailPanel
-              sessionId={ctl.activeSessionId}
-              refreshKey={ctl.meterRefresh}
-              onClose={toggleDetail}
-              onError={setError}
-              onGenerateTitle={ctl.regenerateSessionTitle}
-              onRename={ctl.renameSession}
-              onDeleteSession={ctl.deleteSession}
-              onSetPinned={ctl.setSessionPinned}
-              onSelectSession={ctl.selectSession}
-              onRerun={() => chat.rerunLast()}
-              onOpenDebug={() => setDebugOpen(true)}
-            />
+            <Suspense fallback={<LoadingState label="Loading session details…" />}>
+              <SessionDetailPanel
+                sessionId={ctl.activeSessionId}
+                refreshKey={ctl.meterRefresh}
+                onClose={toggleDetail}
+                onError={setError}
+                onGenerateTitle={ctl.regenerateSessionTitle}
+                onRename={ctl.renameSession}
+                onDeleteSession={ctl.deleteSession}
+                onSetPinned={ctl.setSessionPinned}
+                onSelectSession={ctl.selectSession}
+                onRerun={() => chat.rerunLast()}
+                onOpenDebug={() => setDebugOpen(true)}
+              />
+            </Suspense>
           </div>
         </>
       )}
 
       {/* Coordination side sheet, opened from the chat header's "Coord" button. */}
       {view === 'chat' && coordOpen && ctl.activeSessionId && (
-        <CoordinatorPanel
-          sessionId={ctl.activeSessionId}
-          refreshKey={ctl.meterRefresh}
-          onClose={() => setCoordOpen(false)}
-          onError={setError}
-          onSelectSession={ctl.selectSession}
-          onOpenSkill={openSkill}
-        />
+        <Suspense fallback={null}>
+          <CoordinatorPanel
+            sessionId={ctl.activeSessionId}
+            refreshKey={ctl.meterRefresh}
+            onClose={() => setCoordOpen(false)}
+            onError={setError}
+            onSelectSession={ctl.selectSession}
+            onOpenSkill={openSkill}
+          />
+        </Suspense>
       )}
 
       {/* Bottom navigation for portrait phones (hidden on md+ where the rail
@@ -1024,33 +1015,39 @@ export default function App() {
       {/* Next-turn context preview: opened from the chat header (works whether or
           not the detail inspector is open). */}
       {ctxPreviewOpen && ctl.activeSessionId && (
-        <SessionContextModal
-          sessionId={ctl.activeSessionId}
-          title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
-          onClose={() => setCtxPreviewOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <SessionContextModal
+            sessionId={ctl.activeSessionId}
+            title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
+            onClose={() => setCtxPreviewOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Debug / observability panel: opened from the "Debug" action at the bottom
           of the session detail inspector ("Oturum bilgisi"). */}
       {debugOpen && ctl.activeSessionId && (
-        <SessionDebugModal
-          sessionId={ctl.activeSessionId}
-          title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
-          agentNames={Object.fromEntries(ctl.agents.map((a) => [a.id, a.name]))}
-          onClose={() => setDebugOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <SessionDebugModal
+            sessionId={ctl.activeSessionId}
+            title={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title}
+            agentNames={Object.fromEntries(ctl.agents.map((a) => [a.id, a.name]))}
+            onClose={() => setDebugOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Artifact quick-preview overlay: opened by clicking an artifact card/chip
           in chat or the activity feed. Independent of the current view. */}
       {links.previewArtifactId && (
-        <ArtifactPreviewModal
-          artifactId={links.previewArtifactId}
-          onClose={() => links.setPreviewArtifactId(null)}
-          onOpenFull={links.openArtifactFull}
-          onError={setError}
-        />
+        <Suspense fallback={null}>
+          <ArtifactPreviewModal
+            artifactId={links.previewArtifactId}
+            onClose={() => links.setPreviewArtifactId(null)}
+            onOpenFull={links.openArtifactFull}
+            onError={setError}
+          />
+        </Suspense>
       )}
 
       {/* App-wide transient-message surface (error / success / info). Every

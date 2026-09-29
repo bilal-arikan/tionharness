@@ -192,7 +192,7 @@ liste paneline uygulandı; İçgörü'nün özel `aside`'ı da standarda taşın
   genişlikte; `SidebarHeader onCollapse` / `CollapseListButton` panel içinde.
 - **Uygulanan paneller:** Sohbet oturumları (`app/App.tsx` → `CollapsibleListShell`,
   `tionharness.sessionsListOpen`), Ajanlar, Artifactlar, Skills, Araçlar,
-  Market, Akışlar, Hedefler, Ayarlar ve Workspace kategori rayları, **İçgörü**
+  Market, Akışlar, Ayarlar ve Workspace kategori rayları, **İçgörü**
   (`ListPane` + `SidebarHeader` + sağ kolonda `PaneHeader`).
 - **Sohbet özel durumu:** oturum seçimi / yeni sohbet / görünüm değişimi yalnız
   dar ekranda drawer'ı kapatır; masaüstü dock durumu korunur.

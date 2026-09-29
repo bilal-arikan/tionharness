@@ -118,9 +118,9 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewDeleteArtifactTool(r.db, agent.ID),
 		tools.NewListArtifactsTool(r.db, agent.ID),
 		tools.NewReadArtifactTool(r.db, agent.ID),
-		// Shared archive (agents, skills, artifacts, automations, goals): one
+		// Shared archive (agents, skills, artifacts, automations): one
 		// tool over the same store calls as POST /api/<entity>/{id}/archive.
-		tools.NewSetArchivedTool(r.db, agent.ID, r.skillArchiver()),
+		tools.NewSetArchivedTool(r.db, r.skillArchiver()),
 		tools.NewReadLogsTool(r.logs),
 		// The native processes started for the agents (internal/procwatch): what is
 		// still running, what failed, and under which session — read-only.

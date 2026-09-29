@@ -22,10 +22,6 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [insightTab, setInsightTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'insights' ? INITIAL_ROUTE.id : null,
   )
-  // Selected goal on the Hedefler screen (deep-link aware): #/w/{ws}/goals/{GOL}.
-  const [goalTarget, setGoalTarget] = useState<string | null>(
-    INITIAL_ROUTE.view === 'goals' ? INITIAL_ROUTE.id : null,
-  )
   // Explorer focus node (selection remains local): #/w/{ws}/explorer/{refString}.
   const [explorerNode, setExplorerNode] = useState<string | null>(
     INITIAL_ROUTE.view === 'explorer' ? INITIAL_ROUTE.id : null,
@@ -106,8 +102,6 @@ export function useDeepLinks(setView: (v: View) => void) {
     setWorkspaceTab,
     insightTab,
     setInsightTab,
-    goalTarget,
-    setGoalTarget,
     explorerNode,
     setExplorerNode,
     flowsTab,

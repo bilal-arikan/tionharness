@@ -38,10 +38,6 @@ func TestEntityArchiveRoutesRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goal, err := wsp.DB.CreateGoal(ctx, db.Goal{Name: "goal", Status: db.GoalStatusActive}, db.GoalByUser, "")
-	if err != nil {
-		t.Fatal(err)
-	}
 	if _, err := wsp.Runtime.Skills().Create("arch-skill", skills.SkillInput{Name: "Arch", Description: "d", Shared: true, Body: "body"}); err != nil {
 		t.Fatal(err)
 	}
@@ -54,11 +50,6 @@ func TestEntityArchiveRoutesRoundTrip(t *testing.T) {
 			archived: func(t *testing.T) bool { a, _ := wsp.DB.GetArtifact(ctx, art.ID); return a.Archived }},
 		{name: "automation", base: "/api/automations/" + auto.ID, list: "/api/automations", id: auto.ID, idOf: byID,
 			archived: func(t *testing.T) bool { a, _ := wsp.DB.GetAutomation(ctx, auto.ID); return a.Archived }},
-		{name: "goal", base: "/api/goals/" + goal.ID, list: "/api/goals", id: goal.ID, idOf: byID, defaultOn: false,
-			archived: func(t *testing.T) bool {
-				g, _ := wsp.DB.GetGoal(ctx, goal.ID)
-				return g.Status == db.GoalStatusArchived
-			}},
 		{name: "skill", base: "/api/skills/arch-skill", list: "/api/skills", id: "arch-skill",
 			idOf:      func(item map[string]any) string { s, _ := item["slug"].(string); return s },
 			defaultOn: false,
@@ -140,7 +131,6 @@ func TestEntityArchiveRoutesRejectMissingAndBadFilter(t *testing.T) {
 		"/api/agents/AGT404/archive",
 		"/api/artifacts/ART404/archive",
 		"/api/automations/AUT404/archive",
-		"/api/goals/GOL404/archive",
 		"/api/skills/no-such-skill/archive",
 	} {
 		rec := doJSON(t, h, http.MethodPost, path, nil, nil)
@@ -151,22 +141,6 @@ func TestEntityArchiveRoutesRejectMissingAndBadFilter(t *testing.T) {
 	rec := doJSON(t, h, http.MethodGet, "/api/agents?archived=maybe", nil, nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad archived filter: status %d, want 400", rec.Code)
-	}
-}
-
-func TestGoalUnarchiveReturnsToDraft(t *testing.T) {
-	s, wsp := newWorkspaceServer(t)
-	ctx := context.Background()
-	goal, err := wsp.DB.CreateGoal(ctx, db.Goal{Name: "goal", Status: db.GoalStatusActive}, db.GoalByUser, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := s.Routes()
-	doJSON(t, h, http.MethodPost, "/api/goals/"+goal.ID+"/archive", nil, nil)
-	doJSON(t, h, http.MethodPost, "/api/goals/"+goal.ID+"/unarchive", nil, nil)
-	g, _ := wsp.DB.GetGoal(ctx, goal.ID)
-	if g.Status != db.GoalStatusDraft {
-		t.Fatalf("status after unarchive = %q, want draft (never straight back to active)", g.Status)
 	}
 }
 

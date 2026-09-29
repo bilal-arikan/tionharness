@@ -15,13 +15,13 @@ import (
 func TestRecordSystemAgentSession(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
-	editor, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Goal Writer", System: true, SystemKey: "goal-writer", Soul: "write"})
+	editor, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Insight Analyst", System: true, SystemKey: "insight", Soul: "analyze"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	caller := db.Agent{ID: "AGT-caller", Provider: "claude-cli"}
 	long := strings.Repeat("x", 200)
-	id := rt.recordSystemAgentSession(ctx, "goal-writer", caller, "Hedef: "+long, "PROMPT", "REPLY")
+	id := rt.recordSystemAgentSession(ctx, "insight", caller, "Insight: "+long, "PROMPT", "REPLY")
 	if id == "" {
 		t.Fatal("expected a session id")
 	}
@@ -32,10 +32,10 @@ func TestRecordSystemAgentSession(t *testing.T) {
 	if sess.AgentID != editor.ID || sess.Kind != "chat" || !db.IsWritableSessionKind(sess.Kind) {
 		t.Fatalf("session must be a writable chat owned by the role agent: %+v", sess)
 	}
-	if len(sess.Tags) != 1 || sess.Tags[0] != "system:goal-writer" {
+	if len(sess.Tags) != 1 || sess.Tags[0] != "system:insight" {
 		t.Fatalf("tags: %v", sess.Tags)
 	}
-	if len([]rune(sess.Title)) > systemSessionTitleMax+1 || !strings.HasPrefix(sess.Title, "Hedef: ") {
+	if len([]rune(sess.Title)) > systemSessionTitleMax+1 || !strings.HasPrefix(sess.Title, "Insight: ") {
 		t.Fatalf("title: %q", sess.Title)
 	}
 	msgs, err := rt.db.ListMessages(ctx, id)

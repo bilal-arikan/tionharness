@@ -164,11 +164,11 @@ func TestResolveAnalysisSystemAgentHonoursPinnedProvider(t *testing.T) {
 
 	// Without the override the historical routing applies (CLI caller → anthropic).
 	if _, err := rt.db.CreateAgent(ctx, db.Agent{
-		Name: "Goal Writer", System: true, SystemKey: "goal-writer", Soul: "write", Provider: "claude-cli", Model: "sonnet",
+		Name: "Recipe Optimizer", System: true, SystemKey: "recipe-optimizer", Soul: "optimize", Provider: "claude-cli", Model: "sonnet",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, _, err = rt.resolveAnalysisSystemAgent("goal-writer", caller)
+	got, _, err = rt.resolveAnalysisSystemAgent("recipe-optimizer", caller)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestAuxRouteFallbackRebuildsCaller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	routed := rt.routeAuxAgent(db.Agent{ID: caller.ID, Provider: caller.Provider, ProviderInstanceID: caller.ProviderInstanceID, Model: caller.Model, System: true, SystemKey: "goal-writer"}, db.Agent{Model: "sonnet"})
+	routed := rt.routeAuxAgent(db.Agent{ID: caller.ID, Provider: caller.Provider, ProviderInstanceID: caller.ProviderInstanceID, Model: caller.Model, System: true, SystemKey: "recipe-optimizer"}, db.Agent{Model: "sonnet"})
 	if routed.Provider != "anthropic" {
 		t.Fatalf("precondition: expected routing, got %+v", routed)
 	}
@@ -228,7 +228,7 @@ func TestAuxRouteFallbackRebuildsCaller(t *testing.T) {
 	if !ok || fb.Provider != "codex-cli" || fb.ProviderInstanceID != "codex-cli" || fb.Model != "gpt-5.6-sol" {
 		t.Fatalf("fallback = %+v ok=%v", fb, ok)
 	}
-	if fb.ID != caller.ID || !fb.System || fb.SystemKey != "goal-writer" {
+	if fb.ID != caller.ID || !fb.System || fb.SystemKey != "recipe-optimizer" {
 		t.Fatalf("identity must survive: %+v", fb)
 	}
 	// A non-auth error, a non-aux call or a caller that is itself native: no retry.
@@ -241,7 +241,7 @@ func TestAuxRouteFallbackRebuildsCaller(t *testing.T) {
 		t.Fatal("a non-aux call must not be re-pointed")
 	}
 	native, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "API", Provider: "anthropic", ProviderInstanceID: "anthropic-main", Model: "claude-sonnet-5"})
-	if _, ok := rt.auxRouteFallback(ctx, db.Agent{ID: native.ID, Provider: "anthropic", ProviderInstanceID: "anthropic-main", SystemKey: "goal-writer"}, authErr); ok {
+	if _, ok := rt.auxRouteFallback(ctx, db.Agent{ID: native.ID, Provider: "anthropic", ProviderInstanceID: "anthropic-main", SystemKey: "recipe-optimizer"}, authErr); ok {
 		t.Fatal("a native caller has no fallback")
 	}
 }

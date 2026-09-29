@@ -147,7 +147,6 @@ func (d *DB) writeSessionFileLocked(s Session) error {
 
 // CreateSession inserts a new session.
 func (d *DB) CreateSession(ctx context.Context, s Session) (Session, error) {
-	s = d.stampSnapshot(s)
 	d.mu.Lock()
 	created, err := d.createSessionLocked(s)
 	d.mu.Unlock()
@@ -179,7 +178,6 @@ func (d *DB) CreateChildSession(ctx context.Context, s Session) (Session, error)
 }
 
 func (d *DB) createChildSession(s Session) (Session, error) {
-	s = d.stampSnapshot(s)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if strings.TrimSpace(s.ParentSessionID) == "" {
@@ -319,7 +317,7 @@ func normalizeSessionMeta(s Session) Session {
 }
 
 func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error) {
-	fresh := d.stampSnapshot(Session{AgentID: agentID, Kind: kind, Title: title})
+	fresh := Session{AgentID: agentID, Kind: kind, Title: title}
 	d.mu.Lock()
 	for _, s := range d.sessions {
 		if s.AgentID == agentID && s.Kind == kind {
@@ -340,7 +338,7 @@ func (d *DB) getOrCreateKindSession(agentID, kind, title string) (Session, error
 // "task" session per task or one "flow" session per flow. Each run appends a
 // turn, so the entity's whole execution history reads as a single transcript.
 func (d *DB) GetOrCreateSourceSession(ctx context.Context, kind, sourceID, agentID, title string) (Session, error) {
-	fresh := d.stampSnapshot(Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title})
+	fresh := Session{AgentID: agentID, Kind: kind, SourceID: sourceID, Title: title}
 	d.mu.Lock()
 	for _, s := range d.sessions {
 		if s.Kind == kind && s.SourceID == sourceID {

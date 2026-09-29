@@ -28,7 +28,6 @@ const VIEWS: View[] = [
   'budget',
   'prompts',
   'insights',
-  'goals',
   'workspace',
   'settings',
 ]
@@ -147,7 +146,6 @@ export function routeIdForView(
     settingsCat: string | null
     workspaceTab: string | null
     insightTab: string | null
-    goalId?: string | null
     flowsTab: string | null
     explorerNode: string | null
     rotaTrajectory?: string | null
@@ -176,9 +174,6 @@ export function routeIdForView(
       return state.workspaceTab
     case 'insights':
       return state.insightTab
-    case 'goals':
-      // The selected goal (#/w/{ws}/goals/GOL3); the list root carries no segment.
-      return state.goalId ?? null
     case 'explorer':
       // The focused map node's ref string (e.g. "category:sessions"). The root
       // carries no segment so a plain #/…/explorer stays clean.

@@ -47,6 +47,8 @@ func RunUpdate(ctx context.Context, t Tool) (string, error) {
 		Kind: procwatch.KindExternal, Label: t.Name + " update",
 		Command: t.Update.Command + " " + strings.Join(t.Update.Args, " "),
 	})
+	// A failed installer can also have changed files before returning an error.
+	defer InvalidateVersionCache()
 	out, err := cmd.CombinedOutput()
 	h.Started(cmd)
 	h.AppendOutput(string(out))

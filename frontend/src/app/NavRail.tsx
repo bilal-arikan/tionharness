@@ -24,7 +24,6 @@ export type View =
   | 'budget'
   | 'prompts'
   | 'insights'
-  | 'goals'
   | 'workspace'
   | 'settings'
 

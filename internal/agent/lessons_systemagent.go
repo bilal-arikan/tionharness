@@ -38,10 +38,8 @@ func pinsProvider(a db.Agent) bool {
 // analysisPromptKeys maps an analysis system agent to the prompt-registry key
 // its embedded fallback reads when the agent cannot be resolved.
 var analysisPromptKeys = map[string]string{
-	"lesson-extractor":  "lesson",
-	"insight":           "insight-analyzer",
-	"recipe-optimizer":  "recipe-optimizer",
-	"stall-judge":       "stall-judge",
-	"goal-writer":       "goal-writer",
-	"workspace-evolver": "workspace-evolver",
+	"lesson-extractor": "lesson",
+	"insight":          "insight-analyzer",
+	"recipe-optimizer": "recipe-optimizer",
+	"stall-judge":      "stall-judge",
 }

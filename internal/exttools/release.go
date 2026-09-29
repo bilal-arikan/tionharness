@@ -40,8 +40,9 @@ func (r Release) Fresh(now time.Time) bool { return now.Sub(r.FetchedAt) < relea
 // the internet, not of a workspace.
 var releaseCache = struct {
 	sync.Mutex
-	loaded  bool
-	entries map[string]Release // keyed by "owner/repo"
+	loaded     bool
+	generation uint64
+	entries    map[string]Release // keyed by "owner/repo"
 }{entries: map[string]Release{}}
 
 // cachePath is the on-disk cache location, under the same data dir as the logs.
@@ -122,6 +123,32 @@ func latestRelease(ctx context.Context, repo string, allowPre bool) (rel Release
 	if allowPre {
 		key = repo + "#pre"
 	}
+	releaseCache.Lock()
+	loadCacheLocked()
+	gen := releaseCache.generation
+	cached, hit := releaseCache.entries[key]
+	releaseCache.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Release{}, false, err
+	}
+	if hit && cached.Fresh(time.Now()) {
+		return cached, false, nil
+	}
+	result, err := releaseRequests.do(ctx, fmt.Sprintf("%d:%s", gen, key), 2*releaseHTTPTimeout, func(work context.Context) (releaseResult, error) {
+		value, stale, err := loadRelease(work, repo, key, allowPre, gen)
+		return releaseResult{release: value, stale: stale}, err
+	})
+	return result.release, result.stale, err
+}
+
+type releaseResult struct {
+	release Release
+	stale   bool
+}
+
+var releaseRequests sharedRequests[releaseResult]
+
+func loadRelease(ctx context.Context, repo, key string, allowPre bool, gen uint64) (rel Release, stale bool, err error) {
 
 	releaseCache.Lock()
 	loadCacheLocked()
@@ -148,11 +175,13 @@ func latestRelease(ctx context.Context, repo string, allowPre bool) (rel Release
 	}
 
 	releaseCache.Lock()
-	releaseCache.entries[key] = fetched
-	// The fetched value is correct regardless of whether it persists; a failed
-	// write only costs a refetch next process. Recorded (under the same lock) so
-	// a broken data dir shows up in the API layer's log instead of vanishing.
-	cacheWriteErr = saveCacheLocked()
+	if releaseCache.generation == gen {
+		releaseCache.entries[key] = fetched
+		// The fetched value is correct regardless of whether it persists; a failed
+		// write only costs a refetch next process. Recorded (under the same lock) so
+		// a broken data dir shows up in the API layer's log instead of vanishing.
+		cacheWriteErr = saveCacheLocked()
+	}
 	releaseCache.Unlock()
 	return fetched, false, nil
 }
@@ -171,9 +200,11 @@ func CacheWriteErr() error {
 // InvalidateCache drops every cached release so the next check refetches. Backs
 // an explicit "force refresh" from the UI.
 func InvalidateCache() {
+	InvalidateVersionCache()
 	releaseCache.Lock()
 	defer releaseCache.Unlock()
 	loadCacheLocked()
+	releaseCache.generation++
 	releaseCache.entries = map[string]Release{}
 	_ = saveCacheLocked()
 }

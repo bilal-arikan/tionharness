@@ -11,7 +11,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// Archive endpoints shared by skills, artifacts, automations, goals and agents.
+// Archive endpoints shared by skills, artifacts, automations and agents.
 // They mirror the kanban card's pair (POST /api/tasks/{id}/archive and
 // /unarchive): archiving is a reversible hide — the entity keeps its
 // configuration and history, leaves the default lists and the Map, and can be

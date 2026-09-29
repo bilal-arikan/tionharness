@@ -2,27 +2,7 @@
 // internal/insight.
 import type { SeedDefaultState } from './seed'
 
-type InsightChannel = 'app-fix' | 'workspace-opt' | 'recipe-opt' | 'evolution'
-
-/** Workspace-evolver proposal (_Docs/83 E2, insight.EvolutionProposal): one
- * measured change to one field of one entity toward a goal. Suggestion-only. */
-interface EvolutionProposal {
-  goalId: string
-  surface: string
-  entityId: string
-  field: string
-  action: string
-  value?: string
-  removes?: string
-  expectedMetric?: string
-  expectedDelta?: number
-  sideEffects?: string[]
-  evidence: string
-  snapshotHash?: string
-  lowConfidence?: boolean
-  /** change | conflict | escalation */
-  kind?: string
-}
+type InsightChannel = 'app-fix' | 'workspace-opt' | 'recipe-opt'
 
 // Recipe optimizer proposal (Rota F4, insight.RecipeProposal): one measured,
 // conditional change to one coordinator recipe. Suggestion-only in v1.
@@ -95,8 +75,6 @@ export interface InsightFinding {
   regressedAt?: number
   /** Structured recipe change behind a recipe-opt finding (Rota F4). */
   proposal?: RecipeProposal
-  /** Structured change behind an evolution finding (_Docs/83 E2). */
-  evolution?: EvolutionProposal
 }
 
 export interface InsightSettings {

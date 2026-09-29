@@ -1,10 +1,6 @@
 package api
 
-import (
-	"net/http"
-
-	"github.com/bilal-arikan/tionharness/internal/db"
-)
+import "net/http"
 
 // executionRuntimeItem is the live subset of an executionItem: what the chat
 // sidebar needs to draw a running dot, a last-run chip and the coordinator
@@ -27,43 +23,32 @@ type executionRuntimeItem struct {
 func (s *Server) handleListExecutionRuntime(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 	ctx := r.Context()
-	sessions, err := wsp.DB.ListSessions(ctx, "")
-	if writeDBError(w, err, "") {
-		return
-	}
 	running := s.liveSessions(wsp).RunningSet()
-
-	// Flow status index: one store scan, only when a flow session exists.
-	var flowStatus, runStatus map[string]string
-	for _, sess := range sessions {
-		if sess.Kind != "flow" {
-			continue
-		}
-		runs, err := wsp.DB.ListFlowRuns(ctx, "")
-		if writeDBError(w, err, "") {
-			return
-		}
-		flowStatus = newestFlowRunStatus(runs)
-		runStatus = flowRunStatusByID(runs)
-		break
-	}
-
-	out := make([]executionRuntimeItem, 0, len(running)*2)
-	for _, sess := range sessions {
+	rows := wsp.DB.RuntimeSessions()
+	out := make([]executionRuntimeItem, 0, len(rows)+len(running))
+	seen := make(map[string]bool, len(rows))
+	for _, row := range rows {
 		item := executionRuntimeItem{
-			SessionID:                sess.ID,
-			Running:                  running[sess.ID],
-			LastStatus:               s.lastStatusFor(ctx, wsp, sess, flowStatus, runStatus),
-			CoordinatorSessionID:     sess.CoordinatorSessionID,
-			RootCoordinatorSessionID: sess.RootCoordinator(),
-		}
-		if !item.Running && item.LastStatus == "" && item.CoordinatorSessionID == "" {
-			continue
+			SessionID:                row.SessionID,
+			Running:                  running[row.SessionID],
+			LastStatus:               row.LastStatus,
+			CoordinatorSessionID:     row.CoordinatorSessionID,
+			RootCoordinatorSessionID: row.RootCoordinatorSessionID,
 		}
 		out = append(out, item)
+		seen[row.SessionID] = true
+	}
+	// Idle chat sessions need no cached row. Add only the ones currently active,
+	// including runs that started without mutating the persistent store.
+	for id := range running {
+		if seen[id] {
+			continue
+		}
+		sess, err := wsp.DB.GetSession(ctx, id)
+		if err != nil {
+			continue
+		}
+		out = append(out, executionRuntimeItem{SessionID: id, Running: true, CoordinatorSessionID: sess.CoordinatorSessionID, RootCoordinatorSessionID: sess.RootCoordinator()})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
-
-// executionRuntimeRows is the test seam for the row shape above.
-var _ = db.Session{}

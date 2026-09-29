@@ -7,9 +7,9 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// One-shot system-agent calls that the USER triggers from a screen (goal
-// writer, workspace evolver, recipe optimizer) used to leave no trace: the
-// prompt went out, the JSON came back, the code applied it. The exchange is now
+// One-shot system-agent calls that the user triggers from a screen used to
+// leave no trace: the prompt went out, the JSON came back, and code applied it.
+// The exchange is now
 // recorded as an ordinary chat session bound to the system agent, so the user
 // can open it from the screen, read exactly what the agent saw and answered,
 // and CONTINUE the conversation there (the session is a plain writable chat and
@@ -18,7 +18,7 @@ import (
 // High-frequency background roles (titler, compaction, stall judge, lesson
 // extractor) are deliberately NOT recorded: they would flood the session list.
 
-// SystemSessionTagPrefix tags a recorded exchange with its role ("system:goal-writer").
+// SystemSessionTagPrefix tags a recorded exchange with its role (for example, "system:insight").
 const SystemSessionTagPrefix = "system:"
 
 // systemSessionTitleMax bounds the auto-title taken from the user's request.

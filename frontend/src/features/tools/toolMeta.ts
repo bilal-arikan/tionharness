@@ -160,6 +160,20 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other: 'Diğer',
 }
 
+// Compact labels for the narrow group picker on the tools screen.
+export const CATEGORY_SHORT_LABELS: Record<string, string> = {
+  files: 'Dosya',
+  search: 'Arama',
+  agents: 'Ajanlar',
+  automation: 'Otomasyon',
+  interaction: 'Etkileşim',
+  artifacts: 'Çıktılar',
+  'skills-mcp': 'Skill/MCP',
+  config: 'Ayarlar',
+  diagnostics: 'Tanılama',
+  other: 'Diğer',
+}
+
 // CATEGORY_ORDER fixes the display order of built-in category groups (most-used
 // first). Categories outside this list sort to the end, alphabetically by label.
 export const CATEGORY_ORDER: string[] = [

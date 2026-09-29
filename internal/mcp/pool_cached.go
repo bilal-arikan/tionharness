@@ -5,7 +5,9 @@ package mcp
 // silently skips the rest. It never starts a process, never waits on an
 // initialize handshake and never calls tools/list, so a read-only surface
 // (the session info panel, a context preview) can build a registry without
-// paying a cold server's DefaultDialTimeout per server. cfgByServer carries
+// paying a cold server's DefaultDialTimeout per server. A busy connection is
+// skipped rather than waiting for its in-flight dial or tool-list refresh.
+// cfgByServer carries
 // every config handed in, connected or not, so a caller that only needs the
 // routing map keeps the same shape Catalog produces; skipped names the servers
 // that had no live connection.
@@ -15,7 +17,10 @@ func (p *Pool) CatalogCached(cfgs []ServerConfig) (entries []CatalogEntry, cfgBy
 		name, _, _ := SplitNamespaced(NamespaceTool(cfg.Name, "x"))
 		cfgByServer[name] = cfg
 		e := p.entry(scopedEntryKey(cfg.ScopeKey, name))
-		e.mu.Lock()
+		if !e.mu.TryLock() {
+			skipped = append(skipped, cfg.Name)
+			continue
+		}
 		live := e.client != nil && e.fp == configFingerprint(cfg) && e.client.Alive() && e.listed
 		var list []Tool
 		if live {

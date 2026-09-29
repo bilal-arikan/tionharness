@@ -590,59 +590,72 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// line is not enough: hand the failures to the turn's collector (when one is
 		// wired) so the tool loop can card them once. See mcpnotice.go.
 		failures := repair.FailuresFrom(ctx)
-		// Circuit breaker (mcpescalate.go): a server that failed the last
-		// mcpFailStreakThreshold builds in a row is not dialed again until its
-		// cooldown passes. It is carded as skipped, exactly like a failed one, and
-		// probed once per cooldown. Without this a hung server stalled EVERY
-		// registry build — every turn, the tools panel, the context preview — for
-		// as long as the caller's context lived (2026-09-02, codebase-memory-mcp).
-		live := make([]mcp.ServerConfig, 0, len(cfgs))
-		for _, cfg := range cfgs {
-			if isOpen, retryIn, streak := r.mcpFailStreaks.Open(cfg.Name); isOpen {
-				retry := retryIn.Round(time.Second)
-				failures.Record(cfg.Name, fmt.Sprintf("skipped after %d consecutive failures; next probe in %s", streak, retry))
-				r.logger.Debug("mcp catalog: breaker open, server skipped", "server", cfg.Name, "consecutive", streak, "retry_in", retry)
-				continue
+		entries, cfgByServer := func() ([]mcp.CatalogEntry, map[string]mcp.ServerConfig) {
+			// No-dial previews remain nonblocking while a live catalog connects.
+			if !CatalogNoDialFrom(ctx) {
+				release, err := r.mcpCatalogGate.acquire(ctx)
+				if err != nil {
+					for _, cfg := range cfgs {
+						failures.Record(cfg.Name, err.Error())
+					}
+					return nil, nil
+				}
+				defer release()
 			}
-			live = append(live, cfg)
-		}
-		// A read-only build (WithCatalogNoDial: the info panel, a context preview)
-		// takes only the connections that are already alive and never dials: a
-		// cold or unreachable server contributes nothing instead of stalling the
-		// caller for a DefaultDialTimeout each. It also leaves the breaker
-		// bookkeeping alone — nothing was dialed, so nothing failed or recovered.
-		var (
-			entries     []mcp.CatalogEntry
-			cfgByServer map[string]mcp.ServerConfig
-			errs        map[string]string
-		)
-		noDial := CatalogNoDialFrom(ctx)
-		if noDial {
-			entries, cfgByServer, _ = r.mcpPool.CatalogCached(live)
-		} else {
-			entries, cfgByServer, errs = r.mcpPool.Catalog(ctx, live)
-		}
-		for name, e := range errs {
-			// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
-			// same WARN forever made a workspace where no turn could start look normal.
-			streak := r.mcpFailStreaks.Note(name)
-			switch {
-			case streak == repair.FailStreakThreshold:
-				r.logger.Error("mcp catalog build failing repeatedly; this server's tools are unavailable",
-					"server", name, "consecutive", streak, "error", e)
-			default:
-				r.logger.Warn("mcp catalog build failed", "server", name, "consecutive", streak, "error", e)
+			// A server is not dialed again after its first failure until its
+			// cooldown passes. It is carded as skipped, exactly like a failed one, and
+			// probed once per cooldown. Without this a hung server stalled EVERY
+			// registry build — every turn, the tools panel, the context preview — for
+			// as long as the caller's context lived (2026-09-02, codebase-memory-mcp).
+			live := make([]mcp.ServerConfig, 0, len(cfgs))
+			for _, cfg := range cfgs {
+				if isOpen, retryIn, streak := r.mcpFailStreaks.Open(cfg.Name); isOpen {
+					retry := retryIn.Round(time.Second)
+					failures.Record(cfg.Name, fmt.Sprintf("skipped after %d consecutive failures; next probe in %s", streak, retry))
+					r.logger.Debug("mcp catalog: breaker open, server skipped", "server", cfg.Name, "consecutive", streak, "retry_in", retry)
+					continue
+				}
+				live = append(live, cfg)
 			}
-			failures.Record(name, e)
-		}
-		// Reset the streak for every server that catalogued fine this turn, so the
-		// threshold measures the current outage rather than a lifetime total. Only
-		// the servers actually dialed count: a skipped one must keep its streak.
-		for _, cfg := range live {
-			if _, bad := errs[cfg.Name]; !bad && !noDial {
-				r.mcpFailStreaks.Clear(cfg.Name)
+			// A read-only build (WithCatalogNoDial: the info panel, a context preview)
+			// takes only the connections that are already alive and never dials: a
+			// cold or unreachable server contributes nothing instead of stalling the
+			// caller for a DefaultDialTimeout each. It also leaves the breaker
+			// bookkeeping alone — nothing was dialed, so nothing failed or recovered.
+			var (
+				entries     []mcp.CatalogEntry
+				cfgByServer map[string]mcp.ServerConfig
+				errs        map[string]string
+			)
+			noDial := CatalogNoDialFrom(ctx)
+			if noDial {
+				entries, cfgByServer, _ = r.mcpPool.CatalogCached(live)
+			} else {
+				entries, cfgByServer, errs = r.mcpPool.Catalog(ctx, live)
 			}
-		}
+			for name, e := range errs {
+				// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
+				// same WARN forever made a workspace where no turn could start look normal.
+				streak := r.mcpFailStreaks.Note(name)
+				switch {
+				case streak == repair.FailStreakThreshold:
+					r.logger.Error("mcp catalog build failing repeatedly; this server's tools are unavailable",
+						"server", name, "consecutive", streak, "error", e)
+				default:
+					r.logger.Warn("mcp catalog build failed", "server", name, "consecutive", streak, "error", e)
+				}
+				failures.Record(name, e)
+			}
+			// Reset the streak for every server that catalogued fine this turn, so the
+			// threshold measures the current outage rather than a lifetime total. Only
+			// the servers actually dialed count: a skipped one must keep its streak.
+			for _, cfg := range live {
+				if _, bad := errs[cfg.Name]; !bad && !noDial {
+					r.mcpFailStreaks.Clear(cfg.Name)
+				}
+			}
+			return entries, cfgByServer
+		}()
 		caller := func(cctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error) {
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}

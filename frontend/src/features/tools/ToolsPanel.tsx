@@ -167,6 +167,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   data-status={st}
                   data-on={on}
                   onClick={() => setStatusFilter((prev) => (prev === st ? 'all' : st))}
+                  title={st === 'enabled' ? 'Aktif araçları göster' : 'Devre dışı araçları göster'}
                   className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
                     on
                       ? st === 'enabled'
@@ -175,7 +176,7 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                   }`}
                 >
-                  {st === 'enabled' ? 'Aktif' : 'Devre dışı'}
+                  {st === 'enabled' ? 'Aktif' : 'Pasif'}
                 </button>
               )
             })}
@@ -228,14 +229,15 @@ export function ToolsPanel({ onError, group, onGroupChange }: Props) {
                   data-group={g.key}
                   onClick={() => setActiveGroup(on ? null : g.key)}
                   aria-pressed={on}
-                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+                  title={g.key.startsWith('mcp:') ? g.label : undefined}
+                  className={`flex max-w-28 min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
                     on
                       ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                       : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                   }`}
                 >
-                  <span className="truncate">{g.label}</span>
-                  <span className="tabular-nums opacity-70">{g.tools.length}</span>
+                  <span className="min-w-0 truncate">{g.label}</span>
+                  <span className="shrink-0 tabular-nums opacity-70">{g.tools.length}</span>
                 </button>
               )
             })}

@@ -12,10 +12,11 @@
 // The interval is a BACKSTOP for a missed/reconnected SSE event, not the primary
 // path — hence coarse. It runs through useAsync so it also inherits the
 // visibility gate (a hidden window polls nothing).
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { api } from '@/api'
 import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { useSignalRefresh } from '@/shared/hooks/useSignalRefresh'
 import { SIGNAL_ACTIVITY } from './eventToRefreshSignals'
 import type { View } from './NavRail'
 
@@ -31,9 +32,7 @@ export function useActivity(activeWorkspaceId: string | null, chatStreaming: boo
   // App.tsx bumps this signal on every run-lifecycle event in the active
   // workspace — the path that actually makes the dots feel live.
   const activityTick = useRefreshTrigger(SIGNAL_ACTIVITY)
-  useEffect(() => {
-    refresh()
-  }, [activityTick, refresh])
+  useSignalRefresh(activeWorkspaceId, activityTick, refresh)
 
   return useMemo(() => {
     const s = new Set<View>()

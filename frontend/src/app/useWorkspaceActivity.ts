@@ -15,10 +15,11 @@
 //                           including non-active ones, so a run starting/finishing
 //                           in a background workspace lights its switcher pulse
 //                           instantly instead of on the next poll.
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { api } from '@/api'
 import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { useSignalRefresh } from '@/shared/hooks/useSignalRefresh'
 import { SIGNAL_EXECUTIONS, SIGNAL_WORKSPACE_ACTIVITY } from './eventToRefreshSignals'
 
 // Backstop only: the two SSE signals below are what make the pulse feel live, so
@@ -41,9 +42,7 @@ export function useWorkspaceActivity(activeWorkspaceId: string | null): Set<stri
   // plus any workspace's start/stop (workspace-activity, covers non-active ones).
   const tickExec = useRefreshTrigger(SIGNAL_EXECUTIONS)
   const tickWs = useRefreshTrigger(SIGNAL_WORKSPACE_ACTIVITY)
-  useEffect(() => {
-    refresh()
-  }, [tickExec, tickWs, refresh])
+  useSignalRefresh(activeWorkspaceId, `${tickExec}:${tickWs}`, refresh)
 
   return useMemo(() => {
     const s = new Set<string>()

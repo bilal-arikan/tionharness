@@ -165,17 +165,24 @@ func (d *DB) createAgent(ctx context.Context, a Agent) (Agent, error) {
 // live cron registry (the API server) must reload the scheduler afterwards so
 // the in-memory jobs drop too.
 func (d *DB) DeleteAgent(ctx context.Context, id string) error {
+	return d.deleteAgent(ctx, id, false)
+}
+
+func (d *DB) deleteAgent(ctx context.Context, id string, allowLocked bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	a, ok := d.agents[id]
 	if !ok {
 		return ErrNotFound
 	}
+	if a.Deleted {
+		return nil
+	}
 	// A built-in (locked) row is owned by the compiled registry and re-seeded on
 	// boot, so deleting it would only ever be undone. A workspace customisation
 	// of a system role (System && !Locked) IS deletable: the role falls back to
 	// the built-in, and the soft-deleted row keeps its sessions renderable.
-	if a.Locked {
+	if a.Locked && !allowLocked {
 		return ErrSystemAgentDelete
 	}
 	a.Deleted = true

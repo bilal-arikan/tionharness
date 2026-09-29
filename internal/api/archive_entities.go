@@ -8,7 +8,7 @@ import (
 
 // registerEntityArchiveRoutes wires the archive/unarchive pair (see
 // registerArchiveRoutes) for every entity that mirrors the kanban card's
-// archive: skills, artifacts, automations, goals and agents.
+// archive: skills, artifacts, automations and agents.
 func (s *Server) registerEntityArchiveRoutes(mux *http.ServeMux) {
 	s.registerArchiveRoutes(mux, archiveRoute{
 		base: "/api/agents/{id}", param: "id", kind: "agent", event: "agent", view: "agents",
@@ -31,10 +31,6 @@ func (s *Server) registerEntityArchiveRoutes(mux *http.ServeMux) {
 		},
 	})
 	s.registerArchiveRoutes(mux, archiveRoute{
-		base: "/api/goals/{id}", param: "id", kind: "goal", view: "goals",
-		set: setGoalArchived,
-	})
-	s.registerArchiveRoutes(mux, archiveRoute{
 		base: "/api/skills/{slug}", param: "slug", kind: "skill", event: "skills", view: "skills",
 		set: func(r *http.Request, slug string, archived bool) error {
 			store := ws(r).Runtime.Skills()
@@ -45,12 +41,4 @@ func (s *Server) registerEntityArchiveRoutes(mux *http.ServeMux) {
 			return err
 		},
 	})
-}
-
-// setGoalArchived maps the archive pair onto a goal's status via
-// db.SetGoalArchived (archive → "archived", unarchive → "draft"), shared with
-// the set_archived agent tool.
-func setGoalArchived(r *http.Request, id string, archived bool) error {
-	_, err := ws(r).DB.SetGoalArchived(r.Context(), id, archived, db.GoalByUser)
-	return err
 }

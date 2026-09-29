@@ -56,8 +56,6 @@ func TestSystemAgentOwnership(t *testing.T) {
 		"insight-applier":    "insight-applier",
 		"recipe-optimizer":   "recipe-optimizer",
 		"stall-judge":        "stall-judge",
-		"goal-writer":        "goal-writer",
-		"workspace-evolver":  "workspace-evolver",
 		"subagent-explore":   "subagent-explore",
 		"subagent-planner":   "subagent-planner",
 		"subagent-coder":     "subagent-coder",

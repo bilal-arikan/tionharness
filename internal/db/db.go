@@ -50,26 +50,24 @@ type DB struct {
 	// it, so a cache entry is exactly as fresh as the store it was built from.
 	mutGen atomic.Uint64
 	// sessionsSorted is the memoised ListSessions("") result (store_sessions_cache.go).
-	sessionsSorted atomic.Pointer[sessionsSnapshot]
-	messages       map[string][]Message // keyed by session id, chronological
-	tasks          map[string]Task
-	schedules      map[string]Schedule
-	mcp            map[string]MCPServer
-	flows          map[string]Flow
-	flowRuns       map[string]FlowRun
-	sessionAsks    map[string]SessionAsk // durable ask suspend/resume (MVP)
+	sessionsSorted    atomic.Pointer[sessionsSnapshot]
+	runtimeSessions   atomic.Pointer[runtimeSessionsSnapshot]
+	runtimeSessionsMu sync.Mutex
+	messages          map[string][]Message // keyed by session id, chronological
+	tasks             map[string]Task
+	schedules         map[string]Schedule
+	mcp               map[string]MCPServer
+	flows             map[string]Flow
+	flowRuns          map[string]FlowRun
+	sessionAsks       map[string]SessionAsk // durable ask suspend/resume (MVP)
 	// agentMessages holds the delivery receipts for agent→agent / coordinator→
 	// worker messages, including the parked bodies of held ones.
 	agentMessages map[string]AgentMessage
 	automations   map[string]Automation
 	artifacts     map[string]Artifact
 	hooks         map[string]Hook
-	goals         map[string]Goal // evolution goals (_Docs/83)
-	// snapshotProv, when set, names the configuration snapshot in force for a
-	// new session (store_snapshot.go); nil until the runtime registers one.
-	snapshotProv atomic.Value
-	usage        map[string]Usage        // keyed by agentID + "|" + day
-	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
+	usage         map[string]Usage        // keyed by agentID + "|" + day
+	sessionUsage  map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
 
@@ -249,7 +247,6 @@ func Open(path string) (*DB, error) {
 		automations:        map[string]Automation{},
 		artifacts:          map[string]Artifact{},
 		hooks:              map[string]Hook{},
-		goals:              map[string]Goal{},
 		usage:              map[string]Usage{},
 		sessionUsage:       map[string]SessionUsage{},
 		debugCount:         map[string]int{},
@@ -321,7 +318,6 @@ const (
 	dirArtifacts          = "artifacts"
 	dirRender             = "render" // per-session render_template output (transient, swept)
 	dirHooks              = "hooks"
-	dirGoals              = "goals"
 	dirUsage              = "usage"
 	dirSessionUsage       = "session-usage"
 	dirTrajectories       = "trajectories" // index.json only; the graphs are session sidecars
@@ -672,15 +668,6 @@ func (d *DB) load() error {
 	}
 	for _, h := range hooks {
 		d.hooks[h.ID] = h
-		d.markMutatedLocked()
-	}
-
-	goals, err := loadJSONDir[Goal](d.dir(dirGoals))
-	if err != nil {
-		return err
-	}
-	for _, g := range goals {
-		d.goals[g.ID] = g
 		d.markMutatedLocked()
 	}
 

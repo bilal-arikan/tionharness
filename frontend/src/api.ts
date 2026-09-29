@@ -28,8 +28,6 @@ import { sttServerApi } from './api/stt'
 import { viewApi } from './api/views'
 import { trajectoryApi } from './api/trajectories'
 import { curatorApi } from './api/curator'
-import { goalApi } from './api/goals'
-import { evolutionApi } from './api/evolution'
 import { dashboardApi } from './api/dashboard'
 import { searchIndexApi } from './api/searchIndexes'
 import { deciderApi } from './api/decider'
@@ -63,8 +61,6 @@ export const api = {
   ...viewApi,
   ...trajectoryApi,
   ...curatorApi,
-  ...goalApi,
-  ...evolutionApi,
   ...dashboardApi,
   ...searchIndexApi,
   ...deciderApi,

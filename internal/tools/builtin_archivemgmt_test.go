@@ -45,7 +45,7 @@ func TestSetArchivedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool := NewSetArchivedTool(d, "actor-1", nil)
+	tool := NewSetArchivedTool(d, nil)
 
 	mustSetArchived(t, tool, "agent", a.ID, true)
 	if got, _ := d.GetAgent(ctx, a.ID); !got.Archived {
@@ -64,7 +64,7 @@ func TestSetArchivedRefusesSystemAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = callSetArchived(t, NewSetArchivedTool(d, "actor-1", nil), "agent", sys.ID, true)
+	_, err = callSetArchived(t, NewSetArchivedTool(d, nil), "agent", sys.ID, true)
 	if err == nil || !strings.Contains(err.Error(), db.ErrSystemAgentArchive.Error()) {
 		t.Fatalf("want system-agent refusal, got %v", err)
 	}
@@ -80,7 +80,7 @@ func TestSetArchivedArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool := NewSetArchivedTool(d, "actor-1", nil)
+	tool := NewSetArchivedTool(d, nil)
 
 	mustSetArchived(t, tool, "artifact", art.ID, true)
 	if got, _ := d.GetArtifact(ctx, art.ID); !got.Archived {
@@ -103,7 +103,7 @@ func TestSetArchivedAutomation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool := NewSetArchivedTool(d, "actor-1", nil)
+	tool := NewSetArchivedTool(d, nil)
 
 	mustSetArchived(t, tool, "automation", auto.ID, true)
 	if got, _ := d.GetAutomation(ctx, auto.ID); !got.Archived {
@@ -115,39 +115,13 @@ func TestSetArchivedAutomation(t *testing.T) {
 	}
 }
 
-// TestSetArchivedGoal verifies the goal mapping shared with REST: archive moves
-// the status to archived, restore returns it to draft (never straight back to
-// active), and the acting agent is recorded in the revision history.
-func TestSetArchivedGoal(t *testing.T) {
-	ctx := context.Background()
-	d := openTestDB(t)
-	g, err := d.CreateGoal(ctx, db.Goal{Name: "goal", Status: db.GoalStatusActive}, db.GoalByUser, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tool := NewSetArchivedTool(d, "actor-1", nil)
-
-	mustSetArchived(t, tool, "goal", g.ID, true)
-	got, _ := d.GetGoal(ctx, g.ID)
-	if got.Status != db.GoalStatusArchived {
-		t.Fatalf("status = %q, want archived", got.Status)
-	}
-	if last := got.History[len(got.History)-1]; last.By != "agent:actor-1" {
-		t.Fatalf("revision by = %q, want agent:actor-1", last.By)
-	}
-	mustSetArchived(t, tool, "goal", g.ID, false)
-	if got, _ := d.GetGoal(ctx, g.ID); got.Status != db.GoalStatusDraft {
-		t.Fatalf("status = %q, want draft", got.Status)
-	}
-}
-
 func TestSetArchivedSkill(t *testing.T) {
 	d := openTestDB(t)
 	store := skills.New(t.TempDir(), t.TempDir())
 	if _, err := store.Create("arch-skill", skills.SkillInput{Name: "Arch", Description: "d", Body: "body"}); err != nil {
 		t.Fatal(err)
 	}
-	tool := NewSetArchivedTool(d, "actor-1", func(slug string, archived bool) error {
+	tool := NewSetArchivedTool(d, func(slug string, archived bool) error {
 		_, err := store.SetArchived(slug, archived)
 		return err
 	})
@@ -164,7 +138,7 @@ func TestSetArchivedSkill(t *testing.T) {
 
 func TestSetArchivedRejects(t *testing.T) {
 	d := openTestDB(t)
-	tool := NewSetArchivedTool(d, "actor-1", nil)
+	tool := NewSetArchivedTool(d, nil)
 	cases := []struct {
 		name, input, want string
 	}{
@@ -172,7 +146,7 @@ func TestSetArchivedRejects(t *testing.T) {
 		{"missing id", `{"kind":"agent","id":" ","archived":true}`, "id is required"},
 		{"missing archived", `{"kind":"agent","id":"x"}`, "archived is required"},
 		{"missing agent", `{"kind":"agent","id":"AGT404","archived":true}`, `no agent with id "AGT404"`},
-		{"missing goal", `{"kind":"goal","id":"GOL404","archived":false}`, `no goal with id "GOL404"`},
+		{"removed goal kind", `{"kind":"goal","id":"GOL404","archived":false}`, `invalid kind "goal"`},
 		{"no skill store", `{"kind":"skill","id":"s","archived":true}`, "no skill store"},
 	}
 	for _, tc := range cases {

@@ -43,3 +43,27 @@ func TestPoolCatalogCachedNeverDials(t *testing.T) {
 		t.Fatalf("cached catalog = %+v, want the fake server's echo tool", entries)
 	}
 }
+
+func TestPoolCatalogCachedSkipsBusyServer(t *testing.T) {
+	p := NewPool()
+	t.Cleanup(p.Close)
+	cfg := fakeCfg()
+	e := p.entry(scopedEntryKey(cfg.ScopeKey, "fake"))
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	result := make(chan []string, 1)
+	go func() {
+		_, _, skipped := p.CatalogCached([]ServerConfig{cfg})
+		result <- skipped
+	}()
+
+	select {
+	case skipped := <-result:
+		if len(skipped) != 1 || skipped[0] != cfg.Name {
+			t.Fatalf("busy server skipped = %v", skipped)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cached catalog waited for a busy MCP connection")
+	}
+}

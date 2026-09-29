@@ -22,7 +22,6 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	flowpkg "github.com/bilal-arikan/tionharness/internal/flows"
-	"github.com/bilal-arikan/tionharness/internal/goals"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
@@ -411,6 +410,9 @@ func (m *Manager) open(meta Meta) error {
 	// compiled definitions, so the built-ins this workspace seeds and re-imposes
 	// are the edited ones.
 	database.SetGlobalSystemAgentOverrides(m.globalSysAgents)
+	if err := database.RetireSystemAgents(context.Background(), "goal-writer", "workspace-evolver"); err != nil {
+		return fmt.Errorf("retire obsolete system agents: %w", err)
+	}
 	database.PrepareAgentCatalog(meta.ID)
 	// Seed the small core system-agent set for new workspaces, migrate renamed
 	// roles, and backfill older workspaces. Existing customisations are preserved.
@@ -462,13 +464,6 @@ func (m *Manager) open(meta Meta) error {
 	if err := agent.EnsureDefaultAutomations(context.Background(), database, storeDir); err != nil {
 		m.logger.Warn("seed default automations failed", "workspace", meta.ID, "error", err)
 	}
-	// Seed the built-in starter goals (cost / cache / human load). Idempotent,
-	// deletion-aware, and seeded as DRAFTS so nothing is measured or proposed
-	// until the user reviews and activates one.
-	if err := goals.EnsureDefaultGoals(context.Background(), database, storeDir); err != nil {
-		m.logger.Warn("seed default goals failed", "workspace", meta.ID, "error", err)
-	}
-
 	// Collapse the near-duplicate lessons written before signature-similarity
 	// dedupe existed (the insight lens re-invented a slug per run, so one topic
 	// occupied several rows and crowded the injected context). Idempotent, so

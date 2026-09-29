@@ -15,15 +15,14 @@ import (
 // set_archived is the agent-facing half of the shared entity archive (the REST
 // pair POST /api/<entity>/{id}/archive|unarchive). One tool covers every
 // entity that mirrors the kanban card's archive — agents, skills, artifacts,
-// automations and goals — because the operation, its arguments and its result
-// are identical across them; only the store call differs. Five near-copies
+// and automations — because the operation, its arguments and its result
+// are identical across them; only the store call differs. Four near-copies
 // would multiply the tool surface an agent has to scan for no extra
 // expressiveness. Kanban cards keep their own set_archived_task (it predates
 // this tool and also notifies the board).
 //
 // Every kind delegates to the same store function the REST routes call, so
-// refusals (a system agent cannot be archived) and transitions (an unarchived
-// goal returns to draft) are identical on both paths.
+// refusals (a system agent cannot be archived) are identical on both paths.
 
 // Archivable entity kinds accepted by set_archived.
 const (
@@ -31,10 +30,9 @@ const (
 	ArchiveKindSkill      = "skill"
 	ArchiveKindArtifact   = "artifact"
 	ArchiveKindAutomation = "automation"
-	ArchiveKindGoal       = "goal"
 )
 
-var archiveKinds = []string{ArchiveKindAgent, ArchiveKindSkill, ArchiveKindArtifact, ArchiveKindAutomation, ArchiveKindGoal}
+var archiveKinds = []string{ArchiveKindAgent, ArchiveKindSkill, ArchiveKindArtifact, ArchiveKindAutomation}
 
 // SkillArchiver archives or restores a workspace skill by slug. It is injected
 // (rather than the tool importing the skills package) like SkillWriter; nil
@@ -42,27 +40,25 @@ var archiveKinds = []string{ArchiveKindAgent, ArchiveKindSkill, ArchiveKindArtif
 type SkillArchiver func(slug string, archived bool) error
 
 type SetArchivedTool struct {
-	db      *db.DB
-	actorID string
-	skills  SkillArchiver
+	db     *db.DB
+	skills SkillArchiver
 }
 
-func NewSetArchivedTool(database *db.DB, actorID string, skills SkillArchiver) SetArchivedTool {
-	return SetArchivedTool{db: database, actorID: actorID, skills: skills}
+func NewSetArchivedTool(database *db.DB, skills SkillArchiver) SetArchivedTool {
+	return SetArchivedTool{db: database, skills: skills}
 }
 
 func (SetArchivedTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "set_archived",
-		Description: "Archive or restore an agent, skill, artifact, automation or goal. archived=true hides it from default lists " +
+		Description: "Archive or restore an agent, skill, artifact or automation. archived=true hides it from default lists " +
 			"(list_agents/list_artifacts/list_automations show it only with archived:true) while keeping its configuration and " +
 			"history; archived=false restores it. Reversible, unlike the delete_* tools. An archived agent cannot run, an archived " +
-			"automation does not fire, an archived skill is not offered to agents. Restoring a goal returns it to draft (re-activate " +
-			"it explicitly). System (built-in) agents cannot be archived. For kanban cards use set_archived_task.",
+			"automation does not fire, an archived skill is not offered to agents. System (built-in) agents cannot be archived. For kanban cards use set_archived_task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"kind":{"type":"string","enum":["agent","skill","artifact","automation","goal"],"description":"Entity type"},
+				"kind":{"type":"string","enum":["agent","skill","artifact","automation"],"description":"Entity type"},
 				"id":{"type":"string","description":"Entity id (for kind=skill: the skill slug)"},
 				"archived":{"type":"boolean","description":"true to archive, false to restore"}
 			},
@@ -114,9 +110,6 @@ func (t SetArchivedTool) set(ctx context.Context, kind, id string, archived bool
 		return err
 	case ArchiveKindAutomation:
 		return t.db.SetAutomationArchived(ctx, id, archived)
-	case ArchiveKindGoal:
-		_, err := t.db.SetGoalArchived(ctx, id, archived, "agent:"+t.actorID)
-		return err
 	case ArchiveKindSkill:
 		if t.skills == nil {
 			return fmt.Errorf("no skill store is available in this runtime")

@@ -69,6 +69,7 @@ type Runtime struct {
 	// mcpFailStreaks counts consecutive MCP catalog-build failures per server so a
 	// standing outage escalates from WARN to a single ERROR (see mcpescalate.go).
 	mcpFailStreaks repair.FailStreaks
+	mcpCatalogGate mcpCatalogGate
 
 	// logs is the process-wide ring buffer of captured log entries, exposed to
 	// agents through the read_logs self-management tool. May be nil.
@@ -766,9 +767,6 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		coordCtx:    coordCtx,
 		coordCancel: coordCancel,
 	}
-	// Every new session is stamped with the configuration snapshot in force
-	// (_Docs/83 §4.2); the provider is cheap and self-caching.
-	r.db.SetSnapshotProvider(r.CurrentSnapshotHash)
 	r.skills.SetChangeHandler(func() {
 		r.publish(events.Event{
 			Type:   events.TypeSkills,

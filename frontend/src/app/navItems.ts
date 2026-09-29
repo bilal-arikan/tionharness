@@ -16,14 +16,12 @@ import {
   Wallet,
   FileText,
   Lightbulb,
-  Target,
   type LucideIcon,
 } from 'lucide-react'
 import type { View } from './NavRail'
 
 export const NAV: { key: View; label: string; labelKey?: string; icon: LucideIcon }[] = [
   { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
-  { key: 'goals', label: 'Hedefler', icon: Target },
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'rota', label: 'Rota', icon: Waypoints },

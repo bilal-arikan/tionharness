@@ -78,7 +78,8 @@ export const mcpApi = {
 
   // Workspace-wide tool activation (active for the whole workspace; agents pick
   // from the active set).
-  workspaceTools: () => req<WorkspaceTools>('/api/workspace-tools'),
+  workspaceTools: (cached = false) =>
+    req<WorkspaceTools>(cached ? '/api/workspace-tools?cached=1' : '/api/workspace-tools'),
   setWorkspaceTools: (disabledTools: string[]) =>
     req<{ disabledTools: string[] }>('/api/workspace-tools', {
       method: 'PUT',

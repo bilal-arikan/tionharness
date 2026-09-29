@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKeyedReset } from '@/shared/lib/useKeyedReset'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import { api } from '@/api'
@@ -8,6 +8,7 @@ import type {
   MCPPoolStats,
   ToolVisibility,
   WorkspaceTool,
+  WorkspaceTools,
   ImportableMCPServer,
 } from '@/types'
 import {
@@ -15,7 +16,7 @@ import {
   toolServer,
   toolLabel,
   toolCategory,
-  CATEGORY_LABELS,
+  CATEGORY_SHORT_LABELS,
   CATEGORY_ORDER,
   extractParams,
   parseArgs,
@@ -53,6 +54,7 @@ export function useToolsPanelState(
   options: ToolsPanelStateOptions = {},
 ) {
   const [servers, setServers] = useState<MCPServer[]>([])
+  const [serversReady, setServersReady] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
 
@@ -129,6 +131,7 @@ export function useToolsPanelState(
       .listMCPServers()
       .then(setServers)
       .catch((e) => onError(e.message))
+      .finally(() => setServersReady(true))
   }, [onError])
 
   // Live pool snapshot for the reaper / live-connection indicator. Polled on a
@@ -198,23 +201,36 @@ export function useToolsPanelState(
     }
   }
 
-  const loadTools = useCallback(() => {
-    api
-      .workspaceTools()
-      .then((res) => {
-        setTools(res.tools)
-        setDisabled(res.disabledTools)
-        setVisOv(res.toolVisibility ?? {})
-      })
-      .catch((e) => onError(e.message))
+  const toolLoadSeq = useRef(0)
+  const loadTools = useCallback(async () => {
+    const seq = ++toolLoadSeq.current
+    const apply = (res: WorkspaceTools) => {
+      if (seq !== toolLoadSeq.current) return
+      setTools(res.tools)
+      setDisabled(res.disabledTools)
+      setVisOv(res.toolVisibility ?? {})
+    }
+    try {
+      apply(await api.workspaceTools(true))
+    } catch (e) {
+      if (seq === toolLoadSeq.current) onError((e as Error).message)
+    }
+    try {
+      apply(await api.workspaceTools())
+    } catch (e) {
+      if (seq === toolLoadSeq.current) onError((e as Error).message)
+    }
   }, [onError])
 
   useEffect(() => loadServers(), [loadServers])
   // Reload the catalog whenever the set of MCP servers changes (enabling a
   // server adds its tools to the workspace catalog).
-  useEffect(() => loadTools(), [loadTools, servers])
+  useEffect(() => {
+    if (serversReady) void loadTools()
+  }, [loadTools, servers, serversReady])
 
   const toggleTool = async (t: WorkspaceTool) => {
+    toolLoadSeq.current++
     const next = t.enabled
       ? [...new Set([...disabled, t.name])]
       : disabled.filter((n) => n !== t.name)
@@ -224,6 +240,7 @@ export function useToolsPanelState(
     setDisabled(next)
     try {
       await api.setWorkspaceTools(next)
+      void loadTools()
     } catch (e) {
       onError((e as Error).message)
       loadTools() // revert on failure
@@ -239,6 +256,7 @@ export function useToolsPanelState(
   // changes. Mirrors a skill's visibility state.
   const setToolVisibility = async (t: WorkspaceTool, tier: ToolVisibility) => {
     if (t.visibility === tier) return
+    toolLoadSeq.current++
     const nextOv = { ...visOv, [t.name]: tier }
     setVisBusy(t.name)
     // Optimistic update.
@@ -246,6 +264,7 @@ export function useToolsPanelState(
     setVisOv(nextOv)
     try {
       await api.setWorkspaceToolVisibility(nextOv)
+      void loadTools()
     } catch (e) {
       onError((e as Error).message)
       loadTools() // revert on failure
@@ -262,6 +281,7 @@ export function useToolsPanelState(
       .filter((t) => toolSource(t) === 'mcp' && (toolServer(t) || 'MCP') === serverName)
       .map((t) => t.name)
     if (names.length === 0) return
+    toolLoadSeq.current++
     const nameSet = new Set(names)
     const nextOv = { ...visOv }
     for (const n of names) nextOv[n] = tier
@@ -270,6 +290,7 @@ export function useToolsPanelState(
     setVisOv(nextOv)
     try {
       await api.setWorkspaceToolVisibility(nextOv)
+      void loadTools()
     } catch (e) {
       onError((e as Error).message)
       loadTools() // revert on failure
@@ -459,11 +480,11 @@ export function useToolsPanelState(
       const list = byCategory.get(cat)
       if (!list || !list.length || seen.has(cat)) return
       seen.add(cat)
-      out.push({ key: cat, label: CATEGORY_LABELS[cat] ?? cat, tools: list })
+      out.push({ key: cat, label: CATEGORY_SHORT_LABELS[cat] ?? cat, tools: list })
     }
     for (const cat of CATEGORY_ORDER) emit(cat)
     for (const cat of [...byCategory.keys()].sort((a, b) =>
-      compareText(CATEGORY_LABELS[a] ?? a, CATEGORY_LABELS[b] ?? b),
+      compareText(CATEGORY_SHORT_LABELS[a] ?? a, CATEGORY_SHORT_LABELS[b] ?? b),
     )) {
       emit(cat)
     }
@@ -490,6 +511,7 @@ export function useToolsPanelState(
   )
   const bulkSetEnabled = async (enabled: boolean) => {
     if (sel.count === 0) return
+    toolLoadSeq.current++
     const ids = [...sel.selected]
     const next = enabled
       ? disabled.filter((n) => !sel.selected.has(n))
@@ -499,6 +521,7 @@ export function useToolsPanelState(
     sel.clear()
     try {
       await api.setWorkspaceTools(next)
+      void loadTools()
     } catch (e) {
       onError((e as Error).message)
       loadTools()
@@ -506,6 +529,7 @@ export function useToolsPanelState(
   }
   const bulkSetVisibility = async (tier: ToolVisibility) => {
     if (sel.count === 0) return
+    toolLoadSeq.current++
     const nextOv = { ...visOv }
     for (const n of sel.selected) nextOv[n] = tier
     setTools((ts) => ts.map((x) => (sel.selected.has(x.name) ? { ...x, visibility: tier } : x)))
@@ -513,6 +537,7 @@ export function useToolsPanelState(
     sel.clear()
     try {
       await api.setWorkspaceToolVisibility(nextOv)
+      void loadTools()
     } catch (e) {
       onError((e as Error).message)
       loadTools()

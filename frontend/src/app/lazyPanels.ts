@@ -58,10 +58,6 @@ export const InsightPanel = lazy(() =>
   import('@/features/insight/InsightPanel').then((m) => ({ default: m.InsightPanel })),
 )
 
-export const GoalsPanel = lazy(() =>
-  import('@/features/goals/GoalsPanel').then((m) => ({ default: m.GoalsPanel })),
-)
-
 export const SettingsPanel = lazy(() =>
   import('@/features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 )

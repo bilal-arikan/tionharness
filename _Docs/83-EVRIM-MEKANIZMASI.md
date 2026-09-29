@@ -1,5 +1,10 @@
 # 83 — Evrim Mekanizması: Hedef-Güdümlü Workspace Optimizasyonu
 
+> **Tarihsel belge (2026-09-29):** Hedefler ekranı, Goal varlığı, fitness hesabı,
+> konfigürasyon snapshot'ı ve workspace-evolver işlevi kaldırıldı. Aşağıdaki
+> uygulandı işaretleri kaldırılmadan önceki durumu anlatır; güncel kod için
+> kaynak değildir.
+
 > **Özet (2026-09-22):** Araştırma + beyin fırtınası dokümanı; **E0–E2 uygulandı**, sürüm kırılımı 2026-09-22'de sağlamlaştırıldı (§8.1d: yetersiz-veri kapısı, medyan/kırpılmış ortalama, ajan filtresi, araç çağrısı başına maliyet, sağlayıcı/auth hatalarının hata oranından ayrılması) (Goal varlığı — 2026-09-14'te sadeleştirildi, §4.1 notu: doğrudan oluşturma + yalnız okunan alanlar; `goal-writer` sistem ajanı, Hedefler ekranı; konfigürasyon snapshot'ı + oturum atfı + LLM'siz fitness; `workspace-evolver` yalnız-öneri geçişi + kodda kural katmanı — §8), E3+ tasarım. Amaç:
 > workspace için kaydedilip düzenlenebilen **Hedefler (Goals)** tanımlamak ve ajan
 > hiyerarşisi, araç atamaları, ajan/skill promptları, otomasyon ve zamanlamalar, model

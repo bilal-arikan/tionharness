@@ -45,7 +45,13 @@ func LocalVersion(ctx context.Context, path string, args []string) (string, erro
 	if len(args) == 0 {
 		return "", fmt.Errorf("bu araç sürüm sorgusunu desteklemiyor")
 	}
+	args = append([]string(nil), args...)
+	return localVersions.get(ctx, versionProbeKey(path, args), func(work context.Context) (string, error) {
+		return probeLocalVersion(work, path, args)
+	})
+}
 
+func probeLocalVersion(ctx context.Context, path string, args []string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
 	defer cancel()
 

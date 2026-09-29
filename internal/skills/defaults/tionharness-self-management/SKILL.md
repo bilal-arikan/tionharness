@@ -116,13 +116,13 @@ events are `UserPromptSubmit`, `SessionStart`, `Stop`, `SubagentStop`,
 `PreCompact`, `Notification`, `SessionEnd`. Read/create any; delete only ones you
 created.
 
-**Archive (agents, skills, artifacts, automations, goals)** — `set_archived` with
-`{kind, id, archived}` (`kind` = `agent`|`skill`|`artifact`|`automation`|`goal`; for a
+**Archive (agents, skills, artifacts, automations)** — `set_archived` with
+`{kind, id, archived}` (`kind` = `agent`|`skill`|`artifact`|`automation`; for a
 skill `id` is the slug). A reversible hide: the entity leaves default lists (see it
 again with `archived:true` on `list_agents`/`list_artifacts`/`list_automations`) and
 `archived:false` restores it. Archived agents cannot run, archived automations do not
 fire, archived skills are not offered. Built-in (system) agents cannot be archived.
-Restoring a goal returns it to draft. Prefer archiving over `delete_*` when the user
+Prefer archiving over `delete_*` when the user
 may want it back. Kanban cards use `set_archived_task`.
 
 **MCP servers** — `list_mcp_servers`, `create_mcp_server`, `toggle_mcp_server`,
@@ -181,7 +181,7 @@ FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` 
 `sourcePath` set to the file path — never base64-embed bytes into `content`.
 (Screenshots and exported files are also auto-captured from a tool's saved path.)
 
-**Archive (reversible hide)** — agents, skills, artifacts, automations and goals
+**Archive (reversible hide)** — agents, skills, artifacts and automations
 archive like kanban cards: nothing is deleted, the item leaves the default lists and
 the Map ("Harita"), and it can be restored. `list_agents`, `list_artifacts` and
 `list_automations` follow the `list_tasks` convention — live items by default,
@@ -198,7 +198,7 @@ archived **automation never fires** (ledger reason `archived`). An archived **sk
 never advertised in "# Available Skills", never returned by `skill_search`, and
 `use_skill` refuses it with the same explicit error. Archive/restore with the
 `set_archived` tool above, in the UI, or over REST (`POST /api/{agents|skills|artifacts|
-automations|goals}/{id}/archive` and `/unarchive`); list endpoints take
+automations}/{id}/archive` and `/unarchive`); list endpoints take
 `?archived=true|false|all`. Tell the user when an archived item blocks the task
 instead of working around it.
 

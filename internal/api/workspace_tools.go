@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
@@ -53,7 +54,11 @@ func (s *Server) handleWorkspaceTools(w http.ResponseWriter, r *http.Request) {
 
 	// visibility reflects the EFFECTIVE tier per tool (code defaults + the workspace
 	// per-tool overrides), so the screen's tier selector matches what the agent sees.
-	catalog, visibility := ws(r).Runtime.WorkspaceToolCatalogWithState(r.Context())
+	ctx := r.Context()
+	if r.URL.Query().Get("cached") == "1" {
+		ctx = agent.WithCatalogNoDial(ctx)
+	}
+	catalog, visibility := ws(r).Runtime.WorkspaceToolCatalogWithState(ctx)
 	out := make([]workspaceTool, 0, len(catalog))
 	for _, t := range catalog {
 		wt := workspaceTool{

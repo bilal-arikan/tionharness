@@ -1,5 +1,5 @@
 // Package archive holds the reversible "put away" state shared by kanban cards,
-// skills, artifacts, automations, goals and agents: an archived item is never
+// skills, artifacts, automations and agents: an archived item is never
 // deleted, it just leaves the default lists (and the Map) until it is restored.
 //
 // This leaf package is the one place the list filter and the "refuse to use an
